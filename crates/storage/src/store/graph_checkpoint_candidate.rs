@@ -614,7 +614,7 @@ impl CheckpointCandidate {
                 prepared.source_commit_epoch,
             )?;
             store.source_scan_manifest = CowSegment::default();
-            store.adopt_prepared_checkpoint_state(prepared)?;
+            store.adopt_prepared_checkpoint_state_with_work_context(prepared, work)?;
             store.mount_relational_index_shadow_for_recovery();
             store.validate_authoritative_relational_index_open()?;
             self.bootstrap_manifest = Some(manifest);

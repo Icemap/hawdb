@@ -56,13 +56,21 @@ impl CheckpointSharedBytes {
         source: &[u8],
         work: &CheckpointWorkContext,
     ) -> Result<Self, CheckpointWorkError> {
+        Self::build(source.len(), work, |bytes| bytes.append(source, work))
+    }
+
+    pub(crate) fn build(
+        capacity: usize,
+        work: &CheckpointWorkContext,
+        write: impl FnOnce(&mut CheckpointBytes) -> Result<(), CheckpointWorkError>,
+    ) -> Result<Self, CheckpointWorkError> {
         // The pinned standard Arc layout owns two usize reference counters.
         // Include the concrete shared cell as well as its exact Vec capacity.
         // Allocator metadata/fragmentation remain platform assumptions.
         let ownership_bytes = std::mem::size_of::<CheckpointBytes>()
             + 2 * std::mem::size_of::<std::sync::atomic::AtomicUsize>();
-        let mut bytes = CheckpointBytes::new_with_ownership(source.len(), ownership_bytes, work)?;
-        bytes.append(source, work)?;
+        let mut bytes = CheckpointBytes::new_with_ownership(capacity, ownership_bytes, work)?;
+        write(&mut bytes)?;
         let unit = work.start_unit()?;
         let output = Self(Arc::new(bytes));
         unit.finish();
@@ -97,6 +105,19 @@ impl std::ops::Deref for CheckpointBytes {
 }
 
 impl CheckpointBytes {
+    pub(crate) fn truncate(&mut self, length: usize) {
+        self.bytes.truncate(length);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn into_unadmitted(self) -> Vec<u8> {
+        assert!(
+            self._memory.is_none(),
+            "admitted bytes cannot detach their lease"
+        );
+        self.bytes
+    }
+
     pub(crate) fn new(
         capacity: usize,
         work: &CheckpointWorkContext,

@@ -586,7 +586,13 @@ fn check_projection(nodes: &[NodeRecord], label: Option<LabelId>, epoch: u64, pe
     let mut offset = 0;
     let mut ranges = Vec::new();
     let mut payloads = Vec::new();
-    for (index, segment) in projection.segments.iter_mut().enumerate() {
+    for (index, segment) in projection
+        .segments
+        .make_mut(&CheckpointWorkContext::default())
+        .unwrap()
+        .iter_mut()
+        .enumerate()
+    {
         let expected_rows = &expected[index * 128..expected.len().min((index + 1) * 128)];
         assert_eq!(segment.rows, expected_rows);
         reference::validate_signed_zero_ties(
@@ -619,7 +625,7 @@ fn check_projection(nodes: &[NodeRecord], label: Option<LabelId>, epoch: u64, pe
     let decoded = decode_descriptor(&file, checksum).unwrap();
     assert_eq!(decoded.graph_epoch, epoch);
     assert_eq!(encode_descriptor(&decoded).unwrap(), body);
-    for (segment, expected) in decoded.segments.iter().zip(&projection.segments) {
+    for (segment, expected) in decoded.segments.iter().zip(projection.segments.iter()) {
         assert_eq!(segment.summary, expected.summary);
         assert_eq!(segment.payload_range, expected.payload_range);
         assert!(segment.rows.is_empty());

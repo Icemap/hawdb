@@ -276,6 +276,165 @@ fn checkpoint_units_relational_image_matches_ordinary_bytes_for_inline_and_file_
 }
 
 #[test]
+fn checkpoint_streams_wide_inline_rows_without_a_row_sized_allocation() {
+    use hawdb_core::RuntimeTaskContext;
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
+        RuntimeResourceBudget, RuntimeResourceSnapshot,
+    };
+    let fixture = Fixture::new();
+    let store = RelationalStore::with_overflow_config(
+        RelationalMutationLimits::default(),
+        RelationalOverflowConfig {
+            threshold_bytes: usize::MAX,
+            ..RelationalOverflowConfig::default()
+        },
+    );
+    let row = RelationalRow::new(vec![RelationalValue::Text("界\0🙂".repeat(65536))]);
+    store
+        .commit(
+            RelationalTransaction {
+                writes: vec![
+                    RelationalWrite::CreateTable(RelationalTableSchema {
+                        name: "wide".into(),
+                        columns: vec![RelationalColumnSchema {
+                            name: "value".into(),
+                            scalar_type: RelationalScalarType::Text,
+                            nullable: false,
+                            default: None,
+                        }],
+                        primary_key: vec!["value".into()],
+                        unique_constraints: Vec::new(),
+                        foreign_keys: Vec::new(),
+                        indexes: Vec::new(),
+                    }),
+                    RelationalWrite::Insert {
+                        table: "wide".into(),
+                        rows: vec![row.clone()],
+                        mode: RelationalInsertMode::Error,
+                    },
+                ],
+            },
+            |_, _| Ok(()),
+        )
+        .unwrap();
+    let snapshot = store.snapshot().unwrap();
+    let state = snapshot.value();
+    let expected = encode_relational_checkpoint(41, state).unwrap();
+    let governor = RuntimeGovernor::new(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(4 * 1024 * 1024),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        RuntimeResourceSnapshot::from_parts(
+            RuntimeResourceBudget::from_limits(std::num::NonZeroUsize::MIN, None, None),
+            RuntimeMemorySnapshot::from_limits(Some(1 << 30), Some(1 << 30), None, None, None),
+        ),
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let admission = governor
+        .try_admit_incremental_maintenance(0, 32 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let work = CheckpointWorkContext::new(admission.task_context().unwrap().clone());
+    let path = fixture.directory.join("streamed-wide.hawdb");
+    let mut writer = File::create(&path).unwrap();
+    let observation = crate::test_allocator::AllocationObservation::start();
+    let result = work.classify(|work| {
+        encode_relational_checkpoint_with_work_context(
+            &mut writer,
+            41,
+            state,
+            RelationalDecodeLimits::checkpoint().max_record_bytes,
+            CheckpointOutputIo::File,
+            work,
+        )
+    });
+    let allocations = observation.finish();
+    drop(writer);
+    assert!(result.is_ok(), "streaming row must fit 32 KiB: {result:?}");
+    assert_eq!(allocations, 0, "streaming checkpoint allocated a whole row");
+    assert_eq!(std::fs::read(&path).unwrap(), expected);
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+    drop(work);
+    drop(admission);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+
+    let run = |cpu_cut: usize, io_cut: usize| {
+        use crate::background::{CheckpointOperationError, CheckpointWorkError};
+        let admission = governor
+            .try_admit_incremental_maintenance(0, 32 * 1024, 1, RuntimeTaskContext::default())
+            .unwrap();
+        let task = admission.task_context().unwrap().clone();
+        let probe = Arc::new(CheckpointWorkProbe {
+            cancellation: task.cancellation().clone(),
+            ..CheckpointWorkProbe::default()
+        });
+        let local = scheduler();
+        local.set_telemetry_sink(Some(probe.clone()));
+        probe.cancel_after.store(cpu_cut, Ordering::SeqCst);
+        probe.cancel_on_io_wave.store(io_cut, Ordering::SeqCst);
+        let work = CheckpointWorkContext::new(task.with_io_wave_controller(probe.clone()))
+            .with_scheduler(local.clone());
+        let mut writer = File::create(&path).unwrap();
+        let result = work.classify(|work| {
+            encode_relational_checkpoint_with_work_context(
+                &mut writer,
+                41,
+                state,
+                RelationalDecodeLimits::checkpoint().max_record_bytes,
+                CheckpointOutputIo::File,
+                work,
+            )
+        });
+        drop(writer);
+        if cpu_cut == 0 && io_cut == 0 {
+            assert!(result.is_ok(), "complete streaming retry: {result:?}");
+            assert_eq!(std::fs::read(&path).unwrap(), expected);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(
+                        CheckpointWorkError::Stopped(
+                            hawdb_core::RuntimeCancellationReason::Cancelled
+                        ) | CheckpointWorkError::Io(hawdb_core::RuntimeIoWaveError::Stopped(
+                            hawdb_core::RuntimeCancellationReason::Cancelled
+                        ))
+                    ))
+                ),
+                "streaming cancellation {cpu_cut}/{io_cut}: {result:?}"
+            );
+            if cpu_cut > 0 {
+                assert_eq!(probe.completed.load(Ordering::SeqCst), cpu_cut);
+            } else {
+                assert_eq!(probe.io_waves.load(Ordering::SeqCst), io_cut);
+            }
+        }
+        let counts = (
+            probe.completed.load(Ordering::SeqCst),
+            probe.io_waves.load(Ordering::SeqCst),
+        );
+        probe.assert_released(&local);
+        assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+        drop(work);
+        drop(admission);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        counts
+    };
+    let (cpu_units, io_waves) = run(0, 0);
+    assert!(cpu_units > 16 && io_waves > 8);
+    for cut in 1..=cpu_units {
+        run(cut, 0);
+    }
+    for cut in 1..=io_waves {
+        run(0, cut);
+    }
+    assert_eq!(run(0, 0), (cpu_units, io_waves));
+    println!("verified {cpu_units} streaming CPU cuts and {io_waves} IO cuts, then complete retry");
+}
+
+#[test]
 fn checkpoint_units_relational_image_cancels_each_read_wave_and_cpu_then_retries_complete() {
     let fixture = Fixture::new();
     let state = fixture.file_state();

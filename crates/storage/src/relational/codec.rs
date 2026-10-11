@@ -38,10 +38,12 @@ use std::num::NonZeroU64;
 use std::path::Path;
 use std::sync::Arc;
 
+pub(crate) mod schema_encoding;
+
 mod checkpoint;
 pub(crate) use checkpoint::{
     clone_string_with_work_context, decode_relational_checkpoint_file_with_work_context,
-    decode_relational_table_schema_with_work_context,
+    decode_relational_table_schema_with_work_context, decode_row_owned, decode_schema_owned,
     encode_relational_checkpoint_with_work_context,
     encode_relational_row_payload_with_work_context,
     encode_relational_table_schema_with_work_context,
@@ -1113,49 +1115,11 @@ impl Encoder {
         self.value_count = self.value_count.checked_add(1).ok_or_else(|| {
             RelationalError::Admission("encoded value count overflow".to_string())
         })?;
-        match value {
-            RelationalValue::Null => self.u8(0),
-            RelationalValue::Boolean(value) => {
-                self.u8(1);
-                self.u8(u8::from(*value));
-            }
-            RelationalValue::BigInt(value) => {
-                self.u8(2);
-                self.bytes.extend_from_slice(&value.to_le_bytes());
-            }
-            RelationalValue::DoublePrecision(value) => {
-                self.u8(3);
-                self.u64(value.to_bits());
-            }
-            RelationalValue::Text(value) => {
-                self.u8(4);
-                self.string(value)?;
-            }
-            RelationalValue::Bytea(value) => {
-                self.u8(5);
-                self.bytes(value)?;
-            }
-            RelationalValue::Uuid(value) => {
-                self.u8(7);
-                self.bytes.extend_from_slice(value.as_bytes());
-            }
-            RelationalValue::Overflow(reference) => {
-                self.u8(6);
-                self.sha256(reference.digest);
-                self.scalar_type(reference.scalar_type);
-                self.u64(reference.compressed_bytes);
-                self.u64(reference.uncompressed_bytes);
-            }
-        }
-        Ok(())
+        schema_encoding::value(self, value)
     }
 
     fn row(&mut self, row: &RelationalRow) -> Result<(), RelationalError> {
-        self.count(row.values().len(), "row values")?;
-        for value in row.values() {
-            self.value(value)?;
-        }
-        Ok(())
+        schema_encoding::row(self, row)
     }
 
     fn key(&mut self, key: &RelationalKey) -> Result<(), RelationalError> {
@@ -1167,55 +1131,7 @@ impl Encoder {
     }
 
     fn table_schema(&mut self, schema: &RelationalTableSchema) -> Result<(), RelationalError> {
-        self.string(&schema.name)?;
-        self.count(schema.columns.len(), "table columns")?;
-        for column in &schema.columns {
-            self.string(&column.name)?;
-            self.scalar_type(column.scalar_type);
-            self.u8(u8::from(column.nullable));
-            self.column_default(&column.default)?;
-        }
-        self.string_list(&schema.primary_key)?;
-        self.count(schema.unique_constraints.len(), "unique constraints")?;
-        for columns in &schema.unique_constraints {
-            self.string_list(columns)?;
-        }
-        self.count(schema.foreign_keys.len(), "foreign keys")?;
-        for foreign_key in &schema.foreign_keys {
-            self.foreign_key(foreign_key)?;
-        }
-        self.count(schema.indexes.len(), "indexes")?;
-        for index in &schema.indexes {
-            self.index(index)?;
-        }
-        Ok(())
-    }
-
-    fn foreign_key(
-        &mut self,
-        foreign_key: &RelationalForeignKeySchema,
-    ) -> Result<(), RelationalError> {
-        self.string_list(&foreign_key.columns)?;
-        self.string(&foreign_key.referenced_table)?;
-        self.string_list(&foreign_key.referenced_columns)?;
-        self.referential_action(foreign_key.on_delete);
-        self.referential_action(foreign_key.on_update);
-        Ok(())
-    }
-
-    fn column_default(
-        &mut self,
-        default: &Option<RelationalColumnDefault>,
-    ) -> Result<(), RelationalError> {
-        match default {
-            None => self.u8(0),
-            Some(RelationalColumnDefault::Literal(value)) => {
-                self.u8(1);
-                self.value(value)?;
-            }
-            Some(RelationalColumnDefault::UuidV7) => self.u8(2),
-        }
-        Ok(())
+        schema_encoding::schema(self, schema.into())
     }
 
     fn column_default_logical(
@@ -1231,14 +1147,6 @@ impl Encoder {
             Some(RelationalColumnDefault::UuidV7) => self.u8(2),
         }
         Ok(())
-    }
-
-    fn referential_action(&mut self, action: RelationalReferentialAction) {
-        self.u8(match action {
-            RelationalReferentialAction::NoAction => 0,
-            RelationalReferentialAction::Restrict => 1,
-            RelationalReferentialAction::Cascade => 2,
-        });
     }
 
     fn index(&mut self, index: &RelationalIndexSchema) -> Result<(), RelationalError> {
@@ -1455,6 +1363,9 @@ impl Encoder {
 
 trait DecodeInput {
     fn checkpoint_work_context(&self) -> Option<&crate::background::CheckpointWorkContext> {
+        None
+    }
+    fn checkpoint_allocation_context(&self) -> Option<&crate::background::CheckpointDecodeContext> {
         None
     }
     fn len(&self) -> usize;
@@ -1804,8 +1715,18 @@ impl<I: DecodeInput> Decoder<I> {
         let Some(work) = self.input.checkpoint_work_context().cloned() else {
             return (0..count).map(|_| decode(self)).collect();
         };
+        // Reserve before holding a decode unit: admission consumes its own unit.
+        let owned = self
+            .input
+            .checkpoint_allocation_context()
+            .map(|context| {
+                context
+                    .vector_capacity(count)
+                    .map_err(|error| RelationalError::Admission(error.to_string()))
+            })
+            .transpose()?;
         let unit = work.start_unit().map_err(checkpoint::work_error)?;
-        let mut values = Vec::with_capacity(count);
+        let mut values = owned.unwrap_or_else(|| Vec::with_capacity(count));
         unit.finish();
         for _ in 0..count {
             let value = decode(self)?;
@@ -1914,6 +1835,14 @@ impl<I: DecodeInput> Decoder<I> {
         )?;
         let values = self.repeated(count, Self::value)?;
         if let Some(work) = self.input.checkpoint_work_context().cloned() {
+            if let Some(owned) = self.input.checkpoint_allocation_context() {
+                owned
+                    .reserve(
+                        std::mem::size_of::<Vec<RelationalValue>>()
+                            + 2 * std::mem::size_of::<usize>(),
+                    )
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            }
             let unit = work.start_unit().map_err(checkpoint::work_error)?;
             let row = RelationalRow::from_checkpoint_values(values);
             unit.finish();

@@ -94,7 +94,7 @@ fn preparation_survives_new_source_submission_and_resumes_original_base_before_c
         add(&mut store, &mut catalog, id, "Source");
     }
     let original = store.checkpoint_source_identity().unwrap();
-    let resources = retirement_governor();
+    let resources = governor(32 * 1024 * 1024);
     let scheduler = LocalQosScheduler::new(hawdb_qos::LocalQosPolicy {
         max_background_operations: Some(1),
         max_total_background_operations: Some(1),
@@ -164,7 +164,7 @@ fn manual_suspension_destroys_parked_preparation_before_reusing_its_generation()
     for id in 0..32 {
         add(&mut store, &mut catalog, id, "Source");
     }
-    let resources = retirement_governor();
+    let resources = governor(32 * 1024 * 1024);
     let scheduler = LocalQosScheduler::new(hawdb_qos::LocalQosPolicy {
         max_background_operations: Some(1),
         max_total_background_operations: Some(1),
@@ -200,7 +200,7 @@ fn stopping_owner_releases_parked_preparation_while_control_observers_survive() 
     for id in 0..32 {
         add(&mut store, &mut catalog, id, "Source");
     }
-    let resources = retirement_governor();
+    let resources = governor(32 * 1024 * 1024);
     let scheduler = LocalQosScheduler::new(hawdb_qos::LocalQosPolicy {
         max_background_operations: Some(1),
         max_total_background_operations: Some(1),

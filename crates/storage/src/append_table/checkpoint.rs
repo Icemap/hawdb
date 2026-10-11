@@ -19,7 +19,7 @@ use crate::background::{CheckpointAllocationOwner, CheckpointWorkContext, Checkp
 use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
 
-mod memory;
+pub(in crate::append_table) mod memory;
 pub(super) use memory::CheckpointAppendRows;
 
 const SORT_ROWS_PER_UNIT: usize = 1024;

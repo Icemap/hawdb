@@ -35,7 +35,7 @@ fn occupy_memory(resources: &RuntimeGovernor) -> hawdb_qos::RuntimeRetainedMemor
         .try_admit(RuntimeWorkRequest::foreground_query(1, 0))
         .unwrap();
     let held = admission
-        .reserve_retained_memory(100 * 1024 * 1024)
+        .reserve_retained_memory(200 * 1024 * 1024 - 64 * 1024)
         .unwrap();
     drop(admission);
     assert_eq!(resources.snapshot().active_cpu_slots, 0);
@@ -72,6 +72,9 @@ fn cached_planning_checks_fresh_cancellation_and_source_identity_before_recovery
     assert_eq!(report.planning_cache_hits, 0);
     assert!(report.admission_denial.is_none());
     let old_cache = source.planned_memory;
+    // Retire the old source owner before testing a fresh source identity.
+    // Its scalar estimate is the only state copied into the new source.
+    drop(source.preparing.take());
     let body = "new".repeat(4096);
     add(&mut store, &mut catalog, 1, &body);
     let expected = store.checkpoint_candidate_admission_bytes().unwrap();
@@ -89,7 +92,8 @@ fn cached_planning_checks_fresh_cancellation_and_source_identity_before_recovery
     .is_err());
     assert_eq!(report.planning_scans, 2);
     assert_eq!(report.planning_cache_hits, 0);
-    assert_eq!(report.admission_denial.unwrap().requested, expected);
+    assert!(report.admission_denial.unwrap().requested < expected);
+    assert!(report.memory_denial.is_some());
     assert!(report.admission_denial.unwrap().is_retryable());
     drop(held);
     let (candidate, admission) = prepare(
@@ -106,9 +110,9 @@ fn cached_planning_checks_fresh_cancellation_and_source_identity_before_recovery
     assert!(report.admission_denial.is_none());
     drop(candidate);
     drop(admission);
-    assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
     drop(source);
     drop(changed);
+    assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
     drop(store);
     let recovered = GraphStore::open(&fixture.0, &mut catalog).unwrap();
     assert_eq!(recovered.node_count_for_label(None), 2);
@@ -159,7 +163,10 @@ fn actual_owner_reports_cached_memory_denial_and_recovers_without_frontend_work(
             assert!(report.planning_cache_hits >= 2);
             let denial = report.preparation_admission_denial.unwrap();
             assert_eq!(denial.code, RuntimeAdmissionCode::MemorySaturated);
-            assert_eq!(denial.requested, estimate);
+            assert!(denial.requested < estimate);
+            assert!(report.preparation_memory_denial.is_some());
+            assert_eq!(report.operation_failures, 0);
+            assert!(!report.operation_retry_exhausted);
             assert!(denial.is_retryable());
             break;
         }
@@ -192,6 +199,74 @@ fn actual_owner_reports_cached_memory_denial_and_recovers_without_frontend_work(
     drop(control);
     drop(store);
     assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
+    let recovered = GraphStore::open(&fixture.0, &mut catalog).unwrap();
+    assert_eq!(recovered.node_count_for_label(None), 32);
+    for id in 0..32 {
+        let node = recovered
+            .node_owned(hawdb_storage::NodeId(id))
+            .unwrap()
+            .unwrap();
+        assert_eq!(node.properties["id"], Value::Int(id as i64));
+        assert_eq!(node.properties["body"], Value::String(body.clone()));
+    }
+}
+
+#[test]
+fn permanent_allocation_denial_preserves_source_and_allows_manual_checkpoint() {
+    let fixture = Fixture::new();
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::open(&fixture.0, &mut catalog).unwrap();
+    let body = "界🙂".repeat(128);
+    for id in 0..32 {
+        add(&mut store, &mut catalog, id, &body);
+    }
+    let original = store.checkpoint_source_identity();
+    let resources = governor(64 * 1024);
+    let scheduler = LocalQosScheduler::new(hawdb_qos::LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let mut source = Source::capture(&store, &catalog);
+    let mut report = PreparationReport::default();
+    for attempt in 0..2 {
+        assert!(prepare(
+            &mut source,
+            &scheduler,
+            &resources,
+            &RuntimeTaskContext::default(),
+            &mut report,
+        )
+        .is_err());
+        let denial = report.admission_denial.expect("typed allocation denial");
+        assert_eq!(denial.code, RuntimeAdmissionCode::MemorySaturated);
+        assert!(!denial.is_retryable());
+        assert!(denial.requested + OWNER_MEMORY_BYTES > 64 * 1024);
+        assert!(matches!(
+            report.memory_denial,
+            Some(RuntimeMemoryError::AdmissionDenied {
+                retryable: false,
+                ..
+            })
+        ));
+        assert!(!report.operation_failed);
+        assert_eq!(report.planning_scans, 1);
+        assert_eq!(report.planning_cache_hits, attempt);
+        assert_eq!(store.checkpoint_source_identity(), original);
+        assert_eq!(
+            source.preparing.as_ref().unwrap().frame.source_identity(),
+            original.unwrap()
+        );
+        let paused = resources.snapshot();
+        assert_eq!(paused.active_cpu_slots, 0);
+        assert_eq!(paused.active_background_tasks, 0);
+        assert_eq!(paused.active_background_io_slots, 0);
+        assert!(paused.admitted_memory_bytes <= 64 * 1024);
+    }
+    drop(source);
+    assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
+    store.checkpoint(&catalog).unwrap();
+    drop(store);
     let recovered = GraphStore::open(&fixture.0, &mut catalog).unwrap();
     assert_eq!(recovered.node_count_for_label(None), 32);
     for id in 0..32 {

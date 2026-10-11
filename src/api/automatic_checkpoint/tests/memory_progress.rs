@@ -38,10 +38,10 @@ fn fixed_memory_budget_advances_two_generations_without_accumulating_unused_rese
         add(&mut store, &mut catalog, id);
     }
     let control = Arc::new(Control::default());
-    let resources = governor(200 * 1024 * 1024);
+    let resources = governor(32 * 1024 * 1024);
     assert!(
         store.checkpoint_candidate_admission_bytes().unwrap()
-            < resources.snapshot().limits.memory_budget_bytes
+            > resources.snapshot().limits.memory_budget_bytes
     );
     let mut owner = Owner::start(
         control.clone(),
@@ -61,7 +61,15 @@ fn fixed_memory_budget_advances_two_generations_without_accumulating_unused_rese
         let deadline = Instant::now() + Duration::from_secs(15);
         loop {
             let mut state = control.lock_frontend().unwrap();
-            if state.selected.is_some() {
+            if let Some(selected) = &state.selected {
+                let memory = selected.admission.runtime.memory_report();
+                assert!(memory.incremental);
+                assert_eq!(memory.upfront_reserved_bytes, OWNER_MEMORY_BYTES);
+                assert!(memory.peak_accounted_bytes > 0);
+                assert!(
+                    memory.peak_accounted_bytes + memory.upfront_reserved_bytes
+                        <= resources.snapshot().limits.memory_budget_bytes
+                );
                 control.adopt(&mut state, &mut store).unwrap();
             }
             if state.report.completed_checkpoints >= generation

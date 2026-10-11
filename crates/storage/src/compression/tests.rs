@@ -16,6 +16,9 @@ use super::*;
 use std::cell::Cell;
 use std::ptr;
 
+#[cfg(not(target_arch = "wasm32"))]
+mod checkpoint_memory;
+
 #[derive(Clone, Copy, Default, Debug)]
 struct Activity {
     allocations: usize,

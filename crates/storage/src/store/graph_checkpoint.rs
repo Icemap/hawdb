@@ -1544,6 +1544,27 @@ impl GraphStore {
         &mut self,
         prepared: &mut PreparedCheckpoint,
     ) -> Result<()> {
+        self.adopt_prepared_checkpoint_state_with_work_context(
+            prepared,
+            &crate::background::CheckpointWorkContext::default(),
+        )
+    }
+
+    pub(super) fn adopt_prepared_checkpoint_state_with_work_context(
+        &mut self,
+        prepared: &mut PreparedCheckpoint,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<()> {
+        if prepared.projected_graph_artifacts.is_none() {
+            return Err(HawDBError::Storage(
+                "prepared projection root was already adopted".into(),
+            ));
+        }
+        let append = prepared
+            .checkpoint_append_reader
+            .checkpoint_state_with_work_context(work)?;
+        // Complete admission and validation before taking any prepared roots.
+        // A safe work denial leaves the prepared base reusable.
         self.projected_graph_artifacts =
             prepared.projected_graph_artifacts.take().ok_or_else(|| {
                 HawDBError::Storage("prepared projection root was already adopted".into())
@@ -1552,15 +1573,7 @@ impl GraphStore {
         if let Some(relational_state) = prepared.checkpoint_relational_state.take() {
             self.relational_state = relational_state;
         }
-        self.append_state = AppendState::from_checkpoint_with_generated_order_watermarks(
-            prepared.checkpoint_append_reader.manifest().schemas.clone(),
-            prepared.checkpoint_append_reader.watermarks(),
-            prepared
-                .checkpoint_append_reader
-                .generated_order_watermarks()
-                .clone(),
-        )
-        .map_err(HawDBError::from_storage_error)?;
+        self.append_state = append;
         self.append_generation_reader = Some(prepared.checkpoint_append_reader.clone());
         if prepared.checkpoint_out_of_core {
             let durable = self.durable.as_ref().ok_or_else(|| {

@@ -87,7 +87,7 @@ fn ownership_bytes<T>() -> usize {
     size_of::<CowData<T>>() + 2 * size_of::<std::sync::atomic::AtomicUsize>()
 }
 
-fn tree_node_bytes<K, V>() -> usize {
+pub(crate) fn tree_node_bytes<K, V>() -> usize {
     // Pinned Rust B=6: include the largest internal-node layout, padded fields
     // and a conservative node count that covers root and underfilled nodes.
     let alignment = align_of::<K>()

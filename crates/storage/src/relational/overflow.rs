@@ -29,7 +29,8 @@ pub(in crate::relational) use envelope::admit_overflow_hydration;
 use envelope::DEFAULT_ZSTD_LEVEL;
 pub(crate) use envelope::{
     decode_overflow_envelope, encode_overflow_envelope, encode_overflow_envelope_with_work_context,
-    validate_overflow_envelope_with_work_context, EncodedRelationalOverflow,
+    validate_overflow_envelope_with_work_context, CheckpointRelationalOverflow,
+    EncodedRelationalOverflow,
 };
 pub use exact::{
     RelationalOverflowReferenceSet, RelationalOverflowReferenceSetBuilder,

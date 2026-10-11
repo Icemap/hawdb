@@ -15,6 +15,7 @@
 //! Borrowed row payload encoding for a cooperatively admitted checkpoint.
 
 mod decode;
+mod row_encoding;
 pub(super) use decode::{
     bytes as decode_bytes_with_work_context, string as decode_string_with_work_context,
 };
@@ -28,6 +29,7 @@ pub(super) use runtime::{
 mod mount;
 pub(crate) use mount::decode_relational_checkpoint_file_with_work_context;
 mod schema;
+pub(crate) use schema::{decode_row_owned, decode_schema_owned};
 mod validation;
 pub(crate) use schema::decode_schema as decode_relational_table_schema_with_work_context;
 pub(super) use validation::{
@@ -76,16 +78,8 @@ pub(crate) fn validate_relational_table_schema_codec_shape_with_work_context(
 pub(crate) fn encode_relational_row_payload_with_work_context(
     row: &RelationalRow,
     work: &CheckpointWorkContext,
-) -> Result<Vec<u8>, RelationalError> {
-    let unit = work.start_unit().map_err(work_error)?;
-    let mut encoder = Encoder::default();
-    encoder.count(row.values().len(), "row values")?;
-    unit.finish();
-    for value in row.values() {
-        encode_value_with_work_context(&mut encoder, value, work)?;
-    }
-    work.checkpoint().map_err(work_error)?;
-    Ok(encoder.finish())
+) -> Result<CheckpointBytes, RelationalError> {
+    row_encoding::encode(row, work)
 }
 
 pub(super) fn work_error(error: CheckpointWorkError) -> RelationalError {
@@ -197,74 +191,29 @@ fn string_with_work_context(
     work.checkpoint().map_err(work_error)
 }
 
-fn string_list_with_work_context(
-    encoder: &mut Encoder,
-    values: &[String],
-    work: &CheckpointWorkContext,
-) -> Result<(), RelationalError> {
-    let unit = work.start_unit().map_err(work_error)?;
-    encoder.count(values.len(), "string list")?;
-    unit.finish();
-    for value in values {
-        string_with_work_context(encoder, value, work)?;
-    }
-    work.checkpoint().map_err(work_error)
-}
-
 fn table_schema_with_work_context(
     encoder: &mut Encoder,
     schema: &RelationalTableSchema,
     work: &CheckpointWorkContext,
 ) -> Result<(), RelationalError> {
-    string_with_work_context(encoder, &schema.name, work)?;
-    let unit = work.start_unit().map_err(work_error)?;
-    encoder.count(schema.columns.len(), "table columns")?;
-    unit.finish();
-    for column in &schema.columns {
-        string_with_work_context(encoder, &column.name, work)?;
-        let unit = work.start_unit().map_err(work_error)?;
-        encoder.scalar_type(column.scalar_type);
-        encoder.u8(u8::from(column.nullable));
-        match &column.default {
-            None => encoder.u8(0),
-            Some(RelationalColumnDefault::Literal(_)) => encoder.u8(1),
-            Some(RelationalColumnDefault::UuidV7) => encoder.u8(2),
+    struct Controlled<'a> {
+        encoder: &'a mut Encoder,
+        work: &'a CheckpointWorkContext,
+    }
+    impl schema_encoding::Sink for Controlled<'_> {
+        fn raw(&mut self, bytes: &[u8]) -> Result<(), RelationalError> {
+            for block in bytes.chunks(64 * 1024) {
+                let unit = self.work.start_unit().map_err(work_error)?;
+                self.encoder.bytes.extend_from_slice(block);
+                unit.finish();
+            }
+            self.work.checkpoint().map_err(work_error)
         }
-        unit.finish();
-        if let Some(RelationalColumnDefault::Literal(value)) = &column.default {
-            encode_value_with_work_context(encoder, value, work)?;
+        fn value(&mut self, value: &RelationalValue) -> Result<(), RelationalError> {
+            encode_value_with_work_context(self.encoder, value, self.work)
         }
     }
-    string_list_with_work_context(encoder, &schema.primary_key, work)?;
-    let unit = work.start_unit().map_err(work_error)?;
-    encoder.count(schema.unique_constraints.len(), "unique constraints")?;
-    unit.finish();
-    for columns in &schema.unique_constraints {
-        string_list_with_work_context(encoder, columns, work)?;
-    }
-    let unit = work.start_unit().map_err(work_error)?;
-    encoder.count(schema.foreign_keys.len(), "foreign keys")?;
-    unit.finish();
-    for foreign in &schema.foreign_keys {
-        string_list_with_work_context(encoder, &foreign.columns, work)?;
-        string_with_work_context(encoder, &foreign.referenced_table, work)?;
-        string_list_with_work_context(encoder, &foreign.referenced_columns, work)?;
-        let unit = work.start_unit().map_err(work_error)?;
-        encoder.referential_action(foreign.on_delete);
-        encoder.referential_action(foreign.on_update);
-        unit.finish();
-    }
-    let unit = work.start_unit().map_err(work_error)?;
-    encoder.count(schema.indexes.len(), "indexes")?;
-    unit.finish();
-    for index in &schema.indexes {
-        string_with_work_context(encoder, &index.name, work)?;
-        string_list_with_work_context(encoder, &index.columns, work)?;
-        let unit = work.start_unit().map_err(work_error)?;
-        encoder.u8(u8::from(index.unique));
-        unit.finish();
-    }
-    work.checkpoint().map_err(work_error)
+    schema_encoding::schema(&mut Controlled { encoder, work }, schema.into())
 }
 
 pub(super) fn validate_reachability(
@@ -345,6 +294,12 @@ struct Payload<'a, W> {
     work: &'a CheckpointWorkContext,
 }
 
+impl<W: Write> schema_encoding::Sink for Payload<'_, W> {
+    fn raw(&mut self, bytes: &[u8]) -> Result<(), RelationalError> {
+        self.write_all(bytes)
+    }
+}
+
 impl<'a, W: Write> Payload<'a, W> {
     fn write_all(&mut self, bytes: &[u8]) -> Result<(), RelationalError> {
         let unit = self.work.start_unit().map_err(work_error)?;
@@ -417,7 +372,7 @@ pub(crate) fn encode_relational_checkpoint_with_work_context<W: Write + Seek>(
         unit.finish();
         payload.write_all(&table.finish())?;
         for row in segment.rows.values() {
-            payload.write_all(&encode_relational_row_payload_with_work_context(row, work)?)?;
+            schema_encoding::row(&mut payload, row)?;
         }
     }
     let unit = work.start_unit().map_err(work_error)?;

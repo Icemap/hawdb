@@ -15,6 +15,13 @@
 //! Cooperative private append generation mounting.
 
 use super::*;
+use crate::projection::predicate_checkpoint::decode::MapMemory;
+
+#[derive(Default)]
+struct PartitionWatermarks {
+    values: BTreeMap<RelationalKey, (usize, usize)>,
+    memory: MapMemory<(usize, usize)>,
+}
 
 pub(in crate::append_table::publication) fn open(
     directory: &Path,
@@ -50,10 +57,19 @@ pub(in crate::append_table::publication) fn open(
         ));
     }
 
-    let unit = work.start_unit().map_err(work_error)?;
-    let mut readers = Vec::with_capacity(manifest.segments.len());
-    let mut watermarks: BTreeMap<String, BTreeMap<RelationalKey, RelationalKey>> = BTreeMap::new();
-    unit.finish();
+    let owned = crate::background::CheckpointDecodeContext {
+        work: work.clone(),
+        memory: std::cell::RefCell::default(),
+    };
+    let temporary = crate::background::CheckpointDecodeContext {
+        work: work.clone(),
+        memory: std::cell::RefCell::default(),
+    };
+    let mut readers: Vec<AppendSegmentReader> = owned
+        .vector_capacity(manifest.segments.len())
+        .map_err(super::super::super::binary::allocation_error)?;
+    let mut watermarks: BTreeMap<String, PartitionWatermarks> = BTreeMap::new();
+    let mut table_memory = MapMemory::<PartitionWatermarks>::default();
     for binding in &manifest.segments {
         let unit = work.start_unit().map_err(work_error)?;
         let path = directory.join(append_segment_file(binding.generation));
@@ -80,7 +96,7 @@ pub(in crate::append_table::publication) fn open(
                 "append segment identity differs from its generation binding".to_string(),
             ));
         }
-        for descriptor in reader.descriptors() {
+        for (descriptor_index, descriptor) in reader.descriptors().iter().enumerate() {
             let unit = work.start_unit().map_err(work_error)?;
             if !manifest.schemas.contains_key(&descriptor.table) {
                 return Err(AppendTableError::Corruption(format!(
@@ -88,34 +104,95 @@ pub(in crate::append_table::publication) fn open(
                     descriptor.table
                 )));
             }
-            let partition_watermarks = watermarks.entry(descriptor.table.clone()).or_default();
-            let prior = partition_watermarks.get(&descriptor.partition_key);
-            if prior.is_some_and(|prior| prior >= &descriptor.min_order_key) {
+            let new_table = !watermarks.contains_key(&descriptor.table);
+            unit.finish();
+            if new_table {
+                table_memory
+                    .before_insert(watermarks.len(), &temporary)
+                    .map_err(super::super::super::binary::allocation_error)?;
+                let table = temporary
+                    .string(&descriptor.table)
+                    .map_err(super::super::super::binary::allocation_error)?;
+                watermarks.insert(table, PartitionWatermarks::default());
+            }
+            let partition_watermarks = watermarks.get_mut(&descriptor.table).expect("known table");
+            let unit = work.start_unit().map_err(work_error)?;
+            let prior = partition_watermarks.values.get(&descriptor.partition_key);
+            if prior.is_some_and(|(segment, index)| {
+                let prior_reader = if *segment == readers.len() {
+                    &reader
+                } else {
+                    &readers[*segment]
+                };
+                prior_reader.descriptors()[*index].max_order_key >= descriptor.min_order_key
+            }) {
                 return Err(AppendTableError::Corruption(format!(
                     "append segments overlap or regress table {} partition watermark",
                     descriptor.table
                 )));
             }
-            partition_watermarks.insert(
-                descriptor.partition_key.clone(),
-                descriptor.max_order_key.clone(),
-            );
+            let new_partition = prior.is_none();
             unit.finish();
+            if new_partition {
+                partition_watermarks
+                    .memory
+                    .before_insert(partition_watermarks.values.len(), &temporary)
+                    .map_err(super::super::super::binary::allocation_error)?;
+                let partition = super::state::key_copy(&descriptor.partition_key, &temporary)
+                    .map_err(super::super::super::binary::allocation_error)?;
+                let unit = work.start_unit().map_err(work_error)?;
+                partition_watermarks
+                    .values
+                    .insert(partition, (readers.len(), descriptor_index));
+                unit.finish();
+            } else {
+                let unit = work.start_unit().map_err(work_error)?;
+                *partition_watermarks
+                    .values
+                    .get_mut(&descriptor.partition_key)
+                    .expect("known partition") = (readers.len(), descriptor_index);
+                unit.finish();
+            }
         }
         let unit = work.start_unit().map_err(work_error)?;
         readers.push(reader);
         unit.finish();
     }
-    validate_generated_watermarks(
+    validate_generated_watermarks_by_order(
         &manifest.schemas,
-        &watermarks,
         &manifest.generated_order_watermarks,
         work,
+        |table| {
+            watermarks
+                .get(table)
+                .into_iter()
+                .flat_map(|partitions| partitions.values.values())
+                .map(|(segment, index)| &readers[*segment].descriptors()[*index].max_order_key)
+        },
     )?;
+    drop(watermarks);
+    drop(temporary);
+    let segments = if readers.is_empty() {
+        AppendSegmentRoots::Empty
+    } else {
+        // The decoded readers and their permits stay in the same backing array.
+        let bytes =
+            std::mem::size_of::<Vec<AppendSegmentReader>>() + 2 * std::mem::size_of::<usize>();
+        owned
+            .reserve(bytes)
+            .map_err(super::super::super::binary::allocation_error)?;
+        let unit = work.start_unit().map_err(work_error)?;
+        let readers = Arc::new(readers);
+        unit.finish();
+        AppendSegmentRoots::Shared {
+            readers,
+            _memory: owned.memory.into_inner(),
+        }
+    };
     let unit = work.start_unit().map_err(work_error)?;
     let reader = AppendGenerationReader {
-        manifest: Arc::new(manifest),
-        segments: readers.into(),
+        manifest: manifest.into(),
+        segments,
     };
     unit.finish();
     work.checkpoint().map_err(work_error)?;
@@ -126,7 +203,7 @@ pub(super) fn manifest_decode(
     encoded: &[u8],
     config: AppendPublicationConfig,
     work: &CheckpointWorkContext,
-) -> Result<AppendGenerationManifest, AppendTableError> {
+) -> Result<CheckpointAppendManifest, AppendTableError> {
     work.checkpoint().map_err(work_error)?;
     if encoded.len() < MANIFEST_HEADER_BYTES || &encoded[..8] != MANIFEST_MAGIC {
         return Err(AppendTableError::Corruption(
@@ -185,22 +262,41 @@ pub(super) fn manifest_decode(
             "append manifest checksum mismatch".to_string(),
         ));
     }
-    let mut decoder = Decoder::new(payload);
+    let owned = crate::background::CheckpointDecodeContext {
+        work: work.clone(),
+        memory: std::cell::RefCell::default(),
+    };
+    let mut decoder = Decoder::with_allocations(payload, Some(&owned));
     let mut schemas = BTreeMap::new();
+    let mut schema_memory =
+        crate::projection::predicate_checkpoint::decode::MapMemory::<AppendTableSchema>::default();
     for _ in 0..schema_count {
-        let unit = work.start_unit().map_err(work_error)?;
         let schema_record = decoder.bytes(config.max_schema_bytes, "append schema")?;
-        let batch = decode_append_wal_batch(schema_record, AppendDecodeLimits::wal())?;
-        let [AppendWrite::CreateTable { schema }] = batch.transaction.writes.as_slice() else {
+        let batch = super::super::super::codec::decode_batch(
+            schema_record,
+            AppendDecodeLimits::wal(),
+            Some(&owned),
+        )?;
+        let writes_memory = owned
+            .find(batch.transaction.writes.as_ptr() as usize)
+            .map_err(super::super::super::binary::allocation_error)?;
+        let mut writes = batch.transaction.writes.into_iter();
+        let (Some(AppendWrite::CreateTable { schema }), None) = (writes.next(), writes.next())
+        else {
             return Err(AppendTableError::Corruption(
                 "append manifest schema record has an invalid shape".to_string(),
             ));
         };
-        if batch.epoch != 0
-            || schemas
-                .insert(schema.name.clone(), schema.clone())
-                .is_some()
-        {
+        drop(writes);
+        writes_memory.release_buffer();
+        schema_memory
+            .before_insert(schemas.len(), &owned)
+            .map_err(super::super::super::binary::allocation_error)?;
+        let name = owned
+            .string(&schema.name)
+            .map_err(super::super::super::binary::allocation_error)?;
+        let unit = work.start_unit().map_err(work_error)?;
+        if batch.epoch != 0 || schemas.insert(name, schema).is_some() {
             return Err(AppendTableError::Corruption(
                 "append manifest schema record has a non-zero epoch or duplicate name".to_string(),
             ));
@@ -208,8 +304,12 @@ pub(super) fn manifest_decode(
         unit.finish();
     }
     let mut generated_order_watermarks = BTreeMap::new();
+    let mut watermark_memory =
+        crate::projection::predicate_checkpoint::decode::MapMemory::<i64>::default();
     for _ in 0..generated_order_watermark_count {
-        let unit = work.start_unit().map_err(work_error)?;
+        watermark_memory
+            .before_insert(generated_order_watermarks.len(), &owned)
+            .map_err(super::super::super::binary::allocation_error)?;
         let table = decoder.string(config.max_schema_bytes, "append generated-order table")?;
         let watermark = i64::from_le_bytes(
             decoder
@@ -220,6 +320,7 @@ pub(super) fn manifest_decode(
                 .try_into()
                 .expect("fixed i64"),
         );
+        let unit = work.start_unit().map_err(work_error)?;
         if generated_order_watermarks
             .insert(table, watermark)
             .is_some()
@@ -230,14 +331,15 @@ pub(super) fn manifest_decode(
         }
         unit.finish();
     }
-    let mut segments = Vec::with_capacity(segment_count);
+    let mut segments = decoder.vector(segment_count)?;
     for _ in 0..segment_count {
-        let unit = work.start_unit().map_err(work_error)?;
-        segments.push(AppendSegmentBinding {
+        let binding = AppendSegmentBinding {
             generation: decoder.u64()?,
             source_commit_epoch: decoder.u64()?,
             artifact: decode_artifact(&mut decoder)?,
-        });
+        };
+        let unit = work.start_unit().map_err(work_error)?;
+        segments.push(binding);
         unit.finish();
     }
     decoder.finish("append manifest")?;
@@ -269,14 +371,24 @@ pub(super) fn manifest_decode(
         ));
     }
     work.checkpoint().map_err(work_error)?;
-    Ok(AppendGenerationManifest {
-        generation,
-        source_commit_epoch,
-        previous_generation,
-        root_set_digest,
-        schemas,
-        generated_order_watermarks,
-        segments,
+    if !schemas.is_empty() || !segments.is_empty() || !generated_order_watermarks.is_empty() {
+        owned
+            .reserve(
+                std::mem::size_of::<CheckpointAppendManifest>() + 2 * std::mem::size_of::<usize>(),
+            )
+            .map_err(super::super::super::binary::allocation_error)?;
+    }
+    Ok(CheckpointAppendManifest {
+        data: AppendGenerationManifest {
+            generation,
+            source_commit_epoch,
+            previous_generation,
+            root_set_digest,
+            schemas,
+            generated_order_watermarks,
+            segments,
+        },
+        memory: owned.memory.into_inner(),
     })
 }
 
@@ -285,7 +397,7 @@ fn read_artifact(
     max_bytes: usize,
     context: &str,
     work: &CheckpointWorkContext,
-) -> Result<Vec<u8>, AppendTableError> {
+) -> Result<crate::background::CheckpointBytes, AppendTableError> {
     let unit = work.start_unit().map_err(work_error)?;
     let wave = work.io_wave().map_err(work_error)?;
     let file = File::open(path).map_err(durability("open append artifact"))?;
@@ -298,10 +410,12 @@ fn read_artifact(
             "{context} contains {encoded_len} bytes, exceeding limit {max_bytes}"
         )));
     }
-    let mut encoded = Vec::with_capacity(encoded_len as usize);
     let mut reader = file.take((max_bytes as u64).saturating_add(1));
     drop(wave);
     unit.finish();
+    let encoded_len = to_usize(encoded_len, "artifact length")?;
+    let mut encoded =
+        crate::background::CheckpointBytes::new(encoded_len, work).map_err(work_error)?;
     let mut buffer = [0; 64 * 1024];
     loop {
         let unit = work.start_unit().map_err(work_error)?;
@@ -309,17 +423,17 @@ fn read_artifact(
         let count = reader
             .read(&mut buffer)
             .map_err(durability("read append artifact"))?;
-        encoded.extend_from_slice(&buffer[..count]);
         drop(wave);
         unit.finish();
+        if count > max_bytes.saturating_sub(encoded.len()) {
+            return Err(AppendTableError::Admission(format!(
+                "{context} exceeds limit {max_bytes}"
+            )));
+        }
+        encoded.append(&buffer[..count], work).map_err(work_error)?;
         if count == 0 {
             break;
         }
-    }
-    if encoded.len() > max_bytes {
-        return Err(AppendTableError::Admission(format!(
-            "{context} exceeds limit {max_bytes}"
-        )));
     }
     work.checkpoint().map_err(work_error)?;
     Ok(encoded)

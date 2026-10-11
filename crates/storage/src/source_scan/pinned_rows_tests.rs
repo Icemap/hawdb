@@ -198,24 +198,75 @@ fn pinned_preparation_avoids_wide_nested_record_copies_under_a_small_working_cei
         .unwrap();
     let work = CheckpointWorkContext::new(admission.task_context().unwrap().clone())
         .with_scheduler(scheduler());
-    // This is the actual preceding production builder. Its wide copies are
-    // observed even though this preparation ceiling is only 3 KiB.
+    // The ordinary reference still proves the fixture contains four wide
+    // maps. Both controlled builders must now account metadata as well.
     let observer = crate::test_allocator::AllocationObservation::start();
-    let copied = build_with_work_context(4, Some(LabelId(7)), nodes.values(), &work).unwrap();
+    let copied = build_with_work_context(
+        4,
+        Some(LabelId(7)),
+        nodes.values(),
+        &CheckpointWorkContext::default(),
+    )
+    .unwrap();
     assert!(observer.finish() >= 4);
     drop(copied);
+    let original = nodes.clone();
+    for pinned in [false, true] {
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|work| {
+            if pinned {
+                build_with_pinned_nodes(4, Some(LabelId(7)), &nodes, work)
+            } else {
+                build_with_work_context(4, Some(LabelId(7)), nodes.values(), work)
+            }
+        });
+        assert_eq!(observer.finish(), 0);
+        assert!(matches!(
+            result,
+            Err(crate::background::CheckpointOperationError::Work(
+                crate::background::CheckpointWorkError::Memory(_)
+            ))
+        ));
+        assert!(nodes.shares_storage_with(&original));
+        assert_eq!(nodes.len(), 4);
+        for id in 0..4 {
+            assert_eq!(nodes.get(&NodeId(id)), original.get(&NodeId(id)));
+        }
+        assert!(admission.memory_report().peak_accounted_bytes <= 3 * 1024);
+        assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+    }
+    drop(work);
+    drop(admission);
+    assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn pinned_projection_keeps_summary_leases_until_the_last_clone() {
+    let mut nodes = CowSegmentedMap::default();
+    nodes.insert(NodeId(7), node(7, Value::String("s".repeat(512 * 1024))));
+    let resources = governor();
+    let admission = resources
+        .try_admit_incremental_maintenance(0, 1024 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let work = CheckpointWorkContext::new(admission.task_context().unwrap().clone())
+        .with_scheduler(scheduler());
     let observer = crate::test_allocator::AllocationObservation::start();
-    let pinned = build_with_pinned_nodes(4, Some(LabelId(7)), &nodes, &work).unwrap();
+    let projection = build_with_pinned_nodes(1, Some(LabelId(7)), &nodes, &work).unwrap();
+    assert_eq!(
+        observer.finish(),
+        1,
+        "copy a distinct dictionary scalar once"
+    );
+    let bytes = admission.memory_report().live_accounted_bytes;
+    assert!(bytes >= 512 * 1024);
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let copied = projection.clone();
     assert_eq!(observer.finish(), 0);
-    assert!(pinned
-        .source_nodes
-        .as_ref()
-        .unwrap()
-        .shares_storage_with(&nodes));
-    assert_eq!(pinned.segments.len(), 1);
-    assert!(pinned.segments[0].rows.is_empty());
-    assert_eq!(pinned.segments[0].summary.row_count, 4);
-    assert!(admission.memory_report().peak_accounted_bytes <= 3 * 1024);
+    assert_eq!(admission.memory_report().live_accounted_bytes, bytes);
+    drop(projection);
+    assert_eq!(admission.memory_report().live_accounted_bytes, bytes);
+    assert_eq!(copied.segments[0].summary.row_count, 1);
+    drop(copied);
     assert_eq!(admission.memory_report().live_accounted_bytes, 0);
     drop(work);
     drop(admission);
@@ -336,4 +387,224 @@ fn pinned_reference_capacity_denies_before_any_wide_copy_or_source_change() {
     drop(work);
     drop(admission);
     assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn pinned_summary_denies_wide_scalar_copies_before_allocation() {
+    let mut nodes = CowSegmentedMap::default();
+    nodes.insert(NodeId(7), node(7, Value::String("s".repeat(512 * 1024))));
+    let resources = governor();
+    let admission = resources
+        .try_admit_incremental_maintenance(0, 4 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let local = scheduler();
+    let work = CheckpointWorkContext::new(admission.task_context().unwrap().clone())
+        .with_scheduler(local.clone());
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let result = work.classify(|work| build_with_pinned_nodes(1, Some(LabelId(7)), &nodes, work));
+    let copies = observer.finish();
+    assert!(result.is_err(), "a 4 KiB preparation ceiling admitted wide scalar summary copies: {copies} large allocations");
+    assert!(matches!(
+        result,
+        Err(crate::background::CheckpointOperationError::Work(
+            crate::background::CheckpointWorkError::Memory(_)
+        ))
+    ));
+    assert_eq!(copies, 0, "deny before copying the 512 KiB scalar");
+    assert!(admission.memory_report().peak_accounted_bytes <= 4 * 1024);
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+    assert_eq!(local.state().running_background_operations, 0);
+    assert_eq!(
+        nodes.get(&NodeId(7)).unwrap().properties["payload"],
+        Value::String("s".repeat(512 * 1024))
+    );
+}
+
+#[test]
+fn scalar_copy_denial_reaches_scalar_after_admitting_metadata() {
+    let mut nodes = CowSegmentedMap::default();
+    nodes.insert(NodeId(7), node(7, Value::String("s".repeat(512 * 1024))));
+    let resources = governor();
+    let admission = resources
+        .try_admit_incremental_maintenance(0, 32 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let work = CheckpointWorkContext::new(admission.task_context().unwrap().clone())
+        .with_scheduler(scheduler());
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let result = work.classify(|work| build_with_pinned_nodes(1, Some(LabelId(7)), &nodes, work));
+    let copies = observer.finish();
+    assert!(
+        result.is_err(),
+        "unadmitted scalar result; large copies: {copies}"
+    );
+    let error = result.unwrap_err();
+    assert_eq!(copies, 0);
+    assert!(matches!(error,
+        crate::background::CheckpointOperationError::Work(crate::background::CheckpointWorkError::Memory(hawdb_core::RuntimeMemoryError::ReservationExceeded { requested_bytes, available_bytes }))
+        if requested_bytes == 512 * 1024 && available_bytes == 32 * 1024
+    ));
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+    assert!(admission.memory_report().peak_accounted_bytes > 4 * 1024);
+    assert!(admission.memory_report().peak_accounted_bytes <= 32 * 1024);
+}
+
+#[test]
+fn source_descriptor_denies_before_unadmitted_scalar_encoding() {
+    let mut nodes = CowSegmentedMap::default();
+    nodes.insert(NodeId(7), node(7, Value::String("s".repeat(512 * 1024))));
+    let mut projection = build_with_pinned_nodes(
+        1,
+        Some(LabelId(7)),
+        &nodes,
+        &CheckpointWorkContext::default(),
+    )
+    .unwrap();
+    projection
+        .segments
+        .make_mut(&CheckpointWorkContext::default())
+        .unwrap()[0]
+        .payload_range = Some(SegmentPayloadRange {
+        artifact_id: 1,
+        offset: 0,
+        length: NonZeroU64::MIN,
+        checksum: 0,
+    });
+    let resources = governor();
+    let admission = resources
+        .try_admit_incremental_maintenance(0, 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let work = CheckpointWorkContext::new(admission.task_context().unwrap().clone())
+        .with_scheduler(scheduler());
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let result = work.classify(|work| encode_descriptor_with_work_context(&projection, work));
+    let copies = observer.finish();
+    assert!(
+        result.is_err(),
+        "unadmitted descriptor result; large allocations: {copies}"
+    );
+    let error = result.unwrap_err();
+    assert_eq!(copies, 0);
+    assert!(matches!(
+        error,
+        crate::background::CheckpointOperationError::Work(
+            crate::background::CheckpointWorkError::Memory(_)
+        )
+    ));
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+    assert!(admission.memory_report().peak_accounted_bytes <= 1024);
+}
+
+#[test]
+fn source_descriptor_retains_its_lease_through_footer_and_extreme_ranges() {
+    let record = node(u64::MAX, Value::String("é;\t\n".repeat(4096)));
+    let expected_summary = reference::summary(
+        0,
+        &[SourceScanRow {
+            node_id: u64::MAX,
+            properties: record.properties.clone(),
+        }],
+    );
+    let mut nodes = CowSegmentedMap::default();
+    nodes.insert(record.id, record);
+    let mut projection = build_with_pinned_nodes(
+        u64::MAX,
+        Some(LabelId(7)),
+        &nodes,
+        &CheckpointWorkContext::default(),
+    )
+    .unwrap();
+    let range = SegmentPayloadRange {
+        artifact_id: u64::MAX,
+        offset: u64::MAX,
+        length: NonZeroU64::new(u64::MAX).unwrap(),
+        checksum: u64::MAX,
+    };
+    projection
+        .segments
+        .make_mut(&CheckpointWorkContext::default())
+        .unwrap()[0]
+        .payload_range = Some(range);
+    let expected_body = reference::descriptor(u64::MAX, &[expected_summary], &[range]);
+    let (expected_file, expected_checksum) = reference::descriptor_file(&expected_body);
+    let resources = governor();
+    let admission = resources
+        .try_admit_incremental_maintenance(0, 1024 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let local = scheduler();
+    let work = CheckpointWorkContext::new(admission.task_context().unwrap().clone())
+        .with_scheduler(local.clone());
+    let mut body = work
+        .classify(|work| encode_descriptor_with_work_context(&projection, work))
+        .unwrap();
+    assert_eq!(body.as_bytes(), expected_body.as_bytes());
+    assert!(admission.memory_report().live_accounted_bytes >= body.text.capacity() as u64);
+    let checksum = work.checksum(body.as_bytes()).unwrap();
+    assert_eq!(checksum, expected_checksum);
+    body.fields(format_args!("checksum\t{checksum}\n"), &work)
+        .unwrap();
+    assert_eq!(body.as_bytes(), expected_file.as_bytes());
+    assert!(admission.memory_report().live_accounted_bytes >= body.text.capacity() as u64);
+    let decoded = decode_descriptor(&body, checksum).unwrap();
+    assert_eq!(decoded.graph_epoch, u64::MAX);
+    assert_eq!(decoded.segments[0].payload_range, Some(range));
+    assert_eq!(decoded.segments[0].summary, projection.segments[0].summary);
+    assert!(admission.memory_report().peak_accounted_bytes <= 1024 * 1024);
+    drop(body);
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+    assert_eq!(local.state().running_background_operations, 0);
+    drop(work);
+    drop(admission);
+    assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn pinned_summary_preserves_all_128_positions_for_a_repeated_exact_key() {
+    let mut nodes = CowSegmentedMap::default();
+    let mut rows = Vec::new();
+    for id in 0..128 {
+        let mut record = node(id, Value::Int(id as i64));
+        record
+            .properties
+            .insert("id".into(), Value::String("same;é".into()));
+        rows.push(SourceScanRow {
+            node_id: id,
+            properties: record.properties.clone(),
+        });
+        nodes.insert(record.id, record);
+    }
+    let expected = reference::summary(0, &rows);
+    let resources = governor();
+    let admission = resources
+        .try_admit_incremental_maintenance(0, 256 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let work = CheckpointWorkContext::new(admission.task_context().unwrap().clone())
+        .with_scheduler(scheduler());
+    let projection = build_with_pinned_nodes(128, Some(LabelId(7)), &nodes, &work).unwrap();
+    assert_eq!(projection.segments.len(), 1);
+    assert_eq!(projection.segments[0].summary, expected);
+    let exact = &projection.segments[0].summary.fields["id"].exact_values;
+    assert_eq!(exact.len(), 1);
+    assert_eq!(
+        exact.values().next().unwrap().iter().collect::<Vec<_>>(),
+        (0..128).collect::<Vec<_>>()
+    );
+    assert!(admission.memory_report().live_accounted_bytes > 0);
+    drop(projection);
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+}
+
+#[test]
+fn source_exact_cursor_allocations_fit_the_admitted_segment_bound() {
+    // Observe every actual allocation, including replaced capacities. The
+    // summary inserts local positions in ascending order for at most 128 rows.
+    let observer = crate::test_allocator::AllocationObservation::start_all();
+    let mut cursor = roaring::RoaringTreemap::new();
+    for position in 0..128 {
+        cursor.insert(position);
+    }
+    let bytes = observer.finish_bytes();
+    assert!(bytes > 0);
+    assert!(bytes <= summary::EXACT_CURSOR_ALLOCATION_BYTES, "{bytes}");
+    assert_eq!(cursor.len(), 128);
+    assert!(cursor.contains(127));
 }

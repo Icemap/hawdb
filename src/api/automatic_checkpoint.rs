@@ -16,9 +16,10 @@
 
 use super::{Catalog, DatabaseConfig, GraphStore, LocalQosScheduler, ReaderPins};
 use crate::error::{HawDBError, Result};
-use hawdb_core::RuntimeTaskContext;
+use hawdb_core::{RuntimeMemoryError, RuntimeTaskContext};
 use hawdb_qos::{
-    RuntimeAdmissionError, RuntimeGovernor, RuntimeMaintenanceWork, RuntimeWorkRequest,
+    RuntimeAdmissionCode, RuntimeAdmissionError, RuntimeGovernor, RuntimeMaintenanceWork,
+    RuntimeWorkRequest,
 };
 use hawdb_storage::background::{
     CheckpointOperationError, CheckpointWorkContext, CheckpointWorkError,
@@ -35,6 +36,7 @@ const RETRY_DELAY: Duration = Duration::from_millis(100);
 // Publication, sync-group draining and active reclamation keep their fences.
 const PREPARATION_BACKOFF_LIMIT: Duration = Duration::from_millis(10);
 const PLANNING_MEMORY_BYTES: u64 = 64 * 1024;
+const OWNER_MEMORY_BYTES: u64 = 64 * 1024;
 const MAX_OPERATION_FAILURES: u8 = 3;
 // Cap the serialized suffix admitted while new writers yield to publication.
 // This is not a bound on schema replay, allocation or physical synchronization.
@@ -62,6 +64,9 @@ pub struct AutomaticCheckpointReport {
     /// requests exceed current capacity; replacing or refreshing the governor
     /// can change that capacity. A new attempt clears this value.
     pub preparation_admission_denial: Option<RuntimeAdmissionError>,
+    /// The latest concrete allocation denial. Its requested size, pressure
+    /// and retryability are preserved without counting an operation failure.
+    pub preparation_memory_denial: Option<RuntimeMemoryError>,
 }
 
 #[derive(Default)]
@@ -69,6 +74,7 @@ struct PreparationReport {
     planning_scans: u64,
     planning_cache_hits: u64,
     admission_denial: Option<RuntimeAdmissionError>,
+    memory_denial: Option<RuntimeMemoryError>,
     operation_failed: bool,
 }
 
@@ -938,6 +944,7 @@ fn run(
             state.report.planning_scans += preparation_report.planning_scans;
             state.report.planning_cache_hits += preparation_report.planning_cache_hits;
             state.report.preparation_admission_denial = preparation_report.admission_denial;
+            state.report.preparation_memory_denial = preparation_report.memory_denial;
         }
         let (mut candidate, mut admission) = match attempt {
             Ok(Some(work)) => work,
@@ -1402,6 +1409,7 @@ fn prepare(
     report: &mut PreparationReport,
 ) -> Result<Option<(CheckpointCandidate, Admission)>> {
     report.admission_denial = None;
+    report.memory_denial = None;
     report.operation_failed = false;
     task.checkpoint()
         .map_err(|reason| HawDBError::Storage(reason.to_string()))?;
@@ -1425,8 +1433,8 @@ fn prepare(
         bytes
     } else {
         // Planning borrows the captured source and keeps only scalar totals.
-        // Its traversal is admitted in bounded units before the current
-        // conservative whole-candidate memory reservation is calculated.
+        // Its traversal is admitted in bounded units. The estimate limits
+        // live allocation ownership; it is not an upfront reservation.
         let planning = governor
             .try_admit(RuntimeWorkRequest::background_maintenance(
                 PLANNING_MEMORY_BYTES,
@@ -1452,7 +1460,7 @@ fn prepare(
         bytes
     };
     let runtime = governor
-        .try_admit_resumable_maintenance(memory, 1, task.clone())
+        .try_admit_incremental_maintenance(OWNER_MEMORY_BYTES, memory, 1, task.clone())
         .map_err(|reason| {
             report.admission_denial = Some(reason);
             HawDBError::Storage(format!("automatic checkpoint admission deferred: {reason}"))
@@ -1515,7 +1523,25 @@ fn preparation_result<T>(
     report: &mut PreparationReport,
 ) -> Result<T> {
     result.map_err(|error| match error {
-        CheckpointOperationError::Work(error) => HawDBError::from_storage_error(error),
+        CheckpointOperationError::Work(error) => {
+            if let CheckpointWorkError::Memory(RuntimeMemoryError::AdmissionDenied {
+                requested_bytes,
+                available_bytes,
+                retryable,
+            }) = &error
+            {
+                report.admission_denial = Some(RuntimeAdmissionError {
+                    code: RuntimeAdmissionCode::MemorySaturated,
+                    requested: *requested_bytes,
+                    available: *available_bytes,
+                    retryable: *retryable,
+                });
+            }
+            if let CheckpointWorkError::Memory(reason) = &error {
+                report.memory_denial = Some(*reason);
+            }
+            HawDBError::from_storage_error(error)
+        }
         CheckpointOperationError::Operation(error) => {
             report.operation_failed = true;
             error

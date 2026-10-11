@@ -30,6 +30,31 @@ impl CheckpointText {
         work.checkpoint().map_err(HawDBError::from_storage_error)
     }
 
+    pub(crate) fn scan_scalar(
+        &mut self,
+        value: &crate::scan::ScanScalar,
+        escapes: u32,
+        work: &CheckpointWorkContext,
+    ) -> Result<()> {
+        use crate::scan::ScanScalar;
+        match value {
+            ScanScalar::Bool(value) => {
+                self.escaped(if *value { b"b1" } else { b"b0" }, escapes, work)
+            }
+            ScanScalar::Int(value) => self.escaped_scalar(format_args!("i{value}"), escapes, work),
+            ScanScalar::Float(bits) => self.escaped_scalar(format_args!("f{bits}"), escapes, work),
+            ScanScalar::Uuid(value) => self.escaped_scalar(format_args!("u{value}"), escapes, work),
+            ScanScalar::String(value) => {
+                self.escaped(b"s", escapes, work)?;
+                self.escaped(value.as_bytes(), escapes + 1, work)
+            }
+            ScanScalar::Binary(value) => {
+                self.escaped(b"x", escapes, work)?;
+                self.escaped(value, escapes + 1, work)
+            }
+        }
+    }
+
     pub(crate) fn properties(
         &mut self,
         properties: &BTreeMap<String, Value>,

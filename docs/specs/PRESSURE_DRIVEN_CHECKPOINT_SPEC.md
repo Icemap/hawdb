@@ -154,9 +154,19 @@ use this same owning tagged encoder rather than a duplicate recursive codec.
 Growth admits simultaneous old/new capacities before copying, and wide encoding
 checks cancellation in bounded
 units. Denial and cancellation destroy the text before refunding its lease.
-Summary/dictionary, descriptor, compressed output and native compression
-workspace accounting remain separate coverage gaps; this does not qualify the
-small automatic owner by itself.
+Source payload compression owns an admitted fixed staging buffer, bounded
+compressed-output capacity and the final envelope bytes. Its Zstd allocations
+use the captured task's controller before calling the Rust allocator; native
+allocation headers retain the permits until the physical blocks are freed.
+Native allocation failures release completed allocations, and host-controller
+or permit panics remain contained at the C callback boundary and prevent a
+successful encoded result. The output retains only its own capacity/permit
+charge after encoding and continues owning it after task/admission closure.
+The qualified ABI remains Zstd 1.5.7; allocator rounding/metadata, native-call
+latency and panic-abort builds retain their platform assumptions. Other envelope
+callers still use their preceding workspace policy. Summary/dictionary and
+descriptor accounting remain separate coverage gaps; this does not qualify the
+small automatic owner or fully resumable compression by itself.
 
 The ordinary property decoder preserves the existing text wire grammar while
 distinguishing hex-escaped map leaves from outer tagged property values. Internal
@@ -2362,10 +2372,12 @@ Separate resource tests cover simultaneous allocation limits, epoch reuse,
 lower parent ceilings, pressure recovery, process-policy sharing and the
 irreducible-owner permanent-denial boundary.
 
-This foundation does not yet replace the automatic owner's conservative
-whole-candidate admission. Before that switch, preparation must account its
-remaining allocations and retain resumable builder state at bounded resource
-denials. Property-projection definition vectors/strings and relationship-key
+The automatic owner now uses a fixed 64 KiB controller reservation. Its cached
+source-size estimate is an allocation ceiling, rather than an upfront memory
+charge. Concrete allocation leases compete with foreground and retained work.
+This admission change does not establish complete preparation accounting or
+fully resumable artifact builders; remaining allocation paths must still be
+accounted and unfinished stages must retain bounded state at resource denials. Property-projection definition vectors/strings and relationship-key
 deduplication now have allocation leases as described below. Known paths still
 requiring inspection include COW detach/growth, relational checkpoint planning
 and final serving-reader construction. Complete CPU,
@@ -2597,3 +2609,106 @@ unacknowledged group. After the writer finishes, observing only the owner Contro
 must see automatic publication without another frontend access. Old snapshots,
 complete reopened values and resource release remain checked. This addresses
 the idle completion notification path, not sustained-write performance.
+
+
+### Small automatic owner and concrete preparation denials
+
+`prepare` uses incremental maintenance admission with a 64 KiB controller charge
+and wave-scoped I/O. Paused preparation and replay retain their actual owned
+allocation leases while releasing execution. Fresh attempts keep the original
+captured preparation identity and use the cached estimate without a second
+source-size traversal. Catalog captures already share immutable catalog roots.
+
+`AutomaticCheckpointReport::preparation_memory_denial` preserves the typed
+concrete allocation failure, including requested/available bytes, pressure and
+retryability. Allocation admission failures also populate
+`preparation_admission_denial`; they are deferred work and do not trip the
+non-admission storage-operation failure circuit. A unit larger than capacity
+minus the irreducible controller reports a permanent denial. Direct manual
+checkpoint APIs retain their synchronous behavior after private ownership drops.
+
+Resource regressions retain the original 1025-row, 512-byte-body dataset and
+16 MiB governor. That budget now prepares and publishes the complete result,
+then verifies every value after reopen. A separate 64 KiB governor cannot fit
+any concrete allocation alongside its controller: eight attempts retain one
+planning traversal, expose the permanent allocation denial and release all
+charges after source destruction. The two-generation 33-row case and captured
+128-row Source pause/catch-up case also use reduced 32 MiB budgets. These cases
+measure the admitted allocation ledger; they do not prove total RSS or that
+remaining relational and serving reconstruction allocations are accounted.
+Source summary construction now borrows scalar keys in a temporary admitted
+tree, retains dictionary/exact-cursor allocations with shared summaries and
+copies distinct strings after admission. Its 128-row position bitmap preserves
+all local cursor positions; measured allocation coverage checks the pinned
+Roaring cursor bound. Projection clones share data and leases, and publication
+admits a detached segment directory before changing its payload ranges.
+
+Source descriptors stream into owning admitted text through checksum-footer
+construction and file writes. Independent wire comparisons cover escaped wide
+strings and maximum-width range fields. The original 4 KiB/512 KiB scalar
+reproduction rejects before copying; a 32 KiB case reaches the scalar admission
+after metadata fits. The original 3 KiB nested-row fixture now rejects when its
+previously unaccounted metadata cannot fit, preserving all input records and
+refunds. Descriptor rejection likewise occurs before a wide encoding copy.
+These producer/ownership checks do not qualify serving reconstruction or
+bounded preparation restart cost. Full preparation resumability, unattended handoff, bounded
+pressure-writer waits, physical power-loss qualification and repeated default
+release comparisons remain required before merge readiness.
+
+Append bootstrap now constructs and validates an admitted runtime state before
+taking prepared projection or relational roots. Schema strings, default
+literals, key arrays, map nodes and shared cells retain their allocation leases
+through the store, its snapshots and independent `AppendState` clones. Empty
+maps use static borrowed maps, so graph-only handoff retains no append allocation
+or maintenance admission. Watermark collection borrows the last
+descriptor for each partition and copies only the retained keys. Validation
+scratch covers borrowed-name trees and overlapping key-position capacities.
+The unchanged 32 KiB/512 KiB schema reproduction rejects before a wide copy;
+a binary-default case covers the other variable-width relational variant. A
+fresh separately admitted execution reuses the completed base, publishes it and
+retains its charges until the last state clone closes. Two published generations
+cover default values, partition and generated-order watermarks, and cancellation
+at every runtime-construction unit. This covers runtime mounting.
+
+Append manifest publication borrows schema, generated-order and segment binding
+inputs. Ordinary relational schemas, controlled relational schemas and append
+schema records share the same borrowed schema/value wire grammar. The controlled
+manifest writer admits one final byte buffer before allocation, writes embedded
+create-table WAL records directly into it, and computes the existing checksums
+in bounded byte units. The buffer retains its actual capacity lease through the
+durable artifact write and any independently retained output. A 32 KiB budget
+rejects a 512 KiB schema name or Bytea default before a large allocation; a fresh
+1 MiB execution publishes either complete schema with one large allocation.
+Cancellation at every encoding unit refunds the buffer and validation scratch
+without publishing a new root digest. Segment encoding, manifest decoding,
+retained readers and fully resumable artifact builders still need complete
+resource qualification.
+
+### Append overflow digest-map allocation ownership
+
+The controlled append block writer admits overflow-map node growth before
+inserting a new digest. The map retains these leases until its actual nodes
+and envelope handles are destroyed. Shared overflow envelopes keep their
+independent byte leases; replacing an existing digest adds no node charge or
+allocation. Digest ordering and envelope-conflict validation remain unchanged.
+
+Node coverage reuses the pinned Rust 1.97.1 COW B-tree layout bound and the
+existing WAL/predicate insertion allowance. It covers internal-node capacity,
+alignment gaps, the root and transient split nodes. The append map performs
+no removals. Allocator metadata/rounding and standard-library insertion latency
+remain platform assumptions. This private wrapper is not a new storage index
+or a public API.
+
+Removing only node admission reproduces 72,592 unadmitted backing bytes for
+512 distinct digests and incorrectly admits all entries under the unchanged
+16 KiB working ceiling. With admission restored, the same fixture returns a
+typed retryable allocation denial and releases all private-container charges.
+Actual allocations at every insertion prefix are covered for ascending,
+descending and seeded shuffled digest order. Cancellation at all 513 actual
+CPU boundaries releases execution and map ownership; a fresh retry returns
+every envelope in the original digest order. Task closure and the last shared
+envelope clone retain their allocation coverage until destruction.
+
+These checks qualify this append container. Complete preparation allocation
+accounting, fully resumable bounded builders, unattended handoff, capacity-bound
+writer waits and the physical recovery/performance gates remain open.

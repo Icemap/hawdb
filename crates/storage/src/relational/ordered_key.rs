@@ -19,6 +19,7 @@ use std::fmt;
 pub(super) enum OrderedRelationalKeyError {
     UnsupportedOverflow,
     Corrupt(String),
+    Admission(String),
 }
 
 impl fmt::Display for OrderedRelationalKeyError {
@@ -30,6 +31,7 @@ impl fmt::Display for OrderedRelationalKeyError {
             Self::Corrupt(message) => {
                 write!(formatter, "corrupt ordered relational key: {message}")
             }
+            Self::Admission(message) => formatter.write_str(message),
         }
     }
 }
@@ -57,96 +59,39 @@ pub(crate) enum CheckpointKeyEncodeError {
     Work(crate::background::CheckpointWorkError),
 }
 
-/// Internal checkpoint codec; ordinary host key encoding remains unchanged.
+mod encode;
+pub(crate) use encode::CheckpointKeyEncoding;
+
+impl From<OrderedRelationalKeyError> for CheckpointKeyEncodeError {
+    fn from(error: OrderedRelationalKeyError) -> Self {
+        Self::Key(super::RelationalError::Corruption(error.to_string()))
+    }
+}
+
+impl From<crate::background::CheckpointWorkError> for CheckpointKeyEncodeError {
+    fn from(error: crate::background::CheckpointWorkError) -> Self {
+        Self::Work(error)
+    }
+}
+
+impl From<crate::background::CheckpointWorkError> for OrderedRelationalKeyError {
+    fn from(error: crate::background::CheckpointWorkError) -> Self {
+        Self::Admission(error.to_string())
+    }
+}
+
 pub(super) fn encode_ordered_relational_key_with_work_context(
     key: &RelationalKey,
     work: &crate::background::CheckpointWorkContext,
 ) -> Result<Vec<u8>, CheckpointKeyEncodeError> {
-    let stopped = CheckpointKeyEncodeError::Work;
-    let codec_error = |error: OrderedRelationalKeyError| {
-        CheckpointKeyEncodeError::Key(super::RelationalError::Corruption(error.to_string()))
-    };
-    work.checkpoint().map_err(stopped)?;
-    if key.0.is_empty() {
-        return Err(codec_error(OrderedRelationalKeyError::Corrupt(
-            "key contains no values".to_string(),
-        )));
-    }
-    let mut encoded = Vec::new();
-    for value in &key.0 {
-        let unit = work.start_unit().map_err(stopped)?;
-        let variable = match value {
-            RelationalValue::Text(text) => Some((4, text.as_bytes())),
-            RelationalValue::Bytea(bytes) => Some((5, bytes.as_slice())),
-            _ => None,
-        };
-        if let Some((tag, bytes)) = variable {
-            encoded.push(tag);
-            unit.finish();
-            for chunk in bytes.chunks(64 * 1024) {
-                let unit = work.start_unit().map_err(stopped)?;
-                for byte in chunk {
-                    if *byte == 0 {
-                        encoded.extend_from_slice(&[0, 255]);
-                    } else {
-                        encoded.push(*byte);
-                    }
-                }
-                unit.finish();
-            }
-            let unit = work.start_unit().map_err(stopped)?;
-            encoded.extend_from_slice(&[0, 0]);
-            unit.finish();
-        } else {
-            encode_ordered_relational_value(&mut encoded, value).map_err(codec_error)?;
-            unit.finish();
-        }
-    }
-    work.checkpoint().map_err(stopped)?;
-    Ok(encoded)
+    encode::with_work_context(key, work)
 }
 
 pub(super) fn encode_ordered_relational_value(
     encoded: &mut Vec<u8>,
     value: &RelationalValue,
 ) -> Result<(), OrderedRelationalKeyError> {
-    match value {
-        RelationalValue::Null => encoded.push(0),
-        RelationalValue::Boolean(value) => {
-            encoded.push(1);
-            encoded.push(u8::from(*value));
-        }
-        RelationalValue::BigInt(value) => {
-            encoded.push(2);
-            encoded.extend_from_slice(&((*value as u64) ^ (1_u64 << 63)).to_be_bytes());
-        }
-        RelationalValue::DoublePrecision(value) => {
-            encoded.push(3);
-            let bits = value.to_bits();
-            let ordered = if bits >> 63 == 0 {
-                bits ^ (1_u64 << 63)
-            } else {
-                !bits
-            };
-            encoded.extend_from_slice(&ordered.to_be_bytes());
-        }
-        RelationalValue::Text(value) => {
-            encoded.push(4);
-            encode_escaped_bytes(encoded, value.as_bytes());
-        }
-        RelationalValue::Bytea(value) => {
-            encoded.push(5);
-            encode_escaped_bytes(encoded, value);
-        }
-        RelationalValue::Uuid(value) => {
-            encoded.push(6);
-            encoded.extend_from_slice(value.as_bytes());
-        }
-        RelationalValue::Overflow(_) => {
-            return Err(OrderedRelationalKeyError::UnsupportedOverflow);
-        }
-    }
-    Ok(())
+    encode::value(encoded, value)
 }
 
 pub(super) fn validate_ordered_relational_key(
@@ -201,6 +146,29 @@ pub(super) fn decode_ordered_relational_key(
     Ok(key)
 }
 
+pub(super) fn decode_ordered_relational_key_owned(
+    encoded: &[u8],
+    allocations: &crate::background::CheckpointDecodeContext,
+) -> Result<RelationalKey, OrderedRelationalKeyError> {
+    let mut decoder = OrderedKeyDecoder::with_allocations(encoded, Some(allocations));
+    let mut key = RelationalKey(Vec::new());
+    while !decoder.is_empty() {
+        let value = decoder.value()?;
+        allocations
+            .push(&mut key.0, value)
+            .map_err(|error| OrderedRelationalKeyError::Admission(error.to_string()))?;
+    }
+    if key.0.is_empty() {
+        return Err(OrderedRelationalKeyError::Corrupt(
+            "key contains no values".into(),
+        ));
+    }
+    allocations
+        .checkpoint()
+        .map_err(|error| OrderedRelationalKeyError::Admission(error.to_string()))?;
+    Ok(key)
+}
+
 pub(super) fn decode_ordered_relational_key_into(
     encoded: &[u8],
     key: &mut RelationalKey,
@@ -226,25 +194,26 @@ pub(super) fn decode_ordered_relational_key_into(
     Ok(())
 }
 
-fn encode_escaped_bytes(encoded: &mut Vec<u8>, value: &[u8]) {
-    for byte in value {
-        if *byte == 0 {
-            encoded.extend_from_slice(&[0, 255]);
-        } else {
-            encoded.push(*byte);
-        }
-    }
-    encoded.extend_from_slice(&[0, 0]);
-}
-
 struct OrderedKeyDecoder<'a> {
     encoded: &'a [u8],
     offset: usize,
+    allocations: Option<&'a crate::background::CheckpointDecodeContext>,
 }
 
 impl<'a> OrderedKeyDecoder<'a> {
     fn new(encoded: &'a [u8]) -> Self {
-        Self { encoded, offset: 0 }
+        Self::with_allocations(encoded, None)
+    }
+
+    fn with_allocations(
+        encoded: &'a [u8],
+        allocations: Option<&'a crate::background::CheckpointDecodeContext>,
+    ) -> Self {
+        Self {
+            encoded,
+            offset: 0,
+            allocations,
+        }
     }
 
     fn is_empty(&self) -> bool {
@@ -377,29 +346,25 @@ impl<'a> OrderedKeyDecoder<'a> {
     }
 
     fn escaped_bytes(&mut self, materialize: bool) -> Result<Vec<u8>, OrderedRelationalKeyError> {
-        let mut decoded = Vec::new();
-        loop {
-            let byte = self.byte("escaped key value")?;
-            if byte != 0 {
-                if materialize {
-                    decoded.push(byte);
-                }
-                continue;
+        let mut decoded = if let Some(allocations) = self.allocations.filter(|_| materialize) {
+            // Count through the same escape grammar without allocating. Reserve
+            // the exact decoded backing capacity before replaying this field.
+            let start = self.offset;
+            let mut length = 0usize;
+            self.walk_escaped(|_| length += 1)?;
+            self.offset = start;
+            allocations
+                .vector_capacity(length)
+                .map_err(|error| OrderedRelationalKeyError::Admission(error.to_string()))?
+        } else {
+            Vec::new()
+        };
+        self.walk_escaped(|byte| {
+            if materialize {
+                decoded.push(byte);
             }
-            match self.byte("escaped key terminator")? {
-                0 => return Ok(decoded),
-                255 => {
-                    if materialize {
-                        decoded.push(0);
-                    }
-                }
-                tag => {
-                    return Err(OrderedRelationalKeyError::Corrupt(format!(
-                        "invalid escaped key tag {tag}"
-                    )));
-                }
-            }
-        }
+        })?;
+        Ok(decoded)
     }
 
     fn escaped_bytes_into(
@@ -407,20 +372,47 @@ impl<'a> OrderedKeyDecoder<'a> {
         decoded: &mut Vec<u8>,
     ) -> Result<(), OrderedRelationalKeyError> {
         decoded.clear();
+        self.walk_escaped(|byte| decoded.push(byte))
+    }
+
+    fn walk_escaped(&mut self, mut emit: impl FnMut(u8)) -> Result<(), OrderedRelationalKeyError> {
         loop {
-            let byte = self.byte("escaped key value")?;
-            if byte != 0 {
-                decoded.push(byte);
-                continue;
-            }
-            match self.byte("escaped key terminator")? {
-                0 => return Ok(()),
-                255 => decoded.push(0),
-                tag => {
-                    return Err(OrderedRelationalKeyError::Corrupt(format!(
-                        "invalid escaped key tag {tag}"
-                    )))
+            let start = self.offset;
+            let unit = self
+                .allocations
+                .map(|owned| owned.start_unit())
+                .transpose()
+                .map_err(|error| OrderedRelationalKeyError::Admission(error.to_string()))?;
+            let mut complete = false;
+            while self.allocations.is_none() || self.offset - start < 64 * 1024 {
+                let byte = self.byte("escaped key value")?;
+                if byte != 0 {
+                    emit(byte);
+                    continue;
                 }
+                match self.byte("escaped key terminator")? {
+                    0 => {
+                        complete = true;
+                        break;
+                    }
+                    255 => emit(0),
+                    tag => {
+                        return Err(OrderedRelationalKeyError::Corrupt(format!(
+                            "invalid escaped key tag {tag}"
+                        )))
+                    }
+                }
+            }
+            if let Some(unit) = unit {
+                unit.finish();
+            }
+            if let Some(owned) = self.allocations {
+                owned
+                    .checkpoint()
+                    .map_err(|error| OrderedRelationalKeyError::Admission(error.to_string()))?;
+            }
+            if complete {
+                return Ok(());
             }
         }
     }

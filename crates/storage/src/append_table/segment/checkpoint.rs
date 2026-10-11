@@ -19,12 +19,39 @@
 //! need the owner's resource reservation; this is not a byte-ledger substitute.
 
 mod compaction;
+mod descriptors;
+mod encoder;
+mod externalized;
+mod overflows;
+use descriptors::CheckpointDescriptors;
+use encoder::CheckpointEncoder;
+use externalized::{CheckpointExternalizedOverflows, CheckpointExternalizedRow};
+use overflows::CheckpointOverflows;
 pub(super) mod read;
 
 use super::*;
 use crate::append_table::checkpoint::work_error;
-use crate::background::CheckpointWorkContext;
+use crate::background::{CheckpointBytes, CheckpointSharedBytes, CheckpointWorkContext};
 use std::io::Write;
+
+#[derive(Debug)]
+pub(in crate::append_table) struct CheckpointSegmentWriteOutput {
+    pub(in crate::append_table) generation: u64,
+    pub(in crate::append_table) source_commit_epoch: u64,
+    pub(in crate::append_table) encoded: CheckpointSharedBytes,
+    pub(in crate::append_table) descriptors: CheckpointDescriptors,
+    pub(in crate::append_table) artifact: AppendSegmentArtifactMetadata,
+}
+
+impl PartialEq<AppendSegmentWriteOutput> for CheckpointSegmentWriteOutput {
+    fn eq(&self, other: &AppendSegmentWriteOutput) -> bool {
+        self.generation == other.generation
+            && self.source_commit_epoch == other.source_commit_epoch
+            && self.encoded.as_ref() == other.encoded.as_ref()
+            && self.descriptors == other.descriptors
+            && self.artifact == other.artifact
+    }
+}
 
 pub(super) fn encode(
     generation: u64,
@@ -32,7 +59,7 @@ pub(super) fn encode(
     rows: &[AppendTableRow],
     config: AppendSegmentConfig,
     work: &CheckpointWorkContext,
-) -> Result<AppendSegmentWriteOutput, AppendTableError> {
+) -> Result<CheckpointSegmentWriteOutput, AppendTableError> {
     work.checkpoint().map_err(work_error)?;
     validate_config(config)?;
     if rows.len() > config.max_rows {
@@ -53,8 +80,8 @@ pub(super) fn encode(
         unit.finish();
     }
 
-    let mut descriptors = Vec::new();
-    let mut payload = Vec::new();
+    let mut descriptors = CheckpointDescriptors::default();
+    let mut payload = CheckpointBytes::new(0, work).map_err(work_error)?;
     let mut start = 0;
     let mut partition_end = 0;
     while start < rows.len() {
@@ -98,29 +125,38 @@ pub(super) fn encode(
             AppendTableError::Admission("append payload offset overflows u64".to_string())
         })?;
         let digest = work.integrity(&compressed).map_err(work_error)?;
-        copy_bytes(&mut payload, &compressed, work)?;
-        let unit = work.start_unit().map_err(work_error)?;
-        descriptors.push(AppendSegmentBlockDescriptor {
-            table: first.table.clone(),
-            partition_key: first.partition_key.clone(),
-            min_order_key: first.order_key.clone(),
-            max_order_key: rows[end - 1].order_key.clone(),
-            row_count: u32::try_from(end - start).map_err(|_| {
-                AppendTableError::Admission("append block row count overflows u32".to_string())
-            })?,
-            payload_offset,
-            compressed_bytes: u64::try_from(compressed.len()).map_err(|_| {
-                AppendTableError::Admission(
-                    "append compressed block length overflows u64".to_string(),
-                )
-            })?,
-            decoded_bytes: u64::try_from(raw.len()).map_err(|_| {
-                AppendTableError::Admission("append decoded block length overflows u64".to_string())
-            })?,
-            payload_crc32c: digest.crc32c.get(),
-            payload_sha256: digest.sha256,
-        });
-        unit.finish();
+        payload
+            .append_growing(&compressed, None, work)
+            .map_err(work_error)?;
+        let table = descriptors.copy_table(&first.table, work)?;
+        let partition_key = descriptors.copy_key(&first.partition_key, work)?;
+        let min_order_key = descriptors.copy_key(&first.order_key, work)?;
+        let max_order_key = descriptors.copy_key(&rows[end - 1].order_key, work)?;
+        descriptors.push(
+            AppendSegmentBlockDescriptor {
+                table,
+                partition_key,
+                min_order_key,
+                max_order_key,
+                row_count: u32::try_from(end - start).map_err(|_| {
+                    AppendTableError::Admission("append block row count overflows u32".to_string())
+                })?,
+                payload_offset,
+                compressed_bytes: u64::try_from(compressed.len()).map_err(|_| {
+                    AppendTableError::Admission(
+                        "append compressed block length overflows u64".to_string(),
+                    )
+                })?,
+                decoded_bytes: u64::try_from(raw.len()).map_err(|_| {
+                    AppendTableError::Admission(
+                        "append decoded block length overflows u64".to_string(),
+                    )
+                })?,
+                payload_crc32c: digest.crc32c.get(),
+                payload_sha256: digest.sha256,
+            },
+            work,
+        )?;
         start = end;
     }
 
@@ -136,23 +172,26 @@ pub(super) fn encode(
         )));
     }
     let body_digest = integrity_slices(&[&directory, &payload], work)?;
-    let unit = work.start_unit().map_err(work_error)?;
-    let mut encoded = Vec::with_capacity(total_len);
-    encoded.extend_from_slice(SEGMENT_MAGIC);
-    encoded.extend_from_slice(&SEGMENT_VERSION.to_le_bytes());
-    encoded.extend_from_slice(&0u16.to_le_bytes());
-    encoded.extend_from_slice(&generation.to_le_bytes());
-    encoded.extend_from_slice(&source_commit_epoch.to_le_bytes());
-    encoded.extend_from_slice(&(descriptors.len() as u64).to_le_bytes());
-    encoded.extend_from_slice(&(directory.len() as u64).to_le_bytes());
-    encoded.extend_from_slice(&(payload.len() as u64).to_le_bytes());
-    encoded.extend_from_slice(&body_digest.crc32c.get().to_le_bytes());
-    encoded.extend_from_slice(body_digest.sha256.as_bytes());
-    encoded.extend_from_slice(&0u64.to_le_bytes());
-    debug_assert_eq!(encoded.len(), SEGMENT_HEADER_BYTES);
-    unit.finish();
-    copy_bytes(&mut encoded, &directory, work)?;
-    copy_bytes(&mut encoded, &payload, work)?;
+    let mut header = CheckpointEncoder::new(work)?;
+    header.raw(SEGMENT_MAGIC)?;
+    header.raw(&SEGMENT_VERSION.to_le_bytes())?;
+    header.raw(&0u16.to_le_bytes())?;
+    header.u64(generation)?;
+    header.u64(source_commit_epoch)?;
+    header.u64(descriptors.len() as u64)?;
+    header.u64(directory.len() as u64)?;
+    header.u64(payload.len() as u64)?;
+    header.u32(body_digest.crc32c.get())?;
+    header.raw(body_digest.sha256.as_bytes())?;
+    header.u64(0)?;
+    let header = header.finish();
+    debug_assert_eq!(header.len(), SEGMENT_HEADER_BYTES);
+    let encoded = CheckpointSharedBytes::build(total_len, work, |encoded| {
+        encoded.append(&header, work)?;
+        encoded.append(&directory, work)?;
+        encoded.append(&payload, work)
+    })
+    .map_err(work_error)?;
     let artifact_digest = work.integrity(&encoded).map_err(work_error)?;
     let unit = work.start_unit().map_err(work_error)?;
     let artifact = AppendSegmentArtifactMetadata {
@@ -160,10 +199,10 @@ pub(super) fn encode(
         encoded_crc32c: artifact_digest.crc32c.get(),
         encoded_sha256: artifact_digest.sha256,
     };
-    let output = AppendSegmentWriteOutput {
+    let output = CheckpointSegmentWriteOutput {
         generation,
         source_commit_epoch,
-        encoded: Arc::from(encoded),
+        encoded,
         descriptors,
         artifact,
     };
@@ -178,10 +217,10 @@ fn encode_block(
     partition_end: usize,
     config: AppendSegmentConfig,
     work: &CheckpointWorkContext,
-) -> Result<(usize, Vec<u8>), AppendTableError> {
-    let mut encoder = Encoder::default();
-    encoder.u32(0);
-    let mut overflows = std::collections::BTreeMap::new();
+) -> Result<(usize, crate::background::CheckpointBytes), AppendTableError> {
+    let mut encoder = CheckpointEncoder::new(work)?;
+    encoder.u32(0)?;
+    let mut overflows = CheckpointOverflows::default();
     let mut end = start;
     while end < partition_end {
         let row = &rows[end];
@@ -198,7 +237,7 @@ fn encode_block(
             )));
         }
         let mut new_overflow_bytes = 0usize;
-        for overflow in &row_overflows {
+        for overflow in row_overflows.iter() {
             let unit = work.start_unit().map_err(work_error)?;
             if overflows.contains_key(&overflow.reference.digest) {
                 unit.finish();
@@ -224,10 +263,8 @@ fn encode_block(
         }
         encode_bytes(&mut encoder, &order_key, "append order key", work)?;
         encode_bytes(&mut encoder, &row_payload, "append row payload", work)?;
-        for overflow in row_overflows {
-            let unit = work.start_unit().map_err(work_error)?;
-            let existing = overflows.insert(overflow.reference.digest, overflow.clone());
-            unit.finish();
+        for overflow in row_overflows.iter() {
+            let existing = overflows.insert(overflow.clone(), work)?;
             if let Some(existing) = existing {
                 let same = existing.reference == overflow.reference
                     && bytes_equal(&existing.bytes, &overflow.bytes, work)?;
@@ -245,14 +282,13 @@ fn encode_block(
         AppendTableError::Admission("append block row count exceeds durable limit".to_string())
     })?;
     encoder.overwrite_u32(0, row_count);
-    encoder.u32(u32::try_from(overflows.len()).map_err(|_| {
+    let overflow_count = u32::try_from(overflows.len()).map_err(|_| {
         AppendTableError::Admission("append overflow count exceeds durable limit".to_string())
-    })?);
+    })?;
     unit.finish();
-    for (digest, overflow) in overflows {
-        let unit = work.start_unit().map_err(work_error)?;
-        encoder.raw(digest.as_bytes());
-        unit.finish();
+    encoder.u32(overflow_count)?;
+    for (digest, overflow) in overflows.iter() {
+        encoder.raw(digest.as_bytes())?;
         encode_bytes(
             &mut encoder,
             &overflow.bytes,
@@ -264,24 +300,51 @@ fn encode_block(
     Ok((end, encoder.finish()))
 }
 
-fn externalize(
-    row: &RelationalRow,
+fn externalize<'a>(
+    row: &'a RelationalRow,
     config: AppendSegmentConfig,
     work: &CheckpointWorkContext,
 ) -> Result<
     (
-        RelationalRow,
-        Vec<crate::relational::overflow::EncodedRelationalOverflow>,
+        CheckpointExternalizedRow<'a>,
+        CheckpointExternalizedOverflows,
     ),
     AppendTableError,
 > {
+    let mut needs_externalization = false;
+    for value in row.values() {
+        let unit = work.start_unit().map_err(work_error)?;
+        needs_externalization = match value {
+            RelationalValue::Text(value) => value.len() >= config.overflow_threshold_bytes,
+            RelationalValue::Bytea(value) => value.len() >= config.overflow_threshold_bytes,
+            // Keep unresolved-reference errors in the existing conversion
+            // order, including errors from earlier oversized values.
+            RelationalValue::Overflow(_) => true,
+            _ => false,
+        };
+        unit.finish();
+        work.checkpoint().map_err(work_error)?;
+        if needs_externalization {
+            break;
+        }
+    }
+    if !needs_externalization {
+        return Ok((
+            CheckpointExternalizedRow {
+                row: std::borrow::Cow::Borrowed(row),
+                _allocations: crate::background::CheckpointAllocationOwner::default(),
+            },
+            CheckpointExternalizedOverflows::default(),
+        ));
+    }
     let overflow_config = RelationalOverflowConfig {
         threshold_bytes: config.overflow_threshold_bytes,
         compression_level: config.overflow_compression_level,
         max_value_bytes: config.max_row_bytes,
     };
-    let mut values = Vec::with_capacity(row.values().len());
-    let mut overflows = Vec::new();
+    let mut allocations = crate::background::CheckpointAllocationOwner::default();
+    let mut values = externalized::row_values(row.values().len(), &mut allocations, work)?;
+    let mut overflows = CheckpointExternalizedOverflows::new(row.values().len(), work)?;
     for value in row.values() {
         work.checkpoint().map_err(work_error)?;
         let encoded = match value {
@@ -315,26 +378,35 @@ fn externalize(
         let value = if let Some(encoded) = encoded {
             let unit = work.start_unit().map_err(work_error)?;
             let value = RelationalValue::Overflow(encoded.reference);
-            overflows.push(encoded);
             unit.finish();
+            overflows.push(encoded, work)?;
             value
         } else {
-            clone_value(value, work)?
+            crate::append_table::checkpoint::memory::copy_value(value, &mut allocations, work)?
         };
         let unit = work.start_unit().map_err(work_error)?;
         values.push(value);
         unit.finish();
     }
+    let unit = work.start_unit().map_err(work_error)?;
+    let output = (
+        CheckpointExternalizedRow {
+            row: std::borrow::Cow::Owned(RelationalRow::new(values)),
+            _allocations: allocations,
+        },
+        overflows,
+    );
+    unit.finish();
     work.checkpoint().map_err(work_error)?;
-    Ok((RelationalRow::new(values), overflows))
+    Ok(output)
 }
 
 fn directory(
     descriptors: &[AppendSegmentBlockDescriptor],
     config: AppendSegmentConfig,
     work: &CheckpointWorkContext,
-) -> Result<Vec<u8>, AppendTableError> {
-    let mut encoder = Encoder::default();
+) -> Result<crate::background::CheckpointBytes, AppendTableError> {
+    let mut encoder = CheckpointEncoder::new(work)?;
     for descriptor in descriptors {
         encode_bytes(
             &mut encoder,
@@ -360,47 +432,28 @@ fn directory(
             "append maximum order key",
             work,
         )?;
-        let unit = work.start_unit().map_err(work_error)?;
-        encoder.u32(descriptor.row_count);
-        encoder.u64(descriptor.payload_offset);
-        encoder.u64(descriptor.compressed_bytes);
-        encoder.u64(descriptor.decoded_bytes);
-        encoder.u32(descriptor.payload_crc32c);
-        encoder.raw(descriptor.payload_sha256.as_bytes());
-        unit.finish();
+        encoder.u32(descriptor.row_count)?;
+        encoder.u64(descriptor.payload_offset)?;
+        encoder.u64(descriptor.compressed_bytes)?;
+        encoder.u64(descriptor.decoded_bytes)?;
+        encoder.u32(descriptor.payload_crc32c)?;
+        encoder.raw(descriptor.payload_sha256.as_bytes())?;
     }
     work.checkpoint().map_err(work_error)?;
     Ok(encoder.finish())
 }
 
-fn copy_bytes(
-    target: &mut Vec<u8>,
-    source: &[u8],
-    work: &CheckpointWorkContext,
-) -> Result<(), AppendTableError> {
-    for bytes in source.chunks(64 * 1024) {
-        let unit = work.start_unit().map_err(work_error)?;
-        target.extend_from_slice(bytes);
-        unit.finish();
-    }
-    work.checkpoint().map_err(work_error)
-}
-
 fn encode_bytes(
-    encoder: &mut Encoder,
+    encoder: &mut CheckpointEncoder<'_>,
     bytes: &[u8],
     context: &str,
     work: &CheckpointWorkContext,
 ) -> Result<(), AppendTableError> {
-    let unit = work.start_unit().map_err(work_error)?;
     let len = u64::try_from(bytes.len())
         .map_err(|_| AppendTableError::Admission(format!("{context} length overflows u64")))?;
-    encoder.u64(len);
-    unit.finish();
+    encoder.u64(len)?;
     for chunk in bytes.chunks(64 * 1024) {
-        let unit = work.start_unit().map_err(work_error)?;
-        encoder.raw(chunk);
-        unit.finish();
+        encoder.raw(chunk)?;
     }
     work.checkpoint().map_err(work_error)
 }
@@ -425,12 +478,18 @@ fn compress(
     bytes: &[u8],
     level: i32,
     work: &CheckpointWorkContext,
-) -> Result<Vec<u8>, AppendTableError> {
+) -> Result<crate::background::CheckpointBytes, AppendTableError> {
     let error = |error| {
         AppendTableError::Corruption(format!("failed to compress append segment block: {error}"))
     };
+    let output = crate::compression::AdmittedCompressionOutput::new(bytes.len(), work)
+        .map_err(work_error)?;
     let unit = work.start_unit().map_err(work_error)?;
-    let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), level).map_err(error)?;
+    // The sink already owns the admitted complete output. A small staging
+    // buffer leaves room for the native frame workspace on fixed-memory hosts.
+    let mut encoder =
+        crate::compression::Encoder::with_staging_capacity(output, level, 2 * 1024, work)
+            .map_err(error)?;
     unit.finish();
     for chunk in bytes.chunks(64 * 1024) {
         let unit = work.start_unit().map_err(work_error)?;
@@ -438,7 +497,7 @@ fn compress(
         unit.finish();
     }
     let unit = work.start_unit().map_err(work_error)?;
-    let compressed = encoder.finish().map_err(error)?;
+    let compressed = encoder.finish().map_err(error)?.into_bytes();
     unit.finish();
     work.checkpoint().map_err(work_error)?;
     Ok(compressed)
@@ -451,29 +510,30 @@ fn key(
     key: &RelationalKey,
     max_key_bytes: usize,
     work: &CheckpointWorkContext,
-) -> Result<Vec<u8>, AppendTableError> {
-    let unit = work.start_unit().map_err(work_error)?;
+) -> Result<crate::background::CheckpointBytes, AppendTableError> {
+    work.checkpoint().map_err(work_error)?;
     if key.0.is_empty() {
-        let encoded = vec![GLOBAL_PARTITION_TAG];
+        let mut encoded =
+            crate::background::CheckpointBytes::zeroed(1, work).map_err(work_error)?;
+        let unit = work.start_unit().map_err(work_error)?;
+        encoded.as_mut_slice()[0] = GLOBAL_PARTITION_TAG;
         unit.finish();
         work.checkpoint().map_err(work_error)?;
         return Ok(encoded);
     }
-    unit.finish();
-    let bytes = crate::relational::encode_relational_primary_key_with_work_context(key, work)
-        .map_err(map_relational)?;
-    let encoded_len = bytes.len().saturating_add(1);
+    let error = |error| match error {
+        crate::relational::CheckpointKeyEncodeError::Key(error) => map_relational(error),
+        crate::relational::CheckpointKeyEncodeError::Work(error) => work_error(error),
+    };
+    let plan = crate::relational::CheckpointKeyEncoding::new(key, &[ORDERED_KEY_TAG], work)
+        .map_err(error)?;
+    let encoded_len = plan.encoded_len();
     if encoded_len > max_key_bytes {
         return Err(AppendTableError::Admission(format!(
             "append key contains {encoded_len} bytes, exceeding limit {max_key_bytes}"
         )));
     }
-    let unit = work.start_unit().map_err(work_error)?;
-    let mut encoded = Vec::with_capacity(encoded_len);
-    encoded.push(ORDERED_KEY_TAG);
-    unit.finish();
-    copy_bytes(&mut encoded, &bytes, work)?;
-    Ok(encoded)
+    plan.encode(work).map_err(error)
 }
 
 fn bytes_equal(
@@ -496,42 +556,4 @@ fn bytes_equal(
     }
     work.checkpoint().map_err(work_error)?;
     Ok(true)
-}
-
-fn clone_value(
-    value: &RelationalValue,
-    work: &CheckpointWorkContext,
-) -> Result<RelationalValue, AppendTableError> {
-    let unit = work.start_unit().map_err(work_error)?;
-    match value {
-        RelationalValue::Text(text) => {
-            let mut copy = String::new();
-            unit.finish();
-            let mut start = 0;
-            while start < text.len() {
-                let mut end = (start + 64 * 1024).min(text.len());
-                while !text.is_char_boundary(end) {
-                    end -= 1;
-                }
-                let unit = work.start_unit().map_err(work_error)?;
-                copy.push_str(&text[start..end]);
-                unit.finish();
-                start = end;
-            }
-            work.checkpoint().map_err(work_error)?;
-            Ok(RelationalValue::Text(copy))
-        }
-        RelationalValue::Bytea(bytes) => {
-            let mut copy = Vec::new();
-            unit.finish();
-            copy_bytes(&mut copy, bytes, work)?;
-            Ok(RelationalValue::Bytea(copy))
-        }
-        _ => {
-            let copy = value.clone();
-            unit.finish();
-            work.checkpoint().map_err(work_error)?;
-            Ok(copy)
-        }
-    }
 }

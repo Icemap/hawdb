@@ -52,12 +52,13 @@ pub(in crate::append_table::segment) fn open(
     artifact_hasher.update(&header_bytes);
     let mut body_hasher = IntegrityHasher::new();
     let mut remaining = encoded_len - SEGMENT_HEADER_BYTES;
-    let mut buffer = vec![0; remaining.min(64 * 1024)];
+    let mut buffer = crate::background::CheckpointBytes::zeroed(remaining.min(16 * 1024), work)
+        .map_err(work_error)?;
     while remaining > 0 {
         let chunk_len = remaining.min(buffer.len());
         let unit = work.start_unit().map_err(work_error)?;
         let wave = work.io_wave().map_err(work_error)?;
-        file.read_exact(&mut buffer[..chunk_len])
+        file.read_exact(&mut buffer.as_mut_slice()[..chunk_len])
             .map_err(|error| AppendTableError::from_io("stream append segment", error))?;
         artifact_hasher.update(&buffer[..chunk_len]);
         body_hasher.update(&buffer[..chunk_len]);
@@ -83,13 +84,15 @@ pub(in crate::append_table::segment) fn open(
         ));
     }
 
+    drop(buffer);
     let unit = work.start_unit().map_err(work_error)?;
     let wave = work.io_wave().map_err(work_error)?;
     file.seek(SeekFrom::Start(SEGMENT_HEADER_BYTES as u64))
         .map_err(|error| AppendTableError::from_io("seek append segment directory", error))?;
-    let mut directory = Vec::with_capacity(header.directory_len);
     drop(wave);
     unit.finish();
+    let mut directory =
+        crate::background::CheckpointBytes::new(header.directory_len, work).map_err(work_error)?;
     let mut buffer = [0; 64 * 1024];
     while directory.len() < header.directory_len {
         let chunk_len = (header.directory_len - directory.len()).min(buffer.len());
@@ -97,17 +100,43 @@ pub(in crate::append_table::segment) fn open(
         let wave = work.io_wave().map_err(work_error)?;
         file.read_exact(&mut buffer[..chunk_len])
             .map_err(|error| AppendTableError::from_io("read append segment directory", error))?;
-        directory.extend_from_slice(&buffer[..chunk_len]);
         drop(wave);
         unit.finish();
+        directory
+            .append(&buffer[..chunk_len], work)
+            .map_err(work_error)?;
     }
-    let descriptors = directory_decode(
+    let owned = crate::background::CheckpointDecodeContext {
+        work: work.clone(),
+        memory: std::cell::RefCell::default(),
+    };
+    let descriptors = decode_directory_with_allocations(
         &directory,
         header.descriptor_count,
         header.payload_len,
         config,
-        work,
+        Some(&owned),
     )?;
+    drop(directory);
+    // Share the admitted Vec backing allocation without copying the complete
+    // directory into a new Arc slice. Its permit remains in the reader inventory.
+    let bytes =
+        std::mem::size_of::<Vec<AppendSegmentBlockDescriptor>>() + 2 * std::mem::size_of::<usize>();
+    owned
+        .reserve(bytes)
+        .map_err(super::super::super::binary::allocation_error)?;
+    for bytes in [
+        std::mem::size_of::<AppendSegmentFileSource>() + 2 * std::mem::size_of::<usize>(),
+        std::mem::size_of::<Mutex<AppendDecodedBlockCache>>() + 2 * std::mem::size_of::<usize>(),
+        std::mem::size_of::<Mutex<AppendReadResultCache>>() + 2 * std::mem::size_of::<usize>(),
+    ] {
+        owned
+            .reserve(bytes)
+            .map_err(super::super::super::binary::allocation_error)?;
+    }
+    let unit = work.start_unit().map_err(work_error)?;
+    let descriptors = Arc::new(descriptors);
+    unit.finish();
     let unit = work.start_unit().map_err(work_error)?;
     let reader = AppendSegmentReader {
         generation: header.generation,
@@ -117,7 +146,7 @@ pub(in crate::append_table::segment) fn open(
             encoded_len,
         })),
         payload_start: SEGMENT_HEADER_BYTES + header.directory_len,
-        descriptors: descriptors.into(),
+        descriptors,
         config,
         decoded_block_cache: Arc::new(Mutex::new(AppendDecodedBlockCache::new(
             config.decoded_block_cache_bytes / 2,
@@ -125,110 +154,9 @@ pub(in crate::append_table::segment) fn open(
         read_result_cache: Arc::new(Mutex::new(AppendReadResultCache::new(
             config.decoded_block_cache_bytes - config.decoded_block_cache_bytes / 2,
         ))),
+        _memory: owned.memory.into_inner(),
     };
     unit.finish();
     work.checkpoint().map_err(work_error)?;
     Ok(reader)
-}
-
-pub(super) fn directory_decode(
-    encoded: &[u8],
-    descriptor_count: usize,
-    payload_len: usize,
-    config: AppendSegmentConfig,
-    work: &CheckpointWorkContext,
-) -> Result<Vec<AppendSegmentBlockDescriptor>, AppendTableError> {
-    work.checkpoint().map_err(work_error)?;
-    let unit = work.start_unit().map_err(work_error)?;
-    let mut decoder = Decoder::new(encoded);
-    let mut descriptors = Vec::with_capacity(descriptor_count);
-    let mut row_count = 0usize;
-    let mut expected_offset = 0u64;
-    unit.finish();
-    for _ in 0..descriptor_count {
-        let unit = work.start_unit().map_err(work_error)?;
-        let descriptor = AppendSegmentBlockDescriptor {
-            table: decoder.string(config.max_key_bytes, "append block table")?,
-            partition_key: decode_append_key(
-                decoder.bytes(config.max_key_bytes, "append partition key")?,
-                true,
-            )?,
-            min_order_key: decode_append_key(
-                decoder.bytes(config.max_key_bytes, "append minimum order key")?,
-                false,
-            )?,
-            max_order_key: decode_append_key(
-                decoder.bytes(config.max_key_bytes, "append maximum order key")?,
-                false,
-            )?,
-            row_count: decoder.u32()?,
-            payload_offset: decoder.u64()?,
-            compressed_bytes: decoder.u64()?,
-            decoded_bytes: decoder.u64()?,
-            payload_crc32c: decoder.u32()?,
-            payload_sha256: Sha256Digest::from_bytes(
-                decoder
-                    .take(SHA256_BYTES, "append block digest")?
-                    .try_into()
-                    .expect("fixed SHA-256"),
-            ),
-        };
-        if descriptor.table.is_empty()
-            || descriptor.row_count == 0
-            || descriptor.min_order_key > descriptor.max_order_key
-            || descriptor.payload_offset != expected_offset
-            || descriptor.compressed_bytes == 0
-            || descriptor.decoded_bytes == 0
-        {
-            return Err(AppendTableError::Corruption(
-                "append block descriptor has invalid bounds, counts, or offsets".to_string(),
-            ));
-        }
-        row_count = row_count
-            .checked_add(descriptor.row_count as usize)
-            .ok_or_else(|| AppendTableError::Corruption("append row count overflow".to_string()))?;
-        if row_count > config.max_rows {
-            return Err(AppendTableError::Admission(format!(
-                "append segment rows exceed limit {}",
-                config.max_rows
-            )));
-        }
-        expected_offset = expected_offset
-            .checked_add(descriptor.compressed_bytes)
-            .ok_or_else(|| {
-                AppendTableError::Corruption("append payload offset overflow".to_string())
-            })?;
-        if descriptor.compressed_bytes as usize > config.max_compressed_block_bytes
-            || descriptor.decoded_bytes as usize > config.max_decoded_block_bytes
-        {
-            return Err(AppendTableError::Admission(
-                "append block exceeds compressed or decoded byte limits".to_string(),
-            ));
-        }
-        descriptors.push(descriptor);
-        unit.finish();
-    }
-    decoder.finish("append descriptor directory")?;
-    if expected_offset != payload_len as u64 {
-        return Err(AppendTableError::Corruption(
-            "append descriptor directory has gaps, overlap, or unordered partitions".to_string(),
-        ));
-    }
-    for pair in descriptors.windows(2) {
-        let unit = work.start_unit().map_err(work_error)?;
-        let ordered = pair[0].table < pair[1].table
-            || (pair[0].table == pair[1].table
-                && (pair[0].partition_key < pair[1].partition_key
-                    || (pair[0].partition_key == pair[1].partition_key
-                        && pair[0].max_order_key < pair[1].min_order_key)));
-        if !ordered {
-            return Err(AppendTableError::Corruption(
-                "append descriptor directory has gaps, overlap, or unordered partitions"
-                    .to_string(),
-            ));
-        }
-        unit.finish();
-    }
-    work.checkpoint().map_err(work_error)?;
-    Ok(descriptors)
 }

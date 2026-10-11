@@ -76,7 +76,7 @@ fn checkpoint_units_append_segment_matches_complete_legacy_bytes_and_reopen() {
     assert_eq!(probe.io_waves.load(Ordering::SeqCst), 0);
     assert!(probe.completed.load(Ordering::SeqCst) > rows.len() * 10);
     probe.assert_released(&scheduler);
-    let reader = AppendSegmentReader::open(actual.encoded, config).unwrap();
+    let reader = AppendSegmentReader::open(Arc::from(actual.encoded.as_ref()), config).unwrap();
     let mut reopened = Vec::new();
     for table in ["a🦀", "z"] {
         for partition in 0..7 {
@@ -141,11 +141,11 @@ fn checkpoint_units_append_row_and_ordered_keys_preserve_large_values_and_errors
     let probe = Arc::new(CheckpointWorkProbe::default());
     let work = probe.context(scheduler.clone());
     assert_eq!(
-        crate::relational::encode_relational_row_payload_with_work_context(&row, &work).unwrap(),
+        &crate::relational::encode_relational_row_payload_with_work_context(&row, &work).unwrap()[..],
         encode_relational_row_payload(&row).unwrap()
     );
     assert_eq!(
-        key(&source_key, 4 * 1024 * 1024, &work).unwrap(),
+        &key(&source_key, 4 * 1024 * 1024, &work).unwrap()[..],
         encode_append_key(&source_key, 4 * 1024 * 1024).unwrap()
     );
     assert_eq!(
@@ -153,7 +153,7 @@ fn checkpoint_units_append_row_and_ordered_keys_preserve_large_values_and_errors
         encode_append_key(&source_key, 10).unwrap_err()
     );
     assert_eq!(
-        key(&RelationalKey(Vec::new()), 1, &work).unwrap(),
+        &key(&RelationalKey(Vec::new()), 1, &work).unwrap()[..],
         vec![GLOBAL_PARTITION_TAG]
     );
     probe.assert_released(&scheduler);
@@ -180,11 +180,12 @@ fn checkpoint_units_append_row_and_ordered_keys_preserve_large_values_and_errors
     }
     let empty = RelationalKey(Vec::new());
     let work = CheckpointWorkContext::default();
-    assert_eq!(
-        crate::relational::encode_relational_primary_key_with_work_context(&empty, &work)
-            .unwrap_err(),
-        encode_relational_primary_key(&empty).unwrap_err()
-    );
+    let Err(crate::relational::CheckpointKeyEncodeError::Key(error)) =
+        crate::relational::encode_relational_primary_key_with_checkpoint_work(&empty, &work)
+    else {
+        panic!("empty key must retain the ordinary codec error");
+    };
+    assert_eq!(error, encode_relational_primary_key(&empty).unwrap_err());
 }
 
 #[test]
@@ -295,18 +296,18 @@ fn checkpoint_units_append_block_directory_compression_and_copy_cancel_then_retr
         .iter()
         .position(|row| row.table != rows[0].table || row.partition_key != rows[0].partition_key)
         .unwrap();
-    assert_eq!(
-        encode_block(&rows, 0, partition_end, config, &work).unwrap(),
-        encode_next_block(&rows, 0, partition_end, config).unwrap()
-    );
+    let actual = encode_block(&rows, 0, partition_end, config, &work).unwrap();
+    let expected = encode_next_block(&rows, 0, partition_end, config).unwrap();
+    assert_eq!(actual.0, expected.0);
+    assert_eq!(&actual.1[..], expected.1);
     let output = AppendSegmentWriter::encode(9, 77, &rows, config).unwrap();
     assert_eq!(
-        directory(&output.descriptors, config, &work).unwrap(),
+        &directory(&output.descriptors, config, &work).unwrap()[..],
         encode_directory(&output.descriptors, config).unwrap()
     );
     let large = vec![7; 8 * 64 * 1024 + 1];
     assert_eq!(
-        compress(&large, 3, &work).unwrap(),
+        &compress(&large, 3, &work).unwrap()[..],
         zstd::stream::encode_all(large.as_slice(), 3).unwrap()
     );
     assert!(bytes_equal(&large, &large, &work).unwrap());
@@ -320,7 +321,11 @@ fn checkpoint_units_append_block_directory_compression_and_copy_cancel_then_retr
         let work = probe.context(scheduler.clone());
         let result = match phase {
             0 => compress(&large, 3, &work).map(|_| ()),
-            1 => copy_bytes(&mut Vec::new(), &large, &work),
+            1 => CheckpointSharedBytes::build(large.len(), &work, |bytes| {
+                bytes.append(&large, &work)
+            })
+            .map(|_| ())
+            .map_err(work_error),
             2 => integrity_slices(&[&large], &work).map(|_| ()),
             3 => directory(&output.descriptors, config, &work).map(|_| ()),
             _ => bytes_equal(&large, &large, &work).map(|_| ()),
@@ -361,3 +366,18 @@ fn checkpoint_units_append_block_directory_compression_and_copy_cancel_then_retr
         AppendSegmentWriter::encode(9, 77, &unordered, config).unwrap_err()
     );
 }
+
+#[path = "tests/compression_memory.rs"]
+mod compression_memory;
+
+#[path = "tests/key_memory.rs"]
+mod key_memory;
+
+mod row_memory;
+
+mod block_memory;
+
+mod externalized_memory;
+mod output_memory;
+mod overflow_map_memory;
+mod overflow_memory;

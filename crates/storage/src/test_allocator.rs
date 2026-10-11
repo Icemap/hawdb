@@ -6,6 +6,7 @@ use std::cell::Cell;
 thread_local! {
     static OBSERVING: Cell<bool> = const { Cell::new(false) };
     static LARGE_ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+    static ALLOCATED_BYTES: Cell<usize> = const { Cell::new(0) };
     static MINIMUM_ALLOCATION_BYTES: Cell<usize> = const { Cell::new(64 * 1024) };
 }
 
@@ -20,6 +21,9 @@ fn observe(size: usize, allocated: bool) {
             if active.get() && selected {
                 let _ = LARGE_ALLOCATIONS.try_with(|count| {
                     count.set(count.get().saturating_add(1));
+                });
+                let _ = ALLOCATED_BYTES.try_with(|bytes| {
+                    bytes.set(bytes.get().saturating_add(size));
                 });
             }
         });
@@ -74,12 +78,19 @@ impl AllocationObservation {
     fn start_at(minimum_bytes: usize) -> Self {
         OBSERVING.with(|active| assert!(!active.replace(true), "nested allocation observation"));
         LARGE_ALLOCATIONS.with(|count| count.set(0));
+        ALLOCATED_BYTES.with(|bytes| bytes.set(0));
         MINIMUM_ALLOCATION_BYTES.with(|minimum| minimum.set(minimum_bytes));
         Self(std::marker::PhantomData)
     }
 
     pub(crate) fn finish(self) -> usize {
         let result = LARGE_ALLOCATIONS.with(Cell::get);
+        drop(self);
+        result
+    }
+
+    pub(crate) fn finish_bytes(self) -> usize {
+        let result = ALLOCATED_BYTES.with(Cell::get);
         drop(self);
         result
     }

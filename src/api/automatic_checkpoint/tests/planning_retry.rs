@@ -70,7 +70,7 @@ fn permanently_denied_retries_traverse_an_unchanged_source_only_once() {
     let identity = store.checkpoint_source_identity().unwrap();
     let estimate = store.checkpoint_candidate_admission_bytes().unwrap();
     assert!(estimate > MEMORY_BYTES);
-    let resources = resources(MEMORY_BYTES);
+    let resources = resources(OWNER_MEMORY_BYTES);
     let scheduler = LocalQosScheduler::new(hawdb_qos::LocalQosPolicy::default());
     let mut source = Source::capture(&store, &catalog);
     let mut report = PreparationReport::default();
@@ -85,10 +85,14 @@ fn permanently_denied_retries_traverse_an_unchanged_source_only_once() {
         .is_err());
         let denial = report.admission_denial.unwrap();
         assert_eq!(denial.code, RuntimeAdmissionCode::MemorySaturated);
-        assert_eq!(denial.requested, estimate);
-        assert_eq!(denial.available, MEMORY_BYTES);
+        assert!(denial.requested > 0 && denial.requested < estimate);
+        assert_eq!(denial.available, 0);
+        assert!(report.memory_denial.is_some());
         assert!(!denial.is_retryable());
-        assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
+        assert_eq!(
+            resources.snapshot().admitted_memory_bytes,
+            OWNER_MEMORY_BYTES
+        );
         assert_eq!(resources.snapshot().active_background_tasks, 0);
         assert_eq!(resources.snapshot().active_background_io_slots, 0);
         assert_eq!(store.checkpoint_source_identity(), Some(identity));
@@ -96,7 +100,63 @@ fn permanently_denied_retries_traverse_an_unchanged_source_only_once() {
     assert_eq!(report.planning_scans, 1);
     assert_eq!(report.planning_cache_hits, 7);
     drop(source);
+    assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
     drop(store);
+    let recovered = GraphStore::open(&fixture.0, &mut catalog).unwrap();
+    assert_eq!(recovered.node_count_for_label(None), 1025);
+    for id in 0..1025 {
+        let node = recovered
+            .node_owned(hawdb_storage::NodeId(id))
+            .unwrap()
+            .unwrap();
+        assert_eq!(node.properties["id"], Value::Int(id as i64));
+        assert_eq!(node.properties["body"], Value::String(body.clone()));
+    }
+}
+
+#[test]
+fn original_fixed_budget_prepares_and_publishes_all_1025_rows() {
+    let fixture = Fixture::new();
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::open(&fixture.0, &mut catalog).unwrap();
+    let body = "p".repeat(512);
+    assert!(store.begin_wal_sync_group().unwrap());
+    for id in 0..1025 {
+        add(&mut store, &mut catalog, id, &body);
+    }
+    store.finish_wal_sync_group().unwrap();
+    assert!(store.checkpoint_candidate_admission_bytes().unwrap() > MEMORY_BYTES);
+    let resources = resources(MEMORY_BYTES);
+    let scheduler = LocalQosScheduler::new(hawdb_qos::LocalQosPolicy::default());
+    let mut source = Source::capture(&store, &catalog);
+    let mut report = PreparationReport::default();
+    let (mut candidate, admission) = prepare(
+        &mut source,
+        &scheduler,
+        &resources,
+        &RuntimeTaskContext::default(),
+        &mut report,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(report.planning_scans, 1);
+    assert!(report.admission_denial.is_none());
+    assert!(report.memory_denial.is_none());
+    let memory = admission.runtime.memory_report();
+    assert!(memory.incremental);
+    assert_eq!(memory.upfront_reserved_bytes, OWNER_MEMORY_BYTES);
+    assert!(memory.peak_accounted_bytes > 0);
+    assert!(memory.peak_accounted_bytes + OWNER_MEMORY_BYTES <= MEMORY_BYTES);
+    assert_eq!(candidate.commit_epoch(), 1025);
+    candidate.catch_up(&store).unwrap();
+    catalog = store
+        .publish_checkpoint_candidate(&mut candidate, None, &Default::default())
+        .unwrap();
+    drop(candidate);
+    drop(admission);
+    drop(source);
+    drop(store);
+    assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
     let recovered = GraphStore::open(&fixture.0, &mut catalog).unwrap();
     assert_eq!(recovered.node_count_for_label(None), 1025);
     for id in 0..1025 {

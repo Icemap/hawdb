@@ -36,7 +36,7 @@ fn denied_candidate_releases_execution_and_reuses_its_memory_after_recovery() {
     create(&mut store, &mut catalog, 1);
     let old = store.snapshot_for_read();
     let control = Arc::new(Control::default());
-    let resources = governor(200 * 1024 * 1024);
+    let resources = governor(32 * 1024 * 1024);
     let (sealed, observation) = std::sync::mpsc::channel();
     let (resume, continuation) = std::sync::mpsc::channel();
     control.lock().unwrap().prefix_seal_probe = Some(Arc::new(PrefixSealProbe {
@@ -95,7 +95,10 @@ fn denied_candidate_releases_execution_and_reuses_its_memory_after_recovery() {
     assert_eq!(std::fs::read(&base).unwrap(), bytes);
     // Normal-pressure recovery must reuse the retained memory under a budget
     // that cannot admit a second conservative whole-candidate reservation.
-    assert!(admitted_memory * 2 > resources.snapshot().limits.memory_budget_bytes);
+    assert!(
+        store.checkpoint_candidate_admission_bytes().unwrap() * 2
+            > resources.snapshot().limits.memory_budget_bytes
+    );
     snapshot.memory.pressure = hawdb_qos::RuntimeMemoryPressure::Normal;
     resources.update_resources(snapshot);
     loop {

@@ -731,3 +731,4 @@ mod segmented_range_tests {
 }
 
 mod checkpoint;
+pub(crate) use checkpoint::tree_node_bytes as checkpoint_tree_node_bytes;

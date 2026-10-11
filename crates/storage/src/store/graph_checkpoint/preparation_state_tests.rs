@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::background::CheckpointWorkProbe;
+use crate::relational::RelationalColumnDefault;
 use hawdb_qos::{LocalQosPolicy, LocalQosScheduler};
 use std::sync::atomic::Ordering;
 
@@ -287,6 +288,307 @@ fn cancelled_bootstrap_keeps_completed_base_and_recovers_with_a_fresh_context() 
             Value::Int(id as i64)
         );
     }
+    drop(recovered);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+struct AppendBootstrapFixture {
+    frame: CheckpointPreparation,
+    store: GraphStore,
+    catalog: Catalog,
+    directory: PathBuf,
+    wide_name: String,
+    identity: Option<CheckpointSourceIdentity>,
+    manifest: Vec<u8>,
+    generation: u64,
+    base: Vec<u8>,
+}
+
+fn append_bootstrap_fixture() -> AppendBootstrapFixture {
+    append_bootstrap_fixture_with_column("s".repeat(512 * 1024), RelationalScalarType::BigInt, None)
+}
+
+fn append_bootstrap_fixture_with_column(
+    wide_name: String,
+    scalar_type: RelationalScalarType,
+    default: Option<RelationalColumnDefault>,
+) -> AppendBootstrapFixture {
+    use crate::append_table::{AppendOrderMode, AppendTableSchema, AppendTransaction, AppendWrite};
+    let directory = std::env::temp_dir().join(format!(
+        "hawdb-bootstrap-append-memory-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::open(&directory, &mut catalog).unwrap();
+    store
+        .append_transaction(AppendTransaction {
+            writes: vec![AppendWrite::CreateTable {
+                schema: AppendTableSchema {
+                    name: "events".into(),
+                    columns: ["stream", "sequence", wide_name.as_str()]
+                        .into_iter()
+                        .map(|name| RelationalColumnSchema {
+                            name: name.into(),
+                            scalar_type: if name == wide_name {
+                                scalar_type
+                            } else {
+                                RelationalScalarType::BigInt
+                            },
+                            nullable: false,
+                            default: if name == wide_name {
+                                default.clone()
+                            } else {
+                                None
+                            },
+                        })
+                        .collect(),
+                    partition_key: vec!["stream".into()],
+                    order_key: vec!["sequence".into()],
+                    order_mode: AppendOrderMode::CallerProvided,
+                },
+            }],
+        })
+        .unwrap();
+    let original_identity = store.checkpoint_source_identity();
+    let original_manifest = fs::read(store.durable.as_ref().unwrap().manifest_path()).unwrap();
+    let mut frame = store
+        .begin_checkpoint_preparation(&catalog)
+        .unwrap()
+        .unwrap();
+    let ordinary = crate::background::CheckpointWorkContext::default();
+    let prepared = frame.prepare_with_work_context(&ordinary).unwrap().unwrap();
+    let generation = prepared.generation;
+    let base = fs::read(directory.join(format!("checkpoint.{generation}.hawdb"))).unwrap();
+    frame.bootstrap = Some(frame.source.checkpoint_candidate_from_prepared(
+        &frame.catalog,
+        prepared,
+        &ordinary,
+    ));
+    AppendBootstrapFixture {
+        frame,
+        store,
+        catalog,
+        directory,
+        wide_name,
+        identity: original_identity,
+        manifest: original_manifest,
+        generation,
+        base,
+    }
+}
+
+fn append_governor() -> hawdb_qos::RuntimeGovernor {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
+        RuntimeResourceBudget, RuntimeResourceSnapshot,
+    };
+    let governor = RuntimeGovernor::new(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(4 * 1024 * 1024),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        RuntimeResourceSnapshot::from_parts(
+            RuntimeResourceBudget::from_limits(NonZeroUsize::MIN, None, None),
+            RuntimeMemorySnapshot::from_limits(Some(1 << 30), Some(1 << 30), None, None, None),
+        ),
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    governor
+}
+
+#[test]
+fn bootstrap_denies_before_copying_a_wide_append_schema() {
+    assert_append_bootstrap_denial(append_bootstrap_fixture());
+}
+
+#[test]
+fn bootstrap_denies_before_copying_a_wide_append_default() {
+    assert_append_bootstrap_denial(append_bootstrap_fixture_with_column(
+        "payload".into(),
+        RelationalScalarType::Bytea,
+        Some(RelationalColumnDefault::Literal(RelationalValue::Bytea(
+            vec![23; 512 * 1024],
+        ))),
+    ));
+}
+
+fn assert_append_bootstrap_denial(fixture: AppendBootstrapFixture) {
+    use crate::background::{CheckpointOperationError, CheckpointWorkError};
+    use hawdb_core::RuntimeTaskContext;
+
+    let AppendBootstrapFixture {
+        mut frame,
+        store,
+        mut catalog,
+        directory,
+        wide_name,
+        identity: original_identity,
+        manifest: original_manifest,
+        generation: _,
+        base: _,
+    } = fixture;
+    let expected_schema = store.append_table_schema("events").unwrap().clone();
+    let governor = append_governor();
+    let admission = governor
+        .try_admit_incremental_maintenance(0, 32 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let local = scheduler();
+    let work =
+        crate::background::CheckpointWorkContext::new(admission.task_context().unwrap().clone())
+            .with_scheduler(local.clone());
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let result = work.classify(|work| frame.prepare_candidate_with_work_context(work));
+    let copies = observer.finish();
+    let denied = matches!(
+        result,
+        Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+            _
+        )))
+    );
+    let scalar_denied = matches!(&result,
+        Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+            hawdb_core::RuntimeMemoryError::ReservationExceeded {requested_bytes, available_bytes}
+        ))) if *requested_bytes == 512 * 1024 && *available_bytes == 32 * 1024);
+    drop(result);
+    drop(frame);
+    assert_eq!(store.checkpoint_source_identity(), original_identity);
+    assert_eq!(
+        fs::read(store.durable.as_ref().unwrap().manifest_path()).unwrap(),
+        original_manifest
+    );
+    assert_eq!(
+        store.append_table_schema("events").unwrap().columns[2].name,
+        wide_name
+    );
+    assert_eq!(store.append_table_schema("events"), Some(&expected_schema));
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+    assert_eq!(local.state().running_background_operations, 0);
+    drop(work);
+    drop(admission);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    drop(store);
+    let recovered = GraphStore::open(&directory, &mut catalog).unwrap();
+    assert_eq!(
+        recovered.append_table_schema("events").unwrap().columns[2].name,
+        wide_name
+    );
+    assert_eq!(
+        recovered.append_table_schema("events"),
+        Some(&expected_schema)
+    );
+    drop(recovered);
+    fs::remove_dir_all(directory).unwrap();
+    assert!(
+        denied,
+        "32 KiB bootstrap admitted a wide schema: {copies} large copies"
+    );
+    assert_eq!(copies, 0, "deny before copying the 512 KiB schema name");
+    assert!(
+        scalar_denied,
+        "metadata must fit before the wide value is denied"
+    );
+}
+
+#[test]
+fn append_bootstrap_resumes_the_same_base_and_keeps_leases_through_the_last_snapshot() {
+    use crate::background::{CheckpointOperationError, CheckpointWorkError};
+    use hawdb_core::RuntimeTaskContext;
+
+    let AppendBootstrapFixture {
+        mut frame,
+        mut store,
+        catalog: _,
+        directory,
+        wide_name,
+        identity,
+        manifest,
+        generation,
+        base,
+    } = append_bootstrap_fixture();
+    let governor = append_governor();
+    let small = governor
+        .try_admit_incremental_maintenance(0, 32 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let local = scheduler();
+    let work = crate::background::CheckpointWorkContext::new(small.task_context().unwrap().clone())
+        .with_scheduler(local.clone());
+    assert!(matches!(
+        work.classify(|work| frame.prepare_candidate_with_work_context(work)),
+        Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+            _
+        )))
+    ));
+    assert!(frame.finished);
+    assert!(frame.bootstrap.is_some());
+    assert_eq!(frame.source.checkpoint_source_identity(), identity);
+    assert_eq!(store.checkpoint_source_identity(), identity);
+    assert_eq!(
+        fs::read(store.durable.as_ref().unwrap().manifest_path()).unwrap(),
+        manifest
+    );
+    assert_eq!(small.memory_report().live_accounted_bytes, 0);
+    drop(work);
+    drop(small);
+
+    // A fresh independently admitted execution keeps the original completed
+    // base. The denied 32 KiB attempt must remain a denial under that ceiling.
+    let admission = governor
+        .try_admit_incremental_maintenance(0, 1024 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let work =
+        crate::background::CheckpointWorkContext::new(admission.task_context().unwrap().clone())
+            .with_scheduler(local.clone());
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let mut candidate = frame
+        .prepare_candidate_with_work_context(&work)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        observer.finish(),
+        1,
+        "copy the wide schema once after admission"
+    );
+    assert_eq!(
+        fs::read(directory.join(format!("checkpoint.{generation}.hawdb"))).unwrap(),
+        base
+    );
+    assert!(admission.memory_report().live_accounted_bytes >= 512 * 1024);
+    let mut catalog = store
+        .publish_checkpoint_candidate(&mut candidate, None, &BTreeSet::new())
+        .unwrap();
+    let bytes = admission.memory_report().live_accounted_bytes;
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let snapshot = store.snapshot();
+    let detached = store.append_state().clone();
+    assert_eq!(observer.finish(), 0);
+    assert_eq!(admission.memory_report().live_accounted_bytes, bytes);
+    assert_eq!(
+        snapshot.append_table_schema("events").unwrap().columns[2].name,
+        wide_name
+    );
+    drop(candidate);
+    drop(frame);
+    drop(store);
+    assert_eq!(admission.memory_report().live_accounted_bytes, bytes);
+    assert!(admission.memory_report().peak_accounted_bytes <= 1024 * 1024);
+    drop(snapshot);
+    assert_eq!(admission.memory_report().live_accounted_bytes, bytes);
+    assert_eq!(
+        detached.schema("events").unwrap().columns[2].name,
+        wide_name
+    );
+    drop(detached);
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+    assert_eq!(local.state().running_background_operations, 0);
+    drop(work);
+    drop(admission);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    let recovered = GraphStore::open(&directory, &mut catalog).unwrap();
+    assert_eq!(
+        recovered.append_table_schema("events").unwrap().columns[2].name,
+        wide_name
+    );
     drop(recovered);
     fs::remove_dir_all(directory).unwrap();
 }

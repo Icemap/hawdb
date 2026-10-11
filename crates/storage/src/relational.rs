@@ -26,6 +26,7 @@ use std::num::{NonZeroU32, NonZeroU64, NonZeroUsize};
 use std::sync::Arc;
 
 mod codec;
+pub(crate) use codec::schema_encoding;
 mod compaction;
 mod constraints;
 mod index_shadow;
@@ -49,9 +50,10 @@ pub use codec::{
 };
 pub(crate) use codec::{
     decode_relational_checkpoint_file_with_work_context, decode_relational_row_payload,
-    decode_relational_table_schema, encode_relational_checkpoint_with_work_context,
-    encode_relational_row_payload, encode_relational_row_payload_with_work_context,
-    encode_relational_table_schema, CheckpointOutputIo,
+    decode_relational_table_schema, decode_row_owned, decode_schema_owned,
+    encode_relational_checkpoint_with_work_context, encode_relational_row_payload,
+    encode_relational_row_payload_with_work_context, encode_relational_table_schema,
+    CheckpointOutputIo,
 };
 #[doc(hidden)]
 pub use compaction::relational_row_page_compaction_publication_config;
@@ -693,17 +695,7 @@ pub fn encode_relational_primary_key(key: &RelationalKey) -> Result<Vec<u8>, Rel
         .map_err(|error| RelationalError::Corruption(error.to_string()))
 }
 
-pub(crate) fn encode_relational_primary_key_with_work_context(
-    key: &RelationalKey,
-    work: &crate::background::CheckpointWorkContext,
-) -> Result<Vec<u8>, RelationalError> {
-    encode_relational_primary_key_with_checkpoint_work(key, work).map_err(|error| match error {
-        CheckpointKeyEncodeError::Key(error) => error,
-        CheckpointKeyEncodeError::Work(error) => RelationalError::Admission(error.to_string()),
-    })
-}
-
-pub(crate) use ordered_key::CheckpointKeyEncodeError;
+pub(crate) use ordered_key::{CheckpointKeyEncodeError, CheckpointKeyEncoding};
 
 pub(crate) fn encode_relational_primary_key_with_checkpoint_work(
     key: &RelationalKey,
@@ -715,6 +707,20 @@ pub(crate) fn encode_relational_primary_key_with_checkpoint_work(
 pub fn decode_relational_primary_key(encoded: &[u8]) -> Result<RelationalKey, RelationalError> {
     ordered_key::decode_ordered_relational_key(encoded)
         .map_err(|error| RelationalError::Corruption(error.to_string()))
+}
+
+pub(crate) fn decode_relational_primary_key_owned(
+    encoded: &[u8],
+    allocations: &crate::background::CheckpointDecodeContext,
+) -> Result<RelationalKey, RelationalError> {
+    ordered_key::decode_ordered_relational_key_owned(encoded, allocations).map_err(|error| {
+        match error {
+            ordered_key::OrderedRelationalKeyError::Admission(message) => {
+                RelationalError::Admission(message)
+            }
+            error => RelationalError::Corruption(error.to_string()),
+        }
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

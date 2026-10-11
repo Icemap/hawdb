@@ -15,17 +15,31 @@
 //! Existing overflow envelope with chunked compression, copying and integrity.
 
 use super::*;
-use crate::background::{CheckpointWorkContext, CheckpointWorkError};
+use crate::background::{
+    CheckpointBytes, CheckpointSharedBytes, CheckpointWorkContext, CheckpointWorkError,
+};
 use std::io::Write;
 
 pub(super) mod validation;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CheckpointRelationalOverflow {
+    pub(crate) reference: RelationalOverflowRef,
+    pub(crate) bytes: CheckpointSharedBytes,
+}
+
+impl PartialEq<EncodedRelationalOverflow> for CheckpointRelationalOverflow {
+    fn eq(&self, other: &EncodedRelationalOverflow) -> bool {
+        self.reference == other.reference && self.bytes.as_ref() == other.bytes.as_ref()
+    }
+}
 
 pub(crate) fn encode_overflow_envelope_with_work_context(
     scalar_type: RelationalScalarType,
     raw: &[u8],
     config: RelationalOverflowConfig,
     work: &CheckpointWorkContext,
-) -> Result<EncodedRelationalOverflow, RelationalError> {
+) -> Result<CheckpointRelationalOverflow, RelationalError> {
     work.checkpoint().map_err(work_error)?;
     let scalar_tag = encode_scalar_type(scalar_type)?;
     if raw.is_empty() {
@@ -54,7 +68,7 @@ pub(crate) fn encode_overflow_envelope_with_work_context(
     let (codec, payload) = compressed
         .as_ref()
         .map_or((OVERFLOW_CODEC_RAW, raw), |compressed| {
-            (OVERFLOW_CODEC_ZSTD, compressed.as_slice())
+            (OVERFLOW_CODEC_ZSTD, &compressed[..])
         });
     let encoded_len = OVERFLOW_HEADER_BYTES
         .checked_add(payload.len())
@@ -66,33 +80,30 @@ pub(crate) fn encode_overflow_envelope_with_work_context(
         RelationalError::Admission("overflow payload length does not fit u64".to_string())
     })?;
     let checksum = work.checksum(raw).map_err(work_error)?;
-    let unit = work.start_unit().map_err(work_error)?;
-    let mut encoded = Vec::with_capacity(encoded_len);
-    encoded.extend_from_slice(OVERFLOW_MAGIC);
-    encoded.push(codec);
-    encoded.push(scalar_tag);
-    encoded.extend_from_slice(&0_u16.to_le_bytes());
-    encoded.extend_from_slice(&uncompressed_bytes.to_le_bytes());
-    encoded.extend_from_slice(&compressed_bytes.to_le_bytes());
-    encoded.extend_from_slice(&(checksum as u32).to_le_bytes());
-    unit.finish();
-    for chunk in payload.chunks(64 * 1024) {
-        let unit = work.start_unit().map_err(work_error)?;
-        encoded.extend_from_slice(chunk);
-        unit.finish();
-    }
+    let header = encode_header(
+        codec,
+        scalar_tag,
+        uncompressed_bytes,
+        compressed_bytes,
+        checksum as u32,
+    );
+    let encoded = CheckpointSharedBytes::build(encoded_len, work, |encoded| {
+        encoded.append(&header, work)?;
+        encoded.append(payload, work)
+    })
+    .map_err(work_error)?;
     debug_assert_eq!(encoded.len(), encoded_len);
 
     let digest = work.integrity(&encoded).map_err(work_error)?.sha256;
     let unit = work.start_unit().map_err(work_error)?;
-    let output = EncodedRelationalOverflow {
+    let output = CheckpointRelationalOverflow {
         reference: RelationalOverflowRef {
             digest,
             scalar_type,
             compressed_bytes,
             uncompressed_bytes,
         },
-        bytes: Arc::from(encoded),
+        bytes: encoded,
     };
     unit.finish();
     work.checkpoint().map_err(work_error)?;
@@ -107,11 +118,15 @@ fn compress(
     raw: &[u8],
     level: i32,
     work: &CheckpointWorkContext,
-) -> Result<Vec<u8>, RelationalError> {
+) -> Result<CheckpointBytes, RelationalError> {
     let error =
         |error| RelationalError::Durability(format!("failed to compress overflow value: {error}"));
+    let output =
+        crate::compression::AdmittedCompressionOutput::new(raw.len(), work).map_err(work_error)?;
     let unit = work.start_unit().map_err(work_error)?;
-    let mut encoder = crate::compression::Encoder::new(Vec::new(), level).map_err(error)?;
+    let mut encoder =
+        crate::compression::Encoder::with_staging_capacity(output, level, 2 * 1024, work)
+            .map_err(error)?;
     unit.finish();
     for chunk in raw.chunks(64 * 1024) {
         let unit = work.start_unit().map_err(work_error)?;
@@ -119,7 +134,7 @@ fn compress(
         unit.finish();
     }
     let unit = work.start_unit().map_err(work_error)?;
-    let compressed = encoder.finish().map_err(error)?;
+    let compressed = encoder.finish().map_err(error)?.into_bytes();
     unit.finish();
     work.checkpoint().map_err(work_error)?;
     Ok(compressed)

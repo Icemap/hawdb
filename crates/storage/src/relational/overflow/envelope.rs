@@ -23,8 +23,10 @@ use std::io::{Cursor, Read};
 use std::sync::Arc;
 
 mod checkpoint;
-pub(crate) use checkpoint::encode_overflow_envelope_with_work_context;
 pub(crate) use checkpoint::validation::validate_overflow_envelope_with_work_context;
+pub(crate) use checkpoint::{
+    encode_overflow_envelope_with_work_context, CheckpointRelationalOverflow,
+};
 
 const OVERFLOW_MAGIC: &[u8; 8] = b"SKOVFL01";
 const OVERFLOW_CODEC_RAW: u8 = 0;
@@ -41,6 +43,23 @@ const INITIAL_DECODE_CAPACITY_BYTES: usize = 1024 * 1024;
 pub(crate) struct EncodedRelationalOverflow {
     pub(crate) reference: RelationalOverflowRef,
     pub(crate) bytes: Arc<[u8]>,
+}
+
+fn encode_header(
+    codec: u8,
+    scalar_tag: u8,
+    uncompressed_bytes: u64,
+    compressed_bytes: u64,
+    checksum: u32,
+) -> [u8; OVERFLOW_HEADER_BYTES] {
+    let mut header = [0; OVERFLOW_HEADER_BYTES];
+    header[..8].copy_from_slice(OVERFLOW_MAGIC);
+    header[8] = codec;
+    header[9] = scalar_tag;
+    header[12..20].copy_from_slice(&uncompressed_bytes.to_le_bytes());
+    header[20..28].copy_from_slice(&compressed_bytes.to_le_bytes());
+    header[28..].copy_from_slice(&checksum.to_le_bytes());
+    header
 }
 
 pub(crate) fn encode_overflow_envelope(
@@ -87,13 +106,13 @@ pub(crate) fn encode_overflow_envelope(
         RelationalError::Admission("overflow payload length does not fit u64".to_string())
     })?;
     let mut encoded = Vec::with_capacity(encoded_len);
-    encoded.extend_from_slice(OVERFLOW_MAGIC);
-    encoded.push(codec);
-    encoded.push(scalar_tag);
-    encoded.extend_from_slice(&0_u16.to_le_bytes());
-    encoded.extend_from_slice(&uncompressed_bytes.to_le_bytes());
-    encoded.extend_from_slice(&compressed_bytes.to_le_bytes());
-    encoded.extend_from_slice(&crc32c(raw).get().to_le_bytes());
+    encoded.extend_from_slice(&encode_header(
+        codec,
+        scalar_tag,
+        uncompressed_bytes,
+        compressed_bytes,
+        crc32c(raw).get(),
+    ));
     encoded.extend_from_slice(payload);
     debug_assert_eq!(encoded.len(), encoded_len);
 

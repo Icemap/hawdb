@@ -13,8 +13,9 @@
 // limitations under the License.
 
 //! Cooperative field reads and UTF-8 validation for private reconstruction.
-//! Capacity/reallocation and retained decoder state still need the shared hard
-//! resource ledger; a unit alone does not establish their memory/time bounds.
+//! Owned inputs admit backing capacity through the shared allocation inventory.
+//! Work units also bound field copies; allocator latency remains a platform
+//! assumption and callers must retain the inventory with the decoded values.
 
 use super::*;
 
@@ -48,8 +49,17 @@ pub(crate) fn bytes<I: DecodeInput>(
     work: &CheckpointWorkContext,
 ) -> Result<Vec<u8>, RelationalError> {
     let len = length(decoder, max, context)?;
+    let owned = decoder
+        .input
+        .checkpoint_allocation_context()
+        .map(|context| {
+            context
+                .vector_capacity(len)
+                .map_err(|error| RelationalError::Admission(error.to_string()))
+        })
+        .transpose()?;
     let unit = work.start_unit().map_err(work_error)?;
-    let mut bytes = Vec::with_capacity(len);
+    let mut bytes = owned.unwrap_or_else(|| Vec::with_capacity(len));
     unit.finish();
     while bytes.len() < len {
         let start = bytes.len();
@@ -77,8 +87,13 @@ pub(crate) fn string<I: DecodeInput>(
     work: &CheckpointWorkContext,
 ) -> Result<String, RelationalError> {
     let len = length(decoder, decoder.limits.max_value_bytes, "string")?;
+    let owned = decoder
+        .input
+        .checkpoint_allocation_context()
+        .map(|context| context.string_capacity(len).map_err(work_error))
+        .transpose()?;
     let unit = work.start_unit().map_err(work_error)?;
-    let mut output = String::with_capacity(len);
+    let mut output = owned.unwrap_or_else(|| String::with_capacity(len));
     unit.finish();
     let mut buffer = [0u8; BLOCK_BYTES + 3];
     let mut read = 0usize;

@@ -208,7 +208,7 @@ pub(super) fn reserve_capacity<T>(
     work.reserve_memory(bytes).map_err(work_error)
 }
 
-pub(super) fn allocate_capacity<T>(
+pub(in crate::append_table) fn allocate_capacity<T>(
     capacity: usize,
     work: &CheckpointWorkContext,
 ) -> Result<Vec<T>, AppendTableError> {
@@ -297,7 +297,7 @@ fn copy_small_key(
     Ok(RelationalKey(output))
 }
 
-fn copy_string(
+pub(in crate::append_table) fn copy_string(
     input: &str,
     owner: &mut CheckpointAllocationOwner,
     work: &CheckpointWorkContext,
@@ -333,7 +333,7 @@ fn copy_string(
     Ok(output)
 }
 
-fn copy_key(
+pub(in crate::append_table) fn copy_key(
     input: &RelationalKey,
     owner: &mut CheckpointAllocationOwner,
     work: &CheckpointWorkContext,
@@ -343,31 +343,41 @@ fn copy_key(
     let mut output = allocate_capacity(input.0.len(), work)?;
     unit.finish();
     for value in &input.0 {
-        let copied = match value {
-            RelationalValue::Text(value) => RelationalValue::Text(copy_string(value, owner, work)?),
-            RelationalValue::Bytea(value) => {
-                let unit = work.start_unit().map_err(work_error)?;
-                admit::<u8>(value.len(), owner, work)?;
-                let mut output = allocate_capacity(value.len(), work)?;
-                unit.finish();
-                for bytes in value.chunks(COPY_BYTES_PER_UNIT) {
-                    let unit = work.start_unit().map_err(work_error)?;
-                    output.extend_from_slice(bytes);
-                    unit.finish();
-                }
-                RelationalValue::Bytea(output)
-            }
-            value => {
-                let unit = work.start_unit().map_err(work_error)?;
-                let copied = value.clone();
-                unit.finish();
-                copied
-            }
-        };
+        let copied = copy_value(value, owner, work)?;
         let unit = work.start_unit().map_err(work_error)?;
         output.push(copied);
         unit.finish();
     }
     work.checkpoint().map_err(work_error)?;
     Ok(RelationalKey(output))
+}
+
+pub(in crate::append_table) fn copy_value(
+    value: &RelationalValue,
+    owner: &mut CheckpointAllocationOwner,
+    work: &CheckpointWorkContext,
+) -> Result<RelationalValue, AppendTableError> {
+    match value {
+        RelationalValue::Text(value) => Ok(RelationalValue::Text(copy_string(value, owner, work)?)),
+        RelationalValue::Bytea(value) => {
+            let unit = work.start_unit().map_err(work_error)?;
+            admit::<u8>(value.len(), owner, work)?;
+            let mut output = allocate_capacity(value.len(), work)?;
+            unit.finish();
+            for bytes in value.chunks(COPY_BYTES_PER_UNIT) {
+                let unit = work.start_unit().map_err(work_error)?;
+                output.extend_from_slice(bytes);
+                unit.finish();
+            }
+            work.checkpoint().map_err(work_error)?;
+            Ok(RelationalValue::Bytea(output))
+        }
+        value => {
+            let unit = work.start_unit().map_err(work_error)?;
+            let copied = value.clone();
+            unit.finish();
+            work.checkpoint().map_err(work_error)?;
+            Ok(copied)
+        }
+    }
 }

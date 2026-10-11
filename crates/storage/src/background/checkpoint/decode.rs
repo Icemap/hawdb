@@ -50,6 +50,28 @@ pub(crate) fn allocation(
 }
 
 impl CheckpointDecodeContext {
+    pub(crate) fn vector_capacity<T>(&self, capacity: usize) -> Result<Vec<T>> {
+        let bytes = capacity
+            .checked_mul(std::mem::size_of::<T>())
+            .ok_or_else(|| {
+                allocation("decoded vector capacity overflows usize", usize::MAX, self)
+            })?;
+        let token = self.reserve(bytes)?;
+        let mut output = Vec::new();
+        output
+            .try_reserve_exact(capacity)
+            .map_err(|error| allocation(error, bytes, self))?;
+        if std::mem::size_of::<T>() != 0 && output.capacity() != capacity {
+            return Err(allocation(
+                "decoded vector capacity exceeds admission",
+                bytes,
+                self,
+            ));
+        }
+        token.address(output.as_ptr() as usize);
+        Ok(output)
+    }
+
     /// Copy one schema string after admitting its exact backing capacity.
     /// The caller keeps this inventory until the copied string is destroyed.
     pub(crate) fn string(&self, value: &str) -> Result<String> {
