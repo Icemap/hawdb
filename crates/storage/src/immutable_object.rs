@@ -477,6 +477,15 @@ impl ImmutableObjectStore {
         inventory: &[ObjectReference],
         roots: &[ObjectReference],
     ) -> Result<ReclamationReport, ImmutableObjectError> {
+        self.reclaim_unreachable_with_evidence(inventory, roots, &Default::default())
+    }
+
+    fn reclaim_unreachable_with_evidence(
+        &mut self,
+        inventory: &[ObjectReference],
+        roots: &[ObjectReference],
+        evidence: &crate::branch_abandonment::QuarantinedObjects,
+    ) -> Result<ReclamationReport, ImmutableObjectError> {
         if self.poisoned {
             return Err(ImmutableObjectError::PublisherPoisoned);
         }
@@ -528,6 +537,21 @@ impl ImmutableObjectStore {
                 Err(ImmutableObjectError::Io { source, .. })
                     if source.kind() == io::ErrorKind::NotFound
                         && !reachable.contains(reference) => {}
+                Err(error @ ImmutableObjectError::ExistingObjectCorrupt { .. })
+                | Err(error @ ImmutableObjectError::ReferenceMismatch)
+                    if !reachable.contains(reference) =>
+                {
+                    let preserved =
+                        evidence
+                            .preserves(&self.object_path(*reference))
+                            .map_err(|source| ImmutableObjectError::Io {
+                                operation: "verify quarantined source before reclamation",
+                                source: io::Error::other(source),
+                            })?;
+                    if !preserved {
+                        return Err(error);
+                    }
+                }
                 Err(error) => return Err(error),
             }
         }
@@ -589,6 +613,15 @@ impl ImmutableObjectStore {
         inventory: &BranchReclamationInventory,
         retained_roots: &[ObjectReference],
     ) -> Result<ReclamationReport, ImmutableObjectError> {
+        self.reclaim_branches_with_evidence(inventory, retained_roots, &Default::default())
+    }
+
+    pub(crate) fn reclaim_branches_with_evidence(
+        &mut self,
+        inventory: &BranchReclamationInventory,
+        retained_roots: &[ObjectReference],
+        evidence: &crate::branch_abandonment::QuarantinedObjects,
+    ) -> Result<ReclamationReport, ImmutableObjectError> {
         let mut roots = retained_roots.to_vec();
         for branch in &inventory.branches {
             // A leased creator can still be preparing its first head. The
@@ -620,7 +653,8 @@ impl ImmutableObjectStore {
                 deferred_for_active_leases: true,
             });
         }
-        let mut report = self.reclaim_unreachable(&inventory.objects, &roots)?;
+        let mut report =
+            self.reclaim_unreachable_with_evidence(&inventory.objects, &roots, evidence)?;
         for branch in &inventory.branches {
             if matches!(branch.state, crate::branch_catalog::BranchState::Deleted)
                 && !branch.active_lease

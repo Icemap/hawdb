@@ -85,6 +85,7 @@ pub(crate) fn reclaim_owned_project(
             "reclamation owner is no longer a ready catalog branch".into(),
         ));
     }
+    let proofs = crate::branch_abandonment::reclamation_evidence(directory, &catalog, limits)?;
     let paths: Vec<_> = catalog
         .branches
         .iter()
@@ -141,7 +142,7 @@ pub(crate) fn reclaim_owned_project(
             branches,
         };
         let result = store
-            .reclaim_branches_with_roots(&inventory_branches, &retained_roots)
+            .reclaim_branches_with_evidence(&inventory_branches, &retained_roots, &proofs)
             .map_err(|error| {
                 HawDBError::from(branch_catalog::reclamation_object_error(
                     &catalog,

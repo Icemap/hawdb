@@ -117,8 +117,9 @@ mod types;
 pub(crate) use hawdb_system_sql as system_sql;
 
 pub use branch_lifecycle::{
-    BranchCreateRequest, BranchInfo, BranchLifecycleError, BranchLifecycleState,
-    BranchReclamationLimits, BranchReclamationReport, BranchSelector,
+    BranchAbandonmentAcknowledgement, BranchAbandonmentLimits, BranchAbandonmentPlan,
+    BranchAbandonmentReport, BranchCreateRequest, BranchInfo, BranchLifecycleError,
+    BranchLifecycleState, BranchReclamationLimits, BranchReclamationReport, BranchSelector,
 };
 pub use hawdb_core::graph_rag::{
     MissingScoringFeature, ScoringCombination, ScoringProgram, ScoringProgramError,

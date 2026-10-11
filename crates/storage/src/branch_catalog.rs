@@ -114,6 +114,8 @@ pub enum CreateOutcome {
     Pending,
     Succeeded,
     Aborted,
+    /// Explicit operator abandonment requires its durable quarantine forever.
+    Abandoned,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -281,6 +283,13 @@ impl Catalog {
             if let Some(owner) = &branch.owner {
                 validate_bounded_string(owner, MAX_OWNER_BYTES, "owner")?;
             }
+            if branch.create_outcome == CreateOutcome::Abandoned
+                && branch.state != BranchState::Deleted
+            {
+                return Err(CatalogError::InvalidState(
+                    "abandoned create must be deleted",
+                ));
+            }
             if branch.state == BranchState::Deleted
                 && branch.create_outcome == CreateOutcome::Pending
             {
@@ -383,6 +392,14 @@ impl Catalog {
         self.transition_create(id, expected_metadata_revision, CreateOutcome::Aborted)
     }
 
+    pub(crate) fn abandon_create(
+        &mut self,
+        id: BranchId,
+        expected_metadata_revision: u64,
+    ) -> Result<(), CatalogTransitionError> {
+        self.transition_create(id, expected_metadata_revision, CreateOutcome::Abandoned)
+    }
+
     fn transition_create(
         &mut self,
         id: BranchId,
@@ -415,7 +432,7 @@ impl Catalog {
         candidate.branches[index].create_outcome = outcome;
         candidate.branches[index].state = match outcome {
             CreateOutcome::Succeeded => BranchState::Ready,
-            CreateOutcome::Aborted => BranchState::Deleted,
+            CreateOutcome::Aborted | CreateOutcome::Abandoned => BranchState::Deleted,
             CreateOutcome::Pending => unreachable!("pending is rejected above"),
         };
         candidate
@@ -720,7 +737,7 @@ pub fn bind_main_head_file(
 /// Publishes a catalog while the caller owns the project metadata lease.
 /// Keeping the lock acquisition outside the read/modify/write sequence lets
 /// catalog transitions serialize their read and publication as one operation.
-fn write_catalog_locked(path: &Path, catalog: &Catalog) -> io::Result<()> {
+pub(crate) fn write_catalog_locked(path: &Path, catalog: &Catalog) -> io::Result<()> {
     let encoded = catalog
         .encode()
         .map_err(|error| invalid_data(error.to_string()))?;
@@ -1387,13 +1404,19 @@ pub fn reclaim_catalog_branches(
     let _metadata_lease = CatalogMetadataLease::acquire_blocking(project_directory)
         .map_err(BranchReclamationError::Catalog)?;
     let catalog = read_catalog(catalog_path).map_err(BranchReclamationError::Catalog)?;
+    let proofs = crate::branch_abandonment::reclamation_evidence(
+        project_directory,
+        &catalog,
+        Default::default(),
+    )
+    .map_err(|error| BranchReclamationError::Catalog(io::Error::other(error)))?;
     let branches = reclamation_entries(&catalog, paths, None)?;
     let inventory = BranchReclamationInventory {
         objects: objects.to_vec(),
         branches,
     };
     object_store
-        .reclaim_branches(&inventory)
+        .reclaim_branches_with_evidence(&inventory, &[], &proofs)
         .map_err(|error| reclamation_object_error(&catalog, &inventory.branches, error))
 }
 
@@ -1558,7 +1581,9 @@ pub(crate) fn recover_create_with_validation(
             ))?;
         match branch.create_outcome {
             CreateOutcome::Succeeded => return Ok(CreateRecoveryOutcome::Completed),
-            CreateOutcome::Aborted => return Ok(CreateRecoveryOutcome::Aborted),
+            CreateOutcome::Aborted | CreateOutcome::Abandoned => {
+                return Ok(CreateRecoveryOutcome::Aborted)
+            }
             CreateOutcome::Pending => {}
         }
         fs::create_dir_all(directory).map_err(|source| {
@@ -1598,7 +1623,9 @@ fn recover_create_file_inner(
         ))?;
     match branch.create_outcome {
         CreateOutcome::Succeeded => return Ok(CreateRecoveryOutcome::Completed),
-        CreateOutcome::Aborted => return Ok(CreateRecoveryOutcome::Aborted),
+        CreateOutcome::Aborted | CreateOutcome::Abandoned => {
+            return Ok(CreateRecoveryOutcome::Aborted)
+        }
         CreateOutcome::Pending => {}
     }
     if branch.state != BranchState::Creating {
@@ -1606,6 +1633,13 @@ fn recover_create_file_inner(
             CatalogFileTransitionError::Transition(CatalogTransitionError::InvalidState(
                 "recovery requires a pending child create",
             )),
+        ));
+    }
+    if crate::branch_abandonment::has_abandonment(catalog_path, branch_id)
+        .map_err(|error| BranchCreateError::Catalog(CatalogFileTransitionError::Io(error)))?
+    {
+        return Err(BranchCreateError::InconsistentRequest(
+            "pending create has an operator abandonment intent",
         ));
     }
     let reservation = CreateReservation {
@@ -1845,6 +1879,7 @@ fn outcome_byte(value: CreateOutcome) -> u8 {
         CreateOutcome::Pending => 0,
         CreateOutcome::Succeeded => 1,
         CreateOutcome::Aborted => 2,
+        CreateOutcome::Abandoned => 3,
     }
 }
 
@@ -1853,6 +1888,7 @@ fn parse_outcome(value: u8) -> Result<CreateOutcome, CatalogError> {
         0 => Ok(CreateOutcome::Pending),
         1 => Ok(CreateOutcome::Succeeded),
         2 => Ok(CreateOutcome::Aborted),
+        3 => Ok(CreateOutcome::Abandoned),
         _ => Err(CatalogError::InvalidEnum("create outcome")),
     }
 }
