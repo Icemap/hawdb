@@ -1411,6 +1411,24 @@ admission. Read-only opens skip repair and explicit recovery rejects writes.
 Catalog serialization rechecks pending state before creating a lease directory,
 so a stale recovery cannot recreate a reclaimed terminal branch.
 
+When an unleased `Creating/Pending` record prevents reclamation from validating
+its head, creation baseline or immutable closure, the facade returns
+`HawDBError::BranchReclamationBlocked` with the branch UUID, catalog revision,
+branch metadata revision and underlying cause. Root provenance survives the
+complete mark traversal; an unrelated corrupt inventory object remains an
+ordinary storage error. Descriptor admission failures retain their original
+`FileDescriptors` type instead of being attributed to the pending receipt.
+Live creators retain the existing lease deferral. No sweep or catalog mutation
+is performed on a failed mark.
+
+The diagnostic identifies one blocking pending owner; it does not assert that
+the failed dependency is exclusive to that branch. Shared live dependencies
+remain protected. Its revision fields are observations, not abandonment
+authorization. Explicit operator-authorized abandonment, durable evidence
+quarantine and precise independent reader/job-root progress remain separate
+requirements in #778. A caller must not edit the catalog or delete the reported
+branch directory to work around the blocker.
+
 An unchanged checkpoint is identified by its exact durable-manifest reference
 and recovery boundary. Seal reuses the validated root's checkpoint references
 and bindings, held under the runtime lease, and publishes only the new WAL

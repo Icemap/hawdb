@@ -1334,6 +1334,12 @@ fn retained_pending_create_blocks_reclamation_without_deleting_evidence() {
     std::fs::write(&head_path, &damaged_head).unwrap();
     let catalog_path = project.0.join("branches/catalog.hawdb");
     let before = std::fs::read(&catalog_path).unwrap();
+    let catalog = hawdb_storage::branch_catalog::read_catalog(&catalog_path).unwrap();
+    let record = catalog
+        .branches
+        .iter()
+        .find(|record| record.id.as_uuid() == child)
+        .unwrap();
     let mut objects = ImmutableObjectStore::open(project.0.join("branches/objects")).unwrap();
     let orphan = ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, b"orphan");
     objects.publish(orphan, b"orphan").unwrap();
@@ -1348,14 +1354,140 @@ fn retained_pending_create_blocks_reclamation_without_deleting_evidence() {
             BranchCreateRecoveryStatus::Retained
         );
         assert!(recovery.entries[0].error.is_some());
-        assert!(writer
+        let error = writer
             .reclaim_branch_storage(BranchReclamationLimits::default())
-            .is_err());
+            .unwrap_err();
+        assert!(
+            matches!(
+                &error,
+                HawDBError::BranchReclamationBlocked {
+                    branch_id,
+                    catalog_revision,
+                    metadata_revision,
+                    ..
+                } if *branch_id == child
+                    && *catalog_revision == catalog.revision
+                    && *metadata_revision == record.metadata_revision
+            ),
+            "{error:?}"
+        );
         assert!(writer.delete_branch(BranchSelector::Id(child)).is_err());
         assert_eq!(std::fs::read(&head_path).unwrap(), damaged_head);
         assert_eq!(std::fs::read(&catalog_path).unwrap(), before);
         assert_eq!(objects.read(orphan).unwrap(), b"orphan");
         assert_eq!(values(&mut writer).len(), 1);
+    }
+}
+
+#[test]
+fn pending_reclamation_attributes_root_failures_without_blaming_unrelated_inventory() {
+    use hawdb::BranchReclamationLimits;
+    use hawdb_storage::branch_catalog;
+    use hawdb_storage::branch_head::read_branch_head;
+    use hawdb_storage::immutable_object::{ImmutableObjectStore, ObjectKind, ObjectReference};
+    use hawdb_storage::sealed_root::SealedRoot;
+
+    for durability in [
+        DurabilityPolicy::SyncOnEveryWrite,
+        DurabilityPolicy::SyncOnCheckpoint,
+    ] {
+        for damage in ["missing-root", "root", "dependency", "orphan"] {
+            let project = Project::new();
+            let mut writer = Database::open_with_durability(&project.0, durability).unwrap();
+            writer.query("CREATE (:Memory {id: 'parent'})").unwrap();
+            let child = pending_children(&project.0, &mut writer, 1)[0];
+            let head_path = project
+                .0
+                .join("branches")
+                .join(child.to_string())
+                .join("branch.head");
+            let head_bytes = std::fs::read(&head_path).unwrap();
+            let head = read_branch_head(&head_path).unwrap();
+            // Move the live head forward so the pending branch also exercises
+            // retained historical roots, not only the writer's current root.
+            writer.query("CREATE (:Memory {id: 'later'})").unwrap();
+            writer.checkpoint().unwrap();
+            let catalog_path = project.0.join("branches/catalog.hawdb");
+            let catalog_bytes = std::fs::read(&catalog_path).unwrap();
+            let catalog = branch_catalog::read_catalog(&catalog_path).unwrap();
+            let pending = catalog
+                .branches
+                .iter()
+                .find(|record| record.id.as_uuid() == child)
+                .unwrap();
+            let mut objects =
+                ImmutableObjectStore::open(project.0.join("branches/objects")).unwrap();
+            let orphan = ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, b"orphan");
+            objects.publish(orphan, b"orphan").unwrap();
+            let victim = match damage {
+                "missing-root" | "root" => head.sealed_root,
+                "dependency" => {
+                    SealedRoot::decode(&objects.read(head.sealed_root).unwrap())
+                        .unwrap()
+                        .checkpoint_references[0]
+                }
+                "orphan" => {
+                    let reference = ObjectReference::for_bytes(
+                        ObjectKind::CheckpointArtifact,
+                        1,
+                        b"damaged unrelated inventory",
+                    );
+                    objects
+                        .publish(reference, b"damaged unrelated inventory")
+                        .unwrap();
+                    reference
+                }
+                _ => unreachable!(),
+            };
+            let victim_path = objects.object_path(victim);
+            let original = std::fs::read(&victim_path).unwrap();
+            let damaged = if damage == "missing-root" {
+                std::fs::remove_file(&victim_path).unwrap();
+                None
+            } else {
+                let mut bytes = original.clone();
+                bytes[0] ^= 0xff;
+                std::fs::write(&victim_path, &bytes).unwrap();
+                Some(bytes)
+            };
+
+            let error = writer
+                .reclaim_branch_storage(BranchReclamationLimits::default())
+                .unwrap_err();
+            if damage == "orphan" {
+                assert!(matches!(error, HawDBError::Storage(_)), "{error:?}");
+            } else {
+                assert!(
+                    matches!(
+                        &error,
+                        HawDBError::BranchReclamationBlocked {
+                            branch_id, catalog_revision, metadata_revision, ..
+                        } if *branch_id == child
+                            && *catalog_revision == catalog.revision
+                            && *metadata_revision == pending.metadata_revision
+                    ),
+                    "{damage}: {error:?}"
+                );
+                assert!(std::error::Error::source(&error).is_some());
+            }
+            assert_eq!(std::fs::read(&catalog_path).unwrap(), catalog_bytes);
+            assert_eq!(std::fs::read(&head_path).unwrap(), head_bytes);
+            assert_eq!(std::fs::read(&victim_path).ok(), damaged);
+            assert_eq!(objects.read(orphan).unwrap(), b"orphan");
+
+            // Restore only fixture damage, then retry through the same public
+            // entry point. The diagnostic must not poison an otherwise healthy
+            // writer or change the pending catalog receipt.
+            std::fs::write(&victim_path, original).unwrap();
+            let report = writer
+                .reclaim_branch_storage(BranchReclamationLimits::default())
+                .unwrap();
+            assert!(!report.deferred_for_active_leases);
+            assert!(report.reclaimed_objects >= 1);
+            assert!(!objects.object_path(orphan).exists());
+            assert_eq!(std::fs::read(&catalog_path).unwrap(), catalog_bytes);
+            assert_eq!(values(&mut writer).len(), 2);
+        }
     }
 }
 

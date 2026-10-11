@@ -1256,6 +1256,12 @@ pub enum BranchReclamationError {
     Head(BranchHeadError),
     Lease(io::Error),
     Objects(ImmutableObjectError),
+    PendingCreate {
+        branch_id: BranchId,
+        catalog_revision: u64,
+        metadata_revision: u64,
+        source: Box<BranchReclamationError>,
+    },
 }
 
 impl Display for BranchReclamationError {
@@ -1274,6 +1280,13 @@ impl Display for BranchReclamationError {
                 write!(formatter, "inspect branch lease for reclamation: {error}")
             }
             Self::Objects(error) => write!(formatter, "reclaim branch objects: {error}"),
+            Self::PendingCreate {
+                branch_id, source, ..
+            } => write!(
+                formatter,
+                "pending branch {} blocks reclamation: {source}",
+                branch_id.as_uuid()
+            ),
         }
     }
 }
@@ -1284,9 +1297,76 @@ impl std::error::Error for BranchReclamationError {
             Self::Catalog(error) | Self::Lease(error) => Some(error),
             Self::Head(error) => Some(error),
             Self::Objects(error) => Some(error),
+            Self::PendingCreate { source, .. } => Some(source.as_ref()),
             Self::MissingPath(_) => None,
         }
     }
+}
+
+impl From<BranchReclamationError> for crate::error::HawDBError {
+    fn from(error: BranchReclamationError) -> Self {
+        match error {
+            BranchReclamationError::PendingCreate {
+                branch_id,
+                catalog_revision,
+                metadata_revision,
+                source,
+            } => {
+                let cause = Self::from(*source);
+                // Caller admission failure does not diagnose damaged evidence.
+                if matches!(cause, Self::FileDescriptors(_)) {
+                    return cause;
+                }
+                Self::BranchReclamationBlocked {
+                    branch_id: branch_id.as_uuid(),
+                    catalog_revision,
+                    metadata_revision,
+                    cause: Box::new(cause),
+                }
+            }
+            error => Self::from_storage_error(error),
+        }
+    }
+}
+
+pub(crate) fn pending_reclamation_error(
+    catalog: &Catalog,
+    record: &BranchRecord,
+    source: BranchReclamationError,
+) -> BranchReclamationError {
+    if record.state == BranchState::Creating && record.create_outcome == CreateOutcome::Pending {
+        BranchReclamationError::PendingCreate {
+            branch_id: record.id,
+            catalog_revision: catalog.revision,
+            metadata_revision: record.metadata_revision,
+            source: Box::new(source),
+        }
+    } else {
+        source
+    }
+}
+
+pub(crate) fn reclamation_object_error(
+    catalog: &Catalog,
+    branches: &[BranchReclamationEntry],
+    error: ImmutableObjectError,
+) -> BranchReclamationError {
+    if let ImmutableObjectError::ReclamationRoot { root, .. } = &error
+        && let Some(record) = catalog
+            .branches
+            .iter()
+            .zip(branches)
+            .find_map(|(record, entry)| {
+                (record.state == BranchState::Creating
+                    && record.create_outcome == CreateOutcome::Pending
+                    && (entry.sealed_root == Some(*root)
+                        || record.base_root_digest == Some(*root.sha256.as_bytes())))
+                .then_some(record)
+            })
+    {
+        return pending_reclamation_error(catalog, record, BranchReclamationError::Objects(error));
+    }
+    BranchReclamationError::Objects(error)
 }
 
 /// Builds a conservative branch-aware sweep from one durable catalog. A
@@ -1308,12 +1388,13 @@ pub fn reclaim_catalog_branches(
         .map_err(BranchReclamationError::Catalog)?;
     let catalog = read_catalog(catalog_path).map_err(BranchReclamationError::Catalog)?;
     let branches = reclamation_entries(&catalog, paths, None)?;
+    let inventory = BranchReclamationInventory {
+        objects: objects.to_vec(),
+        branches,
+    };
     object_store
-        .reclaim_branches(&BranchReclamationInventory {
-            objects: objects.to_vec(),
-            branches,
-        })
-        .map_err(BranchReclamationError::Objects)
+        .reclaim_branches(&inventory)
+        .map_err(|error| reclamation_object_error(&catalog, &inventory.branches, error))
 }
 
 pub(crate) fn reclamation_entries(
@@ -1332,58 +1413,70 @@ pub(crate) fn reclamation_entries(
         let path = indexed_paths
             .get(&record.id)
             .ok_or(BranchReclamationError::MissingPath(record.id))?;
-        let owned = if let Some((lease, head)) = exclusive_owner {
-            record.state == BranchState::Ready
-                && head.branch_id == *record.id.as_uuid().as_bytes()
-                && lease
-                    .owns_directory(&path.directory)
-                    .map_err(BranchReclamationError::Lease)?
-        } else {
-            false
-        };
-        let active_lease = if owned
-            || (matches!(record.state, BranchState::Deleted)
-                && !fs::try_exists(&path.directory).map_err(BranchReclamationError::Lease)?)
-        {
-            false
-        } else {
-            match DatabaseDirectoryLease::acquire(&path.directory) {
-                Ok(lease) => {
-                    drop(lease);
-                    false
-                }
-                Err(DatabaseDirectoryLeaseError::AlreadyOpen) => true,
-                Err(DatabaseDirectoryLeaseError::Canonicalize(error))
-                | Err(DatabaseDirectoryLeaseError::OpenLockFile(error))
-                | Err(DatabaseDirectoryLeaseError::Lock(error)) => {
-                    return Err(BranchReclamationError::Lease(error));
-                }
-            }
-        };
-        // A creator owns its lease before publishing the pending receipt or
-        // child head. Its lease defers collection without requiring a head.
-        let sealed_root = if active_lease || matches!(record.state, BranchState::Deleted) {
-            None
-        } else {
-            let head = read_branch_head(&path.head_path).map_err(BranchReclamationError::Head)?;
-            if head.project_id != *catalog.project_id.as_uuid().as_bytes()
-                || head.branch_id != *record.id.as_uuid().as_bytes()
-                || (owned && exclusive_owner.is_some_and(|(_, expected)| *expected != head))
-            {
-                return Err(BranchReclamationError::Catalog(invalid_data(
-                    "reclamation head does not match its catalog or admitted owner",
-                )));
-            }
-            Some(head.sealed_root)
-        };
-        branches.push(BranchReclamationEntry {
-            state: record.state,
-            sealed_root,
-            directory: path.directory.clone(),
-            active_lease,
-        });
+        branches.push(
+            reclamation_entry(catalog, record, path, exclusive_owner)
+                .map_err(|source| pending_reclamation_error(catalog, record, source))?,
+        );
     }
     Ok(branches)
+}
+
+fn reclamation_entry(
+    catalog: &Catalog,
+    record: &BranchRecord,
+    path: &BranchReclamationPath,
+    exclusive_owner: Option<(&DatabaseDirectoryLease, &BranchHead)>,
+) -> Result<BranchReclamationEntry, BranchReclamationError> {
+    let owned = if let Some((lease, head)) = exclusive_owner {
+        record.state == BranchState::Ready
+            && head.branch_id == *record.id.as_uuid().as_bytes()
+            && lease
+                .owns_directory(&path.directory)
+                .map_err(BranchReclamationError::Lease)?
+    } else {
+        false
+    };
+    let active_lease = if owned
+        || (matches!(record.state, BranchState::Deleted)
+            && !fs::try_exists(&path.directory).map_err(BranchReclamationError::Lease)?)
+    {
+        false
+    } else {
+        match DatabaseDirectoryLease::acquire(&path.directory) {
+            Ok(lease) => {
+                drop(lease);
+                false
+            }
+            Err(DatabaseDirectoryLeaseError::AlreadyOpen) => true,
+            Err(DatabaseDirectoryLeaseError::Canonicalize(error))
+            | Err(DatabaseDirectoryLeaseError::OpenLockFile(error))
+            | Err(DatabaseDirectoryLeaseError::Lock(error)) => {
+                return Err(BranchReclamationError::Lease(error));
+            }
+        }
+    };
+    // A creator owns its lease before publishing the pending receipt or
+    // child head. Its lease defers collection without requiring a head.
+    let sealed_root = if active_lease || matches!(record.state, BranchState::Deleted) {
+        None
+    } else {
+        let head = read_branch_head(&path.head_path).map_err(BranchReclamationError::Head)?;
+        if head.project_id != *catalog.project_id.as_uuid().as_bytes()
+            || head.branch_id != *record.id.as_uuid().as_bytes()
+            || (owned && exclusive_owner.is_some_and(|(_, expected)| *expected != head))
+        {
+            return Err(BranchReclamationError::Catalog(invalid_data(
+                "reclamation head does not match its catalog or admitted owner",
+            )));
+        }
+        Some(head.sealed_root)
+    };
+    Ok(BranchReclamationEntry {
+        state: record.state,
+        sealed_root,
+        directory: path.directory.clone(),
+        active_lease,
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1998,6 +2091,34 @@ mod tests {
             revision: 11,
             branches: vec![record(2, "second"), record(1, "first")],
         }
+    }
+
+    #[test]
+    fn pending_reclamation_keeps_nested_descriptor_rejections_typed() {
+        use crate::error::HawDBError;
+        use hawdb_core::error::FileDescriptorError;
+
+        let mut catalog = catalog();
+        let pending = &mut catalog.branches[0];
+        pending.state = BranchState::Creating;
+        pending.create_outcome = CreateOutcome::Pending;
+        let descriptor = FileDescriptorError::BudgetExceeded {
+            requested: 1,
+            available: 0,
+            limit: 32,
+        };
+        let source = BranchReclamationError::Objects(ImmutableObjectError::ReclamationRoot {
+            root: ObjectReference::for_bytes(ObjectKind::SealedRoot, 2, b"pending root"),
+            source: Box::new(ImmutableObjectError::Io {
+                operation: "open immutable recovery dependency",
+                source: io::Error::other(descriptor.clone()),
+            }),
+        });
+        let error = pending_reclamation_error(&catalog, &catalog.branches[0], source);
+        assert_eq!(
+            HawDBError::from(error),
+            HawDBError::FileDescriptors(descriptor)
+        );
     }
 
     fn create_request() -> CreateRequest {
