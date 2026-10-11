@@ -107,6 +107,55 @@ fn with_graph_context<T>(
     (result, observer.into_reports())
 }
 
+#[test]
+fn node_projection_preserves_required_property_metadata_and_reports_borrowing() {
+    for required_properties in [Vec::new(), vec!["id".to_string()]] {
+        let has_property = !required_properties.is_empty();
+        let plan = PhysicalPlan::NodeProjectionScanExec {
+            variable: "n".into(),
+            label: "Memory".into(),
+            access: hawdb_plan_cypher::NodeProjectionAccess::LabelScan,
+            required_properties,
+            predicate: None,
+            items: vec![hawdb_plan_cypher::Projection {
+                name: "id".into(),
+                expression: hawdb_plan_cypher::ProjectionExpression::Property {
+                    variable: "n".into(),
+                    property: "id".into(),
+                },
+            }],
+        };
+        let mut rows = Vec::new();
+        let (result, reports) = with_graph_context(&plan, 2, 8192, None, |context| {
+            execute_binding_batches_inner(
+                BatchPlanRef(&plan),
+                context,
+                ExecutionLimit::unlimited(),
+                &mut |batch| {
+                    rows.extend(batch.into_iter().map(|binding| binding.values));
+                    Ok(BatchControl::Continue)
+                },
+            )
+        });
+        assert_eq!(result.unwrap(), BatchControl::Continue);
+        assert_eq!(rows.len(), 2);
+        for (ordinal, row) in rows.iter().enumerate() {
+            assert_eq!(
+                row.get("id"),
+                Some(&if has_property {
+                    Value::Int(ordinal as i64 + 1)
+                } else {
+                    Value::Null
+                }),
+            );
+        }
+        assert_eq!(
+            reports.pipeline_memory.borrowed_node_projection_rows,
+            if has_property { 2 } else { 0 },
+        );
+    }
+}
+
 fn graph_row_oracle(algorithm: GraphAlgorithmKind, context: BatchReadContext<'_>) -> Vec<Row> {
     // Exercise the algorithm directly, independently of dispatcher output mapping.
     let graph = try_projected_graph_with_node_filter(
