@@ -70,10 +70,9 @@ pub(crate) fn reclaim_owned_project(
     let directory = catalog_path.parent().ok_or_else(|| {
         HawDBError::StorageIntegrity("branch catalog has no project directory".into())
     })?;
-    // An exclusive borrow of the sole runtime lease proves the owner has no
-    // readers or candidates. Metadata serialization excludes new admissions
-    // and catalog changes throughout inventory, mark and sweep. An unrelated
-    // live owner still defers the entire operation, including other processes.
+    // Registered owners declare historical and prepared roots. Metadata
+    // serialization excludes new root registrations and publication throughout
+    // the complete mark/sweep; unregistered owners still defer collection.
     let _metadata = CatalogMetadataLease::acquire_blocking(directory)?;
     let started = Instant::now();
     let catalog = branch_catalog::read_catalog(catalog_path)?;
@@ -97,8 +96,15 @@ pub(crate) fn reclaim_owned_project(
             }
         })
         .collect();
-    let branches = branch_catalog::reclamation_entries(&catalog, &paths, Some((owner, head)))
-        .map_err(HawDBError::from_storage_error)?;
+    let registered = branch_catalog::reclamation_entries_with_pins(
+        &catalog,
+        &paths,
+        (owner, head),
+        limits.max_objects,
+        &_metadata,
+    )
+    .map_err(HawDBError::from_storage_error)?;
+    let branches = registered.branches;
     let mut report = if branches.iter().any(|branch| branch.active_lease) {
         BranchReclamationReport::deferred()
     } else {
@@ -111,7 +117,7 @@ pub(crate) fn reclaim_owned_project(
             .filter(|reference| reference.kind == ObjectKind::SealedRoot)
             .map(|reference| (*reference.sha256.as_bytes(), *reference))
             .collect();
-        let retained_roots = catalog
+        let mut retained_roots = catalog
             .branches
             .iter()
             .filter(|record| record.state != branch_catalog::BranchState::Deleted)
@@ -124,6 +130,7 @@ pub(crate) fn reclaim_owned_project(
                 })
             })
             .collect::<Result<Vec<_>>>()?;
+        retained_roots.extend(registered.roots);
         let result = store
             .reclaim_branches_with_roots(
                 &BranchReclamationInventory {

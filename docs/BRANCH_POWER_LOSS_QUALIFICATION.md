@@ -87,6 +87,7 @@ and are materialized in isolated directories. Recovery uses ordinary
 | Pending-create recovery | Actual interrupted-create images must be reconciled by ordinary open before a matching CREATE retry. Separately, both policies and before/after the recovery catalog replacement model a second interruption: the same complete child reopens, repeat recovery preserves catalog bytes, and main remains deferred during the scan. |
 | Logical deletion | Both policies, before/after Deleting and Deleted catalog replacement; repeat the original UUID/revision request, preserve one tombstone, and recover the unleased descendant. |
 | GC | Both policies, acknowledged deletion plus actual orphan unlink, deleted-directory retirement before its name barrier, first retired child unlink, and final directory unlink through `Database::reclaim_branch_storage` while main remains admitted. Crash images resume cleanup through the same API, repeat it idempotently, and reopen the exact main/descendant schema, SQL rows and graph data; the deleted UUID remains tombstoned. |
+| Registered-root GC | Both policies, a historical reader and pending job across head advancement; actual unrelated orphan unlink while pinned, historical root unlink only after both guards retire, and completed sweep. Lost/isolated/reordered uncovered operations preserve complete checkpointed schema/SQL/graph state; ordinary reopen and repeated maintenance validate each image. |
 | Admission | Before/after actual checkpoint hard-link alias installation; exact committed schema/data survive replay without copying a parent dataset. |
 | Configurations | `Auto`, `Materialized`, and `OutOfCore` crossed with all four existing relational index modes; indexed queries, child DDL/DML/checkpoint, nested fork, parent deletion and reopen under a 32-FD domain. |
 
@@ -160,19 +161,29 @@ proof or an exact process-wide descriptor census. Derived projection completion
 and error classification are delivered in #839; derived-recovery and pruned
 range error preservation are delivered in #841. Each PR targets `main` directly.
 
-Pending/running/failed host jobs block `USE BRANCH` and reclamation with a typed
-branch-busy error, retaining the current runtime and candidate objects;
-completed jobs keep their outcome and monotonically increasing IDs across
-selection. Read snapshots and prepared handoffs retain their runtime lease.
-Catalog-backed GC holds metadata serialization through inspection and sweep.
-The production maintenance API can exempt its uniquely held writer lease;
-unrelated owners and outstanding readers/candidates still defer reclamation.
-Concurrent maintenance retires only an idle internal read publication before
-checking that ownership. The fault matrix exercises this conservative contract
-and restartable directory retirement, including the barrier that makes the
-original UUID path durably absent before recursive cleanup. Independent job-owned
-roots and sweeping through unrelated active owners remain separate #778/#819/#820
-work; these schedules do not establish those capabilities.
+Pending/running/failed host jobs still block `USE BRANCH`; registered jobs now
+retain their immutable source root independently until successful completion.
+Read snapshots and prepared handoffs also retain exact root guards and UUID
+ownership. The production collector reads bounded, checksummed declarations
+only from actively registered owners, including foreign processes. Unknown
+owners still defer; invalid live declarations prevent deletion. Catalog metadata
+serialization covers complete publication/pin admission and inspection/sweep.
+Retirement atomically shrinks a declaration; failed IO conservatively retains
+surplus roots until a successful update or owner retirement. These declarations
+are ephemeral and do not replace durable catalog roots or authorize removing an
+actively leased private directory.
+
+The registered-root fault case in `src/api/tests/power_loss/runtime_roots.rs`
+captures actual orphan/historical-root unlink and completed sweep under both
+durability policies. Each generated image reopens through the ordinary facade,
+verifies both complete checkpointed transactions, repeats GC and reopens again.
+It also checks the historical reader's schema and job-only retention before
+release under the unchanged 32-FD project cap. Separate kernel and public
+regressions cover publication/GC lock exclusion, registry corruption, failed
+retirement, real foreign-process GC progress and killed-owner retirement.
+These finite schedules supplement restartable directory retirement, including
+the barrier making the original UUID path durably absent before recursive
+cleanup; they do not exhaust concurrent interleavings.
 
 ## Model mapping and limits
 
@@ -194,5 +205,5 @@ cannot establish the Windows ancestor-name barrier's semantics. See the
 custom native open flags are rejected by capture. IO outside the recorder must
 be added before claiming coverage of a new path. The finite named matrix is not
 exhaustive IO-interleaving exploration; physical devices, Windows namespace
-persistence, independent job roots and fine-grained concurrent GC remain explicit
+persistence and exhaustive concurrent GC interleavings remain explicit
 gaps. Do not close the umbrella issues solely on this matrix's passing result.

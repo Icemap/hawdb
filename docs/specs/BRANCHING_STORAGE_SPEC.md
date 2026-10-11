@@ -381,7 +381,8 @@ read-only open follows metadata admission and defers main recovery.
 
 Background jobs currently prevent switching while Pending/Running/Failed so
 retryable work cannot be discarded. Completed outcomes and the job ID allocator
-stay with the host handle; independent job-owned branch pins remain required.
+stay with the host handle. Queueing on an admitted runtime retains its immutable
+source root through pending/running/failed states and releases it on success.
 Complete engine FD qualification and deterministic power-loss qualification
 remain #819/#820 work. The default-open integration does not itself prove those
 contracts or all bootstrap publication-failure boundaries.
@@ -626,24 +627,49 @@ revision before invoking the child-publication kernel.
 Catalog-backed GC holds metadata serialization through inventory, mark and
 sweep. `Database::reclaim_branch_storage` and the equivalent concurrent facade
 method provide a typed maintenance entry point for an admitted writer. The
-collector may exclude that writer's own OS lease only while an exclusive Rust
-borrow and a unique ownership `Arc` prove that no snapshot or prepared handoff
-shares it. It validates the selected head against both the catalog UUID/project
-and the writer's exact head before inventorying objects. A prepared immutable
-handoff retains an ownership clone until publication or abandonment.
-Pending, running, or failed host jobs return a typed `BranchBusy` error before
-maintenance starts. Their historical dependencies do not yet have independent
-root registrations; completion releases this conservative gate without changing
-the recorded job outcome.
+collector validates the selected head against the catalog UUID/project and, for
+its own writer, the exact admitted head. Cooperating owners publish checksummed
+root declarations in the UUID-local `root-pins` directory. A separate OS lease
+registers the live owner; stale bytes cannot register an older or unknown owner.
+Missing, corrupt, oversized or conflicting live declarations fail closed before
+any deletion. Owners without a live registration still defer collection.
+
+Read snapshots clone an already registered immutable root guard without IO.
+Prepared handoffs retain their own candidate guard. Publication holds the same
+catalog metadata barrier as GC from before its first immutable-object write
+through candidate registration; completion validates the guard's root and owner
+before publishing a head. Adoption transfers that guard without fallible IO
+after durable head publication. The registration retains UUID ownership even
+when only a reader or detached candidate remains.
+
+Pending, running and failed host jobs retain their admitted immutable source
+guard through cancellation and retry; success retires it. Queueing on a deferred
+or in-memory source does not read persistent data or require an immutable guard.
+Unregistered internal jobs retain the typed `BranchBusy` maintenance gate.
+Unfinished jobs still prevent `USE BRANCH`; root registration does not change
+job execution or branch-selection semantics.
 
 An idle internal concurrent read publication is retired under writer/publication
 lock ordering before collection. Borrowed queries, explicit read transactions,
-checkpoint sources and transaction workspaces retain their original pins. Any
-remaining shared pin or unrelated branch lease, including a foreign process,
-returns `deferred_for_active_leases` without sweeping. Thus a long-lived idle
-main writer can reclaim storage; a perpetually active unrelated owner still
-requires a quiescent interval. This does not implement independent historical
-root registration or concurrent sweeping through foreign active publishers.
+checkpoint sources and transaction workspaces retain their original pins.
+Registered readers, jobs and foreign-process owners protect their complete root
+closures while unrelated orphans remain collectible. New pin admission and
+publication wait for the whole sweep; root retirement can only shrink the set
+through atomic replacement. A failed retirement write retains surplus roots
+until a successful registry update or owner retirement. Unknown owners and
+active creating/deleting/deleted UUIDs still return `deferred_for_active_leases`.
+Registration never authorizes removal of an actively owned private directory.
+
+Declarations are ephemeral process authority, not durable branch metadata: they
+need atomic visibility but no durability barrier. After a crash, durable catalog
+heads and creation baselines remain roots regardless of stale declarations.
+Each registry adds one counted ownership descriptor; admission reserves 24
+descriptors for ownership, the read wave and publication temporaries. A record
+is bounded to 100,000 entries (5,000,080 bytes), and collector allocation also
+obeys its remaining root-count budget. Registering or finally retiring a distinct
+root rewrites its owner's bounded record; cloning a reader does not. This adds
+metadata IO and publication/GC serialization, not a background worker or an
+unbounded per-query record.
 
 The inventory recognizes current immutable object versions and publisher staging
 names. Object-count and cumulative-byte limits cover both final objects and
@@ -687,13 +713,15 @@ The typed report records reclaimed objects/bytes, directory and staging counts,
 conservative deferral, and metadata-lock duration. Hosts schedule maintenance;
 there is no TTL, automatic expiry, background thread or implicit startup sweep.
 
-The live-writer regressions cover reader and candidate deferral, bounded scans,
-corrupt inventory, an unrelated writer, and reopening parent/sibling/descendant
-state after deletion and collection. The native power-loss matrix invokes the
-production facade maintenance entry point with main still open. These tests
-remain bounded implementation evidence, not physical-device certification.
-Finer independent-job/historical-root registration and concurrent collection
-without quiescent ownership remain tracked by [#778](https://github.com/nowledge-co/hawdb/issues/778).
+The live-writer regressions cover exact reader/job/candidate retention, bounded
+scans, corrupt inventory/registries, stale registration, a live foreign writer,
+owner process death, and reopening parent/sibling/descendant state after
+deletion and collection. Unrelated orphans are removed while roots remain
+pinned; historical objects become collectible after the last reader/job retires.
+The native power-loss matrix exercises actual unlink with and without live pins
+through production maintenance, preserving complete schema/SQL/graph state on
+reopen. These finite tests do not exhaust concurrent schedules or certify a
+physical device; broader qualification remains #819/#820 work.
 
 ## On-disk compatibility and immutable objects
 
@@ -1304,7 +1332,7 @@ for executed cases, platform assumptions and limits; each companion PR targets
 
 #819/#820 remain open for broader qualification, including native-library/host
 resources outside the engine domain, additional Windows alias and namespace
-fault schedules, physical-device evidence, independent job pins and finer
+fault schedules, physical-device evidence and finer
 concurrent GC. The source audit and current small-budget tests do not prove all
 possible native allocations or qualify every filesystem/platform.
 

@@ -30,6 +30,9 @@ mod name_reuse;
 #[path = "branch_project_open/qualification.rs"]
 mod qualification;
 
+#[path = "branch_project_open/runtime_roots.rs"]
+mod runtime_roots;
+
 struct Project(PathBuf);
 impl Project {
     fn new() -> Self {
@@ -209,15 +212,7 @@ fn live_writer_reclamation_retains_readers_descendants_and_budget_retries() {
         .0
         .join("branches/objects/objects/.staging/999999-1.stage");
     std::fs::write(&staging, b"interrupted publisher").unwrap();
-    let snapshot = database.begin_read_transaction().unwrap();
-    let deferred = database
-        .reclaim_branch_storage(BranchReclamationLimits::default())
-        .unwrap();
-    assert!(deferred.deferred_for_active_leases);
-    assert_eq!(deferred.reclaimed_objects, 0);
-    assert!(orphan_path.exists());
-    assert!(parent_directory.exists());
-    drop(snapshot);
+    let mut snapshot = database.begin_read_transaction().unwrap();
     assert!(database
         .reclaim_branch_storage(BranchReclamationLimits {
             max_objects: 1,
@@ -238,6 +233,15 @@ fn live_writer_reclamation_retains_readers_descendants_and_budget_retries() {
     assert!(!staging.exists());
     assert!(!orphan_path.exists());
     assert!(!parent_directory.exists());
+    assert_eq!(
+        snapshot
+            .query("MATCH (m:Memory) RETURN m.id")
+            .unwrap()
+            .rows
+            .len(),
+        1
+    );
+    drop(snapshot);
     assert!(
         baseline_path.exists(),
         "a catalog creation baseline remains a GC root after head advancement"
@@ -273,7 +277,7 @@ fn live_writer_reclamation_retains_readers_descendants_and_budget_retries() {
 }
 
 #[test]
-fn concurrent_reclamation_retires_only_idle_publication_pins() {
+fn concurrent_reclamation_preserves_active_readers_without_retaining_unrelated_orphans() {
     use hawdb::BranchReclamationLimits;
     use hawdb_storage::immutable_object::{ImmutableObjectStore, ObjectKind, ObjectReference};
 
@@ -290,12 +294,12 @@ fn concurrent_reclamation_retires_only_idle_publication_pins() {
         ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, b"concurrent-orphan");
     objects.publish(orphan, b"concurrent-orphan").unwrap();
     assert!(
-        database
+        !database
             .reclaim_branch_storage(BranchReclamationLimits::default())
             .unwrap()
             .deferred_for_active_leases
     );
-    assert!(objects.object_path(orphan).exists());
+    assert!(!objects.object_path(orphan).exists());
     assert_eq!(
         reader
             .query("MATCH (m:Memory) RETURN m.id")
@@ -332,7 +336,7 @@ fn concurrent_reclamation_retires_only_idle_publication_pins() {
 }
 
 #[test]
-fn reclamation_rejects_corrupt_inventory_and_unrelated_writer_then_retries() {
+fn reclamation_rejects_corrupt_inventory_while_an_unrelated_writer_remains_active() {
     use hawdb::BranchReclamationLimits;
     use hawdb_storage::immutable_object::{ImmutableObjectStore, ObjectKind, ObjectReference};
 
@@ -352,14 +356,6 @@ fn reclamation_rejects_corrupt_inventory_and_unrelated_writer_then_retries() {
     let orphan = ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, b"retained-orphan");
     objects.publish(orphan, b"retained-orphan").unwrap();
     let path = objects.object_path(orphan);
-    assert!(
-        database
-            .reclaim_branch_storage(BranchReclamationLimits::default())
-            .unwrap()
-            .deferred_for_active_leases
-    );
-    assert!(path.exists());
-    drop(other);
     std::fs::write(&path, b"damaged-orphan").unwrap();
     assert!(database
         .reclaim_branch_storage(BranchReclamationLimits::default())
@@ -372,6 +368,8 @@ fn reclamation_rejects_corrupt_inventory_and_unrelated_writer_then_retries() {
         .unwrap();
     assert!(!report.deferred_for_active_leases);
     assert!(!path.exists());
+    assert_eq!(values(&mut other).len(), 1);
+    drop(other);
     database.query_sql("USE BRANCH other").unwrap();
     assert_eq!(values(&mut database).len(), 1);
 }

@@ -68,13 +68,20 @@ mod tests {
             .prepare_immutable_root_handoff(&objects_path)
             .unwrap();
         let candidate_root = candidate.root.object_reference().unwrap();
-        let objects =
+        let mut objects =
             hawdb_storage::immutable_object::ImmutableObjectStore::open(&objects_path).unwrap();
-        let deferred = database
+        let orphan = hawdb_storage::immutable_object::ObjectReference::for_bytes(
+            hawdb_storage::immutable_object::ObjectKind::CheckpointArtifact,
+            1,
+            b"unrelated orphan",
+        );
+        objects.publish(orphan, b"unrelated orphan").unwrap();
+        let retained = database
             .reclaim_branch_storage(BranchReclamationLimits::default())
             .unwrap();
-        assert!(deferred.deferred_for_active_leases);
+        assert!(!retained.deferred_for_active_leases);
         assert!(objects.read(candidate_root).is_ok());
+        assert!(objects.read(orphan).is_err());
         drop(candidate);
         let reclaimed = database
             .reclaim_branch_storage(BranchReclamationLimits::default())
@@ -93,6 +100,84 @@ mod tests {
         );
         drop(reopened);
         std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn prepared_root_publication_rejects_changed_or_foreign_registration_before_head_write() {
+        for foreign in [false, true] {
+            let path = test_directory("root-pin-source-identity");
+            let other_path = test_directory("root-pin-other-identity");
+            let mut database = Database::open(&path).unwrap();
+            database.query("CREATE (:Memory {id: 'retained'})").unwrap();
+            database.checkpoint().unwrap();
+            let mut other = Database::open(&other_path).unwrap();
+            other.query("CREATE (:Memory {id: 'other'})").unwrap();
+            other.checkpoint().unwrap();
+            let head = *database
+                .runtime
+                .peek()
+                .unwrap()
+                .store
+                .admitted_branch_head()
+                .unwrap();
+            let head_path = database
+                .branch_head_path(Uuid::from_bytes(head.branch_id))
+                .unwrap();
+            let before = std::fs::read(&head_path).unwrap();
+            assert!(database
+                .runtime
+                .get_mut()
+                .unwrap()
+                .store
+                .prepare_immutable_root_handoff(other_path.join("branches/objects"))
+                .is_err());
+            let prepared = if foreign {
+                other
+                    .runtime
+                    .get_mut()
+                    .unwrap()
+                    .store
+                    .prepare_immutable_root_handoff(other_path.join("branches/objects"))
+                    .unwrap()
+            } else {
+                let mut prepared = database
+                    .runtime
+                    .get_mut()
+                    .unwrap()
+                    .store
+                    .prepare_immutable_root_handoff(path.join("branches/objects"))
+                    .unwrap();
+                prepared.root.commit_epoch += 1;
+                prepared
+            };
+            assert!(database
+                .runtime
+                .get_mut()
+                .unwrap()
+                .store
+                .complete_immutable_root_handoff(
+                    prepared,
+                    &head_path,
+                    head.project_id,
+                    head.branch_id,
+                    head.physical_generation,
+                )
+                .is_err());
+            assert_eq!(std::fs::read(&head_path).unwrap(), before);
+            drop(database);
+            let mut reopened = Database::open(&path).unwrap();
+            assert_eq!(
+                reopened
+                    .query("MATCH (m:Memory) RETURN m.id")
+                    .unwrap()
+                    .rows
+                    .len(),
+                1
+            );
+            drop((reopened, other));
+            std::fs::remove_dir_all(path).unwrap();
+            std::fs::remove_dir_all(other_path).unwrap();
+        }
     }
 
     fn test_directory(name: &str) -> PathBuf {
@@ -643,7 +728,7 @@ mod tests {
                 error,
                 HawDBError::FileDescriptors(
                     hawdb_core::error::FileDescriptorError::BudgetExceeded {
-                        requested: 23,
+                        requested: 24,
                         available: 4,
                         limit: 32
                     }
@@ -682,7 +767,7 @@ mod tests {
             );
             let metrics = database.file_descriptor_metrics().unwrap();
             assert_eq!(metrics.reserved, 0);
-            assert_eq!(metrics.ownership_locks, 2);
+            assert_eq!(metrics.ownership_locks, 3);
             assert_eq!(metrics.admitted_runtimes, 1);
             database.query_sql("USE BRANCH main").unwrap();
             assert_eq!(
@@ -695,16 +780,16 @@ mod tests {
             );
             let metrics = database.file_descriptor_metrics().unwrap();
             assert_eq!(metrics.reserved, 0);
-            assert_eq!(metrics.ownership_locks, 2);
+            assert_eq!(metrics.ownership_locks, 3);
             assert!(metrics.high_water <= 32);
         }
         let mut snapshot = database.begin_read_transaction().unwrap();
         database.query_sql("USE BRANCH child").unwrap();
         let metrics = database.file_descriptor_metrics().unwrap();
         assert_eq!(metrics.admitted_runtimes, 2);
-        // The snapshot retains the UUID lease. Its source runtime directory
+        // The snapshot retains the UUID and registration leases. Its runtime
         // lock and mutable WAL close with the original execution context.
-        assert_eq!(metrics.ownership_locks, 3);
+        assert_eq!(metrics.ownership_locks, 5);
         assert_eq!(
             snapshot
                 .query("MATCH (m:Memory) RETURN m.id")
@@ -716,7 +801,7 @@ mod tests {
         drop(snapshot);
         let metrics = database.file_descriptor_metrics().unwrap();
         assert_eq!(metrics.admitted_runtimes, 1);
-        assert_eq!(metrics.ownership_locks, 2);
+        assert_eq!(metrics.ownership_locks, 3);
         assert_eq!(metrics.reserved, 0);
         drop(database);
         std::fs::remove_dir_all(path).unwrap();
@@ -2663,14 +2748,19 @@ impl Database {
     /// Reclaims unreachable immutable objects and deleted branch directories.
     /// Keep calling after readers or other branch owners retire if the report
     /// indicates a conservative deferral. This never expires live branches.
-    /// Unfinished background jobs return a branch-busy error because their
-    /// historical dependencies cannot yet be enumerated independently.
+    /// Registered readers, prepared publications and jobs retain their exact
+    /// immutable roots. Unregistered internal jobs still fail closed.
     pub fn reclaim_branch_storage(
         &mut self,
         limits: BranchReclamationLimits,
     ) -> crate::error::Result<BranchReclamationReport> {
         self.ensure_branch_writable()?;
-        self.ensure_branch_work_idle()?;
+        if self.derived_artifact_jobs.jobs().iter().any(|job| {
+            job.status != hawdb_artifact::DerivedArtifactJobStatus::Succeeded
+                && !self.derived_artifact_root_pins.contains_key(&job.id)
+        }) {
+            return Err(BranchLifecycleError::SourceBusy("unregistered background roots").into());
+        }
         self.runtime.get_mut()?.store.reclaim_branch_storage(limits)
     }
 

@@ -260,6 +260,8 @@ pub struct Database {
     local_qos_scheduler: LocalQosScheduler,
     system_variables: QuerySystemVariables,
     derived_artifact_jobs: hawdb_artifact::DerivedArtifactJobQueue,
+    derived_artifact_root_pins:
+        BTreeMap<u64, Option<Arc<hawdb_storage::branch_root_pins::RootPin>>>,
     telemetry: Option<Arc<dyn TelemetrySink>>,
     runtime_governor: Option<hawdb_qos::RuntimeGovernor>,
 }
@@ -977,6 +979,7 @@ impl Default for Database {
             system_variables: QuerySystemVariables::default(),
 
             derived_artifact_jobs: hawdb_artifact::DerivedArtifactJobQueue::default(),
+            derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
             branch_create_recovery: None,
@@ -1074,6 +1077,7 @@ impl Database {
             system_variables: QuerySystemVariables::default(),
 
             derived_artifact_jobs: hawdb_artifact::DerivedArtifactJobQueue::default(),
+            derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
             branch_create_recovery: None,
@@ -1251,6 +1255,7 @@ impl Database {
             system_variables: QuerySystemVariables::default(),
 
             derived_artifact_jobs: hawdb_artifact::DerivedArtifactJobQueue::default(),
+            derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
             branch_create_recovery: None,
@@ -1364,6 +1369,7 @@ impl Database {
             local_qos_scheduler,
             system_variables: QuerySystemVariables::default(),
             derived_artifact_jobs: hawdb_artifact::DerivedArtifactJobQueue::default(),
+            derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
             branch_create_recovery,

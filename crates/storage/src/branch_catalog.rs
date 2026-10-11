@@ -1386,6 +1386,62 @@ pub(crate) fn reclamation_entries(
     Ok(branches)
 }
 
+pub(crate) struct RegisteredReclamationRoots {
+    pub branches: Vec<BranchReclamationEntry>,
+    pub roots: Vec<ObjectReference>,
+}
+
+/// An active owner may be swept around only after its complete live registry
+/// and selected head are validated under the publication barrier.
+pub(crate) fn reclamation_entries_with_pins(
+    catalog: &Catalog,
+    paths: &[BranchReclamationPath],
+    owner: (&DatabaseDirectoryLease, &BranchHead),
+    max_roots: usize,
+    metadata: &CatalogMetadataLease,
+) -> Result<RegisteredReclamationRoots, BranchReclamationError> {
+    let mut branches = reclamation_entries(catalog, paths, None)?;
+    let indexed_paths: BTreeMap<_, _> = paths.iter().map(|path| (path.id, path)).collect();
+    let mut roots = Vec::new();
+    for (record, entry) in catalog.branches.iter().zip(&mut branches) {
+        if !entry.active_lease || record.state != BranchState::Ready {
+            continue;
+        }
+        let Some(pinned) = crate::branch_root_pins::active_roots(
+            &entry.directory,
+            *catalog.project_id.as_uuid().as_bytes(),
+            *record.id.as_uuid().as_bytes(),
+            max_roots - roots.len(),
+            metadata,
+        )
+        .map_err(BranchReclamationError::Lease)?
+        else {
+            continue;
+        };
+        let path = indexed_paths[&record.id];
+        let head = read_branch_head(&path.head_path).map_err(BranchReclamationError::Head)?;
+        if head.project_id != *catalog.project_id.as_uuid().as_bytes()
+            || head.branch_id != *record.id.as_uuid().as_bytes()
+            || (head.branch_id == owner.1.branch_id
+                && (head != *owner.1
+                    || !owner
+                        .0
+                        .owns_directory(&path.directory)
+                        .map_err(BranchReclamationError::Lease)?))
+        {
+            return Err(BranchReclamationError::Catalog(invalid_data(
+                "registered reclamation head does not match its catalog or owner",
+            )));
+        }
+        roots.extend(pinned);
+        entry.sealed_root = Some(head.sealed_root);
+        // Only Ready records reach this path, so clearing the unaccounted
+        // lease barrier cannot authorize private-directory retirement.
+        entry.active_lease = false;
+    }
+    Ok(RegisteredReclamationRoots { branches, roots })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CreateRecoveryOutcome {
     Completed,
