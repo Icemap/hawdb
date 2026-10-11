@@ -219,33 +219,41 @@ impl Database {
 
     #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
     pub(crate) fn runtime_planning_snapshot(&self) -> Result<RuntimePlanningSnapshot> {
+        let runtime = self.runtime.get()?;
         Ok({
-            let (published_read_view, pin) = self.pin_read_view()?;
+            let (published_read_view, pin) = Self::pin_runtime_read_view(&runtime);
             RuntimePlanningSnapshot {
-                branch_id: self.current_branch()?.map(|current| current.info.id),
-                catalog: self.runtime.get()?.catalog.clone(),
-                store: self.runtime.get()?.store.snapshot_for_read(),
+                branch_id: self
+                    .current_branch_from_runtime(&runtime)
+                    .map(|current| current.info.id),
+                catalog: runtime.catalog.clone(),
+                store: runtime.store.snapshot_for_read(),
                 // Store snapshots omit the writable durable handle and its checkpoint
                 // metadata. Freshness must compare the original pinned publication.
                 published_read_view,
-                optimizer: self.runtime.get()?.optimizer.clone(),
+                optimizer: runtime.optimizer.clone(),
                 config: self.config.clone(),
                 system_variables: self.system_variables.clone(),
                 // Templates and their generation counter must have the same ownership.
-                plan_cache: Arc::clone(&self.runtime.get()?.plan_cache),
-                planning_cache: Arc::clone(&self.runtime.get()?.optimizer_planning_cache),
+                plan_cache: Arc::clone(&runtime.plan_cache),
+                planning_cache: Arc::clone(&runtime.optimizer_planning_cache),
                 _pin: pin,
             }
         })
     }
 
-    fn runtime_planning_context(&self) -> Result<RuntimePlanningContext<'_>> {
+    fn runtime_planning_context<'a>(
+        &'a self,
+        runtime: &'a super::runtime_cell::AdmittedBranchRuntime,
+    ) -> Result<RuntimePlanningContext<'a>> {
         Ok({
             RuntimePlanningContext {
-                branch_id: self.current_branch()?.map(|current| current.info.id),
-                catalog: &self.runtime.get()?.catalog,
-                store: &self.runtime.get()?.store,
-                optimizer: &self.runtime.get()?.optimizer,
+                branch_id: self
+                    .current_branch_from_runtime(runtime)
+                    .map(|current| current.info.id),
+                catalog: &runtime.catalog,
+                store: &runtime.store,
+                optimizer: &runtime.optimizer,
                 config: &self.config,
                 system_variables: &self.system_variables,
             }
@@ -275,7 +283,8 @@ impl Database {
                 .borrow()
                 .clone(),
         );
-        self.runtime_planning_context()?
+        let runtime = self.runtime.get()?;
+        self.runtime_planning_context(&runtime)?
             .prepare(
                 cypher_text.to_string(),
                 parameters,
@@ -291,7 +300,8 @@ impl Database {
         cypher_text: String,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<PreparedRuntimeQuery> {
-        self.runtime_planning_context()?.prepare(
+        let runtime = self.runtime.get()?;
+        self.runtime_planning_context(&runtime)?.prepare(
             cypher_text,
             parameters,
             &self.runtime.get()?.plan_cache,
@@ -522,6 +532,7 @@ impl Database {
         self.validate_prepared_branch(&prepared)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
+        drop(runtime);
         let mut external = executor::NoExternalReadOperator;
         self.query_with_params_trace_and_external_prepared(
             &cypher_text,
@@ -573,6 +584,7 @@ impl Database {
         self.validate_prepared_branch(&prepared)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
+        drop(runtime);
         let mut external = executor::NoExternalReadOperator;
         self.query_with_params_trace_and_external_prepared(
             &cypher_text,

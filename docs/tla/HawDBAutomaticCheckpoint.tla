@@ -13,7 +13,7 @@ EXTENDS Integers, Naturals, FiniteSets
 (* or scheduler liveness, resource bounds, or a particular storage platform. *)
 (* Job-owned memory and execution admission are separate logical leases.    *)
 (* Pending candidates keep the complete prefix and yield execution.         *)
-(* Retirement may defer and read adoption requires an available writer gate.*)
+(* Retirement may defer; read/background adoption requires a free runtime. *)
 (* Serving allocation leases and physical resource accounting are separate. *)
 (* A sealed prefix remains private while foreground writes advance.        *)
 (* Rechecking the complete writer identity either retries on the same base *)
@@ -193,10 +193,10 @@ PersistSelector(reply) ==
 Adopt(frontend) ==
     /\ live.mode = "running"
     /\ job.phase = "selected"
-    /\ (frontend = "write" \/ ~frontendBusy \/ ReadAdoptWhileBusy)
+    /\ (frontend = "write" \/ ~frontendBusy \/ (frontend = "read" /\ ReadAdoptWhileBusy))
     /\ live' = [live EXCEPT !.active = 1]
     /\ job' = [job EXCEPT !.phase = "retirementPending", !.adoption = frontend,
-                          !.readBusy = frontend = "read" /\ frontendBusy]
+                          !.readBusy = frontend # "write" /\ frontendBusy]
     /\ UNCHANGED <<disk, os, observed, pin, lease, execution, admitted, frontendBusy>>
 
 AdmitRetirement ==
@@ -353,7 +353,7 @@ Next == BeginWrite \/ (\E reply \in BOOLEAN : FinishWrite(reply))
         \/ Capture \/ BuildBase \/ ReplayOne \/ SyncCandidate
         \/ ResumeReplay \/ FreezeCompleteIdentity
         \/ BeginSelection \/ (\E reply \in BOOLEAN : PersistSelector(reply))
-        \/ (\E frontend \in {"write", "read"} : Adopt(frontend))
+        \/ (\E frontend \in {"write", "read", "background"} : Adopt(frontend))
         \/ AdmitRetirement \/ DeferRetirement \/ Retire \/ FinishRelease
         \/ PauseCandidate \/ ResumeCandidate \/ ChangeAdmission
         \/ ChangeFrontendAvailability \/ PinReader \/ ReleaseReader \/ ReclaimOld
@@ -376,7 +376,7 @@ TypeOK ==
                          "selecting", "selected", "pending", "retirementPending", "retiring", "releasing", "done",
                          "discarding", "cancelled", "crashed"},
                  base : Epochs, end : Epochs, selection : Epochs,
-                 resume : {"replaying", "sealed", "retiring"}, adoption : {"none", "write", "read"},
+                 resume : {"replaying", "sealed", "retiring"}, adoption : {"none", "write", "read", "background"},
                  readBusy : BOOLEAN, manualBarrier : {"none", "waiting", "complete"},
                  manualUnsafe : BOOLEAN]
     /\ observed \in [ack : Epochs, barrier : Epochs, checkpoint : Epochs]
@@ -447,6 +447,7 @@ PausedPrefixWasNeverResumed ==
 DeferredRetirementWasNeverResumed ==
     ~(job.phase = "retiring" /\ job.resume = "retiring")
 NoReadTriggeredAdoption == job.adoption # "read"
+NoBackgroundTriggeredAdoption == job.adoption # "background"
 
 (* Witness-only controls distinguish permitted loss from strong durability. *)
 AllAcknowledgementsRecover ==

@@ -119,8 +119,10 @@ fn completed_group_wakes_automatic_checkpoint_without_another_frontend_access() 
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
         let report = control.report().unwrap().unwrap();
-        if report.completed_checkpoints == 1 {
-            assert!(report.waiting_for_handoff);
+        if report.completed_checkpoints == 1
+            && !report.waiting_for_handoff
+            && control.is_idle_for_test().unwrap()
+        {
             break;
         }
         assert!(
@@ -129,6 +131,10 @@ fn completed_group_wakes_automatic_checkpoint_without_another_frontend_access() 
         );
         std::thread::sleep(Duration::from_millis(5));
     }
+    let idle_resources = governor.snapshot();
+    assert_eq!(idle_resources.active_cpu_slots, 0);
+    assert_eq!(idle_resources.active_background_tasks, 0);
+    assert_eq!(idle_resources.active_background_io_slots, 0);
     verify_group_rows(&mut old, &[1]);
     let mut current = db.begin_read_transaction().unwrap();
     assert_eq!(current.commit_epoch(), before + 1);

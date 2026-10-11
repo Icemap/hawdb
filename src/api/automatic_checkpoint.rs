@@ -25,8 +25,8 @@ use hawdb_storage::background::{
     CheckpointOperationError, CheckpointWorkContext, CheckpointWorkError,
 };
 use hawdb_storage::store::{CheckpointCandidate, CheckpointDebtSnapshot, CheckpointSourceIdentity};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, TryLockError};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, TryLockError, Weak};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -246,6 +246,10 @@ pub(super) struct State {
     #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
     retirement_probe: Option<Arc<OwnerPauseProbe>>,
     #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+    idle_handoff_probe: Option<Arc<OwnerPauseProbe>>,
+    #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+    handoff_park_probe: Option<Arc<OwnerPauseProbe>>,
+    #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
     retirement_drop_probe: Option<Arc<OwnerPauseProbe>>,
     #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
     frontend_wait_probe: Option<std::sync::mpsc::Sender<Phase>>,
@@ -266,6 +270,9 @@ pub(super) struct Control {
     failed: AtomicBool,
     handoff_ready: AtomicBool,
     publication_requested: AtomicBool,
+    frontend_runtime: OnceLock<Weak<super::runtime_cell::SharedBranchRuntime>>,
+    handoff_thread: OnceLock<std::thread::Thread>,
+    handoff_wake_epoch: AtomicU64,
 }
 
 struct PublicationRequest<'a>(&'a Control);
@@ -280,11 +287,38 @@ impl Drop for PublicationRequest<'_> {
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         self.0.publication_requested.store(false, Ordering::Release);
-        self.0.changed.notify_all();
+        self.0.notify_all();
     }
 }
 
 impl Control {
+    pub(super) fn attach_frontend(&self, runtime: &Arc<super::runtime_cell::SharedBranchRuntime>) {
+        self.frontend_runtime
+            .set(Arc::downgrade(runtime))
+            .expect("one frontend per checkpoint control");
+    }
+
+    pub(super) fn wake_handoff(&self) {
+        if self.handoff_ready.load(Ordering::Acquire) {
+            self.wake_owner();
+        }
+    }
+
+    fn wake_owner(&self) {
+        // Thread parking tokens can be consumed by another blocking operation
+        // on the worker. Retain the notification independently until its next
+        // handoff predicate check, including notifications before park.
+        self.handoff_wake_epoch.fetch_add(1, Ordering::Release);
+        if let Some(thread) = self.handoff_thread.get() {
+            thread.unpark();
+        }
+    }
+
+    fn notify_all(&self) {
+        self.changed.notify_all();
+        self.wake_owner();
+    }
+
     pub(super) fn ensure_healthy(&self) -> Result<()> {
         if self.failed.load(Ordering::Acquire) {
             return Err(HawDBError::StorageIntegrity(
@@ -346,7 +380,7 @@ impl Control {
                 // Entering pressure backoff requests an attempt immediately.
                 // The owner and this predicate share the mutex, so the wake
                 // cannot be lost between predicate evaluation and waiting.
-                self.changed.notify_all();
+                self.notify_all();
                 notified_owner = true;
             }
             #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
@@ -421,7 +455,7 @@ impl Control {
         } else {
             None
         };
-        self.changed.notify_all();
+        self.notify_all();
         // The last owner of an older COW snapshot may destroy a large map.
         // Its caller must release the publication guard before dropping it.
         retired
@@ -440,7 +474,7 @@ impl Control {
                 state.report.waiting_for_handoff = false;
                 state.report.failed_attempts += 1;
                 self.failed.store(true, Ordering::Release);
-                self.changed.notify_all();
+                self.notify_all();
                 return Err(error);
             }
         };
@@ -452,7 +486,7 @@ impl Control {
         });
         state.phase = Phase::Retiring;
         state.report.waiting_for_handoff = false;
-        self.changed.notify_all();
+        self.notify_all();
         Ok(())
     }
 
@@ -470,6 +504,15 @@ impl Control {
         };
         self.ensure_healthy()?;
         self.adopt(&mut state, store)
+    }
+
+    #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+    pub(super) fn is_idle_for_test(&self) -> Result<bool> {
+        let state = self.lock()?;
+        Ok(state.phase == Phase::Idle
+            && state.selected.is_none()
+            && state.retired.is_none()
+            && state.task.is_none())
     }
 
     pub(super) fn has_pending_handoff(&self) -> bool {
@@ -497,14 +540,14 @@ impl Control {
         if owns_cleanup {
             state.phase = Phase::Discarding;
         }
-        self.changed.notify_all();
+        self.notify_all();
         drop(state);
         drop(pending);
         drop(preparation);
         if owns_cleanup {
             let mut state = self.lock()?;
             state.phase = Phase::Idle;
-            self.changed.notify_all();
+            self.notify_all();
         }
         Ok(Suspension {
             control: Arc::clone(self),
@@ -513,7 +556,7 @@ impl Control {
 
     pub(super) fn set_governor(&self, governor: RuntimeGovernor) -> Result<()> {
         self.lock()?.governor = Some(governor);
-        self.changed.notify_all();
+        self.notify_all();
         Ok(())
     }
 
@@ -572,7 +615,7 @@ impl Drop for Suspension {
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         state.suspensions -= 1;
-        self.control.changed.notify_all();
+        self.control.notify_all();
     }
 }
 
@@ -638,7 +681,7 @@ impl Owner {
                     state.phase = Phase::Idle;
                     state.report.preparing = false;
                     state.report.failed_attempts += 1;
-                    failure_control.changed.notify_all();
+                    failure_control.notify_all();
                 }
             });
         let worker = match worker {
@@ -655,6 +698,11 @@ impl Owner {
                 )));
             }
         };
+        control
+            .handoff_thread
+            .set(worker.thread().clone())
+            .expect("one checkpoint owner thread");
+        control.notify_all();
         Ok(Some(Self {
             control,
             worker: Some(worker),
@@ -672,7 +720,7 @@ impl Owner {
             if let Some(task) = &state.task {
                 task.cancellation().cancel();
             }
-            self.control.changed.notify_all();
+            self.control.notify_all();
         }
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
@@ -700,7 +748,7 @@ impl Owner {
             state.phase = Phase::Discarding;
             state.report.preparing = false;
             state.report.waiting_for_handoff = false;
-            self.control.changed.notify_all();
+            self.control.notify_all();
             owned
         };
         // Joining the worker is insufficient when observers retain Control.
@@ -713,7 +761,7 @@ impl Owner {
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         state.phase = Phase::Idle;
-        self.control.changed.notify_all();
+        self.control.notify_all();
     }
 }
 
@@ -738,6 +786,86 @@ fn run(
             loop {
                 if state.stopping {
                     return;
+                }
+                #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+                if state.phase == Phase::Handoff
+                    && let Some(probe) = state.idle_handoff_probe.take()
+                {
+                    // Fixture pause is outside both gates: read-side adoption
+                    // remains executable while the automatic adopter waits.
+                    drop(state);
+                    probe.observe();
+                    state = control
+                        .state
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner());
+                    continue;
+                }
+                if state.phase == Phase::Handoff
+                    && let Some(frontend) = control.frontend_runtime.get().and_then(Weak::upgrade)
+                {
+                    let wake_epoch = control.handoff_wake_epoch.load(Ordering::Acquire);
+                    match frontend.try_write(&control) {
+                        Ok(Some(mut runtime)) => {
+                            let retired_source = match control.adopt(&mut state, &mut runtime.store)
+                            {
+                                Ok(()) => {
+                                    control.submit(&mut state, &runtime.store, &runtime.catalog)
+                                }
+                                Err(_) => {
+                                    control.failed.store(true, Ordering::Release);
+                                    state.stopping = true;
+                                    None
+                                }
+                            };
+                            drop(runtime);
+                            drop(state);
+                            drop(retired_source);
+                            state = control
+                                .state
+                                .lock()
+                                .unwrap_or_else(|error| error.into_inner());
+                            continue;
+                        }
+                        Ok(None) => {
+                            // Guard drop unparks after releasing the runtime.
+                            // park/unpark preserves a notification arriving
+                            // before the wait; reads never acquire Control.
+                            #[cfg(all(
+                                test,
+                                feature = "background-maintenance",
+                                not(target_arch = "wasm32")
+                            ))]
+                            let park_probe = state.handoff_park_probe.take();
+                            drop(state);
+                            #[cfg(all(
+                                test,
+                                feature = "background-maintenance",
+                                not(target_arch = "wasm32")
+                            ))]
+                            if let Some(probe) = park_probe {
+                                probe.observe();
+                            }
+                            if control.handoff_wake_epoch.load(Ordering::Acquire) == wake_epoch {
+                                // No blocking operation occurs between the
+                                // final epoch check and park: an unpark in
+                                // that interval retains the thread token.
+                                std::thread::park();
+                            }
+                            state = control
+                                .state
+                                .lock()
+                                .unwrap_or_else(|error| error.into_inner());
+                            continue;
+                        }
+                        Err(_) => {
+                            control.failed.store(true, Ordering::Release);
+                            state.stopping = true;
+                            state.report.failed_attempts += 1;
+                            control.notify_all();
+                            continue;
+                        }
+                    }
                 }
                 if let Some(mut retired) = state.retired.take() {
                     let task = RuntimeTaskContext::default();
@@ -764,7 +892,7 @@ fn run(
                             // Active cleanup never advances this epoch.
                             state.retirement_deferrals = state.retirement_deferrals.wrapping_add(1);
                             state.report.deferred_attempts += 1;
-                            control.changed.notify_all();
+                            control.notify_all();
                             if state.stopping || state.suspensions != 0 {
                                 continue;
                             }
@@ -821,7 +949,7 @@ fn run(
                     }
                     state.phase = Phase::Releasing;
                     state.task = None;
-                    control.changed.notify_all();
+                    control.notify_all();
                     #[cfg(all(
                         test,
                         feature = "background-maintenance",
@@ -847,7 +975,7 @@ fn run(
                         .lock()
                         .unwrap_or_else(|error| error.into_inner());
                     state.phase = Phase::Idle;
-                    control.changed.notify_all();
+                    control.notify_all();
                     continue;
                 }
                 let due = state
@@ -992,7 +1120,7 @@ fn run(
                 }
                 if discarded.is_some() {
                     state.phase = Phase::Discarding;
-                    control.changed.notify_all();
+                    control.notify_all();
                     drop(state);
                     drop(discarded);
                     state = control
@@ -1003,7 +1131,7 @@ fn run(
                 state.phase = Phase::Idle;
                 state.task = None;
                 state.report.preparing = false;
-                control.changed.notify_all();
+                control.notify_all();
                 #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
                 let probe = state.retry_wait_probe.take();
                 #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
@@ -1128,7 +1256,7 @@ fn run(
                     } else {
                         Phase::Preparing
                     };
-                    control.changed.notify_all();
+                    control.notify_all();
                     drop(state);
                     continue;
                 }
@@ -1154,7 +1282,7 @@ fn run(
                     } else {
                         Phase::Preparing
                     };
-                    control.changed.notify_all();
+                    control.notify_all();
                     drop(state);
                     drop(publication_wave.take());
                     if !bounded_drain {
@@ -1224,7 +1352,7 @@ fn run(
             state.report.waiting_for_handoff = true;
             state.report.completed_checkpoints += 1;
             control.handoff_ready.store(true, Ordering::Release);
-            control.changed.notify_all();
+            control.notify_all();
         } else {
             let exhausted = {
                 let mut state = control
@@ -1257,7 +1385,7 @@ fn run(
                     state.task = None;
                     state.report.preparing = false;
                     state.report.deferred_attempts += 1;
-                    control.changed.notify_all();
+                    control.notify_all();
                     let (state, _) = control
                         .changed
                         .wait_timeout(state, RETRY_DELAY)
@@ -1277,7 +1405,7 @@ fn run(
                     .unwrap_or_else(|error| error.into_inner());
                 state.phase = Phase::Discarding;
                 state.report.preparing = false;
-                control.changed.notify_all();
+                control.notify_all();
             }
             #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
             let discard_probe = control
@@ -1303,7 +1431,7 @@ fn run(
             state.task = None;
             state.report.preparing = false;
             state.report.failed_attempts += 1;
-            control.changed.notify_all();
+            control.notify_all();
             let (state, _) = control
                 .changed
                 .wait_timeout(state, RETRY_DELAY)
@@ -1625,6 +1753,7 @@ mod tests {
     mod discard;
     mod execution_progress;
     mod handoff_execution;
+    mod idle_handoff;
     mod memory_progress;
     mod operation_retry;
     mod planning_recovery;

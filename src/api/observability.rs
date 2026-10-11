@@ -484,13 +484,13 @@ impl Database {
                 prepared.statement(),
                 crate::sql::SqlStatement::Select(_) | crate::sql::SqlStatement::Explain(_)
             ) {
+                let branch_runtime = self.runtime.get()?;
                 let query_result =
                     crate::relational_sql::execute_prepared_relational_query_with_resources(
                         prepared,
                         parameters,
-                        self.runtime.get()?.store.relational_state(),
+                        branch_runtime.store.relational_state(),
                         {
-                            let branch_runtime = self.runtime.get()?;
                             crate::relational_sql::RelationalQueryReadModes::new(
                                 super::relational_index_read_mode(
                                     &self.config,
@@ -517,11 +517,12 @@ impl Database {
             }
 
             self.ensure_writable()?;
-            if let Some(transaction) = compile_append_statement_sql(
+            let transaction = compile_append_statement_sql(
                 sql_text,
                 parameters,
                 self.runtime.get()?.store.append_state(),
-            )? {
+            )?;
+            if let Some(transaction) = transaction {
                 if let crate::sql::SqlStatement::CreateTable(create) = prepared.statement()
                     && self
                         .runtime

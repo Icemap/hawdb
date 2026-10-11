@@ -2711,11 +2711,14 @@ impl Database {
     pub(super) fn branch_catalog_path(&self) -> Result<PathBuf, BranchLifecycleError> {
         let root = self
             .project_root_path
-            .as_deref()
+            .clone()
             .or_else(|| {
-                self.runtime
-                    .peek()
-                    .and_then(|runtime| runtime.store.durable_root_path())
+                self.runtime.peek().and_then(|runtime| {
+                    runtime
+                        .store
+                        .durable_root_path()
+                        .map(|path| path.to_path_buf())
+                })
             })
             .ok_or(BranchLifecycleError::InMemoryDatabase)?;
         Ok(root.join(BRANCH_DIRECTORY).join(BRANCH_CATALOG_FILE))
@@ -2723,14 +2726,33 @@ impl Database {
 
     pub(super) fn current_branch(&self) -> crate::error::Result<Option<CurrentBranch>> {
         let runtime = self.runtime.get()?;
-        Ok(runtime
+        Ok(self.current_branch_from_runtime(&runtime))
+    }
+
+    pub(super) fn current_branch_from_runtime(
+        &self,
+        runtime: &super::runtime_cell::AdmittedBranchRuntime,
+    ) -> Option<CurrentBranch> {
+        runtime
             .branch_selection
             .as_ref()
             .map(|selection| CurrentBranch {
                 info: branch_info(&selection.record),
                 commit_epoch: runtime.store.commit_epoch(),
                 durability: self.durability,
-            }))
+            })
+    }
+
+    pub(super) fn branch_catalog_path_from_runtime(
+        &self,
+        runtime: &super::runtime_cell::AdmittedBranchRuntime,
+    ) -> Result<PathBuf, BranchLifecycleError> {
+        let root = self
+            .project_root_path
+            .as_deref()
+            .or_else(|| runtime.store.durable_root_path())
+            .ok_or(BranchLifecycleError::InMemoryDatabase)?;
+        Ok(root.join(BRANCH_DIRECTORY).join(BRANCH_CATALOG_FILE))
     }
 
     fn admit_branch_record(
@@ -2782,10 +2804,11 @@ impl Database {
                 storage::CatalogTransitionError::InvalidState("selection target is not ready"),
             ));
         }
-        if let Some(selection) = self
+        let current_selection = self
             .runtime
             .peek()
-            .and_then(|runtime| runtime.branch_selection.as_ref())
+            .and_then(|runtime| runtime.branch_selection.clone());
+        if let Some(selection) = current_selection
             && selection.record.id == record.id
         {
             let refresh = selection.record.metadata_revision != record.metadata_revision;

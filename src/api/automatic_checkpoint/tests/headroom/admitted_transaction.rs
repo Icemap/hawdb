@@ -53,6 +53,7 @@ fn concurrent_admitted_commit_releases_pressure_wait_after_retirement_denial() {
     db.set_runtime_governor(governor.clone());
     let (probe, retirement_started, resume) = pause();
     control.lock().unwrap().retirement_probe = Some(probe);
+    let runtime = db.runtime.get().unwrap();
     drop(suspension);
     wait(&control, |state| state.phase == Phase::Handoff);
     let foreground = governor
@@ -64,6 +65,7 @@ fn concurrent_admitted_commit_releases_pressure_wait_after_retirement_denial() {
             .with_result_bytes(1024 * 1024),
         )
         .unwrap();
+    drop(runtime);
     drop(db.runtime.get_mut().unwrap());
     wait(&control, |state| {
         state.retired.is_some() && state.report.deferred_attempts > 0

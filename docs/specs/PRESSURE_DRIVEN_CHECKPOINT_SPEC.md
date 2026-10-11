@@ -2712,3 +2712,58 @@ envelope clone retain their allocation coverage until destruction.
 These checks qualify this append container. Complete preparation allocation
 accounting, fully resumable bounded builders, unattended handoff, capacity-bound
 writer waits and the physical recovery/performance gates remain open.
+
+### Unattended runtime handoff and metadata ownership
+
+The unattended handoff implementation uses runtime lifetime guards. Foreground
+execution owns the admitted runtime through a read or write guard. While holding
+Control, the checkpoint owner attempts the runtime write lock without waiting;
+a contended runtime borrow yields both Control and execution admission. Releasing
+a runtime guard first unlocks the runtime and then sends a nonblocking wake. The
+owner refreshes captured source identity and checkpoint debt after adoption, and
+destroys superseded source state outside Control. Control retains only a weak
+runtime reference; handle closure stops and joins the owner before releasing its
+runtime ownership.
+
+Wake notifications also advance an independent atomic epoch. The owner observes
+it before trying the runtime lock and rechecks it immediately before parking. A
+notification before that check causes another predicate evaluation, even if a
+different blocking operation consumed the thread's parking token. A notification
+between the final check and park retains the thread token; no blocking operation
+is performed in that interval. Stop and suspension notifications use this same
+wake path. This introduces no periodic handoff polling.
+
+A single runtime read guard now covers read-view pin insertion and all snapshot
+components, including transaction state and branch metadata. Background adoption
+cannot replace the runtime between capturing a physical generation, inserting its
+reader pin, and cloning the matching catalog/store/optimizer snapshot.
+
+Metadata getters return owned values so their results can survive background
+adoption and handle closure, following the existing columnar report API pattern.
+The source-level return types of `append_table_schema`,
+`relational_index_shadow_checkpoint_report`,
+`relational_index_shadow_recovery_status`, and `relational_index_recovery_report`
+change from borrowed references to owned snapshots. Callers that explicitly
+require references must borrow the returned value. The two manual checkpoint
+signatures remain source compatible and retain synchronous durability semantics.
+This change does not alter schema or persistence formats.
+
+Native regressions cover two generations without frontend access, guard release
+after contention, guard release without waiting for Control, notification before
+park, retained metadata with a fresh shadow publication and complete graph/SQL
+reopen, and shutdown while a runtime read guard remains held. Group-completion
+coverage additionally requires unattended adoption and idle cleanup before any
+frontend access, while preserving old/new graph and relational snapshot values.
+The notification-before-park case failed on the unchanged fixture before the
+independent epoch was added, and passed with the epoch check.
+
+The automatic checkpoint safety model includes a background adoption actor with
+the same exclusive runtime gate. `HawDBAutomaticHandoffWake` separately models
+parking-token consumption, guard release and stop notification. Under weakly fair
+worker scheduling it checks progress after guard release or stop; forgetting the
+epoch produces a temporal counterexample. This bounded model starts after worker
+thread registration and isolates wake coordination: it does not establish Rust
+refinement, scheduling fairness on every host, resource bounds, durability or
+complete maintenance liveness. Full final-source verification, remaining bounded
+builders/capacity waits, physical fault qualification and release-performance
+comparisons remain required before merge readiness.

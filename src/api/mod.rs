@@ -1020,9 +1020,8 @@ impl Database {
         table: &str,
         row: hawdb_storage::relational::RelationalRow,
     ) -> Result<hawdb_storage::projection_generation::ProjectionGenerationMember> {
-        let schema = self
-            .runtime
-            .get()?
+        let runtime = self.runtime.get()?;
+        let schema = runtime
             .store
             .relational_state()
             .table_schema(table)
@@ -1677,23 +1676,22 @@ impl Database {
         projection_relational: Option<ProjectionRelationalReadSnapshot>,
         task_context: Option<hawdb_core::RuntimeTaskContext>,
     ) -> Result<DatabaseReadTransaction> {
+        let runtime = self.runtime.get()?;
         Ok({
-            let (published_read_view, pin) = self.pin_read_view()?;
+            let (published_read_view, pin) = Self::pin_runtime_read_view(&runtime);
             DatabaseReadTransaction {
-                catalog: self.runtime.get()?.catalog.clone(),
-                store: self.runtime.get()?.store.snapshot_for_read(),
+                catalog: runtime.catalog.clone(),
+                store: runtime.store.snapshot_for_read(),
                 published_read_view,
-                optimizer: self.runtime.get()?.optimizer.clone(),
+                optimizer: runtime.optimizer.clone(),
                 plan_cache: SharedState::new(PlanCache::new(self.config.max_plan_cache_entries)),
-                relational_plan_template_cache: Arc::clone(
-                    &self.runtime.get()?.relational_plan_template_cache,
-                ),
-                optimizer_planning_cache: Arc::clone(&self.runtime.get()?.optimizer_planning_cache),
+                relational_plan_template_cache: Arc::clone(&runtime.relational_plan_template_cache),
+                optimizer_planning_cache: Arc::clone(&runtime.optimizer_planning_cache),
                 slow_query_snapshot: Vec::new(),
                 statement_summary_snapshot: Vec::new(),
                 config: self.config.clone(),
-                branch_catalog_path: self.branch_catalog_path().ok(),
-                current_branch: self.current_branch()?,
+                branch_catalog_path: self.branch_catalog_path_from_runtime(&runtime).ok(),
+                current_branch: self.current_branch_from_runtime(&runtime),
                 projection_relational,
                 task_context,
                 _pin: Arc::new(pin),
@@ -1701,23 +1699,21 @@ impl Database {
         })
     }
 
-    fn pin_read_view(&self) -> Result<(PublishedReadView, ReaderPin)> {
-        Ok({
-            let published_read_view = self.runtime.get()?.store.published_read_view();
-            let mut pins = self
-                .runtime
-                .get()?
-                .reader_pins
-                .lock()
-                .expect("database reader pins lock should not be poisoned");
-            let id = pins.next_reader_id;
-            pins.next_reader_id += 1;
-            pins.active_views.insert(id, published_read_view);
-            (
-                published_read_view,
-                ReaderPin::new(id, Arc::clone(&self.runtime.get()?.reader_pins)),
-            )
-        })
+    fn pin_runtime_read_view(
+        runtime: &runtime_cell::AdmittedBranchRuntime,
+    ) -> (PublishedReadView, ReaderPin) {
+        let published_read_view = runtime.store.published_read_view();
+        let mut pins = runtime
+            .reader_pins
+            .lock()
+            .expect("database reader pins lock should not be poisoned");
+        let id = pins.next_reader_id;
+        pins.next_reader_id += 1;
+        pins.active_views.insert(id, published_read_view);
+        (
+            published_read_view,
+            ReaderPin::new(id, Arc::clone(&runtime.reader_pins)),
+        )
     }
 
     pub fn explain_query(&self, cypher_text: &str) -> Result<ExplainOutput> {
@@ -2048,8 +2044,15 @@ impl Database {
         )
     }
 
-    pub fn append_table_schema(&self, table: &str) -> Result<Option<&AppendTableSchema>> {
-        Ok(self.runtime.get()?.store.append_table_schema(table))
+    /// Returns an owned schema snapshot, valid across background checkpoint
+    /// adoption and after this database handle is closed.
+    pub fn append_table_schema(&self, table: &str) -> Result<Option<AppendTableSchema>> {
+        Ok(self
+            .runtime
+            .get()?
+            .store
+            .append_table_schema(table)
+            .cloned())
     }
 
     pub fn append_storage_residency_report(&self) -> Result<crate::AppendStorageResidencyReport> {
@@ -2160,9 +2163,8 @@ impl Database {
         let result = match prepared {
             Some(prepared) => {
                 let (oldest_reader_epoch, pinned_reader_generations) = {
-                    let pins = self
-                        .runtime
-                        .get()?
+                    let runtime = self.runtime.get()?;
+                    let pins = runtime
                         .reader_pins
                         .lock()
                         .expect("database reader pins lock should not be poisoned");
@@ -2242,9 +2244,8 @@ impl Database {
         prepared: PreparedDatabaseCheckpoint,
     ) -> Result<()> {
         let (oldest_reader_epoch, pinned_reader_generations) = {
-            let pins = self
-                .runtime
-                .get()?
+            let runtime = self.runtime.get()?;
+            let pins = runtime
                 .reader_pins
                 .lock()
                 .expect("database reader pins lock should not be poisoned");
@@ -2386,37 +2387,45 @@ impl Database {
 
     /// Publication evidence for the derived relational index-page store.
     /// `None` while publication is disabled or before its first checkpoint
-    /// attempt.
+    /// attempt. The returned report is an owned snapshot; later background
+    /// publication does not change a previously returned report.
     pub fn relational_index_shadow_checkpoint_report(
         &self,
-    ) -> Result<Option<&crate::store::RelationalIndexShadowCheckpointReport>> {
+    ) -> Result<Option<crate::store::RelationalIndexShadowCheckpointReport>> {
         Ok({
             self.runtime
                 .get()?
                 .store
                 .relational_index_shadow_checkpoint_report()
+                .cloned()
         })
     }
 
     /// Recovery's bounded manifest-only assessment of the relational index
-    /// store. Selected pages remain lazily validated on first SQL access.
+    /// store, as an owned snapshot. Selected pages remain lazily validated on first SQL access.
     pub fn relational_index_shadow_recovery_status(
         &self,
-    ) -> Result<&crate::store::RelationalIndexShadowRecoveryStatus> {
+    ) -> Result<crate::store::RelationalIndexShadowRecoveryStatus> {
         Ok({
             self.runtime
                 .get()?
                 .store
                 .relational_index_shadow_recovery_status()
+                .clone()
         })
     }
 
     /// Resource and publication evidence for WAL index deltas derived during
-    /// the most recent open.
+    /// the most recent open. The owned report can outlive this handle.
     pub fn relational_index_recovery_report(
         &self,
-    ) -> Result<Option<&hawdb_storage::relational::RelationalIndexRecoveryReport>> {
-        Ok(self.runtime.get()?.store.relational_index_recovery_report())
+    ) -> Result<Option<hawdb_storage::relational::RelationalIndexRecoveryReport>> {
+        Ok(self
+            .runtime
+            .get()?
+            .store
+            .relational_index_recovery_report()
+            .cloned())
     }
 
     pub fn storage_pressure_snapshot(&self) -> Result<StoragePressureSnapshot> {
@@ -8782,12 +8791,16 @@ pub(super) fn upsert_knowledge_entity_for(
 
     let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
     let update_properties = knowledge_entity_upsert_update_properties(request);
-    if let Some(existing) = try_seed_node_by_label_and_external_id(
-        &db.runtime.get().unwrap().catalog,
-        &db.runtime.get().unwrap().store,
+    let existing = {
+        let runtime = db.runtime.get()?;
+        try_seed_node_by_label_and_external_id(
+        &runtime.catalog,
+        &runtime.store,
         request.label.as_str(),
         request.external_id.as_str(),
-    )? {
+    )?
+    };
+    if let Some(existing) = existing {
         let node_id = existing.id.0;
         if !node_has_external_id_property(&existing, request.external_id.as_str()) {
             return Ok(KnowledgeEntityUpsertOutput {
@@ -20332,8 +20345,8 @@ impl DatabaseTransactionRuntime {
             ),
             config: db.config.clone(),
             system_variables,
-            branch_catalog_path: db.branch_catalog_path().ok(),
-            current_branch: db.current_branch()?,
+            branch_catalog_path: db.branch_catalog_path_from_runtime(&runtime).ok(),
+            current_branch: db.current_branch_from_runtime(&runtime),
         })
     }
 
@@ -20351,7 +20364,7 @@ impl DatabaseTransactionRuntime {
 impl DatabaseTransactionState {
     fn from_database(db: &Database) -> Result<Self> {
         let runtime = db.runtime.get()?;
-        let (_, pin) = db.pin_read_view()?;
+        let (_, pin) = Database::pin_runtime_read_view(&runtime);
         Ok(Self {
             snapshot_pin: Some(pin),
             graph_transaction: Some(runtime.store.begin_mutation_transaction(&runtime.catalog)),

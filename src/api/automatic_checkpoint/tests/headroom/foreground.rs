@@ -53,6 +53,7 @@ fn admitted_foreground_request_cannot_wait_for_retirement_using_its_only_cpu() {
     db.set_runtime_governor(governor.clone());
     let (probe, retirement_started, resume) = pause();
     control.lock().unwrap().retirement_probe = Some(probe);
+    let runtime = db.runtime.get().unwrap();
     drop(suspension);
     wait(&control, |state| state.phase == Phase::Handoff);
     let foreground = governor
@@ -67,6 +68,7 @@ fn admitted_foreground_request_cannot_wait_for_retirement_using_its_only_cpu() {
     let task = foreground.bind_task_context(RuntimeTaskContext::default());
     // The worker can no longer obtain execution admission, but adoption
     // publishes a fresh, initially empty foreground WAL/delta generation.
+    drop(runtime);
     drop(db.runtime.get_mut().unwrap());
     wait(&control, |state| {
         state.retired.is_some() && state.report.deferred_attempts > 0

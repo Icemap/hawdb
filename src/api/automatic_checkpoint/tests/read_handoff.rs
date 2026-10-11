@@ -84,7 +84,26 @@ fn wait_control(control: &Control, predicate: impl Fn(&State) -> bool) {
     }
 }
 
-fn fixture_with_seal_pause() -> (Fixture, Database, Arc<Control>, mpsc::Sender<()>) {
+struct HandoffHold {
+    resume: Option<mpsc::Sender<()>>,
+    _paused: mpsc::Receiver<()>,
+}
+
+impl Drop for HandoffHold {
+    fn drop(&mut self) {
+        if let Some(resume) = self.resume.take() {
+            let _ = resume.send(());
+        }
+    }
+}
+
+fn fixture_with_seal_pause() -> (
+    Fixture,
+    Database,
+    Arc<Control>,
+    mpsc::Sender<()>,
+    HandoffHold,
+) {
     let fixture = Fixture::new();
     let mut db = Database::open_with_config(
         &fixture.0,
@@ -105,9 +124,19 @@ fn fixture_with_seal_pause() -> (Fixture, Database, Arc<Control>, mpsc::Sender<(
     let (sealed, paused) = mpsc::channel();
     let (resume, continuation) = mpsc::channel();
     let (error_sender, errors) = mpsc::channel();
+    let (handoff_paused, handoff_observed) = mpsc::channel();
+    let (handoff_resume, handoff_continuation) = mpsc::channel();
+    let handoff = HandoffHold {
+        resume: Some(handoff_resume),
+        _paused: handoff_observed,
+    };
     {
         let mut state = control.lock().unwrap();
         state.preparation_error_probe = Some(error_sender);
+        state.idle_handoff_probe = Some(Arc::new(OwnerPauseProbe {
+            paused: handoff_paused,
+            resume: Mutex::new(handoff_continuation),
+        }));
         state.prefix_seal_probe = Some(Arc::new(PrefixSealProbe {
             sealed,
             resume: Mutex::new(continuation),
@@ -136,12 +165,12 @@ fn fixture_with_seal_pause() -> (Fixture, Database, Arc<Control>, mpsc::Sender<(
         state.prefix_seal_probe = None;
         state.preparation_error_probe = None;
     }
-    (fixture, db, control, resume)
+    (fixture, db, control, resume, handoff)
 }
 
 #[test]
 fn checkpoint_publishes_while_read_callback_is_running() {
-    let (fixture, mut db, control, resume) = fixture_with_seal_pause();
+    let (fixture, mut db, control, resume, handoff) = fixture_with_seal_pause();
     let mut old = db.begin_read_transaction().unwrap();
     let mut external = PublicationRead {
         control: control.clone(),
@@ -171,6 +200,7 @@ fn checkpoint_publishes_while_read_callback_is_running() {
         Value::String("complete".into())
     );
     assert!(!control.has_pending_handoff());
+    drop(handoff);
     wait_control(&control, |state| {
         state.phase == Phase::Idle && state.retired.is_none()
     });
@@ -217,7 +247,7 @@ fn checkpoint_publishes_while_read_callback_is_running() {
 
 #[test]
 fn concurrent_read_only_traffic_adopts_and_releases_checkpoint_admission() {
-    let (fixture, db, control, resume) = fixture_with_seal_pause();
+    let (fixture, db, control, resume, handoff) = fixture_with_seal_pause();
     let db = crate::ConcurrentDatabase::new(db);
     let mut old = db.begin_read_transaction().unwrap();
     let before = db.published_read_view().unwrap();
@@ -229,6 +259,7 @@ fn concurrent_read_only_traffic_adopts_and_releases_checkpoint_admission() {
         1
     );
     assert!(!control.has_pending_handoff());
+    drop(handoff);
     wait_control(&control, |state| {
         state.phase == Phase::Idle && state.retired.is_none()
     });
@@ -279,7 +310,7 @@ fn concurrent_read_only_traffic_adopts_and_releases_checkpoint_admission() {
 
 #[test]
 fn invalid_read_handoff_fails_closed_and_preserves_disk_authority() {
-    let (fixture, mut db, control, resume) = fixture_with_seal_pause();
+    let (fixture, mut db, control, resume, handoff) = fixture_with_seal_pause();
     resume.send(()).unwrap();
     wait_control(&control, |state| state.phase == Phase::Handoff);
     let other_fixture = Fixture::new();
@@ -297,6 +328,7 @@ fn invalid_read_handoff_fails_closed_and_preserves_disk_authority() {
     assert!(matches!(error, HawDBError::StorageIntegrity(_)));
     assert!(control.ensure_healthy().is_err());
     assert!(!control.has_pending_handoff());
+    drop(handoff);
     assert_eq!(control.lock().unwrap().report.failed_attempts, 1);
     assert!(matches!(
         db.query("MATCH (n:Memory) RETURN n.id"),
@@ -324,7 +356,7 @@ fn invalid_read_handoff_fails_closed_and_preserves_disk_authority() {
 
 #[test]
 fn typed_explain_analyze_runs_without_the_owner_mutex() {
-    let (_fixture, mut db, control, resume) = fixture_with_seal_pause();
+    let (_fixture, mut db, control, resume, handoff) = fixture_with_seal_pause();
     let (sent, received) = mpsc::channel();
     let result = std::thread::scope(|scope| {
         let state = control.lock().unwrap();
@@ -345,12 +377,13 @@ fn typed_explain_analyze_runs_without_the_owner_mutex() {
         Value::String("memory-1".into())
     );
     wait_control(&control, |state| state.phase == Phase::Handoff);
+    drop(handoff);
     db.checkpoint().unwrap();
 }
 
 #[test]
 fn plain_sql_only_reads_adopt_the_ready_physical_generation() {
-    let (fixture, mut db, control, resume) = fixture_with_seal_pause();
+    let (fixture, mut db, control, resume, handoff) = fixture_with_seal_pause();
     let before = db.runtime.get().unwrap().store.published_read_view();
     resume.send(()).unwrap();
     wait_control(&control, |state| state.phase == Phase::Handoff);
@@ -360,6 +393,7 @@ fn plain_sql_only_reads_adopt_the_ready_physical_generation() {
         Value::String("complete".into())
     );
     assert!(!control.has_pending_handoff());
+    drop(handoff);
     let after = db.runtime.get().unwrap().store.published_read_view();
     assert_eq!(after.visible_commit_epoch(), before.visible_commit_epoch());
     assert_ne!(after.physical_generation(), before.physical_generation());

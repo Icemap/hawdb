@@ -53,11 +53,13 @@ fn foreground_denial_wakeup_does_not_bypass_an_admitted_retirement() {
     let healthy = governor.snapshot().resources;
     let (cleanup_probe, cleanup_started, resume_cleanup) = pause();
     control.lock().unwrap().retirement_probe = Some(cleanup_probe);
+    let runtime = db.runtime.get().unwrap();
     drop(suspension);
     wait(&control, |state| state.phase == Phase::Handoff);
     let mut critical = healthy;
     critical.memory.pressure = hawdb_qos::RuntimeMemoryPressure::Critical;
     governor.update_resources(critical);
+    drop(runtime);
     drop(db.runtime.get_mut().unwrap());
     wait(&control, |state| {
         state.retired.is_some() && state.report.deferred_attempts > 0

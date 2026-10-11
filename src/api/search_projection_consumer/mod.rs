@@ -52,13 +52,13 @@ impl Database {
     {
         let root = self.consumer_writable_root()?;
         if self.runtime.get_mut()?.projection_consumers.unavailable {
-            self.runtime.get_mut()?.projection_consumers = ConsumerRegistry::load(
-                Some(&root),
-                self.runtime
-                    .get()?
-                    .store
-                    .search_projection_database_identity(),
-            );
+            let identity = self
+                .runtime
+                .get()?
+                .store
+                .search_projection_database_identity();
+            self.runtime.get_mut()?.projection_consumers =
+                ConsumerRegistry::load(Some(&root), identity);
         }
         let destination = projection_directory.as_ref();
         if destination.try_exists().map_err(HawDBError::from)? {
@@ -107,12 +107,12 @@ impl Database {
             .commit_epoch()
             .checked_add(options.max_idle_commits().get())
             .ok_or_else(|| HawDBError::Semantic("consumer expiry epoch overflow".into()))?;
-        let database_uuid = match self
+        let identity = self
             .runtime
             .get()?
             .store
-            .search_projection_database_identity()
-        {
+            .search_projection_database_identity();
+        let database_uuid = match identity {
             Some(identity) => identity,
             None => {
                 let identity = generate_uuidv7()?;
@@ -397,9 +397,8 @@ impl Database {
         if self.runtime.get()?.projection_consumers.unavailable {
             return Err(Error::RebuildRequired(Reason::RegistryUnavailable));
         }
-        let record = self
-            .runtime
-            .get()?
+        let runtime = self.runtime.get()?;
+        let record = runtime
             .projection_consumers
             .records
             .get(id.as_str())
@@ -489,9 +488,8 @@ impl Database {
         consumer: &SearchProjectionConsumer,
     ) -> SearchProjectionConsumerResult<()> {
         let status = self.search_projection_consumer_status(consumer.id())?;
-        let record = self
-            .runtime
-            .get()?
+        let runtime = self.runtime.get()?;
+        let record = runtime
             .projection_consumers
             .records
             .get(consumer.id().as_str())

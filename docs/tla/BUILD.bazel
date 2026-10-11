@@ -111,6 +111,7 @@ tla_test_suite(
 )
 
 _AUTOMATIC_CHECKPOINT_CONTROLS = [
+    "BackgroundAdoptionWitness",
     "DiscardWriterWitness",
     "ManualBeforeCleanup",
     "ReleaseLeaseBeforeCleanup",
@@ -148,4 +149,15 @@ tla_test_suite(
     name = "automatic_checkpoint_controls",
     tests = [":HawDBAutomaticCheckpoint" + control + "_check" for control in _AUTOMATIC_CHECKPOINT_CONTROLS],
     tags = ["manual"],
+)
+
+# Dropping the independent epoch reproduces a lost wake, including shutdown.
+tla_check(
+    name = "HawDBAutomaticHandoffWakeForgetEpoch_check",
+    module = "HawDBAutomaticHandoffWake.tla",
+    config = "mutants/HawDBAutomaticHandoffWakeForgetEpoch.cfg",
+    expect = "temporal_violation",
+    tags = ["manual"],
+    timeout_seconds = 1800,
+    tlc_args = ["-cleanup", "-workers", "auto"],
 )

@@ -117,6 +117,7 @@ fn read_does_not_hold_publication_gate(analyze: bool) {
         None,
     );
     // Always release the actual owner before any assertion can unwind.
+    let runtime = db.runtime.get().unwrap();
     control.lock().unwrap().prefix_seal_probe = None;
     resume.send(()).unwrap();
     let output = output.unwrap().0;
@@ -131,6 +132,7 @@ fn read_does_not_hold_publication_gate(analyze: bool) {
         assert_eq!(output.rows[0]["score"], Value::Float(0.75));
     }
     wait_for(&db, |r| r.waiting_for_handoff);
+    drop(runtime);
     // A following write still goes through adoption and the writer gate.
     db.query("CREATE (:Memory {id: 'memory-2', body: 'later'})")
         .unwrap();

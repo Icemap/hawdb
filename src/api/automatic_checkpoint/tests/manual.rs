@@ -496,11 +496,13 @@ fn denied_retirement_manual(concurrent: bool) {
     db.set_runtime_governor(governor.clone());
     db.query("CREATE (:Memory {id: 1})").unwrap();
     let old = db.begin_read_transaction().unwrap();
+    let runtime_guard = db.runtime.get().unwrap();
     drop(suspension);
     wait_for(&db, |report| report.completed_checkpoints == 1);
     let mut resources = governor.snapshot().resources;
     resources.memory.pressure = hawdb_qos::RuntimeMemoryPressure::Critical;
     governor.update_resources(resources);
+    drop(runtime_guard);
     drop(db.runtime.get_mut().unwrap());
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
