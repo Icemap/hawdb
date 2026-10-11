@@ -553,3 +553,22 @@ baseline and measured bulk boundary in #976 also remain incomplete. UTF-8,
 binary, packed boolean, UUID, recursive layouts, SIMD, graph and FTS extensions
 require their own implementation and evidence; this foundation qualifies none
 of those capabilities.
+
+## Bounded point-page ownership proof
+
+The storage regression
+`independent_point_page_preserves_values_without_retaining_other_pages`
+constructs an independent owner of one existing COW node page. It checks that
+the node and string addresses remain unchanged, the full page capacity remains
+included in the existing capacity estimate, and unrelated pages and the original
+directory can be released. Updating and deleting the live node must leave the
+old page unchanged; dropping the final page owner must release it.
+
+This is an executable ownership proof, not a production query lease. It does
+not change the retained cursor's complete-source admission or implement source
+reuse, allocation/generation provenance, poison propagation, aggregate admission,
+or host views. A point lease must admit the complete page before retaining it;
+charging only the selected fields would omit unrelated records pinned by that
+page. It must also account for COW replacement memory while a host retains the
+old page. Ordinary wide point reads remain on the owned path until those
+contracts and comprehensive performance are qualified.

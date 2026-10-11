@@ -125,6 +125,78 @@ mod tests {
     }
 
     #[test]
+    fn independent_point_page_preserves_values_without_retaining_other_pages() {
+        let mut map = CowSegmentedMap::from(
+            (0..1025)
+                .map(|index| {
+                    let id = NodeId(index * 3 + 1);
+                    let mut text = String::with_capacity(1024);
+                    text.push_str("original");
+                    (
+                        id,
+                        NodeRecord {
+                            id,
+                            labels: BTreeSet::from([LabelId(1)]),
+                            properties: BTreeMap::from([("text".into(), Value::String(text))]),
+                        },
+                    )
+                })
+                .collect::<BTreeMap<_, _>>(),
+        );
+        let id = NodeId(1);
+        let index = map.segment_index(&id).unwrap();
+        assert!(map.segment_count() > 1);
+        let page_refs = map.segments.iter().map(Arc::downgrade).collect::<Vec<_>>();
+        let directory_ref = Arc::downgrade(&map.segments);
+        let original = map.get(&id).unwrap();
+        let original_address = std::ptr::from_ref(original);
+        let Value::String(original_text) = &original.properties["text"] else {
+            panic!("fixture text must be a string");
+        };
+        let text_address = original_text.as_ptr();
+        let full_capacity = map.retained_capacity_bytes().unwrap();
+
+        // A separate one-page owner exercises the existing COW implementation,
+        // without exposing a production lease or changing admission semantics.
+        let page = Arc::clone(&map.segments[index]);
+        let page_rows = page.len();
+        let source = CowSegmentedMap {
+            segments: Arc::new(CowPageDirectory::new(vec![page])),
+            len: page_rows,
+        };
+        let page_capacity = source.retained_capacity_bytes().unwrap();
+        assert!(page_capacity < full_capacity);
+        assert!(page_capacity >= page_rows * 1024);
+        assert_eq!(
+            std::ptr::from_ref(source.get(&id).unwrap()),
+            original_address
+        );
+
+        map.get_mut(&id)
+            .unwrap()
+            .properties
+            .insert("text".into(), Value::String("updated".into()));
+        assert_ne!(std::ptr::from_ref(map.get(&id).unwrap()), original_address);
+        assert_eq!(source.retained_capacity_bytes(), Some(page_capacity));
+        assert!(map.remove(&id).is_some());
+        assert!(map.get(&id).is_none());
+        drop(map);
+
+        assert!(directory_ref.upgrade().is_none());
+        for (page_index, reference) in page_refs.iter().enumerate() {
+            assert_eq!(reference.upgrade().is_some(), page_index == index);
+        }
+        let Value::String(text) = &source.get(&id).unwrap().properties["text"] else {
+            panic!("retained text must remain a string");
+        };
+        assert_eq!(text, "original");
+        assert_eq!(text.as_ptr(), text_address);
+        assert_eq!(source.retained_capacity_bytes(), Some(page_capacity));
+        drop(source);
+        assert!(page_refs[index].upgrade().is_none());
+    }
+
+    #[test]
     fn sparse_root_and_recursive_overflow_fail_closed() {
         assert!(
             tree_capacity::<String, Value>(11).unwrap()
