@@ -557,3 +557,31 @@ At 10,000 rows point paired medians are 2.512x/2.482x and independent-CREATE wri
 [Complete ordinary point-statistics evidence](evidence/rust_ordinary_local_statistics_controls_20261011.json) preserves native stdout/stderr, individual pairs, source snapshots, frozen driver/consumers, fixtures, producer hashes, process/RSS observations and all recalculated summaries. Original report SHA-256: `3f20ae6b396b853d9d18174b0f5bbdf057e09ec789aefa84c6b5a151dba25027`; package SHA-256: `9ca7b5122b09bee9cc12b0d5f7f511931467700756ff2dce27b156379ed78248`. Source/artifact guards pass before and after children; the independent audit verifies native results, checksums, profile/defaults, phase sums, discard/order policy, RSS and both producer medians and paired ratios.
 
 This remains a small shared-host Rust control. It does not qualify large sizes, cross-language neutrality, Arrow/source reuse or whole-operation memory. Together with the mixed-growth cold gains and unfavorable hot/tail samples, it leaves comprehensive performance acceptance open.
+
+## Integration after the frozen point controls
+
+The measured producer above is production-identical to `b0ae19bd`. The later
+integration commit `1d274ccf` merges main `f58062e5` ([#998](https://github.com/nowledge-co/hawdb/pull/998))
+and preserves both the projected index fast path and source/retained memory
+budget separation. Its updated regression permits a 128 KiB selected source
+above a 4 KiB blocking-state cap, verifies its query charge is released, and
+then proves a 4 KiB query cap refuses before residual evaluation. The first
+integration run exposed the earlier fixture's blocking-cap assumption; that
+diagnostic failure is distinct from the corrected contract.
+
+Fixed-source integration validation passes all 100 targets: executor unit and
+projection-allocation tests, root general and analytics partitions, and the
+required local fuzz/smoke targets. Ten targets execute and 90 are cached. Root
+general reports 1,602 passed/1 ignored, analytics 62 passed/3 ignored, executor
+unit 430 passed/16 ignored and projection allocation 105 passed. Final
+formatting, workspace strict Clippy, minimal-WASM strict Clippy, prek and commit
+hooks pass. The first diagnostic run's input-change warnings are not used as
+final verification; the fixed-source invocation has no such warnings.
+
+Main subsequently bumps package/build versions to 0.7.0 at `77732a77`
+([#1003](https://github.com/nowledge-co/hawdb/pull/1003)). That mechanical
+integration preserves every Rust source byte from `1d274ccf`; final versioned
+build/lint and focused point checks are tracked separately in the PR.
+Neither merge retroactively qualifies the earlier producer's performance for
+the final head. New-head cross-language, representative performance and
+whole-operation memory acceptance remain open.
