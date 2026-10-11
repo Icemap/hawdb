@@ -221,9 +221,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The recorder models completed POSIX synchronization. Windows needs
-        # separate namespace qualification, not a zero-test Unix selection.
-        os: [ubuntu-24.04, macos-latest]
+        # Native execution checks the implementation under explicit barrier
+        # assumptions; it does not certify Windows directory-flush semantics.
+        os: [ubuntu-24.04, macos-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -240,20 +240,65 @@ jobs:
           rustc --version --verbose > branch-power-loss-results/toolchain.txt
           uname -a > branch-power-loss-results/platform.txt
           df -Pk . "${TMPDIR:-/tmp}" > branch-power-loss-results/disk-before.txt
+          cargo test --locked -p hawdb-storage --all-features --lib \
+            power_loss:: -- --list 2>&1 \
+            | tee branch-power-loss-results/recorder-discovery.txt
           cargo test --locked -p hawdb --all-features --lib \
             api::tests::power_loss:: -- --list 2>&1 \
             | tee branch-power-loss-results/discovery.txt
           set +e
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            power_loss:: -- --nocapture --test-threads=1 2>&1 \
+            | tee branch-power-loss-results/recorder-output.txt
+          recorder_status=$?
           bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
             api::tests::power_loss:: -- --nocapture --test-threads=1 2>&1 \
             | tee branch-power-loss-results/test-output.txt
           test_status=$?
           set -e
           df -Pk . "${TMPDIR:-/tmp}" > branch-power-loss-results/disk-after.txt
-          printf '{"protocol":"hawdb-branch-power-loss-ci-v1","source_revision":"%s","runner_os":"%s","test_status":%s}\n' \
-            "$GITHUB_SHA" "$RUNNER_OS" "$test_status" \
+          namespace_assumption=posix-directory-sync
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            namespace_assumption=windows-directory-flush-unqualified
+          fi
+          printf '{"protocol":"hawdb-branch-power-loss-ci-v1","source_revision":"%s","runner_os":"%s","test_status":%s,"recorder_status":%s,"namespace_assumption":"%s","physical_device_test":false}\n' \
+            "$GITHUB_SHA" "$RUNNER_OS" "$test_status" "$recorder_status" "$namespace_assumption" \
             > branch-power-loss-results/manifest.json
+          if (( recorder_status != 0 )); then
+            exit "$recorder_status"
+          fi
           exit "$test_status"
+
+      - name: Record Windows filesystem context
+        if: always() && matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force branch-power-loss-results | Out-Null
+          $roots = @{
+            workspace = $env:GITHUB_WORKSPACE
+            temporary = [System.IO.Path]::GetTempPath()
+          }
+          $volumes = foreach ($entry in $roots.GetEnumerator()) {
+            $directory = Get-Item -LiteralPath $entry.Value -ErrorAction Stop
+            $volume = Get-Volume -DriveLetter $directory.PSDrive.Name -ErrorAction Stop
+            [ordered]@{
+              scope = $entry.Key
+              path = $directory.FullName
+              filesystem = $volume.FileSystem
+              drive_type = "$($volume.DriveType)"
+              allocation_unit_size = $volume.AllocationUnitSize
+              size = $volume.Size
+              size_remaining = $volume.SizeRemaining
+            }
+          }
+          [ordered]@{
+            source_revision = $env:GITHUB_SHA
+            os = Get-CimInstance Win32_OperatingSystem |
+              Select-Object Caption, Version, BuildNumber, OSArchitecture
+            volumes = @($volumes)
+            namespace_semantics_qualified = $false
+          } | ConvertTo-Json -Depth 4 |
+            Set-Content -Encoding utf8 branch-power-loss-results/windows-filesystems.json
 
       - name: Upload branch power-loss evidence
         if: always()

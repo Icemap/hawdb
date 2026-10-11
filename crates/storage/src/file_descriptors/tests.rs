@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{context_for_path, ProjectFileDescriptors, DEFAULT_MAX_OPEN_FILES};
+#[cfg(unix)]
+use super::DEFAULT_MAX_OPEN_FILES;
+use super::{context_for_path, ProjectFileDescriptors};
 use crate::file_io::{self, File};
 use crate::immutable_files::ImmutableFileBinding;
 use crate::immutable_object::{ObjectKind, ObjectReference};
