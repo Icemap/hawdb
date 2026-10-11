@@ -16,7 +16,10 @@
 
 use crate::binding::{map_memory_bytes, map_payload_bytes, Binding};
 use crate::pipeline::runtime_checkpoint;
-use crate::{QueryMemoryAccount, QueryMemoryClass, QueryMemoryLease, QueryMemoryLedger, Row};
+use crate::{
+    QueryMemoryAccount, QueryMemoryClass, QueryMemoryLease, QueryMemoryLedger, QueryRows,
+    QueryRowsBuilder, Row,
+};
 use hawdb_core::{HawDBError, ReadBudgetResource, Result, RuntimeTaskContext};
 use std::num::NonZeroUsize;
 
@@ -62,7 +65,8 @@ pub struct OutputMetrics {
 }
 
 pub struct QueryOutputAccumulator<'a> {
-    consumer: &'a mut dyn FnMut(Row) -> Result<()>,
+    consumer: Option<&'a mut dyn FnMut(Row) -> Result<()>>,
+    owned_rows: Option<QueryRowsBuilder>,
     memory_mode: ConsumerMemoryMode,
     max_rows: Option<usize>,
     max_payload_bytes: Option<usize>,
@@ -87,7 +91,8 @@ impl<'a> QueryOutputAccumulator<'a> {
         );
         let retained_result_lease = result_account.reserve(0)?;
         Ok(Self {
-            consumer,
+            consumer: Some(consumer),
+            owned_rows: None,
             memory_mode,
             max_rows: limits.max_rows,
             max_payload_bytes: limits.max_payload_bytes,
@@ -96,6 +101,37 @@ impl<'a> QueryOutputAccumulator<'a> {
             deferred_rows: Vec::new(),
             metrics: OutputMetrics::default(),
         })
+    }
+
+    pub fn new_owned(
+        limits: OutputLimits,
+        result_memory_budget: NonZeroUsize,
+        memory_ledger: &QueryMemoryLedger,
+    ) -> Result<Self> {
+        let result_account = memory_ledger.account(
+            QueryMemoryClass::ResultMaterialization,
+            "query result",
+            result_memory_budget,
+        );
+        let retained_result_lease =
+            result_account.reserve(QueryRowsBuilder::owner_memory_bytes())?;
+        Ok(Self {
+            consumer: None,
+            owned_rows: Some(QueryRowsBuilder::new()),
+            memory_mode: ConsumerMemoryMode::Retained,
+            max_rows: limits.max_rows,
+            max_payload_bytes: limits.max_payload_bytes,
+            result_account,
+            retained_result_lease,
+            deferred_rows: Vec::new(),
+            metrics: OutputMetrics::default(),
+        })
+    }
+
+    /// Finalize only after execution, output validation, and profile capture.
+    /// The accumulator keeps its retained charge until the execution call ends.
+    pub fn take_owned_rows(&mut self) -> Option<QueryRows> {
+        self.owned_rows.take().map(QueryRowsBuilder::finish)
     }
 
     pub fn emit(&mut self, binding: Binding) -> Result<()> {
@@ -117,6 +153,16 @@ impl<'a> QueryOutputAccumulator<'a> {
                 "read query payload would exceed max_payload_bytes {max_payload_bytes} (max_read_result_payload_bytes {max_payload_bytes}; next total {next_payload_bytes})"
             )));
         }
+        if let Some(rows) = &mut self.owned_rows {
+            rows.push_budgeted_named_row(
+                row,
+                &self.result_account,
+                &mut self.retained_result_lease,
+            )?;
+            self.metrics.rows = self.metrics.rows.saturating_add(1);
+            self.metrics.payload_bytes = next_payload_bytes;
+            return Ok(());
+        }
         let row_memory_bytes = map_memory_bytes(&row);
         let transient_result_lease = match self.memory_mode {
             ConsumerMemoryMode::Retained | ConsumerMemoryMode::DeferredUntilValidated => {
@@ -130,7 +176,7 @@ impl<'a> QueryOutputAccumulator<'a> {
 
         match self.memory_mode {
             ConsumerMemoryMode::Retained | ConsumerMemoryMode::ReleasedAfterCall => {
-                (self.consumer)(row)?;
+                (self.consumer.as_mut().expect("row consumer is present"))(row)?;
             }
             ConsumerMemoryMode::DeferredUntilValidated => self.deferred_rows.push(row),
         }
@@ -150,7 +196,7 @@ impl<'a> QueryOutputAccumulator<'a> {
         }
         for row in self.deferred_rows.drain(..) {
             runtime_checkpoint(task_context)?;
-            (self.consumer)(row)?;
+            (self.consumer.as_mut().expect("row consumer is present"))(row)?;
             runtime_checkpoint(task_context)?;
         }
         self.retained_result_lease.reset();
