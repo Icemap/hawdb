@@ -108,7 +108,9 @@ mod graph_mutation;
 #[path = "store/graph_read.rs"]
 mod graph_read;
 #[doc(hidden)]
-pub use graph_read::MaterializedNodeReadSource;
+pub use graph_read::{
+    MaterializedNodePointRead, MaterializedNodePointSource, MaterializedNodeReadSource,
+};
 #[path = "store/graph_recovery.rs"]
 mod graph_recovery;
 #[path = "store/immutable_root.rs"]

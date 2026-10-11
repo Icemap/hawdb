@@ -46,7 +46,39 @@ fn value_capacity(value: &Value, depth: usize) -> Option<usize> {
     }
 }
 
+fn node_page_capacity(
+    page: &BTreeMap<NodeId, NodeRecord>,
+    bytes: usize,
+    inspected: &mut usize,
+) -> Option<usize> {
+    let bytes = bytes
+        .checked_add(2usize.checked_mul(std::mem::size_of::<usize>())?)?
+        .checked_add(std::mem::size_of::<BTreeMap<NodeId, NodeRecord>>())?
+        .checked_add(tree_capacity::<NodeId, NodeRecord>(page.len())?)?;
+    page.values().try_fold(bytes, |bytes, node| {
+        *inspected = inspected.saturating_add(1);
+        bytes
+            .checked_add(tree_capacity::<LabelId, ()>(node.labels.len())?)?
+            .checked_add(properties_capacity(&node.properties, 0)?)
+    })
+}
+
+type RetainedNodePagePreflight<'a> = (&'a Arc<BTreeMap<NodeId, NodeRecord>>, Option<usize>);
+
 impl CowSegmentedMap<NodeId, NodeRecord> {
+    /// Borrow the exact page and bound its complete retained capacity before
+    /// adoption. No directory or page is cloned during this cold preflight.
+    pub(crate) fn retained_point_page_preflight(
+        &self,
+        id: NodeId,
+    ) -> Option<RetainedNodePagePreflight<'_>> {
+        let page = self.segments.get(self.segment_index(&id)?)?;
+        if !page.contains_key(&id) {
+            return None;
+        }
+        Some((page, node_page_capacity(page, 0, &mut 0)))
+    }
+
     /// Borrowed preflight of all allocations kept alive by a node snapshot.
     /// Unlike page-splitting weights, this uses owned buffer capacities, not
     /// logical lengths. It allocates/clones no source values. None refuses
@@ -63,16 +95,7 @@ impl CowSegmentedMap<NodeId, NodeRecord> {
             self.segments
                 .iter()
                 .try_fold(self.directory_capacity_bytes(), |bytes, page| {
-                    let bytes = bytes
-                        .checked_add(2usize.checked_mul(std::mem::size_of::<usize>())?)?
-                        .checked_add(std::mem::size_of::<BTreeMap<NodeId, NodeRecord>>())?
-                        .checked_add(tree_capacity::<NodeId, NodeRecord>(page.len())?)?;
-                    page.values().try_fold(bytes, |bytes, node| {
-                        inspected = inspected.saturating_add(1);
-                        bytes
-                            .checked_add(tree_capacity::<LabelId, ()>(node.labels.len())?)?
-                            .checked_add(properties_capacity(&node.properties, 0)?)
-                    })
+                    node_page_capacity(page, bytes, &mut inspected)
                 })
         });
         (capacity, inspected)

@@ -17,7 +17,7 @@
 use super::*;
 use crate::read_view::{
     AdmittedNodeRead, AdmittedNodeRecord, AdmittedRelationshipRead, AdmittedRelationshipRecord,
-    ControlledGraphReadAllocator,
+    ControlledGraphReadAllocator, GraphReadAdmission, GraphReadAllocation,
 };
 use hawdb_core::ids::{
     node_allocation_bytes, project_node_record_ref, projected_node_allocation_bytes,
@@ -79,7 +79,80 @@ impl MaterializedNodeReadSource {
     }
 }
 
+/// Root-internal point source. Unsupported storage must use a separate path;
+/// it must never be reported as a missing node in the live overlay.
+#[doc(hidden)]
+pub enum MaterializedNodePointRead {
+    Unsupported,
+    Missing,
+    Node(MaterializedNodePointSource),
+}
+
+/// Own one immutable node page, without retaining the source directory.
+/// The admission permit outlives the page and all borrowed record access.
+#[doc(hidden)]
+pub struct MaterializedNodePointSource {
+    page: Arc<BTreeMap<NodeId, NodeRecord>>,
+    id: NodeId,
+    integrity_poisoned: Arc<AtomicBool>,
+    post_wal_apply_poisoned: Arc<AtomicBool>,
+    _allocation: Box<dyn GraphReadAllocation>,
+}
+
+impl MaterializedNodePointSource {
+    pub fn node(&self) -> Result<&NodeRecord> {
+        ensure_graph_read_flags_usable(&self.integrity_poisoned, &self.post_wal_apply_poisoned)?;
+        self.page.get(&self.id).ok_or_else(|| {
+            HawDBError::Execution("retained point source lost its immutable node".into())
+        })
+    }
+}
+
 impl GraphStore {
+    /// Admit the full selected page before pinning it, including unrelated
+    /// records and spare capacities. This does not construct Arrow arrays or
+    /// establish a whole-process memory bound. Callers must supply their policy.
+    #[doc(hidden)]
+    pub fn materialized_node_point_read(
+        &self,
+        id: NodeId,
+        admission: &GraphReadAdmission<'_>,
+    ) -> Result<MaterializedNodePointRead> {
+        self.ensure_usable()?;
+        if self.is_out_of_core() || self.canonical_base.is_some() {
+            return Ok(MaterializedNodePointRead::Unsupported);
+        }
+        if self.node_tombstones.contains(&id) {
+            return Ok(MaterializedNodePointRead::Missing);
+        }
+        let Some((page, capacity)) = self.nodes.retained_point_page_preflight(id) else {
+            return Ok(MaterializedNodePointRead::Missing);
+        };
+        let bytes = capacity
+            .and_then(|bytes| bytes.checked_add(64))
+            .ok_or_else(|| {
+                HawDBError::Execution(
+                    "retained point capacity overflow or excessive value nesting".into(),
+                )
+            })?;
+        let mut allocation = admission.reserve(bytes)?;
+        allocation.retain_state()?;
+        if allocation.bytes() < bytes {
+            return Err(HawDBError::Execution(
+                "retained point admission lost its allocation permit".into(),
+            ));
+        }
+        Ok(MaterializedNodePointRead::Node(
+            MaterializedNodePointSource {
+                page: Arc::clone(page),
+                id,
+                integrity_poisoned: Arc::clone(&self.integrity_poisoned),
+                post_wal_apply_poisoned: Arc::clone(&self.post_wal_apply_poisoned),
+                _allocation: allocation,
+            },
+        ))
+    }
+
     /// Bound every heap allocation pinned by the same materialized directory
     /// before a caller adopts it. This preflight borrows all source records.
     #[doc(hidden)]

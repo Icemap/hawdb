@@ -572,3 +572,23 @@ charging only the selected fields would omit unrelated records pinned by that
 page. It must also account for COW replacement memory while a host retains the
 old page. Ordinary wide point reads remain on the owned path until those
 contracts and comprehensive performance are qualified.
+
+
+## Admitted resident point-page primitive
+
+`GraphStore::materialized_node_point_read` is a root-internal ownership
+primitive. It distinguishes unsupported canonical/out-of-core sources from a
+missing resident node. Before cloning any source Arc, it borrows the selected
+page and computes a checked capacity bound for the entire page, including
+unrequested records, sparse tree nodes, nested values and spare buffer capacity.
+It obtains and validates a `GraphReadAllocation`, transfers retained state, then
+captures only that page and the two fail-closed poison signals. The permit is
+dropped after the source page. Mutation uses existing COW semantics; borrowed
+record and string addresses remain unchanged in the retained generation.
+
+This primitive is not connected to ordinary query execution or host bindings.
+Its cold preflight walks the selected page and has no per-page capacity cache;
+activating it for point queries requires performance qualification. Caller
+allocation policy must account for retained runtime/process memory and concurrent
+COW generations. It does not provide typed contiguous Arrow arrays, a host buffer
+lease, scan snapshot generations or end-to-end zero-copy qualification.

@@ -41,6 +41,17 @@ fn canonical_decoding_refuses_instead_of_returning_only_the_live_overlay() {
         )
         .unwrap();
     assert!(store.is_out_of_core());
+    let mut unexpected = |_| -> Result<Box<dyn GraphReadAllocation>> {
+        panic!("unsupported point storage must not invoke admission");
+    };
+    let admission = GraphReadAdmission::new(&mut unexpected);
+    assert!(matches!(
+        store
+            .materialized_node_point_read(NodeId(u64::MAX), &admission)
+            .unwrap(),
+        MaterializedNodePointRead::Unsupported
+    ));
+
     assert!(store.try_materialized_node_read_source().unwrap().is_none());
     assert!(store
         .try_scan_materialized_nodes_after(catalog.label_id("Item"), None)
@@ -274,4 +285,138 @@ fn minimal_source_observes_both_shared_poison_signals() {
             store.ensure_usable().unwrap_err().to_string()
         );
     }
+}
+
+struct PointReadAllocation {
+    bytes: usize,
+    retained: std::rc::Rc<std::cell::Cell<bool>>,
+    released: std::rc::Rc<std::cell::Cell<bool>>,
+}
+
+impl GraphReadAllocation for PointReadAllocation {
+    fn bytes(&self) -> usize {
+        self.bytes
+    }
+
+    fn grow(&mut self, bytes: usize) -> Result<()> {
+        self.bytes += bytes;
+        Ok(())
+    }
+
+    fn retain_state(&mut self) -> Result<()> {
+        self.retained.set(true);
+        Ok(())
+    }
+}
+
+impl Drop for PointReadAllocation {
+    fn drop(&mut self) {
+        self.released.set(true);
+    }
+}
+
+#[test]
+fn admitted_point_source_preserves_addresses_and_reservation_until_release() {
+    let mut store = GraphStore::default();
+    let mut catalog = Catalog::default();
+    let mut text = String::with_capacity(8192);
+    text.push_str("original");
+    let id = store
+        .create_node(
+            &mut catalog,
+            "Item",
+            BTreeMap::from([("text".into(), Value::String(text))]),
+        )
+        .unwrap();
+    let node_address = std::ptr::from_ref(store.nodes.get(&id).unwrap());
+    let retained = std::rc::Rc::new(std::cell::Cell::new(false));
+    let released = std::rc::Rc::new(std::cell::Cell::new(false));
+    let mut allocate = |bytes| -> Result<Box<dyn GraphReadAllocation>> {
+        assert!(bytes >= 8192);
+        Ok(Box::new(PointReadAllocation {
+            bytes,
+            retained: retained.clone(),
+            released: released.clone(),
+        }))
+    };
+    let admission = GraphReadAdmission::new(&mut allocate);
+    let MaterializedNodePointRead::Node(source) =
+        store.materialized_node_point_read(id, &admission).unwrap()
+    else {
+        panic!("resident node must have an admitted source");
+    };
+    assert!(retained.get());
+    assert!(!released.get());
+    assert_eq!(std::ptr::from_ref(source.node().unwrap()), node_address);
+    let Value::String(original) = &source.node().unwrap().properties["text"] else {
+        panic!("fixture must retain a string");
+    };
+    let text_address = original.as_ptr();
+    store.nodes.get_mut(&id).unwrap().properties.clear();
+    drop(store);
+    let Value::String(text) = &source.node().unwrap().properties["text"] else {
+        panic!("source must survive store mutation and destruction");
+    };
+    assert_eq!(text, "original");
+    assert_eq!(text.as_ptr(), text_address);
+    assert!(!released.get());
+    drop(source);
+    assert!(released.get());
+}
+
+#[test]
+fn point_source_rejects_short_permits_before_pin_and_missing_skips_admission() {
+    let mut store = GraphStore::default();
+    let mut catalog = Catalog::default();
+    let id = store
+        .create_node(&mut catalog, "Item", BTreeMap::new())
+        .unwrap();
+    let (page, _) = store.nodes.retained_point_page_preflight(id).unwrap();
+    let owners = Arc::strong_count(page);
+    let mut short =
+        |_| -> Result<Box<dyn GraphReadAllocation>> { Ok(Box::new(UnaccountedReadAllocation(0))) };
+    let admission = GraphReadAdmission::new(&mut short);
+    assert!(matches!(
+        store.materialized_node_point_read(id, &admission),
+        Err(HawDBError::Execution(reason)) if reason.contains("insufficient allocation permit")
+    ));
+    assert_eq!(Arc::strong_count(page), owners);
+    let mut refuse = |_| -> Result<Box<dyn GraphReadAllocation>> {
+        Err(HawDBError::Execution("point admission sentinel".into()))
+    };
+    let admission = GraphReadAdmission::new(&mut refuse);
+    assert!(matches!(
+        store.materialized_node_point_read(id, &admission),
+        Err(HawDBError::Execution(reason)) if reason == "point admission sentinel"
+    ));
+    assert_eq!(Arc::strong_count(page), owners);
+    assert!(matches!(
+        store
+            .materialized_node_point_read(NodeId(u64::MAX), &admission)
+            .unwrap(),
+        MaterializedNodePointRead::Missing
+    ));
+    store.ensure_usable().unwrap();
+}
+
+#[test]
+fn admitted_point_source_observes_later_poison() {
+    let mut store = GraphStore::default();
+    let mut catalog = Catalog::default();
+    let id = store
+        .create_node(&mut catalog, "Item", BTreeMap::new())
+        .unwrap();
+    let mut allocate = |bytes| -> Result<Box<dyn GraphReadAllocation>> {
+        Ok(Box::new(UnaccountedReadAllocation(bytes)))
+    };
+    let admission = GraphReadAdmission::new(&mut allocate);
+    let MaterializedNodePointRead::Node(source) =
+        store.materialized_node_point_read(id, &admission).unwrap()
+    else {
+        panic!("resident point must be supported");
+    };
+    store
+        .post_wal_apply_poisoned
+        .store(true, AtomicOrdering::Release);
+    assert!(source.node().is_err());
 }
