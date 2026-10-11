@@ -184,6 +184,14 @@ than admitted writes consume the remaining WAL/delta headroom, background work
 is admitted, and disk/FD/memory budgets cover the declared working set. Preserve
 bounded backpressure while a checkpoint is catching up.
 
+Soft preparation pressure gives each writer one absolute 10 ms backoff;
+notifications do not reset it. A typed report counts exhausted preparation
+backoffs. At the last tenth of capacity before the existing storage defer
+threshold, callers still wait for generation progress. Publication requests,
+group draining, final publication and active reclamation keep their required
+fences. This bounds soft preparation backoff; complete capacity-wait bounds and
+unattended handoff remain open qualification gates.
+
 Permanent background denial, insufficient disk, an oversized individual
 transaction, impossible reader-retention budgets, or sustained writes exceeding
 storage capacity can still reject with the existing explicit resource errors.

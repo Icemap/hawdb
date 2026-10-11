@@ -27,9 +27,13 @@ use hawdb_storage::store::{CheckpointCandidate, CheckpointDebtSnapshot, Checkpoi
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, TryLockError};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const RETRY_DELAY: Duration = Duration::from_millis(100);
+// Off-gate construction may span the whole database. A pressure writer gives
+// it one short backoff, then relies on the ordinary hard storage limits.
+// Publication, sync-group draining and active reclamation keep their fences.
+const PREPARATION_BACKOFF_LIMIT: Duration = Duration::from_millis(10);
 const PLANNING_MEMORY_BYTES: u64 = 64 * 1024;
 const MAX_OPERATION_FAILURES: u8 = 3;
 // Cap the serialized suffix admitted while new writers yield to publication.
@@ -42,6 +46,8 @@ pub struct AutomaticCheckpointReport {
     pub waiting_for_handoff: bool,
     pub completed_checkpoints: u64,
     pub deferred_attempts: u64,
+    /// Pressure callers that exhausted one bounded preparation backoff.
+    pub preparation_backoff_expirations: u64,
     pub failed_attempts: u64,
     /// Non-admission preparation, replay or publication failures.
     pub operation_failures: u64,
@@ -288,28 +294,48 @@ impl Control {
         let observed_attempts = state.attempts_started;
         let observed_retirement_deferrals = state.retirement_deferrals;
         let mut notified_owner = false;
-        while state.phase == Phase::Finalizing
-            || (self.publication_requested.load(Ordering::Acquire) && !state.sync_group_active)
-            || (state.phase == Phase::Draining && !state.sync_group_active)
-            || (state.phase == Phase::Preparing
+        let mut preparation_deadline = None;
+        loop {
+            let preparation_remaining = if state.phase == Phase::Preparing
                 && !state.sync_group_active
-                && needs_headroom(&state))
-            || (state.phase == Phase::Retiring
-                && !state.sync_group_active
-                && (state.retired.is_none()
-                    || state.retirement_deferrals == observed_retirement_deferrals)
-                && pressure_pending(&state)
-                && needs_headroom(&state))
-            || (state.phase == Phase::Idle
-                && state.enabled
-                && !state.stopping
-                && state.suspensions == 0
-                && !state.sync_group_active
-                && !state.report.operation_retry_exhausted
-                && state.attempts_started == observed_attempts
-                && pressure_pending(&state)
-                && needs_headroom(&state))
-        {
+                && needs_headroom(&state)
+            {
+                let deadline = preparation_deadline
+                    .get_or_insert_with(|| Instant::now() + PREPARATION_BACKOFF_LIMIT);
+                Some(deadline.saturating_duration_since(Instant::now()))
+            } else {
+                None
+            };
+            let must_fence = state.phase == Phase::Finalizing
+                || (self.publication_requested.load(Ordering::Acquire) && !state.sync_group_active)
+                || (state.phase == Phase::Draining && !state.sync_group_active)
+                || (state.phase == Phase::Preparing
+                    && !state.sync_group_active
+                    && preparation_needs_capacity(&state))
+                || (state.phase == Phase::Retiring
+                    && !state.sync_group_active
+                    && (state.retired.is_none()
+                        || state.retirement_deferrals == observed_retirement_deferrals)
+                    && pressure_pending(&state)
+                    && needs_headroom(&state))
+                || (state.phase == Phase::Idle
+                    && state.enabled
+                    && !state.stopping
+                    && state.suspensions == 0
+                    && !state.sync_group_active
+                    && !state.report.operation_retry_exhausted
+                    && state.attempts_started == observed_attempts
+                    && pressure_pending(&state)
+                    && needs_headroom(&state));
+            if !must_fence && preparation_remaining.is_none_or(|remaining| remaining.is_zero()) {
+                if preparation_remaining.is_some() {
+                    state.report.preparation_backoff_expirations = state
+                        .report
+                        .preparation_backoff_expirations
+                        .saturating_add(1);
+                }
+                break;
+            }
             if !notified_owner {
                 // Entering pressure backoff requests an attempt immediately.
                 // The owner and this predicate share the mutex, so the wake
@@ -321,7 +347,14 @@ impl Control {
             if let Some(probe) = &state.frontend_wait_probe {
                 let _ = probe.send(state.phase);
             }
-            state = self.changed.wait(state).map_err(|_| Self::poisoned())?;
+            state = if must_fence {
+                self.changed.wait(state).map_err(|_| Self::poisoned())?
+            } else {
+                self.changed
+                    .wait_timeout(state, preparation_remaining.expect("preparation backoff"))
+                    .map_err(|_| Self::poisoned())?
+                    .0
+            };
             #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
             if let Some(probe) = state.frontend_resume_probe.take() {
                 drop(state);
@@ -1287,6 +1320,23 @@ fn needs_headroom(state: &State) -> bool {
     .into_iter()
     .any(|(bytes, limit)| {
         limit.is_some_and(|limit| near_limit(bytes, limit, reserve.unwrap_or(limit)))
+    })
+}
+
+fn preparation_needs_capacity(state: &State) -> bool {
+    let Some(debt) = state.debt else {
+        return false;
+    };
+    [
+        (debt.wal_bytes, debt.max_wal_bytes),
+        (debt.delta_bytes, debt.max_delta_bytes),
+    ]
+    .into_iter()
+    .any(|(bytes, limit)| {
+        // Timed backoff applies while the ordinary mutation path has room.
+        // Keep a tenth of the configured capacity before its existing defer
+        // threshold; near exhaustion, generation progress must free capacity.
+        limit.is_some_and(|limit| near_limit(bytes, limit, limit / 10))
     })
 }
 
