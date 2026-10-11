@@ -94,11 +94,11 @@ pub(super) struct PlanCacheKey {
     max_optimizer_groups: Option<usize>,
     access_control: Option<AccessControlPlanCacheKey>,
     scoring: Option<ScoringPlanCacheKey>,
-    point_statistics: Option<PointStatistics>,
+    point_statistics: Option<PointStatisticsKey>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct PointStatistics {
+struct PointStatisticsKey {
     label: String,
     property: String,
     matched_rows: u64,
@@ -107,12 +107,30 @@ struct PointStatistics {
     index_seek_is_cheaper: bool,
 }
 
-fn point_statistics<S: crate::executor::ExecutionStore>(
+struct PointStatistics<'plan> {
+    label: &'plan str,
+    property: &'plan str,
+    matched_rows: u64,
+    index_seek_is_cheaper: bool,
+}
+
+impl From<&PointStatistics<'_>> for PointStatisticsKey {
+    fn from(point: &PointStatistics<'_>) -> Self {
+        Self {
+            label: point.label.to_owned(),
+            property: point.property.to_owned(),
+            matched_rows: point.matched_rows,
+            index_seek_is_cheaper: point.index_seek_is_cheaper,
+        }
+    }
+}
+
+fn point_statistics<'plan, S: crate::executor::ExecutionStore>(
     context: &PlanCacheContext<'_, S>,
-    logical: &LogicalPlan,
+    logical: &'plan LogicalPlan,
     parameters: &BTreeMap<String, Value>,
     has_parameter_slots: bool,
-) -> Result<Option<PointStatistics>> {
+) -> Result<Option<PointStatistics<'plan>>> {
     if context.access_control.is_some()
         || context.scoring.is_some()
         || context.store.is_out_of_core()
@@ -190,8 +208,8 @@ fn point_statistics<S: crate::executor::ExecutionStore>(
     }
     let label_count = context.store.node_count_for_label(Some(label_id)) as u64;
     Ok(Some(PointStatistics {
-        label: label.clone(),
-        property: property.clone(),
+        label,
+        property,
         matched_rows,
         index_seek_is_cheaper: node_equality_index_seek_is_cheaper(label_count, matched_rows),
     }))
@@ -646,7 +664,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
         max_optimizer_groups: context.config.max_optimizer_groups,
         access_control: access_control_cache_key,
         scoring: context.scoring.map(BoundScoringRequest::cache_key),
-        point_statistics: point_statistics.clone(),
+        point_statistics: point_statistics.as_ref().map(PointStatisticsKey::from),
     });
     if cache_mode == PlanCacheMode::Use {
         let key = key.as_ref().expect("cache key exists in use mode");
@@ -803,7 +821,7 @@ fn refresh_materialized_plan_trace(trace: &mut OptimizerTrace, physical_plan: &P
 fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
     context: &PlanCacheContext<'_, S>,
     logical: &LogicalPlan,
-    point_statistics: Option<&PointStatistics>,
+    point_statistics: Option<&PointStatistics<'_>>,
     environment_hint: Option<&OptimizerEnvironmentKey>,
 ) -> OptimizerCatalogAccess {
     if let Some(point) = point_statistics {
@@ -818,8 +836,8 @@ fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
             optimizer_catalog_from_graph_statistics(context.catalog, &statistics)
                 .with_ordered_range_indexes(environment.ordered_range_indexes.clone())
                 .with_property_equality_row_count(
-                    point.label.clone(),
-                    point.property.clone(),
+                    point.label.to_owned(),
+                    point.property.to_owned(),
                     point.matched_rows,
                 ),
         );
@@ -1031,6 +1049,74 @@ mod tests {
     use super::*;
     use crate::schema::SchemaObjectState;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn point_statistics_borrow_plan_names_and_keep_owned_cache_identity() {
+        let mut db = crate::Database::new();
+        for statement in [
+            "CREATE INDEX ON :Item(id)",
+            "CREATE INDEX ON :Item(other_id)",
+            "CREATE INDEX ON :Other(id)",
+            "CREATE (:Item {id: 1, other_id: 1})",
+            "CREATE (:Other {id: 1})",
+        ] {
+            db.query(statement).unwrap();
+        }
+        let runtime = db.runtime.get().unwrap();
+        let context = PlanCacheContext {
+            catalog: &runtime.catalog,
+            store: &runtime.store,
+            optimizer: &runtime.optimizer,
+            config: &db.config,
+            cache: &runtime.plan_cache,
+            planning_cache: &runtime.optimizer_planning_cache,
+            access_control: None,
+            optimizer_search: OptimizerSearchDirective::Auto,
+            scoring: None,
+        };
+        let parameters = BTreeMap::from([("id".into(), Value::Int(1))]);
+        let keys = [
+            "MATCH (n:Item) WHERE n.id = $id RETURN n.id",
+            "MATCH (n:Item) WHERE n.other_id = $id RETURN n.id",
+            "MATCH (n:Other) WHERE n.id = $id RETURN n.id",
+        ]
+        .map(|query| {
+            let statement = cypher::parse(query).unwrap();
+            let plan = parameterize_logical_plan(statement_body(&statement), &parameters).unwrap();
+            let point =
+                point_statistics(&context, plan.logical(), &parameters, plan.slot_count() > 0)
+                    .unwrap()
+                    .unwrap();
+            let LogicalPlan::Project { input, .. } = plan.logical() else {
+                panic!("expected projection");
+            };
+            let LogicalPlan::Filter {
+                predicate: Predicate::PropertyEq { property, .. },
+                input,
+            } = input.as_ref()
+            else {
+                panic!("expected property equality");
+            };
+            let LogicalPlan::NodeScan { label, .. } = input.as_ref() else {
+                panic!("expected node scan");
+            };
+            assert_eq!(point.label.as_ptr(), label.as_ptr());
+            assert_eq!(point.property.as_ptr(), property.as_ptr());
+            PointStatisticsKey::from(&point)
+        });
+        // Each plan has been dropped, while its independently owned identity
+        // still distinguishes names with identical cardinality and cost class.
+        assert_eq!(keys[0].label, "Item");
+        assert_eq!(keys[0].property, "id");
+        assert_eq!(keys[1].property, "other_id");
+        assert_eq!(keys[2].label, "Other");
+        for key in &keys {
+            assert_eq!(key.matched_rows, 1);
+            assert_eq!(key.index_seek_is_cheaper, keys[0].index_seek_is_cheaper);
+        }
+        assert_ne!(keys[0], keys[1]);
+        assert_ne!(keys[0], keys[2]);
+    }
 
     #[test]
     fn point_statistics_avoid_full_publication_for_a_cold_indexed_read() {

@@ -585,3 +585,87 @@ build/lint and focused point checks are tracked separately in the PR.
 Neither merge retroactively qualifies the earlier producer's performance for
 the final head. New-head cross-language, representative performance and
 whole-operation memory acceptance remain open.
+
+## Borrowed point metadata controls (2026-10-11)
+
+The before producer is `71e2b538065aa4f9435cf0e9843ed93a61bf24f2`, tree
+`00453de6d8e2d70c431302dbd949bd0a57a46327`. The after producer is staged tree
+`261394366bbb5469ca8c10149297d8f810d84cc2` on that head. Its only production
+change borrows temporary point-statistics names from the logical plan while
+preserving owned `(label, property, K, B)` cache identity. The source archives,
+native artifacts, unchanged harness and drivers are frozen independently.
+Both producers use default `bazel build -c opt`; no compiler, allocator or
+budget override is applied.
+
+All 128 uninstrumented mixed-growth records succeed: 1,000/10,000 rows,
+raw/admitted APIs and stable/rotating parameters, with one discarded pair and
+seven measured pairs per group. Before/after order alternates. Each phase has
+100 separately timed, verified point calls after growth from four rows.
+The table gives medians of paired before/after ratios; values below 1 are
+unfavorable to the candidate. These are exploratory measurements on a shared
+host, without an idle-host claim.
+
+| Rows | API | Parameters | First call | Total 100 calls | Hot median | p95 | p99 | Refreshed median |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1000 | raw | stable | 0.934x | 1.008x | 1.005x | 1.006x | 0.935x | 0.986x |
+| 1000 | raw | rotating | 0.951x | 1.021x | 1.045x | 0.956x | 1.003x | 0.985x |
+| 1000 | admitted | stable | 1.011x | 0.967x | 0.991x | 0.822x | 0.969x | 0.989x |
+| 1000 | admitted | rotating | 0.995x | 1.014x | 0.917x | 1.028x | 1.032x | 0.981x |
+| 10000 | raw | stable | 0.949x | 1.081x | 1.082x | 1.271x | 1.471x | 1.002x |
+| 10000 | raw | rotating | 0.940x | 0.813x | 0.895x | 0.623x | 0.999x | 0.969x |
+| 10000 | admitted | stable | 1.050x | 1.069x | 1.054x | 1.069x | 1.015x | 1.030x |
+| 10000 | admitted | rotating | 1.040x | 1.011x | 1.052x | 1.011x | 1.318x | 1.058x |
+
+Separate existing allocation-profiling binaries first produce 16 successful
+controls. Their before/after file paths differ in length, affecting allocation
+byte and live/peak observations. Those records remain preserved, but their
+byte deltas are not used as optimization evidence. A corrective control uses
+equal-length producer, job and database paths, with three alternating
+repetitions per workload: all 48 records succeed and reproduce the same deltas.
+
+| Rows | Backend | Before allocation calls | After allocation calls | Fewer calls | Fewer requested bytes |
+| --- | --- | --- | --- | --- | --- |
+| 1000 | memory | 1,950,001 | 1,946,001 | 4,000 | 20,000 |
+| 1000 | file | 1,960,001 | 1,956,001 | 4,000 | 20,000 |
+| 10000 | memory | 19,500,001 | 19,460,001 | 40,000 | 200,000 |
+| 10000 | file | 19,600,001 | 19,560,001 | 40,000 | 200,000 |
+
+These admitted point controls save four native allocation calls and 20 requested
+bytes per query; the implementation removes two temporary strings per eligible
+planning call. The 1,000-row scan, individual CREATE, bulk CREATE and wide-read
+controls have identical allocation-call/byte counts in all three repetitions.
+Reallocation counts, completion live bytes and process peak requested bytes are
+identical for every corrected pair. There is no peak-memory reduction claim.
+Native requested traffic excludes foreign heaps and allocator rounding, and
+instrumented timings are not ordinary latency qualification. The point traffic
+remains approximately 1,946/1,956 allocation calls per admitted query; this small
+metadata improvement does not establish broad execution-buffer or memory gains.
+
+[Complete metadata control evidence](evidence/point_statistics_borrowed_metadata_controls_20261011.json)
+preserves all 192 records, raw native streams, per-call timings, fixtures,
+producer/source/consumer identities, both drivers, path-confounded observations
+and corrected repetitions. Every raw native result, checksum, fixture, timing
+phase, RSS observation, percentile and paired summary is independently audited.
+Package SHA-256: `ff31a916efb3a160444e3e73a2a7f4c04b4e39c0a591042a7e478f3dbf93adde`.
+This proves the bounded allocation reduction, without a consistent latency or
+whole-operation memory improvement. The comprehensive performance gate stays
+open; no unfavorable latency group is removed or labeled proven noise.
+
+On the same production source, default Bazel general/fuzz verification passes
+97/97 targets (23 executed/74 cached). Root general reports 1,603 passed and one
+ignored, including all five point-statistics regressions. The added regression
+checks actual borrowed names and owned cache identity after the plan is dropped,
+with distinct labels/properties at identical cardinality and access-cost class.
+Pinned-toolchain formatting, strict workspace/all-target/all-feature Clippy,
+minimal-WASM Clippy and prek pass. Documentation and evidence added after timing
+do not change the measured Rust production source.
+
+The earlier `71e2b538` five platform/binding checks pass, including installed
+wheel tests (159 passed/7 skipped) and pydantic (43 passed/1 skipped). Those checks
+precede this ownership refinement. Its manual Linux comparison
+[run 38114750497](https://github.com/nowledge-co/hawdb/actions/runs/38114750497)
+is still in progress at publication; it must not qualify later source.
+The earlier [b0ae19bd run](https://github.com/nowledge-co/hawdb/actions/runs/38112390209)
+is cancelled during baseline. Its preserved artifact contains 345 successful
+baseline records and no candidate report; raw results are checked but no paired
+comparison or performance qualification exists.

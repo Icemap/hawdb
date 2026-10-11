@@ -186,6 +186,14 @@ schema, capabilities, published generation and small-label classes still apply.
 Full key equality, not hash uniqueness, determines reuse. A retained snapshot
 derives K and B from its own reader, never from live-head candidates.
 
+The temporary point-statistics descriptor borrows the label and property from
+the parameterized logical plan. The persistent cache key still owns both names,
+and a cache miss gives the ephemeral optimizer catalog its own names. This
+removes two temporary string allocations per eligible planning call without
+omitting any cache identity field. Query normalization alone is not used to
+prove label/property identity. The owned key may outlive the logical plan;
+neither the cache nor its catalog retains a borrowed planning reference.
+
 Under the existing index-completeness and maintained-count contracts, counting
 K contributes a bounded index probe rather than a full graph statistics scan.
 Metadata enumeration, parameter/value cloning and ordinary result allocation
