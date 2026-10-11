@@ -220,6 +220,7 @@ pub(super) struct State {
     latest: Option<Source>,
     pending: Option<Pending>,
     last_identity: Option<CheckpointSourceIdentity>,
+    snapshot_requested: bool,
     sync_group_active: bool,
     attempts_started: u64,
     operation_failures_in_generation: u8,
@@ -273,6 +274,12 @@ pub(super) struct Control {
     frontend_runtime: OnceLock<Weak<super::runtime_cell::SharedBranchRuntime>>,
     handoff_thread: OnceLock<std::thread::Thread>,
     handoff_wake_epoch: AtomicU64,
+}
+
+enum SourceRefresh {
+    Current,
+    Captured(Option<Box<Source>>),
+    Busy,
 }
 
 struct PublicationRequest<'a>(&'a Control);
@@ -432,13 +439,32 @@ impl Control {
         state.sync_group_active = store.wal_sync_group_active();
         state.debt = store.checkpoint_debt_snapshot();
         let generation = state.debt.map(|debt| debt.wal_generation);
-        if generation != state.operation_generation {
+        let generation_changed = generation != state.operation_generation;
+        if generation_changed {
             state.operation_generation = generation;
             state.operation_failures_in_generation = 0;
             state.report.operation_retry_exhausted = false;
         }
         let identity = store.checkpoint_source_identity();
-        let retired = if identity != state.last_identity || finished_group {
+        let changed = identity != state.last_identity;
+        let managed = self
+            .frontend_runtime
+            .get()
+            .and_then(Weak::upgrade)
+            .is_some();
+        let capture = !managed
+            || state.snapshot_requested
+            || generation_changed
+            || finished_group
+            || self.publication_requested.load(Ordering::Acquire)
+            || state.latest.as_ref().is_none_or(|source| {
+                source
+                    .store
+                    .checkpoint_debt_snapshot()
+                    .is_none_or(|debt| debt.commit_epoch <= debt.checkpoint_commit_epoch)
+            });
+        let retired = if (changed && capture) || finished_group || state.snapshot_requested {
+            state.snapshot_requested = false;
             let mut next = Source::capture(store, catalog);
             let mut retired = state.latest.take();
             if let Some(previous) = &mut retired
@@ -450,15 +476,40 @@ impl Control {
                 next.preparing = previous.preparing.take();
             }
             state.latest = Some(next);
-            state.last_identity = identity;
             retired
         } else {
             None
         };
+        // Every commit still publishes its exact identity and scheduling debt.
+        // Only data-view capture is coalesced; publication must refresh it.
+        state.last_identity = identity;
         self.notify_all();
         // The last owner of an older COW snapshot may destroy a large map.
         // Its caller must release the publication guard before dropping it.
         retired
+    }
+
+    fn refresh_source(&self, state: &mut State) -> Result<SourceRefresh> {
+        if state
+            .latest
+            .as_ref()
+            .and_then(|source| source.store.checkpoint_source_identity())
+            == state.last_identity
+        {
+            return Ok(SourceRefresh::Current);
+        }
+        let Some(frontend) = self.frontend_runtime.get().and_then(Weak::upgrade) else {
+            return Ok(SourceRefresh::Current);
+        };
+        state.snapshot_requested = true;
+        // Control precedes this nonblocking runtime acquisition. Never wait
+        // for a frontend that may itself be waiting to submit through Control.
+        let Some(runtime) = frontend.try_read(self)? else {
+            return Ok(SourceRefresh::Busy);
+        };
+        let retired = self.submit(state, &runtime.store, &runtime.catalog);
+        drop(runtime);
+        Ok(SourceRefresh::Captured(retired.map(Box::new)))
     }
 
     pub(super) fn adopt(&self, state: &mut State, store: &mut GraphStore) -> Result<()> {
@@ -978,10 +1029,14 @@ fn run(
                     control.notify_all();
                     continue;
                 }
-                let due = state
-                    .latest
-                    .as_ref()
-                    .is_some_and(|source| due(source, max_age));
+                let due = state.latest.as_ref().is_some_and(|source| {
+                    due(source, max_age)
+                        || state.debt.is_some_and(|debt| {
+                            !debt.read_only
+                                && debt.commit_epoch > debt.checkpoint_commit_epoch
+                                && soft_pressure(debt)
+                        })
+                });
                 if state.phase == Phase::Idle
                     && state.suspensions == 0
                     && !state.sync_group_active
@@ -1001,6 +1056,39 @@ fn run(
                             .lock()
                             .unwrap_or_else(|error| error.into_inner());
                         continue;
+                    }
+                    // Refresh an idle, coalesced source before deriving its
+                    // preparation allocation limit. No runtime lock is waited
+                    // on while Control is held.
+                    match control.refresh_source(&mut state) {
+                        Ok(SourceRefresh::Current) => {}
+                        Ok(SourceRefresh::Captured(retired)) => {
+                            drop(state);
+                            drop(retired);
+                            state = control
+                                .state
+                                .lock()
+                                .unwrap_or_else(|error| error.into_inner());
+                            continue;
+                        }
+                        Ok(SourceRefresh::Busy) => {
+                            state.attempts_started = state.attempts_started.wrapping_add(1);
+                            state.report.deferred_attempts += 1;
+                            control.notify_all();
+                            state = control
+                                .changed
+                                .wait_timeout(state, RETRY_DELAY)
+                                .unwrap_or_else(|error| error.into_inner())
+                                .0;
+                            continue;
+                        }
+                        Err(_) => {
+                            control.failed.store(true, Ordering::Release);
+                            state.stopping = true;
+                            state.report.failed_attempts += 1;
+                            control.notify_all();
+                            continue;
+                        }
                     }
                     // A pending foreground waiter gives this owner one attempt.
                     // Denial must release it instead of repeatedly waiting on
@@ -1229,6 +1317,34 @@ fn run(
                     }
                     Err(TryLockError::Poisoned(_)) => return Err(Control::poisoned().into()),
                 };
+                if state.last_identity != source.store.checkpoint_source_identity()
+                    && state
+                        .latest
+                        .as_ref()
+                        .and_then(|latest| latest.store.checkpoint_source_identity())
+                        != state.last_identity
+                {
+                    publication_request.get_or_insert_with(|| control.request_publication());
+                    match control.refresh_source(&mut state)? {
+                        SourceRefresh::Current => {}
+                        SourceRefresh::Captured(retired) => {
+                            drop(state);
+                            drop(publication_wave.take());
+                            drop(retired);
+                            continue;
+                        }
+                        SourceRefresh::Busy => {
+                            drop(publication_wave.take());
+                            admission.runtime.pause();
+                            let (state, _) = control
+                                .changed
+                                .wait_timeout(state, RETRY_DELAY)
+                                .map_err(|_| Control::poisoned())?;
+                            drop(state);
+                            continue;
+                        }
+                    }
+                }
                 state.phase = Phase::Draining;
                 #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
                 if let Some(probe) = state.publication_probe.take() {
@@ -1318,6 +1434,13 @@ fn run(
                             ));
                         }
                     };
+                }
+                if state.last_identity != source.store.checkpoint_source_identity() {
+                    return Err(CheckpointOperationError::Work(
+                        CheckpointWorkError::Contended(
+                            "checkpoint source requires a fresh capture",
+                        ),
+                    ));
                 }
                 state.phase = Phase::Finalizing;
                 let oldest = pins.lock().map_err(|_| Control::poisoned())?.oldest_epoch();
@@ -1750,6 +1873,7 @@ fn release_retired_state(retired: Retired) {
 
 #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
 mod tests {
+    mod coalesced_capture;
     mod discard;
     mod execution_progress;
     mod handoff_execution;

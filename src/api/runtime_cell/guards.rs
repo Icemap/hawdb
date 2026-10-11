@@ -41,6 +41,20 @@ impl SharedBranchRuntime {
         }))
     }
 
+    pub(in crate::api) fn try_read<'a>(
+        &'a self,
+        control: &'a Control,
+    ) -> Result<Option<RuntimeRead<'a>>> {
+        match self.value.try_read() {
+            Ok(value) => Ok(value.is_some().then_some(RuntimeRead {
+                value: Some(value),
+                control,
+            })),
+            Err(TryLockError::WouldBlock) => Ok(None),
+            Err(TryLockError::Poisoned(_)) => Err(poisoned()),
+        }
+    }
+
     pub(in crate::api) fn initialize(&self, runtime: AdmittedBranchRuntime) -> Result<()> {
         let mut value = self.value.write().map_err(|_| poisoned())?;
         if value.is_some() {
