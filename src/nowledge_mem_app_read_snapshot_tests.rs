@@ -1525,3 +1525,64 @@ fn user_can_reenter_snapshot_reads_from_admission_and_completion_telemetry() {
         );
     }
 }
+
+#[test]
+fn database_instance_identity_tracks_the_exact_published_read_view() {
+    let handle = app_read_handle();
+    let cloned = handle.clone();
+    let old_identity = handle.database_instance_identity().unwrap();
+    assert_eq!(cloned.database_instance_identity().unwrap(), old_identity);
+    let replacement = app_read_handle();
+    let replacement_identity = replacement.database_instance_identity().unwrap();
+    assert_ne!(old_identity, replacement_identity);
+    assert_eq!(
+        handle.runtime_status().unwrap().graph_commit_epoch,
+        replacement.runtime_status().unwrap().graph_commit_epoch
+    );
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 4,
+        max_payload_bytes: 4096,
+    };
+    {
+        let mut writer = handle.write_store().unwrap();
+        let mut replacement_writer = replacement.write_store().unwrap();
+        std::mem::swap(
+            writer.graph_mut().database_mut(),
+            replacement_writer.graph_mut().database_mut(),
+        );
+        assert_eq!(
+            writer.graph().database().instance_identity().unwrap(),
+            replacement_identity
+        );
+        // The committed publication still owns the previous database snapshot.
+        handle
+            .with_bounded_graph_read_snapshot(budget, |snapshot| {
+                assert_eq!(snapshot.database_instance_identity(), &old_identity);
+                let rows = snapshot.query_cypher(
+                    "MATCH (n:Memory) RETURN n.id AS id",
+                    &BTreeMap::new(),
+                    4,
+                )?;
+                assert_eq!(rows.rows.len(), 1);
+                Ok(())
+            })
+            .unwrap();
+    }
+    assert_eq!(
+        handle.database_instance_identity().unwrap(),
+        replacement_identity
+    );
+    for pin_projection in [false, true] {
+        let check = |snapshot: &mut super::NowledgeMemReadSnapshot<'_>| {
+            assert_eq!(snapshot.database_instance_identity(), &replacement_identity);
+            Ok(())
+        };
+        if pin_projection {
+            handle.with_bounded_read_snapshot(budget, check).unwrap();
+        } else {
+            handle
+                .with_bounded_graph_read_snapshot(budget, check)
+                .unwrap();
+        }
+    }
+}

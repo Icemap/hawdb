@@ -1688,3 +1688,46 @@ fn stale_pending_recovery_does_not_recreate_a_reclaimed_successful_child() {
     assert!(!directory.exists());
     assert_eq!(std::fs::read(&catalog_path).unwrap(), before);
 }
+
+#[test]
+fn database_instance_identity_changes_on_branch_selection_and_reopen() {
+    let project = Project::new();
+    let mut database = Database::open(&project.0).unwrap();
+    let main_identity = database.instance_identity().unwrap();
+    database.query("CREATE (:Memory {id: 'identity'})").unwrap();
+    database.checkpoint().unwrap();
+    assert_eq!(database.instance_identity().unwrap(), main_identity);
+    let branch = database
+        .create_branch(BranchCreateRequest {
+            name: Some("identity-child".into()),
+            parent: BranchSelector::Id(main_id(&database)),
+            expected_source_commit_epoch: database.commit_epoch().unwrap(),
+            idempotency_key: "identity-child".into(),
+            owner: None,
+        })
+        .unwrap();
+    database
+        .query_sql_with_params("USE BRANCH ID $1", &[Value::Uuid(branch.id)])
+        .unwrap();
+    let child_identity = database.instance_identity().unwrap();
+    assert_ne!(child_identity, main_identity);
+    database
+        .query_sql_with_params("USE BRANCH ID $1", &[Value::Uuid(branch.id)])
+        .unwrap();
+    assert_eq!(database.instance_identity().unwrap(), child_identity);
+    assert!(database
+        .query_sql("USE BRANCH missing_identity_child")
+        .is_err());
+    assert_eq!(database.instance_identity().unwrap(), child_identity);
+    database.query_sql("USE BRANCH main").unwrap();
+    let selected_main_identity = database.instance_identity().unwrap();
+    assert_ne!(selected_main_identity, main_identity);
+    let epoch = database.commit_epoch().unwrap();
+    drop(database);
+    let reopened = Database::open(&project.0).unwrap();
+    assert_eq!(reopened.commit_epoch().unwrap(), epoch);
+    assert_ne!(
+        reopened.instance_identity().unwrap(),
+        selected_main_identity
+    );
+}

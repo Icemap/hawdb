@@ -227,3 +227,22 @@ fn fromless_select_evaluates_once_and_rejects_column_references() {
     ));
     assert!(db.query_sql("SELECT does_not_exist").is_err());
 }
+
+#[test]
+fn database_instance_identity_is_stable_and_distinguishes_equal_state() {
+    let mut database = Database::new();
+    let identity = database.instance_identity().unwrap();
+    let another = Database::new();
+    assert_eq!(
+        database.commit_epoch().unwrap(),
+        another.commit_epoch().unwrap()
+    );
+    assert_ne!(identity, another.instance_identity().unwrap());
+    assert_eq!(identity.clone(), identity);
+    database.query("CREATE (:Memory {id: 'instance'})").unwrap();
+    assert_eq!(database.instance_identity().unwrap(), identity);
+    let moved = database;
+    assert_eq!(moved.instance_identity().unwrap(), identity);
+    drop(moved);
+    assert_ne!(Database::new().instance_identity().unwrap(), identity);
+}
