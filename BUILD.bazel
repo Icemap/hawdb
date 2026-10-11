@@ -539,6 +539,7 @@ test_suite(
 test_suite(
     name = "hawdb_unit_tests",
     tests = [
+        ":hawdb_in_memory_portable_tests",
         ":hawdb_branch_project_open_tests",
         ":hawdb_branch_project_open_minimal_tests",
         ":hawdb_default_consumer_tests",
