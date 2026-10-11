@@ -424,10 +424,21 @@ fn verify_native_tree(
                 context.acquire(crate::file_descriptors::DescriptorKind::Transient)?;
             let mut file = std::fs::File::open(&path)?;
             let identity = identity::of_file(&file)?;
+            if file.metadata()?.len() != expected.len() as u64 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("uncaptured native length at {}", relative.display()),
+                ));
+            }
             let mut bytes = Vec::new();
-            file.by_ref()
-                .take((expected.len() as u64).saturating_add(1))
-                .read_to_end(&mut bytes)?;
+            // Windows byte-range locks also cover bytes beyond EOF. Empty
+            // lease files need only the handle's identity and length checked;
+            // probing EOF through a second handle would violate their lock.
+            if !expected.is_empty() {
+                file.by_ref()
+                    .take((expected.len() as u64).saturating_add(1))
+                    .read_to_end(&mut bytes)?;
+            }
             if bytes.as_slice() != expected {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,

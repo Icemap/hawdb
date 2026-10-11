@@ -160,10 +160,47 @@ fn captured_native_clones_preserve_cursor_and_append_semantics() {
 }
 
 #[test]
+fn capture_verifies_empty_files_without_releasing_their_exclusive_locks() {
+    let fixture = Fixture::new(ImageLimits::default());
+    let path = fixture.root.join("lease");
+    let lease = fs::File::create(&path).unwrap();
+    lease.lock().unwrap();
+
+    let snapshot = fixture.model.capture().unwrap();
+    let image = snapshot.crash(&snapshot.persist_all_plan()).unwrap();
+    assert_eq!(image.bytes(Path::new("lease")), Some(b"".as_slice()));
+    let contender = fs::OpenOptions::new().write(true).open(&path).unwrap();
+    assert!(matches!(
+        contender.try_lock(),
+        Err(std::fs::TryLockError::WouldBlock)
+    ));
+    drop(contender);
+    drop(lease);
+    assert_eq!(fixture.model.project().metrics().open, 0);
+}
+
+#[test]
+fn capture_rejects_uncaptured_bytes_in_an_expected_empty_locked_file() {
+    let fixture = Fixture::new(ImageLimits::default());
+    let path = fixture.root.join("lease");
+    let lease = fs::File::create(&path).unwrap();
+    std::fs::write(&path, b"uncaptured").unwrap();
+    lease.lock().unwrap();
+
+    let error = fixture.model.capture().unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert!(error
+        .to_string()
+        .contains("uncaptured native length at lease"));
+    drop(lease);
+    assert_eq!(fixture.model.project().metrics().open, 0);
+}
+
+#[test]
 fn capture_rejects_uninstrumented_bytes_and_directory_changes() {
     let fixture = Fixture::new(ImageLimits::default());
     fs::write(fixture.root.join("wal"), b"captured").unwrap();
-    std::fs::write(fixture.root.join("wal"), b"not captured").unwrap();
+    std::fs::write(fixture.root.join("wal"), b"tampered").unwrap();
     assert!(fixture.model.capture().is_err());
     std::fs::write(fixture.root.join("wal"), b"captured").unwrap();
     fixture.model.capture().unwrap();

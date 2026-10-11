@@ -68,7 +68,11 @@ or handle closure cannot strengthen that image. No callback executes inside
 storage locks. A final audited capture checks the complete fixture's IO coverage.
 Acknowledgment capture requires the host to exclude concurrent operations.
 
-The audit reads bytes and file identity from the same admitted native handle.
+The audit reads bytes, length and file identity from the same admitted native
+handle. Empty files are verified by identity and exact length without probing
+EOF: Windows exclusive byte-range locks also cover the nonexistent bytes in
+empty lease files. Nonempty files still require a complete byte comparison;
+an unreadable or length-mismatched file fails capture without releasing locks.
 Unix uses device/inode; Windows uses `GetFileInformationByHandleEx(FileIdInfo)`
 with the full volume serial and 128-bit file ID. Both directions of identity
 agreement are required: copied equal-byte files cannot impersonate a hard link,
