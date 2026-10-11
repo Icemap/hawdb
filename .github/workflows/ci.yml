@@ -251,6 +251,17 @@ jobs:
             power_loss:: -- --nocapture --test-threads=1 2>&1 \
             | tee branch-power-loss-results/recorder-output.txt
           recorder_status=$?
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            # Surface configuration failures before the long publication matrix.
+            bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
+              api::tests::power_loss::schema_indexes_and_nested_data_survive_power_loss_in_configured_residencies \
+              -- --exact --nocapture --test-threads=1 2>&1 \
+              | tee branch-power-loss-results/configuration-output.txt
+            configuration_status=$?
+            if (( configuration_status != 0 )); then
+              exit "$configuration_status"
+            fi
+          fi
           bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
             api::tests::power_loss:: -- --nocapture --test-threads=1 2>&1 \
             | tee branch-power-loss-results/test-output.txt

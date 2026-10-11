@@ -465,10 +465,18 @@ fn verify_native_tree(
             native_files.insert(relative.to_path_buf());
         }
     }
-    if native_files != image.paths().map(Path::to_path_buf).collect()
-        || native_directories != image.directory_paths().map(Path::to_path_buf).collect()
-    {
-        return Err(invalid("captured namespace differs from native namespace"));
+    let captured_files = image.paths().map(Path::to_path_buf).collect();
+    let captured_directories = image.directory_paths().map(Path::to_path_buf).collect();
+    if native_files != captured_files || native_directories != captured_directories {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "captured namespace differs from native namespace: missing file {:?}, missing directory {:?}, unexpected directory {:?}",
+                captured_files.difference(&native_files).next(),
+                captured_directories.difference(&native_directories).next(),
+                native_directories.difference(&captured_directories).next(),
+            ),
+        ));
     }
     Ok(())
 }

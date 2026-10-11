@@ -230,6 +230,59 @@ fn capture_admission_rejects_before_mutating_native_bytes() {
 }
 
 #[test]
+fn native_rename_of_existing_hard_links_matches_the_platform_namespace() {
+    let fixture = Fixture::new(ImageLimits::default());
+    let object_path = fixture.root.join("object");
+    let alias_path = fixture.root.join("alias");
+    let file = fs::File::create(&object_path).unwrap();
+    (&file).write_all(b"durable").unwrap();
+    file.sync_all().unwrap();
+    drop(file);
+    fs::hard_link(&object_path, &alias_path).unwrap();
+    crate::durability::sync_directory(&fixture.root).unwrap();
+
+    fs::rename(&alias_path, &object_path).unwrap();
+    let alias_exists = fs::try_exists(&alias_path).unwrap();
+    eprintln!("native-shared-inode-rename-v1 source_present={alias_exists}");
+    let before_barrier = fixture
+        .model
+        .capture()
+        .unwrap()
+        .crash(&CrashPlan::default())
+        .unwrap();
+    assert_eq!(
+        before_barrier.bytes(Path::new("alias")).unwrap(),
+        b"durable"
+    );
+    assert_eq!(
+        before_barrier.bytes(Path::new("object")).unwrap(),
+        b"durable"
+    );
+
+    crate::durability::sync_directory(&fixture.root).unwrap();
+    let after_barrier = fixture
+        .model
+        .capture()
+        .unwrap()
+        .crash(&CrashPlan::default())
+        .unwrap();
+    assert_eq!(
+        after_barrier.bytes(Path::new("object")).unwrap(),
+        b"durable"
+    );
+    assert_eq!(
+        after_barrier.bytes(Path::new("alias")).is_some(),
+        alias_exists
+    );
+    if alias_exists {
+        assert_eq!(
+            after_barrier.file_inode(Path::new("alias")),
+            after_barrier.file_inode(Path::new("object")),
+        );
+    }
+}
+
+#[test]
 fn native_head_replacement_and_gc_do_not_mutate_durable_old_inodes() {
     let fixture = Fixture::new(ImageLimits::default());
     let head = fs::File::create(fixture.root.join("head")).unwrap();
