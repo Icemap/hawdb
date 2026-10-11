@@ -44,15 +44,18 @@ impl QueryRowsBuilder {
         let heap_bytes = row.values().try_fold(0usize, |total, value| {
             checked_result_add(total, retained_value_heap_bytes(value)?)
         })?;
-        // The incoming map remains live while its payload is moved into the
-        // result. Keep its existing opaque-map node estimate plus capacity
-        // accounting until the map and its keys have actually been destroyed.
-        let key_spare_bytes = row.keys().try_fold(0usize, |total, name| {
-            checked_result_add(total, name.capacity().saturating_sub(name.len()))
+        // Keep the incoming tree, keys and payload charged until ownership
+        // transfer destroys the tree. Payload accounting is shared with the
+        // retained result instead of traversing it again as a logical estimate.
+        let key_bytes = row.keys().try_fold(0usize, |total, name| {
+            checked_result_add(total, name.capacity())
         })?;
         let transient = account.reserve(checked_result_add(
-            crate::binding::map_memory_bytes(&row),
-            checked_result_add(heap_bytes, key_spare_bytes)?,
+            checked_result_add(
+                std::mem::size_of::<Row>(),
+                retained_map_node_bound(row.len())?,
+            )?,
+            checked_result_add(heap_bytes, key_bytes)?,
         )?)?;
         if self.schema.is_none() {
             let slots = checked_result_mul(row.len(), std::mem::size_of::<String>())?;
@@ -132,6 +135,17 @@ fn checked_result_mul(left: usize, right: usize) -> Result<usize> {
     left.checked_mul(right).ok_or_else(result_capacity_overflow)
 }
 
+fn retained_map_node_bound(entries: usize) -> Result<usize> {
+    // The pinned std B-tree has 11 slots, 12 child pointers, and at least
+    // five entries per non-root node. Include an allocated empty root and
+    // bound every node as internal. See OWNED_RESULT_MEMORY_ACCOUNTING.md;
+    // toolchain upgrades must requalify this implementation-dependent bound.
+    let nodes = checked_result_add(1, entries.saturating_sub(1) / 5)?;
+    let slots = checked_result_mul(11, std::mem::size_of::<(String, Value)>())?;
+    let pointers = checked_result_mul(14, std::mem::size_of::<usize>())?;
+    checked_result_mul(nodes, checked_result_add(slots, pointers)?)
+}
+
 fn retained_value_heap_bytes(value: &Value) -> Result<usize> {
     match value {
         Value::String(value) => Ok(value.capacity()),
@@ -140,22 +154,15 @@ fn retained_value_heap_bytes(value: &Value) -> Result<usize> {
             checked_result_mul(values.capacity(), std::mem::size_of::<Value>())?,
             |total, value| checked_result_add(total, retained_value_heap_bytes(value)?),
         ),
-        Value::Map(values) => {
-            // std does not expose BTreeMap node capacity. Preserve the existing
-            // opaque-map entry estimate, with capacities for retained payloads.
-            values
-                .iter()
-                .try_fold(std::mem::size_of::<Row>(), |total, (name, value)| {
-                    let entry = checked_result_mul(3, std::mem::size_of::<(String, Value)>())?;
-                    checked_result_add(
-                        total,
-                        checked_result_add(
-                            entry,
-                            checked_result_add(name.capacity(), retained_value_heap_bytes(value)?)?,
-                        )?,
-                    )
-                })
-        }
+        Value::Map(values) => values.iter().try_fold(
+            retained_map_node_bound(values.len())?,
+            |total, (name, value)| {
+                checked_result_add(
+                    total,
+                    checked_result_add(name.capacity(), retained_value_heap_bytes(value)?)?,
+                )
+            },
+        ),
         Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_) | Value::Uuid(_) => Ok(0),
     }
 }

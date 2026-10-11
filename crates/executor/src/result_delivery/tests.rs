@@ -290,6 +290,67 @@ fn compact_owned_results_admit_scalar_string_fixture_under_16_mib() {
 }
 
 #[test]
+fn compact_owned_results_admit_small_map_nodes_before_publication() {
+    let mut emptied = Row::from([("entry".into(), Value::Null)]);
+    emptied.remove("entry");
+    let cases = [
+        Value::Map(emptied),
+        Value::Map(Row::from([("entry".into(), Value::Null)])),
+        Value::List(vec![Value::Map(Row::from([("entry".into(), Value::Null)]))]),
+    ];
+    for value in cases {
+        let ledger = QueryMemoryLedger::new(NonZeroUsize::new(8192).unwrap());
+        let mut output = QueryOutputAccumulator::new_owned(
+            OutputLimits::default(),
+            NonZeroUsize::new(1024).unwrap(),
+            &ledger,
+        )
+        .unwrap();
+        let error = output
+            .emit(Binding::values(Row::from([("value".into(), value)])))
+            .unwrap_err();
+        assert!(error.to_string().contains("result_materialization"));
+        assert_eq!(output.metrics().rows, 0);
+        drop(output);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+}
+
+#[test]
+fn compact_owned_results_preserve_sparse_multi_level_maps() {
+    let mut values = Row::new();
+    for index in 0..1000 {
+        values.insert(format!("key-{index:04}"), Value::Int(index));
+    }
+    for index in 0..990 {
+        values.remove(&format!("key-{index:04}"));
+    }
+    let ledger = QueryMemoryLedger::new(NonZeroUsize::new(1024 * 1024).unwrap());
+    let mut output = QueryOutputAccumulator::new_owned(
+        OutputLimits::default(),
+        NonZeroUsize::new(64 * 1024).unwrap(),
+        &ledger,
+    )
+    .unwrap();
+    output
+        .emit(Binding::values(Row::from([(
+            "value".into(),
+            Value::Map(values),
+        )])))
+        .unwrap();
+    let rows = output.take_owned_rows().unwrap();
+    let Some(hawdb_core::ValueRef::Map(values)) = rows.get(0, "value") else {
+        panic!("expected a retained map");
+    };
+    assert_eq!(values.len(), 10);
+    assert_eq!(values.get("key-0990"), Some(&Value::Int(990)));
+    assert_eq!(values.get("key-0999"), Some(&Value::Int(999)));
+    assert!(!values.contains_key("key-0000"));
+    drop(output);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
 fn compact_owned_results_charge_spare_nested_payload_capacity() {
     let memory = ExecutionMemoryConfig::default();
     let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
