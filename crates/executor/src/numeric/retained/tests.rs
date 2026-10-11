@@ -306,6 +306,38 @@ fn producer_errors_cannot_seal_a_partial_result_and_release_all_charges() {
 }
 
 #[test]
+fn numeric_type_mismatch_does_not_advance_retained_buffers() {
+    for (property_type, valid, invalid) in [
+        (PropertyType::Int, Value::Int(3), Value::Float(3.0)),
+        (PropertyType::Float, Value::Float(3.0), Value::Int(3)),
+    ] {
+        let governor = governor(64 * 1024, 8);
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::foreground_query(0, 64 * 1024))
+            .unwrap();
+        let (ledger, account) = account(64 * 1024);
+        let fragment = NumericFragment {
+            property_type,
+            ..fragment()
+        };
+        let mut builder =
+            RetainedNumericBuilder::new(fragment, nz(2), true, account, &permit).unwrap();
+        builder.push_node(&node(0, Some(valid))).unwrap();
+        let before = builder.buffer_provenance();
+        let error = builder.push_node(&node(1, Some(invalid))).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "execution error: retained numeric schema/value mismatch"
+        );
+        assert_eq!(builder.buffer_provenance(), before);
+        assert_eq!(builder.rows, 1);
+        assert!(builder.seal(None).is_err());
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    }
+}
+
+#[test]
 fn fresh_producers_get_distinct_allocation_identities() {
     let governor = governor(64 * 1024, 8);
     let permit = governor

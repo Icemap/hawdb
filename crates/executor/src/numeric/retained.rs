@@ -290,7 +290,7 @@ impl<'plan> RetainedNumericBuilder<'plan> {
                 "retained numeric schema/value mismatch".into(),
             ));
         }
-        let valid = match self.values.push_node_value(self.fragment, node) {
+        let valid = match self.values.push_value(self.fragment, value) {
             Ok(valid) => valid,
             Err(error) => {
                 self.failed = true;

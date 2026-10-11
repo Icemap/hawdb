@@ -119,6 +119,37 @@ admission or the proposal's separate per-cursor slot limit.
 
 ## Numeric ownership handoff
 
+### Retained property extraction
+
+The retained numeric producer validates and appends the same borrowed property
+lookup. It does not traverse the node property map again when constructing the
+first numeric buffer. Type mismatch poisons the producer before advancing its
+value, identity, validity, or row-count state; the producer cannot seal a partial
+result. This does not change source ownership or turn construction into source
+reuse.
+
+[Isolated extraction controls](../bindings/benchmarks/evidence/retained_property_lookup_controls_20261012.json)
+preserve 54 raw observations, frozen binary identities, source hashes, the
+standalone harness, and its measurement scope. Nine alternating paired rounds
+observed median extraction speedups of 1.46x, 1.80x, and 1.93x for one immutable
+integer node with 1, 16, and 128 properties, respectively. Query-ledger peak
+remained 13,216 bytes and returned to zero after release. Another compiler
+process competed for CPU; these observations are not clean-machine latency
+qualification. Planning, storage I/O, selection, cursor and foreign delivery,
+null/float timings, and full-query performance are excluded. The result does
+not establish comprehensive performance acceptance, SIMD, or strict source
+reuse.
+
+For a borrowed immutable `NodeRecord`, both property lookups in the previous
+producer resolve to the same `Option<&Value>`. Reusing the first reference
+therefore supplies the same input to the unchanged value-buffer match. The
+schema guard still runs before that match, and neither the guard nor the lookup
+mutates the node. Accepted inputs perform the same value/identity/validity
+appends; rejected inputs return before those appends. Existing admission and
+sealing rules remain in force. This is a source-level equivalence argument,
+not a machine-checked whole-query proof.
+
+
 `numeric::retained` constructs the first typed integer/float representation
 from borrowed node properties under both a query ledger and the shared runtime
 reservation. It stages no owned rows or `Vec<Value>`. Optional unsigned node

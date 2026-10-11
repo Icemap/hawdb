@@ -1,0 +1,862 @@
+{
+  "raw": [
+    {
+      "extract_ns": 24365793,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "baseline",
+      "round": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 15881809,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "candidate",
+      "round": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 15550886,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "candidate",
+      "round": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 20733256,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "baseline",
+      "round": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 23398064,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "baseline",
+      "round": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 15997422,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "candidate",
+      "round": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 15715398,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "candidate",
+      "round": 3,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 23959438,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "baseline",
+      "round": 3,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 24347764,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "baseline",
+      "round": 4,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 16903672,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "candidate",
+      "round": 4,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 16540794,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "candidate",
+      "round": 5,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 23392143,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "baseline",
+      "round": 5,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 22577630,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "baseline",
+      "round": 6,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 14880520,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "candidate",
+      "round": 6,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 15366218,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "candidate",
+      "round": 7,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 21974919,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "baseline",
+      "round": 7,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 23225839,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "baseline",
+      "round": 8,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 15841099,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 1,
+      "revision": "candidate",
+      "round": 8,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 123950289,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "baseline",
+      "round": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 68313718,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "candidate",
+      "round": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 70134717,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "candidate",
+      "round": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 162418651,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "baseline",
+      "round": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 157868416,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "baseline",
+      "round": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 78299534,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "candidate",
+      "round": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 98425960,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "candidate",
+      "round": 3,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 166758744,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "baseline",
+      "round": 3,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 154410823,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "baseline",
+      "round": 4,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 88446068,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "candidate",
+      "round": 4,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 89872658,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "candidate",
+      "round": 5,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 159266426,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "baseline",
+      "round": 5,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 157266406,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "baseline",
+      "round": 6,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 85461587,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "candidate",
+      "round": 6,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 89933865,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "candidate",
+      "round": 7,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 152001998,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "baseline",
+      "round": 7,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 146986382,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "baseline",
+      "round": 8,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 81525060,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 16,
+      "revision": "candidate",
+      "round": 8,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 150686660,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "baseline",
+      "round": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 77809594,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "candidate",
+      "round": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 78926915,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "candidate",
+      "round": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 155495528,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "baseline",
+      "round": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 145214783,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "baseline",
+      "round": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 78841919,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "candidate",
+      "round": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 81694981,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "candidate",
+      "round": 3,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 135487701,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "baseline",
+      "round": 3,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 136259078,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "baseline",
+      "round": 4,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 72357383,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "candidate",
+      "round": 4,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 69473852,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "candidate",
+      "round": 5,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 135977036,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "baseline",
+      "round": 5,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 139585052,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "baseline",
+      "round": 6,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 73259767,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "candidate",
+      "round": 6,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 69661832,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "candidate",
+      "round": 7,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 138209826,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "baseline",
+      "round": 7,
+      "order": [
+        "candidate",
+        "baseline"
+      ]
+    },
+    {
+      "extract_ns": 143030426,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "baseline",
+      "round": 8,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    },
+    {
+      "extract_ns": 74044043,
+      "ledger_peak_bytes": 13216,
+      "released_bytes": 0,
+      "rounds": 2000,
+      "rows": 2048000,
+      "scope": "isolated retained push_node CPU; not full-query performance acceptance",
+      "width": 128,
+      "revision": "candidate",
+      "round": 8,
+      "order": [
+        "baseline",
+        "candidate"
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "width": 1,
+      "paired_median_speedup": 1.4626146637877029,
+      "paired_mad": 0.0484054668168683,
+      "min_speedup": 1.3332523947510129,
+      "max_speedup": 1.5341950655621157
+    },
+    {
+      "width": 16,
+      "paired_median_speedup": 1.802959507174849,
+      "paired_mad": 0.05714054097727872,
+      "min_speedup": 1.6901530697029423,
+      "max_speedup": 2.3158096011138105
+    },
+    {
+      "width": 128,
+      "paired_median_speedup": 1.9316938973740265,
+      "paired_mad": 0.03842653619416758,
+      "min_speedup": 1.658458075900648,
+      "max_speedup": 1.9840107851312323
+    }
+  ],
+  "binary_sha256": {
+    "baseline": "70c95a2c3f09442525c232cbb8a054417221ab9050ec8aa9dca0a75e32836ea1",
+    "candidate": "320d7d8f256d6845571bb4fc5b4a87d1309b323e944623ec076b8208b9b91007"
+  },
+  "scope": "isolated integer retained push_node CPU with repeated immutable node, ARM64 release, alternating paired processes; excludes query planning, storage I/O, seal/selection, cursor, foreign handoff, null/float latency and full-query acceptance",
+  "baseline_head": "dd817f573bef1b4299043de97224a5db4f2566b4",
+  "candidate_source_sha256": {
+    "crates/executor/src/numeric/lending.rs": "8a219dcdd9f3a2a23b20ec3cb98f0b025d093fe5182f3dab89528042c41c3adb",
+    "crates/executor/src/numeric/retained.rs": "215180d4c12e581e31d0e5fed2a9be9f0710413f10ce05aec29e05680eafc8e4"
+  },
+  "harness_source": "use hawdb_core::{PropertyType, Value};\nuse hawdb_executor::{numeric::{NumericFragment, retained::{RetainedNumericBuilder, RetainedNumericValues}}, NumericLiteral, NumericPredicate, QueryMemoryClass, QueryMemoryLedger};\nuse hawdb_qos::{IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeResourceSnapshot, RuntimeWorkRequest};\nuse hawdb_storage::{NodeId, NodeRecord};\nuse std::{collections::{BTreeMap, BTreeSet}, hint::black_box, num::NonZeroUsize, time::Instant};\nfn nz(n: usize) -> NonZeroUsize { NonZeroUsize::new(n).unwrap() }\nfn main() {\n let args: Vec<_> = std::env::args().collect();\n let width: usize = args[1].parse().unwrap();\n let rounds: usize = args[2].parse().unwrap();\n let property = format!(\"property-{:04}\", width / 2);\n let node = NodeRecord { id: NodeId(1), labels: BTreeSet::new(), properties: (0..width).map(|i| (format!(\"property-{i:04}\"), Value::Int(i as i64))).collect::<BTreeMap<_,_>>() };\n let fragment = NumericFragment { label: \"Item\", property: &property, property_type: PropertyType::Int, predicate: NumericPredicate::Eq, expected: NumericLiteral::Int((width/2) as i64), fused_operators: None };\n let governor = RuntimeGovernor::new(RuntimeGovernorConfig::shared_host(), RuntimeResourceSnapshot::detect(), IoConcurrencyBudget::new(2,1));\n let permit = governor.try_admit(RuntimeWorkRequest::foreground_query(0,65536)).unwrap();\n let ledger = QueryMemoryLedger::new(nz(65536));\n let account = ledger.account(QueryMemoryClass::ResultMaterialization,\"probe\",nz(65536));\n let mut elapsed = 0u128;\n let mut peak = 0;\n for _ in 0..rounds {\n  let mut builder = RetainedNumericBuilder::new(fragment,nz(1024),false,account.clone(),&permit).unwrap();\n  let start = Instant::now();\n  for _ in 0..1024 { builder.push_node(black_box(&node)).unwrap(); }\n  elapsed += start.elapsed().as_nanos();\n  let batch = builder.seal(None).unwrap();\n  assert_eq!(batch.selected_rows().0.len(),1024);\n  match batch.values().0 { RetainedNumericValues::Int(values) => assert!(values.iter().all(|v| *v==(width/2) as i64)), _ => panic!(\"unexpected type\") };\n  peak = peak.max(ledger.snapshot().peak_bytes);\n  black_box(&batch);\n }\n assert_eq!(ledger.snapshot().used_bytes,0);\n assert_eq!(governor.retained_result_snapshot().retained_bytes,0);\n println!(\"{}\",serde_json::json!({\"width\":width,\"rounds\":rounds,\"rows\":rounds*1024,\"extract_ns\":elapsed,\"ledger_peak_bytes\":peak,\"released_bytes\":ledger.snapshot().used_bytes,\"scope\":\"isolated retained push_node CPU; not full-query performance acceptance\"}));\n}\n",
+  "harness_manifest": "[package]\nname = \"retained-lookup-probe\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[workspace]\n[dependencies]\nhawdb-core = { path = \"../pr-986-result-accounting-source/crates/core\" }\nhawdb-executor = { path = \"../pr-986-result-accounting-source/crates/executor\" }\nhawdb-qos = { path = \"../pr-986-result-accounting-source/crates/qos\" }\nhawdb-storage = { path = \"../pr-986-result-accounting-source/crates/storage\" }\nserde_json = \"1\"\n",
+  "harness_lock_sha256": "0a5bdf67b76b9f8f0b8f07f29d389648ed9f8e941028fbb5a2adac6d7fe6ac1a",
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "platform": "Darwin arm64",
+  "limitations": [
+    "A separate Bazel rustc process competed for CPU during observation; no clean-machine latency qualification.",
+    "Repeated reads of one immutable node isolate property lookup; this is not a source-residency, full-query or Arrow benchmark.",
+    "Only integer extraction timing is measured. Null/float/corruption semantics rely on targeted CI regressions, which are not yet current-head green.",
+    "No strict storage-source reuse, SIMD, graph/FTS or comprehensive-performance claim."
+  ],
+  "baseline_source_sha256": {
+    "crates/executor/src/numeric/lending.rs": "5df66e7c7ce25d279732d23609094b191a0d3818e2e709f9ef6f964c0bab2fa0",
+    "crates/executor/src/numeric/retained.rs": "8c81900ab6f9d8687e6539e1b5dca1c08cae5a7379d682f2fc7df32bc283eedb"
+  }
+}

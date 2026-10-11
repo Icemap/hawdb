@@ -125,7 +125,15 @@ impl NumericValueBuffer {
         fragment: NumericFragment<'_>,
         node: &NodeRecord,
     ) -> Result<bool> {
-        match (self, node.properties.get(fragment.property)) {
+        self.push_value(fragment, node.properties.get(fragment.property))
+    }
+
+    pub(super) fn push_value(
+        &mut self,
+        fragment: NumericFragment<'_>,
+        value: Option<&Value>,
+    ) -> Result<bool> {
+        match (self, value) {
             (Self::Int(values), Some(Value::Int(value))) => {
                 values.push(*value);
                 Ok(true)
