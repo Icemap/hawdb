@@ -107,6 +107,25 @@ impl<'a> DocumentLookup<'a> {
 }
 
 impl LexicalProjectionReader {
+    /// Conservative capacity for one mapping block and transient decoded IDs.
+    /// Probes run sequentially, so a caller can retain this admission across them.
+    pub(crate) fn document_id_probe_memory_bytes(&self) -> Result<usize> {
+        let largest = self
+            .manifest
+            .blocks
+            .iter()
+            .filter(|block| block.kind == BlockKind::Documents)
+            .map(|block| block.length)
+            .max()
+            .unwrap_or(0);
+        let bytes = usize::try_from(largest)
+            .map_err(|_| HawDBError::Execution("document ID probe exceeds address space".into()))?;
+        bytes
+            .checked_mul(8)
+            .and_then(|bytes| bytes.checked_add(4 * std::mem::size_of::<String>()))
+            .ok_or_else(|| HawDBError::Execution("document ID probe capacity overflow".into()))
+    }
+
     /// Probes one document ID through its bounded, file-backed mapping block.
     ///
     /// The manifest keeps document blocks ordered by their ID bounds, so a
