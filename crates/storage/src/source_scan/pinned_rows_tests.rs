@@ -20,6 +20,7 @@ use hawdb_qos::{
     RuntimeMemorySnapshot, RuntimeResourceBudget, RuntimeResourceSnapshot,
 };
 use std::num::NonZeroUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 fn scheduler() -> LocalQosScheduler {
@@ -31,9 +32,13 @@ fn scheduler() -> LocalQosScheduler {
 }
 
 fn governor() -> RuntimeGovernor {
+    governor_with_memory(4 * 1024 * 1024)
+}
+
+fn governor_with_memory(bytes: u64) -> RuntimeGovernor {
     let governor = RuntimeGovernor::new(
         RuntimeGovernorConfig {
-            memory_budget_bytes: Some(4 * 1024 * 1024),
+            memory_budget_bytes: Some(bytes),
             ..RuntimeGovernorConfig::shared_host()
         },
         RuntimeResourceSnapshot::from_parts(
@@ -654,4 +659,215 @@ fn source_payload_preparation_keeps_completed_rows_across_fixed_work_denials() {
         &*expected
     );
     assert!(preparation.segments[0].text.is_none());
+}
+
+fn incompressible_nodes(count: u64, width: usize) -> CowSegmentedMap<NodeId, NodeRecord> {
+    const ALPHABET: &[u8; 64] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+    let mut random = 0x9e37_79b9_7f4a_7c15u64;
+    let mut nodes = CowSegmentedMap::default();
+    for id in 0..count {
+        let payload = (0..width)
+            .map(|_| {
+                random ^= random << 13;
+                random ^= random >> 7;
+                random ^= random << 17;
+                char::from(ALPHABET[(random & 63) as usize])
+            })
+            .collect::<String>();
+        nodes.insert(NodeId(id), node(id, Value::String(payload)));
+    }
+    nodes
+}
+
+#[test]
+fn source_publication_streams_more_compressed_bytes_than_its_live_memory_budget() {
+    let nodes = incompressible_nodes(8192, 2048);
+    let mut projection = build_with_pinned_nodes(
+        8192,
+        Some(LabelId(7)),
+        &nodes,
+        &CheckpointWorkContext::default(),
+    )
+    .unwrap();
+    let directory = std::env::temp_dir().join(format!(
+        "hawdb-source-stream-memory-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    fs::create_dir(&directory).unwrap();
+    let resources = governor_with_memory(8 * 1024 * 1024);
+    let admission = resources
+        .try_admit_incremental_maintenance(0, 8 * 1024 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let work = CheckpointWorkContext::new(admission.task_context().unwrap().clone())
+        .with_scheduler(scheduler());
+    let mut preparation = SourceScanWritePreparation::new(&work);
+    let publication =
+        write_with_preparation(&directory, &mut projection, &mut preparation, &work).unwrap();
+    let payload_length = fs::metadata(directory.join(SOURCE_SCAN_PAYLOAD_FILE))
+        .unwrap()
+        .len();
+    assert!(payload_length > 8 * 1024 * 1024, "{payload_length}");
+    assert!(admission.memory_report().peak_accounted_bytes <= 8 * 1024 * 1024);
+    assert!(preparation
+        .segments
+        .iter()
+        .all(|segment| segment.payload.is_none()));
+    assert!(preparation
+        .segments
+        .iter()
+        .all(|segment| segment.text.is_none()));
+    let manifest = load(&directory, 8192, publication.descriptor_checksum())
+        .unwrap()
+        .unwrap();
+    assert_eq!(manifest.segments().len(), 64);
+    drop(manifest);
+    drop(preparation);
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+
+    // The same fixture cannot retain all compressed segments under this cap.
+    // This is the former preparation strategy, using the same encoder.
+    let mut buffered = SourceScanWritePreparation::new(&work);
+    let error = work
+        .classify(|work| buffered.prepare(&projection, work))
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        crate::background::CheckpointOperationError::Work(
+            crate::background::CheckpointWorkError::Memory(_)
+        )
+    ));
+    drop(buffered);
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+    drop(work);
+    drop(admission);
+    assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn source_publication_keeps_written_prefix_across_repeated_io_denial() {
+    let nodes = incompressible_nodes(512, 128);
+    let projection = build_with_pinned_nodes(
+        512,
+        Some(LabelId(7)),
+        &nodes,
+        &CheckpointWorkContext::default(),
+    )
+    .unwrap();
+    let directory = std::env::temp_dir().join(format!(
+        "hawdb-source-stream-resume-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let reference = directory.join("reference");
+    let resumed = directory.join("resumed");
+    fs::create_dir_all(&reference).unwrap();
+    fs::create_dir(&resumed).unwrap();
+    let expected = write(&reference, &mut projection.clone()).unwrap();
+    let mut projection = projection;
+    let local = scheduler();
+    let mut preparation = SourceScanWritePreparation::new(&CheckpointWorkContext::default());
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe.cancel_on_io_wave.store(3, Ordering::SeqCst);
+    let work = probe.context(local.clone());
+    assert!(write_with_preparation(&resumed, &mut projection, &mut preparation, &work).is_err());
+    probe.assert_released(&local);
+    let temporary = resumed
+        .join(SOURCE_SCAN_PAYLOAD_FILE)
+        .with_extension("hawdb.tmp");
+    let prefix = fs::read(&temporary).unwrap();
+    assert!(!prefix.is_empty());
+    assert!(preparation.segments[0].payload.is_none());
+    assert!(preparation.segments[1].payload.is_some());
+    drop(work);
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe.cancel_on_io_wave.store(1, Ordering::SeqCst);
+    let work = probe.context(local.clone());
+    assert!(write_with_preparation(&resumed, &mut projection, &mut preparation, &work).is_err());
+    probe.assert_released(&local);
+    assert_eq!(fs::read(&temporary).unwrap(), prefix);
+    drop(work);
+    let completed = write_with_preparation(
+        &resumed,
+        &mut projection,
+        &mut preparation,
+        &CheckpointWorkContext::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        completed.descriptor_checksum(),
+        expected.descriptor_checksum()
+    );
+    for file in [SOURCE_SCAN_PAYLOAD_FILE, SOURCE_SCAN_DESCRIPTOR_FILE] {
+        assert_eq!(
+            fs::read(resumed.join(file)).unwrap(),
+            fs::read(reference.join(file)).unwrap()
+        );
+    }
+    assert!(!temporary.exists());
+    // Losing a successful response does not re-create or overwrite files.
+    assert_eq!(
+        write_with_preparation(
+            &resumed,
+            &mut projection,
+            &mut preparation,
+            &CheckpointWorkContext::default()
+        )
+        .unwrap()
+        .descriptor_checksum(),
+        completed.descriptor_checksum()
+    );
+    drop(preparation);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn source_publication_rejects_insufficient_native_compression_memory() {
+    // Preserve the original 4 MiB / 4096-row fixture. Zstd's minimum live
+    // workspace is itself subject to admission; streaming cannot waive it.
+    let nodes = incompressible_nodes(4096, 2048);
+    let mut projection = build_with_pinned_nodes(
+        4096,
+        Some(LabelId(7)),
+        &nodes,
+        &CheckpointWorkContext::default(),
+    )
+    .unwrap();
+    let directory = std::env::temp_dir().join(format!(
+        "hawdb-source-native-memory-denial-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    fs::create_dir(&directory).unwrap();
+    let resources = governor();
+    let admission = resources
+        .try_admit_incremental_maintenance(0, 4 * 1024 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let work = CheckpointWorkContext::new(admission.task_context().unwrap().clone())
+        .with_scheduler(scheduler());
+    let mut preparation = SourceScanWritePreparation::new(&work);
+    let error = work
+        .classify(|work| {
+            write_with_preparation(&directory, &mut projection, &mut preparation, work)
+        })
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            crate::background::CheckpointOperationError::Work(
+                crate::background::CheckpointWorkError::Memory(_)
+            )
+        ),
+        "{error:?}"
+    );
+    assert!(admission.memory_report().peak_accounted_bytes <= 4 * 1024 * 1024);
+    assert!(!directory.join(SOURCE_SCAN_DESCRIPTOR_FILE).exists());
+    drop(preparation);
+    assert_eq!(admission.memory_report().live_accounted_bytes, 0);
+    assert!(!directory
+        .join(SOURCE_SCAN_PAYLOAD_FILE)
+        .with_extension("hawdb.tmp")
+        .exists());
+    drop(work);
+    drop(admission);
+    assert_eq!(resources.snapshot().admitted_memory_bytes, 0);
+    fs::remove_dir_all(directory).unwrap();
 }

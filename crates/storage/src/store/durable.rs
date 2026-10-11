@@ -652,10 +652,23 @@ impl DurableStore {
         // Interrupted candidates are evidence, not reusable WAL names. Bound
         // discovery per attempt; maintenance must resolve a larger backlog.
         for _ in 0..256 {
-            let preparation_exists = fs::try_exists(
-                self.root_path
-                    .join(format!(".checkpoint.{generation}.prepare")),
-            )?;
+            let preparation_path = self
+                .root_path
+                .join(format!(".checkpoint.{generation}.prepare"));
+            let preparation_exists = match fs::symlink_metadata(&preparation_path) {
+                Ok(metadata) if metadata.is_dir() => true,
+                Ok(_) => {
+                    // Only a directory can be an owned preparation. An
+                    // unexpected file or link is an operational obstruction,
+                    // not another candidate to silently allocate around.
+                    return Err(HawDBError::Storage(format!(
+                        "checkpoint preparation namespace is not a directory: {}",
+                        preparation_path.display()
+                    )));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+                Err(error) => return Err(error.into()),
+            };
             let wal_exists = match branch_directory {
                 Some(directory) => fs::try_exists(
                     directory.join(crate::artifact_files::wal_generation_file(generation)),

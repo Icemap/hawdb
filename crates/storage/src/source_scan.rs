@@ -53,6 +53,7 @@ const UNIQUE_KEY_FIELDS: &[&str] = &["id"];
 
 mod owned;
 mod summary;
+mod write_progress;
 
 #[derive(Debug, Clone)]
 pub struct SourceScanProjection {
@@ -480,6 +481,7 @@ struct SegmentEncoding {
 pub(crate) struct SourceScanWritePreparation {
     segments: Vec<SegmentEncoding>,
     memory: crate::background::CheckpointDecodeContext,
+    publication: Option<write_progress::Progress>,
 }
 
 impl std::fmt::Debug for SourceScanWritePreparation {
@@ -495,6 +497,7 @@ impl SourceScanWritePreparation {
         Self {
             segments: Vec::new(),
             memory: owned::context(work),
+            publication: None,
         }
     }
 
@@ -517,66 +520,78 @@ impl SourceScanWritePreparation {
         Ok(())
     }
 
+    #[cfg(test)]
     fn prepare(
         &mut self,
         projection: &SourceScanProjection,
         work: &CheckpointWorkContext,
     ) -> Result<()> {
+        for index in 0..projection.segments.len() {
+            self.prepare_segment(projection, index, work)?;
+        }
+        Ok(())
+    }
+
+    fn prepare_segment(
+        &mut self,
+        projection: &SourceScanProjection,
+        index: usize,
+        work: &CheckpointWorkContext,
+    ) -> Result<()> {
         self.memory.work = work.clone();
-        for (index, segment) in projection.segments.iter().enumerate() {
-            if self.segments.len() == index {
-                self.memory
-                    .push(&mut self.segments, SegmentEncoding::default())?;
-            }
-            let state = &mut self.segments[index];
-            if state.payload.is_some() {
-                continue;
-            }
-            if state.text.is_none() {
-                let mut text = CheckpointText::new();
-                text.append(SOURCE_SCAN_SEGMENT_HEADER, work)?;
-                text.append("\n", work)?;
-                state.text = Some(text);
-            }
-            if !state.complete_text {
-                if let Some((first, last, label)) = segment.pinned_bounds {
-                    let nodes = projection.source_nodes.as_ref().ok_or_else(|| {
-                        HawDBError::StorageIntegrity(
-                            "source scan segment lost its pinned records".into(),
-                        )
-                    })?;
-                    let start = state
-                        .last_node
-                        .map_or(Some(first), |id| id.0.checked_add(1).map(NodeId));
-                    if let Some(start) = start.filter(|start| *start <= last) {
-                        for (_, node) in nodes.range(&start, &last) {
-                            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-                            let selected = node.labels.contains(&label);
-                            unit.finish();
-                            if selected {
-                                Self::encode_row(state, node.id.0, &node.properties, work)?;
-                            }
-                            state.last_node = Some(node.id);
-                        }
-                    }
-                } else {
-                    for row in segment.rows.iter().skip(state.row_index) {
+        let segment = &projection.segments[index];
+        if self.segments.len() == index {
+            self.memory
+                .push(&mut self.segments, SegmentEncoding::default())?;
+        }
+        let state = &mut self.segments[index];
+        if state.payload.is_some() {
+            return Ok(());
+        }
+        if state.text.is_none() {
+            let mut text = CheckpointText::new();
+            text.append(SOURCE_SCAN_SEGMENT_HEADER, work)?;
+            text.append("\n", work)?;
+            state.text = Some(text);
+        }
+        if !state.complete_text {
+            if let Some((first, last, label)) = segment.pinned_bounds {
+                let nodes = projection.source_nodes.as_ref().ok_or_else(|| {
+                    HawDBError::StorageIntegrity(
+                        "source scan segment lost its pinned records".into(),
+                    )
+                })?;
+                let start = state
+                    .last_node
+                    .map_or(Some(first), |id| id.0.checked_add(1).map(NodeId));
+                if let Some(start) = start.filter(|start| *start <= last) {
+                    for (_, node) in nodes.range(&start, &last) {
                         let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                        let selected = node.labels.contains(&label);
                         unit.finish();
-                        Self::encode_row(state, row.node_id, &row.properties, work)?;
-                        state.row_index += 1;
+                        if selected {
+                            Self::encode_row(state, node.id.0, &node.properties, work)?;
+                        }
+                        state.last_node = Some(node.id);
                     }
                 }
-                state.complete_text = true;
+            } else {
+                for row in segment.rows.iter().skip(state.row_index) {
+                    let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                    unit.finish();
+                    Self::encode_row(state, row.node_id, &row.properties, work)?;
+                    state.row_index += 1;
+                }
             }
-            let text = state.text.as_ref().expect("segment text exists");
-            state.payload = Some(encode_owned_durable_text_with_work_context(
-                text,
-                DurableCompression::default(),
-                work,
-            )?);
-            state.text = None;
+            state.complete_text = true;
         }
+        let text = state.text.as_ref().expect("segment text exists");
+        state.payload = Some(encode_owned_durable_text_with_work_context(
+            text,
+            DurableCompression::default(),
+            work,
+        )?);
+        state.text = None;
         Ok(())
     }
 }
@@ -587,104 +602,7 @@ pub(crate) fn write_with_preparation(
     preparation: &mut SourceScanWritePreparation,
     work: &CheckpointWorkContext,
 ) -> Result<SourceScanPublication> {
-    preparation.prepare(projection, work)?;
-    let payload_path = path.join(SOURCE_SCAN_PAYLOAD_FILE);
-    let payload_tmp_path = payload_path.with_extension("hawdb.tmp");
-    let mut payload_temporary = TemporarySourceScanPath(None);
-    let mut offset = 0u64;
-    {
-        let mut file = {
-            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-            let _wave = work.io_wave().map_err(HawDBError::from_storage_error)?;
-            let file = File::create(&payload_tmp_path)?;
-            payload_temporary.0 = Some(payload_tmp_path.clone());
-            unit.finish();
-            file
-        };
-        for (index, segment) in projection.segments.make_mut(work)?.iter_mut().enumerate() {
-            let payload = preparation.segments[index]
-                .payload
-                .as_ref()
-                .expect("prepared source payload");
-            let length = u64::try_from(payload.len()).map_err(|_| {
-                HawDBError::Storage(format!(
-                    "source scan segment {} payload exceeds supported range length",
-                    segment.summary.segment_id
-                ))
-            })?;
-            segment.payload_range = Some(SegmentPayloadRange {
-                artifact_id: SOURCE_SCAN_ARTIFACT_ID,
-                offset,
-                length: NonZeroU64::new(length).ok_or_else(|| {
-                    HawDBError::Storage("source scan segment payload is empty".to_string())
-                })?,
-                checksum: work
-                    .checksum(payload)
-                    .map_err(HawDBError::from_storage_error)?,
-            });
-            for block in payload.chunks(64 * 1024) {
-                let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-                let _wave = work.io_wave().map_err(HawDBError::from_storage_error)?;
-                file.write_all(block)?;
-                unit.finish();
-            }
-            offset = offset.checked_add(length).ok_or_else(|| {
-                HawDBError::Storage("source scan payload artifact length overflow".to_string())
-            })?;
-        }
-        let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-        let _wave = work.io_wave().map_err(HawDBError::from_storage_error)?;
-        file.sync_all()?;
-        unit.finish();
-    }
-    {
-        let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-        let _wave = work.io_wave().map_err(HawDBError::from_storage_error)?;
-        durable_replace_file(&payload_tmp_path, &payload_path)?;
-        payload_temporary.0 = None;
-        unit.finish();
-    }
-
-    let descriptor_path = path.join(SOURCE_SCAN_DESCRIPTOR_FILE);
-    let descriptor_tmp_path = descriptor_path.with_extension("hawdb.tmp");
-    let mut descriptor_temporary = TemporarySourceScanPath(None);
-    let mut body = encode_descriptor_with_work_context(projection, work)?;
-    let descriptor_checksum = work
-        .checksum(body.as_bytes())
-        .map_err(HawDBError::from_storage_error)?;
-    body.fields(format_args!("checksum\t{descriptor_checksum}\n"), work)?;
-    {
-        let mut file = {
-            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-            let _wave = work.io_wave().map_err(HawDBError::from_storage_error)?;
-            let file = File::create(&descriptor_tmp_path)?;
-            descriptor_temporary.0 = Some(descriptor_tmp_path.clone());
-            unit.finish();
-            file
-        };
-        for block in body.as_bytes().chunks(64 * 1024) {
-            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-            let _wave = work.io_wave().map_err(HawDBError::from_storage_error)?;
-            file.write_all(block)?;
-            unit.finish();
-        }
-        let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-        let _wave = work.io_wave().map_err(HawDBError::from_storage_error)?;
-        file.sync_all()?;
-        unit.finish();
-    }
-    {
-        let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-        let _wave = work.io_wave().map_err(HawDBError::from_storage_error)?;
-        durable_replace_file(&descriptor_tmp_path, &descriptor_path)?;
-        descriptor_temporary.0 = None;
-        unit.finish();
-    }
-    work.checkpoint().map_err(HawDBError::from_storage_error)?;
-    Ok(SourceScanPublication {
-        graph_epoch: projection.graph_epoch,
-        descriptor_checksum,
-    })
+    write_progress::advance(path, projection, preparation, work)
 }
 
 pub fn load(
@@ -865,92 +783,109 @@ fn encode_descriptor(projection: &SourceScanProjection) -> Result<String> {
         .map(CheckpointText::into_unadmitted)
 }
 
+#[cfg(test)]
 fn encode_descriptor_with_work_context(
     projection: &SourceScanProjection,
     work: &CheckpointWorkContext,
 ) -> Result<CheckpointText> {
     let mut body = CheckpointText::new();
-    body.append(SOURCE_SCAN_DESCRIPTOR_HEADER, work)?;
-    body.fields(
-        format_args!("\ngraph_epoch\t{}\n", projection.graph_epoch),
-        work,
-    )?;
+    encode_descriptor_header(projection.graph_epoch, &mut body, work)?;
     for segment in projection.segments.iter() {
-        let range = segment.payload_range.ok_or_else(|| {
-            HawDBError::Storage("source scan segment has no payload range".to_string())
-        })?;
-        body.fields(
-            format_args!("segment\t{}", segment.summary.segment_id),
-            work,
-        )?;
-        for value in [
-            range.artifact_id,
-            range.offset,
-            range.length.get(),
-            range.checksum,
-            segment.summary.row_count,
-        ] {
-            body.fields(format_args!("\t{value}"), work)?;
-        }
-        body.append("\n", work)?;
-        for (field, summary) in &segment.summary.fields {
-            body.append("field\t", work)?;
-            body.hex(field, work)?;
-            for count in [
-                summary.present_count,
-                summary.null_count,
-                summary.missing_count,
-            ] {
-                body.fields(format_args!("\t{count}"), work)?;
-            }
-            for value in [
-                summary.numeric_min_max.map(|value| value.min.to_bits()),
-                summary.numeric_min_max.map(|value| value.max.to_bits()),
-            ] {
-                if let Some(value) = value {
-                    body.fields(format_args!("\t{value}"), work)?;
-                } else {
-                    body.append("\t", work)?;
-                }
-            }
-            for value in [
-                summary.datetime_min_max.map(|value| value.min_epoch_millis),
-                summary.datetime_min_max.map(|value| value.max_epoch_millis),
-            ] {
-                if let Some(value) = value {
-                    body.fields(format_args!("\t{value}"), work)?;
-                } else {
-                    body.append("\t", work)?;
-                }
-            }
-            body.append("\t", work)?;
-            if let Some(dictionary) = &summary.enum_dictionary {
-                for (index, value) in dictionary.values.iter().enumerate() {
-                    if index != 0 {
-                        body.append(":", work)?;
-                    }
-                    body.scan_scalar(value, 1, work)?;
-                }
-            }
-            body.append("\n", work)?;
-            for (value, row_ids) in &summary.exact_values {
-                body.append("exact\t", work)?;
-                body.hex(field, work)?;
-                body.append("\t", work)?;
-                body.scan_scalar(value, 1, work)?;
-                body.append("\t", work)?;
-                for (index, row_id) in row_ids.iter().enumerate() {
-                    if index != 0 {
-                        body.append(",", work)?;
-                    }
-                    body.fields(format_args!("{row_id}"), work)?;
-                }
-                body.append("\n", work)?;
-            }
-        }
+        encode_descriptor_segment(segment, &mut body, work)?;
     }
     work.checkpoint().map_err(HawDBError::from_storage_error)?;
     Ok(body)
+}
+
+fn encode_descriptor_header(
+    graph_epoch: u64,
+    body: &mut CheckpointText,
+    work: &CheckpointWorkContext,
+) -> Result<()> {
+    body.append(SOURCE_SCAN_DESCRIPTOR_HEADER, work)?;
+    body.fields(format_args!("\ngraph_epoch\t{}\n", graph_epoch), work)?;
+    Ok(())
+}
+
+fn encode_descriptor_segment(
+    segment: &SourceScanSegment,
+    body: &mut CheckpointText,
+    work: &CheckpointWorkContext,
+) -> Result<()> {
+    let range = segment.payload_range.ok_or_else(|| {
+        HawDBError::Storage("source scan segment has no payload range".to_string())
+    })?;
+    body.fields(
+        format_args!("segment\t{}", segment.summary.segment_id),
+        work,
+    )?;
+    for value in [
+        range.artifact_id,
+        range.offset,
+        range.length.get(),
+        range.checksum,
+        segment.summary.row_count,
+    ] {
+        body.fields(format_args!("\t{value}"), work)?;
+    }
+    body.append("\n", work)?;
+    for (field, summary) in &segment.summary.fields {
+        body.append("field\t", work)?;
+        body.hex(field, work)?;
+        for count in [
+            summary.present_count,
+            summary.null_count,
+            summary.missing_count,
+        ] {
+            body.fields(format_args!("\t{count}"), work)?;
+        }
+        for value in [
+            summary.numeric_min_max.map(|value| value.min.to_bits()),
+            summary.numeric_min_max.map(|value| value.max.to_bits()),
+        ] {
+            if let Some(value) = value {
+                body.fields(format_args!("\t{value}"), work)?;
+            } else {
+                body.append("\t", work)?;
+            }
+        }
+        for value in [
+            summary.datetime_min_max.map(|value| value.min_epoch_millis),
+            summary.datetime_min_max.map(|value| value.max_epoch_millis),
+        ] {
+            if let Some(value) = value {
+                body.fields(format_args!("\t{value}"), work)?;
+            } else {
+                body.append("\t", work)?;
+            }
+        }
+        body.append("\t", work)?;
+        if let Some(dictionary) = &summary.enum_dictionary {
+            for (index, value) in dictionary.values.iter().enumerate() {
+                if index != 0 {
+                    body.append(":", work)?;
+                }
+                body.scan_scalar(value, 1, work)?;
+            }
+        }
+        body.append("\n", work)?;
+        for (value, row_ids) in &summary.exact_values {
+            body.append("exact\t", work)?;
+            body.hex(field, work)?;
+            body.append("\t", work)?;
+            body.scan_scalar(value, 1, work)?;
+            body.append("\t", work)?;
+            for (index, row_id) in row_ids.iter().enumerate() {
+                if index != 0 {
+                    body.append(",", work)?;
+                }
+                body.fields(format_args!("{row_id}"), work)?;
+            }
+            body.append("\n", work)?;
+        }
+    }
+    work.checkpoint().map_err(HawDBError::from_storage_error)?;
+    Ok(())
 }
 
 fn decode_descriptor(text: &str, expected_checksum: u64) -> Result<SourceScanProjection> {

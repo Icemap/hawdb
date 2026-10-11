@@ -1426,6 +1426,10 @@ impl GraphStore {
                 plan.overflow = None;
                 plan.row = None;
                 plan.source_publication = None;
+                // The Source writer owns this staging generation's handles
+                // and published-file receipt. A terminal operation abandons
+                // those files; only safe work denial may retain its progress.
+                plan.source_write = None;
                 plan.adjacency = None;
                 plan.property_projection = None;
                 plan.canonical = None;

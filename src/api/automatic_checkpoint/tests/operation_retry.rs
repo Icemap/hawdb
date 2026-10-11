@@ -62,7 +62,8 @@ fn persistent_preparation_io_failure_stops_and_manual_checkpoint_rearms_the_owne
     )
     .unwrap();
     db.set_runtime_governor(governor.clone());
-    // A real filesystem operation fails before any selector or WAL mutation.
+    // A filesystem obstruction prevents preparation before any selector or WAL
+    // mutation. A regular file is not an owned candidate staging directory.
     let root = db
         .runtime
         .get()
