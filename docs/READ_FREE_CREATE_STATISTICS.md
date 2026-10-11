@@ -210,3 +210,49 @@ the separate preservation regression checks Arc identity and generation.
 First-call, hot-call, total and tail latency controls are required before
 admitting this production change. This remains a source-level argument, not a
 machine-checked whole-system proof or comprehensive performance acceptance.
+
+## Shared synchronous admission templates
+
+The synchronous embedded admitted path prepares against the runtime's existing
+template cache and optimizer-planning generation owner. Its execution read
+transaction shares those same two owners while pinning its own catalog/store
+view. Ordinary public read transactions and snapshot forks retain independent
+template caches. Admission and execution still parse, semantically bind, derive
+the full environment/key from their supplied view, and check output limits.
+This eliminates the repeated empty-cache optimization, not those validation
+steps or the execution-owned physical-plan binding.
+
+Let a cached entry be `(key, Arc(template, trace, slots))`. Cache lookup clones
+only the Arc handle. Binding clones the immutable template into a private
+physical plan and mutates only that private plan; reporting clones the trace.
+Eviction drops a cache handle and cannot invalidate a live lookup handle.
+Neither entry stores a borrowed caller parameter, store payload or read view.
+The full existing key, including schema, generation, parameter variants and
+snapshot-local point count/cost class, remains the reuse condition. Sharing a
+template therefore shares structure, not bound values or snapshot contents.
+
+The admission's prepared/bound plan is dropped while its planning permit is
+still live. The execution permit is acquired before the read transaction is
+created and remains live through parameter binding, streaming and collection.
+No owned prepared plan crosses an uncharged phase boundary, no extra execution
+slot is retained, and no result budget or durability policy is relaxed.
+Non-cacheable mutations still bind separately at execution. Read cache
+eligibility now rejects `CurrentTimestamp` recursively in pattern properties,
+predicates, scalar/CASE/list expressions, ordering, pagination and graph options.
+The AST checks are exhaustive over the corresponding variants; parameterized
+`timestamp($now)` and string literals containing a function name remain
+deterministic. Volatile reads therefore rebind at execution instead of storing
+a planning-time clock value. Persistent cache entries use the existing cache
+lifetime/entry-limit contract (default 128 entries); this is not a new byte cap
+or a whole-process memory proof.
+
+The `admitted_sync_` regressions cover a cold miss followed by an execution hit,
+parameter rebinding on both subsequent planning calls, disabled caches, missing
+parameters, shared-cache older snapshots, schema changes, the eight-to-nine
+index cost-class transition, volatile read bypass, cancellation, admission
+rejection and permit release. The volatile eligibility regression also covers
+nested expressions and deterministic timestamp parameters. The measured
+controls and remaining performance gates are recorded in
+[RUST_ORDINARY_RESULTS.md](../bindings/benchmarks/RUST_ORDINARY_RESULTS.md).
+This mechanism does not establish Arrow source-to-host zero copy or
+comprehensive performance qualification.

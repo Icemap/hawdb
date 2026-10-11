@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod determinism;
+
 use super::query_request::{BoundScoringRequest, ScoringPlanCacheKey};
 use super::{
     optimizer_config_from_database_config, statement_body, DatabaseConfig,
@@ -84,7 +86,7 @@ pub(super) struct CachedPlan {
     has_parameter_slots: bool,
 }
 
-pub(super) type PlanCache = LfuCache<PlanCacheKey, CachedPlan>;
+pub(super) type PlanCache = LfuCache<PlanCacheKey, Arc<CachedPlan>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(super) struct PlanCacheKey {
@@ -678,7 +680,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             if let Some(scoring) = context.scoring {
                 scoring.rebind(&mut physical_plan)?;
             }
-            let mut trace = cached.trace;
+            let mut trace = cached.trace.clone();
             trace.query_digest = Some(query_identity.query_digest().to_string());
             refresh_plan_trace(
                 &query_optimizer,
@@ -779,11 +781,11 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
         key.environment = catalog_access.environment.clone();
         context.cache.borrow_mut().insert(
             key,
-            CachedPlan {
+            Arc::new(CachedPlan {
                 physical_template,
                 trace: cached_trace,
                 has_parameter_slots,
-            },
+            }),
         );
         trace
             .decisions
@@ -1021,11 +1023,19 @@ pub(super) fn statement_uses_plan_cache(statement: &cypher::Statement) -> bool {
             // Eligibility is not a substitute for semantic binding validation.
             !query.clauses.is_empty()
                 && query.clauses.iter().all(|clause| match &clause.kind {
-                    cypher::ClauseKind::Match { .. }
-                    | cypher::ClauseKind::With(_)
-                    | cypher::ClauseKind::Return(_) => true,
+                    cypher::ClauseKind::Match {
+                        patterns,
+                        predicate,
+                        ..
+                    } => determinism::match_is_deterministic(patterns, predicate.as_ref()),
+                    cypher::ClauseKind::With(projection)
+                    | cypher::ClauseKind::Return(projection) => {
+                        determinism::projection_is_deterministic(projection)
+                    }
                     cypher::ClauseKind::Call { procedure, .. } => match &procedure.kind {
-                        cypher::ProcedureCallKind::GraphAlgorithm { .. } => true,
+                        cypher::ProcedureCallKind::GraphAlgorithm { options, .. } => {
+                            determinism::graph_options_are_deterministic(options)
+                        }
                         cypher::ProcedureCallKind::VectorSearch(_)
                         | cypher::ProcedureCallKind::TextSearch(_)
                         | cypher::ProcedureCallKind::GraphSeedSearch(_)
@@ -1039,7 +1049,9 @@ pub(super) fn statement_uses_plan_cache(statement: &cypher::Statement) -> bool {
                 })
         }
 
-        cypher::Statement::GraphAlgorithm(_) => true,
+        cypher::Statement::GraphAlgorithm(query) => {
+            determinism::graph_options_are_deterministic(&query.options)
+        }
         _ => false,
     }
 }
@@ -1049,6 +1061,34 @@ mod tests {
     use super::*;
     use crate::schema::SchemaObjectState;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn plan_cache_rejects_volatile_values_in_read_expressions() {
+        for query in [
+            "MATCH (n:Item) RETURN [CURRENT_TIMESTAMP()] AS values",
+            "MATCH (n:Item) RETURN CASE WHEN true THEN timestamp(CURRENT_TIMESTAMP()) ELSE 0 END AS now",
+            "MATCH (n:Item) RETURN coalesce(NULL, CASE WHEN true THEN CURRENT_TIMESTAMP() ELSE 0 END) AS now",
+            "MATCH (n:Item {id: CURRENT_TIMESTAMP()}) RETURN n.id",
+            "MATCH (n:Item) WHERE n.id = CURRENT_TIMESTAMP() RETURN n.id",
+            "MATCH (n:Item) WHERE n.id IN [CURRENT_TIMESTAMP()] RETURN n.id",
+            "MATCH (n:Item)-[:LINK {at: CURRENT_TIMESTAMP()}]->(m:Item) RETURN n.id",
+            "MATCH (n:Item) RETURN n.id AS id ORDER BY CASE WHEN true THEN CURRENT_TIMESTAMP() ELSE 0 END",
+            "MATCH (n:Item) WITH CASE WHEN true THEN CURRENT_TIMESTAMP() ELSE 0 END AS now RETURN now",
+            "MATCH (n:Item) RETURN n.id LIMIT CURRENT_TIMESTAMP()",
+            "CALL page_rank('g', maxIterations := CURRENT_TIMESTAMP()) RETURN node, rank",
+        ] {
+            let statement = cypher::parse(query).unwrap_or_else(|error| panic!("{query}: {error}"));
+            assert!(!statement_uses_plan_cache(&statement), "{query}");
+        }
+        for query in [
+            "MATCH (n:Item) RETURN CASE WHEN true THEN timestamp($now) ELSE 0 END AS now",
+            "MATCH (n:Item) RETURN 'CURRENT_TIMESTAMP()' AS value",
+            "MATCH (n:Item) WHERE n.id = timestamp($now) RETURN n.id",
+        ] {
+            let statement = cypher::parse(query).unwrap_or_else(|error| panic!("{query}: {error}"));
+            assert!(statement_uses_plan_cache(&statement), "{query}");
+        }
+    }
 
     #[test]
     fn point_statistics_borrow_plan_names_and_keep_owned_cache_identity() {

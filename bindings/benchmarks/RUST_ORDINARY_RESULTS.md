@@ -669,3 +669,129 @@ The earlier [b0ae19bd run](https://github.com/nowledge-co/hawdb/actions/runs/381
 is cancelled during baseline. Its preserved artifact contains 345 successful
 baseline records and no candidate report; raw results are checked but no paired
 comparison or performance qualification exists.
+
+
+## Shared admitted planning templates (2026-10-11)
+
+The [audited evidence package](evidence/shared_admission_template_controls_20261011.json) has SHA-256
+`b84f70d0a13c190681f7b2f4239fd47d5094182706198cd8ff462c70dd759518`. The before producer is `a58cdf715547734d012376ad0f0715bc5b9c0e0f`,
+tree `19d7da21050d93b67f39027bb0ae3e4e58563392`; the after producer is staged tree
+`08c9304b4b75865c25878c97a2a9824b9fd68d5b` on that head. Both default-opt native producers,
+their source archives, unchanged harnesses, consumer and drivers are frozen.
+The delivery adds this document and evidence only after timing and verifies
+that every measured Rust source and harness file remains unchanged.
+
+Synchronous admitted reads now share the runtime's template and optimizer
+planning caches between admission and execution. Entries use immutable Arc
+ownership, so lookup avoids copying a whole template before the execution-owned
+binding copy. Public read transactions retain their private caches. All key,
+snapshot, semantic-binding, result-budget and resource-permit checks remain.
+CurrentTimestamp-containing reads bypass templates recursively; parameterized
+timestamp values remain eligible. This is planning reuse on ordinary row APIs.
+It is not Arrow source-to-host zero copy or comprehensive performance acceptance.
+
+All 128 uninstrumented mixed-growth records succeed. Each group has one
+discarded iteration and seven alternating measured pairs; each hot/refreshed
+phase has 100 separately timed and value-verified calls after growth from four
+rows. Values below 1 in this table are unfavorable to the candidate. These are
+shared-host measurements; process snapshots preserve concurrent activity.
+
+| Rows | API | Parameters | First call | Total 100 calls | Hot median | p95 | p99 | Refreshed median |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1000 | raw | stable | 1.030x | 1.050x | 1.036x | 1.072x | 1.016x | 1.003x |
+| 1000 | raw | rotating | 1.047x | 0.936x | 0.994x | 0.858x | 1.060x | 1.061x |
+| 1000 | admitted | stable | 1.091x | 1.365x | 1.357x | 1.406x | 1.468x | 1.356x |
+| 1000 | admitted | rotating | 1.034x | 1.106x | 1.110x | 1.170x | 1.227x | 0.952x |
+| 10000 | raw | stable | 0.893x | 1.145x | 1.059x | 0.919x | 1.416x | 1.047x |
+| 10000 | raw | rotating | 1.080x | 1.201x | 1.011x | 2.126x | 1.864x | 0.972x |
+| 10000 | admitted | stable | 1.080x | 1.337x | 1.323x | 1.310x | 1.224x | 1.322x |
+| 10000 | admitted | rotating | 1.114x | 0.580x | 1.072x | 0.880x | 0.507x | 0.946x |
+
+Stable admitted hot medians improve, but rotating and raw controls still have
+unfavorable first, total, tail or refreshed observations. In particular the
+10,000-row admitted rotating total and p99 regress. No unfavorable sample is
+removed or treated as proven noise. The unchanged harness retains historical
+private-cache labels: candidate admitted counters now describe its shared
+runtime cache. Forced diagnostics remain untimed and do not reconstruct the
+hot-call plans. The package records that scope correction explicitly.
+
+All 48 instrumented allocation controls succeed, using equal-length binary,
+job and database paths and three alternating repetitions per workload. Counts
+and requested bytes describe the measured operation; the process peak includes
+setup. Instrumented timings are separate from ordinary latency.
+
+| Rows | Backend | Before calls | After calls | Fewer calls | Fewer requested bytes | Additional live bytes | Peak requested change |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1000 | memory | 1,946,001 | 1,397,001 | 549,000 | 93,228,000 | 9,153 | 0 |
+| 10000 | memory | 19,460,001 | 13,970,001 | 5,490,000 | 932,400,000 | 9,159 | 0 |
+| 1000 | file | 1,956,001 | 1,407,001 | 549,000 | 93,228,000 | 9,153 | 0 |
+| 10000 | file | 19,560,001 | 14,070,001 | 5,490,000 | 932,400,000 | 9,159 | 0 |
+
+Each admitted point query removes 549 native allocation calls. Requested
+traffic falls by 93,228 bytes/query at 1,000 rows and 93,240 at 10,000 rows;
+cache residency increases by 9,153/9,159 bytes respectively, both before and
+after the measured operation. Point process peak requested bytes are unchanged,
+as setup dominates. Scan, individual-write, bulk-write and wide-read traffic
+also falls in these controls, with additional completion cache residency.
+These counters exclude foreign heaps and allocator rounding; fewer requests
+are not a proof of lower peak/RSS or a byte-bounded cache. Default cache capacity
+remains 128 entries, without a new template-byte cap.
+
+The ordinary Rust matrix preserves all 320 records: five cases, memory/file,
+1,000/10,000 rows, one discarded plus seven alternating measured pairs. It uses
+ordinary row APIs, SyncOnEveryWrite and zero prefetch. Successful records verify
+checksums, output counts, absent allocation instrumentation and phase sums.
+The table reports paired baseline/candidate medians; values below 1 regress.
+
+| Rows | Case | Backend | Query boundary | Write boundary | Read boundary | Total elapsed |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1000 | select | memory | 0.933x | n/a | 0.933x | 0.929x |
+| 1000 | select | file | 1.100x | n/a | 1.100x | 1.095x |
+| 1000 | point | memory | 1.417x | n/a | 1.417x | 1.415x |
+| 1000 | point | file | 1.309x | n/a | 1.309x | 1.306x |
+| 1000 | fill | memory | 1.074x | 1.072x | 1.182x | 1.074x |
+| 1000 | fill | file | 1.022x | 1.022x | 1.029x | 1.022x |
+| 1000 | fill_bulk | memory | 0.999x | 0.977x | 1.140x | 1.001x |
+| 1000 | fill_bulk | file | 1.000x | 0.991x | 1.154x | 0.999x |
+| 1000 | wide | memory | 0.958x | n/a | 0.958x | 0.960x |
+| 1000 | wide | file | 1.103x | n/a | 1.103x | 1.114x |
+| 10000 | select | memory | 1.022x | n/a | 1.022x | 1.001x |
+| 10000 | select | file | 1.174x | n/a | 1.174x | 1.165x |
+| 10000 | point | memory | 1.392x | n/a | 1.392x | 1.390x |
+| 10000 | point | file | 1.298x | n/a | 1.298x | 1.298x |
+| 10000 | fill | memory | 1.037x | 1.014x | 1.266x | 1.037x |
+| 10000 | fill | file | 0.993x | 0.992x | 1.076x | 0.993x |
+| 10000 | fill_bulk | memory | 1.107x | 1.101x | 1.236x | 1.107x |
+| 10000 | fill_bulk | file | 1.011x | 0.992x | 1.539x | 1.010x |
+| 10000 | wide | memory | refused | refused | refused | refused |
+| 10000 | wide | file | refused | refused | refused | refused |
+
+Ordinary status counts: `{"error": 32, "ok": 288}`. The default
+10,000-row wide workload refuses during warmup because result_materialization
+needs 16,780,548 bytes against the unchanged 16,777,216-byte budget. All 32
+refusals and raw errors remain in the package; the full matrix is not successful.
+No result limit is raised to make the controls pass. The independent audits
+verify ordering/counts, raw native fields/hashes, fixtures/checksums, phase sums,
+profiles, RSS extraction, percentile and paired summary math, source archives,
+producer/consumer/harness identities and terminal/refusal state.
+
+On final measured Rust source, default Bazel general/fuzz verification passes
+97/97 targets (14 executed/83 cached). Root general has 1,608 passed and one
+ignored. Focused admitted_sync_ tests pass seven cases; volatile-cache
+eligibility passes one test covering 11 volatile and three deterministic forms.
+Pinned-toolchain format, strict workspace/all-target/all-feature Clippy,
+minimal-WASM Clippy and prek pass. Before committing documentation/evidence,
+format and strict native checks are repeated on the delivery tree.
+
+The predecessor a58cdf71 automatic platform/binding checks all pass, including
+installed-wheel tests (159 passed/7 skipped), pydantic (43 passed/1 skipped)
+and PyArrow interoperability (eight passed). Those tests do not qualify new
+source. Current delivery CI must be inspected separately. The older 71e2b538
+[manual Linux comparison](https://github.com/nowledge-co/hawdb/actions/runs/38114750497)
+cannot qualify this refinement either. It is allowed to finish without a
+duplicate dispatch that would cancel it.
+
+The comprehensive gate remains open: unfavorable read/write/tail controls,
+larger-size and current-head cross-language/platform verification, template-byte
+budgets, foreign heaps and whole-operation memory remain unqualified. This
+refinement does not establish Arrow source reuse, graph/FTS or SIMD completion.
