@@ -244,16 +244,21 @@ impl GraphStore {
         let Some(reader) = self.canonical_base.as_ref() else {
             return Ok(None);
         };
-        let Some(bytes) = reader
-            .projected_node_allocation_bytes(id, required_properties)
-            .map_err(canonical_segment_error)?
-        else {
-            return Ok(None);
-        };
-        admit(bytes)?;
-        reader
-            .get_projected_node(id, required_properties)
-            .map_err(canonical_segment_error)
+        let mut admission_error = None;
+        let result = reader.with_node_input(id, |input| {
+            input
+                .decode_selected(required_properties, |bytes| {
+                    admit(bytes).map_err(|error| {
+                        admission_error = Some(error);
+                        CanonicalSegmentError::Source("graph read admission refused".into())
+                    })
+                })
+                .map(|(node, ())| node)
+        });
+        if let Some(error) = admission_error {
+            return Err(error);
+        }
+        result.map_err(canonical_segment_error)
     }
 
     pub fn relationship_owned(&self, id: RelId) -> Result<Option<RelRecord>> {

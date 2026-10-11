@@ -1819,12 +1819,37 @@ impl CanonicalSegmentReader {
         })
     }
 
+    pub(crate) fn with_node_input<T>(
+        &self,
+        id: NodeId,
+        mut consume: impl FnMut(CanonicalNodeInput<'_>) -> Result<T, CanonicalSegmentError>,
+    ) -> Result<Option<T>, CanonicalSegmentError> {
+        self.with_point_record(CanonicalSegmentKind::Nodes, id.0, |payload| {
+            consume(CanonicalNodeInput {
+                id,
+                payload,
+                property_keys: self.property_keys(),
+                property_spills: self.property_spills.as_ref(),
+            })
+        })
+    }
+
     fn point_allocation_bytes(
         &self,
         kind: CanonicalSegmentKind,
         id: u64,
-        mut measure: impl FnMut(&[u8]) -> Result<Option<usize>, CanonicalSegmentError>,
+        measure: impl FnMut(&[u8]) -> Result<Option<usize>, CanonicalSegmentError>,
     ) -> Result<Option<usize>, CanonicalSegmentError> {
+        self.with_point_record(kind, id, measure)
+            .map(Option::flatten)
+    }
+
+    fn with_point_record<T>(
+        &self,
+        kind: CanonicalSegmentKind,
+        id: u64,
+        mut consume: impl FnMut(&[u8]) -> Result<T, CanonicalSegmentError>,
+    ) -> Result<Option<T>, CanonicalSegmentError> {
         self.ensure_healthy()?;
         let result = (|| {
             let (segment, _) = self.find_descriptor_for_id(kind, id)?;
@@ -1842,7 +1867,7 @@ impl CanonicalSegmentReader {
                         return Ok(CanonicalScanControl::Continue);
                     }
                     if record_id == id {
-                        found = measure(payload)?;
+                        found = Some(consume(payload)?);
                     }
                     Ok(CanonicalScanControl::Stop)
                 },
@@ -4529,6 +4554,37 @@ mod tests {
                 ("title".to_string(), Value::String("selected".to_string())),
             ])
         );
+        let properties = BTreeSet::from(["rank".to_string(), "title".to_string()]);
+        let mut admission_calls = 0;
+        let refused = reader.with_node_input(NodeId(7), |input| {
+            input.decode_selected(&properties, |bytes| {
+                admission_calls += 1;
+                assert_eq!(bytes, selected_bytes);
+                Err::<(), _>(CanonicalSegmentError::Source("budget refused".into()))
+            })
+        });
+        assert!(
+            matches!(refused, Err(CanonicalSegmentError::Source(reason)) if reason == "budget refused")
+        );
+        assert_eq!(admission_calls, 1);
+        assert!(!reader.is_poisoned());
+        let retried = reader
+            .with_node_input(NodeId(7), |input| {
+                input.decode_selected(&properties, |bytes| {
+                    assert_eq!(bytes, selected_bytes);
+                    Ok(())
+                })
+            })
+            .unwrap()
+            .unwrap()
+            .0;
+        assert_eq!(retried, projected);
+        assert!(reader
+            .with_node_input(NodeId(999), |_| -> Result<(), CanonicalSegmentError> {
+                panic!("missing records must not invoke admission")
+            })
+            .unwrap()
+            .is_none());
         remove_fixture(&path, manifest.generation);
     }
 

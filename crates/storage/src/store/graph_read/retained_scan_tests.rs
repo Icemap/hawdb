@@ -59,6 +59,97 @@ fn canonical_decoding_refuses_instead_of_returning_only_the_live_overlay() {
 }
 
 #[test]
+fn canonical_projected_point_admission_preserves_refusal_and_allows_retry() {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "hawdb-projected-point-admission-{}-{nonce}",
+        std::process::id()
+    ));
+    let config = WalReplayConfig {
+        residency_mode: StorageResidencyMode::OutOfCore,
+        ..WalReplayConfig::default()
+    };
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::open_with_durability_and_replay_config(
+        &path,
+        &mut catalog,
+        DurabilityPolicy::default(),
+        config,
+    )
+    .unwrap();
+    let id = store
+        .create_node(
+            &mut catalog,
+            "Item",
+            BTreeMap::from([
+                ("score".into(), Value::Int(9)),
+                ("content".into(), Value::String("x".repeat(128 * 1024))),
+            ]),
+        )
+        .unwrap();
+    store.checkpoint(&catalog).unwrap();
+    drop(store);
+    let store = GraphStore::open_with_durability_and_replay_config(
+        &path,
+        &mut catalog,
+        DurabilityPolicy::default(),
+        config,
+    )
+    .unwrap();
+    assert!(store.is_out_of_core());
+    assert!(!store.nodes.contains_key(&id));
+    assert_eq!(
+        store.storage_residency_report().segment_cache_pinned_bytes,
+        0
+    );
+    let properties = BTreeSet::from(["score".into()]);
+    let mut refused_bytes = None;
+    let error = store
+        .projected_node_owned_admitted(id, &properties, &mut |bytes| {
+            assert!(refused_bytes.replace(bytes).is_none());
+            assert!(store.storage_residency_report().segment_cache_pinned_bytes > 0);
+            Err(HawDBError::Execution("admission sentinel".into()))
+        })
+        .unwrap_err();
+    assert!(matches!(error, HawDBError::Execution(reason) if reason == "admission sentinel"));
+    assert!(refused_bytes.unwrap() < 4096);
+    assert_eq!(
+        store.storage_residency_report().segment_cache_pinned_bytes,
+        0
+    );
+    let mut retry_calls = 0;
+    let node = store
+        .projected_node_owned_admitted(id, &properties, &mut |bytes| {
+            retry_calls += 1;
+            assert_eq!(Some(bytes), refused_bytes);
+            Ok(())
+        })
+        .unwrap()
+        .unwrap();
+    assert_eq!(retry_calls, 1);
+    assert_eq!(
+        store.storage_residency_report().segment_cache_pinned_bytes,
+        0
+    );
+    assert_eq!(node.id, id);
+    assert_eq!(
+        node.properties,
+        BTreeMap::from([("score".into(), Value::Int(9))])
+    );
+    assert!(store
+        .projected_node_owned_admitted(NodeId(u64::MAX), &properties, &mut |_| {
+            panic!("missing nodes must not invoke admission")
+        })
+        .unwrap()
+        .is_none());
+    drop(store);
+    std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
 fn demanded_scan_resumes_borrowed_label_order_across_publication() {
     let mut store = GraphStore::default();
     let mut catalog = Catalog::default();
