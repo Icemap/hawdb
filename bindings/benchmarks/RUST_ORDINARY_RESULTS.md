@@ -454,3 +454,106 @@ All 320 expected records are present: 288 successes and the same 32 wide warmup 
 At 10,000 rows the point medians are 2.949x/2.540x and individual-CREATE write-phase medians are 53.229x/2.078x (memory/file). Both sizes have unfavorable scan medians, about 0.974x-0.983x. The 10,000-row memory bulk median is also unfavorable at 0.997x query-boundary and 0.999x write-boundary. These are complete shared-host controls against main, not isolated cache-change causality or comprehensive acceptance.
 
 [Complete ordinary index-class evidence](evidence/rust_ordinary_index_class_controls_20261011.json) includes every raw native outcome/hash, all paired ratios, fixture checks and consumer/driver snapshots, source/artifact guards and recomputed summaries. Original report SHA-256: `ffd7fdd4e9291bdb5bc3d8b70ef5b22ba4af8f5295a3826526757324585dde9b`. This control does not establish idle-host guarantees, larger sizes, cross-language neutrality, Arrow/source reuse or whole-operation memory bounds.
+
+
+## Linux index-class control at 94503681
+
+[The completed Linux run](https://github.com/nowledge-co/hawdb/actions/runs/38107881978)
+compares frozen ordinary Rust/Python/Go producers at candidate
+`94503681bca75f9a39cc72199525993fd3fe03b6`, before the subsequent bounded
+query-local point-statistics change. It retains all five cases, both backends,
+1,000 rows, one discarded iteration and seven measured iterations. All 480
+records and 30 groups succeed. Baseline-first ratios of medians are not
+alternating paired observations and do not establish change causality.
+
+| Case | Rust memory | Rust file | Python memory | Python file | Go memory | Go file |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| select | 0.991x | 1.033x | 1.047x | 1.105x | 1.041x | 1.039x |
+| point | 1.095x | 1.100x | 1.097x | 1.095x | 1.066x | 1.073x |
+| fill | 5.286x | 2.582x | 5.082x | 2.610x | 4.439x | 2.480x |
+| fill_bulk | 0.999x | 0.998x | 1.019x | 1.030x | 1.007x | 0.989x |
+| wide | 1.036x | 1.103x | 1.106x | 1.144x | 1.051x | 0.976x |
+
+These are query-boundary ratios; separate write-phase ratios, complete raw
+records and all unfavorable samples remain in the
+[complete evidence](evidence/linux_ordinary_index_class_controls_20261011.json).
+The package SHA-256 is
+`5a3cab91122fcdad3dfb4f5196a5f3005b443ec95d33920b3a15e6c2ab4ac570`.
+Its audit reconstructs every fixture, checks every native result, checksum,
+phase sum and RSS receipt, validates native artifact bytes and frozen Python
+wrapper/extension/manifest pairs, and recomputes every comparison summary.
+GitHub artifact transport does not preserve executable modes and symlink types;
+the local audit does not claim to reconstruct the complete transported runfiles
+identity. CI checked the original identity before and after the matrices.
+
+All five automatic correctness checks at 94503681 also succeed. This qualifies
+that revision's recorded small Linux control only. First-point behavior after
+mixed growth, large sizes, allocation/foreign-heap and whole-operation memory
+acceptance remain open. The run does not measure Arrow, retained delivery or the
+subsequent query-local statistics implementation. Go file wide, Go file bulk,
+Rust memory scan and Rust bulk have unfavorable ratios; they are not hidden or
+counted as comprehensive performance success.
+
+
+## Bounded query-local point statistics
+
+This control measures candidate source tree `4eb69e483e3a1dbdec127726746f20d47170d70d`, based on `94503681`, after replacing the full-statistics requirement for eligible simple indexed equality reads with a bounded snapshot-local candidate count. It preserves default opt, the memory backend, fixed query parameters, unchanged durability and 100 point calls after growth from four rows. Ordinary row APIs are used; no Arrow or retained delivery is timed.
+
+The three frozen producers are main `3cdb2610`, the previous immutable index-class-control producer and the query-local-statistics candidate. Previous-control production source is identical to `94503681`; its original binary is retained. All 96 records complete, with one discarded and seven measured rotating producer pairs for each API/size. All owned builds/checks finish before timing; this remains a shared macOS host. Ratios below one are unfavorable.
+
+| Rows | API | Candidate first-call median | previous / candidate first | previous / candidate total 100 | main / candidate total 100 | previous / candidate hot median |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 1000 | raw | 0.126375 ms | 2.806x | 1.073x | 1.315x | 0.992x |
+| 1000 | admitted | 0.182584 ms | 3.775x | 1.069x | 1.181x | 0.981x |
+| 10000 | raw | 0.148042 ms | 23.231x | 2.169x | 4.822x | 0.993x |
+| 10000 | admitted | 0.202875 ms | 27.672x | 1.954x | 3.159x | 0.973x |
+
+At 10,000 rows, first-point paired medians improve 23.231x raw and 27.672x admitted versus the previous producer; all 100 timed calls improve 2.169x/1.954x. Candidate first-call medians are 0.148042/0.202875 ms. The first call remains roughly constant between the two measured sizes, while the previous control paid a full-statistics refresh. These measurements do not prove asymptotic behavior for unmeasured sizes.
+
+| Rows | API | previous / candidate growth | previous / candidate hot p95 | previous / candidate hot p99 | previous / candidate post-refresh median |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 1000 | raw | 1.007x | 0.977x | 0.893x | 0.986x |
+| 1000 | admitted | 1.003x | 0.953x | 0.986x | 0.985x |
+| 10000 | raw | 1.012x | 0.923x | 1.199x | 0.986x |
+| 10000 | admitted | 1.003x | 0.944x | 0.916x | 0.978x |
+
+Hot medians versus the previous producer are about 0.8-2.8% unfavorable, and several p95/p99 comparisons are unfavorable. Every sample remains visible. Raw cache counters report 99 hits/one miss; admitted private-cache behavior is not inferred from raw Database diagnostics. Force-refresh diagnostics run after the hot timer and cannot reconstruct its plan. Growth stays close to the previous producer; main-to-candidate growth improvements include earlier CREATE work and are not isolated causality for this point change.
+
+[Complete mixed-growth evidence](evidence/mixed_point_local_statistics_controls_20261011.json) preserves each native result/raw stream, all 100 individual timings per phase, first/total/nearest-rank-tail calculations, RSS, source snapshots, frozen producer/consumer identities and before/after guards. Package SHA-256: `602aba2343b335dc9ed9c31b7bf0dfa726cf483b6e1c2dec6f1ede5e9d53e657`. Auditing verifies record sequence, parameter/default checks, native output and each derived summary.
+
+This control does not qualify file backends, other languages, dense/complex read distributions, source-to-host zero copy, larger sizes, foreign heap or whole-operation memory. The bounded probe visits at most nine borrowed candidates and publishes no shared advanced statistics, but ordinary execution/result ownership retains its existing behavior. Comprehensive performance acceptance remains open.
+
+## Ordinary Rust controls on query-local point statistics
+
+The default-opt ordinary control freezes the same candidate source tree `4eb69e483e3a1dbdec127726746f20d47170d70d` and main `3cdb2610` with the identical untimed adapter/harness. All five cases, both backends and 1,000/10,000 rows retain their fixtures, seeds, calls, budgets, `SyncOnEveryWrite` and zero prefetch. One iteration is discarded and seven alternating producer pairs are measured. Owned builds/checks finish before timing. No Arrow/retained API or allocation instrumentation is enabled.
+
+| Rows | Case | Backend | Query-boundary speedup | Write-phase speedup | Read-phase speedup |
+| ---: | --- | --- | ---: | ---: | ---: |
+| 1000 | `select` | memory | 0.923x | - | 0.923x |
+| 1000 | `select` | file | 0.999x | - | 0.999x |
+| 1000 | `point` | memory | 1.109x | - | 1.109x |
+| 1000 | `point` | file | 1.103x | - | 1.103x |
+| 1000 | `fill` | memory | 5.768x | 5.919x | 0.906x |
+| 1000 | `fill` | file | 0.987x | 0.987x | 0.934x |
+| 1000 | `fill_bulk` | memory | 0.991x | 0.982x | 1.006x |
+| 1000 | `fill_bulk` | file | 1.041x | 0.976x | 0.967x |
+| 1000 | `wide` | memory | 1.026x | - | 1.026x |
+| 1000 | `wide` | file | 0.996x | - | 0.996x |
+| 10000 | `select` | memory | 0.999x | - | 0.999x |
+| 10000 | `select` | file | 1.012x | - | 1.012x |
+| 10000 | `point` | memory | 2.512x | - | 2.512x |
+| 10000 | `point` | file | 2.482x | - | 2.482x |
+| 10000 | `fill` | memory | 53.614x | 55.075x | 0.938x |
+| 10000 | `fill` | file | 1.934x | 1.935x | 0.861x |
+| 10000 | `fill_bulk` | memory | 0.999x | 0.996x | 1.027x |
+| 10000 | `fill_bulk` | file | 1.087x | 1.091x | 1.044x |
+| 10000 | `wide` | memory | Refused before timing | Refused before timing | Refused before timing |
+| 10000 | `wide` | file | Refused before timing | Refused before timing | Refused before timing |
+
+All 320 expected records are present: 288 successes and 32 identical 10,000-row wide warmup refusals. Both producers refuse 16,780,548 result-materialization bytes against the unchanged 16,777,216-byte account. The driver exits 1 and the whole-matrix qualification flag is false; the terminal raw-data audit succeeds. Those groups have no successful timing or speedup claim.
+
+At 10,000 rows point paired medians are 2.512x/2.482x and independent-CREATE write-phase medians are 55.075x/1.935x (memory/file). Main-to-candidate improvements include earlier projected-seek/CREATE work and do not isolate this point-statistics change. The 1,000-row memory scan is unfavorable at 0.923x, file individual-CREATE write at 0.987x, and both 1,000-row bulk write medians at 0.982x/0.976x. The 10,000-row memory bulk write median is 0.996x. Several final verification-read medians are unfavorable even where total/write medians improve. No unfavorable sample is dropped or explained away as proven noise.
+
+[Complete ordinary point-statistics evidence](evidence/rust_ordinary_local_statistics_controls_20261011.json) preserves native stdout/stderr, individual pairs, source snapshots, frozen driver/consumers, fixtures, producer hashes, process/RSS observations and all recalculated summaries. Original report SHA-256: `3f20ae6b396b853d9d18174b0f5bbdf057e09ec789aefa84c6b5a151dba25027`; package SHA-256: `9ca7b5122b09bee9cc12b0d5f7f511931467700756ff2dce27b156379ed78248`. Source/artifact guards pass before and after children; the independent audit verifies native results, checksums, profile/defaults, phase sums, discard/order policy, RSS and both producer medians and paired ratios.
+
+This remains a small shared-host Rust control. It does not qualify large sizes, cross-language neutrality, Arrow/source reuse or whole-operation memory. Together with the mixed-growth cold gains and unfavorable hot/tail samples, it leaves comprehensive performance acceptance open.

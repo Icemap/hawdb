@@ -151,3 +151,54 @@ profile, defaults and consumers. They improve hot/amortized points and ordinary
 writes against main, but preserve unfavorable first-call, scan and bulk samples
 and unchanged wide-result budget refusals. They do not complete performance
 or whole-operation memory acceptance.
+
+## Bounded statistics for ordinary indexed point reads
+
+The first ordinary read after read-free creation must not hide an O(N) advanced
+statistics walk behind a single-row lookup. A query-local catalog is eligible
+only for a parameterized template shaped as `Project(Filter(PropertyEq,
+NodeScan))`, with matching variables and node/property/id/literal projections.
+Access control, scoring, non-scalar or non-finite operands, out-of-core stores,
+undeclared indexes, unsupported readers, complex operators and bound EXPLAIN
+continue through the existing full-statistics path.
+
+The operand uses the plan-cache crate's existing marker binder. The planner then
+uses the same complete-index, same-snapshot and materialized-store contract as
+the execution reader. Its borrowed iterator visits at most nine candidates,
+without cloning their graph payloads. If it exhausts after K <= 8 candidates,
+K is an exact snapshot-local equality count. A ninth candidate instead rejects
+the query-local catalog. No result limit or storage interface is introduced.
+
+The ephemeral optimizer catalog contains maintained basic counts and one
+query-local equality row count. It does not impersonate whole-index size or
+distinct-count statistics, and it is never published in the shared statistics
+or catalog cache. Existing estimates still clamp zero to one. Existing physical
+optimization, parameter rebinding, projection lowering and execution remain in
+use; this is not a handwritten point executor.
+
+The physical cache key additionally contains `(label, property, K, B)`, where B
+is the equality index/scan access-cost decision from the optimizer's shared cost
+function. K changes invalidate the key, as does crossing the access boundary
+while K remains constant. Different bound operands with the same K and B can
+reuse the template: this eligible catalog contains no value-specific histogram,
+and execution binds the operand again. Existing parameter-shape/exact keys,
+schema, capabilities, published generation and small-label classes still apply.
+Full key equality, not hash uniqueness, determines reuse. A retained snapshot
+derives K and B from its own reader, never from live-head candidates.
+
+Under the existing index-completeness and maintained-count contracts, counting
+K contributes a bounded index probe rather than a full graph statistics scan.
+Metadata enumeration, parameter/value cloning and ordinary result allocation
+remain outside that bound. Borrowed candidate iteration proves no graph payload
+copy in this probe only; it is not source-to-host zero copy or a process memory
+bound. Dense values and unsupported shapes retain their original planning costs.
+
+The `point_statistics_` regressions cover cold publication, preservation of an
+earlier publication, parameter reuse, empty/nonempty results, duplicate-key cost
+boundaries, snapshots, whole-node results, missing parameters, dense fallback,
+aggregation, null operands and bound EXPLAIN. DDL can itself leave a statistics
+publication, so the cold regression explicitly invalidates that planning cache;
+the separate preservation regression checks Arc identity and generation.
+First-call, hot-call, total and tail latency controls are required before
+admitting this production change. This remains a source-level argument, not a
+machine-checked whole-system proof or comprehensive performance acceptance.

@@ -189,6 +189,15 @@ pub(super) fn node_index_seek_is_cheaper(label_count: u64, seek_cost: u64) -> bo
         && seek_cost <= estimate_node_full_scan_cost(label_count)
 }
 
+/// Shares the equality access-cost boundary with query-local plan cache keys.
+#[doc(hidden)]
+pub fn node_equality_index_seek_is_cheaper(label_count: u64, matched_rows: u64) -> bool {
+    node_index_seek_is_cheaper(
+        label_count,
+        estimate_node_index_seek_cost(matched_rows.max(1), NODE_INDEX_EQ_STARTUP_COST),
+    )
+}
+
 pub(super) fn estimate_physical_plan_cost(
     plan: &PhysicalPlan,
     catalog: &OptimizerCatalog,
