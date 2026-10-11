@@ -33,7 +33,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 mod checkpoint;
-pub(crate) use checkpoint::CheckpointRangeReadError;
+pub(crate) use checkpoint::{CheckpointRangeReadError, CheckpointRangeReadProgress};
 
 pub(crate) const SHARED_SEGMENT_READ_WORKER_LIMIT: usize = 16;
 

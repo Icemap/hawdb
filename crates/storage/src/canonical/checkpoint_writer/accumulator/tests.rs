@@ -543,3 +543,680 @@ fn checkpoint_units_canonical_accumulator_memory_related_full_writer_arrays_file
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn retained_flush_keeps_records_and_leases_after_prewrite_cancellation() {
+    let ceiling = 128 * 1024;
+    let resources = governor(ceiling);
+    let permit = resources
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let payload = vec![42; 1024];
+    let mut actual = fill(&work, &payload).unwrap();
+    let expected = reference(&payload);
+    let retained = used(&task, ceiling);
+    assert!(retained > 0);
+    let root = std::env::temp_dir().join(format!(
+        "hawdb-retained-canonical-flush-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let path = root.join("actual.hawdb");
+    let mut file = File::create(&path).unwrap();
+    file.write_all(b"prefix").unwrap();
+    let mut digest = IntegrityHasher::new();
+    digest.update(b"prefix");
+    let covered_digest = digest.clone().finish();
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe.cancel_after.store(1, Ordering::SeqCst);
+    local.set_telemetry_sink(Some(probe.clone()));
+    let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+        RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+    ))
+    .with_scheduler(local.clone());
+    assert!(matches!(
+        actual.flush_retained_with_work_context(&mut file, &mut digest, 6, &stopped),
+        Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+    ));
+    probe.assert_released(&local);
+    compare(&actual, &expected);
+    assert_eq!(used(&task, ceiling), retained);
+    assert_eq!(digest.clone().finish(), covered_digest);
+    assert_eq!(std::fs::read(&path).unwrap(), b"prefix");
+    local.set_telemetry_sink(None);
+    let descriptor = actual
+        .flush_retained_with_work_context(&mut file, &mut digest, 6, &work)
+        .unwrap();
+    let reference_path = root.join("reference.hawdb");
+    let mut reference_file = File::create(&reference_path).unwrap();
+    reference_file.write_all(b"prefix").unwrap();
+    let mut reference_digest = IntegrityHasher::new();
+    reference_digest.update(b"prefix");
+    let reference_descriptor = expected
+        .flush(&mut reference_file, &mut reference_digest, 6)
+        .unwrap();
+    assert_eq!(
+        descriptor.encode_descriptor_tree_value().unwrap(),
+        reference_descriptor.encode_descriptor_tree_value().unwrap()
+    );
+    assert_eq!(digest.finish(), reference_digest.finish());
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        std::fs::read(&reference_path).unwrap()
+    );
+    drop(descriptor);
+    assert_eq!(used(&task, ceiling), retained);
+    drop(actual);
+    assert_eq!(used(&task, ceiling), 0);
+    drop(file);
+    drop(reference_file);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn retained_flush_keeps_complete_blocks_at_every_actual_io_cut() {
+    let ceiling = 2 * 1024 * 1024;
+    let resources = governor(ceiling);
+    let permit = resources
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let payload = vec![37; 16 * 1024];
+    let root = std::env::temp_dir().join(format!(
+        "hawdb-retained-flush-io-cuts-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let reference_path = root.join("reference.hawdb");
+    let mut reference_file = File::create(&reference_path).unwrap();
+    reference_file.write_all(b"prefix").unwrap();
+    let mut reference_digest = IntegrityHasher::new();
+    reference_digest.update(b"prefix");
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    let baseline_work =
+        CheckpointWorkContext::new(task.clone().with_io_wave_controller(baseline.clone()))
+            .with_scheduler(local.clone());
+    let mut input = fill(&work, &payload).unwrap();
+    let reference_descriptor = input
+        .flush_retained_with_work_context(
+            &mut reference_file,
+            &mut reference_digest,
+            6,
+            &baseline_work,
+        )
+        .unwrap();
+    let descriptor_bytes = reference_descriptor.encode_descriptor_tree_value().unwrap();
+    let digest = reference_digest.finish();
+    let io_cuts = baseline.io_waves.load(Ordering::SeqCst);
+    let bytes = std::fs::read(&reference_path).unwrap();
+    assert!(io_cuts >= 6, "exercise several physical payload blocks");
+    drop(input);
+    drop(reference_descriptor);
+    assert_eq!(used(&task, ceiling), 0);
+    let mut partial_cuts = 0;
+    for cut in 1..=io_cuts {
+        let path = root.join(format!("cut-{cut}.hawdb"));
+        let mut file = File::create(&path).unwrap();
+        file.write_all(b"prefix").unwrap();
+        let mut covered = IntegrityHasher::new();
+        covered.update(b"prefix");
+        let covered_digest = covered.clone().finish();
+        let mut input = fill(&work, &payload).unwrap();
+        let retained = used(&task, ceiling);
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_on_io_wave.store(cut, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(
+            permit
+                .bind_task_context(RuntimeTaskContext::without_deadline(
+                    probe.cancellation.clone(),
+                ))
+                .with_io_wave_controller(probe.clone()),
+        )
+        .with_scheduler(local.clone());
+        assert!(matches!(
+            input.flush_retained_with_work_context(&mut file, &mut covered, 6, &stopped),
+            Err(CanonicalSegmentError::Work(_))
+        ));
+        assert!(probe.cancellation.is_cancelled());
+        probe.assert_released(&local);
+        assert_eq!(covered.clone().finish(), covered_digest);
+        assert_eq!(used(&task, ceiling), retained);
+        let partial = std::fs::read(&path).unwrap();
+        assert!(bytes.starts_with(&partial));
+        if partial.len() > 6 {
+            partial_cuts += 1;
+        }
+        local.set_telemetry_sink(None);
+        if input.pending_flush.is_some() {
+            assert!(matches!(
+                input.push(99, &payload, None),
+                Err(CanonicalSegmentError::Corrupt(_))
+            ));
+            assert!(matches!(
+                input.add_node_properties(&node(), Some(&work)),
+                Err(CanonicalSegmentError::Corrupt(_))
+            ));
+            assert!(matches!(
+                input.flush_retained_with_work_context(&mut file, &mut covered, 7, &work),
+                Err(CanonicalSegmentError::Corrupt(_))
+            ));
+            assert_eq!(std::fs::read(&path).unwrap(), partial);
+        }
+        let actual = input
+            .flush_retained_with_work_context(&mut file, &mut covered, 6, &work)
+            .unwrap();
+        assert_eq!(
+            actual.encode_descriptor_tree_value().unwrap(),
+            descriptor_bytes
+        );
+        assert_eq!(covered.finish(), digest);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        assert!(input.pending_flush.is_none());
+        drop(actual);
+        assert_eq!(used(&task, ceiling), retained);
+        drop(input);
+        assert_eq!(used(&task, ceiling), 0);
+        eprintln!(
+            "retained-flush actual_io_cut={cut}/{io_cuts} partial_bytes={}",
+            partial.len()
+        );
+    }
+    assert!(partial_cuts >= 4);
+    drop(reference_file);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn retained_flush_completes_with_two_units_per_attempt() {
+    let ceiling = 2 * 1024 * 1024;
+    let resources = governor(ceiling);
+    let permit = resources
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let payload = vec![31; 16 * 1024];
+    let mut input = fill(&work, &payload).unwrap();
+    let mut expected = reference(&payload);
+    // Exercise more than two insertion chunks in the property Bloom while
+    // keeping the same work quantum and working-memory ceiling.
+    for _ in 0..128 {
+        input.add_node_properties(&node(), Some(&work)).unwrap();
+        expected.add_node_properties(&node(), None).unwrap();
+    }
+    let retained = used(&task, ceiling);
+    let blocks = 1 + input.records.len().div_ceil(64 * 1024);
+    let root = std::env::temp_dir().join(format!(
+        "hawdb-retained-crc-progress-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let path = root.join("actual.hawdb");
+    let mut file = File::create(&path).unwrap();
+    file.write_all(b"prefix").unwrap();
+    let mut digest = IntegrityHasher::new();
+    digest.update(b"prefix");
+    let initial = digest.clone().finish();
+    let mut completed = 0;
+    for attempt in 1..=blocks {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(2, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        assert!(matches!(
+            input.flush_retained_with_work_context(&mut file, &mut digest, 6, &stopped),
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+        ));
+        probe.assert_released(&local);
+        assert_eq!(probe.completed.load(Ordering::SeqCst), 2);
+        assert!(input.flush_progress.completed_blocks > completed);
+        completed = input.flush_progress.completed_blocks;
+        assert_eq!(used(&task, ceiling), retained);
+        assert_eq!(digest.clone().finish(), initial);
+        assert_eq!(std::fs::read(&path).unwrap(), b"prefix");
+        eprintln!("retained-crc attempt={attempt} completed_blocks={completed}/{blocks}");
+        if completed == blocks {
+            break;
+        }
+    }
+    assert_eq!(completed, blocks);
+    let mut written = 0;
+    for attempt in 1..=blocks {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(2, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        assert!(matches!(
+            input.flush_retained_with_work_context(&mut file, &mut digest, 6, &stopped),
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+        ));
+        probe.assert_released(&local);
+        assert_eq!(probe.completed.load(Ordering::SeqCst), 2);
+        assert!(input.flush_progress.written_blocks > written);
+        written = input.flush_progress.written_blocks;
+        assert!(!input.flush_progress.dirty_tail);
+        assert_eq!(
+            file.metadata().unwrap().len(),
+            6 + input.flush_progress.written_bytes
+        );
+        assert_eq!(digest.clone().finish(), initial);
+        assert_eq!(used(&task, ceiling), retained);
+        eprintln!("retained-write attempt={attempt} completed_blocks={written}/{blocks}");
+        if written == blocks {
+            break;
+        }
+    }
+    assert_eq!(written, blocks);
+    local.set_telemetry_sink(None);
+    let complete_file = std::fs::read(&path).unwrap();
+    let mut previous = 0;
+    let mut finished = None;
+    for attempt in 1..=32 {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(2, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        let result = input.flush_retained_with_work_context(&mut file, &mut digest, 6, &stopped);
+        probe.assert_released(&local);
+        assert_eq!(std::fs::read(&path).unwrap(), complete_file);
+        match result {
+            Ok(descriptor) => {
+                finished = Some(descriptor);
+                break;
+            }
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_))) => {
+                assert_eq!(probe.completed.load(Ordering::SeqCst), 2);
+                let progress = input.flush_progress.bloom_progress_for_test();
+                assert!(progress > previous);
+                previous = progress;
+                assert_eq!(digest.clone().finish(), initial);
+                assert!(used(&task, ceiling) >= retained);
+                eprintln!("retained-bloom attempt={attempt} progress={progress}");
+            }
+            Err(error) => panic!("uncontrolled bounded flush failure: {error:?}"),
+        }
+    }
+    local.set_telemetry_sink(None);
+    let actual = finished.expect("all flush stages must finish with the same two-unit quantum");
+    let reference_path = root.join("reference.hawdb");
+    let mut reference_file = File::create(&reference_path).unwrap();
+    reference_file.write_all(b"prefix").unwrap();
+    let mut reference_digest = IntegrityHasher::new();
+    reference_digest.update(b"prefix");
+    let reference_descriptor = expected
+        .flush(&mut reference_file, &mut reference_digest, 6)
+        .unwrap();
+    assert_eq!(
+        actual.encode_descriptor_tree_value().unwrap(),
+        reference_descriptor.encode_descriptor_tree_value().unwrap()
+    );
+    assert_eq!(digest.finish(), reference_digest.finish());
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        std::fs::read(&reference_path).unwrap()
+    );
+    assert_eq!(input.flush_progress.completed_blocks, 0);
+    drop(actual);
+    assert_eq!(used(&task, ceiling), retained);
+    drop(input);
+    assert_eq!(used(&task, ceiling), 0);
+    drop(file);
+    drop(reference_file);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn retained_flush_partial_block_error_preserves_prior_complete_blocks() {
+    let ceiling = 2 * 1024 * 1024;
+    let resources = governor(ceiling);
+    let permit = resources
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let payload = vec![73; 16 * 1024];
+    let mut input = fill(&work, &payload).unwrap();
+    let retained = used(&task, ceiling);
+    let expected = reference(&payload);
+    let root = std::env::temp_dir().join(format!(
+        "hawdb-private-block-error-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let path = root.join("actual.hawdb");
+    let mut file = File::create(&path).unwrap();
+    file.write_all(b"prefix").unwrap();
+    let mut digest = IntegrityHasher::new();
+    digest.update(b"prefix");
+    let initial = digest.clone().finish();
+    // Header completes; the next physical write persists17payloadbytes and
+    // then returns an IO error through the ordinary private-file error path.
+    input.flush_progress.partial_write_probe = Some((1, 17));
+    assert!(matches!(
+        input.flush_retained_with_work_context(&mut file, &mut digest, 6, &work),
+        Err(CanonicalSegmentError::Io(_))
+    ));
+    assert!(input.flush_progress.dirty_tail);
+    assert_eq!(input.flush_progress.written_blocks, 1);
+    let complete_bytes = input.flush_progress.written_bytes;
+    assert_eq!(file.metadata().unwrap().len(), 6 + complete_bytes + 17);
+    assert_eq!(digest.clone().finish(), initial);
+    assert_eq!(used(&task, ceiling), retained);
+    assert_eq!(local.state().running_background_operations, 0);
+    eprintln!("retained-partial-block complete_bytes={complete_bytes} incomplete_bytes=17");
+    let actual = input
+        .flush_retained_with_work_context(&mut file, &mut digest, 6, &work)
+        .unwrap();
+    let reference_path = root.join("reference.hawdb");
+    let mut reference_file = File::create(&reference_path).unwrap();
+    reference_file.write_all(b"prefix").unwrap();
+    let mut reference_digest = IntegrityHasher::new();
+    reference_digest.update(b"prefix");
+    let reference_descriptor = expected
+        .flush(&mut reference_file, &mut reference_digest, 6)
+        .unwrap();
+    assert_eq!(
+        actual.encode_descriptor_tree_value().unwrap(),
+        reference_descriptor.encode_descriptor_tree_value().unwrap()
+    );
+    assert_eq!(digest.finish(), reference_digest.finish());
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        std::fs::read(&reference_path).unwrap()
+    );
+    assert!(!input.flush_progress.dirty_tail);
+    assert!(input.pending_flush.is_none());
+    drop(actual);
+    assert_eq!(used(&task, ceiling), retained);
+    drop(input);
+    assert_eq!(used(&task, ceiling), 0);
+    drop(file);
+    drop(reference_file);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+fn bounded_record_append(kind: CanonicalSegmentKind, endpoints: Option<(u64, u64)>) {
+    let ceiling = 2 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let old_payload = vec![0x31; 128 * 1024];
+    let payload = vec![0x97; 256 * 1024];
+    let mut actual = accumulator(work.clone(), kind);
+    actual
+        .push(1, &old_payload, endpoints.map(|_| (3, 7)))
+        .unwrap();
+    let mut expected = SegmentAccumulator::new(
+        kind,
+        ManifestGeneration(47),
+        1,
+        CanonicalSegmentConfig::default(),
+    );
+    expected
+        .push(1, &old_payload, endpoints.map(|_| (3, 7)))
+        .unwrap();
+    expected.push(2, &payload, endpoints).unwrap();
+    let mut finished = false;
+    let mut attempts = 0;
+    for attempt in 1..=32 {
+        attempts = attempt;
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(2, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let fresh = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        match actual.push_retained_with_work_context(2, &payload, endpoints, &fresh) {
+            Ok(()) => {
+                finished = true;
+                break;
+            }
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_))) => {}
+            other => panic!("unexpected record resume result: {other:?}"),
+        }
+        probe.assert_released(&local);
+        assert_eq!(probe.completed.load(Ordering::SeqCst), 2);
+        assert!(actual.pending_push.is_some());
+        assert!(matches!(
+            actual.push_retained_with_work_context(3, &payload, endpoints, &work),
+            Err(CanonicalSegmentError::Corrupt(_))
+        ));
+    }
+    assert!(
+        finished,
+        "record append restarted instead of making bounded progress"
+    );
+    assert!(attempts >= 8);
+    compare(&actual, &expected);
+    local.set_telemetry_sink(None);
+    drop(actual);
+    assert_eq!(used(&task, ceiling), 0);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_record_append_retries_every_cut_without_duplicate_records_or_endpoints() {
+    let ceiling = 2 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let prefix = vec![0x31; 16 * 1024];
+    let payload = vec![0x97; 128 * 1024];
+    let mut expected = SegmentAccumulator::new(
+        CanonicalSegmentKind::Relationships,
+        ManifestGeneration(47),
+        1,
+        CanonicalSegmentConfig::default(),
+    );
+    expected.push(1, &prefix, Some((3, 7))).unwrap();
+    expected.push(2, &payload, Some((11, 13))).unwrap();
+    let mut baseline_output = accumulator(work.clone(), CanonicalSegmentKind::Relationships);
+    baseline_output.push(1, &prefix, Some((3, 7))).unwrap();
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    local.set_telemetry_sink(Some(baseline.clone()));
+    baseline_output.push(2, &payload, Some((11, 13))).unwrap();
+    let total = baseline.completed.load(Ordering::SeqCst);
+    assert!(total > 10);
+    drop(baseline_output);
+    local.set_telemetry_sink(None);
+    for cut in 1..=total {
+        let mut actual = accumulator(work.clone(), CanonicalSegmentKind::Relationships);
+        actual.push(1, &prefix, Some((3, 7))).unwrap();
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(cut, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        assert!(
+            matches!(
+                actual.push_retained_with_work_context(2, &payload, Some((11, 13)), &stopped),
+                Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+            ),
+            "cut={cut}"
+        );
+        probe.assert_released(&local);
+        local.set_telemetry_sink(None);
+        actual
+            .push_retained_with_work_context(2, &payload, Some((11, 13)), &work)
+            .unwrap();
+        compare(&actual, &expected);
+        assert!(actual.pending_push.is_none());
+        drop(actual);
+        assert_eq!(used(&task, ceiling), 0, "cut={cut}");
+    }
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_record_append_completes_capacity_copy_and_payload_with_two_units_per_attempt() {
+    bounded_record_append(CanonicalSegmentKind::Nodes, None);
+}
+
+#[test]
+fn retained_relationship_append_scans_inventory_and_copies_payload_with_two_units_per_attempt() {
+    bounded_record_append(CanonicalSegmentKind::Relationships, Some((11, 13)));
+}
+
+#[test]
+fn retained_node_property_batch_completes_with_fixed_budget_without_duplicate_keys() {
+    let ceiling = 2 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let node = NodeRecord {
+        id: NodeId(17),
+        labels: BTreeSet::from([LabelId(7), LabelId(9)]),
+        properties: (0..64)
+            .map(|id| (format!("property-{id:04}-界"), Value::Int(id)))
+            .collect(),
+    };
+    let mut expected = SegmentAccumulator::new(
+        CanonicalSegmentKind::Nodes,
+        ManifestGeneration(47),
+        1,
+        CanonicalSegmentConfig::default(),
+    );
+    expected.add_node_properties(&node, None).unwrap();
+    let mut actual = accumulator(work.clone(), CanonicalSegmentKind::Nodes);
+    let mut finished = false;
+    for _ in 0..128 {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(24, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let fresh = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        actual.work = fresh;
+        match actual.add_node_properties(&node, None) {
+            Ok(()) => {
+                finished = true;
+                break;
+            }
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_))) => {}
+            other => panic!("unexpected property resume result: {other:?}"),
+        }
+        probe.assert_released(&local);
+        assert_eq!(probe.completed.load(Ordering::SeqCst), 24);
+    }
+    local.set_telemetry_sink(None);
+    assert!(
+        finished,
+        "node property batch restarted instead of retaining progress"
+    );
+    compare(&actual, &expected);
+    drop(actual);
+    assert_eq!(used(&task, ceiling), 0);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_node_property_batch_retries_every_cut_without_repeating_completed_keys() {
+    let ceiling = 2 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let node = node();
+    let mut expected = SegmentAccumulator::new(
+        CanonicalSegmentKind::Nodes,
+        ManifestGeneration(47),
+        1,
+        CanonicalSegmentConfig::default(),
+    );
+    expected.add_node_properties(&node, None).unwrap();
+    expected.add_node_properties(&node, None).unwrap();
+    let mut baseline_output = accumulator(work.clone(), CanonicalSegmentKind::Nodes);
+    baseline_output.add_node_properties(&node, None).unwrap();
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    local.set_telemetry_sink(Some(baseline.clone()));
+    baseline_output.add_node_properties(&node, None).unwrap();
+    let total = baseline.completed.load(Ordering::SeqCst);
+    assert!(total > 16);
+    drop(baseline_output);
+    local.set_telemetry_sink(None);
+    for cut in 1..=total {
+        let mut actual = accumulator(work.clone(), CanonicalSegmentKind::Nodes);
+        actual.add_node_properties(&node, None).unwrap();
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(cut, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        assert!(
+            matches!(
+                actual.add_node_properties(&node, Some(&stopped)),
+                Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+            ),
+            "cut={cut}"
+        );
+        probe.assert_released(&local);
+        local.set_telemetry_sink(None);
+        if actual.pending_properties.is_some() {
+            let empty = NodeRecord {
+                id: node.id,
+                labels: node.labels.clone(),
+                properties: BTreeMap::new(),
+            };
+            assert!(matches!(
+                actual.add_node_properties(&empty, Some(&work)),
+                Err(CanonicalSegmentError::Corrupt(_))
+            ));
+        }
+        actual.add_node_properties(&node, Some(&work)).unwrap();
+        compare(&actual, &expected);
+        assert!(actual.pending_properties.is_none());
+        drop(actual);
+        assert_eq!(used(&task, ceiling), 0, "cut={cut}");
+    }
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}

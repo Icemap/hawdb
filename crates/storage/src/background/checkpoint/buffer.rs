@@ -177,7 +177,69 @@ impl CheckpointBytes {
         self.append(bytes, work)
     }
 
+    /// Install this buffer in retained state before observing the next stop.
+    pub(crate) fn new_retained(
+        capacity: usize,
+        work: &CheckpointWorkContext,
+    ) -> Result<Self, CheckpointWorkError> {
+        Self::allocate_capacity(capacity, 0, work)
+    }
+
+    pub(crate) fn extend_zeroes_to(
+        &mut self,
+        length: usize,
+        work: &CheckpointWorkContext,
+    ) -> Result<(), CheckpointWorkError> {
+        if length > self.bytes.capacity() {
+            return Err(work.record_failure(CheckpointWorkError::Allocation {
+                bytes: length as u64,
+                reason: "zero initialization exceeds admitted byte capacity".into(),
+            }));
+        }
+        while self.bytes.len() < length {
+            let unit = work.start_unit()?;
+            self.bytes
+                .resize(self.bytes.len().saturating_add(64 * 1024).min(length), 0);
+            unit.finish();
+        }
+        work.checkpoint()
+    }
+
+    /// Append one admitted physical block, retaining it if the unit cancels.
+    pub(crate) fn append_block_retained(
+        &mut self,
+        block: &[u8],
+        work: &CheckpointWorkContext,
+    ) -> Result<(), CheckpointWorkError> {
+        let required = self.bytes.len().checked_add(block.len()).ok_or_else(|| {
+            work.record_failure(CheckpointWorkError::Allocation {
+                bytes: u64::MAX,
+                reason: "retained byte length overflows usize".into(),
+            })
+        })?;
+        if block.len() > 64 * 1024 || required > self.bytes.capacity() {
+            return Err(work.record_failure(CheckpointWorkError::Allocation {
+                bytes: required as u64,
+                reason: "retained byte block exceeds its admission".into(),
+            }));
+        }
+        let unit = work.start_unit()?;
+        self.bytes.extend_from_slice(block);
+        unit.finish();
+        Ok(())
+    }
+
     fn new_with_ownership(
+        capacity: usize,
+        ownership_bytes: usize,
+        work: &CheckpointWorkContext,
+    ) -> Result<Self, CheckpointWorkError> {
+        let output = Self::allocate_capacity(capacity, ownership_bytes, work)?;
+        work.checkpoint()?;
+        Ok(output)
+    }
+
+    fn allocate_capacity(
         capacity: usize,
         ownership_bytes: usize,
         work: &CheckpointWorkContext,
@@ -211,7 +273,6 @@ impl CheckpointBytes {
             _memory: memory,
         };
         unit.finish();
-        work.checkpoint()?;
         Ok(output)
     }
 

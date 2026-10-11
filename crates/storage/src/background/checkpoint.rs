@@ -32,7 +32,9 @@ mod values;
 pub(crate) use values::{CheckpointSharedValues, CheckpointValues};
 
 mod allocation;
-pub(crate) use allocation::{CheckpointAllocationOwner, CheckpointAllocationToken};
+pub(crate) use allocation::{
+    CheckpointAllocationLookup, CheckpointAllocationOwner, CheckpointAllocationToken,
+};
 
 /// The task already admitted by the owner, optionally with per-unit local QoS.
 /// This never creates a governor or reserves the owner's memory a second time.
@@ -397,7 +399,9 @@ pub(crate) mod tests {
 }
 
 mod decode;
-pub(crate) use decode::{allocation as checkpoint_decode_allocation, CheckpointDecodeContext};
+pub(crate) use decode::{
+    allocation as checkpoint_decode_allocation, CheckpointDecodeContext, CheckpointVectorPush,
+};
 
 mod text;
 #[doc(hidden)]

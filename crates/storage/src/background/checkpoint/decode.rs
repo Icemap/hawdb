@@ -36,6 +36,16 @@ impl CheckpointDecodeContext {
             .find(address, self)
             .map_err(HawDBError::from_storage_error)
     }
+    pub(crate) fn find_retained(
+        &self,
+        address: usize,
+        pending: &mut Option<crate::background::CheckpointAllocationLookup>,
+    ) -> Result<crate::background::CheckpointAllocationToken> {
+        self.memory
+            .borrow()
+            .find_retained(address, pending, self)
+            .map_err(HawDBError::from_storage_error)
+    }
 }
 
 pub(crate) fn allocation(
@@ -47,6 +57,34 @@ pub(crate) fn allocation(
         bytes: bytes as u64,
         reason: error.to_string(),
     }))
+}
+
+/// Own the incoming item and both vector backings while a bounded move pauses.
+/// The caller must retain the associated decode inventory until this state dies.
+pub(crate) struct CheckpointVectorPush<T> {
+    value: Option<T>,
+    growth: Option<VectorGrowth<T>>,
+    previous: Option<crate::background::CheckpointAllocationToken>,
+    located_previous: bool,
+    lookup: Option<crate::background::CheckpointAllocationLookup>,
+}
+
+struct VectorGrowth<T> {
+    old: std::vec::IntoIter<T>,
+    replacement: Vec<T>,
+    previous: Option<crate::background::CheckpointAllocationToken>,
+}
+
+impl<T> CheckpointVectorPush<T> {
+    pub(crate) fn new(value: T) -> Self {
+        Self {
+            value: Some(value),
+            growth: None,
+            previous: None,
+            located_previous: false,
+            lookup: None,
+        }
+    }
 }
 
 impl CheckpointDecodeContext {
@@ -113,57 +151,60 @@ impl CheckpointDecodeContext {
     }
 
     pub(crate) fn push<T>(&self, values: &mut Vec<T>, value: T) -> Result<()> {
-        let work = self;
-        if values.len() == values.capacity() {
-            let previous = if values.capacity() == 0 {
-                None
-            } else {
-                Some(work.find(values.as_ptr() as usize)?)
-            };
+        let mut pending = Some(CheckpointVectorPush::new(value));
+        self.resume_push(values, &mut pending)
+    }
+
+    /// Resume only with the same destination and inventory, excluding reads or
+    /// other mutations until the pending item has been appended.
+    pub(crate) fn resume_push<T>(
+        &self,
+        values: &mut Vec<T>,
+        pending: &mut Option<CheckpointVectorPush<T>>,
+    ) -> Result<()> {
+        let Some(state) = pending.as_mut() else {
+            return Ok(());
+        };
+        if state.growth.is_none() && values.len() == values.capacity() {
+            if !state.located_previous {
+                state.previous = if values.capacity() == 0 {
+                    None
+                } else {
+                    Some(self.find_retained(values.as_ptr() as usize, &mut state.lookup)?)
+                };
+                state.located_previous = true;
+            }
             let capacity = values
                 .capacity()
                 .saturating_mul(2)
                 .max(values.len().saturating_add(1));
-            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-            let bytes = capacity
-                .checked_mul(std::mem::size_of::<T>())
-                .ok_or_else(|| {
-                    allocation("WAL vector capacity overflows usize", usize::MAX, work)
-                })?;
-            let token = work.reserve(bytes)?;
-            let mut replacement = Vec::new();
-            replacement.try_reserve_exact(capacity).map_err(|error| {
-                allocation(
-                    error,
-                    capacity.saturating_mul(std::mem::size_of::<T>()),
-                    work,
-                )
-            })?;
-            if replacement.capacity() != capacity {
-                return Err(allocation(
-                    "vector capacity differs from admitted capacity",
-                    bytes,
-                    work,
-                ));
-            }
-            token.address(replacement.as_ptr() as usize);
+            let unit = self.start_unit().map_err(HawDBError::from_storage_error)?;
+            let replacement = self.vector_capacity(capacity)?;
+            state.growth = Some(VectorGrowth {
+                old: std::mem::take(values).into_iter(),
+                replacement,
+                previous: state.previous.take(),
+            });
             unit.finish();
-            let mut old = std::mem::take(values).into_iter();
+        }
+        if let Some(growth) = &mut state.growth {
             let count = (64 * 1024 / std::mem::size_of::<T>().max(1)).max(1);
-            while !old.as_slice().is_empty() {
-                let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-                replacement.extend(old.by_ref().take(count));
+            while !growth.old.as_slice().is_empty() {
+                let unit = self.start_unit().map_err(HawDBError::from_storage_error)?;
+                growth.replacement.extend(growth.old.by_ref().take(count));
                 unit.finish();
             }
-            drop(old);
-            if let Some(previous) = previous {
+            let growth = state.growth.take().expect("retained vector growth");
+            drop(growth.old);
+            if let Some(previous) = growth.previous {
                 previous.release_buffer();
             }
-            *values = replacement;
+            *values = growth.replacement;
         }
-        let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-        values.push(value);
+        let unit = self.start_unit().map_err(HawDBError::from_storage_error)?;
+        values.push(state.value.take().expect("pending vector item"));
+        *pending = None;
         unit.finish();
-        work.checkpoint().map_err(HawDBError::from_storage_error)
+        self.checkpoint().map_err(HawDBError::from_storage_error)
     }
 }

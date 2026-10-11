@@ -197,9 +197,8 @@ impl DurableStore {
         let staging_path = self
             .root_path
             .join(format!(".checkpoint.{generation}.prepare"));
-        if staging_path.exists() {
-            fs::remove_dir_all(&staging_path)?;
-        }
+        // Another retained preparation may own this generation. Atomic
+        // creation must fail rather than delete its private recovery files.
         fs::create_dir(&staging_path)?;
         Ok(staging_path)
     }

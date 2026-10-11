@@ -608,3 +608,50 @@ fn source_exact_cursor_allocations_fit_the_admitted_segment_bound() {
     assert_eq!(cursor.len(), 128);
     assert!(cursor.contains(127));
 }
+
+#[test]
+fn source_payload_preparation_keeps_completed_rows_across_fixed_work_denials() {
+    let mut nodes = CowSegmentedMap::default();
+    for id in 0..64 {
+        nodes.insert(NodeId(id), node(id, Value::String("界🙂;=".repeat(128))));
+    }
+    let work = CheckpointWorkContext::default();
+    let projection = build_with_pinned_nodes(64, Some(LabelId(7)), &nodes, &work).unwrap();
+    let expected = encode_segment_records_with_work_context(
+        nodes
+            .values()
+            .map(|node| (true, node.id.0, &node.properties)),
+        &work,
+    )
+    .unwrap();
+    let mut preparation = SourceScanWritePreparation::new(&work);
+    let local = scheduler();
+    let mut finished = false;
+    for attempt in 1..=32 {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe
+            .cancel_after
+            .store(256, std::sync::atomic::Ordering::SeqCst);
+        let work = probe.context(local.clone());
+        let result = preparation.prepare(&projection, &work);
+        probe.assert_released(&local);
+        eprintln!(
+            "source-encoding-progress attempt={attempt} completed_node={:?}",
+            preparation.segments[0].last_node
+        );
+        if result.is_ok() {
+            finished = true;
+            break;
+        }
+        assert!(probe.cancellation.is_cancelled());
+    }
+    assert!(
+        finished,
+        "completed rows must survive controlled cancellation"
+    );
+    assert_eq!(
+        &**preparation.segments[0].payload.as_ref().unwrap(),
+        &*expected
+    );
+    assert!(preparation.segments[0].text.is_none());
+}

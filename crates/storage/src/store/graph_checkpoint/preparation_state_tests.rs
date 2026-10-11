@@ -592,3 +592,196 @@ fn append_bootstrap_resumes_the_same_base_and_keeps_leases_through_the_last_snap
     drop(recovered);
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn repeated_bounded_preparation_attempts_finish_without_restarting_every_unit() {
+    let directory = std::env::temp_dir().join(format!(
+        "hawdb-bounded-preparation-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::open(&directory, &mut catalog).unwrap();
+    for id in 0..64 {
+        store
+            .create_node(
+                &mut catalog,
+                "Source",
+                BTreeMap::from([
+                    ("id".into(), Value::Int(id)),
+                    ("title".into(), Value::String(format!("source {id}"))),
+                    ("body".into(), Value::String("界🙂".repeat(128))),
+                ]),
+            )
+            .unwrap();
+    }
+    let identity = store.checkpoint_source_identity();
+    let local = scheduler();
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    let work = baseline.context(local.clone());
+    let prepared = store
+        .prepare_checkpoint_with_work_context(&catalog, &work)
+        .unwrap()
+        .unwrap();
+    let expected_rows = source_rows(&prepared);
+    let total_units = baseline.completed.load(Ordering::SeqCst);
+    baseline.assert_released(&local);
+    discard(&store, prepared);
+    drop(work);
+    // Keep the measured baseline quantum fixed across implementation changes.
+    let quantum = 2842;
+    let mut frame = store
+        .begin_checkpoint_preparation(&catalog)
+        .unwrap()
+        .unwrap();
+    let mut completed = None;
+    for attempt in 1..=16 {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(quantum, Ordering::SeqCst);
+        let work = probe.context(local.clone());
+        let result = frame.prepare_with_work_context(&work);
+        probe.assert_released(&local);
+        eprintln!("bounded-preparation attempt={attempt} units={} quantum={quantum} baseline={total_units} projected={} source_scan={} finished={}",
+            probe.completed.load(Ordering::SeqCst), frame.plan.projected.is_some(), frame.plan.source_scan.is_some(), frame.finished);
+        assert_eq!(store.checkpoint_source_identity(), identity);
+        store.ensure_usable().unwrap();
+        if let Err(error) = &result {
+            eprintln!("bounded-preparation attempt={attempt} error={error:?}");
+        }
+        if let Ok(Some(prepared)) = result {
+            completed = Some(prepared);
+            break;
+        }
+        assert!(
+            probe.cancellation.is_cancelled(),
+            "attempt failed without the controlled cancellation"
+        );
+    }
+    let finished_with_bounded_attempts = completed.is_some();
+    // Verify that retries did not damage the captured source even when the
+    // bounded progress contract fails. This unrestricted attempt is diagnostic,
+    // never evidence that bounded work eventually completes.
+    let recovery = Arc::new(CheckpointWorkProbe::default());
+    let work = recovery.context(local.clone());
+    let prepared =
+        completed.unwrap_or_else(|| frame.prepare_with_work_context(&work).unwrap().unwrap());
+    assert_eq!(source_rows(&prepared), expected_rows);
+    assert_eq!(prepared.source_commit_epoch, 64);
+    recovery.assert_released(&local);
+    discard(&store, prepared);
+    drop(work);
+    drop(frame);
+    drop(store);
+    fs::remove_dir_all(directory).unwrap();
+    assert!(
+        finished_with_bounded_attempts,
+        "16 attempts with quantum {quantum} did not complete a {total_units}-unit preparation"
+    );
+}
+
+fn retained_stage_survives_denial_then_finishes_or_is_abandoned(finish: bool) {
+    let directory = std::env::temp_dir().join(format!(
+        "hawdb-retained-stage-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::open(&directory, &mut catalog).unwrap();
+    store
+        .create_node(
+            &mut catalog,
+            "Source",
+            BTreeMap::from([("id".into(), Value::Int(17))]),
+        )
+        .unwrap();
+    let manifest_path = store
+        .durable
+        .as_ref()
+        .unwrap()
+        .manifest_path()
+        .to_path_buf();
+    let manifest_before = fs::read(&manifest_path).unwrap();
+    let identity = store.checkpoint_source_identity();
+    let mut frame = store
+        .begin_checkpoint_preparation(&catalog)
+        .unwrap()
+        .unwrap();
+    let local = scheduler();
+    let mut captured = None;
+    for attempt in 0..2 {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_on_io_wave.store(1, Ordering::SeqCst);
+        let stopped = probe.context(local.clone());
+        assert!(frame.prepare_with_work_context(&stopped).is_err());
+        assert!(probe.cancellation.is_cancelled());
+        probe.assert_released(&local);
+        let stage = frame
+            .plan
+            .stage
+            .as_ref()
+            .expect("safe IO denial retains generation");
+        if attempt == 0 {
+            fs::write(stage.path.join("owned-marker"), b"retained staging").unwrap();
+            assert!(frame
+                .source
+                .durable
+                .as_ref()
+                .unwrap()
+                .prepare_checkpoint_staging(stage.generation)
+                .is_err());
+            assert_eq!(
+                fs::read(stage.path.join("owned-marker")).unwrap(),
+                b"retained staging"
+            );
+            captured = Some((stage.generation, stage.path.clone()));
+        } else {
+            let (generation, path) = captured.as_ref().unwrap();
+            assert_eq!(stage.generation, *generation);
+            assert_eq!(&stage.path, path);
+            assert_eq!(
+                fs::read(path.join("owned-marker")).unwrap(),
+                b"retained staging"
+            );
+        }
+        assert_eq!(store.checkpoint_source_identity(), identity);
+        assert_eq!(fs::read(&manifest_path).unwrap(), manifest_before);
+    }
+    let (generation, path) = captured.unwrap();
+    if finish {
+        let fresh = crate::background::CheckpointWorkContext::default();
+        let prepared = frame.prepare_with_work_context(&fresh).unwrap().unwrap();
+        assert_eq!(prepared.generation, generation);
+        assert_eq!(prepared.staging_path, path);
+        assert!(frame.plan.stage.is_none());
+        drop(frame);
+        assert!(
+            path.exists(),
+            "prepared result owns staging after source frame drops"
+        );
+        discard(&store, prepared);
+    } else {
+        drop(frame);
+    }
+    assert!(
+        !path.exists(),
+        "abandonment or explicit discard removes owned staging"
+    );
+    assert_eq!(fs::read(&manifest_path).unwrap(), manifest_before);
+    drop(store);
+    let recovered = GraphStore::open(&directory, &mut catalog).unwrap();
+    assert_eq!(recovered.node_count_for_label(None), 1);
+    assert_eq!(
+        recovered.node_owned(NodeId(0)).unwrap().unwrap().properties["id"],
+        Value::Int(17)
+    );
+    drop(recovered);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn safe_io_denial_keeps_staging_identity_until_preparation_finishes() {
+    retained_stage_survives_denial_then_finishes_or_is_abandoned(true);
+}
+
+#[test]
+fn abandoning_denied_preparation_cleans_its_owned_staging_and_preserves_source() {
+    retained_stage_survives_denial_then_finishes_or_is_abandoned(false);
+}

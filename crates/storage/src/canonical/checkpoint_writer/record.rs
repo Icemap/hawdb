@@ -21,11 +21,12 @@ use crate::background::CheckpointBytes;
 #[cfg(test)]
 mod tests;
 
-pub(in crate::canonical) fn node(
+pub(in crate::canonical) fn node_with_preparation(
     node: &NodeRecord,
     spills: Option<&mut PropertySpillWriter>,
     dictionary: &mut PropertyKeyDictionary,
     config: CanonicalSegmentConfig,
+    preparation: &mut Option<Planning>,
 ) -> Result<CheckpointBytes, CanonicalSegmentError> {
     let work = dictionary
         .checkpoint_work()
@@ -33,65 +34,79 @@ pub(in crate::canonical) fn node(
         .clone();
     let count = u32_len(node.labels.len(), "node labels")?;
     let prefix = 4u64 + u64::from(count) * 4;
-    let length = length(
+    length(
         prefix,
         &node.properties,
         spills.as_deref(),
         dictionary,
         &work,
+        preparation,
     )?;
-    let mut output = allocate(length, config, &work)?;
-    output.append(&count.to_le_bytes(), &work)?;
-    let mut labels = node.labels.iter();
-    let mut block = [0u8; 4096];
-    loop {
-        let unit = work.start_unit()?;
-        let mut bytes = 0;
-        for label in labels.by_ref().take(block.len() / 4) {
-            block[bytes..bytes + 4].copy_from_slice(&label.0.to_le_bytes());
-            bytes += 4;
-        }
-        unit.finish();
-        if bytes == 0 {
-            break;
-        }
-        output.append(&block[..bytes], &work)?;
-    }
-    properties(&node.properties, spills, dictionary, &mut output, &work)?;
-    work.checkpoint()?;
-    Ok(output)
+    let plan = preparation.as_mut().expect("completed record plan");
+    body::encode(
+        plan,
+        config,
+        body::Source {
+            header: &count.to_le_bytes(),
+            labels: Some(&node.labels),
+            properties: &node.properties,
+        },
+        spills,
+        dictionary,
+        &work,
+    )
 }
 
-pub(in crate::canonical) fn relationship(
+pub(in crate::canonical) fn relationship_with_preparation(
     relationship: &RelRecord,
     spills: Option<&mut PropertySpillWriter>,
     dictionary: &mut PropertyKeyDictionary,
     config: CanonicalSegmentConfig,
+    preparation: &mut Option<Planning>,
 ) -> Result<CheckpointBytes, CanonicalSegmentError> {
     let work = dictionary
         .checkpoint_work()
         .expect("checkpoint dictionary")
         .clone();
-    let length = length(
+    length(
         20,
         &relationship.properties,
         spills.as_deref(),
         dictionary,
         &work,
+        preparation,
     )?;
-    let mut output = allocate(length, config, &work)?;
-    output.append(&relationship.source.0.to_le_bytes(), &work)?;
-    output.append(&relationship.target.0.to_le_bytes(), &work)?;
-    output.append(&relationship.rel_type.0.to_le_bytes(), &work)?;
-    properties(
-        &relationship.properties,
+    let mut header = [0u8; 20];
+    header[..8].copy_from_slice(&relationship.source.0.to_le_bytes());
+    header[8..16].copy_from_slice(&relationship.target.0.to_le_bytes());
+    header[16..].copy_from_slice(&relationship.rel_type.0.to_le_bytes());
+    let plan = preparation.as_mut().expect("completed record plan");
+    body::encode(
+        plan,
+        config,
+        body::Source {
+            header: &header,
+            labels: None,
+            properties: &relationship.properties,
+        },
         spills,
         dictionary,
-        &mut output,
         &work,
-    )?;
-    work.checkpoint()?;
-    Ok(output)
+    )
+}
+
+pub(in crate::canonical) struct Planning {
+    source: usize,
+    property_count: usize,
+    prefix: u64,
+    length: u64,
+    current_id: Option<u32>,
+    previous_property: Option<crate::background::CheckpointText>,
+    current_property: Option<crate::background::CheckpointText>,
+    ids: Vec<u32>,
+    complete: bool,
+    body: body::Progress,
+    allocation: crate::background::CheckpointDecodeContext,
 }
 
 fn length(
@@ -100,31 +115,123 @@ fn length(
     spills: Option<&PropertySpillWriter>,
     dictionary: &mut PropertyKeyDictionary,
     work: &CheckpointWorkContext,
+    preparation: &mut Option<Planning>,
 ) -> Result<u64, CanonicalSegmentError> {
     u32_len(properties.len(), "property map")?;
-    let mut length = prefix + 4;
-    for (key, value) in properties {
-        // Intern before final record admission, preserving first-seen IDs.
-        // The second lookup avoids a separate temporary key-ID array.
-        dictionary.intern(key)?;
-        let value_bytes = value_size(value, work)?;
-        let wire = if spills.is_some_and(|spills| spills.should_spill(value_bytes)) {
-            9
-        } else {
-            value_bytes as u64
-        };
-        length = length
-            .checked_add(4)
-            .and_then(|length| length.checked_add(wire))
-            .ok_or_else(|| {
-                CanonicalSegmentError::Work(work.record_failure(CheckpointWorkError::Allocation {
-                    bytes: u64::MAX,
-                    reason: "canonical record length overflows u64".into(),
-                }))
-            })?;
+    let source = properties as *const BTreeMap<String, Value> as usize;
+    let state = preparation.get_or_insert_with(|| Planning {
+        source,
+        property_count: properties.len(),
+        prefix,
+        length: prefix + 4,
+        current_id: None,
+        previous_property: None,
+        current_property: None,
+        ids: Vec::new(),
+        complete: false,
+        body: body::Progress::default(),
+        allocation: crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: RefCell::default(),
+        },
+    });
+    if state.source != source || state.property_count != properties.len() || state.prefix != prefix
+    {
+        return Err(CanonicalSegmentError::Corrupt(
+            "retained record property source changed".into(),
+        ));
     }
-    work.checkpoint()?;
-    Ok(length)
+    work.classify(|scoped| {
+        state.allocation.work = scoped.clone();
+        if state.ids.capacity() == 0 && !properties.is_empty() {
+            let unit = scoped.start_unit()?;
+            state.ids = state
+                .allocation
+                .vector_capacity(properties.len())
+                .map_err(source_error)?;
+            unit.finish();
+        }
+        while state.ids.len() < properties.len() {
+            scoped.checkpoint()?;
+            let selected = match state.previous_property.as_deref() {
+                Some(previous) => properties
+                    .range::<str, _>((
+                        std::ops::Bound::Excluded(previous),
+                        std::ops::Bound::Unbounded,
+                    ))
+                    .next(),
+                None => properties.first_key_value(),
+            };
+            let (key, value) = selected.ok_or_else(|| {
+                CanonicalSegmentError::Corrupt("captured record property disappeared".into())
+            })?;
+            let id = match state.current_id {
+                Some(id) => id,
+                None => {
+                    let id = dictionary.intern(key)?;
+                    state.current_id = Some(id);
+                    id
+                }
+            };
+            let property = state
+                .current_property
+                .get_or_insert_with(crate::background::CheckpointText::new);
+            while property.len() < key.len() {
+                let start = property.len();
+                let mut end = (start + 64 * 1024).min(key.len());
+                while !key.is_char_boundary(end) {
+                    end -= 1;
+                }
+                property
+                    .append(&key[start..end], scoped)
+                    .map_err(source_error)?;
+            }
+            let value_bytes = value_size(value, scoped)?;
+            let wire = if spills.is_some_and(|spills| spills.should_spill(value_bytes)) {
+                9
+            } else {
+                value_bytes as u64
+            };
+            let length = state
+                .length
+                .checked_add(4)
+                .and_then(|length| length.checked_add(wire))
+                .ok_or_else(|| {
+                    CanonicalSegmentError::Work(scoped.record_failure(
+                        CheckpointWorkError::Allocation {
+                            bytes: u64::MAX,
+                            reason: "canonical record length overflows u64".into(),
+                        },
+                    ))
+                })?;
+            let previous = state.ids.len();
+            let result = state
+                .allocation
+                .push(&mut state.ids, id)
+                .map_err(source_error);
+            // An append can complete before its cancellation is returned. Commit
+            // its logical length once, so the next ordered lookup advances.
+            if state.ids.len() > previous {
+                state.length = length;
+                state.current_id = None;
+                state.previous_property = state.current_property.take();
+            }
+            result?;
+        }
+        scoped.checkpoint()?;
+        state.complete = true;
+        Ok(state.length)
+    })
+    .map_err(|error| match error {
+        crate::background::CheckpointOperationError::Work(error) => {
+            CanonicalSegmentError::Work(error)
+        }
+        crate::background::CheckpointOperationError::Operation(error) => error,
+    })
+}
+
+fn source_error(error: hawdb_core::HawDBError) -> CanonicalSegmentError {
+    CanonicalSegmentError::Corrupt(error.to_string())
 }
 
 fn allocate(
@@ -145,36 +252,7 @@ fn allocate(
             reason: "canonical record capacity exceeds usize".into(),
         }))
     })?;
-    CheckpointBytes::new(capacity, work).map_err(CanonicalSegmentError::Work)
-}
-
-fn properties(
-    properties: &BTreeMap<String, Value>,
-    mut spills: Option<&mut PropertySpillWriter>,
-    dictionary: &mut PropertyKeyDictionary,
-    output: &mut CheckpointBytes,
-    work: &CheckpointWorkContext,
-) -> Result<(), CanonicalSegmentError> {
-    output.append(
-        &u32_len(properties.len(), "property map")?.to_le_bytes(),
-        work,
-    )?;
-    for (key, value) in properties {
-        output.append(&dictionary.intern(key)?.to_le_bytes(), work)?;
-        let value_bytes = value_size(value, work)?;
-        if let Some(spills) = spills.as_deref_mut()
-            && spills.should_spill(value_bytes)
-        {
-            let encoded = encode_value(value, work)?;
-            let id = spills.push_checkpoint(encoded)?;
-            output.append(&[7], work)?;
-            output.append(&id.to_le_bytes(), work)?;
-        } else {
-            value::append(value, output, work)?;
-        }
-    }
-    work.checkpoint()?;
-    Ok(())
+    CheckpointBytes::new_retained(capacity, work).map_err(CanonicalSegmentError::Work)
 }
 
 fn value_size(value: &Value, work: &CheckpointWorkContext) -> Result<usize, CanonicalSegmentError> {
@@ -186,3 +264,5 @@ fn value_size(value: &Value, work: &CheckpointWorkContext) -> Result<usize, Cano
         }))
     })
 }
+
+mod body;

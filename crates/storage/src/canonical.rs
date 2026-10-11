@@ -42,12 +42,16 @@ mod checkpoint_record_memory_tests;
 mod checkpoint_scan;
 mod checkpoint_validation;
 mod checkpoint_writer;
+mod write_preparation;
 pub(crate) use checkpoint_writer::CheckpointCanonicalManifest;
+pub(crate) use write_preparation::Preparation as CanonicalPreparation;
 #[cfg(test)]
 mod checkpoint_validation_memory_tests;
 #[cfg(test)]
 mod checkpoint_writer_memory_tests;
-pub(crate) use checkpoint_scan::{CheckpointCanonicalIterator, CheckpointCanonicalRecord};
+pub(crate) use checkpoint_scan::{
+    CheckpointCanonicalCursor, CheckpointCanonicalIterator, CheckpointCanonicalRecord,
+};
 
 use crate::file_io::{self as fs, File};
 use crate::graph_descriptor_tree::demand::{
@@ -1081,6 +1085,7 @@ impl CanonicalSegmentWriter {
             .map(|(manifest, spills)| (manifest.into_unadmitted(), spills))
     }
 
+    #[cfg(test)]
     pub(crate) fn write_checkpoint_steps<N, R, NT, RT>(
         &self,
         path: &Path,
@@ -1118,61 +1123,19 @@ impl CanonicalSegmentWriter {
         RT: Borrow<RelRecord>,
     {
         let work = self.work.clone().unwrap_or_default();
-        work.checkpoint()?;
-        let tmp_path = path.with_extension("hawdb.tmp");
-        let spill_tmp_path = property_spill.artifact_path.with_extension("hawdb.tmp");
-        let source_commit_epoch = property_spill.source_commit_epoch;
-        let descriptor_tree = create_canonical_descriptor_tree(
-            path,
-            generation,
-            source_commit_epoch,
-            &work,
-            self.source_admits,
-        )?;
-        // Declared before the open writer/prepared artifacts so their handles
-        // close before cleanup, including failure during spill construction.
-        let _temporary_data = CanonicalTemporaryData {
-            canonical: tmp_path.clone(),
-            property_spill: Some(spill_tmp_path.clone()),
-        };
-        let mut spill_writer = if self.source_admits {
-            PropertySpillWriter::create_checkpoint(
-                &spill_tmp_path,
-                generation,
-                property_spill.source_commit_epoch,
-                property_spill.config,
-                property_spill.descriptor_tree,
-                work.clone(),
-            )?
-        } else {
-            PropertySpillWriter::create_with_work_context(
-                &spill_tmp_path,
-                generation,
-                property_spill.source_commit_epoch,
-                property_spill.config,
-                property_spill.descriptor_tree,
-                work.clone(),
-            )?
-        };
-        let prepared_canonical = self.write_inner(
-            &tmp_path,
-            CanonicalWriteIdentity {
-                generation,
-                source_commit_epoch,
-            },
+        let mut preparation =
+            write_preparation::Preparation::new(self, path, generation, property_spill);
+        preparation.initialize(&work)?;
+        self.append_inputs(
+            preparation
+                .state
+                .as_mut()
+                .expect("initialized canonical writer"),
             nodes,
             relationships,
-            Some(&mut spill_writer),
-            descriptor_tree,
+            preparation.spill_writer.as_mut(),
         )?;
-        let prepared_spill = spill_writer.finish()?;
-        let spill_output = prepared_spill.publish(property_spill.artifact_path)?;
-        {
-            let _wave = work.io_wave()?;
-            durable_replace_file(&tmp_path, path)?;
-        }
-        let canonical_manifest = prepared_canonical.publish_descriptor_tree()?;
-        Ok((canonical_manifest, spill_output))
+        preparation.finish(&work)
     }
 
     fn write_inner<N, R, NT, RT>(
@@ -1181,8 +1144,8 @@ impl CanonicalSegmentWriter {
         identity: CanonicalWriteIdentity,
         nodes: N,
         relationships: R,
-        mut property_spills: Option<&mut PropertySpillWriter>,
-        mut descriptor_tree: GraphDescriptorTreeBuilder,
+        property_spills: Option<&mut PropertySpillWriter>,
+        descriptor_tree: GraphDescriptorTreeBuilder,
     ) -> Result<PreparedCanonicalSegmentArtifact, CanonicalSegmentError>
     where
         N: IntoIterator<Item = Result<Option<NT>, CanonicalSegmentError>>,
@@ -1190,37 +1153,26 @@ impl CanonicalSegmentWriter {
         NT: Borrow<NodeRecord>,
         RT: Borrow<RelRecord>,
     {
-        let CanonicalWriteIdentity {
-            generation,
-            source_commit_epoch,
-        } = identity;
-        let work = self.work.clone().unwrap_or_default();
-        let _wave = work.io_wave()?;
-        let mut file = File::create(path)?;
-        let mut artifact_digest = IntegrityHasher::new();
-        write_hashed(&mut file, &mut artifact_digest, ARTIFACT_HEADER)?;
-        write_hashed(&mut file, &mut artifact_digest, &generation.0.to_le_bytes())?;
-        drop(_wave);
-        let mut artifact_len = ARTIFACT_HEADER.len() as u64 + 8;
-        let mut segment_id = 1u64;
-        let mut node_segment_count = 0u64;
-        let mut relationship_segment_count = 0u64;
-        let mut node_count = 0u64;
-        let mut relationship_count = 0u64;
-        let mut property_keys = if self.source_admits {
-            PropertyKeyDictionary::with_work_context(work.clone())
-        } else {
-            PropertyKeyDictionary::default()
-        };
+        let mut state =
+            checkpoint_writer::state::State::create(self, path, identity, descriptor_tree)?;
+        self.append_inputs(&mut state, nodes, relationships, property_spills)?;
+        state.finish()
+    }
 
-        let mut accumulator = checkpoint_writer::accumulator::Accumulator::new(
-            CanonicalSegmentKind::Nodes,
-            generation,
-            segment_id,
-            self.config,
-            work.clone(),
-            self.source_admits,
-        );
+    fn append_inputs<N, R, NT, RT>(
+        &self,
+        state: &mut checkpoint_writer::state::State,
+        nodes: N,
+        relationships: R,
+        mut property_spills: Option<&mut PropertySpillWriter>,
+    ) -> Result<(), CanonicalSegmentError>
+    where
+        N: IntoIterator<Item = Result<Option<NT>, CanonicalSegmentError>>,
+        R: IntoIterator<Item = Result<Option<RT>, CanonicalSegmentError>>,
+        NT: Borrow<NodeRecord>,
+        RT: Borrow<RelRecord>,
+    {
+        let work = self.work.clone().unwrap_or_default();
         let mut nodes = nodes.into_iter();
         loop {
             let (node, unit) = work.next_input(&mut nodes, self.source_admits)?;
@@ -1240,84 +1192,13 @@ impl CanonicalSegmentWriter {
             } else {
                 Some(unit)
             };
-            let payload = if self.source_admits {
-                checkpoint_writer::Record::Checkpoint(checkpoint_writer::record::node(
-                    node,
-                    property_spills.as_deref_mut(),
-                    &mut property_keys,
-                    self.config,
-                )?)
-            } else {
-                checkpoint_writer::Record::Ordinary(encode_node_with_property_spills(
-                    node,
-                    property_spills.as_deref_mut(),
-                    Some(&mut property_keys),
-                )?)
-            };
-            // Public callbacks keep their consumer admission through ordinary
-            // encoding; private dictionary work owns bounded child units.
+            state.encode_node(node, property_spills.as_deref_mut(), &work)?;
             if let Some(unit) = unit {
                 unit.finish();
             }
-            if accumulator.would_exceed(node.id.0, payload.len()) && !accumulator.is_empty() {
-                let descriptor = accumulator.flush_with_work_context(
-                    &mut file,
-                    &mut artifact_digest,
-                    artifact_len,
-                    self.work.as_ref(),
-                )?;
-                artifact_len = artifact_len.saturating_add(descriptor.length.get());
-                node_count = node_count.saturating_add(u64::from(descriptor.record_count));
-                descriptor_tree.push(
-                    descriptor.descriptor_tree_key(),
-                    descriptor.encode_descriptor_tree_value()?,
-                )?;
-                node_segment_count = node_segment_count.checked_add(1).ok_or_else(|| {
-                    CanonicalSegmentError::Corrupt(
-                        "canonical node segment count overflow".to_string(),
-                    )
-                })?;
-                segment_id = segment_id.saturating_add(1);
-                accumulator = checkpoint_writer::accumulator::Accumulator::new(
-                    CanonicalSegmentKind::Nodes,
-                    generation,
-                    segment_id,
-                    self.config,
-                    work.clone(),
-                    self.source_admits,
-                );
-            }
-            // Hashing owns bounded child units after callback/payload admission.
-            accumulator.add_node_properties(node, self.work.as_ref())?;
-            accumulator.push(node.id.0, &payload, None)?;
+            state.append_node(node)?;
         }
-        if !accumulator.is_empty() {
-            let descriptor = accumulator.flush_with_work_context(
-                &mut file,
-                &mut artifact_digest,
-                artifact_len,
-                self.work.as_ref(),
-            )?;
-            artifact_len = artifact_len.saturating_add(descriptor.length.get());
-            node_count = node_count.saturating_add(u64::from(descriptor.record_count));
-            descriptor_tree.push(
-                descriptor.descriptor_tree_key(),
-                descriptor.encode_descriptor_tree_value()?,
-            )?;
-            node_segment_count = node_segment_count.checked_add(1).ok_or_else(|| {
-                CanonicalSegmentError::Corrupt("canonical node segment count overflow".to_string())
-            })?;
-            segment_id = segment_id.saturating_add(1);
-        }
-
-        let mut accumulator = checkpoint_writer::accumulator::Accumulator::new(
-            CanonicalSegmentKind::Relationships,
-            generation,
-            segment_id,
-            self.config,
-            work.clone(),
-            self.source_admits,
-        );
+        state.finish_nodes()?;
         let mut relationships = relationships.into_iter();
         loop {
             let (relationship, unit) = work.next_input(&mut relationships, self.source_admits)?;
@@ -1337,104 +1218,13 @@ impl CanonicalSegmentWriter {
             } else {
                 Some(unit)
             };
-            let payload = if self.source_admits {
-                checkpoint_writer::Record::Checkpoint(checkpoint_writer::record::relationship(
-                    relationship,
-                    property_spills.as_deref_mut(),
-                    &mut property_keys,
-                    self.config,
-                )?)
-            } else {
-                checkpoint_writer::Record::Ordinary(encode_relationship_with_property_spills(
-                    relationship,
-                    property_spills.as_deref_mut(),
-                    Some(&mut property_keys),
-                )?)
-            };
-            // Public callbacks keep their consumer admission through ordinary
-            // encoding; private dictionary work owns bounded child units.
+            state.encode_relationship(relationship, property_spills.as_deref_mut(), &work)?;
             if let Some(unit) = unit {
                 unit.finish();
             }
-            if accumulator.would_exceed(relationship.id.0, payload.len()) && !accumulator.is_empty()
-            {
-                let descriptor = accumulator.flush_with_work_context(
-                    &mut file,
-                    &mut artifact_digest,
-                    artifact_len,
-                    self.work.as_ref(),
-                )?;
-                artifact_len = artifact_len.saturating_add(descriptor.length.get());
-                relationship_count =
-                    relationship_count.saturating_add(u64::from(descriptor.record_count));
-                descriptor_tree.push(
-                    descriptor.descriptor_tree_key(),
-                    descriptor.encode_descriptor_tree_value()?,
-                )?;
-                relationship_segment_count =
-                    relationship_segment_count.checked_add(1).ok_or_else(|| {
-                        CanonicalSegmentError::Corrupt(
-                            "canonical relationship segment count overflow".to_string(),
-                        )
-                    })?;
-                segment_id = segment_id.saturating_add(1);
-                accumulator = checkpoint_writer::accumulator::Accumulator::new(
-                    CanonicalSegmentKind::Relationships,
-                    generation,
-                    segment_id,
-                    self.config,
-                    work.clone(),
-                    self.source_admits,
-                );
-            }
-            accumulator.push(
-                relationship.id.0,
-                &payload,
-                Some((relationship.source.0, relationship.target.0)),
-            )?;
+            state.append_relationship(relationship)?;
         }
-        if !accumulator.is_empty() {
-            let descriptor = accumulator.flush_with_work_context(
-                &mut file,
-                &mut artifact_digest,
-                artifact_len,
-                self.work.as_ref(),
-            )?;
-            artifact_len = artifact_len.saturating_add(descriptor.length.get());
-            relationship_count =
-                relationship_count.saturating_add(u64::from(descriptor.record_count));
-            descriptor_tree.push(
-                descriptor.descriptor_tree_key(),
-                descriptor.encode_descriptor_tree_value()?,
-            )?;
-            relationship_segment_count =
-                relationship_segment_count.checked_add(1).ok_or_else(|| {
-                    CanonicalSegmentError::Corrupt(
-                        "canonical relationship segment count overflow".to_string(),
-                    )
-                })?;
-        }
-        {
-            let _wave = work.io_wave()?;
-            file.sync_all()?;
-        }
-        let artifact_integrity = artifact_digest.finish();
-        let descriptor_tree = descriptor_tree.finish()?;
-        Ok(PreparedCanonicalSegmentArtifact {
-            work,
-            generation,
-            source_commit_epoch,
-            artifact_id: ARTIFACT_ID,
-            artifact_len,
-            artifact_digest: ContentDigest(artifact_integrity.crc32c.as_u64()),
-            artifact_sha256: artifact_integrity.sha256,
-            node_count,
-            relationship_count,
-            node_segment_count,
-            relationship_segment_count,
-            property_keys: property_keys.into_keys(),
-            descriptor_tree,
-        })
+        Ok(())
     }
 }
 
@@ -1483,64 +1273,77 @@ struct PreparedCanonicalSegmentArtifact {
     node_segment_count: u64,
     relationship_segment_count: u64,
     property_keys: checkpoint_writer::Keys,
+    manifest: Option<CheckpointCanonicalManifest>,
+    manifest_consumed: bool,
     descriptor_tree: PreparedGraphDescriptorTree,
 }
 
 impl PreparedCanonicalSegmentArtifact {
-    fn publish_descriptor_tree(self) -> Result<CheckpointCanonicalManifest, CanonicalSegmentError> {
-        let Self {
-            work,
-            generation,
-            source_commit_epoch,
-            artifact_id,
-            artifact_len,
-            artifact_digest,
-            artifact_sha256,
-            node_count,
-            relationship_count,
-            node_segment_count,
-            relationship_segment_count,
-            property_keys,
-            descriptor_tree,
-        } = self;
-        let segment_count = node_segment_count
-            .checked_add(relationship_segment_count)
-            .ok_or_else(|| {
-                CanonicalSegmentError::Corrupt(
-                    "canonical descriptor count overflows u64".to_string(),
-                )
-            })?;
-        let descriptor_tree = descriptor_tree.publish()?;
-        if descriptor_tree.root.kind != GraphDescriptorKind::CanonicalSegment
-            || descriptor_tree.root.generation != generation.0
-            || descriptor_tree.root.source_commit_epoch != source_commit_epoch
-            || descriptor_tree.root.descriptor_count != segment_count
-        {
+    fn publish_descriptor_tree(
+        mut self,
+    ) -> Result<CheckpointCanonicalManifest, CanonicalSegmentError> {
+        let work = self.work.clone();
+        self.publish_descriptor_tree_with_work_context(&work)
+    }
+
+    fn publish_descriptor_tree_with_work_context(
+        &mut self,
+        work: &CheckpointWorkContext,
+    ) -> Result<CheckpointCanonicalManifest, CanonicalSegmentError> {
+        if self.manifest_consumed {
             return Err(CanonicalSegmentError::Corrupt(
-                "canonical descriptor root does not match its data artifact".to_string(),
+                "canonical manifest already consumed".into(),
             ));
         }
-        let manifest = CanonicalSegmentManifest {
-            generation,
-            source_commit_epoch,
-            artifact_id,
-            artifact_len,
-            artifact_digest,
-            artifact_sha256,
-            node_count,
-            relationship_count,
-            segment_count,
-            node_segment_count,
-            relationship_segment_count,
-            descriptor_root_artifact: descriptor_tree.root_artifact,
-            property_keys: property_keys.values,
-        };
         work.checkpoint()?;
-        manifest.validate_with_work_context(&work)?;
-        Ok(CheckpointCanonicalManifest {
-            manifest,
-            memory: property_keys.memory,
-        })
+        self.work = work.clone();
+        if self.manifest.is_none() {
+            let segment_count = self
+                .node_segment_count
+                .checked_add(self.relationship_segment_count)
+                .ok_or_else(|| {
+                    CanonicalSegmentError::Corrupt(
+                        "canonical descriptor count overflows u64".into(),
+                    )
+                })?;
+            let descriptor_tree = self.descriptor_tree.publish_with_work_context(work)?;
+            if descriptor_tree.root.kind != GraphDescriptorKind::CanonicalSegment
+                || descriptor_tree.root.generation != self.generation.0
+                || descriptor_tree.root.source_commit_epoch != self.source_commit_epoch
+                || descriptor_tree.root.descriptor_count != segment_count
+            {
+                return Err(CanonicalSegmentError::Corrupt(
+                    "canonical descriptor root does not match its data artifact".into(),
+                ));
+            }
+            let property_keys = std::mem::take(&mut self.property_keys);
+            self.manifest = Some(CheckpointCanonicalManifest {
+                manifest: CanonicalSegmentManifest {
+                    generation: self.generation,
+                    source_commit_epoch: self.source_commit_epoch,
+                    artifact_id: self.artifact_id,
+                    artifact_len: self.artifact_len,
+                    artifact_digest: self.artifact_digest,
+                    artifact_sha256: self.artifact_sha256,
+                    node_count: self.node_count,
+                    relationship_count: self.relationship_count,
+                    segment_count,
+                    node_segment_count: self.node_segment_count,
+                    relationship_segment_count: self.relationship_segment_count,
+                    descriptor_root_artifact: descriptor_tree.root_artifact,
+                    property_keys: property_keys.values,
+                },
+                memory: property_keys.memory,
+            });
+        }
+        work.checkpoint()?;
+        self.manifest
+            .as_ref()
+            .expect("cached canonical manifest")
+            .manifest
+            .validate_with_work_context(work)?;
+        self.manifest_consumed = true;
+        Ok(self.manifest.take().expect("completed canonical manifest"))
     }
 }
 
@@ -3362,52 +3165,110 @@ fn decode_segment_records_control(
     descriptor: &CanonicalSegmentDescriptor,
     mut consumer: impl FnMut(u64, &[u8]) -> Result<CanonicalScanControl, CanonicalSegmentError>,
 ) -> Result<CanonicalScanControl, CanonicalSegmentError> {
-    let mut cursor = SliceCursor::new(bytes);
-    if cursor.read_exact(8)? != SEGMENT_HEADER {
-        return Err(CanonicalSegmentError::Corrupt(format!(
-            "canonical segment {} has an invalid header",
-            descriptor.segment_id
-        )));
-    }
-    let kind = CanonicalSegmentKind::from_tag(cursor.read_u8()?)?;
-    let generation = cursor.read_u64()?;
-    let segment_id = cursor.read_u64()?;
-    let record_count = cursor.read_u32()?;
-    if kind != descriptor.kind
-        || generation != expected_generation.0
-        || segment_id != descriptor.segment_id
-        || record_count != descriptor.record_count
-    {
-        return Err(CanonicalSegmentError::Corrupt(format!(
-            "canonical segment {} metadata does not match its manifest",
-            descriptor.segment_id
-        )));
-    }
-    let mut previous_id = None;
-    for _ in 0..record_count {
-        let id = cursor.read_u64()?;
-        if previous_id.is_some_and(|previous| id <= previous) {
-            return Err(CanonicalSegmentError::Corrupt(format!(
-                "canonical segment {} record ids are not strictly increasing",
-                descriptor.segment_id
-            )));
-        }
-        let payload_len = cursor.read_u32()? as usize;
-        let payload = cursor.read_exact(payload_len)?;
-        let control = consumer(id, payload)?;
-        previous_id = Some(id);
+    let mut framing = SegmentRecordCursor::new(bytes, expected_generation, descriptor)?;
+    while let Some(frame) = framing.next(bytes, descriptor)? {
+        let control = consumer(frame.id, &bytes[frame.payload_start..frame.payload_end])?;
+        framing.accept(frame);
         if control == CanonicalScanControl::Stop {
             return Ok(CanonicalScanControl::Stop);
         }
     }
-    if !cursor.is_empty() || previous_id.is_none() || previous_id != Some(descriptor.max_record_id)
-    {
-        return Err(CanonicalSegmentError::Corrupt(format!(
-            "canonical segment {} payload bounds are inconsistent",
-            descriptor.segment_id
-        )));
-    }
     Ok(CanonicalScanControl::Continue)
+}
+
+#[derive(Clone, Copy)]
+struct SegmentRecordFrame {
+    id: u64,
+    payload_start: usize,
+    payload_end: usize,
+}
+
+/// Shared framing for ordinary scans and retained checkpoint segment decoding.
+struct SegmentRecordCursor {
+    offset: usize,
+    index: u32,
+    record_count: u32,
+    previous_id: Option<u64>,
+}
+
+impl SegmentRecordCursor {
+    fn new(
+        bytes: &[u8],
+        expected_generation: ManifestGeneration,
+        descriptor: &CanonicalSegmentDescriptor,
+    ) -> Result<Self, CanonicalSegmentError> {
+        let mut cursor = SliceCursor::new(bytes);
+        if cursor.read_exact(8)? != SEGMENT_HEADER {
+            return Err(CanonicalSegmentError::Corrupt(format!(
+                "canonical segment {} has an invalid header",
+                descriptor.segment_id
+            )));
+        }
+        let kind = CanonicalSegmentKind::from_tag(cursor.read_u8()?)?;
+        let generation = cursor.read_u64()?;
+        let segment_id = cursor.read_u64()?;
+        let record_count = cursor.read_u32()?;
+        if kind != descriptor.kind
+            || generation != expected_generation.0
+            || segment_id != descriptor.segment_id
+            || record_count != descriptor.record_count
+        {
+            return Err(CanonicalSegmentError::Corrupt(format!(
+                "canonical segment {} metadata does not match its manifest",
+                descriptor.segment_id
+            )));
+        }
+        Ok(Self {
+            offset: cursor.offset,
+            index: 0,
+            record_count,
+            previous_id: None,
+        })
+    }
+
+    fn next(
+        &self,
+        bytes: &[u8],
+        descriptor: &CanonicalSegmentDescriptor,
+    ) -> Result<Option<SegmentRecordFrame>, CanonicalSegmentError> {
+        if self.index == self.record_count {
+            if self.offset != bytes.len()
+                || self.previous_id.is_none()
+                || self.previous_id != Some(descriptor.max_record_id)
+            {
+                return Err(CanonicalSegmentError::Corrupt(format!(
+                    "canonical segment {} payload bounds are inconsistent",
+                    descriptor.segment_id,
+                )));
+            }
+            return Ok(None);
+        }
+        let mut cursor = SliceCursor {
+            bytes,
+            offset: self.offset,
+        };
+        let id = cursor.read_u64()?;
+        if self.previous_id.is_some_and(|previous| id <= previous) {
+            return Err(CanonicalSegmentError::Corrupt(format!(
+                "canonical segment {} record ids are not strictly increasing",
+                descriptor.segment_id,
+            )));
+        }
+        let payload_len = cursor.read_u32()? as usize;
+        let payload_start = cursor.offset;
+        cursor.read_exact(payload_len)?;
+        Ok(Some(SegmentRecordFrame {
+            id,
+            payload_start,
+            payload_end: cursor.offset,
+        }))
+    }
+
+    fn accept(&mut self, frame: SegmentRecordFrame) {
+        self.offset = frame.payload_end;
+        self.previous_id = Some(frame.id);
+        self.index += 1;
+    }
 }
 
 /// Interns each distinct top-level record property key into a `u32` id in

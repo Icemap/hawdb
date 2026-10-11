@@ -533,3 +533,262 @@ fn checkpoint_units_scan_memory_related_segment_denial_precedes_any_unadmitted_l
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
+
+fn retained_cursor_every_cut<T>(reader: &CanonicalSegmentReader, expected: &[T])
+where
+    T: CheckpointCanonicalRecord + std::fmt::Debug + PartialEq,
+{
+    let ceiling = 8 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    local.set_telemetry_sink(Some(baseline.clone()));
+    let mut cursor = CheckpointCanonicalCursor::<T>::new(reader);
+    let first = cursor.next_record(reader, &work).unwrap().unwrap();
+    assert_eq!(*first, expected[0]);
+    let total = baseline.completed.load(Ordering::SeqCst);
+    drop(first);
+    drop(cursor);
+    assert_eq!(used(&task, ceiling), 0);
+    local.set_telemetry_sink(None);
+    let mut selected_retries = 0;
+    for cut in 1..=total {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(cut, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        let mut cursor = CheckpointCanonicalCursor::<T>::new(reader);
+        let mut count = 0;
+        match cursor.next_record(reader, &stopped) {
+            Ok(Some(record)) => {
+                assert_eq!(*record, expected[0]);
+                count = 1;
+            }
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_))) => {
+                selected_retries += usize::from(cursor.pending_descriptor.is_some());
+            }
+            other => panic!("unexpected retained scan result at cut {cut}: {other:?}"),
+        }
+        probe.assert_released(&local);
+        local.set_telemetry_sink(None);
+        while let Some(record) = cursor.next_record(reader, &work).unwrap() {
+            assert_eq!(*record, expected[count], "cut={cut} record={count}");
+            count += 1;
+        }
+        assert_eq!(count, expected.len(), "cut={cut}");
+        drop(cursor);
+        drop(stopped);
+        assert_eq!(used(&task, ceiling), 0, "cut={cut}");
+    }
+    assert!(
+        selected_retries > 0,
+        "must cancel after descriptor advancement and before hydration completes"
+    );
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_canonical_cursor_retries_node_and_relationship_cuts_without_skipping_segments() {
+    let fixture = Fixture::new(3, 23);
+    let before = std::fs::read(&fixture.path).unwrap();
+    retained_cursor_every_cut(&fixture.reader, &fixture.nodes);
+    retained_cursor_every_cut(&fixture.reader, &fixture.relationships);
+    assert_eq!(std::fs::read(&fixture.path).unwrap(), before);
+}
+
+#[test]
+fn retained_canonical_cursor_rejects_changed_source_without_advancing() {
+    let fixture = Fixture::new(3, 23);
+    let changed = Fixture::new(3, 29);
+    let work = CheckpointWorkContext::default();
+    let mut cursor = CheckpointCanonicalCursor::<NodeRecord>::new(&fixture.reader);
+    assert!(matches!(
+        cursor.next_record(&changed.reader, &work),
+        Err(CanonicalSegmentError::Corrupt(_))
+    ));
+    for expected in &fixture.nodes {
+        assert_eq!(
+            *cursor.next_record(&fixture.reader, &work).unwrap().unwrap(),
+            *expected
+        );
+    }
+    assert!(cursor
+        .next_record(&fixture.reader, &work)
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn retained_canonical_cursor_rejects_changed_dictionary_even_with_identical_artifact_digest() {
+    let fixture = Fixture::new(3, 23);
+    let mut changed = fixture.reader.clone();
+    let mut manifest = changed.manifest.as_ref().clone();
+    manifest.property_keys[0] = "different-property".into();
+    changed.manifest = Arc::new(manifest);
+    assert_eq!(
+        changed.manifest.artifact_sha256,
+        fixture.reader.manifest.artifact_sha256
+    );
+    let work = CheckpointWorkContext::default();
+    let mut cursor = CheckpointCanonicalCursor::<NodeRecord>::new(&fixture.reader);
+    assert!(matches!(
+        cursor.next_record(&changed, &work),
+        Err(CanonicalSegmentError::Corrupt(_))
+    ));
+    assert_eq!(
+        *cursor
+            .next_record(&fixture.reader.clone(), &work)
+            .unwrap()
+            .unwrap(),
+        fixture.nodes[0]
+    );
+}
+
+fn retained_segment_decode_with_budget<T>(reader: &CanonicalSegmentReader, expected: &[T])
+where
+    T: CheckpointCanonicalRecord + std::fmt::Debug + PartialEq,
+{
+    let ceiling = 8 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let mut cursor = CheckpointCanonicalCursor::<T>::new(reader);
+    let mut first = None;
+    let mut previous_records = 0;
+    let mut retained_bytes_retries = 0;
+    for _ in 0..32 {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(256, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let attempt_task = permit.bind_task_context(RuntimeTaskContext::without_deadline(
+            probe.cancellation.clone(),
+        ));
+        let fresh = observed_context(&attempt_task, &local, probe.clone());
+        let already_cached = cursor.loading.bytes.is_some();
+        match cursor.next_record(reader, &fresh) {
+            Ok(Some(record)) => {
+                first = Some(record);
+                break;
+            }
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_))) => {}
+            other => panic!("unexpected segment resume result: {other:?}"),
+        }
+        probe.assert_released(&local);
+        assert_eq!(probe.completed.load(Ordering::SeqCst), 256);
+        let records = cursor
+            .loading
+            .framing
+            .as_ref()
+            .map_or(0, |framing| framing.index);
+        assert!(records >= previous_records);
+        previous_records = records;
+        if already_cached {
+            assert_eq!(
+                probe.io_waves.load(Ordering::SeqCst),
+                0,
+                "cached segment must not be reread"
+            );
+            retained_bytes_retries += 1;
+        }
+    }
+    local.set_telemetry_sink(None);
+    let first = first.expect("segment decode restarted instead of retaining completed records");
+    assert!(previous_records > 0);
+    assert!(retained_bytes_retries > 0);
+    assert_eq!(*first, expected[0]);
+    drop(first);
+    for node in &expected[1..] {
+        assert_eq!(*cursor.next_record(reader, &work).unwrap().unwrap(), *node);
+    }
+    assert!(cursor.next_record(reader, &work).unwrap().is_none());
+    drop(cursor);
+    assert_eq!(used(&task, ceiling), 0);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_canonical_cursor_completes_segment_decode_across_fixed_work_denials() {
+    let fixture = Fixture::new(32, 23);
+    let before = std::fs::read(&fixture.path).unwrap();
+    retained_segment_decode_with_budget(&fixture.reader, &fixture.nodes);
+    retained_segment_decode_with_budget(&fixture.reader, &fixture.relationships);
+    assert_eq!(std::fs::read(&fixture.path).unwrap(), before);
+}
+
+#[test]
+fn retained_segment_decode_exposes_no_records_before_final_framing_validation() {
+    let fixture = Fixture::new(32, 23);
+    let ceiling = 8 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe.cancel_after.store(256, Ordering::SeqCst);
+    let attempt_task = permit.bind_task_context(RuntimeTaskContext::without_deadline(
+        probe.cancellation.clone(),
+    ));
+    let stopped = observed_context(&attempt_task, &local, probe.clone());
+    let mut cursor = CheckpointCanonicalCursor::<NodeRecord>::new(&fixture.reader);
+    assert!(matches!(
+        cursor.next_record(&fixture.reader, &stopped),
+        Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+    ));
+    probe.assert_released(&local);
+    assert!(cursor.loading.framing.as_ref().unwrap().index > 0);
+    assert!(cursor.current.records.as_slice().is_empty());
+    // Exercise the real final bound check using the private descriptor seam.
+    // Cached decoded prefixes must remain private when that check fails.
+    cursor
+        .pending_descriptor
+        .as_mut()
+        .unwrap()
+        .descriptor
+        .max_record_id += 1;
+    local.set_telemetry_sink(None);
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    assert!(matches!(
+        cursor.next_record(&fixture.reader, &work),
+        Err(CanonicalSegmentError::Corrupt(_))
+    ));
+    assert!(cursor.current.records.as_slice().is_empty());
+    drop(cursor);
+    drop(stopped);
+    drop(attempt_task);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}

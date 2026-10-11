@@ -27,6 +27,8 @@ use std::collections::BTreeSet;
 use std::iter::Peekable;
 
 mod checkpoint;
+mod cursor;
+pub(crate) use cursor::Cursor as CheckpointOverlayCursor;
 #[cfg(test)]
 mod tests;
 pub(crate) use checkpoint::{CheckpointOverlayIterator, CheckpointRecordRef};

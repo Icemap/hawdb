@@ -20,9 +20,12 @@ mod checkpoint;
 #[cfg(test)]
 pub(crate) use checkpoint::tests::CheckpointWorkProbe;
 pub(crate) use checkpoint::{
-    checkpoint_decode_allocation, CheckpointBytes, CheckpointDecodeContext, CheckpointWorkUnit,
+    checkpoint_decode_allocation, CheckpointBytes, CheckpointDecodeContext, CheckpointVectorPush,
+    CheckpointWorkUnit,
 };
-pub(crate) use checkpoint::{CheckpointAllocationOwner, CheckpointAllocationToken};
+pub(crate) use checkpoint::{
+    CheckpointAllocationLookup, CheckpointAllocationOwner, CheckpointAllocationToken,
+};
 #[doc(hidden)]
 pub use checkpoint::{
     CheckpointOperationError, CheckpointSharedBytes, CheckpointText, CheckpointWorkContext,

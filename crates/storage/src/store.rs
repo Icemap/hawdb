@@ -9007,12 +9007,8 @@ mod tests {
             );
         }
         let epoch = store.commit_epoch();
-        let generation = store
-            .durable
-            .as_ref()
-            .unwrap()
-            .next_checkpoint_generation()
-            .unwrap();
+        // Locate this candidate, rather than allocate another generation.
+        let generation = candidate.prepared_generation_for_test();
         let private_wal = path.join(super::wal_generation_file(generation));
         if uncertain {
             super::set_checkpoint_failpoint(Some(super::CheckpointPublishStage::ManifestPublished));
@@ -10982,12 +10978,8 @@ mod tests {
         let old_manifest = std::fs::read(path.join(super::MANIFEST_FILE)).unwrap();
         let old_wal = store.durable.as_ref().unwrap().wal_path.clone();
         let old_bytes = std::fs::read(&old_wal).unwrap();
-        let generation = store
-            .durable
-            .as_ref()
-            .unwrap()
-            .next_checkpoint_generation()
-            .unwrap();
+        // Locate this candidate, rather than allocate another generation.
+        let generation = candidate.prepared_generation_for_test();
         let candidate_path = path.join(super::wal_generation_file(generation));
         std::fs::OpenOptions::new()
             .write(true)
@@ -11039,12 +11031,8 @@ mod tests {
         let captured = store.checkpoint_source();
         candidate.catch_up(&captured).unwrap();
         drop(captured);
-        let generation = store
-            .durable
-            .as_ref()
-            .unwrap()
-            .next_checkpoint_generation()
-            .unwrap();
+        // Locate this candidate, rather than allocate another generation.
+        let generation = candidate.prepared_generation_for_test();
         super::set_checkpoint_failpoint(Some(super::CheckpointPublishStage::ManifestPublished));
         let publication =
             store.publish_checkpoint_candidate(&mut candidate, Some(1), &Default::default());

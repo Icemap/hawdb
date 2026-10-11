@@ -460,6 +460,134 @@ pub fn write_with_work_context(
     projection: &mut SourceScanProjection,
     work: &CheckpointWorkContext,
 ) -> Result<SourceScanPublication> {
+    write_with_preparation(
+        path,
+        projection,
+        &mut SourceScanWritePreparation::new(work),
+        work,
+    )
+}
+
+#[derive(Default, Debug)]
+struct SegmentEncoding {
+    text: Option<CheckpointText>,
+    last_node: Option<NodeId>,
+    row_index: usize,
+    complete_text: bool,
+    payload: Option<CheckpointBytes>,
+}
+
+pub(crate) struct SourceScanWritePreparation {
+    segments: Vec<SegmentEncoding>,
+    memory: crate::background::CheckpointDecodeContext,
+}
+
+impl std::fmt::Debug for SourceScanWritePreparation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SourceScanWritePreparation")
+            .field("segments", &self.segments)
+            .finish_non_exhaustive()
+    }
+}
+
+impl SourceScanWritePreparation {
+    pub(crate) fn new(work: &CheckpointWorkContext) -> Self {
+        Self {
+            segments: Vec::new(),
+            memory: owned::context(work),
+        }
+    }
+
+    fn encode_row(
+        state: &mut SegmentEncoding,
+        node_id: u64,
+        properties: &BTreeMap<String, Value>,
+        work: &CheckpointWorkContext,
+    ) -> Result<()> {
+        let mut row = CheckpointText::new();
+        row.fields(format_args!("row\t{node_id}\t"), work)?;
+        row.properties(properties, work)?;
+        row.append("\n", work)?;
+        let text = state.text.as_mut().expect("segment header exists");
+        let previous = text.len();
+        if let Err(error) = text.append(&row, work) {
+            text.truncate(previous);
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn prepare(
+        &mut self,
+        projection: &SourceScanProjection,
+        work: &CheckpointWorkContext,
+    ) -> Result<()> {
+        self.memory.work = work.clone();
+        for (index, segment) in projection.segments.iter().enumerate() {
+            if self.segments.len() == index {
+                self.memory
+                    .push(&mut self.segments, SegmentEncoding::default())?;
+            }
+            let state = &mut self.segments[index];
+            if state.payload.is_some() {
+                continue;
+            }
+            if state.text.is_none() {
+                let mut text = CheckpointText::new();
+                text.append(SOURCE_SCAN_SEGMENT_HEADER, work)?;
+                text.append("\n", work)?;
+                state.text = Some(text);
+            }
+            if !state.complete_text {
+                if let Some((first, last, label)) = segment.pinned_bounds {
+                    let nodes = projection.source_nodes.as_ref().ok_or_else(|| {
+                        HawDBError::StorageIntegrity(
+                            "source scan segment lost its pinned records".into(),
+                        )
+                    })?;
+                    let start = state
+                        .last_node
+                        .map_or(Some(first), |id| id.0.checked_add(1).map(NodeId));
+                    if let Some(start) = start.filter(|start| *start <= last) {
+                        for (_, node) in nodes.range(&start, &last) {
+                            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                            let selected = node.labels.contains(&label);
+                            unit.finish();
+                            if selected {
+                                Self::encode_row(state, node.id.0, &node.properties, work)?;
+                            }
+                            state.last_node = Some(node.id);
+                        }
+                    }
+                } else {
+                    for row in segment.rows.iter().skip(state.row_index) {
+                        let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                        unit.finish();
+                        Self::encode_row(state, row.node_id, &row.properties, work)?;
+                        state.row_index += 1;
+                    }
+                }
+                state.complete_text = true;
+            }
+            let text = state.text.as_ref().expect("segment text exists");
+            state.payload = Some(encode_owned_durable_text_with_work_context(
+                text,
+                DurableCompression::default(),
+                work,
+            )?);
+            state.text = None;
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn write_with_preparation(
+    path: &Path,
+    projection: &mut SourceScanProjection,
+    preparation: &mut SourceScanWritePreparation,
+    work: &CheckpointWorkContext,
+) -> Result<SourceScanPublication> {
+    preparation.prepare(projection, work)?;
     let payload_path = path.join(SOURCE_SCAN_PAYLOAD_FILE);
     let payload_tmp_path = payload_path.with_extension("hawdb.tmp");
     let mut payload_temporary = TemporarySourceScanPath(None);
@@ -473,22 +601,11 @@ pub fn write_with_work_context(
             unit.finish();
             file
         };
-        for segment in projection.segments.make_mut(work)? {
-            let payload = if let Some((first, last, label)) = segment.pinned_bounds {
-                let nodes = projection.source_nodes.as_ref().ok_or_else(|| {
-                    HawDBError::StorageIntegrity(
-                        "source scan segment lost its pinned records".into(),
-                    )
-                })?;
-                encode_segment_records_with_work_context(
-                    nodes.range(&first, &last).map(|(_, node)| {
-                        (node.labels.contains(&label), node.id.0, &node.properties)
-                    }),
-                    work,
-                )?
-            } else {
-                encode_segment_payload_with_work_context(&segment.rows, work)?
-            };
+        for (index, segment) in projection.segments.make_mut(work)?.iter_mut().enumerate() {
+            let payload = preparation.segments[index]
+                .payload
+                .as_ref()
+                .expect("prepared source payload");
             let length = u64::try_from(payload.len()).map_err(|_| {
                 HawDBError::Storage(format!(
                     "source scan segment {} payload exceeds supported range length",
@@ -502,7 +619,7 @@ pub fn write_with_work_context(
                     HawDBError::Storage("source scan segment payload is empty".to_string())
                 })?,
                 checksum: work
-                    .checksum(&payload)
+                    .checksum(payload)
                     .map_err(HawDBError::from_storage_error)?,
             });
             for block in payload.chunks(64 * 1024) {
@@ -700,6 +817,7 @@ fn encode_segment_payload(rows: &[SourceScanRow]) -> Result<Vec<u8>> {
         .map(CheckpointBytes::into_unadmitted)
 }
 
+#[cfg(test)]
 fn encode_segment_payload_with_work_context(
     rows: &[SourceScanRow],
     work: &CheckpointWorkContext,
@@ -710,6 +828,7 @@ fn encode_segment_payload_with_work_context(
     )
 }
 
+#[cfg(test)]
 fn encode_segment_records_with_work_context<'a>(
     rows: impl Iterator<Item = (bool, u64, &'a BTreeMap<String, Value>)>,
     work: &CheckpointWorkContext,
@@ -718,6 +837,7 @@ fn encode_segment_records_with_work_context<'a>(
     encode_owned_durable_text_with_work_context(&body, DurableCompression::default(), work)
 }
 
+#[cfg(test)]
 fn encode_segment_text_with_work_context<'a>(
     rows: impl Iterator<Item = (bool, u64, &'a BTreeMap<String, Value>)>,
     work: &CheckpointWorkContext,

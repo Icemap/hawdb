@@ -18,7 +18,7 @@
 //! publication, manifest validation and physical-generation reclamation.
 
 #[path = "durable/artifacts.rs"]
-mod artifacts;
+pub(in crate::store) mod artifacts;
 #[path = "durable/backup.rs"]
 mod backup;
 #[path = "durable/checkpoint.rs"]
@@ -645,19 +645,24 @@ impl DurableStore {
             .max(self.wal_generation)
             .checked_add(1)
             .ok_or_else(|| HawDBError::Storage("checkpoint generation overflow".to_string()))?;
-        let Some(directory) = self
+        let branch_directory = self
             .branch_runtime
             .as_ref()
-            .and_then(|branch| branch.head_path().parent())
-        else {
-            return Ok(generation);
-        };
+            .and_then(|branch| branch.head_path().parent());
         // Interrupted candidates are evidence, not reusable WAL names. Bound
         // discovery per attempt; maintenance must resolve a larger backlog.
         for _ in 0..256 {
-            if !fs::try_exists(
-                directory.join(crate::artifact_files::wal_generation_file(generation)),
-            )? {
+            let preparation_exists = fs::try_exists(
+                self.root_path
+                    .join(format!(".checkpoint.{generation}.prepare")),
+            )?;
+            let wal_exists = match branch_directory {
+                Some(directory) => fs::try_exists(
+                    directory.join(crate::artifact_files::wal_generation_file(generation)),
+                )?,
+                None => false,
+            };
+            if !preparation_exists && !wal_exists {
                 return Ok(generation);
             }
             generation = generation

@@ -305,3 +305,139 @@ fn checkpoint_units_range_read_errors_preserve_typed_diagnostics_and_release_buf
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
+
+#[test]
+fn retained_range_read_completes_with_two_units_without_restarting_blocks_or_checksum() {
+    use crate::background::CheckpointWorkProbe;
+    use std::sync::atomic::Ordering;
+    let fixture = Fixture::new(1024 * 1024 + 17);
+    assert!(fixture
+        .reader
+        .artifacts
+        .get(&7)
+        .unwrap()
+        .registration()
+        .unwrap()
+        .binding
+        .is_none());
+    let ceiling = 2 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let local = scheduler();
+    let mut state = None;
+    let mut payload = None;
+    let mut copied = 0;
+    let mut checked = 0;
+    let mut attempts = 0;
+    for attempt in 1..=128 {
+        attempts = attempt;
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(2, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let work = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        match fixture
+            .reader
+            .checkpoint_range_with_preparation(&fixture.range, &mut state, &work)
+        {
+            Ok(output) => {
+                payload = Some(output);
+                break;
+            }
+            Err(CheckpointRangeReadError::Work(CheckpointWorkError::Stopped(_))) => {}
+            other => panic!("unexpected retained range result: {other:?}"),
+        }
+        probe.assert_released(&local);
+        assert_eq!(probe.completed.load(Ordering::SeqCst), 2);
+        assert_eq!(governor.snapshot().active_background_io_slots, 0);
+        let current = state.as_ref().unwrap();
+        let length = current.payload.as_ref().map_or(0, |bytes| bytes.len());
+        assert!(length >= copied);
+        assert!(current.checked >= checked);
+        copied = length;
+        checked = current.checked;
+        if let Some(bytes) = &current.payload {
+            assert_eq!(&**bytes, &fixture.expected[..length]);
+        }
+    }
+    let payload = payload.expect("retained range made no complete bounded progress");
+    assert!(attempts >= 16);
+    assert!(state.is_none());
+    assert_eq!(&*payload, fixture.expected);
+    fixture.assert_source_unchanged();
+    local.set_telemetry_sink(None);
+    drop(permit);
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, ceiling);
+    drop(payload);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_range_read_rejects_changed_range_and_artifact_without_discarding_original_progress() {
+    use crate::background::CheckpointWorkProbe;
+    use std::sync::atomic::Ordering;
+    let fixture = Fixture::new(128 * 1024 + 17);
+    let ceiling = 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let local = scheduler();
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe.cancel_after.store(8, Ordering::SeqCst);
+    local.set_telemetry_sink(Some(probe.clone()));
+    let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+        RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+    ))
+    .with_scheduler(local.clone());
+    let mut state = None;
+    assert!(matches!(
+        fixture
+            .reader
+            .checkpoint_range_with_preparation(&fixture.range, &mut state, &stopped),
+        Err(CheckpointRangeReadError::Work(
+            CheckpointWorkError::Stopped(_)
+        ))
+    ));
+    probe.assert_released(&local);
+    local.set_telemetry_sink(None);
+    let before = state.as_ref().unwrap().payload.as_ref().unwrap().len();
+    let work = CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()))
+        .with_scheduler(local.clone());
+    let wrong = SegmentReadRange::new(7, 11, 1, fixture.range.length)
+        .with_content_digest(fixture.range.content_digest.unwrap());
+    assert!(matches!(
+        fixture
+            .reader
+            .checkpoint_range_with_preparation(&wrong, &mut state, &work),
+        Err(CheckpointRangeReadError::Read(_))
+    ));
+    let mut replaced = fixture.reader.clone();
+    replaced.register(7, &fixture.path);
+    assert!(matches!(
+        replaced.checkpoint_range_with_preparation(&fixture.range, &mut state, &work),
+        Err(CheckpointRangeReadError::Read(_))
+    ));
+    assert_eq!(
+        state.as_ref().unwrap().payload.as_ref().unwrap().len(),
+        before
+    );
+    let output = fixture
+        .reader
+        .checkpoint_range_with_preparation(&fixture.range, &mut state, &work)
+        .unwrap();
+    assert_eq!(&*output, fixture.expected);
+    assert!(state.is_none());
+    fixture.assert_source_unchanged();
+    drop(output);
+    drop(stopped);
+    drop(work);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}

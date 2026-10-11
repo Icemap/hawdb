@@ -42,6 +42,25 @@ impl std::fmt::Debug for CheckpointAllocationOwner {
 
 pub(crate) struct CheckpointAllocationToken(Option<Arc<Allocation>>);
 
+/// Keep the immutable inventory suffix visited by an unfinished buffer lookup.
+/// Incoming allocations may extend the owner, but the original backing remains
+/// owned and unchanged until its caller completes the capacity replacement.
+pub(crate) struct CheckpointAllocationLookup {
+    address: usize,
+    current: Option<Arc<Allocation>>,
+}
+
+impl Drop for CheckpointAllocationLookup {
+    fn drop(&mut self) {
+        // The owner may close while the lookup retains its last suffix. Reuse
+        // the inventory's iterative destruction instead of recursively dropping
+        // the linked Arc chain through the cursor's last reference.
+        drop(CheckpointAllocationOwner {
+            head: self.current.take(),
+        });
+    }
+}
+
 impl CheckpointAllocationToken {
     pub(crate) fn address(&self, address: usize) {
         if let Some(node) = &self.0 {
@@ -102,16 +121,37 @@ impl CheckpointAllocationOwner {
         address: usize,
         work: &CheckpointWorkContext,
     ) -> Result<CheckpointAllocationToken, CheckpointWorkError> {
-        let mut current = self.head.as_ref();
-        while let Some(node) = current {
+        self.find_retained(address, &mut None, work)
+    }
+
+    pub(crate) fn find_retained(
+        &self,
+        address: usize,
+        pending: &mut Option<CheckpointAllocationLookup>,
+        work: &CheckpointWorkContext,
+    ) -> Result<CheckpointAllocationToken, CheckpointWorkError> {
+        let state = pending.get_or_insert_with(|| CheckpointAllocationLookup {
+            address,
+            current: self.head.clone(),
+        });
+        if state.address != address {
+            return Err(work.record_failure(CheckpointWorkError::Allocation {
+                bytes: 0,
+                reason: "retained allocation lookup address changed".into(),
+            }));
+        }
+        while let Some(node) = state.current.clone() {
             let unit = work.start_unit()?;
             let found = node.address.load(Ordering::Relaxed) == address;
-            unit.finish();
             if found {
-                return Ok(CheckpointAllocationToken(Some(node.clone())));
+                *pending = None;
+                unit.finish();
+                return Ok(CheckpointAllocationToken(Some(node)));
             }
-            current = node.next.as_ref();
+            state.current = node.next.clone();
+            unit.finish();
         }
+        *pending = None;
         Ok(CheckpointAllocationToken(None))
     }
 

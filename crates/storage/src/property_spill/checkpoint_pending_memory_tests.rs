@@ -239,3 +239,236 @@ fn checkpoint_units_canonical_accumulator_memory_related_pending_every_cpu_cut_r
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     assert_eq!(governor.snapshot().active_background_io_slots, 0);
 }
+
+#[test]
+fn retained_spill_finish_preserves_written_block_and_tree_with_two_units() {
+    let fixture = Fixture::new();
+    let bytes = vec![0x97; 512 * 1024];
+    let mut ordinary = fixture.writer("ordinary", CheckpointWorkContext::default());
+    assert_eq!(push(&mut ordinary, &bytes).unwrap(), 0);
+    let expected = ordinary
+        .finish()
+        .unwrap()
+        .publish(&fixture.0.join("ordinary-final.hawdb"))
+        .unwrap();
+    let ceiling = 4 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let mut writer = fixture.writer("retained", work.clone());
+    assert_eq!(push(&mut writer, &bytes).unwrap(), 0);
+    let mut completed = None;
+    let mut previous_bytes = fs::metadata(writer.path()).unwrap().len();
+    let mut attempts = 0;
+    for attempt in 1..=128 {
+        attempts = attempt;
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(2, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let fresh = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        let result = writer.finish_with_work_context(&fresh);
+        probe.assert_released(&local);
+        assert!(probe.completed.load(Ordering::SeqCst) <= 2);
+        let current_bytes = fs::metadata(writer.path()).unwrap().len();
+        assert!(current_bytes >= previous_bytes);
+        previous_bytes = current_bytes;
+        match result {
+            Ok(prepared) => {
+                completed = Some(prepared);
+                break;
+            }
+            Err(
+                PropertySpillError::Work(crate::background::CheckpointWorkError::Stopped(_))
+                | PropertySpillError::DescriptorTree(GraphDescriptorTreeError::Work(
+                    crate::background::CheckpointWorkError::Stopped(_),
+                )),
+            ) => {}
+            other => panic!("attempt={attempt}: {other:?}"),
+        }
+    }
+    assert!(attempts >= 3);
+    let mut prepared = completed.expect("fixed two-unit spill finish must complete");
+    assert_eq!(prepared.value_count, 1);
+    assert_eq!(prepared.block_count, 1);
+    local.set_telemetry_sink(None);
+    assert!(writer.push(vec![1]).is_err());
+    assert!(writer.finish_with_work_context(&work).is_err());
+    prepared.work = work.clone();
+    let result = prepared
+        .publish(&fixture.0.join("retained-final.hawdb"))
+        .unwrap();
+    drop(writer);
+    assert_eq!(
+        result.manifest.encode().unwrap(),
+        expected.manifest.encode().unwrap()
+    );
+    for (left, right) in [
+        ("retained-final.hawdb", "ordinary-final.hawdb"),
+        ("retained.pages.hawdb", "ordinary.pages.hawdb"),
+        ("retained.root.hawdb", "ordinary.root.hawdb"),
+    ] {
+        assert_eq!(
+            fs::read(fixture.0.join(left)).unwrap(),
+            fs::read(fixture.0.join(right)).unwrap()
+        );
+    }
+    assert_eq!(used(&task, ceiling), 0);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_spill_push_retries_every_growth_cut_without_losing_values_or_ids() {
+    let fixture = Fixture::new();
+    let ceiling = 4 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let capture = |name: &str| {
+        let mut writer = fixture.writer(name, work.clone());
+        for id in 0..32 {
+            assert_eq!(push(&mut writer, &[id as u8; 64]).unwrap(), id);
+        }
+        writer
+    };
+    let mut baseline_writer = capture("push-baseline");
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    local.set_telemetry_sink(Some(baseline.clone()));
+    assert_eq!(push(&mut baseline_writer, &[32; 64]).unwrap(), 32);
+    let units = baseline.completed.load(Ordering::SeqCst);
+    baseline.assert_released(&local);
+    drop(baseline_writer);
+    local.set_telemetry_sink(None);
+    for cut in 1..=units {
+        let mut writer = capture(&format!("push-cut-{cut}"));
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(cut, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        writer.bind_checkpoint_attempt(&stopped);
+        assert!(matches!(
+            push(&mut writer, &[32; 64]),
+            Err(PropertySpillError::Work(
+                crate::background::CheckpointWorkError::Stopped(_)
+            ))
+        ));
+        probe.assert_released(&local);
+        local.set_telemetry_sink(None);
+        writer.bind_checkpoint_attempt(&work);
+        if writer.has_pending_checkpoint_push() {
+            assert_eq!(writer.resume_checkpoint_push(&work).unwrap(), 32);
+        } else if writer.next_checkpoint_spill_id() == 32 {
+            assert_eq!(push(&mut writer, &[32; 64]).unwrap(), 32);
+        }
+        assert_eq!(writer.next_checkpoint_spill_id(), 33);
+        assert_eq!(writer.pending.len(), 33);
+        for (id, (actual, value)) in writer.pending.iter().enumerate() {
+            assert_eq!(*actual, id as u64, "cut={cut}");
+            assert_eq!(&**value, &[id as u8; 64], "cut={cut}");
+        }
+        assert_eq!(push(&mut writer, &[33; 64]).unwrap(), 33);
+        drop(writer);
+        drop(stopped);
+        assert_eq!(used(&task, ceiling), 0);
+    }
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_spill_publication_resumes_after_data_rename_without_replacing_it() {
+    let fixture = Fixture::new();
+    let bytes = vec![0x53; 8192];
+    let mut ordinary = fixture.writer("publication-ordinary", CheckpointWorkContext::default());
+    ordinary.push(bytes.clone()).unwrap();
+    let expected = ordinary
+        .finish()
+        .unwrap()
+        .publish(&fixture.0.join("publication-ordinary-final.hawdb"))
+        .unwrap();
+    for cut in 1..=2 {
+        let name = format!("publication-cut-{cut}");
+        let mut writer = fixture.writer(&name, CheckpointWorkContext::default());
+        writer.push(bytes.clone()).unwrap();
+        let mut prepared = writer.finish().unwrap();
+        let destination = fixture.0.join(format!("{name}-final.hawdb"));
+        let scheduler = local();
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_on_io_wave.store(cut, Ordering::SeqCst);
+        let stopped = probe.context(scheduler.clone());
+        assert!(matches!(
+            prepared.publish_with_work_context(&destination, &stopped),
+            Err(PropertySpillError::Work(
+                crate::background::CheckpointWorkError::Io(
+                    hawdb_core::RuntimeIoWaveError::Stopped(_)
+                )
+            )) | Err(PropertySpillError::DescriptorTree(
+                GraphDescriptorTreeError::Work(crate::background::CheckpointWorkError::Io(
+                    hawdb_core::RuntimeIoWaveError::Stopped(_)
+                ))
+            ))
+        ));
+        probe.assert_released(&scheduler);
+        assert_eq!(prepared.data_published, cut == 2);
+        assert_eq!(destination.exists(), cut == 2);
+        assert_eq!(prepared.temporary_artifact_path.exists(), cut == 1);
+        let fresh = CheckpointWorkContext::default();
+        if cut == 2 {
+            let wrong_path = fixture.0.join("publication-wrong-path.hawdb");
+            assert!(matches!(
+                prepared.publish_with_work_context(&wrong_path, &fresh),
+                Err(PropertySpillError::Corrupt(_))
+            ));
+            assert!(!wrong_path.exists());
+        }
+        let actual = prepared
+            .publish_with_work_context(&destination, &fresh)
+            .unwrap();
+        assert_eq!(actual, expected);
+        // A lost successful response also reuses the published immutable tree.
+        assert_eq!(
+            prepared
+                .publish_with_work_context(&destination, &fresh)
+                .unwrap(),
+            expected
+        );
+        for (actual_path, expected_path) in [
+            (
+                destination,
+                fixture.0.join("publication-ordinary-final.hawdb"),
+            ),
+            (
+                fixture.0.join(format!("{name}.pages.hawdb")),
+                fixture.0.join("publication-ordinary.pages.hawdb"),
+            ),
+            (
+                fixture.0.join(format!("{name}.root.hawdb")),
+                fixture.0.join("publication-ordinary.root.hawdb"),
+            ),
+        ] {
+            assert_eq!(
+                fs::read(actual_path).unwrap(),
+                fs::read(expected_path).unwrap(),
+                "cut={cut}"
+            );
+        }
+    }
+}

@@ -16,6 +16,10 @@
 
 use super::*;
 
+#[path = "graph_checkpoint/canonical_preparation.rs"]
+mod canonical_preparation;
+use canonical_preparation::CanonicalPreparationState;
+
 /// An owned, immutable source and its completed preparation plans.
 ///
 /// A fresh execution context may continue planning after a work denial. The
@@ -39,9 +43,42 @@ struct PreparationPlan {
         crate::projection::artifact::CheckpointProjectedGraphRoot,
     )>,
     source_scan: Option<Option<crate::source_scan::SourceScanProjection>>,
+    source_write: Option<crate::source_scan::SourceScanWritePreparation>,
+    append_report: Option<hawdb_storage::append_table::AppendPublicationReport>,
+    append_reader: Option<AppendGenerationReader>,
+    canonical: Option<CanonicalPreparationState>,
+    adjacency: Option<durable::CanonicalAdjacencyCheckpointArtifacts>,
+    property_projection: Option<durable::DurableArtifactMetadata>,
+    source_publication: Option<Option<source_scan::SourceScanPublication>>,
+    overflow: Option<(
+        crate::relational::RelationalOverflowPublicationReport,
+        u64,
+        u64,
+    )>,
+    row: Option<crate::relational::RelationalRowPagePublicationReport>,
     // Completed plan buffers can outlive the execution attempt. Keep its
     // memory controller alive; this context is never executed after pause.
     memory_owner: Option<crate::background::CheckpointWorkContext>,
+    // Drop the owned writers/readers before cleaning the private generation.
+    stage: Option<PreparationStage>,
+}
+
+#[derive(Debug)]
+struct PreparationStage {
+    durable: DurableStore,
+    generation: u64,
+    path: PathBuf,
+    armed: bool,
+}
+
+impl Drop for PreparationStage {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = self
+                .durable
+                .discard_prepared_checkpoint(self.generation, &self.path);
+        }
+    }
 }
 
 impl CheckpointPreparation {
@@ -742,20 +779,6 @@ impl GraphStore {
             .expect("completed projection plan")
             .0
             .is_some();
-        let merged_nodes = self
-            .canonical_base
-            .as_ref()
-            .map(|_| {
-                Ok::<_, HawDBError>(
-                    self.checkpoint_node_records_owned(work)?
-                        .checkpoint_steps()
-                        .inspect(|record| self.poison_on_storage_error(record))
-                        .map(|record| {
-                            record.map_err(|error| CanonicalSegmentError::Source(error.to_string()))
-                        }),
-                )
-            })
-            .transpose()?;
         let property_projection_records = self.canonical_base.as_ref().map(|_| {
             let nodes = self
                 .checkpoint_node_records_owned(work)?
@@ -886,20 +909,7 @@ impl GraphStore {
                 }
             }
         }
-        let merged_relationships = self
-            .canonical_base
-            .as_ref()
-            .map(|_| {
-                Ok::<_, HawDBError>(
-                    self.checkpoint_relationship_records_owned(work)?
-                        .checkpoint_steps()
-                        .inspect(|record| self.poison_on_storage_error(record))
-                        .map(|record| {
-                            record.map_err(|error| CanonicalSegmentError::Source(error.to_string()))
-                        }),
-                )
-            })
-            .transpose()?;
+
         let adjacency_relationships = self
             .canonical_base
             .as_ref()
@@ -937,40 +947,42 @@ impl GraphStore {
         } else {
             self.checkpoint_statistics_with_work_context(catalog, work)?
         };
-        let generation = durable.next_checkpoint_generation()?;
-        let staging_path = durable.prepare_checkpoint_staging(generation)?;
-        let prepared = (|| {
+        if plan.stage.is_none() {
+            let generation = durable.next_checkpoint_generation()?;
+            let path = durable.prepare_checkpoint_staging(generation)?;
+            plan.stage = Some(PreparationStage {
+                durable: durable.clone(),
+                generation,
+                path,
+                armed: true,
+            });
+        }
+        let stage = plan.stage.as_ref().expect("owned preparation generation");
+        let generation = stage.generation;
+        let staging_path = stage.path.clone();
+        let prepared = work.classify(|work| {
             work.checkpoint().map_err(HawDBError::from_storage_error)?;
-            let append_rows = self
-                .append_state
-                .checkpoint_rows_with_work_context(
-                    self.append_publication_config.segment.max_rows,
-                    work,
-                )
-                .map_err(HawDBError::from_storage_error)?;
-            let append_report = AppendPublisher::publish_checkpoint_with_work_context(
-                hawdb_storage::append_table::AppendCheckpointPublicationRequest {
-                    directory: durable.root_path(),
-                    generation,
-                    source_commit_epoch: commit_epoch,
-                    previous: self.append_generation_reader.as_ref(),
-                    state: AppendPublicationState::new(
-                        self.append_state.schemas(),
-                        self.append_state.generated_order_watermarks(),
-                    ),
-                    rows: &append_rows,
-                    config: self.append_publication_config,
-                },
-                work,
-            )
-            .map_err(HawDBError::from_storage_error)?;
-            let checkpoint_append_reader = AppendGenerationReader::open_bound_with_work_context(
-                durable.root_path(),
-                append_report.generation_artifacts,
-                self.append_publication_config,
-                work,
-            )
-            .map_err(HawDBError::from_storage_error)?;
+            #[cfg(test)]
+            eprintln!("bounded-preparation-stage append-start");
+            if plan.append_report.is_none() {
+                let append_rows = self.append_state.checkpoint_rows_with_work_context(
+                    self.append_publication_config.segment.max_rows, work,
+                ).map_err(HawDBError::from_storage_error)?;
+                plan.append_report = Some(AppendPublisher::publish_checkpoint_with_work_context(
+                    hawdb_storage::append_table::AppendCheckpointPublicationRequest {
+                        directory: durable.root_path(), generation, source_commit_epoch: commit_epoch,
+                        previous: self.append_generation_reader.as_ref(),
+                        state: AppendPublicationState::new(self.append_state.schemas(), self.append_state.generated_order_watermarks()),
+                        rows: &append_rows, config: self.append_publication_config,
+                    }, work,
+                ).map_err(HawDBError::from_storage_error)?);
+            }
+            let append_report = plan.append_report.as_ref().expect("completed append publication");
+            if plan.append_reader.is_none() {
+                plan.append_reader = Some(AppendGenerationReader::open_bound_with_work_context(
+                    durable.root_path(), append_report.generation_artifacts, self.append_publication_config, work,
+                ).map_err(HawDBError::from_storage_error)?);
+            }
             if let Some(encoded) = plan
                 .projected
                 .as_ref()
@@ -984,36 +996,36 @@ impl GraphStore {
                     work,
                 )?;
             }
-            let source_scan_publication = plan
+            #[cfg(test)]
+            eprintln!("bounded-preparation-stage source-write-start");
+            if plan.source_publication.is_none() {
+                plan.source_publication = Some(plan
                 .source_scan
                 .as_mut()
                 .expect("completed source-scan plan")
                 .as_mut()
                 .map(|projection| {
-                    source_scan::write_with_work_context(&staging_path, projection, work)
+                    let preparation = plan
+                        .source_write
+                        .get_or_insert_with(|| source_scan::SourceScanWritePreparation::new(work));
+                    source_scan::write_with_preparation(
+                        &staging_path,
+                        projection,
+                        preparation,
+                        work,
+                    )
                 })
-                .transpose()?;
-            let (canonical_manifest_artifact, property_spill_manifest_artifact) =
-                match (merged_nodes, merged_relationships) {
-                    (Some(nodes), Some(relationships)) => durable.write_canonical_segments(
-                        nodes,
-                        relationships,
-                        generation,
-                        commit_epoch,
-                        work,
-                    )?,
-                    (None, None) => durable.write_canonical_segments(
-                        self.nodes.values().map(|node| Ok(Some(node))),
-                        self.relationships
-                            .values()
-                            .map(|relationship| Ok(Some(relationship))),
-                        generation,
-                        commit_epoch,
-                        work,
-                    )?,
-                    _ => unreachable!("canonical base iterators are created together"),
-                };
-            let canonical_adjacency_artifacts = match adjacency_relationships {
+                .transpose()?);
+            }
+            let source_scan_publication = plan.source_publication.expect("completed Source publication");
+            #[cfg(test)]
+            eprintln!("bounded-preparation-stage canonical-start");
+            let canonical = plan.canonical.get_or_insert_with(|| CanonicalPreparationState::new(self, durable, generation));
+            let (canonical_manifest_artifact, property_spill_manifest_artifact) = canonical.advance(durable, work)?;
+            #[cfg(test)]
+            eprintln!("bounded-preparation-stage adjacency-start");
+            if plan.adjacency.is_none() {
+                plan.adjacency = Some(match adjacency_relationships {
                 Some(relationships) => durable.write_canonical_adjacency(
                     relationships,
                     generation,
@@ -1028,8 +1040,13 @@ impl GraphStore {
                     build_config.adjacency,
                     work,
                 )?,
-            };
-            let property_projection_manifest_artifact = match property_projection_records {
+            });
+            }
+            let canonical_adjacency_artifacts = plan.adjacency.expect("completed adjacency publication");
+            #[cfg(test)]
+            eprintln!("bounded-preparation-stage property-projection-start");
+            if plan.property_projection.is_none() {
+                plan.property_projection = Some(match property_projection_records {
                 Some(records) => durable.write_persistent_property_projection(
                     property_projection_definitions,
                     records,
@@ -1059,7 +1076,11 @@ impl GraphStore {
                     build_config.property_projection,
                     work,
                 )?,
-            };
+            });
+            }
+            let property_projection_manifest_artifact = plan.property_projection.expect("completed property projection publication");
+            #[cfg(test)]
+            eprintln!("bounded-preparation-stage relational-start");
             let relational_checkpoint_artifact = durable.write_relational_checkpoint(
                 &self.relational_state,
                 commit_epoch,
@@ -1130,6 +1151,7 @@ impl GraphStore {
                 .with_work_context(work);
             let mut copied_base_extent_count = 0u64;
             let mut introduced_extent_count = 0u64;
+            if plan.overflow.is_none() {
             let relational_overflow_report = if let Some(exact) = exact_overflow.as_ref() {
                 let base = previous_overflow.as_ref().ok_or_else(|| {
                     HawDBError::StorageIntegrity(
@@ -1198,6 +1220,11 @@ impl GraphStore {
                     )
                     .map_err(HawDBError::from_storage_error)
             }?;
+                plan.overflow = Some((relational_overflow_report, copied_base_extent_count, introduced_extent_count));
+            }
+            let (relational_overflow_report, copied_base_extent_count, introduced_extent_count) = plan.overflow.as_ref().expect("completed overflow publication");
+            let copied_base_extent_count = *copied_base_extent_count;
+            let introduced_extent_count = *introduced_extent_count;
             let relational_overflow_compaction_report =
                 exact_overflow
                     .as_ref()
@@ -1254,6 +1281,7 @@ impl GraphStore {
             };
             let row_publisher =
                 RelationalRowPagePublisher::new(row_publication_config).with_work_context(work);
+            if plan.row.is_none() {
             let relational_row_report = match row_compaction.as_ref() {
                 Some(compaction) => {
                     row_compaction_checkpoint(compaction.task)?;
@@ -1263,13 +1291,18 @@ impl GraphStore {
                         compaction.config.rewrite,
                         compaction.task,
                     );
+                    let report = result.map_err(row_compaction_publication_error)?;
+                    plan.row = Some(report.clone());
                     row_compaction_checkpoint(compaction.task)?;
-                    result.map_err(row_compaction_publication_error)?
+                    report
                 }
                 None => row_publisher
                     .persist_generation(row_request, row_plan.deltas)
                     .map_err(HawDBError::from_storage_error)?,
             };
+                plan.row = Some(relational_row_report);
+            }
+            let relational_row_report = plan.row.as_ref().expect("completed row publication");
             let relational_row_compaction_report = row_compaction
                 .as_ref()
                 .map(|compaction| {
@@ -1354,7 +1387,7 @@ impl GraphStore {
                 source_scan_publication,
                 checkpoint_statistics,
                 checkpoint_relational_state,
-                checkpoint_append_reader,
+                checkpoint_append_reader: plan.append_reader.take().expect("completed append reader"),
                 relational_index_candidate,
                 relational_overflow_compaction_report,
                 relational_row_compaction_report,
@@ -1372,11 +1405,36 @@ impl GraphStore {
                 },
                 staging_path: staging_path.clone(),
             })
-        })();
-        if prepared.is_err() {
-            let _ = durable.discard_prepared_checkpoint(generation, &staging_path);
+        });
+        match prepared {
+            Ok(prepared) => {
+                plan.stage
+                    .as_mut()
+                    .expect("owned preparation generation")
+                    .armed = false;
+                plan.stage = None;
+                Ok(Some(prepared))
+            }
+            Err(crate::background::CheckpointOperationError::Work(error)) => {
+                // Budget/cancellation/admission denial leaves private files and
+                // their generation identity owned by the same preparation.
+                Err(HawDBError::from_storage_error(error))
+            }
+            Err(crate::background::CheckpointOperationError::Operation(error)) => {
+                // Preserve the existing terminal-operation disposition. Close
+                // mounted handles before abandoning its private generation.
+                plan.overflow = None;
+                plan.row = None;
+                plan.source_publication = None;
+                plan.adjacency = None;
+                plan.property_projection = None;
+                plan.canonical = None;
+                plan.append_reader = None;
+                plan.append_report = None;
+                plan.stage = None;
+                Err(error)
+            }
         }
-        prepared.map(Some)
     }
 
     pub(crate) fn publish_prepared_checkpoint(

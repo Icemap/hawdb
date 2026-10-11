@@ -21,9 +21,13 @@ use std::ops::Deref;
 
 pub(in crate::canonical) struct Accumulator {
     segment: SegmentAccumulator,
+    pending_push: Option<record_push::Progress>,
+    pending_properties: Option<node_properties::Progress>,
     memory: CheckpointAllocationOwner,
     work: CheckpointWorkContext,
     admitted: bool,
+    pending_flush: Option<(u64, hawdb_integrity::IntegrityDigest)>,
+    flush_progress: checkpoint_flush::FlushProgress,
 }
 
 impl Deref for Accumulator {
@@ -35,6 +39,15 @@ impl Deref for Accumulator {
 }
 
 impl Accumulator {
+    // The enclosing preparation retains the original memory admission and calls
+    // this only between attempts, with no work unit or I/O wave held.
+    pub(crate) fn bind_checkpoint_attempt(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) {
+        self.work = work.clone();
+    }
+
     pub(in crate::canonical) fn new(
         kind: CanonicalSegmentKind,
         generation: ManifestGeneration,
@@ -45,12 +58,17 @@ impl Accumulator {
     ) -> Self {
         Self {
             segment: SegmentAccumulator::new(kind, generation, segment_id, config),
+            pending_push: None,
+            pending_properties: None,
             memory: CheckpointAllocationOwner::default(),
             work,
             admitted,
+            pending_flush: None,
+            flush_progress: checkpoint_flush::FlushProgress::default(),
         }
     }
 
+    #[cfg(test)]
     fn with_memory<T>(
         &mut self,
         operation: impl FnOnce(
@@ -80,59 +98,35 @@ impl Accumulator {
         payload: &[u8],
         endpoints: Option<(u64, u64)>,
     ) -> Result<(), CanonicalSegmentError> {
+        if self.pending_flush.is_some() || self.pending_properties.is_some() {
+            return Err(CanonicalSegmentError::Corrupt(
+                "canonical input cannot change during retained property or flush recovery".into(),
+            ));
+        }
         if !self.admitted {
             let unit = self.work.start_unit()?;
             self.segment.push(record_id, payload, endpoints)?;
             unit.finish();
             return Ok(());
         }
-        self.with_memory(|segment, context| {
-            let unit = context.start_unit()?;
-            let record_bytes = 12u64.saturating_add(payload.len() as u64);
-            if record_bytes > segment.config.max_record_bytes.get() {
-                return Err(CanonicalSegmentError::RecordTooLarge {
-                    record_bytes,
-                    max_bytes: segment.config.max_record_bytes.get(),
-                });
-            }
-            let payload_bytes = u32_len(payload.len(), "canonical record")?;
-            if record_id < segment.max_record_id && segment.record_count > 0 {
-                return Err(CanonicalSegmentError::Corrupt(
-                    "canonical records must be ordered by id".into(),
-                ));
-            }
-            let count = segment.record_count.checked_add(1).ok_or_else(|| {
-                CanonicalSegmentError::Corrupt("canonical segment record count overflow".into())
-            })?;
-            let required = segment
-                .records
-                .len()
-                .checked_add(12)
-                .and_then(|bytes| bytes.checked_add(payload.len()))
-                .ok_or_else(|| {
-                    CanonicalSegmentError::Corrupt("canonical segment byte count overflow".into())
-                })?;
-            unit.finish();
-            capacity(&mut segment.records, required, context)?;
-            append(&mut segment.records, &record_id.to_le_bytes(), context)?;
-            append(&mut segment.records, &payload_bytes.to_le_bytes(), context)?;
-            append(&mut segment.records, payload, context)?;
-            if let Some((source_id, target_id)) = endpoints {
-                context
-                    .push(&mut segment.source_endpoint_keys, source_id)
-                    .map_err(source)?;
-                context
-                    .push(&mut segment.target_endpoint_keys, target_id)
-                    .map_err(source)?;
-            }
-            let unit = context.start_unit()?;
-            segment.min_record_id.get_or_insert(record_id);
-            segment.max_record_id = record_id;
-            segment.record_count = count;
-            unit.finish();
-            context.checkpoint()?;
-            Ok(())
-        })
+        let work = self.work.clone();
+        self.push_retained_with_work_context(record_id, payload, endpoints, &work)
+    }
+
+    /// The immutable record payload must remain identical until this push ends.
+    pub(in crate::canonical) fn push_retained_with_work_context(
+        &mut self,
+        record_id: u64,
+        payload: &[u8],
+        endpoints: Option<(u64, u64)>,
+        work: &CheckpointWorkContext,
+    ) -> Result<(), CanonicalSegmentError> {
+        if self.pending_flush.is_some() || self.pending_properties.is_some() {
+            return Err(CanonicalSegmentError::Corrupt(
+                "canonical input cannot change during retained property or flush recovery".into(),
+            ));
+        }
+        record_push::push(self, record_id, payload, endpoints, work)
     }
 
     pub(in crate::canonical) fn add_node_properties(
@@ -140,50 +134,35 @@ impl Accumulator {
         node: &NodeRecord,
         work: Option<&CheckpointWorkContext>,
     ) -> Result<(), CanonicalSegmentError> {
+        if self.pending_flush.is_some() || self.pending_push.is_some() {
+            return Err(CanonicalSegmentError::Corrupt(
+                "canonical input cannot change during retained record or flush recovery".into(),
+            ));
+        }
         if !self.admitted {
             return self.segment.add_node_properties(node, work);
         }
-        self.with_memory(|segment, context| {
-            if node.properties.is_empty() {
-                context.checkpoint()?;
-                return Ok(());
-            }
-            for label in &node.labels {
-                for (property, value) in &node.properties {
-                    let key = checkpoint_bloom::key(*label, property, value, Some(context))?;
-                    context
-                        .push(&mut segment.node_property_keys, key)
-                        .map_err(source)?;
-                }
-            }
-            context.checkpoint()?;
-            Ok(())
-        })
+        let owned_work = self.work.clone();
+        node_properties::add(self, node, work.unwrap_or(&owned_work))
     }
 
     pub(in crate::canonical) fn flush_with_work_context(
-        self,
+        mut self,
         file: &mut File,
         artifact_digest: &mut IntegrityHasher,
         offset: u64,
         work: Option<&CheckpointWorkContext>,
     ) -> Result<super::descriptor::Descriptor, CanonicalSegmentError> {
-        let Self {
-            segment,
-            memory,
-            work: owned_work,
-            admitted,
-        } = self;
-        let result = if admitted {
-            checkpoint_flush::flush_admitted(
-                segment,
+        let owned_work = self.work.clone();
+        if self.admitted {
+            self.flush_retained_with_work_context(
                 file,
                 artifact_digest,
                 offset,
                 work.unwrap_or(&owned_work),
             )
         } else {
-            segment
+            self.segment
                 .flush_with_work_context(file, artifact_digest, offset, work)
                 .map(|descriptor| {
                     super::descriptor::Descriptor::new(
@@ -191,67 +170,77 @@ impl Accumulator {
                         CheckpointAllocationOwner::default(),
                     )
                 })
-        };
-        // The consuming flush destroys segment data on success and every error.
-        drop(memory);
-        drop(owned_work);
+        }
+    }
+
+    /// Keep input buffers and their admission on safe work denial. A caller
+    /// retaining this state must supply the same private file and captured
+    /// source on retry. A fresh admitted attempt rolls back its incomplete tail;
+    /// cancellation itself performs no additional filesystem operations. The
+    /// artifact digest changes only on complete success.
+    pub(in crate::canonical) fn flush_retained_with_work_context(
+        &mut self,
+        file: &mut File,
+        artifact_digest: &mut IntegrityHasher,
+        offset: u64,
+        work: &CheckpointWorkContext,
+    ) -> Result<super::descriptor::Descriptor, CanonicalSegmentError> {
+        use std::io::{Seek, SeekFrom};
+        if self.pending_push.is_some() || self.pending_properties.is_some() {
+            return Err(CanonicalSegmentError::Corrupt(
+                "canonical flush cannot publish an unfinished record".into(),
+            ));
+        }
+        let covered_digest = artifact_digest.clone().finish();
+        if let Some((covered_offset, digest)) = self.pending_flush
+            && (covered_offset != offset || digest != covered_digest)
+        {
+            return Err(CanonicalSegmentError::Corrupt(
+                "retained canonical flush source boundary changed".into(),
+            ));
+        }
+        if self.pending_flush.is_some() && self.flush_progress.dirty_tail {
+            let boundary = offset
+                .checked_add(self.flush_progress.written_bytes)
+                .ok_or_else(|| {
+                    CanonicalSegmentError::Corrupt(
+                        "private flush recovery boundary overflow".into(),
+                    )
+                })?;
+            let unit = work.start_unit()?;
+            {
+                let _wave = work.io_wave()?;
+                if file.metadata()?.len() < boundary {
+                    return Err(CanonicalSegmentError::Corrupt(
+                        "retained canonical flush lost its covered prefix".into(),
+                    ));
+                }
+                file.set_len(boundary)?;
+                file.seek(SeekFrom::Start(boundary))?;
+                self.flush_progress.dirty_tail = false;
+            }
+            unit.finish();
+            work.checkpoint()?;
+        }
+        self.pending_flush = Some((offset, covered_digest));
+        let result = checkpoint_flush::flush_admitted(
+            &self.segment,
+            file,
+            artifact_digest,
+            offset,
+            work,
+            &mut self.flush_progress,
+        );
+        if result.is_ok() {
+            self.pending_flush = None;
+            self.flush_progress = checkpoint_flush::FlushProgress::default();
+        }
         result
     }
 }
 
-fn capacity(
-    bytes: &mut Vec<u8>,
-    required: usize,
-    context: &CheckpointDecodeContext,
-) -> Result<(), CanonicalSegmentError> {
-    if required <= bytes.capacity() {
-        return Ok(());
-    }
-    let previous = if bytes.capacity() == 0 {
-        None
-    } else {
-        Some(context.find(bytes.as_ptr() as usize).map_err(source)?)
-    };
-    let capacity = bytes.capacity().saturating_mul(2).max(required);
-    let unit = context.start_unit()?;
-    let token = context.reserve(capacity).map_err(source)?;
-    let mut replacement = Vec::new();
-    replacement.try_reserve_exact(capacity).map_err(|error| {
-        source(crate::background::checkpoint_decode_allocation(
-            error, capacity, context,
-        ))
-    })?;
-    if replacement.capacity() != capacity {
-        return Err(source(crate::background::checkpoint_decode_allocation(
-            "canonical segment capacity differs from admitted capacity",
-            capacity,
-            context,
-        )));
-    }
-    token.address(replacement.as_ptr() as usize);
-    unit.finish();
-    append(&mut replacement, bytes, context)?;
-    drop(std::mem::replace(bytes, replacement));
-    if let Some(previous) = previous {
-        previous.release_buffer();
-    }
-    context.checkpoint()?;
-    Ok(())
-}
-
-fn append(
-    bytes: &mut Vec<u8>,
-    input: &[u8],
-    context: &CheckpointDecodeContext,
-) -> Result<(), CanonicalSegmentError> {
-    for block in input.chunks(64 * 1024) {
-        let unit = context.start_unit()?;
-        bytes.extend_from_slice(block);
-        unit.finish();
-        context.checkpoint()?;
-    }
-    Ok(())
-}
+mod node_properties;
+mod record_push;
 
 #[cfg(test)]
 mod tests;

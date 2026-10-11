@@ -69,6 +69,10 @@ impl CheckpointText {
         self.text
     }
 
+    pub(crate) fn truncate(&mut self, length: usize) {
+        self.text.truncate(length);
+    }
+
     fn reserve(&mut self, additional: usize, work: &CheckpointWorkContext) -> Result<()> {
         let required = self.text.len().checked_add(additional).ok_or_else(|| {
             HawDBError::from_storage_error(work.record_failure(CheckpointWorkError::Allocation {

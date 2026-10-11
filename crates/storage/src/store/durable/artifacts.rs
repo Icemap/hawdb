@@ -32,10 +32,7 @@ use crate::store::{
 };
 use hawdb_storage::{
     cache::{ManifestGeneration, SegmentCache, StoreId},
-    canonical::{
-        CanonicalSegmentConfig, CanonicalSegmentError, CanonicalSegmentManifest,
-        CanonicalSegmentReader, CanonicalSegmentWriter,
-    },
+    canonical::{CanonicalSegmentConfig, CanonicalSegmentManifest, CanonicalSegmentReader},
     canonical_adjacency::{
         CanonicalAdjacencyConfig, CanonicalAdjacencyReader, CanonicalAdjacencyWriter,
     },
@@ -54,14 +51,14 @@ use hawdb_storage::{
     },
     property_spill::{
         PersistentPropertySpillDescriptorTree, PropertySpillConfig, PropertySpillManifest,
-        PropertySpillReader, PropertySpillWriteOptions,
+        PropertySpillReader,
     },
     scan::ScanSegmentManifest,
     stable_identity::{
         StableIdentityKey, StableIdentityMappingConfig, StableIdentityMappingReader,
         StableIdentityMappingWriter, StableIdentityMaterializeLimits,
     },
-    NodeRecord, RelRecord,
+    RelRecord,
 };
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -79,7 +76,7 @@ impl Drop for CheckpointMetadataTemporaryPath {
     }
 }
 
-pub(super) fn publish_checkpoint_metadata(
+pub(in crate::store) fn publish_checkpoint_metadata(
     path: &Path,
     encoded: &[u8],
     work: &crate::background::CheckpointWorkContext,
@@ -144,82 +141,6 @@ impl DurableStore {
             }
             Err(_) => Ok(None),
         }
-    }
-
-    pub(in crate::store) fn write_canonical_segments<N, R, NT, RT>(
-        &self,
-        nodes: N,
-        relationships: R,
-        generation: u64,
-        source_commit_epoch: u64,
-        work: &crate::background::CheckpointWorkContext,
-    ) -> Result<(DurableArtifactMetadata, DurableArtifactMetadata)>
-    where
-        N: IntoIterator<Item = std::result::Result<Option<NT>, CanonicalSegmentError>>,
-        R: IntoIterator<Item = std::result::Result<Option<RT>, CanonicalSegmentError>>,
-        NT: std::borrow::Borrow<NodeRecord>,
-        RT: std::borrow::Borrow<RelRecord>,
-    {
-        let artifact_path = self
-            .root_path
-            .join(canonical_artifact_generation_file(generation));
-        let property_artifact_path = self
-            .root_path
-            .join(property_spill_artifact_generation_file(generation));
-        let property_descriptor_tree = PersistentPropertySpillDescriptorTree::new(
-            GraphDescriptorTreePaths::new(
-                self.root_path.join(
-                    hawdb_storage::property_spill::property_spill_descriptor_page_file(generation),
-                ),
-                self.root_path.join(
-                    hawdb_storage::property_spill::property_spill_descriptor_root_file(generation),
-                ),
-            ),
-            GraphDescriptorTreeBuildConfig::default(),
-        );
-        let (canonical_manifest, property_spill_output) =
-            CanonicalSegmentWriter::new(CanonicalSegmentConfig::default())
-                .with_work_context(work.clone())
-                .write_checkpoint_steps(
-                    &artifact_path,
-                    ManifestGeneration(generation),
-                    nodes,
-                    relationships,
-                    PropertySpillWriteOptions {
-                        artifact_path: &property_artifact_path,
-                        source_commit_epoch,
-                        config: PropertySpillConfig::default(),
-                        descriptor_tree: property_descriptor_tree,
-                    },
-                )
-                .map_err(HawDBError::from_storage_error)?;
-        let property_spill_manifest = property_spill_output.manifest;
-        let encoded = canonical_manifest
-            .encode_with_work_context(work)
-            .map_err(HawDBError::from_storage_error)?;
-        let integrity = work
-            .integrity(encoded.as_bytes())
-            .map_err(HawDBError::from_storage_error)?;
-        let metadata = DurableArtifactMetadata {
-            encoded_len: encoded.len() as u64,
-            encoded_checksum: integrity.crc32c.as_u64(),
-            encoded_sha256: integrity.sha256,
-        };
-        let manifest_path = self
-            .root_path
-            .join(canonical_manifest_generation_file(generation));
-        publish_checkpoint_metadata(&manifest_path, encoded.as_bytes(), work)?;
-        let property_encoded = property_spill_manifest
-            .encode()
-            .map_err(HawDBError::from_storage_error)?;
-        let property_manifest_path = self
-            .root_path
-            .join(property_spill_manifest_generation_file(generation));
-        publish_checkpoint_metadata(&property_manifest_path, property_encoded.as_bytes(), work)?;
-        Ok((
-            metadata,
-            DurableArtifactMetadata::for_bytes(property_encoded.as_bytes()),
-        ))
     }
 
     pub(in crate::store) fn write_canonical_adjacency<R, RT>(

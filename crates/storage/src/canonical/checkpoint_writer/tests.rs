@@ -23,7 +23,7 @@ use hawdb_qos::{
 use std::num::NonZeroUsize;
 use std::sync::atomic::Ordering;
 
-fn governor(ceiling: u64) -> RuntimeGovernor {
+pub(in crate::canonical) fn governor(ceiling: u64) -> RuntimeGovernor {
     RuntimeGovernor::new(
         RuntimeGovernorConfig {
             memory_budget_bytes: Some(ceiling),
@@ -38,7 +38,7 @@ fn governor(ceiling: u64) -> RuntimeGovernor {
     )
 }
 
-fn local() -> hawdb_qos::LocalQosScheduler {
+pub(in crate::canonical) fn local() -> hawdb_qos::LocalQosScheduler {
     LocalQosScheduler::new(LocalQosPolicy {
         max_background_operations: Some(1),
         max_total_background_operations: Some(1),
@@ -46,7 +46,7 @@ fn local() -> hawdb_qos::LocalQosScheduler {
     })
 }
 
-fn used(task: &RuntimeTaskContext, ceiling: u64) -> u64 {
+pub(in crate::canonical) fn used(task: &RuntimeTaskContext, ceiling: u64) -> u64 {
     match task.reserve_working_memory(ceiling) {
         Err(RuntimeMemoryError::ReservationExceeded {
             available_bytes, ..
@@ -532,4 +532,319 @@ fn checkpoint_units_canonical_writer_memory_related_pending_spills_retain_until_
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     assert_eq!(governor.snapshot().active_background_io_slots, 0);
     std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn retained_dictionary_retries_every_cancelled_insert_without_duplicate_ids() {
+    let ceiling = 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let key = "retained-界🦀";
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    local.set_telemetry_sink(Some(baseline.clone()));
+    let mut dictionary = Dictionary::new(work.clone());
+    assert_eq!(dictionary.intern(key).unwrap(), 0);
+    let total = baseline.completed.load(Ordering::SeqCst);
+    drop(dictionary);
+    for cut in 1..=total {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(cut, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        let mut dictionary = Dictionary::new(stopped);
+        assert!(matches!(
+            dictionary.intern(key),
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+        ));
+        probe.assert_released(&local);
+        local.set_telemetry_sink(None);
+        dictionary.work = work.clone();
+        assert_eq!(dictionary.intern(key).unwrap(), 0, "cut={cut}");
+        assert_eq!(dictionary.intern("next").unwrap(), 1, "cut={cut}");
+        assert_eq!(dictionary.intern(key).unwrap(), 0, "cut={cut}");
+        let keys = dictionary.into_keys();
+        assert_eq!(keys.values, [key, "next"], "cut={cut}");
+        drop(keys);
+        assert_eq!(used(&task, ceiling), 0);
+    }
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_dictionary_growth_retries_every_cut_without_losing_prior_keys() {
+    let ceiling = 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let source = (0..33).map(|id| format!("key-{id}")).collect::<Vec<_>>();
+    let mut baseline_dictionary = Dictionary::new(work.clone());
+    for (id, key) in source[..32].iter().enumerate() {
+        assert_eq!(baseline_dictionary.intern(key).unwrap(), id as u32);
+    }
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    local.set_telemetry_sink(Some(baseline.clone()));
+    assert_eq!(baseline_dictionary.intern(&source[32]).unwrap(), 32);
+    let total = baseline.completed.load(Ordering::SeqCst);
+    drop(baseline_dictionary);
+    local.set_telemetry_sink(None);
+    for cut in 1..=total {
+        let mut dictionary = Dictionary::new(work.clone());
+        for (id, key) in source[..32].iter().enumerate() {
+            assert_eq!(dictionary.intern(key).unwrap(), id as u32);
+        }
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(cut, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        dictionary.work = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        assert!(matches!(
+            dictionary.intern(&source[32]),
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+        ));
+        probe.assert_released(&local);
+        local.set_telemetry_sink(None);
+        dictionary.work = work.clone();
+        assert_eq!(dictionary.intern(&source[32]).unwrap(), 32, "cut={cut}");
+        for (id, key) in source.iter().enumerate() {
+            assert_eq!(dictionary.intern(key).unwrap(), id as u32, "cut={cut}");
+        }
+        let keys = dictionary.into_keys();
+        assert_eq!(keys.values, source, "cut={cut}");
+        drop(keys);
+        assert_eq!(used(&task, ceiling), 0);
+    }
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_vector_growth_finishes_multiple_blocks_with_two_units_per_attempt() {
+    let ceiling = 2 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let mut context = CheckpointDecodeContext {
+        work: work.clone(),
+        memory: RefCell::default(),
+    };
+    let count = 128 * 1024;
+    let mut values = context.vector_capacity::<u32>(count).unwrap();
+    values.extend(0..count as u32);
+    let mut pending = Some(CheckpointVectorPush::new(count as u32));
+    let mut attempts = 0;
+    for attempt in 1..=16 {
+        attempts = attempt;
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(2, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let fresh = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        context.work = fresh.clone();
+        let result = fresh.classify(|scoped| {
+            context.work = scoped.clone();
+            context.resume_push(&mut values, &mut pending)
+        });
+        probe.assert_released(&local);
+        assert!(probe.completed.load(Ordering::SeqCst) <= 2);
+        match result {
+            Ok(()) => break,
+            Err(CheckpointOperationError::Work(CheckpointWorkError::Stopped(_))) => {}
+            other => panic!("unexpected retained growth result: {other:?}"),
+        }
+    }
+    assert!(
+        pending.is_none(),
+        "fixed two-unit attempts made no complete progress"
+    );
+    assert_eq!(values, (0..=count as u32).collect::<Vec<_>>());
+    assert!(
+        attempts >= 10,
+        "lookup, allocation and eight moves must be bounded"
+    );
+    local.set_telemetry_sink(None);
+    drop(values);
+    drop(pending);
+    drop(context);
+    assert_eq!(used(&task, ceiling), 0);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_allocation_lookup_outlives_owner_and_drops_its_suffix_without_recursion() {
+    let ceiling = 2 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let mut context = CheckpointDecodeContext {
+        work: work.clone(),
+        memory: RefCell::default(),
+    };
+    for address in 1..=4096 {
+        context.reserve(1).unwrap().address(address);
+    }
+    let mut pending = None;
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe.cancel_after.store(2, Ordering::SeqCst);
+    local.set_telemetry_sink(Some(probe.clone()));
+    let fresh = CheckpointWorkContext::new(permit.bind_task_context(
+        RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+    ))
+    .with_scheduler(local.clone());
+    let result = fresh.classify(|scoped| {
+        context.work = scoped.clone();
+        context.find_retained(usize::MAX, &mut pending)
+    });
+    assert!(matches!(
+        result,
+        Err(CheckpointOperationError::Work(
+            CheckpointWorkError::Stopped(_)
+        ))
+    ));
+    probe.assert_released(&local);
+    assert!(pending.is_some());
+    local.set_telemetry_sink(None);
+    drop(context);
+    drop(fresh);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, ceiling);
+    std::thread::Builder::new()
+        .stack_size(64 * 1024)
+        .spawn(move || drop(pending))
+        .unwrap()
+        .join()
+        .unwrap();
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_dictionary_wide_key_finishes_hash_copy_and_lookup_with_two_units() {
+    let ceiling = 4 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let key = "界🙂".repeat(128 * 1024);
+    let mut dictionary = Dictionary::new(work.clone());
+    for lookup in 0..2 {
+        let mut completed = false;
+        for attempt in 1..=128 {
+            let probe = Arc::new(CheckpointWorkProbe::default());
+            probe.cancel_after.store(2, Ordering::SeqCst);
+            local.set_telemetry_sink(Some(probe.clone()));
+            dictionary.work = CheckpointWorkContext::new(permit.bind_task_context(
+                RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+            ))
+            .with_scheduler(local.clone());
+            let result = dictionary.intern(&key);
+            probe.assert_released(&local);
+            assert!(probe.completed.load(Ordering::SeqCst) <= 2);
+            match result {
+                Ok(id) => {
+                    assert_eq!(id, 0);
+                    completed = true;
+                    break;
+                }
+                Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_))) => {}
+                other => panic!("lookup={lookup}, attempt={attempt}: {other:?}"),
+            }
+        }
+        if !completed {
+            let pending = dictionary.pending_key.as_ref().unwrap();
+            panic!("lookup={lookup} hashed={} located={} compared={} done={} owned={:?} result={:?} pending_index={:?} key_push={} index_push={} keys={}", pending.hashed, pending.located, pending.compared, pending.lookup_done, pending.owned.as_ref().map(String::len), pending.result, dictionary.pending_index, dictionary.key_push.is_some(), dictionary.index_push.is_some(), dictionary.keys.len());
+        }
+    }
+    local.set_telemetry_sink(None);
+    dictionary.work = work.clone();
+    assert_eq!(dictionary.intern("next").unwrap(), 1);
+    let keys = dictionary.into_keys();
+    assert_eq!(keys.values, [key, "next".into()]);
+    drop(keys);
+    assert_eq!(used(&task, ceiling), 0);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_dictionary_rejects_changed_source_without_losing_original_progress() {
+    let ceiling = 2 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let key = "界🙂".repeat(32 * 1024);
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe.cancel_after.store(2, Ordering::SeqCst);
+    local.set_telemetry_sink(Some(probe.clone()));
+    let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+        RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+    ))
+    .with_scheduler(local.clone());
+    let mut dictionary = Dictionary::new(stopped);
+    assert!(matches!(
+        dictionary.intern(&key),
+        Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+    ));
+    probe.assert_released(&local);
+    let hashed = dictionary.pending_key.as_ref().unwrap().hashed;
+    assert_eq!(hashed, 64 * 1024);
+    local.set_telemetry_sink(None);
+    dictionary.work = work.clone();
+    let changed = key.clone();
+    assert!(matches!(
+        dictionary.intern(&changed),
+        Err(CanonicalSegmentError::Corrupt(_))
+    ));
+    assert_eq!(dictionary.pending_key.as_ref().unwrap().hashed, hashed);
+    assert_eq!(dictionary.intern(&key).unwrap(), 0);
+    let keys = dictionary.into_keys();
+    assert_eq!(keys.values, [key]);
+    drop(keys);
+    assert_eq!(used(&task, ceiling), 0);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }

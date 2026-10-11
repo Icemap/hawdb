@@ -23,6 +23,24 @@ use hawdb_qos::{
 use std::num::NonZeroUsize;
 use std::sync::atomic::Ordering;
 
+fn encode_node_once(
+    node: &NodeRecord,
+    spills: Option<&mut PropertySpillWriter>,
+    dictionary: &mut PropertyKeyDictionary,
+    config: CanonicalSegmentConfig,
+) -> Result<CheckpointBytes, CanonicalSegmentError> {
+    node_with_preparation(node, spills, dictionary, config, &mut None)
+}
+
+fn encode_relationship_once(
+    relationship: &RelRecord,
+    spills: Option<&mut PropertySpillWriter>,
+    dictionary: &mut PropertyKeyDictionary,
+    config: CanonicalSegmentConfig,
+) -> Result<CheckpointBytes, CanonicalSegmentError> {
+    relationship_with_preparation(relationship, spills, dictionary, config, &mut None)
+}
+
 fn governor(ceiling: u64) -> RuntimeGovernor {
     RuntimeGovernor::new(
         RuntimeGovernorConfig {
@@ -88,7 +106,7 @@ fn attempt(
 ) -> Result<(CheckpointBytes, Keys), CheckpointOperationError<CanonicalSegmentError>> {
     work.classify(|work| {
         let mut dictionary = PropertyKeyDictionary::with_work_context(work.clone());
-        let bytes = super::node(
+        let bytes = encode_node_once(
             node,
             None,
             &mut dictionary,
@@ -186,7 +204,7 @@ fn checkpoint_units_canonical_record_memory_related_complete_wire_and_buffer_lif
     let expected =
         encode_relationship_with_property_spills(&rel, None, Some(&mut ordinary)).unwrap();
     let mut dictionary = PropertyKeyDictionary::with_work_context(work.clone());
-    let actual = super::relationship(
+    let actual = encode_relationship_once(
         &rel,
         None,
         &mut dictionary,
@@ -286,7 +304,7 @@ fn checkpoint_units_canonical_record_memory_related_size_and_depth_errors_preser
     };
     let mut dictionary = PropertyKeyDictionary::with_work_context(work.clone());
     assert!(
-        matches!(super::node(&node, None, &mut dictionary, config), Err(CanonicalSegmentError::RecordTooLarge { record_bytes, max_bytes }) if record_bytes == expected.len() as u64 + 12 && max_bytes == max)
+        matches!(encode_node_once(&node, None, &mut dictionary, config), Err(CanonicalSegmentError::RecordTooLarge { record_bytes, max_bytes }) if record_bytes == expected.len() as u64 + 12 && max_bytes == max)
     );
     drop(dictionary);
     assert_eq!(used(&task, ceiling), 0);
@@ -430,4 +448,236 @@ fn checkpoint_units_canonical_record_memory_related_full_borrowed_writer_matches
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     assert_eq!(governor.snapshot().active_background_io_slots, 0);
     std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn retained_record_plan_finishes_wide_keys_without_restarting_first_seen_ids() {
+    let ceiling = 4 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let node = NodeRecord {
+        id: NodeId(17),
+        labels: BTreeSet::from([LabelId(7)]),
+        properties: (0..4)
+            .map(|id| (format!("{id}-{}", "界🙂".repeat(36 * 1024)), Value::Int(id)))
+            .collect(),
+    };
+    let config = CanonicalSegmentConfig::default();
+    let mut reference = PropertyKeyDictionary::default();
+    let expected = encode_node_with_property_spills(&node, None, Some(&mut reference)).unwrap();
+    let mut dictionary = PropertyKeyDictionary::with_work_context(work.clone());
+    let mut planning = None;
+    let mut complete = None;
+    let mut previous = 0;
+    let mut attempts = 0;
+    for attempt in 1..=16 {
+        attempts = attempt;
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(32, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let fresh = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        dictionary.checkpoint.as_mut().unwrap().work = fresh;
+        let result = node_with_preparation(&node, None, &mut dictionary, config, &mut planning);
+        probe.assert_released(&local);
+        assert!(probe.completed.load(Ordering::SeqCst) <= 32);
+        let prefix = planning.as_ref().unwrap().ids.len();
+        assert!(prefix >= previous);
+        previous = prefix;
+        match result {
+            Ok(bytes) => {
+                complete = Some(bytes);
+                break;
+            }
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_))) => {}
+            other => panic!("attempt={attempt}: {other:?}"),
+        }
+    }
+    let output = complete.expect("fixed 32-unit attempts must finish retained key planning");
+    assert!(attempts > 1);
+    assert_eq!(&*output, expected);
+    assert_eq!(planning.as_ref().unwrap().ids, [0, 1, 2, 3]);
+    assert_eq!(dictionary.checkpoint.as_ref().unwrap().keys, reference.keys);
+    local.set_telemetry_sink(None);
+    drop(output);
+    drop(planning);
+    drop(dictionary);
+    assert_eq!(used(&task, ceiling), 0);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_record_plan_retries_every_cpu_cut_with_identical_ids_and_bytes() {
+    let ceiling = 4 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let node = NodeRecord {
+        id: NodeId(17),
+        labels: BTreeSet::from([LabelId(7), LabelId(8)]),
+        properties: (0..8)
+            .map(|id| (format!("key-{id}-界🙂"), Value::Int(id)))
+            .collect(),
+    };
+    let config = CanonicalSegmentConfig::default();
+    let mut ordinary = PropertyKeyDictionary::default();
+    let expected = encode_node_with_property_spills(&node, None, Some(&mut ordinary)).unwrap();
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    local.set_telemetry_sink(Some(baseline.clone()));
+    let mut dictionary = PropertyKeyDictionary::with_work_context(work.clone());
+    let output = node_with_preparation(&node, None, &mut dictionary, config, &mut None).unwrap();
+    assert_eq!(&*output, expected);
+    let units = baseline.completed.load(Ordering::SeqCst);
+    baseline.assert_released(&local);
+    drop(output);
+    drop(dictionary);
+    assert!(units > 32);
+    for cut in 1..=units {
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(cut, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        let mut dictionary = PropertyKeyDictionary::with_work_context(stopped);
+        let mut planning = None;
+        assert!(matches!(
+            node_with_preparation(&node, None, &mut dictionary, config, &mut planning),
+            Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_)))
+        ));
+        probe.assert_released(&local);
+        local.set_telemetry_sink(None);
+        dictionary.checkpoint.as_mut().unwrap().work = work.clone();
+        let output =
+            node_with_preparation(&node, None, &mut dictionary, config, &mut planning).unwrap();
+        assert_eq!(&*output, expected, "cut={cut}");
+        assert_eq!(
+            planning.as_ref().unwrap().ids,
+            (0..8).collect::<Vec<_>>(),
+            "cut={cut}"
+        );
+        assert_eq!(
+            dictionary.checkpoint.as_ref().unwrap().keys,
+            ordinary.keys,
+            "cut={cut}"
+        );
+        drop(output);
+        drop(planning);
+        drop(dictionary);
+        assert_eq!(used(&task, ceiling), 0);
+    }
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_record_body_finishes_many_properties_for_nodes_and_relationships() {
+    let ceiling = 4 * 1024 * 1024;
+    let governor = governor(ceiling);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = local();
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let node = NodeRecord {
+        id: NodeId(17),
+        labels: BTreeSet::from([LabelId(7), LabelId(8)]),
+        properties: (0..64)
+            .map(|id| (format!("key-{id:03}-界🙂"), Value::Int(id)))
+            .collect(),
+    };
+    let relationship = RelRecord {
+        id: RelId(19),
+        source: NodeId(17),
+        target: NodeId(23),
+        rel_type: RelTypeId(5),
+        properties: node.properties.clone(),
+    };
+    for is_node in [true, false] {
+        let mut ordinary = PropertyKeyDictionary::default();
+        let expected = if is_node {
+            encode_node_with_property_spills(&node, None, Some(&mut ordinary)).unwrap()
+        } else {
+            encode_relationship_with_property_spills(&relationship, None, Some(&mut ordinary))
+                .unwrap()
+        };
+        let mut dictionary = PropertyKeyDictionary::with_work_context(work.clone());
+        let mut planning = None;
+        let mut complete = None;
+        let mut previous_bytes = 0;
+        let mut body_attempts = 0;
+        for _ in 0..128 {
+            let probe = Arc::new(CheckpointWorkProbe::default());
+            probe.cancel_after.store(32, Ordering::SeqCst);
+            local.set_telemetry_sink(Some(probe.clone()));
+            dictionary.checkpoint.as_mut().unwrap().work =
+                CheckpointWorkContext::new(permit.bind_task_context(
+                    RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+                ))
+                .with_scheduler(local.clone());
+            let result = if is_node {
+                node_with_preparation(
+                    &node,
+                    None,
+                    &mut dictionary,
+                    CanonicalSegmentConfig::default(),
+                    &mut planning,
+                )
+            } else {
+                relationship_with_preparation(
+                    &relationship,
+                    None,
+                    &mut dictionary,
+                    CanonicalSegmentConfig::default(),
+                    &mut planning,
+                )
+            };
+            probe.assert_released(&local);
+            assert!(probe.completed.load(Ordering::SeqCst) <= 32);
+            if let Some(bytes) = planning.as_ref().unwrap().body.output.as_ref() {
+                body_attempts += 1;
+                assert!(bytes.len() >= previous_bytes);
+                previous_bytes = bytes.len();
+            }
+            match result {
+                Ok(bytes) => {
+                    complete = Some(bytes);
+                    break;
+                }
+                Err(CanonicalSegmentError::Work(CheckpointWorkError::Stopped(_))) => {}
+                other => panic!("node={is_node}: {other:?}"),
+            }
+        }
+        let output = complete.expect("fixed 32-unit attempts must complete record body");
+        assert!(body_attempts >= 4);
+        assert_eq!(&*output, expected);
+        assert_eq!(dictionary.checkpoint.as_ref().unwrap().keys, ordinary.keys);
+        local.set_telemetry_sink(None);
+        drop(output);
+        drop(planning);
+        drop(dictionary);
+        assert_eq!(used(&task, ceiling), 0);
+    }
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }

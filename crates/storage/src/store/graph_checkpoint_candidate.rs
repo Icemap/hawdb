@@ -583,6 +583,14 @@ impl GraphStore {
 }
 
 impl CheckpointCandidate {
+    #[cfg(test)]
+    pub(super) fn prepared_generation_for_test(&self) -> u64 {
+        self.prepared
+            .as_ref()
+            .expect("candidate owns a prepared generation")
+            .generation
+    }
+
     pub(super) fn bootstrap_with_work_context(
         &mut self,
         work: &crate::background::CheckpointWorkContext,

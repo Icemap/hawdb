@@ -355,3 +355,335 @@ fn checkpoint_units_descriptor_tree_memory_related_each_constructor_cpu_and_real
         assert_eq!(used(&task, CEILING), 0);
     }
 }
+
+#[test]
+fn retained_leaf_page_retry_preserves_reference_after_page_write_cancellation() {
+    retained_leaf_retry(false);
+}
+
+#[test]
+fn retained_leaf_page_retry_preserves_input_after_io_wave_denial() {
+    retained_leaf_retry(true);
+}
+
+fn retained_leaf_retry(io_denial: bool) {
+    let directory = Directory::new();
+    let ordinary = Directory::new();
+    let mut baseline = GraphDescriptorTreeBuilder::create(
+        ordinary.paths(),
+        GraphDescriptorKind::CanonicalSegment,
+        47,
+        47,
+        19,
+        config(),
+    )
+    .unwrap();
+    for id in 1u64..=5 {
+        baseline
+            .push(id.to_be_bytes().to_vec(), id.to_le_bytes().to_vec())
+            .unwrap();
+    }
+    baseline.finish().unwrap().publish().unwrap();
+    let governor = governor(CEILING);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(CEILING).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(2),
+        max_total_background_operations: Some(2),
+        ..Default::default()
+    });
+    let work = CheckpointWorkContext::new(task.clone()).with_scheduler(local.clone());
+    let mut tree = builder(&directory, work.clone()).unwrap();
+    for id in 1u64..=4 {
+        tree.push(id.to_be_bytes().to_vec(), id.to_le_bytes().to_vec())
+            .unwrap();
+    }
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe
+        .cancel_after
+        .store(usize::from(!io_denial), Ordering::SeqCst);
+    probe
+        .cancel_on_io_wave
+        .store(usize::from(io_denial), Ordering::SeqCst);
+    local.set_telemetry_sink(Some(probe.clone()));
+    let stopped = CheckpointWorkContext::new(
+        permit
+            .bind_task_context(RuntimeTaskContext::without_deadline(
+                probe.cancellation.clone(),
+            ))
+            .with_io_wave_controller(Arc::new(ObservedIo {
+                admitted: task.clone(),
+                probe: probe.clone(),
+            })),
+    )
+    .with_scheduler(local.clone());
+    tree.bind_checkpoint_attempt(&stopped);
+    let error = tree
+        .push(5u64.to_be_bytes().to_vec(), 5u64.to_le_bytes().to_vec())
+        .unwrap_err();
+    if io_denial {
+        assert!(matches!(
+            error,
+            GraphDescriptorTreeError::Work(CheckpointWorkError::Io(RuntimeIoWaveError::Stopped(
+                hawdb_core::RuntimeCancellationReason::Cancelled
+            )))
+        ));
+    } else {
+        assert!(matches!(
+            error,
+            GraphDescriptorTreeError::Work(CheckpointWorkError::Stopped(
+                hawdb_core::RuntimeCancellationReason::Cancelled
+            ))
+        ));
+    }
+    assert_eq!(tree.page_count, u64::from(!io_denial));
+    assert_eq!(tree.descriptor_count, 4);
+    probe.assert_released(&local);
+    local.set_telemetry_sink(None);
+    tree.bind_checkpoint_attempt(&work);
+    tree.push(5u64.to_be_bytes().to_vec(), 5u64.to_le_bytes().to_vec())
+        .unwrap();
+    let prepared = tree.finish().unwrap();
+    assert_eq!(prepared.root.descriptor_count, 5);
+    prepared.publish().unwrap();
+    let root = GraphDescriptorTreeRootReader::open(directory.paths(), config()).unwrap();
+    let reader = demand::GraphDescriptorTreeDemandReader::open(
+        root,
+        config(),
+        Arc::new(crate::cache::SegmentCache::new(0)),
+        crate::cache::StoreId(47),
+    )
+    .unwrap();
+    let mut actual = Vec::new();
+    reader
+        .deep_visit(|key, value| {
+            actual.push((key.to_vec(), value.to_vec()));
+            Ok(demand::GraphDescriptorTreeScanControl::Continue)
+        })
+        .unwrap();
+    assert_eq!(
+        actual,
+        (1u64..=5)
+            .map(|id| (id.to_be_bytes().to_vec(), id.to_le_bytes().to_vec()))
+            .collect::<Vec<_>>()
+    );
+    drop(reader);
+    assert_eq!(
+        fs::read(directory.paths().page_artifact).unwrap(),
+        fs::read(ordinary.paths().page_artifact).unwrap()
+    );
+    assert_eq!(
+        fs::read(directory.paths().root_manifest).unwrap(),
+        fs::read(ordinary.paths().root_manifest).unwrap()
+    );
+    assert_eq!(used(&task, CEILING), 0);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_descriptor_finish_builds_multiple_levels_with_two_units_per_attempt() {
+    let directory = Directory::new();
+    let ordinary = Directory::new();
+    let mut baseline = GraphDescriptorTreeBuilder::create(
+        ordinary.paths(),
+        GraphDescriptorKind::CanonicalSegment,
+        47,
+        47,
+        19,
+        config(),
+    )
+    .unwrap();
+    let governor = governor(CEILING);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(CEILING).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    // Capture input without a callback consumer unit overlapping page writes.
+    let work = CheckpointWorkContext::new(task.clone());
+    let mut tree = builder(&directory, work.clone()).unwrap();
+    for id in 0u64..64 {
+        tree.push(id.to_be_bytes().to_vec(), vec![id as u8; 48])
+            .unwrap();
+        baseline
+            .push(id.to_be_bytes().to_vec(), vec![id as u8; 48])
+            .unwrap();
+    }
+    baseline.finish().unwrap().publish().unwrap();
+    let mut completed = None;
+    let mut previous_pages = tree.page_count;
+    let mut attempts = 0;
+    for attempt in 1..=256 {
+        attempts = attempt;
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(2, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let fresh = CheckpointWorkContext::new(permit.bind_task_context(
+            RuntimeTaskContext::without_deadline(probe.cancellation.clone()),
+        ))
+        .with_scheduler(local.clone());
+        let result = tree.finish_with_work_context(&fresh);
+        probe.assert_released(&local);
+        assert!(probe.completed.load(Ordering::SeqCst) <= 2);
+        assert!(tree.page_count >= previous_pages);
+        previous_pages = tree.page_count;
+        match result {
+            Ok(prepared) => {
+                completed = Some(prepared);
+                break;
+            }
+            Err(GraphDescriptorTreeError::Work(CheckpointWorkError::Stopped(_))) => {}
+            other => panic!("attempt={attempt}: {other:?}"),
+        }
+    }
+    let mut prepared = completed.expect("fixed two-unit finish attempts must complete");
+    assert!(attempts > 16);
+    assert!(prepared.root.height >= 2);
+    assert_eq!(prepared.root.descriptor_count, 64);
+    assert!(tree.push(vec![0xff; 8], vec![1]).is_err());
+    assert!(tree.finish_with_work_context(&work).is_err());
+    // Publication is a separate durable boundary; use the fresh final context.
+    prepared.work = work.clone();
+    local.set_telemetry_sink(None);
+    prepared.publish().unwrap();
+    drop(tree);
+    assert_eq!(
+        fs::read(directory.paths().page_artifact).unwrap(),
+        fs::read(ordinary.paths().page_artifact).unwrap()
+    );
+    assert_eq!(
+        fs::read(directory.paths().root_manifest).unwrap(),
+        fs::read(ordinary.paths().root_manifest).unwrap()
+    );
+    assert_complete(&directory, 64);
+    assert_eq!(used(&task, CEILING), 0);
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_descriptor_finish_retries_every_actual_cpu_and_io_cut() {
+    let reference = Directory::new();
+    let mut ordinary = GraphDescriptorTreeBuilder::create(
+        reference.paths(),
+        GraphDescriptorKind::CanonicalSegment,
+        47,
+        47,
+        19,
+        config(),
+    )
+    .unwrap();
+    for id in 0u64..16 {
+        ordinary
+            .push(id.to_be_bytes().to_vec(), vec![id as u8; 48])
+            .unwrap();
+    }
+    ordinary.finish().unwrap().publish().unwrap();
+    let governor = governor(CEILING);
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(CEILING).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let local = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let work = CheckpointWorkContext::new(task.clone());
+    let capture = |directory: &Directory| {
+        let mut tree = builder(directory, work.clone()).unwrap();
+        for id in 0u64..16 {
+            tree.push(id.to_be_bytes().to_vec(), vec![id as u8; 48])
+                .unwrap();
+        }
+        tree
+    };
+    let context = |probe: &Arc<CheckpointWorkProbe>| {
+        CheckpointWorkContext::new(
+            permit
+                .bind_task_context(RuntimeTaskContext::without_deadline(
+                    probe.cancellation.clone(),
+                ))
+                .with_io_wave_controller(Arc::new(ObservedIo {
+                    admitted: task.clone(),
+                    probe: probe.clone(),
+                })),
+        )
+        .with_scheduler(local.clone())
+    };
+    let baseline_directory = Directory::new();
+    let mut baseline_tree = capture(&baseline_directory);
+    let baseline = Arc::new(CheckpointWorkProbe::default());
+    local.set_telemetry_sink(Some(baseline.clone()));
+    let baseline_context = context(&baseline);
+    let prepared = baseline_tree
+        .finish_with_work_context(&baseline_context)
+        .unwrap();
+    let units = baseline.completed.load(Ordering::SeqCst);
+    let waves = baseline.io_waves.load(Ordering::SeqCst);
+    assert!(units > 16 && waves > 8);
+    baseline.assert_released(&local);
+    drop(prepared);
+    drop(baseline_tree);
+    drop(baseline_context);
+    local.set_telemetry_sink(None);
+    for (cpu_cut, io_cut) in (1..=units)
+        .map(|cut| (cut, 0))
+        .chain((1..=waves).map(|cut| (0, cut)))
+    {
+        let directory = Directory::new();
+        let mut tree = capture(&directory);
+        let probe = Arc::new(CheckpointWorkProbe::default());
+        probe.cancel_after.store(cpu_cut, Ordering::SeqCst);
+        probe.cancel_on_io_wave.store(io_cut, Ordering::SeqCst);
+        local.set_telemetry_sink(Some(probe.clone()));
+        let stopped = context(&probe);
+        let error = tree.finish_with_work_context(&stopped).unwrap_err();
+        if io_cut == 0 {
+            assert!(matches!(
+                error,
+                GraphDescriptorTreeError::Work(CheckpointWorkError::Stopped(_))
+            ));
+        } else {
+            assert!(matches!(
+                error,
+                GraphDescriptorTreeError::Work(CheckpointWorkError::Io(
+                    RuntimeIoWaveError::Stopped(_)
+                ))
+            ));
+        }
+        probe.assert_released(&local);
+        local.set_telemetry_sink(None);
+        let prepared = tree.finish_with_work_context(&work).unwrap();
+        prepared.publish().unwrap();
+        drop(tree);
+        drop(stopped);
+        assert_eq!(
+            fs::read(directory.paths().page_artifact).unwrap(),
+            fs::read(reference.paths().page_artifact).unwrap(),
+            "cpu={cpu_cut}, io={io_cut}"
+        );
+        assert_eq!(
+            fs::read(directory.paths().root_manifest).unwrap(),
+            fs::read(reference.paths().root_manifest).unwrap(),
+            "cpu={cpu_cut}, io={io_cut}"
+        );
+        assert_complete(&directory, 16);
+        assert_eq!(used(&task, CEILING), 0);
+    }
+    drop(work);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}

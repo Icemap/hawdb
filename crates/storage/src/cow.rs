@@ -428,6 +428,25 @@ impl<K: Ord, V> CowSegmentedMap<K, V> {
             .flat_map(move |segment| segment.range(first..=last))
     }
 
+    /// Seek the next captured record without visiting completed pages.
+    pub(crate) fn first_after<'a>(&'a self, lower: Option<&K>) -> Option<(&'a K, &'a V)> {
+        let start = lower.map_or(0, |lower| {
+            self.segments.partition_point(|segment| {
+                segment
+                    .last_key_value()
+                    .is_some_and(|(key, _)| key <= lower)
+            })
+        });
+        self.segments[start..]
+            .iter()
+            .find_map(|segment| match lower {
+                None => segment.first_key_value(),
+                Some(lower) => segment
+                    .range((std::ops::Bound::Excluded(lower), std::ops::Bound::Unbounded))
+                    .next(),
+            })
+    }
+
     pub fn keys(&self) -> impl Iterator<Item = &K> {
         self.iter().map(|(key, _)| key)
     }

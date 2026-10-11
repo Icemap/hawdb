@@ -459,6 +459,14 @@ pub struct PreparedGraphDescriptorTree {
 }
 
 impl PreparedGraphDescriptorTree {
+    // Only the enclosing retained preparation rebinds an unpublished result.
+    pub(crate) fn bind_checkpoint_attempt(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) {
+        self.work = work.clone();
+    }
+
     pub fn root(&self) -> &GraphDescriptorTreeRoot {
         &self.root
     }
@@ -468,28 +476,40 @@ impl PreparedGraphDescriptorTree {
     }
 
     pub fn publish(mut self) -> Result<GraphDescriptorTreeWriteOutput, GraphDescriptorTreeError> {
-        let unit = self.work.start_unit()?;
-        let _wave = self.work.io_wave()?;
-        if self.paths.page_artifact.exists() || self.paths.root_manifest.exists() {
-            return Err(admission(
+        let work = self.work.clone();
+        self.publish_with_work_context(&work)
+    }
+
+    pub(crate) fn publish_with_work_context(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<GraphDescriptorTreeWriteOutput, GraphDescriptorTreeError> {
+        self.bind_checkpoint_attempt(work);
+        work.checkpoint()?;
+        if !self.published {
+            let unit = self.work.start_unit()?;
+            let _wave = self.work.io_wave()?;
+            if self.paths.page_artifact.exists() || self.paths.root_manifest.exists() {
+                return Err(admission(
                 "graph descriptor publication refuses to replace an existing generation artifact",
             ));
+            }
+            durable_publish_immutable(&self.page_tmp, &self.paths.page_artifact)?;
+            let root_tmp = self.paths.root_tmp();
+            remove_if_exists(&root_tmp)?;
+            {
+                let mut file = File::create(&root_tmp)?;
+                file.write_all(&self.encoded_root)?;
+                file.sync_all()?;
+            }
+            if let Err(error) = durable_publish_immutable(&root_tmp, &self.paths.root_manifest) {
+                let _ = fs::remove_file(&root_tmp);
+                return Err(error);
+            }
+            self.published = true;
+            unit.finish();
         }
-        durable_publish_immutable(&self.page_tmp, &self.paths.page_artifact)?;
-        let root_tmp = self.paths.root_tmp();
-        remove_if_exists(&root_tmp)?;
-        {
-            let mut file = File::create(&root_tmp)?;
-            file.write_all(&self.encoded_root)?;
-            file.sync_all()?;
-        }
-        if let Err(error) = durable_publish_immutable(&root_tmp, &self.paths.root_manifest) {
-            let _ = fs::remove_file(&root_tmp);
-            return Err(error);
-        }
-        self.published = true;
         let root_integrity = integrity_digest(&self.encoded_root);
-        unit.finish();
         Ok(GraphDescriptorTreeWriteOutput {
             root: self.root.clone(),
             report: self.report,
