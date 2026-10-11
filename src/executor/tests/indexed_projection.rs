@@ -170,12 +170,36 @@ fn indexed_projection_admits_selected_source_before_residual_evaluation() {
         ..Default::default()
     };
     let mut external = NoExternalReadOperator;
+    let output = execute_with_request(
+        ExecutionRequest::new(&point_plan(Value::Int(1), true), &BTreeMap::new(), &memory),
+        ExecutionResources::new(&mut catalog, &mut store, &mut external),
+    )
+    .unwrap();
+    assert!(output.rows.is_empty());
+    assert!(
+        output
+            .profile
+            .pipeline_memory_report
+            .query_memory_peak_bytes
+            > memory.blocking_operator_bytes.get()
+    );
+    assert_eq!(
+        output
+            .profile
+            .pipeline_memory_report
+            .query_memory_completion_bytes,
+        0
+    );
+    let memory = ExecutionMemoryConfig {
+        query_memory_bytes: NonZeroUsize::new(4096).unwrap(),
+        ..memory
+    };
     let error = execute_with_request(
         ExecutionRequest::new(&point_plan(Value::Int(1), true), &BTreeMap::new(), &memory),
         ExecutionResources::new(&mut catalog, &mut store, &mut external),
     )
     .unwrap_err();
-    // The residual rejects rank=0, but source allocation must be admitted first.
+    // The residual rejects rank=0, but the source must fit the query cap first.
     assert!(error.to_string().contains("4096-byte budget"), "{error}");
     let output = execute_with_request(
         ExecutionRequest::new(
