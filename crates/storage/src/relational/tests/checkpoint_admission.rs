@@ -1200,3 +1200,78 @@ fn overwritten_update_arithmetic_still_fails_before_recovery_publication() {
     assert_eq!(metadata.row_count("documents"), 1);
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn update_without_matches_borrows_wide_literal_during_resolution() {
+    use crate::background::CheckpointDecodeContext;
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let source = RelationalState::default()
+        .stage_transaction(create_upsert_table(), limits, overflow)
+        .unwrap();
+    let transaction = RelationalTransaction {
+        writes: vec![RelationalWrite::UpdateWhere {
+            table: "documents".into(),
+            assignments: vec![RelationalUpdateAssignment {
+                column: "payload".into(),
+                value: RelationalUpdateValue::Value(RelationalValue::Text("v".repeat(128 * 1024))),
+            }],
+            predicate: RelationalPredicate::Compare {
+                column: "id".into(),
+                op: RelationalComparisonOp::Eq,
+                value: RelationalValue::Text("missing".into()),
+            },
+        }],
+    };
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let applied = apply_transaction_inner(
+        &source,
+        transaction,
+        limits,
+        overflow,
+        TransactionApplyOptions {
+            checkpoint_allocations: Some(&context),
+            ..TransactionApplyOptions::materialized()
+        },
+    )
+    .unwrap();
+    assert_eq!(observer.finish(), 0);
+    assert_eq!(applied.state.row_count("documents"), 0);
+    assert_eq!(source.row_count("documents"), 0);
+}
+
+#[test]
+fn controlled_resolved_collection_rejects_capacity_growth_and_preserves_errors() {
+    use crate::background::CheckpointDecodeContext;
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    let expected = vec![Ok(3), Ok(1), Ok(3)];
+    assert_eq!(
+        collect_results_with_allocations(expected.clone(), 3, None).unwrap(),
+        collect_results_with_allocations(expected, 3, Some(&context)).unwrap()
+    );
+    assert!(matches!(
+        collect_results_with_allocations(vec![Ok(1), Ok(2)], 1, Some(&context)),
+        Err(RelationalError::Admission(_))
+    ));
+    let failure = || {
+        vec![
+            Ok(1),
+            Err(RelationalError::Schema("missing assignment".into())),
+        ]
+    };
+    assert_eq!(
+        collect_results_with_allocations(failure(), 2, None)
+            .unwrap_err()
+            .to_string(),
+        collect_results_with_allocations(failure(), 2, Some(&context))
+            .unwrap_err()
+            .to_string()
+    );
+}

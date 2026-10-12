@@ -6074,18 +6074,27 @@ fn apply_upsert(
             .get(table)
             .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?,
     );
-    let conflict_positions = column_positions(&schema, conflict_columns)?;
+    let assignment_context =
+        checkpoint_allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
+    let conflict_positions =
+        column_positions_with_allocations(&schema, conflict_columns, assignment_context.as_ref())?;
     if conflict_columns.is_empty() || schema.unique_index_definition(conflict_columns).is_none() {
         return Err(RelationalError::Schema(format!(
             "UPSERT conflict target on table {table} must name a primary or unique key"
         )));
     }
-    let primary_key_positions = column_positions(&schema, &schema.primary_key)?;
+    let primary_key_positions = column_positions_with_allocations(
+        &schema,
+        &schema.primary_key,
+        assignment_context.as_ref(),
+    )?;
     let assignments = match action {
         RelationalConflictAction::DoNothing => Vec::new(),
-        RelationalConflictAction::Update(assignments) => assignments
-            .iter()
-            .map(|assignment| {
+        RelationalConflictAction::Update(assignments) => collect_results_with_allocations(
+            assignments.iter().map(|assignment| {
                 let target = schema.column_position(&assignment.column).ok_or_else(|| {
                     RelationalError::Schema(format!(
                         "UPSERT assignment references unknown column {}",
@@ -6107,8 +6116,10 @@ fn apply_upsert(
                     }
                 };
                 Ok((target, source, &assignment.value))
-            })
-            .collect::<Result<Vec<_>, RelationalError>>()?,
+            }),
+            assignments.len(),
+            assignment_context.as_ref(),
+        )?,
     };
     let mut staged_conflicts = BTreeMap::<RelationalKey, Option<RelationalKey>>::new();
     let mut affected_rows = 0usize;
@@ -6340,9 +6351,13 @@ fn apply_update(
         ));
     }
     validate_predicate(&schema, predicate)?;
-    let resolved = assignments
-        .iter()
-        .map(|assignment| {
+    let assignment_context =
+        checkpoint_allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
+    let resolved = collect_results_with_allocations(
+        assignments.iter().map(|assignment| {
             let target = schema.column_position(&assignment.column).ok_or_else(|| {
                 RelationalError::Schema(format!(
                     "UPDATE assignment references unknown column {}",
@@ -6365,7 +6380,7 @@ fn apply_update(
                 }
                 RelationalUpdateValue::Value(value) => {
                     validate_value_type(&schema.columns[target], value)?;
-                    ResolvedUpdateValue::Value(value.clone())
+                    ResolvedUpdateValue::Value(value)
                 }
                 RelationalUpdateValue::BigIntArithmetic {
                     left,
@@ -6386,8 +6401,10 @@ fn apply_update(
                 }
             };
             Ok((target, value))
-        })
-        .collect::<Result<Vec<_>, RelationalError>>()?;
+        }),
+        assignments.len(),
+        assignment_context.as_ref(),
+    )?;
     let segment = state
         .segments
         .get(table)
@@ -6407,7 +6424,11 @@ fn apply_update(
             }
         }
     }
-    let primary_key_positions = column_positions(&schema, &schema.primary_key)?;
+    let primary_key_positions = column_positions_with_allocations(
+        &schema,
+        &schema.primary_key,
+        assignment_context.as_ref(),
+    )?;
     let mut updates = Vec::with_capacity(matched.len());
     for (old_key, row) in &matched {
         let replacement_context =
@@ -6483,9 +6504,9 @@ fn apply_update(
     Ok(matched.len())
 }
 
-enum ResolvedUpdateValue {
+enum ResolvedUpdateValue<'a> {
     Column(usize),
-    Value(RelationalValue),
+    Value(&'a RelationalValue),
     BigIntArithmetic {
         left: ResolvedBigIntOperand,
         operator: RelationalBigIntArithmeticOperator,
@@ -7557,6 +7578,36 @@ fn column_positions(
     columns: &[String],
 ) -> Result<Vec<usize>, RelationalError> {
     column_positions_with_allocations(schema, columns, None)
+}
+
+fn collect_results_with_allocations<T>(
+    items: impl IntoIterator<Item = Result<T, RelationalError>>,
+    capacity: usize,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<Vec<T>, RelationalError> {
+    let Some(context) = allocations else {
+        return items.into_iter().collect();
+    };
+    let mut values = context
+        .vector_capacity(capacity)
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    for item in items {
+        let item = item?;
+        if values.len() == capacity {
+            return Err(RelationalError::Admission(
+                "resolved input exceeds its admitted capacity".into(),
+            ));
+        }
+        let unit = context
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        values.push(item);
+        unit.finish();
+    }
+    context
+        .checkpoint()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    Ok(values)
 }
 
 fn column_positions_with_allocations(
