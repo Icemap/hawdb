@@ -1048,6 +1048,7 @@ impl GraphStore {
     pub(super) fn finish_private_relational_row_page_recovery(
         &mut self,
         recovery_source: Option<RelationalRecoverySourceIdentity>,
+        work: &crate::background::CheckpointWorkContext,
     ) -> super::Result<Option<crate::relational::PreparedRelationalRecoverySelector>> {
         let Some(builder) = self.relational_row_pages.recovery_builder.as_mut() else {
             return Ok(None);
@@ -1064,6 +1065,7 @@ impl GraphStore {
                 recovery_source,
                 None,
                 &self.relational_state,
+                work,
             )
             .map_err(|error| {
                 super::HawDBError::Storage(format!("private row recovery: {error}"))

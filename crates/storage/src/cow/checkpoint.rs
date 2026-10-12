@@ -319,6 +319,10 @@ where
                 Arc::get_mut(&mut directory.value[index].0).expect("prepared page is unique");
             page.growth = growth;
             page._memory = page_memory;
+            // Capacity records are opaque and no longer need buffer lookup.
+            // A single cleanup step keeps sequential insertion metadata small
+            // without adding a fallible check after installing prepared roots.
+            page._memory.coalesce_retained_head();
         }
         Ok(())
     }

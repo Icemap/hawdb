@@ -237,3 +237,131 @@ fn relational_suffix_after_unchanged_prefix_seals_and_keeps_all_later_prefixes_b
         }
     }
 }
+
+#[test]
+fn private_relational_prefix_clone_denial_preserves_candidate_for_retry() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
+        RuntimeResourceBudget, RuntimeResourceSnapshot,
+    };
+    let root = std::env::temp_dir().join(format!(
+        "hawdb-private-prefix-admission-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let names: Vec<String> = (0..128)
+        .map(|i| format!("t{i:03}{}", "x".repeat(1020)))
+        .collect();
+    let table = names[0].clone();
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::open_with_durability_and_replay_config(
+        &root,
+        &mut catalog,
+        DurabilityPolicy::SyncOnEveryWrite,
+        WalReplayConfig::default(),
+    )
+    .unwrap();
+    let row = |value: &str| RelationalWrite::Insert {
+        table: table.clone(),
+        rows: vec![RelationalRow::new(vec![RelationalValue::Text(
+            value.into(),
+        )])],
+        mode: RelationalInsertMode::Error,
+    };
+    let mut writes: Vec<RelationalWrite> = names
+        .iter()
+        .map(|name| {
+            RelationalWrite::CreateTable(RelationalTableSchema {
+                name: name.clone(),
+                columns: vec![RelationalColumnSchema {
+                    name: "id".into(),
+                    scalar_type: RelationalScalarType::Text,
+                    nullable: false,
+                    default: None,
+                }],
+                primary_key: vec!["id".into()],
+                unique_constraints: Vec::new(),
+                foreign_keys: Vec::new(),
+                indexes: Vec::new(),
+            })
+        })
+        .collect();
+    writes.push(row("kept"));
+    store
+        .commit_relational_transaction(&mut catalog, RelationalTransaction { writes })
+        .unwrap();
+    store.checkpoint(&catalog).unwrap();
+    store
+        .create_node(&mut catalog, "Memory", BTreeMap::new())
+        .unwrap();
+    let pinned = store.checkpoint_source();
+    let mut candidate = pinned
+        .prepare_checkpoint_candidate(&catalog)
+        .unwrap()
+        .unwrap();
+    store
+        .commit_relational_transaction(
+            &mut catalog,
+            RelationalTransaction {
+                writes: vec![row("new")],
+            },
+        )
+        .unwrap();
+    candidate.catch_up(&store).unwrap();
+    let governor_for = |budget| {
+        RuntimeGovernor::new(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(budget),
+                background_task_limit: Some(NonZeroUsize::MIN),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            RuntimeResourceSnapshot::from_parts(
+                RuntimeResourceBudget::from_limits(NonZeroUsize::MIN, None, None),
+                RuntimeMemorySnapshot::from_limits(Some(1 << 30), Some(1 << 30), None, None, None),
+            ),
+            IoConcurrencyBudget::new(2, 1),
+        )
+    };
+    let governor = governor_for(4096);
+    let admission = governor
+        .try_admit_incremental_maintenance(4096, 4096, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let work =
+        crate::background::CheckpointWorkContext::new(admission.task_context().unwrap().clone());
+    let before = store.checkpoint_source_identity();
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let result = candidate.finish_catch_up_with_work_context(&work);
+    let large_allocations = observer.finish();
+    assert!(matches!(
+        result,
+        Err(crate::background::CheckpointOperationError::Work(
+            crate::background::CheckpointWorkError::Memory(_)
+        ))
+    ));
+    assert_eq!(large_allocations, 0, "deny before cloning wide metadata");
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 4096);
+    assert_eq!(store.checkpoint_source_identity(), before);
+    assert!(!candidate.replay_finalized);
+    assert!(!candidate.failed);
+    assert!(candidate.recovery_selectors.iter().all(Option::is_none));
+    drop((work, admission));
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+
+    let retry_governor = governor_for(16 * 1024 * 1024);
+    let retry = retry_governor
+        .try_admit_incremental_maintenance(4096, 16 * 1024 * 1024, 1, RuntimeTaskContext::default())
+        .unwrap();
+    let retry_work =
+        crate::background::CheckpointWorkContext::new(retry.task_context().unwrap().clone());
+    candidate
+        .finish_catch_up_with_work_context(&retry_work)
+        .unwrap();
+    assert!(candidate.replay_finalized);
+    assert!(!candidate.failed);
+    assert_eq!(store.checkpoint_source_identity(), before);
+    let private = candidate.store.as_ref().unwrap();
+    assert_eq!(private.relational_state.row_count(&table), 2);
+    assert_eq!(private.relational_state.table_schemas().count(), 128);
+    drop((retry_work, retry, candidate, pinned, store));
+    assert_eq!(retry_governor.snapshot().admitted_memory_bytes, 0);
+    std::fs::remove_dir_all(root).unwrap();
+}

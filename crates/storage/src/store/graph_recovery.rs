@@ -618,6 +618,7 @@ impl GraphStore {
         &mut self,
         source: &RelationalRecoverySourceBuilder,
         replayed_entries: usize,
+        work: &crate::background::CheckpointWorkContext,
     ) -> Result<[Option<crate::relational::PreparedRelationalRecoverySelector>; 2]> {
         let identity = if replayed_entries == 0 {
             None
@@ -628,7 +629,7 @@ impl GraphStore {
                     .map_err(|reason| HawDBError::Storage(reason.to_string()))?,
             )
         };
-        let row = self.finish_private_relational_row_page_recovery(identity)?;
+        let row = self.finish_private_relational_row_page_recovery(identity, work)?;
         let index = self.finish_private_relational_index_recovery(identity)?;
         Ok([row, index])
     }

@@ -201,15 +201,6 @@ pub(super) fn encode_manifest(
             "row delta manifest payload length does not fit u64".to_string(),
         )
     })?;
-    let mut payload = Vec::with_capacity(payload_len);
-    for table in &manifest.tables {
-        encode_table_metadata(table, &mut payload)?;
-    }
-    for run in &manifest.runs {
-        payload.extend_from_slice(&encode_run_descriptor(run)?);
-    }
-    debug_assert_eq!(payload.len(), payload_len);
-
     let mut encoded = Vec::with_capacity(total_len);
     encoded.extend_from_slice(MANIFEST_MAGIC);
     encoded.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
@@ -238,14 +229,24 @@ pub(super) fn encode_manifest(
     encoded.extend_from_slice(&manifest.total_entries.to_le_bytes());
     encoded.extend_from_slice(&payload_len_u64.to_le_bytes());
     debug_assert_eq!(encoded.len(), MANIFEST_INTEGRITY_OFFSET);
+    // Reserve the integrity slot and encode the payload directly into its
+    // final backing allocation. The digest excludes this slot, as before.
+    encoded.resize(MANIFEST_HEADER_BYTES, 0);
+    for table in &manifest.tables {
+        encode_table_metadata(table, &mut encoded)?;
+    }
+    for run in &manifest.runs {
+        encode_run_descriptor_into(run, &mut encoded)?;
+    }
+    debug_assert_eq!(encoded.len(), total_len);
     let mut hasher = IntegrityHasher::new();
-    hasher.update(&encoded);
-    hasher.update(&payload);
+    hasher.update(&encoded[..MANIFEST_INTEGRITY_OFFSET]);
+    hasher.update(&encoded[MANIFEST_HEADER_BYTES..]);
     let digest = hasher.finish();
-    encoded.extend_from_slice(&digest.crc32c.get().to_le_bytes());
-    encoded.extend_from_slice(digest.sha256.as_bytes());
-    debug_assert_eq!(encoded.len(), MANIFEST_HEADER_BYTES);
-    encoded.extend_from_slice(&payload);
+    encoded[MANIFEST_INTEGRITY_OFFSET..MANIFEST_INTEGRITY_OFFSET + 4]
+        .copy_from_slice(&digest.crc32c.get().to_le_bytes());
+    encoded[MANIFEST_INTEGRITY_OFFSET + 4..MANIFEST_HEADER_BYTES]
+        .copy_from_slice(digest.sha256.as_bytes());
     Ok(encoded)
 }
 
@@ -508,6 +509,25 @@ fn encode_run_descriptor(run: &RowDeltaRunDescriptor) -> Result<Vec<u8>, Relatio
             )
         })?;
     let mut encoded = Vec::with_capacity(capacity);
+    encode_run_descriptor_into(run, &mut encoded)?;
+    Ok(encoded)
+}
+
+fn encode_run_descriptor_into(
+    run: &RowDeltaRunDescriptor,
+    encoded: &mut Vec<u8>,
+) -> Result<(), RelationalRowDeltaError> {
+    let lower_len = u32::try_from(run.lower_bound.encoded_primary_key.len()).map_err(|_| {
+        RelationalRowDeltaError::Admission(
+            "row delta lower key length does not fit u32".to_string(),
+        )
+    })?;
+    let upper_len = u32::try_from(run.upper_bound.encoded_primary_key.len()).map_err(|_| {
+        RelationalRowDeltaError::Admission(
+            "row delta upper key length does not fit u32".to_string(),
+        )
+    })?;
+    let start = encoded.len();
     encoded.extend_from_slice(&run.ordinal.to_le_bytes());
     encoded.extend_from_slice(&run.start_epoch.to_le_bytes());
     encoded.extend_from_slice(&run.end_epoch.to_le_bytes());
@@ -521,10 +541,10 @@ fn encode_run_descriptor(run: &RowDeltaRunDescriptor) -> Result<Vec<u8>, Relatio
     encoded.extend_from_slice(&lower_len.to_le_bytes());
     encoded.extend_from_slice(&run.upper_bound.table_ordinal.to_le_bytes());
     encoded.extend_from_slice(&upper_len.to_le_bytes());
-    debug_assert_eq!(encoded.len(), RUN_DESCRIPTOR_BYTES);
+    debug_assert_eq!(encoded.len() - start, RUN_DESCRIPTOR_BYTES);
     encoded.extend_from_slice(&run.lower_bound.encoded_primary_key);
     encoded.extend_from_slice(&run.upper_bound.encoded_primary_key);
-    Ok(encoded)
+    Ok(())
 }
 
 fn decode_run_descriptor(

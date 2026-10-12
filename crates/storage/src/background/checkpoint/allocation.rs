@@ -155,6 +155,36 @@ impl CheckpointAllocationOwner {
         Ok(CheckpointAllocationToken(None))
     }
 
+    /// Coalesce one pair of retained, opaque capacity records after a
+    /// successful mutation preflight. This is infallible and bounded: it
+    /// allocates no memory, admits no work and never visits a shared suffix.
+    /// Callers must no longer require individual backing-address lookups.
+    pub(crate) fn coalesce_retained_head(&mut self) -> bool {
+        let Some(head) = self.head.as_mut().and_then(Arc::get_mut) else {
+            return false;
+        };
+        let Some(next) = head.next.as_mut().and_then(Arc::get_mut) else {
+            return false;
+        };
+        let target = head.buffer.get_mut().unwrap_or_else(|p| p.into_inner());
+        let source = next.buffer.get_mut().unwrap_or_else(|p| p.into_inner());
+        match (target.as_mut(), source.take()) {
+            (_, None) => {}
+            (Some(target), Some(source_permit)) => {
+                if let Err(source_permit) = target.merge(source_permit) {
+                    *source = Some(source_permit);
+                    return false;
+                }
+            }
+            (None, Some(source_permit)) => *target = Some(source_permit),
+        }
+        let suffix = next.next.take();
+        let retired = head.next.take();
+        head.next = suffix;
+        drop(CheckpointAllocationOwner { head: retired });
+        true
+    }
+
     /// Transfer buffers whose callers will no longer grow or look them up.
     /// Compatible leases are consolidated only in uniquely owned nodes. The
     /// surviving lease retains every backing byte; metadata is refunded only

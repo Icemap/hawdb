@@ -713,6 +713,31 @@ impl CheckpointCandidate {
     /// writer gate. Later catch-up extends the same pinned checkpoint base;
     /// its builders and source digest remain available for another seal.
     pub fn finish_catch_up(&mut self) -> Result<()> {
+        self.finish_catch_up_checked(&crate::background::CheckpointWorkContext::default())
+    }
+
+    /// Finalize a private prefix while preserving typed allocation denials.
+    #[doc(hidden)]
+    pub fn finish_catch_up_with_work_context(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> std::result::Result<(), crate::background::CheckpointOperationError<HawDBError>> {
+        let was_failed = self.failed;
+        let result = work.classify(|work| self.finish_catch_up_checked(work));
+        if matches!(
+            result,
+            Err(crate::background::CheckpointOperationError::Work(_))
+        ) {
+            // Work admission currently precedes cloning and prefix publication.
+            self.failed = was_failed;
+        }
+        result
+    }
+
+    fn finish_catch_up_checked(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<()> {
         if self.failed {
             return Err(HawDBError::Storage(
                 "checkpoint candidate has failed".into(),
@@ -742,7 +767,8 @@ impl CheckpointCandidate {
                 HawDBError::Storage("checkpoint candidate has no private runtime".into())
             })?;
             if self.relational_replay_required {
-                self.recovery_selectors = next.finish_private_wal_recovery(source, replayed)?;
+                self.recovery_selectors =
+                    next.finish_private_wal_recovery(source, replayed, work)?;
             } else {
                 // The validated WAL is still durable and complete. Its
                 // non-relational commits advanced the pinned read views with

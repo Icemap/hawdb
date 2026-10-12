@@ -230,3 +230,72 @@ fn incremental_replay_consolidates_real_governor_charges_and_preserves_backing()
     drop(work);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
+
+#[test]
+fn retained_head_compaction_is_one_step_and_keeps_all_backing_charged() {
+    let (governor, permit, work) = fixture();
+    let mut owner = CheckpointAllocationOwner::default();
+    let first = buffer(&mut owner, 8, &work);
+    let second = buffer(&mut owner, 16, &work);
+    let third = buffer(&mut owner, 32, &work);
+    let before = available(&work);
+    assert!(owner.coalesce_retained_head());
+    let head = owner.head.as_ref().unwrap();
+    assert_eq!(head.buffer.lock().unwrap().as_ref().unwrap().bytes(), 48);
+    assert!(head.next.is_some());
+    assert!(available(&work) > before);
+    assert!(owner.coalesce_retained_head());
+    let head = owner.head.as_ref().unwrap();
+    assert_eq!(head.buffer.lock().unwrap().as_ref().unwrap().bytes(), 56);
+    assert!(head.next.is_none());
+    assert!(!owner.coalesce_retained_head());
+    assert_eq!(first.len() + second.len() + third.len(), 56);
+    drop((first, second, third, owner, permit));
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn retained_head_compaction_leaves_shared_head_and_suffix_unchanged() {
+    let (governor, permit, work) = fixture();
+    let mut owner = CheckpointAllocationOwner::default();
+    let first = buffer(&mut owner, 8, &work);
+    let second = buffer(&mut owner, 16, &work);
+    let snapshot = owner.clone();
+    let before = available(&work);
+    assert!(!owner.coalesce_retained_head());
+    assert_eq!(available(&work), before);
+    drop(snapshot);
+    let suffix = owner.head.as_ref().unwrap().next.as_ref().unwrap().clone();
+    assert!(!owner.coalesce_retained_head());
+    assert_eq!(available(&work), before);
+    assert_eq!(
+        owner
+            .head
+            .as_ref()
+            .unwrap()
+            .buffer
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .bytes(),
+        16
+    );
+    drop(suffix);
+    assert!(owner.coalesce_retained_head());
+    assert_eq!(
+        owner
+            .head
+            .as_ref()
+            .unwrap()
+            .buffer
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .bytes(),
+        24
+    );
+    drop((first, second, owner, permit));
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}

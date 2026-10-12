@@ -378,17 +378,54 @@ impl RelationalRowDeltaBuilder {
         recovery_source: RelationalRecoverySourceIdentity,
         overflow_root: Option<&RelationalOverflowRootReader>,
         final_state: &RelationalState,
+        work: &crate::background::CheckpointWorkContext,
     ) -> Result<RelationalRowDeltaReport, RelationalRowDeltaError> {
         // Flush the live builder first. Cloning dirty entries before flushing
         // would reuse run ordinals and overwrite an already pinned prefix.
         self.flush()?;
-        self.clone().finish_with_state_inner(
+        // Admit every backing allocation copied by Clone before creating the
+        // snapshot. The live builder remains reusable if admission fails.
+        let mut memory = crate::background::CheckpointAllocationOwner::default();
+        let mut reserve = |bytes: usize| {
+            memory
+                .reserve(bytes, work)
+                .map(|_| ())
+                .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))
+        };
+        let checked_bytes = |count: usize, size: usize| {
+            count.checked_mul(size).ok_or_else(|| {
+                RelationalRowDeltaError::Admission("private row builder clone size overflow".into())
+            })
+        };
+        reserve(self.directory.as_os_str().len())?;
+        reserve(checked_bytes(
+            self.tables.len(),
+            std::mem::size_of::<RelationalRowDeltaTableMetadata>(),
+        )?)?;
+        for table in &self.tables {
+            reserve(table.table.len())?;
+        }
+        reserve(checked_bytes(
+            self.runs.len(),
+            std::mem::size_of::<RowDeltaRunDescriptor>(),
+        )?)?;
+        for run in &self.runs {
+            reserve(run.lower_bound.encoded_primary_key.len())?;
+            reserve(run.upper_bound.encoded_primary_key.len())?;
+        }
+        if let Some(reason) = &self.invalidated {
+            reserve(reason.len())?;
+        }
+        let result = self.clone().finish_with_state_inner(
             expected_visible_commit_epoch,
             recovery_source,
             overflow_root,
             final_state,
             DeltaSelection::PrivatePrefix,
-        )
+        );
+        // The cloned builder and its manifest are destroyed before refunding.
+        drop(memory);
+        result
     }
 
     fn finish_with_state_inner(

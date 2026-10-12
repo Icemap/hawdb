@@ -1343,7 +1343,7 @@ fn run(
                     .with_scheduler(scheduler.clone())
                     .with_progress_counter(control.work_progress.clone());
                 candidate.catch_up_with_work_context(&source.store, &work)?;
-                candidate.finish_catch_up()?;
+                candidate.finish_catch_up_with_work_context(&work)?;
                 #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
                 {
                     let probe = control.lock()?.prefix_seal_probe.clone();
