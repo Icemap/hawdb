@@ -3619,23 +3619,11 @@ impl RelationalState {
                     memory: Default::default(),
                 }
             });
-            let primary_key_positions = match &position_allocations {
-                Some(context) => {
-                    let mut positions = context
-                        .vector_capacity(schema.primary_key.len())
-                        .map_err(admission)?;
-                    for column in &schema.primary_key {
-                        positions.push(schema.column_position(column).ok_or_else(|| {
-                            RelationalError::Schema(format!(
-                                "table {} references unknown column {column}",
-                                schema.name
-                            ))
-                        })?);
-                    }
-                    positions
-                }
-                None => column_positions(schema, &schema.primary_key)?,
-            };
+            let primary_key_positions = column_positions_with_allocations(
+                schema,
+                &schema.primary_key,
+                position_allocations.as_ref(),
+            )?;
             if !primary_key_positions
                 .iter()
                 .map(|position| &row.values()[*position])
@@ -7156,14 +7144,39 @@ fn column_positions(
     schema: &RelationalTableSchema,
     columns: &[String],
 ) -> Result<Vec<usize>, RelationalError> {
-    columns
-        .iter()
-        .map(|column| {
-            schema.column_position(column).ok_or_else(|| {
-                RelationalError::Schema(format!("table {} has no column {column}", schema.name))
-            })
-        })
-        .collect()
+    column_positions_with_allocations(schema, columns, None)
+}
+
+fn column_positions_with_allocations(
+    schema: &RelationalTableSchema,
+    columns: &[String],
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<Vec<usize>, RelationalError> {
+    let mut positions = match allocations {
+        Some(context) => context
+            .vector_capacity(columns.len())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?,
+        None => Vec::with_capacity(columns.len()),
+    };
+    for column in columns {
+        let position = schema.column_position(column).ok_or_else(|| {
+            RelationalError::Schema(format!("table {} has no column {column}", schema.name))
+        })?;
+        let unit = allocations
+            .map(|context| context.start_unit())
+            .transpose()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        positions.push(position);
+        if let Some(unit) = unit {
+            unit.finish();
+        }
+    }
+    if let Some(context) = allocations {
+        context
+            .checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    }
+    Ok(positions)
 }
 
 fn row_key(row: &RelationalRow, positions: &[usize]) -> RelationalKey {

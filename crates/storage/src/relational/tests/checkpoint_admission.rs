@@ -564,3 +564,61 @@ fn controlled_sparse_workspace_moves_sorted_rows_into_bounded_pages() {
         );
     }
 }
+
+#[test]
+fn controlled_column_positions_share_results_errors_and_deny_capacity_before_allocation() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let source = RelationalState::default()
+        .stage_transaction(
+            create_upsert_table(),
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let schema = source.table_schema("documents").unwrap();
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    for columns in [
+        vec![],
+        vec!["payload".into(), "id".into(), "id".into()],
+        vec!["id".into(), "missing".into()],
+    ] {
+        let ordinary = column_positions(schema, &columns);
+        let controlled = column_positions_with_allocations(schema, &columns, Some(&context));
+        match (ordinary, controlled) {
+            (Ok(expected), Ok(actual)) => assert_eq!(actual, expected),
+            (Err(expected), Err(actual)) => assert_eq!(actual.to_string(), expected.to_string()),
+            result => panic!("column-position drift: {result:?}"),
+        }
+    }
+    let columns = vec!["id".to_string(); 16 * 1024];
+    let ceiling = 4096;
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(ceiling),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let context = CheckpointDecodeContext {
+        work: CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default())),
+        memory: Default::default(),
+    };
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let denied = column_positions_with_allocations(schema, &columns, Some(&context));
+    assert_eq!(observer.finish(), 0);
+    assert!(matches!(denied, Err(RelationalError::Admission(_))));
+    drop(context);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
