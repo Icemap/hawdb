@@ -134,8 +134,18 @@ pub(crate) fn decode_overflow_envelope(
     budget: &mut RelationalHydrationBudget,
     task_context: Option<&hawdb_core::RuntimeTaskContext>,
 ) -> Result<RelationalValue, RelationalError> {
+    decode_overflow_envelope_with_allocations(reference, encoded, budget, task_context, None)
+}
+
+pub(in crate::relational) fn decode_overflow_envelope_with_allocations(
+    reference: &RelationalOverflowRef,
+    encoded: &[u8],
+    budget: &mut RelationalHydrationBudget,
+    task_context: Option<&hawdb_core::RuntimeTaskContext>,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalValue, RelationalError> {
     runtime_checkpoint(task_context)?;
-    let header = decode_header(reference, encoded)?;
+    let header = decode_header(reference, encoded, allocations)?;
     let next_budget = admitted_hydration_budget(reference, budget)?;
     let payload = &encoded[OVERFLOW_HEADER_BYTES..];
     let decoded = match header.codec {
@@ -145,12 +155,46 @@ pub(crate) fn decode_overflow_envelope(
                     "raw overflow envelope length mismatch".to_string(),
                 ));
             }
-            payload.to_vec()
+            match allocations {
+                Some(context) => {
+                    let mut decoded = context
+                        .vector_capacity(payload.len())
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                    for chunk in payload.chunks(DECODE_CHUNK_BYTES) {
+                        let unit = context
+                            .start_unit()
+                            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                        decoded.extend_from_slice(chunk);
+                        unit.finish();
+                    }
+                    decoded
+                }
+                None => payload.to_vec(),
+            }
         }
-        OVERFLOW_CODEC_ZSTD => decode_zstd(payload, header.uncompressed_bytes, task_context)?,
+        OVERFLOW_CODEC_ZSTD => decode_zstd(
+            payload,
+            header.uncompressed_bytes,
+            task_context,
+            allocations,
+        )?,
         _ => unreachable!("validated overflow codec"),
     };
-    if decoded.len() != header.uncompressed_bytes || crc32c(&decoded).get() != header.checksum {
+    if decoded.len() != header.uncompressed_bytes {
+        return Err(RelationalError::Corruption(
+            "overflow decoded length or checksum mismatch".to_string(),
+        ));
+    }
+    let checksum = match allocations {
+        Some(context) => {
+            context
+                .integrity(&decoded)
+                .map_err(|error| RelationalError::Admission(error.to_string()))?
+                .crc32c
+        }
+        None => crc32c(&decoded),
+    };
+    if checksum.get() != header.checksum {
         return Err(RelationalError::Corruption(
             "overflow decoded length or checksum mismatch".to_string(),
         ));
@@ -180,9 +224,16 @@ struct DecodedHeader {
 fn decode_header(
     reference: &RelationalOverflowRef,
     encoded: &[u8],
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
 ) -> Result<DecodedHeader, RelationalError> {
     validate_header_prefix(encoded)?;
-    if integrity_digest(encoded).sha256 != reference.digest {
+    let digest = match allocations {
+        Some(context) => context
+            .integrity(encoded)
+            .map_err(|error| RelationalError::Admission(error.to_string()))?,
+        None => integrity_digest(encoded),
+    };
+    if digest.sha256 != reference.digest {
         return Err(RelationalError::Corruption(
             "overflow envelope digest mismatch".to_string(),
         ));
@@ -252,8 +303,22 @@ fn decode_zstd(
     payload: &[u8],
     uncompressed_bytes: usize,
     task_context: Option<&hawdb_core::RuntimeTaskContext>,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
 ) -> Result<Vec<u8>, RelationalError> {
-    let decoder = crate::compression::Decoder::new(Cursor::new(payload)).map_err(|error| {
+    let mut decoded = match allocations {
+        Some(context) => context
+            .vector_capacity(uncompressed_bytes)
+            .map_err(|error| RelationalError::Admission(error.to_string()))?,
+        None => Vec::with_capacity(uncompressed_bytes.min(INITIAL_DECODE_CAPACITY_BYTES)),
+    };
+    // The payload already implements BufRead; avoid an additional buffered copy.
+    let decoder = match allocations {
+        Some(context) => {
+            crate::compression::Decoder::with_buffer_and_work_context(Cursor::new(payload), context)
+        }
+        None => crate::compression::Decoder::with_buffer(Cursor::new(payload)),
+    }
+    .map_err(|error| {
         RelationalError::Corruption(format!("failed to initialize overflow decoder: {error}"))
     })?;
     let read_limit = uncompressed_bytes
@@ -261,9 +326,13 @@ fn decode_zstd(
         .and_then(|bytes| u64::try_from(bytes).ok())
         .ok_or_else(|| RelationalError::Corruption("overflow decode limit overflow".to_string()))?;
     let mut decoder = decoder.take(read_limit);
-    let mut decoded = Vec::with_capacity(uncompressed_bytes.min(INITIAL_DECODE_CAPACITY_BYTES));
     let mut chunk = [0_u8; DECODE_CHUNK_BYTES];
     loop {
+        if let Some(context) = allocations {
+            context
+                .checkpoint()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        }
         runtime_checkpoint(task_context)?;
         let read = decoder.read(&mut chunk).map_err(|error| {
             RelationalError::Corruption(format!("failed to decode overflow value: {error}"))
@@ -346,7 +415,7 @@ fn decode_scalar_type(tag: u8) -> Result<RelationalScalarType, RelationalError> 
 }
 
 fn compress(raw: &[u8], compression_level: i32) -> Result<Vec<u8>, RelationalError> {
-    crate::compression::encode_all(raw, compression_level).map_err(|error| {
+    crate::compression::encode_slice(raw, compression_level).map_err(|error| {
         RelationalError::Durability(format!("failed to compress overflow value: {error}"))
     })
 }
@@ -374,6 +443,115 @@ fn read_u32(bytes: &[u8]) -> Result<u32, RelationalError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn controlled_overflow_output_denies_before_copy_and_preserves_budget() {
+        use crate::background::{
+            CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+            CheckpointWorkError,
+        };
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+            RuntimeWorkRequest,
+        };
+        let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+        let random = (0..128 * 1024)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state as u8
+            })
+            .collect::<Vec<_>>();
+        let ascii = random.iter().map(|byte| byte & 0x7f).collect::<Vec<_>>();
+        for (scalar, raw, codec) in [
+            (RelationalScalarType::Bytea, random, OVERFLOW_CODEC_RAW),
+            (RelationalScalarType::Text, ascii, OVERFLOW_CODEC_RAW),
+            (
+                RelationalScalarType::Bytea,
+                vec![7; 128 * 1024],
+                OVERFLOW_CODEC_ZSTD,
+            ),
+            (
+                RelationalScalarType::Text,
+                "中".repeat(64 * 1024).into_bytes(),
+                OVERFLOW_CODEC_ZSTD,
+            ),
+        ] {
+            let encoded =
+                encode_overflow_envelope(scalar, &raw, RelationalOverflowConfig::default())
+                    .unwrap();
+            assert_eq!(encoded.bytes[8], codec);
+            let mut ordinary_budget = RelationalHydrationBudget::default();
+            let ordinary = decode_overflow_envelope(
+                &encoded.reference,
+                &encoded.bytes,
+                &mut ordinary_budget,
+                None,
+            )
+            .unwrap();
+            for (bytes, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+                let governor = RuntimeGovernor::detect(
+                    RuntimeGovernorConfig {
+                        memory_budget_bytes: Some(bytes),
+                        ..RuntimeGovernorConfig::shared_host()
+                    },
+                    IoConcurrencyBudget::new(2, 1),
+                );
+                governor.pin_resources();
+                let permit = governor
+                    .try_admit(RuntimeWorkRequest::background_maintenance(bytes))
+                    .unwrap();
+                let work = CheckpointWorkContext::new(
+                    permit.bind_task_context(RuntimeTaskContext::default()),
+                );
+                let mut budget = RelationalHydrationBudget::default();
+                let before = budget;
+                let observer = crate::test_allocator::AllocationObservation::start();
+                let result = work.classify(|scoped| {
+                    let context = CheckpointDecodeContext {
+                        work: scoped.clone(),
+                        memory: Default::default(),
+                    };
+                    let value = decode_overflow_envelope_with_allocations(
+                        &encoded.reference,
+                        &encoded.bytes,
+                        &mut budget,
+                        Some(scoped.task_context()),
+                        Some(&context),
+                    )?;
+                    Ok::<_, RelationalError>((value, context.memory.into_inner()))
+                });
+                let large_allocations = observer.finish();
+                if succeeds {
+                    let (value, memory) = result.unwrap();
+                    assert_eq!(value, ordinary);
+                    assert_eq!(budget, ordinary_budget);
+                    assert!(matches!(work.task_context().reserve_working_memory(bytes),
+                        Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes <= bytes - raw.len() as u64));
+                    drop(value);
+                    drop(memory);
+                } else {
+                    assert!(
+                        matches!(
+                            result,
+                            Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                                _
+                            )))
+                        ),
+                        "{result:?}"
+                    );
+                    assert_eq!(large_allocations, 0);
+                    assert_eq!(budget, before);
+                }
+                assert!(matches!(work.task_context().reserve_working_memory(bytes),
+                    Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == bytes));
+                drop(work);
+                drop(permit);
+                assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+            }
+        }
+    }
 
     #[test]
     fn raw_v1_fixture_is_stable_and_round_trips() {

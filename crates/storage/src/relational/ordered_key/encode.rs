@@ -203,6 +203,33 @@ impl Output for Admitted<'_> {
     }
 }
 
+struct InventoryOutput<'a> {
+    bytes: Vec<u8>,
+    allocations: &'a crate::background::CheckpointDecodeContext,
+}
+
+impl Output for InventoryOutput<'_> {
+    type Error = CheckpointKeyEncodeError;
+
+    fn work(&self) -> Option<&CheckpointWorkContext> {
+        Some(self.allocations)
+    }
+
+    fn raw(&mut self, bytes: &[u8]) -> Result<(), Self::Error> {
+        if bytes.len() > self.bytes.capacity() - self.bytes.len() {
+            return Err(self
+                .allocations
+                .record_failure(CheckpointWorkError::Allocation {
+                    bytes: bytes.len() as u64,
+                    reason: "ordered key exceeded its admitted output".into(),
+                })
+                .into());
+        }
+        self.bytes.extend_from_slice(bytes);
+        Ok(())
+    }
+}
+
 /// A borrowed immutable key whose exact output size was computed using the
 /// same grammar that materializes it. Callers apply their format limit before
 /// allocating; the result retains its allocation permit through destruction.
@@ -237,6 +264,34 @@ impl<'a> CheckpointKeyEncoding<'a> {
 
     pub(crate) fn encoded_len(&self) -> usize {
         self.encoded_len
+    }
+
+    pub(crate) fn encode_owned(
+        self,
+        allocations: &crate::background::CheckpointDecodeContext,
+    ) -> Result<Vec<u8>, CheckpointKeyEncodeError> {
+        let bytes = allocations
+            .vector_capacity(self.encoded_len)
+            .map_err(|error| {
+                CheckpointKeyEncodeError::Key(super::super::RelationalError::Admission(
+                    error.to_string(),
+                ))
+            })?;
+        let mut output = InventoryOutput { bytes, allocations };
+        for chunk in self.prefix.chunks(64 * 1024) {
+            output.unit(|output| output.raw(chunk))?;
+        }
+        for item in &self.key.0 {
+            value(&mut output, item)?;
+        }
+        allocations.checkpoint()?;
+        if output.bytes.len() != self.encoded_len {
+            return Err(OrderedRelationalKeyError::Corrupt(
+                "ordered key size changed during encoding".into(),
+            )
+            .into());
+        }
+        Ok(output.bytes)
     }
 
     pub(crate) fn encode(

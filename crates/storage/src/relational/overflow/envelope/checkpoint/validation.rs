@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Validate a publication input without retaining a hydrated value. Zstd's
-//! internal workspace, allocator costs and retained inputs still need hard
-//! resource accounting; bounded Rust buffers alone do not qualify the job.
+//! Validate a publication input without retaining a hydrated value. Native
+//! decoder allocations use the work controller; retained input ownership is
+//! supplied by the caller.
 
 use super::*;
 use hawdb_integrity::Crc32cHasher;
@@ -58,12 +58,15 @@ pub(crate) fn validate_overflow_envelope_with_work_context(
         }
         OVERFLOW_CODEC_ZSTD => {
             let unit = work.start_unit().map_err(work_error)?;
-            let decoder =
-                crate::compression::Decoder::new(Cursor::new(payload)).map_err(|error| {
-                    RelationalError::Corruption(format!(
-                        "failed to initialize overflow decoder: {error}"
-                    ))
-                })?;
+            let decoder = crate::compression::Decoder::with_buffer_and_work_context(
+                Cursor::new(payload),
+                work,
+            )
+            .map_err(|error| {
+                RelationalError::Corruption(format!(
+                    "failed to initialize overflow decoder: {error}"
+                ))
+            })?;
             let read_limit = header
                 .uncompressed_bytes
                 .checked_add(1)

@@ -84,6 +84,16 @@ pub(super) fn decode_row_fields(
     requested_fields: Option<&[usize]>,
     limits: RelationalRowPageLimits,
 ) -> Result<Vec<RelationalProjectedField>, RelationalRowPageError> {
+    decode_row_fields_with_allocations(encoded, column_count, requested_fields, limits, None)
+}
+
+pub(super) fn decode_row_fields_with_allocations(
+    encoded: &[u8],
+    column_count: usize,
+    requested_fields: Option<&[usize]>,
+    limits: RelationalRowPageLimits,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<Vec<RelationalProjectedField>, RelationalRowPageError> {
     if encoded.len() < 4 {
         return Err(RelationalRowPageError::Corrupt(
             "row is smaller than its value-count header".to_string(),
@@ -108,10 +118,21 @@ pub(super) fn decode_row_fields(
     }
     let directory = &encoded[4..payload_start];
     let payload = &encoded[payload_start..];
-    let mut fields = Vec::with_capacity(requested_fields.map_or(column_count, <[usize]>::len));
+    let capacity = requested_fields.map_or(column_count, <[usize]>::len);
+    let mut fields = match allocations {
+        Some(context) => context
+            .vector_capacity(capacity)
+            .map_err(|error| RelationalRowPageError::Admission(error.to_string()))?,
+        None => Vec::with_capacity(capacity),
+    };
     let mut requested_index = 0usize;
     let mut next_offset = 0usize;
     for ordinal in 0..column_count {
+        if let Some(context) = allocations {
+            context
+                .checkpoint()
+                .map_err(super::checkpoint::work_error)?;
+        }
         let slot_offset = ordinal * VALUE_SLOT_BYTES;
         let value_offset = read_u32(&directory[slot_offset..slot_offset + 4]);
         let value_len = read_u32(&directory[slot_offset + 4..slot_offset + 8]);
@@ -130,7 +151,10 @@ pub(super) fn decode_row_fields(
         {
             fields.push(RelationalProjectedField {
                 ordinal,
-                value: decode_validated_value(value)?,
+                value: match allocations {
+                    Some(context) => decode_validated_value_with_allocations(value, context)?,
+                    None => decode_validated_value(value)?,
+                },
             });
             if requested_fields.is_some() {
                 requested_index += 1;
@@ -318,6 +342,37 @@ fn decode_validated_value(encoded: &[u8]) -> Result<RelationalValue, RelationalR
                 .expect("UUID value has a fixed length"),
         ))),
         _ => unreachable!("validated row value tag"),
+    }
+}
+
+fn decode_validated_value_with_allocations(
+    encoded: &[u8],
+    context: &crate::background::CheckpointDecodeContext,
+) -> Result<RelationalValue, RelationalRowPageError> {
+    let admission =
+        |error: hawdb_core::HawDBError| RelationalRowPageError::Admission(error.to_string());
+    match encoded[0] {
+        4 => context
+            .string(std::str::from_utf8(&encoded[5..]).expect("validated TEXT value is UTF-8"))
+            .map(RelationalValue::Text)
+            .map_err(admission),
+        5 => {
+            let mut bytes = context
+                .vector_capacity(encoded.len() - 5)
+                .map_err(admission)?;
+            for chunk in encoded[5..].chunks(64 * 1024) {
+                let unit = context
+                    .start_unit()
+                    .map_err(super::checkpoint::work_error)?;
+                bytes.extend_from_slice(chunk);
+                unit.finish();
+            }
+            context
+                .checkpoint()
+                .map_err(super::checkpoint::work_error)?;
+            Ok(RelationalValue::Bytea(bytes))
+        }
+        _ => decode_validated_value(encoded),
     }
 }
 

@@ -26,7 +26,11 @@ use crate::relational::row_page::RelationalRowPageRecoveredValue;
 #[cfg(test)]
 use crate::relational::RelationalRecoverySourceIdentity;
 use crate::relational::{
-    ordered_key::{decode_ordered_relational_key, encode_ordered_relational_key},
+    ordered_key::{
+        decode_ordered_relational_key, decode_ordered_relational_key_owned,
+        encode_ordered_relational_key, CheckpointKeyEncodeError, CheckpointKeyEncoding,
+        OrderedRelationalKeyError,
+    },
     RelationalKey, RelationalOverflowRootReader, RelationalRecoveryFence, RelationalRow,
     RelationalRowPageRootReader, RelationalValue,
 };
@@ -624,6 +628,22 @@ pub(super) fn lookup_runs(
     ),
     RelationalRowDeltaError,
 > {
+    lookup_runs_with_allocations(context, runs, table, primary_key, None)
+}
+
+pub(super) fn lookup_runs_with_allocations(
+    context: RowDeltaRunContext<'_>,
+    runs: &[RowDeltaRunDescriptor],
+    table: &str,
+    primary_key: &RelationalKey,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<
+    (
+        Option<RelationalRowPageRecoveredValue>,
+        RelationalRowDeltaReadReport,
+    ),
+    RelationalRowDeltaError,
+> {
     let Ok(table_ordinal) = context
         .tables
         .binary_search_by(|candidate| candidate.table.as_str().cmp(table))
@@ -633,11 +653,36 @@ pub(super) fn lookup_runs(
     let table_ordinal = u32::try_from(table_ordinal).map_err(|_| {
         RelationalRowDeltaError::Corrupt("row delta table ordinal does not fit u32".to_string())
     })?;
-    let encoded_key = encode_ordered_relational_key(primary_key).map_err(|error| {
-        RelationalRowDeltaError::Admission(format!(
-            "row delta lookup key cannot be encoded: {error}"
-        ))
-    })?;
+    let (admitted_key, ordinary_key) = match allocations {
+        Some(allocations) => {
+            let encoding = CheckpointKeyEncoding::new(primary_key, &[], allocations)
+                .map_err(lookup_key_encoding_error)?;
+            if encoding.encoded_len() > context.config.row_limits.max_key_bytes.get() {
+                return Err(RelationalRowDeltaError::Admission(format!(
+                    "row delta lookup key contains {} bytes, exceeding limit {}",
+                    encoding.encoded_len(),
+                    context.config.row_limits.max_key_bytes
+                )));
+            }
+            (
+                Some(
+                    encoding
+                        .encode(allocations)
+                        .map_err(lookup_key_encoding_error)?,
+                ),
+                Vec::new(),
+            )
+        }
+        None => (
+            None,
+            encode_ordered_relational_key(primary_key).map_err(|error| {
+                RelationalRowDeltaError::Admission(format!(
+                    "row delta lookup key cannot be encoded: {error}"
+                ))
+            })?,
+        ),
+    };
+    let encoded_key: &[u8] = admitted_key.as_deref().unwrap_or(&ordinary_key);
     if encoded_key.len() > context.config.row_limits.max_key_bytes.get() {
         return Err(RelationalRowDeltaError::Admission(format!(
             "row delta lookup key contains {} bytes, exceeding limit {}",
@@ -646,7 +691,7 @@ pub(super) fn lookup_runs(
         )));
     }
 
-    let target = (table_ordinal, encoded_key.as_slice());
+    let target = (table_ordinal, encoded_key);
     let mut report = RelationalRowDeltaReadReport::default();
     for run in runs.iter().rev() {
         let lower = (
@@ -662,24 +707,37 @@ pub(super) fn lookup_runs(
         }
 
         let mut found = None;
-        let completed = visit_run(context, run, |candidate_table, candidate_key, value, _| {
-            report.entries_visited = report.entries_visited.checked_add(1).ok_or_else(|| {
-                RelationalRowDeltaError::Admission(
-                    "row delta lookup entry counter overflow".to_string(),
-                )
-            })?;
-            match candidate_table
-                .cmp(table)
-                .then_with(|| candidate_key.cmp(primary_key))
-            {
-                std::cmp::Ordering::Less => Ok(true),
-                std::cmp::Ordering::Equal => {
-                    found = Some(value.clone());
-                    Ok(false)
+        let completed = visit_run_with_work_context(
+            context,
+            run,
+            allocations.map(|context| &context.work),
+            |candidate_table, candidate_key, value, _, memory| {
+                report.entries_visited =
+                    report.entries_visited.checked_add(1).ok_or_else(|| {
+                        RelationalRowDeltaError::Admission(
+                            "row delta lookup entry counter overflow".to_string(),
+                        )
+                    })?;
+                match candidate_table
+                    .cmp(table)
+                    .then_with(|| candidate_key.cmp(primary_key))
+                {
+                    std::cmp::Ordering::Less => Ok(true),
+                    std::cmp::Ordering::Equal => {
+                        if let Some(context) = allocations {
+                            context
+                                .memory
+                                .borrow_mut()
+                                .append_retained(memory, context)
+                                .map_err(super::super::checkpoint::work_error)?;
+                        }
+                        found = Some(value.clone());
+                        Ok(false)
+                    }
+                    std::cmp::Ordering::Greater => Ok(false),
                 }
-                std::cmp::Ordering::Greater => Ok(false),
-            }
-        })?;
+            },
+        )?;
         report.runs_read = report.runs_read.checked_add(1).ok_or_else(|| {
             RelationalRowDeltaError::Admission("row delta lookup run counter overflow".to_string())
         })?;
@@ -919,13 +977,31 @@ fn visit_run(
         u64,
     ) -> Result<bool, RelationalRowDeltaError>,
 ) -> Result<bool, RelationalRowDeltaError> {
+    visit_run_with_work_context(context, run, None, |table, key, value, epoch, _| {
+        visit(table, key, value, epoch)
+    })
+}
+
+fn visit_run_with_work_context(
+    context: RowDeltaRunContext<'_>,
+    run: &RowDeltaRunDescriptor,
+    work: Option<&crate::background::CheckpointWorkContext>,
+    mut visit: impl FnMut(
+        &str,
+        &RelationalKey,
+        &RelationalRowPageRecoveredValue,
+        u64,
+        &mut crate::background::CheckpointAllocationOwner,
+    ) -> Result<bool, RelationalRowDeltaError>,
+) -> Result<bool, RelationalRowDeltaError> {
     let mut cursor = RowDeltaRunCursor::open(context, run)?;
-    while let Some(entry) = cursor.next_entry()? {
+    while let Some(mut entry) = cursor.next_entry_with_work_context(work)? {
         if !visit(
             &context.tables[entry.table_ordinal as usize].table,
             &entry.primary_key,
             &entry.value,
             entry.last_modified_epoch,
+            &mut entry._memory,
         )? {
             return Ok(false);
         }
@@ -938,6 +1014,7 @@ struct RowDeltaRunEntry {
     primary_key: RelationalKey,
     value: RelationalRowPageRecoveredValue,
     last_modified_epoch: u64,
+    _memory: crate::background::CheckpointAllocationOwner,
 }
 
 struct EncodedRowDeltaRunEntry {
@@ -946,6 +1023,7 @@ struct EncodedRowDeltaRunEntry {
     encoded_row: Vec<u8>,
     kind: u8,
     last_modified_epoch: u64,
+    _memory: crate::background::CheckpointAllocationOwner,
 }
 
 struct RowDeltaRunCursor<'a> {
@@ -961,6 +1039,7 @@ struct RowDeltaRunCursor<'a> {
     artifact_hasher: Option<IntegrityHasher>,
     initialized: bool,
     completed: bool,
+    _previous_key_memory: crate::background::CheckpointAllocationOwner,
 }
 
 impl<'a> RowDeltaRunCursor<'a> {
@@ -1027,6 +1106,7 @@ impl<'a> RowDeltaRunCursor<'a> {
             artifact_hasher: None,
             initialized: false,
             completed: false,
+            _previous_key_memory: Default::default(),
         }
     }
 
@@ -1069,28 +1149,63 @@ impl<'a> RowDeltaRunCursor<'a> {
         Ok(())
     }
 
-    fn next_entry(&mut self) -> Result<Option<RowDeltaRunEntry>, RelationalRowDeltaError> {
-        let Some(entry) = self.next_encoded_entry()? else {
+    fn next_entry_with_work_context(
+        &mut self,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<Option<RowDeltaRunEntry>, RelationalRowDeltaError> {
+        let Some(entry) = self.next_encoded_entry_with_work_context(work)? else {
             return Ok(None);
         };
-        let primary_key = decode_delta_primary_key(&entry.encoded_primary_key)?;
-        let value = decode_value(
-            entry.kind,
-            &entry.encoded_row,
-            &self.context.tables[entry.table_ordinal as usize],
-            self.context.config,
-        )?;
+        let allocations = work.map(|work| crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        });
+        let primary_key = match allocations.as_ref() {
+            Some(context) => {
+                decode_ordered_relational_key_owned(&entry.encoded_primary_key, context)
+                    .map_err(delta_primary_key_error)?
+            }
+            None => decode_delta_primary_key(&entry.encoded_primary_key)?,
+        };
+        let value = match allocations.as_ref() {
+            Some(context) => decode_value_with_allocations(
+                entry.kind,
+                &entry.encoded_row,
+                &self.context.tables[entry.table_ordinal as usize],
+                self.context.config,
+                context,
+            )?,
+            None => decode_value(
+                entry.kind,
+                &entry.encoded_row,
+                &self.context.tables[entry.table_ordinal as usize],
+                self.context.config,
+            )?,
+        };
         Ok(Some(RowDeltaRunEntry {
             table_ordinal: entry.table_ordinal,
             primary_key,
             value,
             last_modified_epoch: entry.last_modified_epoch,
+            _memory: allocations
+                .map_or_else(Default::default, |context| context.memory.into_inner()),
         }))
     }
 
     fn next_encoded_entry(
         &mut self,
     ) -> Result<Option<EncodedRowDeltaRunEntry>, RelationalRowDeltaError> {
+        self.next_encoded_entry_with_work_context(None)
+    }
+
+    fn next_encoded_entry_with_work_context(
+        &mut self,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<Option<EncodedRowDeltaRunEntry>, RelationalRowDeltaError> {
+        if let Some(work) = work {
+            work.checkpoint()
+                .map_err(super::super::checkpoint::work_error)?;
+        }
         if self.completed {
             return Ok(None);
         }
@@ -1137,8 +1252,27 @@ impl<'a> RowDeltaRunCursor<'a> {
                 "invalid row delta entry descriptor at ordinal {entry_ordinal}"
             )));
         }
-        let mut encoded_key = vec![0u8; decoded.key_len as usize];
-        let mut encoded_row = vec![0u8; decoded.row_len as usize];
+        let allocations = work.map(|work| crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        });
+        let (mut encoded_key, mut encoded_row) = match &allocations {
+            Some(context) => {
+                let mut key = context
+                    .vector_capacity(decoded.key_len as usize)
+                    .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+                let mut row = context
+                    .vector_capacity(decoded.row_len as usize)
+                    .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+                key.resize(decoded.key_len as usize, 0);
+                row.resize(decoded.row_len as usize, 0);
+                (key, row)
+            }
+            None => (
+                vec![0u8; decoded.key_len as usize],
+                vec![0u8; decoded.row_len as usize],
+            ),
+        };
         let key_offset = self
             .payload_start
             .checked_add(decoded.key_offset)
@@ -1219,7 +1353,23 @@ impl<'a> RowDeltaRunCursor<'a> {
                 "row delta upper key bound mismatch".to_string(),
             ));
         }
-        self.previous_key = Some((decoded.table_ordinal, encoded_key.clone()));
+        let previous_allocations = work.map(|work| crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        });
+        let previous_key = match &previous_allocations {
+            Some(context) => {
+                let mut copied = context
+                    .vector_capacity(encoded_key.len())
+                    .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+                copied.extend_from_slice(&encoded_key);
+                copied
+            }
+            None => encoded_key.clone(),
+        };
+        self.previous_key = Some((decoded.table_ordinal, previous_key));
+        self._previous_key_memory = previous_allocations
+            .map_or_else(Default::default, |context| context.memory.into_inner());
         self.entry_ordinal += 1;
         Ok(Some(EncodedRowDeltaRunEntry {
             table_ordinal: decoded.table_ordinal,
@@ -1227,6 +1377,8 @@ impl<'a> RowDeltaRunCursor<'a> {
             encoded_row,
             kind: decoded.kind,
             last_modified_epoch: decoded.last_modified_epoch,
+            _memory: allocations
+                .map_or_else(Default::default, |context| context.memory.into_inner()),
         }))
     }
 
@@ -1493,12 +1645,76 @@ pub(super) fn decode_staged_value(
     )
 }
 
+pub(super) fn decode_staged_value_with_allocations(
+    value: &RowDeltaValue,
+    table: &RelationalRowDeltaTableMetadata,
+    config: RelationalRowDeltaConfig,
+    allocations: &crate::background::CheckpointDecodeContext,
+) -> Result<RelationalRowPageRecoveredValue, RelationalRowDeltaError> {
+    decode_value_with_allocations(
+        u8::from(value.is_present),
+        &value.encoded_row,
+        table,
+        config,
+        allocations,
+    )
+}
+
+fn decode_value_with_allocations(
+    kind: u8,
+    encoded_row: &[u8],
+    table: &RelationalRowDeltaTableMetadata,
+    config: RelationalRowDeltaConfig,
+    allocations: &crate::background::CheckpointDecodeContext,
+) -> Result<RelationalRowPageRecoveredValue, RelationalRowDeltaError> {
+    if kind == 0 {
+        return Ok(RelationalRowPageRecoveredValue::Deleted);
+    }
+    let fields = super::super::value::decode_row_fields_with_allocations(
+        encoded_row,
+        table.column_count.get() as usize,
+        None,
+        config.row_limits,
+        Some(allocations),
+    )?;
+    let mut values = allocations
+        .vector_capacity(fields.len())
+        .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+    for field in fields {
+        allocations
+            .checkpoint()
+            .map_err(super::super::checkpoint::work_error)?;
+        values.push(field.value);
+    }
+    allocations
+        .reserve(std::mem::size_of::<Vec<RelationalValue>>() + 2 * std::mem::size_of::<usize>())
+        .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+    Ok(RelationalRowPageRecoveredValue::Present(
+        RelationalRow::new(values),
+    ))
+}
+
+pub(super) fn lookup_key_encoding_error(
+    error: CheckpointKeyEncodeError,
+) -> RelationalRowDeltaError {
+    match error {
+        CheckpointKeyEncodeError::Work(error) => super::super::checkpoint::work_error(error).into(),
+        CheckpointKeyEncodeError::Key(error) => RelationalRowDeltaError::Admission(format!(
+            "row delta lookup key cannot be encoded: {error}"
+        )),
+    }
+}
+
+fn delta_primary_key_error(error: OrderedRelationalKeyError) -> RelationalRowDeltaError {
+    let message = format!("row delta primary key cannot be decoded: {error}");
+    match error {
+        OrderedRelationalKeyError::Admission(_) => RelationalRowDeltaError::Admission(message),
+        _ => RelationalRowDeltaError::Corrupt(message),
+    }
+}
+
 fn decode_delta_primary_key(encoded: &[u8]) -> Result<RelationalKey, RelationalRowDeltaError> {
-    decode_ordered_relational_key(encoded).map_err(|error| {
-        RelationalRowDeltaError::Corrupt(format!(
-            "row delta primary key cannot be decoded: {error}"
-        ))
-    })
+    decode_ordered_relational_key(encoded).map_err(delta_primary_key_error)
 }
 
 fn decode_projected_value(

@@ -25,9 +25,10 @@ use crate::durability::{durable_replace_file, sync_directory};
 use crate::file_io::{self as fs, File, OpenOptions};
 use crate::relational::row_page::{RelationalRowPageRecoveredValue, RelationalRowPageRootReader};
 use crate::relational::{
-    ordered_key::encode_ordered_relational_key, RelationalKey, RelationalOverflowRootReader,
-    RelationalRecoverySourceIdentity, RelationalRowChange, RelationalRowChangeCapture,
-    RelationalRowChangeCaptureLimits, RelationalRowPagePublicationConfig, RelationalState,
+    ordered_key::{encode_ordered_relational_key, CheckpointKeyEncoding},
+    RelationalKey, RelationalOverflowRootReader, RelationalRecoverySourceIdentity,
+    RelationalRowChange, RelationalRowChangeCapture, RelationalRowChangeCaptureLimits,
+    RelationalRowPagePublicationConfig, RelationalState,
 };
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -265,6 +266,21 @@ impl RelationalRowDeltaBuilder {
         ),
         RelationalRowDeltaError,
     > {
+        self.lookup_staged_with_allocations(table, primary_key, None)
+    }
+
+    pub(crate) fn lookup_staged_with_allocations(
+        &self,
+        table: &str,
+        primary_key: &RelationalKey,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<
+        (
+            Option<RelationalRowPageRecoveredValue>,
+            RelationalRowDeltaReadReport,
+        ),
+        RelationalRowDeltaError,
+    > {
         self.require_available()?;
         let Ok(table_ordinal) = self
             .tables
@@ -275,11 +291,34 @@ impl RelationalRowDeltaBuilder {
         let table_ordinal = u32::try_from(table_ordinal).map_err(|_| {
             RelationalRowDeltaError::Corrupt("row delta table ordinal does not fit u32".to_string())
         })?;
-        let encoded_primary_key = encode_ordered_relational_key(primary_key).map_err(|error| {
-            RelationalRowDeltaError::Admission(format!(
-                "row delta lookup key cannot be encoded: {error}"
-            ))
-        })?;
+        // Query-key scratch dies with this lookup, independently of the
+        // caller's inventory for returned row payloads.
+        let key_allocations =
+            allocations.map(|context| crate::background::CheckpointDecodeContext {
+                work: context.work.clone(),
+                memory: Default::default(),
+            });
+        let encoded_primary_key = match key_allocations.as_ref() {
+            Some(context) => {
+                let encoding = CheckpointKeyEncoding::new(primary_key, &[], context)
+                    .map_err(super::reader::lookup_key_encoding_error)?;
+                if encoding.encoded_len() > self.config.row_limits.max_key_bytes.get() {
+                    return Err(RelationalRowDeltaError::Admission(format!(
+                        "row delta lookup key contains {} bytes, exceeding limit {}",
+                        encoding.encoded_len(),
+                        self.config.row_limits.max_key_bytes
+                    )));
+                }
+                encoding
+                    .encode_owned(context)
+                    .map_err(super::reader::lookup_key_encoding_error)?
+            }
+            None => encode_ordered_relational_key(primary_key).map_err(|error| {
+                RelationalRowDeltaError::Admission(format!(
+                    "row delta lookup key cannot be encoded: {error}"
+                ))
+            })?,
+        };
         if encoded_primary_key.len() > self.config.row_limits.max_key_bytes.get() {
             return Err(RelationalRowDeltaError::Admission(format!(
                 "row delta lookup key contains {} bytes, exceeding limit {}",
@@ -292,11 +331,19 @@ impl RelationalRowDeltaBuilder {
             encoded_primary_key,
         };
         if let Some(value) = self.dirty.get(&key) {
-            let value = super::reader::decode_staged_value(
-                value,
-                &self.tables[table_ordinal as usize],
-                self.config,
-            )?;
+            let value = match allocations {
+                Some(context) => super::reader::decode_staged_value_with_allocations(
+                    value,
+                    &self.tables[table_ordinal as usize],
+                    self.config,
+                    context,
+                )?,
+                None => super::reader::decode_staged_value(
+                    value,
+                    &self.tables[table_ordinal as usize],
+                    self.config,
+                )?,
+            };
             return Ok((
                 Some(value),
                 RelationalRowDeltaReadReport {
@@ -305,7 +352,11 @@ impl RelationalRowDeltaBuilder {
                 },
             ));
         }
-        super::reader::lookup_runs(
+        // Free the temporary dirty-map key before encoding the immutable-run
+        // lookup key. Physical backing always dies before its permit owner.
+        drop(key);
+        drop(key_allocations);
+        super::reader::lookup_runs_with_allocations(
             RowDeltaRunContext {
                 directory: &self.directory,
                 base: self.base,
@@ -317,6 +368,7 @@ impl RelationalRowDeltaBuilder {
             &self.runs,
             table,
             primary_key,
+            allocations,
         )
     }
 

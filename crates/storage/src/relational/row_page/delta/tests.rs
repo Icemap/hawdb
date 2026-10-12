@@ -278,6 +278,454 @@ fn dirty_run_coalesces_repeated_keys_to_the_latest_epoch() {
 }
 
 #[test]
+fn controlled_dirty_lookup_denies_payload_copy_and_retains_successful_backing() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    for value in [
+        RelationalValue::Text("x".repeat(128 * 1024)),
+        RelationalValue::Bytea(vec![7; 128 * 1024]),
+    ] {
+        let directory = unique_test_dir("controlled-dirty-lookup");
+        let base = publish_and_open_base(&directory);
+        let mut config = RelationalRowDeltaConfig::default();
+        config.row_limits.max_inline_value_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+        let mut builder = builder(&directory, &base, 1, None, config);
+        builder
+            .record(
+                2,
+                RelationalRowChangeCapture::Captured {
+                    changes: vec![RelationalRowChange {
+                        table: "documents".into(),
+                        primary_key: key(2),
+                        row: Some(RelationalRow::new(vec![
+                            RelationalValue::BigInt(2),
+                            value.clone(),
+                        ])),
+                    }],
+                    encoded_bytes: 0,
+                },
+            )
+            .unwrap();
+        for (bytes, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+            let governor = RuntimeGovernor::detect(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(bytes),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                IoConcurrencyBudget::new(2, 1),
+            );
+            governor.pin_resources();
+            let permit = governor
+                .try_admit(RuntimeWorkRequest::background_maintenance(bytes))
+                .unwrap();
+            let work =
+                CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+            let observer = crate::test_allocator::AllocationObservation::start();
+            let result = work.classify(|scoped| {
+                let allocations = CheckpointDecodeContext {
+                    work: scoped.clone(),
+                    memory: Default::default(),
+                };
+                let recovered = builder.lookup_staged_with_allocations(
+                    "documents",
+                    &key(2),
+                    Some(&allocations),
+                )?;
+                Ok::<_, RelationalRowDeltaError>((recovered, allocations.memory.into_inner()))
+            });
+            let large_allocations = observer.finish();
+            if succeeds {
+                let ((recovered, report), memory) = result.unwrap();
+                let Some(RelationalRowPageRecoveredValue::Present(row)) = recovered else {
+                    panic!("expected recovered row")
+                };
+                assert_eq!(row.values()[1], value);
+                assert_eq!(report.runs_read, 0);
+                assert!(large_allocations > 0);
+                let backing = row.values().as_ptr();
+                let observer = crate::test_allocator::AllocationObservation::start();
+                let mut budget = crate::relational::RelationalHydrationBudget::default();
+                let row = crate::relational::overflow::hydrate_owned_row(
+                    &crate::relational::RelationalState::default(),
+                    row,
+                    &mut budget,
+                    Some(work.task_context()),
+                    None,
+                )
+                .unwrap();
+                assert_eq!(
+                    observer.finish(),
+                    0,
+                    "hydration must reuse the admitted inline payload"
+                );
+                assert_eq!(row.values().as_ptr(), backing);
+                assert_eq!(budget.hydrated_rows, 1);
+                assert!(
+                    matches!(work.task_context().reserve_working_memory(bytes), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes <= bytes - 128 * 1024)
+                );
+                drop(row);
+                drop(memory);
+            } else {
+                assert!(
+                    matches!(
+                        result,
+                        Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                            _
+                        )))
+                    ),
+                    "{result:?}"
+                );
+                assert_eq!(
+                    large_allocations, 0,
+                    "denial must precede the large payload copy"
+                );
+            }
+            assert!(matches!(
+                work.task_context().reserve_working_memory(bytes),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == bytes
+            ));
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+            assert_eq!(builder.visible_commit_epoch(), 2);
+        }
+        fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[test]
+fn controlled_run_lookup_denies_read_buffer_before_allocation_and_retries() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("controlled-run-buffer");
+    let base = publish_and_open_base(&directory);
+    let mut config = RelationalRowDeltaConfig {
+        max_dirty_entries: NonZeroUsize::MIN,
+        ..Default::default()
+    };
+    config.row_limits.max_inline_value_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    let mut builder = builder(&directory, &base, 1, None, config);
+    let payload = "x".repeat(128 * 1024);
+    builder.record(2, capture(2, Some(&payload))).unwrap();
+    builder.record(3, capture(3, Some("three"))).unwrap();
+    let ordinary = builder.lookup_staged("documents", &key(2)).unwrap();
+    assert_eq!(ordinary.1.runs_read, 1);
+    for (bytes, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(bytes),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(bytes))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let value =
+                builder.lookup_staged_with_allocations("documents", &key(2), Some(&context))?;
+            Ok::<_, RelationalRowDeltaError>((value, context.memory.into_inner()))
+        });
+        let large_allocations = observer.finish();
+        if succeeds {
+            let (value, memory) = result.unwrap();
+            assert_eq!(value, ordinary);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(bytes),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes <= bytes - 128 * 1024),
+                "selected run payload must remain charged after the cursor closes"
+            );
+            drop(value);
+            drop(memory);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(
+                large_allocations, 0,
+                "deny before allocating the run row buffer"
+            );
+        }
+        assert_eq!(builder.visible_commit_epoch(), 3);
+        assert!(matches!(work.task_context().reserve_working_memory(bytes),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == bytes));
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+    drop(builder);
+    drop(base);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn controlled_run_lookup_admits_wide_query_and_decoded_primary_keys() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("controlled-run-key");
+    let base = publish_and_open_base(&directory);
+    let mut config = RelationalRowDeltaConfig {
+        max_dirty_entries: NonZeroUsize::MIN,
+        ..Default::default()
+    };
+    config.row_limits.max_key_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    let mut builder = builder(&directory, &base, 1, None, config);
+    let wide_key = RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]);
+    builder
+        .record(
+            2,
+            RelationalRowChangeCapture::Captured {
+                changes: vec![RelationalRowChange {
+                    table: "documents".into(),
+                    primary_key: wide_key.clone(),
+                    row: Some(row(2, "small payload")),
+                }],
+                encoded_bytes: 0,
+            },
+        )
+        .unwrap();
+    builder.record(3, capture(3, Some("three"))).unwrap();
+    let ordinary = builder.lookup_staged("documents", &wide_key).unwrap();
+    assert_eq!(ordinary.1.runs_read, 1);
+    for (bytes, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(bytes),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(bytes))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let value =
+                builder.lookup_staged_with_allocations("documents", &wide_key, Some(&context))?;
+            Ok::<_, RelationalRowDeltaError>((value, context.memory.into_inner()))
+        });
+        let large_allocations = observer.finish();
+        if succeeds {
+            let (value, memory) = result.unwrap();
+            assert_eq!(value, ordinary);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(bytes),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes <= bytes - 128 * 1024),
+                "decoded primary key ownership must remain charged through its selected inventory"
+            );
+            drop(value);
+            drop(memory);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(
+                large_allocations, 0,
+                "deny before allocating the encoded lookup key"
+            );
+        }
+        assert_eq!(builder.visible_commit_epoch(), 3);
+        assert!(matches!(work.task_context().reserve_working_memory(bytes),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == bytes));
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+    drop(builder);
+    drop(base);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn controlled_run_lookup_releases_skipped_payloads_under_one_budget() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("controlled-run-streaming");
+    let base = publish_and_open_base(&directory);
+    let mut config = RelationalRowDeltaConfig {
+        max_dirty_entries: NonZeroUsize::new(128).unwrap(),
+        max_dirty_bytes: NonZeroUsize::new(32 * 1024 * 1024).unwrap(),
+        ..Default::default()
+    };
+    config.row_limits.max_inline_value_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    let payload = "x".repeat(128 * 1024);
+    let mut builder = builder(&directory, &base, 1, None, config);
+    builder
+        .record(
+            2,
+            RelationalRowChangeCapture::Captured {
+                changes: (1..=128)
+                    .map(|id| RelationalRowChange {
+                        table: "documents".into(),
+                        primary_key: key(id),
+                        row: Some(row(id, &payload)),
+                    })
+                    .collect(),
+                encoded_bytes: 0,
+            },
+        )
+        .unwrap();
+    builder.record(3, capture(129, Some("next"))).unwrap();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(16 * 1024 * 1024),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024))
+        .unwrap();
+    let work = CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+    let context = CheckpointDecodeContext {
+        work: work.clone(),
+        memory: Default::default(),
+    };
+    let (value, report) = builder
+        .lookup_staged_with_allocations("documents", &key(128), Some(&context))
+        .unwrap();
+    assert_eq!(report.runs_read, 1);
+    assert_eq!(report.entries_visited, 128);
+    assert!(
+        matches!(value.as_ref(), Some(RelationalRowPageRecoveredValue::Present(row)) if row.values()[1] == RelationalValue::Text(payload.clone()))
+    );
+    assert!(
+        matches!(work.task_context().reserve_working_memory(16 * 1024 * 1024),
+        Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+            if available_bytes > 15 * 1024 * 1024 && available_bytes < 16 * 1024 * 1024),
+        "only the selected payload remains charged after scanning 16 MiB of skipped/selected rows"
+    );
+    drop(value);
+    drop(context);
+    drop(work);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    drop(builder);
+    drop(base);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn repeated_dirty_wide_key_lookups_release_scratch_without_retaining_payload_inventory() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("dirty-key-scratch");
+    let base = publish_and_open_base(&directory);
+    let mut config = RelationalRowDeltaConfig::default();
+    config.row_limits.max_key_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    let mut builder = builder(&directory, &base, 1, None, config);
+    let wide_key = RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]);
+    builder
+        .record(
+            2,
+            RelationalRowChangeCapture::Captured {
+                changes: vec![RelationalRowChange {
+                    table: "documents".into(),
+                    primary_key: wide_key.clone(),
+                    row: None,
+                }],
+                encoded_bytes: 0,
+            },
+        )
+        .unwrap();
+    let ceiling = 1024 * 1024;
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(ceiling),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let context = CheckpointDecodeContext {
+        work: CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default())),
+        memory: Default::default(),
+    };
+    for _ in 0..128 {
+        let (value, report) = builder
+            .lookup_staged_with_allocations("documents", &wide_key, Some(&context))
+            .unwrap();
+        assert!(matches!(
+            value,
+            Some(RelationalRowPageRecoveredValue::Deleted)
+        ));
+        assert_eq!(report.runs_read, 0);
+        assert!(
+            context.memory.borrow().is_empty(),
+            "lookup scratch escaped into the payload inventory"
+        );
+        assert!(
+            matches!(context.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                if available_bytes == ceiling)
+        );
+    }
+    drop(context);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    drop(builder);
+    drop(base);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn unpublished_lookup_prefers_dirty_values_then_newest_immutable_run() {
     let directory = unique_test_dir("unpublished-lookup");
     let base = publish_and_open_base(&directory);

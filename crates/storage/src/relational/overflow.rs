@@ -146,6 +146,32 @@ pub(super) fn hydrate_row(
     budget: &mut RelationalHydrationBudget,
     task_context: Option<&hawdb_core::RuntimeTaskContext>,
 ) -> Result<RelationalRow, RelationalError> {
+    hydrate_row_values(
+        state,
+        || RelationalRow::new(row.values.to_vec()),
+        budget,
+        task_context,
+        None,
+    )
+}
+
+pub(super) fn hydrate_owned_row(
+    state: &RelationalState,
+    row: RelationalRow,
+    budget: &mut RelationalHydrationBudget,
+    task_context: Option<&hawdb_core::RuntimeTaskContext>,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalRow, RelationalError> {
+    hydrate_row_values(state, || row, budget, task_context, allocations)
+}
+
+fn hydrate_row_values(
+    state: &RelationalState,
+    row: impl FnOnce() -> RelationalRow,
+    budget: &mut RelationalHydrationBudget,
+    task_context: Option<&hawdb_core::RuntimeTaskContext>,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalRow, RelationalError> {
     runtime_checkpoint(task_context)?;
     let mut staged_budget = *budget;
     if staged_budget.hydrated_rows >= staged_budget.max_rows {
@@ -155,8 +181,11 @@ pub(super) fn hydrate_row(
         )));
     }
     staged_budget.hydrated_rows += 1;
-    let mut values = row.values.to_vec();
-    for value in &mut values {
+    let mut row = row();
+    let values = Arc::get_mut(&mut row.values).ok_or_else(|| {
+        RelationalError::Admission("owned recovery hydration requires unique row backing".into())
+    })?;
+    for value in values {
         let RelationalValue::Overflow(reference) = value else {
             continue;
         };
@@ -170,11 +199,17 @@ pub(super) fn hydrate_row(
                 ))
             })?;
         runtime_checkpoint(task_context)?;
-        let envelope = segment.read()?;
-        *value = decode_overflow_envelope(reference, &envelope, &mut staged_budget, task_context)?;
+        let envelope = segment.read_with_work_context(allocations.map(|context| &context.work))?;
+        *value = envelope::decode_overflow_envelope_with_allocations(
+            reference,
+            &envelope,
+            &mut staged_budget,
+            task_context,
+            allocations,
+        )?;
     }
     *budget = staged_budget;
-    Ok(RelationalRow::new(values))
+    Ok(row)
 }
 
 pub(super) fn hydrate_projected_row(

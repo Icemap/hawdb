@@ -51,6 +51,10 @@ pub struct CheckpointWorkContext {
 }
 
 impl CheckpointWorkContext {
+    pub(crate) fn task_context(&self) -> &RuntimeTaskContext {
+        &self.task
+    }
+
     pub fn new(task: RuntimeTaskContext) -> Self {
         Self {
             task,

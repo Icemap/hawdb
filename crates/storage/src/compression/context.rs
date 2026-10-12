@@ -257,6 +257,13 @@ impl CompressionContext {
         Ok(context)
     }
 
+    pub(super) fn set_pledged_src_size(&mut self, bytes: u64) -> io::Result<()> {
+        // SAFETY: the idle context is exclusively owned; Zstd checks the
+        // pledged byte count when finishing the next frame.
+        native_result(unsafe { sys::ZSTD_CCtx_setPledgedSrcSize(self.pointer(), bytes) })?;
+        Ok(())
+    }
+
     fn pointer(&self) -> *mut sys::ZSTD_CCtx {
         self.pointer
             .expect("owned compression context is live")
@@ -358,13 +365,35 @@ pub struct DecompressionContext {
     prefix: [u8; 4],
     prefix_length: usize,
     prefix_position: usize,
+    _memory_context: Option<Box<MemoryContext>>,
 }
 
 impl DecompressionContext {
     pub fn new() -> io::Result<Self> {
+        Self::with_memory(None)
+    }
+
+    pub(crate) fn new_with_work_context(work: &CheckpointWorkContext) -> io::Result<Self> {
+        let memory = work
+            .reserve_memory(size_of::<MemoryContext>())
+            .map_err(io::Error::other)?;
+        let context = Box::new(MemoryContext {
+            work: work.clone(),
+            failed: std::sync::atomic::AtomicBool::new(false),
+            _memory: memory,
+        });
+        Self::with_memory(Some(context))
+    }
+
+    fn with_memory(mut memory: Option<Box<MemoryContext>>) -> io::Result<Self> {
         require_version()?;
-        // SAFETY: same qualified ABI and callback lifetime as CompressionContext.
-        let pointer = NonNull::new(unsafe { ZSTD_createDCtx_advanced(custom_memory()) })
+        let mut callbacks = custom_memory();
+        if let Some(context) = memory.as_mut() {
+            callbacks.opaque = (&mut **context as *mut MemoryContext).cast();
+        }
+        // SAFETY: callbacks and their stable opaque owner remain live through
+        // every native operation and until after freeDCtx has returned.
+        let pointer = NonNull::new(unsafe { ZSTD_createDCtx_advanced(callbacks) })
             .ok_or_else(|| io::Error::from(io::ErrorKind::OutOfMemory))?;
         let context = Self {
             pointer,
@@ -372,6 +401,7 @@ impl DecompressionContext {
             prefix: [0; 4],
             prefix_length: 0,
             prefix_position: 0,
+            _memory_context: memory,
         };
         // SAFETY: the newly owned context is idle.
         native_result(unsafe { sys::ZSTD_initDStream(context.pointer.as_ptr()) })?;

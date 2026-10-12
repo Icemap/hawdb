@@ -1035,3 +1035,122 @@ fn checkpoint_units_overflow_input_collection_detaches_file_bytes_without_servin
     assert_eq!(cache.snapshot().pinned_bytes, 0);
     crate::file_io::remove_file(path).unwrap();
 }
+
+#[test]
+fn owned_file_backed_hydration_admits_envelope_before_read_and_keeps_only_output() {
+    use crate::background::{CheckpointDecodeContext, CheckpointOperationError};
+    use crate::relational::{
+        decode_relational_checkpoint_file, encode_relational_checkpoint, RelationalDecodeLimits,
+    };
+    let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
+    let payload = (0..128 * 1024)
+        .map(|_| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            char::from((seed as u8) & 0x7f)
+        })
+        .collect::<String>();
+    let original = source(0)
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "messages".into(),
+                    mode: RelationalInsertMode::Error,
+                    rows: vec![RelationalRow::new(vec![
+                        RelationalValue::Text("id-0000".into()),
+                        RelationalValue::Text(payload.clone()),
+                        RelationalValue::Text(payload),
+                        RelationalValue::Text("inline scalar".into()),
+                    ])],
+                }],
+            },
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let checkpoint = encode_relational_checkpoint(2, &original).unwrap();
+    let directory = std::env::temp_dir().join(format!(
+        "hawdb-owned-hydration-{}-{}",
+        std::process::id(),
+        NEXT_FILE.fetch_add(1, Ordering::Relaxed)
+    ));
+    crate::file_io::create_dir_all(&directory).unwrap();
+    let path = directory.join("source.hawdb");
+    crate::file_io::write(&path, &checkpoint).unwrap();
+    let state = decode_relational_checkpoint_file(&path, RelationalDecodeLimits::checkpoint())
+        .unwrap()
+        .state;
+    assert_eq!(state.file_backed_overflow_segment_count(), 1);
+    let stored = state.rows("messages").next().unwrap().1;
+    let mut expected_budget = crate::relational::RelationalHydrationBudget::default();
+    let expected =
+        crate::relational::overflow::hydrate_row(&state, stored, &mut expected_budget, None)
+            .unwrap();
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = input_governor(ceiling);
+        let permit = governor
+            .try_admit(
+                hawdb_qos::RuntimeWorkRequest::background_maintenance(ceiling)
+                    .with_io_wave_slots(1),
+            )
+            .unwrap();
+        let work = CheckpointWorkContext::new(
+            permit.bind_task_context(hawdb_core::RuntimeTaskContext::default()),
+        );
+        let mut budget = crate::relational::RelationalHydrationBudget::default();
+        let before = budget;
+        let row = RelationalRow::new(stored.values().to_vec());
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let row = crate::relational::overflow::hydrate_owned_row(
+                &state,
+                row,
+                &mut budget,
+                Some(scoped.task_context()),
+                Some(&context),
+            )?;
+            Ok::<_, RelationalError>((row, context.memory.into_inner()))
+        });
+        let wide_allocations = observation.finish();
+        if succeeds {
+            let (row, memory) = result.unwrap();
+            assert_eq!(row, expected);
+            assert_eq!(budget, expected_budget);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes <= ceiling - 256 * 1024)
+            );
+            drop(row);
+            drop(memory);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(wide_allocations, 0);
+            assert_eq!(budget, before);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                if available_bytes == ceiling)
+        );
+        assert_eq!(crate::file_io::read(&path).unwrap(), checkpoint);
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+    drop(state);
+    crate::file_io::remove_dir_all(directory).unwrap();
+}

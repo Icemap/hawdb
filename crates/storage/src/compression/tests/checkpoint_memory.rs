@@ -146,3 +146,61 @@ fn a_native_memory_permit_panic_frees_physical_data_and_prevents_a_successful_re
     assert!(error.is_err());
     assert_eq!(controller.live.load(Ordering::SeqCst), 0);
 }
+
+#[test]
+fn decoder_native_allocations_are_admitted_and_refunded_on_each_failure() {
+    let input = vec![0x3f; 300_000];
+    let encoded = encode_all(input.as_slice(), 3).unwrap();
+    let controller = Arc::new(Controller::default());
+    let work = CheckpointWorkContext::new(
+        RuntimeTaskContext::default().with_memory_controller(controller.clone()),
+    );
+    let decode = || -> io::Result<Vec<u8>> {
+        let mut decoder = Decoder::with_buffer_and_work_context(encoded.as_slice(), &work)?;
+        assert!(controller.live.load(Ordering::SeqCst) > 0);
+        let mut decoded = Vec::new();
+        decoder.read_to_end(&mut decoded)?;
+        assert!(controller.live.load(Ordering::SeqCst) > 0);
+        Ok(decoded)
+    };
+    let (result, baseline) = observe(None, decode);
+    assert_eq!(result.unwrap(), input);
+    assert!(baseline.allocations >= 2);
+    assert_eq!(controller.live.load(Ordering::SeqCst), 0);
+    for failure in 0..baseline.allocations {
+        let (result, _) = observe(Some(failure), decode);
+        assert!(result.is_err(), "native allocation {failure}");
+        assert_eq!(controller.live.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[test]
+fn decoder_host_callback_panics_preserve_typed_failure_and_refund_memory() {
+    let encoded = encode_all(&[0x3f; 300_000][..], 3).unwrap();
+    for release in [false, true] {
+        let controller = Arc::new(Controller {
+            panic_allocation: (!release).then_some(1),
+            panic_release: release.then_some(1),
+            ..Default::default()
+        });
+        let work = CheckpointWorkContext::new(
+            RuntimeTaskContext::default().with_memory_controller(controller.clone()),
+        );
+        let (result, _) = observe(None, || {
+            work.classify(|scoped| -> io::Result<Vec<u8>> {
+                let mut decoder =
+                    Decoder::with_buffer_and_work_context(encoded.as_slice(), scoped)?;
+                let mut decoded = Vec::new();
+                decoder.read_to_end(&mut decoded)?;
+                Ok(decoded)
+            })
+        });
+        assert!(matches!(
+            result,
+            Err(CheckpointOperationError::Work(
+                CheckpointWorkError::Allocation { .. }
+            ))
+        ));
+        assert_eq!(controller.live.load(Ordering::SeqCst), 0);
+    }
+}

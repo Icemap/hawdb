@@ -127,6 +127,9 @@ fn compress(
     let mut encoder =
         crate::compression::Encoder::with_staging_capacity(output, level, 2 * 1024, work)
             .map_err(error)?;
+    encoder
+        .set_pledged_src_size(raw.len() as u64)
+        .map_err(error)?;
     unit.finish();
     for chunk in raw.chunks(64 * 1024) {
         let unit = work.start_unit().map_err(work_error)?;

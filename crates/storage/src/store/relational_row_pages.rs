@@ -401,6 +401,19 @@ impl GraphStore {
         replay_access: &RelationalReplayAccessSet,
         limits: RelationalRowChangeCaptureLimits,
     ) -> Result<Vec<RelationalSparseRecoveryRow>, RelationalError> {
+        self.hydrate_sparse_relational_recovery_access_with_work_context(
+            replay_access,
+            limits,
+            None,
+        )
+    }
+
+    pub(super) fn hydrate_sparse_relational_recovery_access_with_work_context(
+        &self,
+        replay_access: &RelationalReplayAccessSet,
+        limits: RelationalRowChangeCaptureLimits,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<Vec<RelationalSparseRecoveryRow>, RelationalError> {
         if !self.relational_state.canonical_row_metadata_only() {
             return Err(RelationalError::Admission(
                 "sparse WAL hydration requires canonical metadata-only relational state"
@@ -458,11 +471,33 @@ impl GraphStore {
             max_memory_bytes: max_bytes,
             ..RelationalHydrationBudget::default()
         };
-        let task = hawdb_core::RuntimeTaskContext::default();
-        let mut requested_fields = BTreeMap::<String, Vec<usize>>::new();
-        let mut hydrated = Vec::with_capacity(replay_access.entries().len());
+        let default_task = hawdb_core::RuntimeTaskContext::default();
+        let task = allocations.map_or(&default_task, |context| context.task_context());
+        // Requested-field vectors are scratch, unlike returned access rows.
+        // Destroy the map before refunding its separate allocation inventory.
+        let fields_allocations =
+            allocations.map(|context| crate::background::CheckpointDecodeContext {
+                work: context.work.clone(),
+                memory: Default::default(),
+            });
+        let mut requested_fields = BTreeMap::<&str, Vec<usize>>::new();
+        let mut fields_memory = crate::projection::predicate_checkpoint::decode::MapMemory::<(
+            &str,
+            Vec<usize>,
+        )>::default();
+        let mut hydrated = match allocations {
+            Some(context) => context
+                .vector_capacity(replay_access.entries().len())
+                .map_err(|error| RelationalError::Admission(error.to_string()))?,
+            None => Vec::with_capacity(replay_access.entries().len()),
+        };
         let mut read_bytes = 0usize;
         for access in replay_access.entries() {
+            if let Some(context) = allocations {
+                context
+                    .checkpoint()
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            }
             let schema = self
                 .relational_state
                 .table_schema(&access.table)
@@ -473,11 +508,41 @@ impl GraphStore {
                     ))
                 })?;
             let column_count = schema.columns.len();
+            let table = match allocations {
+                Some(context) => std::borrow::Cow::Owned(
+                    context
+                        .string(&access.table)
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?,
+                ),
+                None => std::borrow::Cow::Borrowed(access.table.as_str()),
+            };
+            let primary_key = match allocations {
+                Some(context) => std::borrow::Cow::Owned(
+                    clone_sparse_recovery_key_with_work_context(&access.primary_key, context)?,
+                ),
+                None => std::borrow::Cow::Borrowed(&access.primary_key),
+            };
+            if !requested_fields.contains_key(access.table.as_str()) {
+                let fields = match fields_allocations.as_ref() {
+                    Some(context) => {
+                        fields_memory
+                            .before_insert(requested_fields.len(), context)
+                            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                        let mut fields = context
+                            .vector_capacity(column_count)
+                            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                        fields.extend(0..column_count);
+                        fields
+                    }
+                    None => (0..column_count).collect(),
+                };
+                requested_fields.insert(access.table.as_str(), fields);
+            }
             let fields = requested_fields
-                .entry(access.table.clone())
-                .or_insert_with(|| (0..column_count).collect());
+                .get(access.table.as_str())
+                .expect("requested fields initialized");
             let (staged, recovery_report) = builder
-                .lookup_staged(&access.table, &access.primary_key)
+                .lookup_staged_with_allocations(table.as_ref(), primary_key.as_ref(), allocations)
                 .map_err(map_sparse_row_delta_error)?;
             charge_sparse_recovery_read_bytes(
                 &mut read_bytes,
@@ -487,10 +552,11 @@ impl GraphStore {
             let row = match staged {
                 Some(RelationalRowPageRecoveredValue::Present(row)) => Some(
                     self.relational_state
-                        .hydrate_sparse_recovery_row_with_context(
-                            &row,
+                        .hydrate_owned_sparse_recovery_row_with_context(
+                            row,
                             &mut hydration,
-                            Some(&task),
+                            Some(task),
+                            allocations,
                         )?,
                 ),
                 Some(RelationalRowPageRecoveredValue::Deleted) => None,
@@ -513,12 +579,12 @@ impl GraphStore {
                     snapshot_limits.demand.max_bytes = remaining_bytes;
                     let (projected, point_report) = reader
                         .point_projected(
-                            &access.table,
-                            &access.primary_key,
+                            table.as_ref(),
+                            primary_key.as_ref(),
                             fields,
                             snapshot_limits,
                             &mut hydration,
-                            &task,
+                            task,
                         )
                         .map_err(map_sparse_snapshot_read_error)?;
                     charge_sparse_recovery_read_bytes(
@@ -556,8 +622,8 @@ impl GraphStore {
                 }
             };
             hydrated.push(RelationalSparseRecoveryRow {
-                table: access.table.clone(),
-                primary_key: access.primary_key.clone(),
+                table: table.into_owned(),
+                primary_key: primary_key.into_owned(),
                 row,
             });
         }
@@ -1576,6 +1642,47 @@ fn charge_sparse_recovery_read_bytes(
     }
     *read_bytes = next;
     Ok(())
+}
+
+fn clone_sparse_recovery_key_with_work_context(
+    key: &crate::relational::RelationalKey,
+    context: &crate::background::CheckpointDecodeContext,
+) -> Result<crate::relational::RelationalKey, RelationalError> {
+    let mut values = context
+        .vector_capacity(key.0.len())
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    for value in &key.0 {
+        let value = match value {
+            RelationalValue::Text(text) => RelationalValue::Text(
+                context
+                    .string(text)
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?,
+            ),
+            RelationalValue::Bytea(bytes) => {
+                let mut copied = context
+                    .vector_capacity(bytes.len())
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                for block in bytes.chunks(64 * 1024) {
+                    let unit = context
+                        .start_unit()
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                    copied.extend_from_slice(block);
+                    unit.finish();
+                }
+                RelationalValue::Bytea(copied)
+            }
+            value => value.clone(),
+        };
+        let unit = context
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        values.push(value);
+        unit.finish();
+    }
+    context
+        .checkpoint()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    Ok(crate::relational::RelationalKey(values))
 }
 
 fn map_sparse_snapshot_read_error(error: RelationalRowPageSnapshotReadError) -> RelationalError {
@@ -3365,6 +3472,261 @@ mod tests {
         std::fs::remove_dir_all(backup).unwrap();
         drop(reopened);
         std::fs::remove_dir_all(restored).unwrap();
+    }
+
+    #[test]
+    fn sparse_recovery_hydration_admits_returned_metadata_and_preserves_source_on_denial() {
+        use crate::background::{
+            CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+            CheckpointWorkError,
+        };
+        use crate::relational::RelationalReplayAccess;
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+        };
+        let path = seed_row_root(
+            "hydration-metadata-admission",
+            WalReplayConfig {
+                relational_index_mode: RelationalIndexMode::Shadow,
+                ..Default::default()
+            },
+        );
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                residency_mode: StorageResidencyMode::OutOfCore,
+                relational_index_mode: RelationalIndexMode::Authoritative,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        store.mount_relational_row_pages_for_recovery().unwrap();
+        let access =
+            RelationalReplayAccessSet::from_decoded_entries(vec![RelationalReplayAccess {
+                table: "documents".into(),
+                primary_key: key(1),
+            }])
+            .unwrap();
+        let identity = store.checkpoint_source_identity();
+        for (bytes, succeeds) in [(64, false), (16 * 1024 * 1024, true)] {
+            let governor = RuntimeGovernor::detect(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(bytes),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                IoConcurrencyBudget::new(2, 1),
+            );
+            governor.pin_resources();
+            let permit = governor
+                .try_admit(RuntimeWorkRequest::background_maintenance(bytes).with_io_wave_slots(1))
+                .unwrap();
+            let work =
+                CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+            let observer = crate::test_allocator::AllocationObservation::start();
+            let result = work.classify(|scoped| {
+                let context = CheckpointDecodeContext {
+                    work: scoped.clone(),
+                    memory: Default::default(),
+                };
+                let rows = store.hydrate_sparse_relational_recovery_access_with_work_context(
+                    &access,
+                    RelationalRowChangeCaptureLimits::default(),
+                    Some(&context),
+                )?;
+                Ok::<_, RelationalError>((rows, context.memory.into_inner()))
+            });
+            let large_allocations = observer.finish();
+            if succeeds {
+                let (rows, memory) = result.unwrap();
+                assert_eq!(rows.len(), 1);
+                assert_eq!(rows[0].table, "documents");
+                assert_eq!(rows[0].primary_key, key(1));
+                assert_eq!(rows[0].row.as_ref(), Some(&row(1, "one")));
+                drop(rows);
+                drop(memory);
+            } else {
+                assert!(
+                    matches!(
+                        result,
+                        Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                            _
+                        )))
+                    ),
+                    "{result:?}"
+                );
+                assert_eq!(large_allocations, 0);
+            }
+            assert_eq!(store.checkpoint_source_identity(), identity);
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+        drop(store);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn controlled_sparse_replay_retains_metadata_leases_until_store_drop() {
+        use crate::background::CheckpointWorkContext;
+        use crate::relational::RelationalReplayAccess;
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+        };
+        let path = seed_row_root(
+            "controlled-sparse-retained-metadata",
+            WalReplayConfig {
+                relational_index_mode: RelationalIndexMode::Shadow,
+                ..Default::default()
+            },
+        );
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                residency_mode: StorageResidencyMode::OutOfCore,
+                relational_index_mode: RelationalIndexMode::Authoritative,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        store.mount_relational_row_pages_for_recovery().unwrap();
+        store.mount_relational_index_shadow_for_recovery();
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(16 * 1024 * 1024),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(
+                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1),
+            )
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let access = || {
+            RelationalReplayAccessSet::from_decoded_entries(vec![RelationalReplayAccess {
+                table: "documents".into(),
+                primary_key: key(2),
+            }])
+            .unwrap()
+        };
+        let epoch = store.commit_epoch() + 1;
+        store
+            .stage_recovered_relational_transaction(
+                RelationalTransaction {
+                    writes: vec![RelationalWrite::Insert {
+                        table: "documents".into(),
+                        rows: vec![row(2, "two")],
+                        mode: RelationalInsertMode::Error,
+                    }],
+                },
+                Some(access()),
+                epoch,
+                Some(&work),
+            )
+            .unwrap();
+        assert_eq!(store.relational_state.row_count("documents"), 2);
+        store
+            .stage_recovered_relational_transaction(
+                RelationalTransaction {
+                    writes: vec![RelationalWrite::DeleteByPrimaryKey {
+                        table: "documents".into(),
+                        keys: vec![key(2)],
+                    }],
+                },
+                Some(access()),
+                epoch + 1,
+                Some(&work),
+            )
+            .unwrap();
+        assert_eq!(store.relational_state.row_count("documents"), 1);
+        assert!(matches!(
+            store
+                .relational_row_pages
+                .recovery_builder
+                .as_ref()
+                .unwrap()
+                .lookup_staged("documents", &key(2))
+                .unwrap()
+                .0,
+            Some(RelationalRowPageRecoveredValue::Deleted)
+        ));
+        let available = || match work.task_context().reserve_working_memory(16 * 1024 * 1024) {
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded {
+                available_bytes, ..
+            }) => available_bytes,
+            other => panic!("probe must expose available working memory: {other:?}"),
+        };
+        assert!(
+            available() < 16 * 1024 * 1024,
+            "retained metadata must remain charged after preparation returns"
+        );
+        drop(store);
+        assert_eq!(
+            available(),
+            16 * 1024 * 1024,
+            "store drop releases every retained metadata lease"
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn sparse_recovery_key_clone_denies_large_backing_before_copy() {
+        use crate::background::{
+            CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+            CheckpointWorkError,
+        };
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+        };
+        let source =
+            crate::relational::RelationalKey(vec![RelationalValue::Text("x".repeat(128 * 1024))]);
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(4096),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(4096))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let key = clone_sparse_recovery_key_with_work_context(&source, &context)?;
+            Ok::<_, RelationalError>((key, context.memory.into_inner()))
+        });
+        assert_eq!(observer.finish(), 0);
+        assert!(
+            matches!(
+                result,
+                Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                    _
+                )))
+            ),
+            "{result:?}"
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 
     #[test]

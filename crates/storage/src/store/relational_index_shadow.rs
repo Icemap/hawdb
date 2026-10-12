@@ -77,6 +77,7 @@ pub(super) struct PreparedRelationalRecoveryTransaction {
     next: RelationalState,
     index_capture: Option<RelationalIndexChangeCapture>,
     row_capture: Option<RelationalRowChangeCapture>,
+    memory: crate::background::CheckpointAllocationOwner,
 }
 
 pub use hawdb_storage::relational_index_view::{
@@ -1211,7 +1212,14 @@ impl GraphStore {
         expected_epoch: u64,
         work: Option<&crate::background::CheckpointWorkContext>,
     ) -> Result<(), hawdb_storage::relational::RelationalError> {
-        let prepared = self.prepare_recovered_relational_transaction(transaction, replay_access)?;
+        let prepared = match work {
+            Some(work) => self.prepare_recovered_relational_transaction_with_work_context(
+                transaction,
+                replay_access,
+                Some(work),
+            )?,
+            None => self.prepare_recovered_relational_transaction(transaction, replay_access)?,
+        };
         self.install_recovered_relational_transaction(prepared, expected_epoch, work)
     }
 
@@ -1221,6 +1229,24 @@ impl GraphStore {
         replay_access: Option<RelationalReplayAccessSet>,
     ) -> Result<PreparedRelationalRecoveryTransaction, hawdb_storage::relational::RelationalError>
     {
+        self.prepare_recovered_relational_transaction_with_work_context(
+            transaction,
+            replay_access,
+            None,
+        )
+    }
+
+    fn prepare_recovered_relational_transaction_with_work_context(
+        &self,
+        transaction: RelationalTransaction,
+        replay_access: Option<RelationalReplayAccessSet>,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<PreparedRelationalRecoveryTransaction, hawdb_storage::relational::RelationalError>
+    {
+        let allocations = work.map(|work| crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        });
         let authoritative = self
             .relational_index_shadow
             .mode
@@ -1245,33 +1271,43 @@ impl GraphStore {
                             .to_string(),
                     )
                 })?;
-                let (next, index_capture, row_capture) =
-                    if self.relational_state.canonical_row_metadata_only() {
-                        let hydrated_access = self
-                            .hydrate_sparse_relational_recovery_access(replay_access, row_limits)?;
-                        self.relational_state
-                            .stage_sparse_transaction_for_authoritative_recovery_with_replay_access(
-                                RelationalSparseRecoveryStage {
-                                    transaction,
-                                    hydrated_access,
-                                    mutation_limits: self.relational_mutation_limits,
-                                    overflow_config: self.relational_overflow_config,
-                                    index_capture_limits: index_limits,
-                                    row_capture_limits: row_limits,
-                                    expected_replay_access: replay_access,
-                                },
-                            )?
-                    } else {
-                        self.relational_state
-                            .stage_transaction_for_authoritative_recovery_with_replay_access(
-                                transaction,
-                                self.relational_mutation_limits,
-                                self.relational_overflow_config,
-                                index_limits,
-                                row_limits,
+                let (next, index_capture, row_capture) = if self
+                    .relational_state
+                    .canonical_row_metadata_only()
+                {
+                    let hydrated_access = match allocations.as_ref() {
+                        Some(context) => self
+                            .hydrate_sparse_relational_recovery_access_with_work_context(
                                 replay_access,
-                            )?
+                                row_limits,
+                                Some(context),
+                            )?,
+                        None => self
+                            .hydrate_sparse_relational_recovery_access(replay_access, row_limits)?,
                     };
+                    self.relational_state
+                        .stage_sparse_transaction_for_authoritative_recovery_with_replay_access(
+                            RelationalSparseRecoveryStage {
+                                transaction,
+                                hydrated_access,
+                                mutation_limits: self.relational_mutation_limits,
+                                overflow_config: self.relational_overflow_config,
+                                index_capture_limits: index_limits,
+                                row_capture_limits: row_limits,
+                                expected_replay_access: replay_access,
+                            },
+                        )?
+                } else {
+                    self.relational_state
+                        .stage_transaction_for_authoritative_recovery_with_replay_access(
+                            transaction,
+                            self.relational_mutation_limits,
+                            self.relational_overflow_config,
+                            index_limits,
+                            row_limits,
+                            replay_access,
+                        )?
+                };
                 (next, Some(index_capture), Some(row_capture))
             }
             (Some(index_limits), Some(row_limits)) => {
@@ -1329,6 +1365,8 @@ impl GraphStore {
             next,
             index_capture,
             row_capture,
+            memory: allocations
+                .map_or_else(Default::default, |context| context.memory.into_inner()),
         })
     }
 
@@ -1338,10 +1376,18 @@ impl GraphStore {
         expected_epoch: u64,
         work: Option<&crate::background::CheckpointWorkContext>,
     ) -> Result<(), hawdb_storage::relational::RelationalError> {
+        let mut prepared = prepared;
+        if let Some(work) = work {
+            self.retain_decoded_checkpoint_memory(&mut prepared.memory, work)
+                .map_err(|error| {
+                    hawdb_storage::relational::RelationalError::Admission(error.to_string())
+                })?;
+        }
         let PreparedRelationalRecoveryTransaction {
             next,
             index_capture,
             row_capture,
+            memory: _,
         } = prepared;
         self.relational_state = next;
         if let Some(capture) = index_capture

@@ -1910,6 +1910,28 @@ enum RelationalOverflowSegment {
 
 impl RelationalOverflowSegment {
     fn read(&self) -> Result<RelationalOverflowRead<'_>, RelationalError> {
+        self.read_with_work_context(None)
+    }
+
+    fn read_with_work_context(
+        &self,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<RelationalOverflowRead<'_>, RelationalError> {
+        if let (Self::FileRange { reader, range }, Some(work)) = (self, work) {
+            return reader
+                .checkpoint_range_with_work_context(range, work)
+                .map(RelationalOverflowRead::Checkpoint)
+                .map_err(|error| match error {
+                    crate::scan::CheckpointRangeReadError::Read(error) => {
+                        RelationalError::Corruption(format!(
+                            "failed to read file-backed overflow segment: {error}"
+                        ))
+                    }
+                    crate::scan::CheckpointRangeReadError::Work(error) => {
+                        RelationalError::Admission(error.to_string())
+                    }
+                });
+        }
         match self {
             Self::Inline(bytes) => Ok(RelationalOverflowRead::Inline(bytes)),
             Self::FileRange { reader, range } => reader
@@ -1931,6 +1953,7 @@ impl RelationalOverflowSegment {
 enum RelationalOverflowRead<'a> {
     Inline(&'a [u8]),
     FileRange(crate::cache::SegmentBytes),
+    Checkpoint(crate::background::CheckpointBytes),
 }
 
 impl std::ops::Deref for RelationalOverflowRead<'_> {
@@ -1940,6 +1963,7 @@ impl std::ops::Deref for RelationalOverflowRead<'_> {
         match self {
             Self::Inline(bytes) => bytes,
             Self::FileRange(bytes) => bytes,
+            Self::Checkpoint(bytes) => bytes,
         }
     }
 }
@@ -3969,6 +3993,21 @@ impl RelationalState {
             ));
         }
         overflow::hydrate_row(self, row, budget, task_context)
+    }
+
+    pub(crate) fn hydrate_owned_sparse_recovery_row_with_context(
+        &self,
+        row: RelationalRow,
+        budget: &mut RelationalHydrationBudget,
+        task_context: Option<&hawdb_core::RuntimeTaskContext>,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<RelationalRow, RelationalError> {
+        if self.materialized_rows_resident || !self.canonical_row_metadata_only {
+            return Err(RelationalError::Admission(
+                "sparse recovery row hydration requires canonical metadata-only state".to_string(),
+            ));
+        }
+        overflow::hydrate_owned_row(self, row, budget, task_context, allocations)
     }
 
     /// Resolves only overflow references retained by one projected row.

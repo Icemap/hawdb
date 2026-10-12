@@ -87,6 +87,10 @@ impl<W: Write> Encoder<W> {
         })
     }
 
+    pub(crate) fn set_pledged_src_size(&mut self, bytes: u64) -> io::Result<()> {
+        self.writer.operation_mut().set_pledged_src_size(bytes)
+    }
+
     pub fn finish(mut self) -> io::Result<W> {
         self.writer.finish()?;
         let (writer, context) = self.writer.into_inner();
@@ -120,6 +124,15 @@ impl<R: Read> Decoder<BufReader<R>> {
 }
 
 impl<R: BufRead> Decoder<R> {
+    pub(crate) fn with_buffer_and_work_context(
+        reader: R,
+        work: &CheckpointWorkContext,
+    ) -> io::Result<Self> {
+        Ok(Self {
+            reader: zio::Reader::new(reader, DecompressionContext::new_with_work_context(work)?),
+        })
+    }
+
     pub fn with_buffer(reader: R) -> io::Result<Self> {
         Ok(Self {
             reader: zio::Reader::new(reader, DecompressionContext::new()?),
@@ -170,6 +183,15 @@ impl Operation for DecompressionContext {
 pub fn encode_all(mut source: impl Read, level: i32) -> io::Result<Vec<u8>> {
     let mut encoder = Encoder::new(Vec::new(), level)?;
     io::copy(&mut source, &mut encoder)?;
+    encoder.finish()
+}
+
+/// Compress a known complete slice without advertising an unnecessarily large
+/// unknown-size frame window to streaming readers.
+pub(crate) fn encode_slice(source: &[u8], level: i32) -> io::Result<Vec<u8>> {
+    let mut encoder = Encoder::new(Vec::new(), level)?;
+    encoder.set_pledged_src_size(source.len() as u64)?;
+    encoder.write_all(source)?;
     encoder.finish()
 }
 
