@@ -692,28 +692,43 @@ impl GraphStore {
         )
     }
 
-    pub(super) fn record_relational_row_recovery_capture(
+    pub(super) fn record_relational_row_recovery_capture_with_work_context(
         &mut self,
         epoch: u64,
         capture: Option<RelationalRowChangeCapture>,
-    ) {
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<(), RelationalError> {
         let Some(capture) = capture else {
-            return;
+            return Ok(());
         };
         if let RelationalRowChangeCapture::RequiresCheckpoint { tables } = &capture {
             self.mark_relational_row_page_schema_checkpoint_required(epoch, tables.clone());
-            return;
+            return Ok(());
         }
         let Some(mut builder) = self.relational_row_pages.recovery_builder.take() else {
-            return;
+            return Ok(());
         };
-        match builder.record(epoch, capture) {
+        let result = match work {
+            Some(work) => {
+                work.classify(|scoped| builder.record_with_work_context(epoch, capture, scoped))
+            }
+            None => builder
+                .record(epoch, capture)
+                .map_err(crate::background::CheckpointOperationError::Operation),
+        };
+        match result {
             Ok(()) => self.relational_row_pages.recovery_builder = Some(builder),
-            Err(error) => self.mark_relational_row_page_recovery_unavailable(
-                epoch,
-                format!("relational WAL row overlay could not advance: {error}"),
-            ),
+            Err(crate::background::CheckpointOperationError::Operation(error)) => self
+                .mark_relational_row_page_recovery_unavailable(
+                    epoch,
+                    format!("relational WAL row overlay could not advance: {error}"),
+                ),
+            Err(crate::background::CheckpointOperationError::Work(error)) => {
+                self.mark_relational_row_page_recovery_unavailable(epoch, error.to_string());
+                return Err(RelationalError::Admission(error.to_string()));
+            }
         }
+        Ok(())
     }
 
     pub(super) fn advance_relational_row_recovery_epoch(&mut self, epoch: u64) {
@@ -1899,7 +1914,7 @@ mod tests {
         );
 
         store
-            .stage_recovered_relational_transaction(first, Some(first_access), 2)
+            .stage_recovered_relational_transaction(first, Some(first_access), 2, None)
             .unwrap();
         assert!(store.relational_state.canonical_row_metadata_only());
         assert!(!store.relational_state.materialized_rows_resident());
@@ -1917,7 +1932,7 @@ mod tests {
         ));
 
         store
-            .stage_recovered_relational_transaction(second, Some(second_access), 3)
+            .stage_recovered_relational_transaction(second, Some(second_access), 3, None)
             .unwrap();
         assert!(store.relational_state.canonical_row_metadata_only());
         assert_eq!(
@@ -3350,6 +3365,79 @@ mod tests {
         std::fs::remove_dir_all(backup).unwrap();
         drop(reopened);
         std::fs::remove_dir_all(restored).unwrap();
+    }
+
+    #[test]
+    fn recovered_relational_installation_returns_record_flush_admission_failure() {
+        use crate::background::{
+            CheckpointOperationError, CheckpointWorkContext, CheckpointWorkError,
+        };
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+            RuntimeWorkRequest,
+        };
+        let replay = WalReplayConfig::default();
+        let path = seed_row_root("installation-flush-admission", replay);
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            replay,
+        )
+        .unwrap();
+        store.relational_row_pages.delta_config.max_dirty_entries = NonZeroUsize::MIN;
+        store.mount_relational_row_pages_for_recovery().unwrap();
+        let transaction = |id| RelationalTransaction {
+            writes: vec![RelationalWrite::Insert {
+                table: "documents".into(),
+                rows: vec![row(id, "inserted")],
+                mode: RelationalInsertMode::Error,
+            }],
+        };
+        let first_epoch = store.commit_epoch() + 1;
+        store
+            .stage_recovered_relational_transaction(transaction(2), None, first_epoch, None)
+            .unwrap();
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(64),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(64))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let result = work.classify(|scoped| {
+            store.stage_recovered_relational_transaction(
+                transaction(3),
+                None,
+                first_epoch + 1,
+                Some(scoped),
+            )
+        });
+        assert!(
+            matches!(
+                result,
+                Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                    _
+                )))
+            ),
+            "{result:?}"
+        );
+        // Installation has begun. The caller must discard this private runtime,
+        // rather than treating its missing row delta as a successful replay.
+        assert_eq!(store.relational_state.row_count("documents"), 3);
+        assert!(store.relational_row_pages.recovery_builder.is_none());
+        drop(store);
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     fn seed_row_root(name: &str, replay: WalReplayConfig) -> std::path::PathBuf {

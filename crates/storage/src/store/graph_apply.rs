@@ -497,6 +497,43 @@ impl GraphStore {
         }
     }
 
+    pub(super) fn apply_recovered_relational_batch(
+        &mut self,
+        batch: crate::relational::RelationalWalBatch,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<()> {
+        let expected_epoch = self.commit_epoch.saturating_add(1);
+        if batch.epoch != expected_epoch {
+            return Err(HawDBError::Storage(format!(
+                "relational WAL epoch mismatch: expected {expected_epoch}, got {}",
+                batch.epoch
+            )));
+        }
+        if self.uses_sparse_read_only_relational_recovery() {
+            if batch.transaction.changes_schema() {
+                return Err(HawDBError::Storage(
+                    "read-only sparse relational recovery rejects schema-changing WAL until a new canonical checkpoint is published"
+                        .to_string(),
+                ));
+            }
+            if batch.replay_access.is_none() {
+                return Err(HawDBError::Storage(
+                    "authoritative relational WAL is missing its exact replay access set"
+                        .to_string(),
+                ));
+            }
+        } else {
+            self.stage_recovered_relational_transaction(
+                batch.transaction,
+                batch.replay_access,
+                expected_epoch,
+                work,
+            )
+            .map_err(HawDBError::from_storage_error)?;
+        }
+        Ok(())
+    }
+
     pub(super) fn apply_wal_op(&mut self, catalog: &mut Catalog, op: WalOp) -> Result<()> {
         self.apply_wal_op_with_work_context(catalog, op, None)
     }
@@ -745,34 +782,7 @@ impl GraphStore {
             WalOp::Relational { record } => {
                 let batch = decode_relational_wal_batch(&record, RelationalDecodeLimits::wal())
                     .map_err(HawDBError::from_storage_error)?;
-                let expected_epoch = self.commit_epoch.saturating_add(1);
-                if batch.epoch != expected_epoch {
-                    return Err(HawDBError::Storage(format!(
-                        "relational WAL epoch mismatch: expected {expected_epoch}, got {}",
-                        batch.epoch
-                    )));
-                }
-                if self.uses_sparse_read_only_relational_recovery() {
-                    if batch.transaction.changes_schema() {
-                        return Err(HawDBError::Storage(
-                            "read-only sparse relational recovery rejects schema-changing WAL until a new canonical checkpoint is published"
-                                .to_string(),
-                        ));
-                    }
-                    if batch.replay_access.is_none() {
-                        return Err(HawDBError::Storage(
-                            "authoritative relational WAL is missing its exact replay access set"
-                                .to_string(),
-                        ));
-                    }
-                } else {
-                    self.stage_recovered_relational_transaction(
-                        batch.transaction,
-                        batch.replay_access,
-                        expected_epoch,
-                    )
-                    .map_err(HawDBError::from_storage_error)?;
-                }
+                self.apply_recovered_relational_batch(batch, work)?;
             }
             WalOp::RelationalSnapshot { record } => {
                 if self.relational_state.canonical_row_metadata_only() {

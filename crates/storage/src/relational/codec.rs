@@ -411,15 +411,41 @@ pub fn decode_relational_wal_batch(
     limits: RelationalDecodeLimits,
 ) -> Result<RelationalWalBatch, RelationalError> {
     let (epoch, payload) = decode_envelope(bytes, WAL_MAGIC, limits.max_record_bytes)?;
-    let mut decoder = Decoder::from_slice(payload, limits, false);
+    decode_relational_wal_payload(epoch, Decoder::from_slice(payload, limits, false))
+}
+
+pub(crate) fn decode_relational_wal_batch_owned(
+    bytes: &[u8],
+    limits: RelationalDecodeLimits,
+    allocations: &crate::background::CheckpointDecodeContext,
+) -> Result<RelationalWalBatch, RelationalError> {
+    let (epoch, payload) = decode_envelope_with_work_context(
+        bytes,
+        WAL_MAGIC,
+        limits.max_record_bytes,
+        Some(allocations),
+    )?;
+    let input = checkpoint::schema::Input {
+        source: SliceDecodeInput {
+            bytes: payload,
+            offset: 0,
+        },
+        work: allocations,
+        allocations: Some(allocations),
+    };
+    decode_relational_wal_payload(epoch, Decoder::new(input, limits, false))
+}
+
+fn decode_relational_wal_payload<I: DecodeInput>(
+    epoch: u64,
+    mut decoder: Decoder<I>,
+) -> Result<RelationalWalBatch, RelationalError> {
+    let limits = decoder.limits;
     let write_count = decoder.count(limits.max_writes, "WAL writes")?;
-    let mut writes = Vec::with_capacity(write_count);
-    for _ in 0..write_count {
-        writes.push(decoder.write()?);
-    }
+    let writes = decoder.repeated(write_count, Decoder::write)?;
     let replay_access = if decoder.boolean("WAL replay access presence")? {
         let entry_count = decoder.count(limits.max_rows, "WAL replay access entries")?;
-        let mut entries = Vec::with_capacity(entry_count);
+        let mut entries = decoder.vector_capacity(entry_count)?;
         for _ in 0..entry_count {
             entries.push(RelationalReplayAccess {
                 table: decoder.string()?,
@@ -437,7 +463,7 @@ pub fn decode_relational_wal_batch(
             const KEY_FIXED_BYTES: usize = 4;
             let table_count =
                 decoder.count(limits.max_tables, "relational primary-key change tables")?;
-            let mut tables = Vec::with_capacity(table_count);
+            let mut tables = decoder.vector_capacity(table_count)?;
             let mut encoded_bytes = 0usize;
             let mut entry_count = 0usize;
             for _ in 0..table_count {
@@ -464,12 +490,23 @@ pub fn decode_relational_wal_batch(
                             "relational primary-key change byte count overflow".to_string(),
                         )
                     })?;
-                let mut primary_keys = Vec::with_capacity(key_count);
+                let mut primary_keys = decoder.vector_capacity(key_count)?;
                 for _ in 0..key_count {
                     let primary_key = decoder.key()?;
-                    let key_bytes = super::ordered_key::encode_ordered_relational_key(&primary_key)
-                        .map_err(|error| RelationalError::Corruption(error.to_string()))?
-                        .len();
+                    let key_bytes = if let Some(work) = decoder.input.checkpoint_work_context() {
+                        super::ordered_key::CheckpointKeyEncoding::new(&primary_key, &[], work)
+                            .map_err(|error| match error {
+                                super::ordered_key::CheckpointKeyEncodeError::Key(error) => error,
+                                super::ordered_key::CheckpointKeyEncodeError::Work(error) => {
+                                    checkpoint::work_error(error)
+                                }
+                            })?
+                            .encoded_len()
+                    } else {
+                        super::ordered_key::encode_ordered_relational_key(&primary_key)
+                            .map_err(|error| RelationalError::Corruption(error.to_string()))?
+                            .len()
+                    };
                     encoded_bytes = encoded_bytes
                         .checked_add(KEY_FIXED_BYTES)
                         .and_then(|bytes| bytes.checked_add(key_bytes))
@@ -999,6 +1036,18 @@ fn decode_envelope<'a>(
     expected_magic: &[u8; 8],
     max_record_bytes: usize,
 ) -> Result<(u64, &'a [u8]), RelationalError> {
+    decode_envelope_with_work_context(bytes, expected_magic, max_record_bytes, None)
+}
+
+fn decode_envelope_with_work_context<'a>(
+    bytes: &'a [u8],
+    expected_magic: &[u8; 8],
+    max_record_bytes: usize,
+    work: Option<&crate::background::CheckpointWorkContext>,
+) -> Result<(u64, &'a [u8]), RelationalError> {
+    if let Some(work) = work {
+        work.checkpoint().map_err(checkpoint::work_error)?;
+    }
     if bytes.len() > max_record_bytes {
         return Err(RelationalError::Admission(format!(
             "relational durable record contains {} bytes, exceeding max_record_bytes {max_record_bytes}",
@@ -1032,7 +1081,18 @@ fn decode_envelope<'a>(
         )));
     }
     let payload = &bytes[HEADER_BYTES..];
-    let digest = integrity_digest(payload);
+    let digest = if let Some(work) = work {
+        let mut hasher = IntegrityHasher::new();
+        for block in payload.chunks(64 * 1024) {
+            let unit = work.start_unit().map_err(checkpoint::work_error)?;
+            hasher.update(block);
+            unit.finish();
+        }
+        work.checkpoint().map_err(checkpoint::work_error)?;
+        hasher.finish()
+    } else {
+        integrity_digest(payload)
+    };
     let expected_crc = u32::from_le_bytes(bytes[28..32].try_into().expect("fixed header"));
     if digest.crc32c.get() != expected_crc
         || digest.sha256.as_bytes() != &bytes[32..32 + SHA256_BYTES]
@@ -1552,6 +1612,14 @@ impl<'a> Decoder<SliceDecodeInput<'a>> {
 }
 
 impl<I: DecodeInput> Decoder<I> {
+    fn vector_capacity<T>(&self, count: usize) -> Result<Vec<T>, RelationalError> {
+        match self.input.checkpoint_allocation_context() {
+            Some(context) => context
+                .vector_capacity(count)
+                .map_err(|error| RelationalError::Admission(error.to_string())),
+            None => Ok(Vec::with_capacity(count)),
+        }
+    }
     fn new(input: I, limits: RelationalDecodeLimits, retain_overflow_bytes: bool) -> Self {
         Self {
             input,
@@ -1995,23 +2063,19 @@ impl<I: DecodeInput> Decoder<I> {
                     }
                 };
                 let row_count = self.row_count()?;
-                let rows = (0..row_count)
-                    .map(|_| self.row())
-                    .collect::<Result<_, _>>()?;
+                let rows = self.repeated(row_count, Self::row)?;
                 Ok(RelationalWrite::Insert { table, rows, mode })
             }
             4 => {
                 let table = self.string()?;
                 let key_count = self.row_count()?;
-                let mut keys = Vec::with_capacity(key_count);
+                let mut keys = self.vector_capacity(key_count)?;
                 for _ in 0..key_count {
                     let value_count = self.count(
                         self.limits.max_values.saturating_sub(self.values),
                         "key values",
                     )?;
-                    let values = (0..value_count)
-                        .map(|_| self.value())
-                        .collect::<Result<_, _>>()?;
+                    let values = self.repeated(value_count, Self::value)?;
                     keys.push(RelationalKey(values));
                 }
                 Ok(RelationalWrite::DeleteByPrimaryKey { table, keys })
@@ -2023,7 +2087,7 @@ impl<I: DecodeInput> Decoder<I> {
                     0 => RelationalConflictAction::DoNothing,
                     1 => {
                         let count = self.count(self.limits.max_values, "upsert assignments")?;
-                        let mut assignments = Vec::with_capacity(count);
+                        let mut assignments = self.vector_capacity(count)?;
                         for _ in 0..count {
                             let column = self.string()?;
                             let value = match self.u8()? {
@@ -2046,9 +2110,7 @@ impl<I: DecodeInput> Decoder<I> {
                     }
                 };
                 let row_count = self.row_count()?;
-                let rows = (0..row_count)
-                    .map(|_| self.row())
-                    .collect::<Result<_, _>>()?;
+                let rows = self.repeated(row_count, Self::row)?;
                 Ok(RelationalWrite::Upsert {
                     table,
                     rows,
@@ -2063,7 +2125,7 @@ impl<I: DecodeInput> Decoder<I> {
             7 => {
                 let table = self.string()?;
                 let count = self.count(self.limits.max_values, "update assignments")?;
-                let mut assignments = Vec::with_capacity(count);
+                let mut assignments = self.vector_capacity(count)?;
                 for _ in 0..count {
                     let column = self.string()?;
                     let value = match self.u8()? {
@@ -2138,17 +2200,27 @@ impl<I: DecodeInput> Decoder<I> {
         Ok(value)
     }
 
+    fn boxed_predicate(&mut self) -> Result<Box<RelationalPredicate>, RelationalError> {
+        let predicate = self.predicate()?;
+        if let Some(context) = self.input.checkpoint_allocation_context() {
+            context
+                .reserve(std::mem::size_of::<RelationalPredicate>())
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        }
+        Ok(Box::new(predicate))
+    }
+
     fn predicate(&mut self) -> Result<RelationalPredicate, RelationalError> {
         match self.u8()? {
             0 => Ok(RelationalPredicate::And(
-                Box::new(self.predicate()?),
-                Box::new(self.predicate()?),
+                self.boxed_predicate()?,
+                self.boxed_predicate()?,
             )),
             1 => Ok(RelationalPredicate::Or(
-                Box::new(self.predicate()?),
-                Box::new(self.predicate()?),
+                self.boxed_predicate()?,
+                self.boxed_predicate()?,
             )),
-            2 => Ok(RelationalPredicate::Not(Box::new(self.predicate()?))),
+            2 => Ok(RelationalPredicate::Not(self.boxed_predicate()?)),
             3 => {
                 let column = self.string()?;
                 let op = match self.u8()? {

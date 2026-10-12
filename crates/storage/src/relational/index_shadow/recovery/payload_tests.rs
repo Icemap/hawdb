@@ -17,6 +17,73 @@ use crate::relational::index_shadow::demand_read::{IndexReadObserver, IndexReadP
 use std::cell::Cell;
 use std::rc::Rc;
 
+#[test]
+fn record_triggered_index_flush_denies_metadata_before_page_publication() {
+    use crate::background::{CheckpointOperationError, CheckpointWorkContext, CheckpointWorkError};
+    use crate::relational::RelationalValue;
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let directory = std::env::temp_dir().join(format!(
+        "hawdb-index-record-flush-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let config = RelationalIndexRecoveryConfig {
+        max_dirty_entries: NonZeroUsize::MIN,
+        ..Default::default()
+    };
+    let mut builder = RelationalIndexRecoveryBuilder::new(&directory, 1, 1, config).unwrap();
+    let capture = |id| RelationalIndexChangeCapture::Captured {
+        changes: vec![RelationalIndexChange {
+            table: "documents".into(),
+            index: "by_id".into(),
+            index_key: RelationalKey(vec![RelationalValue::BigInt(id)]),
+            primary_key: RelationalKey(vec![RelationalValue::BigInt(id)]),
+            kind: RelationalIndexChangeKind::Insert,
+        }],
+        encoded_bytes: 0,
+    };
+    builder.record(2, capture(1)).unwrap();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(64),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(64))
+        .unwrap();
+    let work = CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+    let result = work.classify(|scoped| builder.record_with_work_context(3, capture(2), scoped));
+    assert!(
+        matches!(
+            result,
+            Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                _
+            )))
+        ),
+        "{result:?}"
+    );
+    assert!(!directory
+        .join(relational_index_recovery_delta_file(
+            1,
+            builder.delta_generation,
+            0
+        ))
+        .exists());
+    assert!(!directory
+        .join(RELATIONAL_INDEX_RECOVERY_MANIFEST_FILE)
+        .exists());
+    drop(builder);
+    drop(work);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 struct OwnedPayload(PathBuf);
 
 impl OwnedPayload {

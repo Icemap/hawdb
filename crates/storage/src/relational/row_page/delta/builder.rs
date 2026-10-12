@@ -325,9 +325,20 @@ impl RelationalRowDeltaBuilder {
         epoch: u64,
         capture: RelationalRowChangeCapture,
     ) -> Result<(), RelationalRowDeltaError> {
+        self.record_with_work_context(epoch, capture, &Default::default())
+    }
+
+    pub(crate) fn record_with_work_context(
+        &mut self,
+        epoch: u64,
+        capture: RelationalRowChangeCapture,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), RelationalRowDeltaError> {
+        work.checkpoint()
+            .map_err(super::super::checkpoint::work_error)?;
         self.require_available()?;
         self.private_prefix = None;
-        let result = self.record_inner(epoch, capture);
+        let result = self.record_inner(epoch, capture, work);
         if let Err(error) = &result {
             self.invalidated = Some(error.to_string());
         }
@@ -743,6 +754,7 @@ impl RelationalRowDeltaBuilder {
         &mut self,
         epoch: u64,
         capture: RelationalRowChangeCapture,
+        work: &crate::background::CheckpointWorkContext,
     ) -> Result<(), RelationalRowDeltaError> {
         self.require_current_or_next_epoch(epoch)?;
         let changes = match capture {
@@ -768,8 +780,10 @@ impl RelationalRowDeltaBuilder {
         }
         let advances_epoch = epoch != self.visible_commit_epoch;
         for change in changes {
+            work.checkpoint()
+                .map_err(super::super::checkpoint::work_error)?;
             let (key, value) = self.encode_change(epoch, change)?;
-            self.insert_change(key, value)?;
+            self.insert_change(key, value, work)?;
         }
         if advances_epoch {
             self.replayed_batches = self.replayed_batches.checked_add(1).ok_or_else(|| {
@@ -841,6 +855,7 @@ impl RelationalRowDeltaBuilder {
         &mut self,
         key: RowDeltaKey,
         value: RowDeltaValue,
+        work: &crate::background::CheckpointWorkContext,
     ) -> Result<(), RelationalRowDeltaError> {
         let inserted_bytes = value.charged_bytes;
         if value.charged_bytes > self.config.max_dirty_bytes.get() {
@@ -875,7 +890,7 @@ impl RelationalRowDeltaBuilder {
             && (next_entries > self.config.max_dirty_entries.get()
                 || next_bytes > self.config.max_dirty_bytes.get())
         {
-            self.flush()?;
+            self.flush_with_work_context(work)?;
         }
         let replaced = self.dirty.insert(key, value);
         if let Some(replaced) = replaced {

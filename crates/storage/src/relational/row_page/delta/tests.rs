@@ -198,6 +198,56 @@ fn immutable_runs_round_trip_across_bounded_flushes() {
 }
 
 #[test]
+fn record_triggered_row_flush_denies_metadata_before_run_publication() {
+    use crate::background::{CheckpointOperationError, CheckpointWorkContext, CheckpointWorkError};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("record-flush-admission");
+    let base = publish_and_open_base(&directory);
+    let config = RelationalRowDeltaConfig {
+        max_dirty_entries: NonZeroUsize::MIN,
+        ..Default::default()
+    };
+    let mut builder = builder(&directory, &base, 7, None, config);
+    builder.record(2, capture(2, Some("two-v2"))).unwrap();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(64),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(64))
+        .unwrap();
+    let work = CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+    let result =
+        work.classify(|scoped| builder.record_with_work_context(3, capture(1, None), scoped));
+    assert!(
+        matches!(
+            result,
+            Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                _
+            )))
+        ),
+        "{result:?}"
+    );
+    assert!(!directory
+        .join(relational_row_delta_run_file(1, 7, 0))
+        .exists());
+    assert!(!directory.join(RELATIONAL_ROW_DELTA_MANIFEST_FILE).exists());
+    drop(builder);
+    drop(work);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    drop(base);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn dirty_run_coalesces_repeated_keys_to_the_latest_epoch() {
     let directory = unique_test_dir("coalesce");
     let base = publish_and_open_base(&directory);

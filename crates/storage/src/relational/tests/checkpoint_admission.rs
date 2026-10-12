@@ -15,6 +15,181 @@
 use super::*;
 
 #[test]
+fn owned_relational_wal_decode_matches_shared_codec_and_rejects_corruption() {
+    use crate::background::CheckpointDecodeContext;
+    for length in [0, 1, 31, 65_535, 65_536, 65_537] {
+        let transaction = RelationalTransaction {
+            writes: vec![RelationalWrite::Insert {
+                table: "messages".into(),
+                rows: vec![RelationalRow::new(vec![
+                    RelationalValue::Text("id-\0-中文".into()),
+                    RelationalValue::Text("x".repeat(length)),
+                    RelationalValue::Bytea(vec![0xff; length]),
+                ])],
+                mode: RelationalInsertMode::Error,
+            }],
+        };
+        let bytes = encode_relational_wal_batch(17, &transaction).unwrap();
+        let allocations = CheckpointDecodeContext {
+            work: Default::default(),
+            memory: Default::default(),
+        };
+        let ordinary = decode_relational_wal_batch(&bytes, RelationalDecodeLimits::wal()).unwrap();
+        let owned =
+            decode_relational_wal_batch_owned(&bytes, RelationalDecodeLimits::wal(), &allocations)
+                .unwrap();
+        assert_eq!(owned, ordinary);
+        drop(owned);
+        for offset in [0, 8, 28, bytes.len() - 1] {
+            let mut corrupt = bytes.clone();
+            corrupt[offset] ^= 0xff;
+            assert!(decode_relational_wal_batch(&corrupt, RelationalDecodeLimits::wal()).is_err());
+            assert!(decode_relational_wal_batch_owned(
+                &corrupt,
+                RelationalDecodeLimits::wal(),
+                &allocations,
+            )
+            .is_err());
+        }
+    }
+}
+
+#[test]
+fn owned_relational_wal_decode_denies_large_field_before_copy_and_releases_memory() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let transaction = RelationalTransaction {
+        writes: vec![RelationalWrite::Insert {
+            table: "messages".into(),
+            rows: vec![RelationalRow::new(vec![RelationalValue::Text(
+                "x".repeat(128 * 1024),
+            )])],
+            mode: RelationalInsertMode::Error,
+        }],
+    };
+    let bytes = encode_relational_wal_batch(1, &transaction).unwrap();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(4 * 1024),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(4 * 1024))
+        .unwrap();
+    let allocations = CheckpointDecodeContext {
+        work: CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default())),
+        memory: Default::default(),
+    };
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let result =
+        decode_relational_wal_batch_owned(&bytes, RelationalDecodeLimits::wal(), &allocations);
+    let large_allocations = observer.finish();
+    let error = result.unwrap_err();
+    assert!(matches!(error, RelationalError::Admission(_)), "{error}");
+    assert_eq!(large_allocations, 0, "deny before copying the large field");
+    drop(allocations);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn owned_relational_wal_decode_preserves_all_write_variants_and_access_captures() {
+    use crate::background::CheckpointDecodeContext;
+    let key = RelationalKey(vec![RelationalValue::Text("id-1".into())]);
+    let row = RelationalRow::new(vec![RelationalValue::Text("id-1".into())]);
+    let predicate = RelationalPredicate::Not(Box::new(RelationalPredicate::IsNull {
+        column: "id".into(),
+        negated: false,
+    }));
+    let mut transaction = create_payload_table();
+    transaction.writes.extend([
+        RelationalWrite::CreateIndex {
+            table: "messages".into(),
+            index: RelationalIndexSchema {
+                name: "by_id".into(),
+                columns: vec!["id".into()],
+                unique: false,
+            },
+        },
+        RelationalWrite::Insert {
+            table: "messages".into(),
+            rows: vec![row.clone()],
+            mode: RelationalInsertMode::Error,
+        },
+        RelationalWrite::DeleteByPrimaryKey {
+            table: "messages".into(),
+            keys: vec![key.clone()],
+        },
+        RelationalWrite::Upsert {
+            table: "messages".into(),
+            rows: vec![row],
+            conflict_columns: vec!["id".into()],
+            action: RelationalConflictAction::Update(vec![RelationalUpsertAssignment {
+                column: "id".into(),
+                value: RelationalUpsertValue::ExcludedColumn("id".into()),
+            }]),
+        },
+        RelationalWrite::DeleteWhere {
+            table: "messages".into(),
+            predicate: predicate.clone(),
+        },
+        RelationalWrite::UpdateWhere {
+            table: "messages".into(),
+            assignments: vec![RelationalUpdateAssignment {
+                column: "id".into(),
+                value: RelationalUpdateValue::Value(RelationalValue::Text("id-2".into())),
+            }],
+            predicate,
+        },
+        RelationalWrite::AddColumn {
+            table: "messages".into(),
+            column: RelationalColumnSchema {
+                name: "extra".into(),
+                scalar_type: RelationalScalarType::Text,
+                nullable: true,
+                default: None,
+            },
+        },
+    ]);
+    let access = RelationalReplayAccessSet::from_decoded_entries(vec![RelationalReplayAccess {
+        table: "messages".into(),
+        primary_key: key.clone(),
+    }])
+    .unwrap();
+    let capture = RelationalPrimaryKeyChangeCapture::Captured {
+        tables: vec![RelationalTablePrimaryKeyChanges {
+            table: "messages".into(),
+            primary_keys: vec![key],
+        }],
+        encoded_bytes: 0,
+    };
+    let encoded =
+        encode_relational_wal_batch_with_captures(9, &transaction, Some(&access), &capture)
+            .unwrap();
+    let allocations = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    let ordinary =
+        decode_relational_wal_batch(&encoded.record, RelationalDecodeLimits::wal()).unwrap();
+    let owned = decode_relational_wal_batch_owned(
+        &encoded.record,
+        RelationalDecodeLimits::wal(),
+        &allocations,
+    )
+    .unwrap();
+    assert_eq!(owned, ordinary);
+    assert_eq!(owned.transaction, transaction);
+    assert_eq!(owned.replay_access.as_ref(), Some(&access));
+}
+
+#[test]
 fn planning_preserves_resident_detached_and_file_backed_overflow_terms() {
     let source = RelationalStore::with_overflow_config(
         RelationalMutationLimits::default(),

@@ -207,6 +207,59 @@ fn checkpoint_suffix_preserves_valid_noncanonical_payload_bytes() {
 }
 
 #[test]
+fn checkpoint_suffix_rejects_embedded_relational_corruption_before_mutation() {
+    for invalid_epoch in [false, true] {
+        let mut fixture = Fixture::new();
+        let epoch = fixture.store.commit_epoch();
+        let mut record = crate::relational::encode_relational_wal_batch(
+            epoch + u64::from(invalid_epoch),
+            &crate::relational::RelationalTransaction::default(),
+        )
+        .unwrap();
+        if !invalid_epoch {
+            let last = record.len() - 1;
+            record[last] ^= 0xff;
+        }
+        fixture.replace_suffix(|payload| {
+            let BinaryWalRecordDecode::Entry {
+                mut entry,
+                commit_epoch,
+            } = decode_binary_wal_record(payload).unwrap()
+            else {
+                panic!("fixture suffix must contain a transaction");
+            };
+            entry.op = WalOp::Batch(vec![
+                entry.op,
+                WalOp::Relational {
+                    record: record.into(),
+                },
+            ]);
+            *payload = crate::wal::binary::encode_binary_wal_record(&entry, commit_epoch).unwrap();
+        });
+        let manifest = fs::read(fixture.store.durable.as_ref().unwrap().manifest_path()).unwrap();
+        let private = fixture.private_wal();
+        let complete_bytes = fixture.candidate.candidate_wal_bytes;
+        let result = fixture.candidate.catch_up(&fixture.store);
+        assert!(
+            matches!(result, Err(HawDBError::StorageIntegrity(_))),
+            "{result:?}"
+        );
+        assert!(fixture.private_wal().starts_with(&private));
+        assert_eq!(fixture.candidate.candidate_wal_bytes, complete_bytes);
+        assert_eq!(
+            fixture.candidate.commit_epoch(),
+            fixture.pinned.commit_epoch()
+        );
+        assert!(!fixture.candidate.can_continue_from(&fixture.store));
+        assert!(fixture.store.ensure_usable().is_err());
+        assert_eq!(
+            fs::read(fixture.store.durable.as_ref().unwrap().manifest_path()).unwrap(),
+            manifest
+        );
+    }
+}
+
+#[test]
 fn checkpoint_suffix_rejects_valid_framing_with_wrong_commit_epoch() {
     let mut fixture = Fixture::new();
     let epoch = fixture.store.commit_epoch();

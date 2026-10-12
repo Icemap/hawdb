@@ -921,10 +921,20 @@ impl GraphStore {
         let epoch = self.commit_epoch.checked_add(1).ok_or_else(|| {
             HawDBError::StorageIntegrity("commit epoch overflow during WAL replay".into())
         })?;
+        let allocations = work.map(|work| crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        });
+        let mut relational_records = if let Some(allocations) = &allocations {
+            self.prepare_replayed_relational_records(operations, epoch, allocations)?
+        } else {
+            Vec::new()
+        };
         let relational_changes = if let Some(work) = work {
-            self.relational_primary_key_changes_from_wal_ops_with_work_context(
+            Self::relational_changes_from_prepared_records(
                 operations,
-                Some(work),
+                &mut relational_records,
+                work,
             )?
         } else {
             self.relational_primary_key_changes_from_wal_ops(operations)?
@@ -935,11 +945,19 @@ impl GraphStore {
         if let Some(work) = work {
             self.prepare_replayed_checkpoint_record_copies(operations, work)?;
         }
-        if let Some(memory) = replay_memory {
-            self.retain_decoded_checkpoint_memory(
-                memory,
-                work.expect("decoded checkpoint memory has an admitted work context"),
-            )?;
+        match (replay_memory, allocations.as_ref()) {
+            (Some(memory), Some(allocations)) => {
+                memory
+                    .append_retained(&mut allocations.memory.borrow_mut(), allocations)
+                    .map_err(HawDBError::from_storage_error)?;
+                self.retain_decoded_checkpoint_memory(memory, allocations)?;
+            }
+            (None, Some(allocations)) => self.retain_decoded_checkpoint_memory(
+                &mut allocations.memory.borrow_mut(),
+                allocations,
+            )?,
+            (None, None) => {}
+            (Some(_), None) => unreachable!("decoded checkpoint memory requires a work context"),
         }
         // Earlier admission and preflight leave schema/data intact. Projection
         // bookkeeping below is the first mutation, before the batch's data or
@@ -956,7 +974,18 @@ impl GraphStore {
                 relational_changes,
                 work,
             )?;
-            self.apply_replayed_checkpoint_operations(catalog, operation, work)?;
+            let mut relational_records = relational_records.into_iter();
+            self.apply_replayed_checkpoint_operations(
+                catalog,
+                operation,
+                work,
+                &mut relational_records,
+            )?;
+            if relational_records.next().is_some() {
+                return Err(HawDBError::StorageIntegrity(
+                    "unused prepared relational WAL record".into(),
+                ));
+            }
             work.checkpoint().map_err(HawDBError::from_storage_error)?;
         } else {
             self.record_search_projection_changes_for_ops(
@@ -1061,18 +1090,151 @@ impl GraphStore {
         work.checkpoint().map_err(HawDBError::from_storage_error)
     }
 
+    fn relational_changes_from_prepared_records(
+        operations: &[WalOp],
+        records: &mut [crate::relational::RelationalWalBatch],
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Option<crate::relational::RelationalPrimaryKeyChangeCapture>> {
+        use crate::relational::{
+            RelationalPrimaryKeyChangeCapture as Capture,
+            RelationalPrimaryKeyChangeRebuildReason as Reason,
+        };
+        fn snapshot_count(
+            operations: &[WalOp],
+            work: &crate::background::CheckpointWorkContext,
+        ) -> Result<usize> {
+            let mut count = 0usize;
+            for operation in operations {
+                let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                unit.finish();
+                let incoming = match operation {
+                    WalOp::Batch(operations) => snapshot_count(operations, work)?,
+                    WalOp::RelationalSnapshot { .. } => 1,
+                    _ => 0,
+                };
+                count = count.checked_add(incoming).ok_or_else(|| {
+                    HawDBError::StorageIntegrity("relational snapshot count overflow".into())
+                })?;
+            }
+            Ok(count)
+        }
+        let snapshots = snapshot_count(operations, work)?;
+        if records.len().saturating_add(snapshots) > 1 {
+            return Ok(Some(Capture::RequiresRebuild {
+                reason: Reason::MultipleRelationalTransactions,
+            }));
+        }
+        if snapshots != 0 {
+            return Ok(Some(Capture::RequiresRebuild {
+                reason: Reason::SnapshotReplacement,
+            }));
+        }
+        Ok(records.first_mut().map(|record| {
+            record
+                .primary_key_changes
+                .take()
+                .unwrap_or(Capture::RequiresRebuild {
+                    reason: Reason::MissingWalCapture,
+                })
+        }))
+    }
+
+    fn prepare_replayed_relational_records(
+        &self,
+        operations: &[WalOp],
+        epoch: u64,
+        allocations: &crate::background::CheckpointDecodeContext,
+    ) -> Result<Vec<crate::relational::RelationalWalBatch>> {
+        fn count(
+            operations: &[WalOp],
+            work: &crate::background::CheckpointWorkContext,
+        ) -> Result<usize> {
+            let mut total = 0usize;
+            for operation in operations {
+                work.checkpoint().map_err(HawDBError::from_storage_error)?;
+                let incoming = match operation {
+                    WalOp::Batch(operations) => count(operations, work)?,
+                    WalOp::Relational { .. } => 1,
+                    _ => 0,
+                };
+                total = total.checked_add(incoming).ok_or_else(|| {
+                    HawDBError::StorageIntegrity("relational WAL record count overflow".into())
+                })?;
+            }
+            Ok(total)
+        }
+        fn decode(
+            operations: &[WalOp],
+            epoch: u64,
+            allocations: &crate::background::CheckpointDecodeContext,
+            output: &mut Vec<crate::relational::RelationalWalBatch>,
+        ) -> Result<()> {
+            for operation in operations {
+                allocations
+                    .checkpoint()
+                    .map_err(HawDBError::from_storage_error)?;
+                match operation {
+                    WalOp::Batch(operations) => decode(operations, epoch, allocations, output)?,
+                    WalOp::Relational { record } => {
+                        let batch = crate::relational::decode_relational_wal_batch_owned(
+                            record,
+                            RelationalDecodeLimits::wal(),
+                            allocations,
+                        )
+                        .map_err(|error| match error {
+                            crate::relational::RelationalError::Corruption(message) => {
+                                HawDBError::StorageIntegrity(format!(
+                                    "relational WAL corruption: {message}"
+                                ))
+                            }
+                            error => HawDBError::from_storage_error(error),
+                        })?;
+                        if batch.epoch != epoch {
+                            return Err(HawDBError::StorageIntegrity(format!(
+                                "relational WAL epoch mismatch: expected {epoch}, got {}",
+                                batch.epoch
+                            )));
+                        }
+                        output.push(batch);
+                    }
+                    _ => {}
+                }
+            }
+            Ok(())
+        }
+        let count = count(operations, allocations)?;
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let mut records = allocations.vector_capacity(count)?;
+        decode(operations, epoch, allocations, &mut records)?;
+        Ok(records)
+    }
+
     fn apply_replayed_checkpoint_operations(
         &mut self,
         catalog: &mut Catalog,
         operation: WalOp,
         work: &crate::background::CheckpointWorkContext,
+        relational_records: &mut std::vec::IntoIter<crate::relational::RelationalWalBatch>,
     ) -> Result<()> {
         match operation {
             WalOp::Batch(operations) => {
                 for operation in operations {
-                    self.apply_replayed_checkpoint_operations(catalog, operation, work)?;
+                    self.apply_replayed_checkpoint_operations(
+                        catalog,
+                        operation,
+                        work,
+                        relational_records,
+                    )?;
                 }
                 Ok(())
+            }
+            WalOp::Relational { .. } => {
+                let batch = relational_records.next().ok_or_else(|| {
+                    HawDBError::StorageIntegrity("missing prepared relational WAL record".into())
+                })?;
+                self.apply_recovered_relational_batch(batch, Some(work))
             }
             operation @ WalOp::ProjectGraph { .. } => {
                 self.apply_wal_op_with_work_context(catalog, operation, Some(work))

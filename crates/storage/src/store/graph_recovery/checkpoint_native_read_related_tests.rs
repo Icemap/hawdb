@@ -25,6 +25,148 @@ use std::sync::atomic::Ordering;
 
 const CEILING: u64 = 4 * 1024 * 1024;
 
+#[test]
+fn relational_decode_denial_precedes_mixed_replay_mutation_and_allows_retry() {
+    use crate::relational::{
+        encode_relational_wal_batch, RelationalColumnSchema, RelationalInsertMode, RelationalRow,
+        RelationalScalarType, RelationalTableSchema, RelationalTransaction, RelationalValue,
+        RelationalWrite,
+    };
+    let directory = std::env::temp_dir().join(format!(
+        "hawdb-relational-decode-boundary-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let mut catalog = Catalog::default();
+    let mut store = GraphStore::open_with_durability_and_replay_config(
+        &directory,
+        &mut catalog,
+        DurabilityPolicy::default(),
+        WalReplayConfig::default(),
+    )
+    .unwrap();
+    store
+        .commit_relational_transaction(
+            &mut catalog,
+            RelationalTransaction {
+                writes: vec![RelationalWrite::CreateTable(RelationalTableSchema {
+                    name: "documents".into(),
+                    columns: vec![RelationalColumnSchema {
+                        name: "id".into(),
+                        scalar_type: RelationalScalarType::Text,
+                        nullable: false,
+                        default: None,
+                    }],
+                    primary_key: vec!["id".into()],
+                    unique_constraints: Vec::new(),
+                    foreign_keys: Vec::new(),
+                    indexes: Vec::new(),
+                })],
+            },
+        )
+        .unwrap();
+    let node = store
+        .create_node(&mut catalog, "Document", BTreeMap::new())
+        .unwrap();
+    let epoch = store.commit_epoch();
+    let identity = store.checkpoint_source_identity();
+    let record = encode_relational_wal_batch(
+        epoch + 1,
+        &RelationalTransaction {
+            writes: vec![RelationalWrite::Insert {
+                table: "documents".into(),
+                rows: vec![RelationalRow::new(vec![RelationalValue::Text(
+                    "x".repeat(128 * 1024),
+                )])],
+                mode: RelationalInsertMode::Error,
+            }],
+        },
+    )
+    .unwrap();
+    let operation = WalOp::Batch(vec![
+        WalOp::SetNodeProperty {
+            id: node,
+            property: "value".into(),
+            value: Value::Int(7),
+        },
+        WalOp::Relational {
+            record: record.into(),
+        },
+    ]);
+    for (bytes, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(bytes),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(bytes))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let mut started = false;
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            store.apply_replayed_checkpoint_wal_transaction_with_boundary(
+                &mut catalog,
+                operation.clone(),
+                scoped,
+                &mut started,
+                None,
+            )
+        });
+        let large_allocations = observer.finish();
+        if succeeds {
+            result.unwrap();
+            assert!(started);
+            assert_eq!(store.commit_epoch(), epoch + 1);
+            assert_eq!(store.relational_state.row_count("documents"), 1);
+            assert_eq!(
+                store
+                    .node_owned(node)
+                    .unwrap()
+                    .unwrap()
+                    .properties
+                    .get("value"),
+                Some(&Value::Int(7))
+            );
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(crate::background::CheckpointOperationError::Work(
+                        crate::background::CheckpointWorkError::Memory(_)
+                    ))
+                ),
+                "{result:?}"
+            );
+            assert!(
+                !started,
+                "denial must precede projection and graph mutation"
+            );
+            assert_eq!(large_allocations, 0);
+            assert_eq!(store.commit_epoch(), epoch);
+            assert_eq!(store.checkpoint_source_identity(), identity);
+            assert_eq!(store.relational_state.row_count("documents"), 0);
+            assert!(!store
+                .node_owned(node)
+                .unwrap()
+                .unwrap()
+                .properties
+                .contains_key("value"));
+        }
+        drop(work);
+        drop(permit);
+        if !succeeds {
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+    }
+    drop(store);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 fn source(relationships: bool) -> (PathBuf, GraphStore, Catalog) {
     let directory = std::env::temp_dir().join(format!(
         "hawdb-checkpoint-native-point-{}",

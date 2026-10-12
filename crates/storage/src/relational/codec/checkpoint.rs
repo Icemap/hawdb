@@ -28,7 +28,7 @@ pub(super) use runtime::{
 };
 mod mount;
 pub(crate) use mount::decode_relational_checkpoint_file_with_work_context;
-mod schema;
+pub(super) mod schema;
 pub(crate) use schema::{decode_row_owned, decode_schema_owned};
 mod validation;
 pub(crate) use schema::decode_schema as decode_relational_table_schema_with_work_context;

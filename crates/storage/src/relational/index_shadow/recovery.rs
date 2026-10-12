@@ -670,6 +670,17 @@ impl RelationalIndexRecoveryBuilder {
         epoch: u64,
         capture: RelationalIndexChangeCapture,
     ) -> Result<(), RelationalIndexShadowError> {
+        self.record_with_work_context(epoch, capture, &Default::default())
+    }
+
+    pub(crate) fn record_with_work_context(
+        &mut self,
+        epoch: u64,
+        capture: RelationalIndexChangeCapture,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), RelationalIndexShadowError> {
+        work.checkpoint()
+            .map_err(|error| RelationalIndexShadowError::Admission(error.to_string()))?;
         if epoch <= self.base_commit_epoch {
             return Err(RelationalIndexShadowError::Corrupt(format!(
                 "recovery delta epoch {epoch} is not after base epoch {}",
@@ -683,6 +694,8 @@ impl RelationalIndexRecoveryBuilder {
             return Err(RelationalIndexShadowError::Admission(reason));
         };
         for change in changes {
+            work.checkpoint()
+                .map_err(|error| RelationalIndexShadowError::Admission(error.to_string()))?;
             let (key, value, entry_bytes) = encode_change(change, epoch)?;
             let key_exists = self.dirty.contains_key(&key);
             let existing_bytes = if key_exists { entry_bytes } else { 0 };
@@ -700,7 +713,7 @@ impl RelationalIndexRecoveryBuilder {
                 && (next_entries > self.config.max_dirty_entries.get()
                     || next_bytes > self.config.max_dirty_bytes.get())
             {
-                self.flush()?;
+                self.flush_with_work_context(work)?;
             }
             if entry_bytes > self.config.max_dirty_bytes.get() {
                 return Err(RelationalIndexShadowError::Admission(format!(

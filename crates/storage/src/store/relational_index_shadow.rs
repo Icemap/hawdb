@@ -62,14 +62,22 @@ use hawdb_storage::{
         RelationalIndexShadowBuildReport, RelationalIndexShadowConfig, RelationalIndexShadowError,
         RelationalIndexShadowReader, RelationalIndexShadowWriter, RelationalKey,
         RelationalOverflowPublicationConfig, RelationalOverflowRootReader, RelationalRecoveryFence,
-        RelationalRecoverySourceIdentity, RelationalReplayAccessSet,
+        RelationalRecoverySourceIdentity, RelationalReplayAccessSet, RelationalRowChangeCapture,
         RelationalRowPagePublicationConfig, RelationalRowPageReadView, RelationalRowPageRootReader,
         RelationalRowPageSnapshotReader, RelationalScalarType, RelationalSparseRecoveryStage,
-        RelationalTableSchema, RelationalTransaction, RelationalValue,
+        RelationalState, RelationalTableSchema, RelationalTransaction, RelationalValue,
         RELATIONAL_PRIMARY_INDEX_NAME,
     },
 };
 use std::{collections::BTreeSet, sync::Arc};
+
+/// A recovered transaction whose schema, rows, and delta captures have been
+/// validated without changing the store. Dropping it leaves recovery unchanged.
+pub(super) struct PreparedRelationalRecoveryTransaction {
+    next: RelationalState,
+    index_capture: Option<RelationalIndexChangeCapture>,
+    row_capture: Option<RelationalRowChangeCapture>,
+}
 
 pub use hawdb_storage::relational_index_view::{
     RelationalIndexQualificationProbe, RelationalIndexQualificationProbeKind,
@@ -1201,7 +1209,18 @@ impl GraphStore {
         transaction: RelationalTransaction,
         replay_access: Option<RelationalReplayAccessSet>,
         expected_epoch: u64,
+        work: Option<&crate::background::CheckpointWorkContext>,
     ) -> Result<(), hawdb_storage::relational::RelationalError> {
+        let prepared = self.prepare_recovered_relational_transaction(transaction, replay_access)?;
+        self.install_recovered_relational_transaction(prepared, expected_epoch, work)
+    }
+
+    pub(super) fn prepare_recovered_relational_transaction(
+        &self,
+        transaction: RelationalTransaction,
+        replay_access: Option<RelationalReplayAccessSet>,
+    ) -> Result<PreparedRelationalRecoveryTransaction, hawdb_storage::relational::RelationalError>
+    {
         let authoritative = self
             .relational_index_shadow
             .mode
@@ -1306,18 +1325,60 @@ impl GraphStore {
                 None,
             ),
         };
+        Ok(PreparedRelationalRecoveryTransaction {
+            next,
+            index_capture,
+            row_capture,
+        })
+    }
+
+    pub(super) fn install_recovered_relational_transaction(
+        &mut self,
+        prepared: PreparedRelationalRecoveryTransaction,
+        expected_epoch: u64,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<(), hawdb_storage::relational::RelationalError> {
+        let PreparedRelationalRecoveryTransaction {
+            next,
+            index_capture,
+            row_capture,
+        } = prepared;
         self.relational_state = next;
         if let Some(capture) = index_capture
             && let Some(mut builder) = self.relational_index_shadow.recovery_builder.take()
         {
-            if let Err(error) = builder.record(expected_epoch, capture) {
-                self.mark_relational_index_recovery_unavailable(expected_epoch, error.to_string());
-            } else {
-                self.relational_index_shadow.recovery_builder = Some(builder);
+            let result = match work {
+                Some(work) => work.classify(|scoped| {
+                    builder.record_with_work_context(expected_epoch, capture, scoped)
+                }),
+                None => builder
+                    .record(expected_epoch, capture)
+                    .map_err(crate::background::CheckpointOperationError::Operation),
+            };
+            match result {
+                Ok(()) => self.relational_index_shadow.recovery_builder = Some(builder),
+                Err(crate::background::CheckpointOperationError::Operation(error)) => {
+                    self.mark_relational_index_recovery_unavailable(
+                        expected_epoch,
+                        error.to_string(),
+                    );
+                }
+                Err(crate::background::CheckpointOperationError::Work(error)) => {
+                    self.mark_relational_index_recovery_unavailable(
+                        expected_epoch,
+                        error.to_string(),
+                    );
+                    return Err(hawdb_storage::relational::RelationalError::Admission(
+                        error.to_string(),
+                    ));
+                }
             }
         }
-        self.record_relational_row_recovery_capture(expected_epoch, row_capture);
-        Ok(())
+        self.record_relational_row_recovery_capture_with_work_context(
+            expected_epoch,
+            row_capture,
+            work,
+        )
     }
 
     pub(super) fn invalidate_relational_index_recovery(
@@ -3390,6 +3451,57 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn recovered_relational_preparation_can_be_discarded_without_installation() {
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-relational-replay-preparation-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig::default(),
+        )
+        .expect("open recovery store");
+        let epoch = store.commit_epoch;
+        let prepared = store
+            .prepare_recovered_relational_transaction(
+                create_recovery_documents_table("doc-1"),
+                None,
+            )
+            .expect("prepare schema and row together");
+        assert!(store.relational_state.table_schema("documents").is_none());
+        assert_eq!(store.commit_epoch, epoch);
+        drop(prepared);
+        assert!(store.relational_state.table_schema("documents").is_none());
+        let prepared = store
+            .prepare_recovered_relational_transaction(
+                create_recovery_documents_table("doc-1"),
+                None,
+            )
+            .expect("retry discarded preparation");
+        store
+            .install_recovered_relational_transaction(prepared, epoch + 1, None)
+            .unwrap();
+        assert_eq!(store.relational_state.row_count("documents"), 1);
+        assert!(store
+            .prepare_recovered_relational_transaction(
+                create_recovery_documents_table("duplicate-schema"),
+                None,
+            )
+            .is_err());
+        assert_eq!(store.relational_state.row_count("documents"), 1);
+        assert_eq!(store.commit_epoch, epoch);
+        drop(store);
+        std::fs::remove_dir_all(path).expect("remove preparation fixture");
     }
 
     #[test]

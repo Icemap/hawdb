@@ -1181,7 +1181,18 @@ impl CheckpointCandidate {
                 // The rolling digest and all three replay counters move only
                 // with a whole schema/data transaction. No database-sized
                 // rollback snapshot is taken for a partially applied record.
-                entry.replay_into_with_boundary(store, catalog, work, &mut self.failed)?;
+                entry
+                    .replay_into_with_boundary(store, catalog, work, &mut self.failed)
+                    .map_err(|error| {
+                        // A corrupt transaction in the authoritative source WAL
+                        // cannot be retried or followed by acknowledged writes.
+                        if matches!(error, HawDBError::StorageIntegrity(_)) {
+                            source
+                                .integrity_poisoned
+                                .store(true, AtomicOrdering::Release);
+                        }
+                        error
+                    })?;
                 if let Some((rows, indexes)) = unchanged_views {
                     store.publish_relational_row_live_view(rows);
                     store.publish_relational_index_live_view(indexes);

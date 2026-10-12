@@ -18,10 +18,11 @@
 
 use super::*;
 
-struct Input<'a> {
-    source: SliceDecodeInput<'a>,
-    work: &'a CheckpointWorkContext,
-    allocations: Option<&'a crate::background::CheckpointDecodeContext>,
+pub(in crate::relational::codec) struct Input<'a> {
+    pub(in crate::relational::codec) source: SliceDecodeInput<'a>,
+    pub(in crate::relational::codec) work: &'a CheckpointWorkContext,
+    pub(in crate::relational::codec) allocations:
+        Option<&'a crate::background::CheckpointDecodeContext>,
 }
 
 impl DecodeInput for Input<'_> {
