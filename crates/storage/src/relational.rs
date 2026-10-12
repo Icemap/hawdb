@@ -958,10 +958,27 @@ pub struct RelationalMutationOutcome {
 /// conflict rows read by a no-op `UPSERT`. Recovery can therefore hydrate only
 /// this bounded set before replaying predicate DML instead of scanning rows
 /// that were not authenticated by the WAL record.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct RelationalReplayAccessSet {
     entries: Vec<RelationalReplayAccess>,
+    _memory: crate::background::CheckpointAllocationOwner,
 }
+
+impl Clone for RelationalReplayAccessSet {
+    fn clone(&self) -> Self {
+        Self {
+            entries: self.entries.clone(),
+            _memory: Default::default(),
+        }
+    }
+}
+
+impl PartialEq for RelationalReplayAccessSet {
+    fn eq(&self, other: &Self) -> bool {
+        self.entries == other.entries
+    }
+}
+impl Eq for RelationalReplayAccessSet {}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RelationalReplayAccess {
@@ -1220,7 +1237,10 @@ impl RelationalReplayAccessSet {
                 "relational WAL replay access set is not strictly ordered".to_string(),
             ));
         }
-        Ok(Self { entries })
+        Ok(Self {
+            entries,
+            _memory: Default::default(),
+        })
     }
 }
 
@@ -1229,11 +1249,19 @@ struct RelationalReplayAccessTracker {
     entry_count: usize,
     encoded_bytes: usize,
     limits: RelationalRowChangeCaptureLimits,
+    allocations: Option<crate::background::CheckpointDecodeContext>,
 }
 
 impl RelationalReplayAccessTracker {
-    fn new(limits: RelationalRowChangeCaptureLimits) -> Self {
+    fn new(
+        limits: RelationalRowChangeCaptureLimits,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Self {
         Self {
+            allocations: allocations.map(|context| crate::background::CheckpointDecodeContext {
+                work: context.work.clone(),
+                memory: Default::default(),
+            }),
             entries: BTreeMap::new(),
             entry_count: 0,
             encoded_bytes: 0,
@@ -1268,12 +1296,58 @@ impl RelationalReplayAccessTracker {
                 self.limits.max_entries, self.limits.max_bytes
             )));
         }
-        self.entries
-            .entry(table.to_string())
-            .or_default()
-            .insert(primary_key.clone());
+        let (owned_table, owned_key) = if let Some(context) = &self.allocations {
+            // One node per insertion conservatively covers B-tree splits.
+            let mut bytes = crate::cow::checkpoint_tree_node_bytes::<RelationalKey, ()>();
+            if !self.entries.contains_key(table) {
+                bytes = bytes
+                    .checked_add(crate::cow::checkpoint_tree_node_bytes::<
+                        String,
+                        BTreeSet<RelationalKey>,
+                    >())
+                    .ok_or_else(|| {
+                        RelationalError::Admission("replay access node capacity overflow".into())
+                    })?;
+            }
+            context
+                .reserve(bytes)
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            let key = primary_key.clone_with_allocations(context)?;
+            let name = if self.entries.contains_key(table) {
+                None
+            } else {
+                Some(
+                    context
+                        .string(table)
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?,
+                )
+            };
+            context
+                .checkpoint()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            (name, key)
+        } else {
+            (Some(table.to_string()), primary_key.clone())
+        };
+        let unit = self
+            .allocations
+            .as_ref()
+            .map(|context| context.start_unit())
+            .transpose()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        if let Some(keys) = self.entries.get_mut(table) {
+            keys.insert(owned_key);
+        } else {
+            self.entries.insert(
+                owned_table.expect("new table has an owned name"),
+                BTreeSet::from([owned_key]),
+            );
+        }
         self.entry_count += 1;
         self.encoded_bytes = encoded_bytes;
+        if let Some(unit) = unit {
+            unit.finish();
+        }
         Ok(())
     }
 
@@ -1289,15 +1363,49 @@ impl RelationalReplayAccessTracker {
         Ok(())
     }
 
-    fn finish(self) -> RelationalReplayAccessSet {
-        let mut entries = Vec::with_capacity(self.entry_count);
-        for (table, keys) in self.entries {
-            entries.extend(keys.into_iter().map(|primary_key| RelationalReplayAccess {
-                table: table.clone(),
-                primary_key,
-            }));
+    fn finish(self) -> Result<RelationalReplayAccessSet, RelationalError> {
+        let allocations = self.allocations;
+        let tables = self.entries;
+        let entry_count = self.entry_count;
+        // Keep the inventory alive through every temporary and error path.
+        let mut entries = match &allocations {
+            Some(context) => context
+                .vector_capacity(entry_count)
+                .map_err(|error| RelationalError::Admission(error.to_string()))?,
+            None => Vec::with_capacity(entry_count),
+        };
+        for (table, keys) in tables {
+            for primary_key in keys {
+                let table = match &allocations {
+                    Some(context) => context
+                        .string(&table)
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?,
+                    None => table.clone(),
+                };
+                let unit = allocations
+                    .as_ref()
+                    .map(|context| context.start_unit())
+                    .transpose()
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                entries.push(RelationalReplayAccess { table, primary_key });
+                if let Some(unit) = unit {
+                    unit.finish();
+                }
+            }
         }
-        RelationalReplayAccessSet { entries }
+        if let Some(context) = &allocations {
+            context
+                .checkpoint()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        }
+        // The conservative tree allowance stays with the moved keys until
+        // the access set is destroyed; it cannot refund live key backing.
+        Ok(RelationalReplayAccessSet {
+            entries,
+            _memory: allocations
+                .map(|context| context.memory.into_inner())
+                .unwrap_or_default(),
+        })
     }
 }
 
@@ -5609,7 +5717,8 @@ fn apply_transaction_inner(
     let mut deleted_rows = VecDeque::new();
     let mut touched = BTreeSet::new();
     let mut changed_keys = BTreeMap::<String, BTreeSet<RelationalKey>>::new();
-    let mut replay_access_tracker = replay_access_limits.map(RelationalReplayAccessTracker::new);
+    let mut replay_access_tracker = replay_access_limits
+        .map(|limits| RelationalReplayAccessTracker::new(limits, checkpoint_allocations));
     let mut full_index_rebuild = BTreeSet::new();
     let mut projection_rebuild_tables = BTreeSet::new();
     let mut mutation_outcomes = Vec::new();
@@ -6006,7 +6115,7 @@ fn apply_transaction_inner(
     });
     let replay_access = if let Some(mut tracker) = replay_access_tracker {
         tracker.record_changed_keys(&changed_keys)?;
-        Some(tracker.finish())
+        Some(tracker.finish()?)
     } else {
         None
     };

@@ -2789,7 +2789,10 @@ fn wal_encoder_rejects_replay_access_above_decoder_limit() {
             )]),
         })
         .collect();
-    let replay_access = RelationalReplayAccessSet { entries };
+    let replay_access = RelationalReplayAccessSet {
+        entries,
+        _memory: Default::default(),
+    };
     let error = encode_relational_wal_batch_with_replay_access(
         1,
         &RelationalTransaction::default(),
@@ -6080,10 +6083,13 @@ fn row_capture_rejects_wide_key_before_copy_and_keeps_canonical_state() {
 fn replay_access_rejects_wide_key_before_copy_and_retries_atomically() {
     let key = RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]);
     let table = "documents";
-    let mut tracker = RelationalReplayAccessTracker::new(RelationalRowChangeCaptureLimits {
-        max_entries: NonZeroUsize::new(1).unwrap(),
-        max_bytes: NonZeroUsize::new(1).unwrap(),
-    });
+    let mut tracker = RelationalReplayAccessTracker::new(
+        RelationalRowChangeCaptureLimits {
+            max_entries: NonZeroUsize::new(1).unwrap(),
+            max_bytes: NonZeroUsize::new(1).unwrap(),
+        },
+        None,
+    );
     let observer = crate::test_allocator::AllocationObservation::start();
     let denied = tracker.record(table, &key);
     let wide_allocations = observer.finish();
@@ -6101,7 +6107,7 @@ fn replay_access_rejects_wide_key_before_copy_and_retries_atomically() {
     assert_eq!(observer.finish(), 0);
     assert_eq!(tracker.entry_count, 1);
     assert_eq!(tracker.encoded_bytes, encoded_bytes);
-    let access = tracker.finish();
+    let access = tracker.finish().unwrap();
     assert_eq!(access.entries().len(), 1);
     assert_eq!(access.entries()[0].table, table);
     assert_eq!(access.entries()[0].primary_key, key);

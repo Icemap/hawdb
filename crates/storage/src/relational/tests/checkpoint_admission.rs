@@ -1375,3 +1375,74 @@ fn controlled_update_match_denies_wide_key_before_copy_and_retries() {
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }
+
+#[test]
+fn controlled_replay_access_retains_key_inventory_until_output_drop() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let key = RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]);
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let mut tracker = RelationalReplayAccessTracker::new(
+            RelationalRowChangeCaptureLimits::default(),
+            Some(&context),
+        );
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = tracker.record("documents", &key);
+        let copies = observer.finish();
+        if succeeds {
+            result.unwrap();
+            let observer = crate::test_allocator::AllocationObservation::start();
+            tracker.record("documents", &key).unwrap();
+            assert_eq!(observer.finish(), 0);
+            let output = tracker.finish().unwrap();
+            drop(context);
+            assert_eq!(output.entries()[0].primary_key, key);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes < ceiling - 128 * 1024)
+            );
+            let copy = output.clone();
+            assert_eq!(copy, output);
+            drop(output);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes == ceiling)
+            );
+            assert_eq!(copy.entries()[0].primary_key, key);
+            drop(copy);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+            assert!(tracker.entries.is_empty());
+            assert_eq!(tracker.entry_count, 0);
+            assert_eq!(tracker.encoded_bytes, 0);
+            drop(tracker);
+            drop(context);
+        }
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
