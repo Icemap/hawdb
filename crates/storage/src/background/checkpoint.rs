@@ -22,6 +22,7 @@ use hawdb_qos::{LocalQosPermit, LocalQosScheduler, QosAdmission, WorkClass, Work
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 mod buffer;
@@ -46,6 +47,7 @@ pub struct CheckpointWorkContext {
     task: RuntimeTaskContext,
     scheduler: Option<LocalQosScheduler>,
     recorded_failure: Option<Arc<Mutex<Option<CheckpointWorkError>>>>,
+    progress: Option<Arc<AtomicU64>>,
 }
 
 impl CheckpointWorkContext {
@@ -54,11 +56,19 @@ impl CheckpointWorkContext {
             task,
             scheduler: None,
             recorded_failure: None,
+            progress: None,
         }
     }
 
     pub fn with_scheduler(mut self, scheduler: LocalQosScheduler) -> Self {
         self.scheduler = Some(scheduler);
+        self
+    }
+
+    /// Observes completed builder units without counting failed admission or
+    /// classification alone as progress. This does not reserve any resources.
+    pub fn with_progress_counter(mut self, progress: Arc<AtomicU64>) -> Self {
+        self.progress = Some(progress);
         self
     }
 
@@ -90,7 +100,7 @@ impl CheckpointWorkContext {
         let recorded = Arc::new(Mutex::new(None));
         let mut scoped = self.clone();
         scoped.recorded_failure = Some(recorded.clone());
-        unit.finish();
+        unit.finish_without_progress();
         let result = operation(&scoped);
         let failure = recorded
             .lock()
@@ -128,7 +138,7 @@ impl CheckpointWorkContext {
             .transpose()?;
         // A telemetry callback can cancel while admission is being recorded.
         self.checkpoint()?;
-        Ok(CheckpointWorkUnit(permit))
+        Ok(CheckpointWorkUnit(permit, self.progress.clone()))
     }
 
     /// Ordinary iterator callbacks keep their original consumer admission.
@@ -217,10 +227,17 @@ impl CheckpointWorkContext {
     }
 }
 
-pub(crate) struct CheckpointWorkUnit(Option<LocalQosPermit>);
+pub(crate) struct CheckpointWorkUnit(Option<LocalQosPermit>, Option<Arc<AtomicU64>>);
 
 impl CheckpointWorkUnit {
     pub(crate) fn finish(self) {
+        if let Some(progress) = &self.1 {
+            progress.fetch_add(1, Ordering::Relaxed);
+        }
+        self.finish_without_progress();
+    }
+
+    fn finish_without_progress(self) {
         if let Some(permit) = self.0 {
             permit.finish_with_outcome(true);
         }
@@ -301,6 +318,37 @@ pub(crate) mod tests {
     use hawdb_qos::{QosTelemetryEvent, QosTelemetryOutcome, QosTelemetryPhase, QosTelemetrySink};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+
+    #[test]
+    fn progress_counts_completed_work_but_not_classification_denial_or_abandonment() {
+        let progress = Arc::new(AtomicU64::new(0));
+        let scheduler = LocalQosScheduler::new(hawdb_qos::LocalQosPolicy {
+            max_background_operations: Some(1),
+            max_total_background_operations: Some(1),
+            ..Default::default()
+        });
+        let work = CheckpointWorkContext::default()
+            .with_scheduler(scheduler.clone())
+            .with_progress_counter(progress.clone());
+        work.classify(|_| Ok::<_, ()>(())).unwrap();
+        assert_eq!(progress.load(Ordering::Relaxed), 0);
+        drop(work.start_unit().unwrap());
+        assert_eq!(progress.load(Ordering::Relaxed), 0);
+        let occupied = scheduler
+            .try_start(WorkRequest::background(WorkClass::Mutation, 1))
+            .unwrap();
+        assert!(matches!(
+            work.start_unit(),
+            Err(CheckpointWorkError::Admission(_))
+        ));
+        assert_eq!(progress.load(Ordering::Relaxed), 0);
+        drop(occupied);
+        work.start_unit().unwrap().finish();
+        assert_eq!(progress.load(Ordering::Relaxed), 1);
+        assert_eq!(Arc::strong_count(&progress), 2);
+        drop(work);
+        assert_eq!(Arc::strong_count(&progress), 1);
+    }
 
     #[derive(Debug, Default)]
     pub(crate) struct CheckpointWorkProbe {

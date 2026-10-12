@@ -38,6 +38,10 @@ const RETRY_DELAY: Duration = Duration::from_millis(100);
 // it one short backoff, then relies on the ordinary hard storage limits.
 // Publication, sync-group draining and active reclamation keep their fences.
 const PREPARATION_BACKOFF_LIMIT: Duration = Duration::from_millis(10);
+// Near exhaustion, a caller cannot safely keep growing the serving WAL while
+// preparation is parked. Bound that wait and return a retryable busy result;
+// never bypass the publication fence or start a partially admitted mutation.
+const PREPARATION_CAPACITY_WAIT_LIMIT: Duration = Duration::from_secs(5);
 const PLANNING_MEMORY_BYTES: u64 = 64 * 1024;
 const OWNER_MEMORY_BYTES: u64 = 64 * 1024;
 const MAX_OPERATION_FAILURES: u8 = 3;
@@ -79,6 +83,16 @@ struct PreparationReport {
     admission_denial: Option<RuntimeAdmissionError>,
     memory_denial: Option<RuntimeMemoryError>,
     operation_failed: bool,
+    progress: Option<Arc<AtomicU64>>,
+}
+
+impl PreparationReport {
+    fn track_progress(&self, work: CheckpointWorkContext) -> CheckpointWorkContext {
+        match &self.progress {
+            Some(progress) => work.with_progress_counter(progress.clone()),
+            None => work,
+        }
+    }
 }
 
 #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
@@ -269,6 +283,7 @@ pub(super) struct State {
 
 #[derive(Debug, Default)]
 pub(super) struct Control {
+    work_progress: Arc<AtomicU64>,
     state: Mutex<State>,
     changed: Condvar,
     failed: AtomicBool,
@@ -345,7 +360,37 @@ impl Control {
         let observed_retirement_deferrals = state.retirement_deferrals;
         let mut notified_owner = false;
         let mut preparation_deadline = None;
+        let mut capacity_deadline = None;
+        let mut capacity_checkpoint_count = state.report.completed_checkpoints;
+        let mut capacity_work_progress = self.work_progress.load(Ordering::Relaxed);
         loop {
+            let work_progress = self.work_progress.load(Ordering::Relaxed);
+            if state.report.completed_checkpoints != capacity_checkpoint_count
+                || work_progress != capacity_work_progress
+            {
+                // Completed builder work or publication is actual progress.
+                // Retries and notifications alone cannot renew the deadline.
+                capacity_checkpoint_count = state.report.completed_checkpoints;
+                capacity_work_progress = work_progress;
+                capacity_deadline = None;
+            }
+            let capacity_remaining = if state.phase == Phase::Preparing
+                && !state.sync_group_active
+                && preparation_needs_capacity(&state)
+            {
+                let deadline = capacity_deadline
+                    .get_or_insert_with(|| Instant::now() + PREPARATION_CAPACITY_WAIT_LIMIT);
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    self.ensure_healthy()?;
+                    return Err(HawDBError::BranchBusy {
+                        resource: "automatic checkpoint capacity",
+                    });
+                }
+                Some(remaining)
+            } else {
+                None
+            };
             let preparation_remaining = if state.phase == Phase::Preparing
                 && !state.sync_group_active
                 && needs_headroom(&state)
@@ -397,7 +442,12 @@ impl Control {
             if let Some(probe) = &state.frontend_wait_probe {
                 let _ = probe.send(state.phase);
             }
-            state = if must_fence {
+            state = if let Some(remaining) = capacity_remaining {
+                self.changed
+                    .wait_timeout(state, remaining)
+                    .map_err(|_| Self::poisoned())?
+                    .0
+            } else if must_fence {
                 self.changed.wait(state).map_err(|_| Self::poisoned())?
             } else {
                 self.changed
@@ -1138,7 +1188,10 @@ fn run(
                 };
             }
         };
-        let mut preparation_report = PreparationReport::default();
+        let mut preparation_report = PreparationReport {
+            progress: Some(control.work_progress.clone()),
+            ..Default::default()
+        };
         let attempt = match pending {
             Some(pending) if pending.candidate.can_continue_from(&source.store) => {
                 Ok(Some((pending.candidate, pending.admission)))
@@ -1287,7 +1340,8 @@ fn run(
                     source = latest;
                 }
                 let work = CheckpointWorkContext::new(admitted_task.clone())
-                    .with_scheduler(scheduler.clone());
+                    .with_scheduler(scheduler.clone())
+                    .with_progress_counter(control.work_progress.clone());
                 candidate.catch_up_with_work_context(&source.store, &work)?;
                 candidate.finish_catch_up()?;
                 #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
@@ -1705,10 +1759,12 @@ fn prepare(
                 report.admission_denial = Some(reason);
                 HawDBError::Storage(format!("automatic checkpoint planning deferred: {reason}"))
             })?;
-        let work = hawdb_storage::background::CheckpointWorkContext::new(
-            planning.bind_task_context(task.clone()),
-        )
-        .with_scheduler(scheduler.clone());
+        let work = report.track_progress(
+            hawdb_storage::background::CheckpointWorkContext::new(
+                planning.bind_task_context(task.clone()),
+            )
+            .with_scheduler(scheduler.clone()),
+        );
         report.planning_scans += 1;
         let bytes = preparation_result(
             work.classify(|work| {
@@ -1755,15 +1811,17 @@ fn continue_preparation(
             report.admission_denial = Some(reason);
             HawDBError::Storage(format!("automatic checkpoint resume deferred: {reason}"))
         })?;
-    let work = CheckpointWorkContext::new(
-        preparing
-            .admission
-            .runtime
-            .task_context()
-            .expect("preparation execution is admitted")
-            .clone(),
-    )
-    .with_scheduler(scheduler.clone());
+    let work = report.track_progress(
+        CheckpointWorkContext::new(
+            preparing
+                .admission
+                .runtime
+                .task_context()
+                .expect("preparation execution is admitted")
+                .clone(),
+        )
+        .with_scheduler(scheduler.clone()),
+    );
     let result = preparation_result(
         work.classify(|work| preparing.frame.prepare_candidate_with_work_context(work)),
         report,

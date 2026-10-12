@@ -197,10 +197,20 @@ bounded backpressure while a checkpoint is catching up.
 Soft preparation pressure gives each writer one absolute 10 ms backoff;
 notifications do not reset it. A typed report counts exhausted preparation
 backoffs. At the last tenth of capacity before the existing storage defer
-threshold, callers still wait for generation progress. Publication requests,
-group draining, final publication and active reclamation keep their required
-fences. This bounds soft preparation backoff; complete capacity-wait bounds and
-unattended handoff remain open qualification gates.
+threshold, callers wait for preparation or generation progress. If a critical
+`Preparing` wait observes no completed builder unit or published checkpoint for
+five seconds, mutation admission returns
+`HawDBError::BranchBusy { resource: "automatic checkpoint capacity" }` before
+borrowing the mutable runtime. Notifications, failed admission and classification
+alone cannot extend that stall deadline. The rejected call performs no mutation;
+the application may retry after resource recovery or invoke the synchronous
+manual checkpoint API. Progress observation uses an atomic counter without
+calling a host callback from builder units.
+
+Publication requests, group draining, final publication and active reclamation
+keep their required fences. The preparation stall bound is not a timeout on
+filesystem synchronization or on an already-started mutation. The idle owner
+can refresh, adopt and retire checkpoints without another application call.
 
 Permanent background denial, insufficient disk, an oversized individual
 transaction, impossible reader-retention budgets, or sustained writes exceeding

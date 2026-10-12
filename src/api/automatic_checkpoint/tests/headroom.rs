@@ -1,6 +1,7 @@
 use super::*;
 mod active_cleanup;
 mod admitted_transaction;
+mod capacity_wait;
 mod foreground;
 mod notifications;
 mod preparation_backoff;
