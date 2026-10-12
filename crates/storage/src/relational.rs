@@ -6321,8 +6321,21 @@ fn apply_upsert(
                 row_key_with_allocations(&updated, &primary_key_positions, checkpoint_allocations)?;
             let updated_conflict_key =
                 row_key_with_allocations(&updated, &conflict_positions, checkpoint_allocations)?;
-            changed_keys.insert(existing_primary_key.clone());
-            changed_keys.insert(updated_primary_key.clone());
+            insert_changed_key_with_allocations(
+                changed_keys,
+                &existing_primary_key,
+                checkpoint_allocations,
+            )?;
+            insert_changed_key_with_allocations(
+                changed_keys,
+                &updated_primary_key,
+                checkpoint_allocations,
+            )?;
+            if let Some(context) = checkpoint_allocations {
+                segment
+                    .rows
+                    .prepare_checkpoint_copy_for_key(&existing_primary_key, &context.work)?;
+            }
             segment.rows.remove(&existing_primary_key);
             segment.rows.insert_with_allocations(
                 updated_primary_key.clone(),
@@ -6340,7 +6353,11 @@ fn apply_upsert(
                 &primary_key_positions,
                 checkpoint_allocations,
             )?;
-            changed_keys.insert(primary_key.clone());
+            insert_changed_key_with_allocations(
+                changed_keys,
+                &primary_key,
+                checkpoint_allocations,
+            )?;
             if segment
                 .rows
                 .insert_with_allocations(primary_key.clone(), excluded, checkpoint_allocations)?
@@ -6631,11 +6648,16 @@ fn apply_update(
         .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
     let segment = Arc::make_mut(segment);
     for (old_key, _, _) in &updates {
-        changed_keys.insert(old_key.clone());
+        insert_changed_key_with_allocations(changed_keys, old_key, checkpoint_allocations)?;
+        if let Some(context) = checkpoint_allocations {
+            segment
+                .rows
+                .prepare_checkpoint_copy_for_key(old_key, &context.work)?;
+        }
         segment.rows.remove(old_key);
     }
     for (_, new_key, row) in updates {
-        changed_keys.insert(new_key.clone());
+        insert_changed_key_with_allocations(changed_keys, &new_key, checkpoint_allocations)?;
         if segment
             .rows
             .insert_with_allocations(new_key, row, checkpoint_allocations)?
@@ -6647,6 +6669,34 @@ fn apply_update(
         }
     }
     Ok(matched.len())
+}
+
+fn insert_changed_key_with_allocations(
+    keys: &mut BTreeSet<RelationalKey>,
+    key: &RelationalKey,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<(), RelationalError> {
+    if keys.contains(key) {
+        return Ok(());
+    }
+    let owned = match allocations {
+        Some(context) => {
+            context
+                .reserve(crate::cow::checkpoint_tree_node_bytes::<RelationalKey, ()>())
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            key.clone_with_allocations(context)?
+        }
+        None => key.clone(),
+    };
+    let unit = allocations
+        .map(|context| context.start_unit())
+        .transpose()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    keys.insert(owned);
+    if let Some(unit) = unit {
+        unit.finish();
+    }
+    Ok(())
 }
 
 enum ResolvedUpdateValue<'a> {

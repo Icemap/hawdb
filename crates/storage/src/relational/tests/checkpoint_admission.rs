@@ -1446,3 +1446,63 @@ fn controlled_replay_access_retains_key_inventory_until_output_drop() {
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }
+
+#[test]
+fn controlled_changed_key_tracking_admits_nodes_and_key_copies() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let key = RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]);
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let mut keys = BTreeSet::new();
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = insert_changed_key_with_allocations(&mut keys, &key, Some(&context));
+        let copies = observer.finish();
+        if succeeds {
+            result.unwrap();
+            assert!(keys.contains(&key));
+            let observer = crate::test_allocator::AllocationObservation::start();
+            insert_changed_key_with_allocations(&mut keys, &key, Some(&context)).unwrap();
+            assert_eq!(observer.finish(), 0);
+            assert_eq!(keys.len(), 1);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes < ceiling - 128 * 1024)
+            );
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+            assert!(keys.is_empty());
+        }
+        drop(keys);
+        drop(context);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
