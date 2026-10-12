@@ -82,30 +82,45 @@ impl MaterializedNodeReadSource {
 /// Root-internal point source. Unsupported storage must use a separate path;
 /// it must never be reported as a missing node in the live overlay.
 #[doc(hidden)]
-pub enum MaterializedNodePointRead {
+pub enum MaterializedNodePointRead<A = Box<dyn GraphReadAllocation>> {
     Unsupported,
     Missing,
-    Node(MaterializedNodePointSource),
+    Node(MaterializedNodePointSource<A>),
 }
 
 /// Own one immutable node page, without retaining the source directory.
 /// The admission permit outlives the page and all borrowed record access.
 #[doc(hidden)]
-pub struct MaterializedNodePointSource {
+pub struct MaterializedNodePointSource<A = Box<dyn GraphReadAllocation>> {
     page: Arc<BTreeMap<NodeId, NodeRecord>>,
     id: NodeId,
     integrity_poisoned: Arc<AtomicBool>,
     post_wal_apply_poisoned: Arc<AtomicBool>,
-    _allocation: Box<dyn GraphReadAllocation>,
+    _allocation: A,
 }
 
-impl MaterializedNodePointSource {
+impl<A> MaterializedNodePointSource<A> {
     pub fn node(&self) -> Result<&NodeRecord> {
         ensure_graph_read_flags_usable(&self.integrity_poisoned, &self.post_wal_apply_poisoned)?;
         self.page.get(&self.id).ok_or_else(|| {
             HawDBError::Execution("retained point source lost its immutable node".into())
         })
     }
+}
+
+fn retain_point_allocation(allocation: &mut dyn GraphReadAllocation, bytes: usize) -> Result<()> {
+    if allocation.bytes() < bytes {
+        return Err(HawDBError::Execution(
+            "retained point admission returned an insufficient allocation permit".into(),
+        ));
+    }
+    allocation.retain_state()?;
+    if allocation.bytes() < bytes {
+        return Err(HawDBError::Execution(
+            "retained point admission lost its allocation permit".into(),
+        ));
+    }
+    Ok(())
 }
 
 impl GraphStore {
@@ -118,6 +133,32 @@ impl GraphStore {
         id: NodeId,
         admission: &GraphReadAdmission<'_>,
     ) -> Result<MaterializedNodePointRead> {
+        self.materialized_node_point_read_with_policy(
+            id,
+            |bytes| admission.reserve(bytes),
+            |allocation, bytes| retain_point_allocation(allocation.as_mut(), bytes),
+        )
+    }
+
+    /// Preserve the concrete permit's auto traits for typed host ownership.
+    /// No Send/Sync promise is imposed on standalone allocation policies.
+    #[doc(hidden)]
+    pub fn materialized_node_point_read_typed<A: GraphReadAllocation>(
+        &self,
+        id: NodeId,
+        allocate: impl FnOnce(usize) -> Result<A>,
+    ) -> Result<MaterializedNodePointRead<A>> {
+        self.materialized_node_point_read_with_policy(id, allocate, |allocation, bytes| {
+            retain_point_allocation(allocation, bytes)
+        })
+    }
+
+    fn materialized_node_point_read_with_policy<A>(
+        &self,
+        id: NodeId,
+        allocate: impl FnOnce(usize) -> Result<A>,
+        retain: impl FnOnce(&mut A, usize) -> Result<()>,
+    ) -> Result<MaterializedNodePointRead<A>> {
         self.ensure_usable()?;
         if self.is_out_of_core() || self.canonical_base.is_some() {
             return Ok(MaterializedNodePointRead::Unsupported);
@@ -135,13 +176,8 @@ impl GraphStore {
                     "retained point capacity overflow or excessive value nesting".into(),
                 )
             })?;
-        let mut allocation = admission.reserve(bytes)?;
-        allocation.retain_state()?;
-        if allocation.bytes() < bytes {
-            return Err(HawDBError::Execution(
-                "retained point admission lost its allocation permit".into(),
-            ));
-        }
+        let mut allocation = allocate(bytes)?;
+        retain(&mut allocation, bytes)?;
         Ok(MaterializedNodePointRead::Node(
             MaterializedNodePointSource {
                 page: Arc::clone(page),

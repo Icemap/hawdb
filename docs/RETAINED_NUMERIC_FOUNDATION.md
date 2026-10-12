@@ -592,3 +592,20 @@ activating it for point queries requires performance qualification. Caller
 allocation policy must account for retained runtime/process memory and concurrent
 COW generations. It does not provide typed contiguous Arrow arrays, a host buffer
 lease, scan snapshot generations or end-to-end zero-copy qualification.
+
+### Concrete point allocation ownership
+
+`materialized_node_point_read_typed` retains the caller's concrete allocation
+permit rather than erasing it into a boxed trait object. The point source keeps
+that type's automatic `Send`/`Sync` properties; the existing boxed entry point
+and standalone allocation trait remain unchanged. Both entry points use the
+same preflight/capture path and validate the complete page reservation before
+and after retained-state transfer. A short permit, failed transfer or shrinking
+permit releases the allocation without capturing a source page.
+
+The typed ownership regression moves a source to another thread after COW
+mutation and store destruction, checks the original record address, then drops
+the source and observes permit release. This establishes the native typed-owner
+mechanics, not Python/Arrow callback qualification or runtime/process admission.
+The caller must supply a real retained query/runtime allocation policy before
+host activation; no unsafe Send/Sync implementation or query routing is added.

@@ -420,3 +420,127 @@ fn admitted_point_source_observes_later_poison() {
         .store(true, AtomicOrdering::Release);
     assert!(source.node().is_err());
 }
+
+struct ThreadPointAllocation {
+    bytes: usize,
+    released: Arc<AtomicBool>,
+    retained: Arc<AtomicBool>,
+    fail_retention: bool,
+    retained_bytes: Option<usize>,
+    page_on_release: Option<std::sync::Weak<BTreeMap<NodeId, NodeRecord>>>,
+}
+
+impl GraphReadAllocation for ThreadPointAllocation {
+    fn bytes(&self) -> usize {
+        self.bytes
+    }
+
+    fn grow(&mut self, bytes: usize) -> Result<()> {
+        self.bytes += bytes;
+        Ok(())
+    }
+
+    fn retain_state(&mut self) -> Result<()> {
+        self.retained.store(true, AtomicOrdering::Release);
+        if self.fail_retention {
+            return Err(HawDBError::Execution("typed retention sentinel".into()));
+        }
+        if let Some(bytes) = self.retained_bytes {
+            self.bytes = bytes;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for ThreadPointAllocation {
+    fn drop(&mut self) {
+        if let Some(page) = &self.page_on_release {
+            assert_eq!(page.strong_count(), 0, "page must drop before its permit");
+        }
+        self.released.store(true, AtomicOrdering::Release);
+    }
+}
+
+#[test]
+fn typed_point_source_preserves_auto_traits_and_cross_thread_release() {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<MaterializedNodePointSource<ThreadPointAllocation>>();
+    let mut store = GraphStore::default();
+    let mut catalog = Catalog::default();
+    let id = store
+        .create_node(
+            &mut catalog,
+            "Item",
+            BTreeMap::from([("text".into(), Value::String("original".into()))]),
+        )
+        .unwrap();
+    let address = std::ptr::from_ref(store.nodes.get(&id).unwrap()) as usize;
+    let page = Arc::downgrade(store.nodes.retained_point_page_preflight(id).unwrap().0);
+    let released = Arc::new(AtomicBool::new(false));
+    let retained = Arc::new(AtomicBool::new(false));
+    let MaterializedNodePointRead::Node(source) = store
+        .materialized_node_point_read_typed(id, |bytes| {
+            Ok(ThreadPointAllocation {
+                bytes,
+                released: Arc::clone(&released),
+                retained: Arc::clone(&retained),
+                fail_retention: false,
+                retained_bytes: None,
+                page_on_release: Some(page.clone()),
+            })
+        })
+        .unwrap()
+    else {
+        panic!("resident typed point must be supported");
+    };
+    assert!(retained.load(AtomicOrdering::Acquire));
+    store.nodes.get_mut(&id).unwrap().properties.clear();
+    drop(store);
+    let observed_release = Arc::clone(&released);
+    std::thread::spawn(move || {
+        let node = source.node().unwrap();
+        assert_eq!(std::ptr::from_ref(node) as usize, address);
+        assert!(matches!(&node.properties["text"], Value::String(text) if text == "original"));
+        assert!(!observed_release.load(AtomicOrdering::Acquire));
+        drop(source);
+        assert!(observed_release.load(AtomicOrdering::Acquire));
+    })
+    .join()
+    .unwrap();
+    assert!(released.load(AtomicOrdering::Acquire));
+}
+
+#[test]
+fn typed_point_admission_validates_before_and_after_retained_transfer() {
+    let mut store = GraphStore::default();
+    let mut catalog = Catalog::default();
+    let id = store
+        .create_node(&mut catalog, "Item", BTreeMap::new())
+        .unwrap();
+    let (page, _) = store.nodes.retained_point_page_preflight(id).unwrap();
+    let owners = Arc::strong_count(page);
+    for (short, fail, shrink, expected) in [
+        (true, false, false, "insufficient allocation permit"),
+        (false, true, false, "typed retention sentinel"),
+        (false, false, true, "lost its allocation permit"),
+    ] {
+        let released = Arc::new(AtomicBool::new(false));
+        let retained = Arc::new(AtomicBool::new(false));
+        let result = store.materialized_node_point_read_typed(id, |bytes| {
+            assert_eq!(Arc::strong_count(page), owners);
+            Ok(ThreadPointAllocation {
+                bytes: if short { 0 } else { bytes },
+                released: Arc::clone(&released),
+                retained: Arc::clone(&retained),
+                fail_retention: fail,
+                retained_bytes: shrink.then_some(0),
+                page_on_release: None,
+            })
+        });
+        assert!(matches!(result, Err(HawDBError::Execution(reason)) if reason.contains(expected)));
+        assert!(released.load(AtomicOrdering::Acquire));
+        assert_eq!(retained.load(AtomicOrdering::Acquire), !short);
+        assert_eq!(Arc::strong_count(page), owners);
+        store.ensure_usable().unwrap();
+    }
+}
