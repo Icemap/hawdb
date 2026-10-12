@@ -795,3 +795,43 @@ The comprehensive gate remains open: unfavorable read/write/tail controls,
 larger-size and current-head cross-language/platform verification, template-byte
 budgets, foreign heaps and whole-operation memory remain unqualified. This
 refinement does not establish Arrow source reuse, graph/FTS or SIMD completion.
+
+
+## Large Linux run and bounded comparison scheduling
+
+The full ordinary run [38172074248](https://github.com/nowledge-co/hawdb/actions/runs/38172074248)
+ended cancelled at its configured six-hour window. Its frozen candidate was
+`c2a98e2a`, and its baseline was `3cdb2610`. The preserved archive contains only
+156 baseline outcomes in 39 groups: 132 successful outcomes and 24 default
+16 MiB result-budget refusals for 100,000-row scans. Reconstructed fixture/job
+hashes and all ten frozen producer hashes match. There is no candidate report,
+no million-row outcome and no qualified comparison group.
+
+The 100,000-row memory point rounds took 584.948-907.756 seconds on the baseline.
+The harness creates an equality index and visits every ID in both warmup and
+measurement. Index creation alone does not verify the runtime plan. These raw
+outcomes remain baseline-only evidence; no speedup is inferred.
+
+The manual comparison accepts `benchmark_layers` and `benchmark_backends` so
+independent groups can finish without sharing a single baseline-first deadline.
+Both drivers receive the same selection, and the manifest records it. Defaults
+remain all three languages, both backends, all three sizes and all five cases.
+A selected group retains the original fixture, all-ID work, one discarded
+iteration, measured sample count, parity checks and frozen producer checks.
+Distinct manual selections have distinct concurrency groups; a dispatch for
+one shard must not cancel another shard. This changes scheduling, not workload.
+
+For example, a 100,000-row Go memory point shard uses:
+
+```sh
+gh workflow run native-bindings.yml --repo nowledge-co/hawdb \
+  --ref feat/978-boundary-baseline -f boundary_comparison=true \
+  -f benchmark_sizes=100000 -f benchmark_cases=point \
+  -f benchmark_layers=go -f benchmark_backends=memory -f benchmark_samples=3
+```
+
+A completed shard qualifies only its recorded groups. Complete acceptance still
+requires all original matrix groups, current source identity, failure/refusal
+retention, and the broader zero-copy, read/write, graph/FTS, tail-latency and
+whole-operation memory gates. This scheduling change does not activate a
+retained point-query implementation or qualify Arrow source reuse.

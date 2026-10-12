@@ -226,6 +226,7 @@ def main():
     parser.add_argument("--sizes", default="1000,100000,1000000")
     parser.add_argument("--cases", default=",".join(matrix.CASES))
     parser.add_argument("--backends", default="memory,file")
+    parser.add_argument("--layers", default="rust,python,go")
     parser.add_argument("--samples", type=int, default=3)
     args = parser.parse_args()
     validate_revision(args.baseline)
@@ -233,6 +234,9 @@ def main():
             or set(args.cases.split(",")) - set(matrix.CASES)
             or set(args.backends.split(",")) - {"memory", "file"}):
         parser.error("positive sizes/samples and known cases/backends are required")
+    layers = args.layers.split(",")
+    if set(layers) - {"rust", "python", "go"} or len(set(layers)) != len(layers):
+        parser.error("known, distinct layers are required")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     evidence = output / "evidence"
@@ -250,9 +254,13 @@ def main():
         producers[name] = build_producer(repository, evidence / (name + "-producer"))
         require_source(repository, sources[name])
     identity = {"sources": sources, "producers": producers, "platform": platform.platform(),
+                "matrix_selection": {"sizes": args.sizes, "cases": args.cases,
+                                     "layers": layers, "backends": args.backends,
+                                     "samples": args.samples},
                 "build": "default Bazel configuration, -c opt", "defaults_changed": False,
                 "ordering": "baseline then candidate; ratios of medians, not alternated pairs",
                 "measurement_limits": ["Process RSS includes fixture/setup/host runtime.",
+                                       "A shard does not establish complete matrix coverage.",
                                        "Ordinary APIs do not use Arrow or retained cursors.",
                                        "Python launcher, package and runtime are copied independently; runfiles hashes are checked before and after each producer matrix.",
                                        "Any refusal/failure prevents a group speedup claim."]}
@@ -268,7 +276,8 @@ def main():
         require_producer(producer)
         arguments = [sys.executable, "-B", str(repository / "bindings/benchmarks/run.py"),
                      "--output", str(evidence / name), "--sizes", args.sizes, "--cases", args.cases,
-                     "--backends", args.backends, "--samples", str(args.samples)]
+                     "--backends", args.backends, "--layers", args.layers,
+                     "--samples", str(args.samples)]
         for flag in ("rust", "python", "go", "library", "python_extension"):
             arguments += ["--" + flag.replace("_", "-"), producer[flag]["path"]]
         with (evidence / (name + "-driver.log")).open("w") as log:

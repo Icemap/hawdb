@@ -30,7 +30,7 @@ def complete_profile(layer):
 
 class DriverTests(unittest.TestCase):
     def matrix(self, native_profiles, supplied_profiles, process_exit=0, read_ns=10,
-               replace_artifact=False):
+               replace_artifact=False, layers="rust,python,go"):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             artifacts = {}
@@ -40,7 +40,8 @@ class DriverTests(unittest.TestCase):
                 artifacts[name] = path
             output = root / "result"
             arguments = ["run.py", "--output", str(output), "--sizes", "2",
-                         "--cases", "select", "--backends", "memory", "--samples", "1"]
+                         "--cases", "select", "--backends", "memory", "--samples", "1",
+                         "--layers", layers]
             for name, path in artifacts.items():
                 arguments.extend(("--" + name, str(path)))
             if native_profiles:
@@ -80,9 +81,32 @@ class DriverTests(unittest.TestCase):
             for command in commands:
                 if pathlib.Path(command[0]).name == "python":
                     self.assertEqual(command[2], str(artifacts["python-extension"].resolve()))
-            self.assertEqual(len(report["records"]), 6)
+            self.assertEqual(len(report["records"]), 2 * len(layers.split(",")))
             self.assertTrue(report["terminal"])
             return status, report
+
+    def test_language_shard_preserves_samples_and_fixture(self):
+        status, report = self.matrix(False, lambda _: None, layers="go")
+        self.assertEqual(status, 0)
+        self.assertEqual(report["layers"], ["go"])
+        self.assertEqual(report["samples"], 1)
+        self.assertEqual(report["discarded_iterations"], 1)
+        self.assertEqual({r["layer"] for r in report["records"]}, {"go"})
+        self.assertEqual([r["iteration"] for r in report["records"]], [0, 1])
+        self.assertEqual([r["discarded"] for r in report["records"]], [True, False])
+        self.assertTrue(all(r["parity"] for r in report["records"]))
+        self.assertEqual(len(report["summaries"]), 1)
+
+    def test_invalid_or_duplicate_layers_refuse_before_execution(self):
+        for layers in ("", "rust,rust", "unknown"):
+            with self.subTest(layers=layers), \
+                    mock.patch.object(sys, "argv", ["run.py", "--output", "unused", "--layers", layers]), \
+                    mock.patch.object(driver, "run_child") as child, \
+                    contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as exit_status:
+                    driver.main()
+                self.assertEqual(exit_status.exception.code, 2)
+                child.assert_not_called()
 
     def test_fixed_ordinary_extension_is_not_instrumentation(self):
         status, report = self.matrix(False, lambda _: None)

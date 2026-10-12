@@ -19,6 +19,14 @@ on:
         description: "Measured iterations, in addition to one discarded iteration"
         type: string
         default: "3"
+      benchmark_layers:
+        description: "Comma-separated language layers; select a shard without changing its workload"
+        type: string
+        default: "rust,python,go"
+      benchmark_backends:
+        description: "Comma-separated storage backends"
+        type: string
+        default: "memory,file"
   pull_request:
     paths:
       - "bindings/ffi/**"
@@ -40,7 +48,7 @@ on:
       - ".github/workflows/native-bindings.yml"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.boundary_comparison }}-${{ inputs.benchmark_sizes }}-${{ inputs.benchmark_cases }}-${{ inputs.benchmark_layers }}-${{ inputs.benchmark_backends }}-${{ inputs.benchmark_samples }}
   cancel-in-progress: true
 
 jobs:
@@ -103,6 +111,8 @@ jobs:
       BENCHMARK_SIZES: ${{ inputs.benchmark_sizes }}
       BENCHMARK_CASES: ${{ inputs.benchmark_cases }}
       BENCHMARK_SAMPLES: ${{ inputs.benchmark_samples }}
+      BENCHMARK_LAYERS: ${{ inputs.benchmark_layers }}
+      BENCHMARK_BACKENDS: ${{ inputs.benchmark_backends }}
     steps:
       - name: Checkout the candidate
         uses: actions/checkout@v7
@@ -126,6 +136,7 @@ jobs:
           python3 -B bindings/benchmarks/compare.py \
             --output "$RUNNER_TEMP/hawdb-boundary-comparison" \
             --sizes "$BENCHMARK_SIZES" --cases "$BENCHMARK_CASES" \
+            --layers "$BENCHMARK_LAYERS" --backends "$BENCHMARK_BACKENDS" \
             --samples "$BENCHMARK_SAMPLES"
 
       - name: Preserve complete or partial evidence, including failed outcomes

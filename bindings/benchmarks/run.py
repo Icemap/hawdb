@@ -145,6 +145,7 @@ def main():
     parser.add_argument("--sizes", default="1000,100000,1000000")
     parser.add_argument("--cases", default=",".join(CASES))
     parser.add_argument("--backends", default="memory,file")
+    parser.add_argument("--layers", default="rust,python,go")
     parser.add_argument("--samples", type=int, default=3)
     parser.add_argument("--rust", type=pathlib.Path, default=ROOT / "bazel-bin/hawdb_bench_host_boundary")
     parser.add_argument("--python", type=pathlib.Path, default=ROOT / "bazel-bin/bindings/benchmarks/python_boundary")
@@ -158,8 +159,11 @@ def main():
     sizes = [int(size) for size in args.sizes.split(",")]
     cases = args.cases.split(",")
     backends = args.backends.split(",")
+    layers = args.layers.split(",")
     if args.samples < 1 or any(size < 1 for size in sizes) or set(cases) - set(CASES) or set(backends) - {"memory", "file"}:
         parser.error("positive sizes/samples and known cases/backends are required")
+    if set(layers) - {"rust", "python", "go"} or len(set(layers)) != len(layers):
+        parser.error("known, distinct layers are required")
     if args.native_profiles and args.python_extension is None:
         parser.error("--native-profiles requires an explicit instrumented --python-extension")
     args.output.mkdir(parents=True, exist_ok=False)
@@ -178,6 +182,7 @@ def main():
     if not args.python_extension.is_file():
         parser.error("build the matching Python extension or pass --python-extension: " + str(args.python_extension))
     commands = {"rust": [str(args.rust)], "python": [str(args.python)], "go": [str(args.go)]}
+    commands = {layer: commands[layer] for layer in layers}
     for path in (args.rust, args.python, args.go, library):
         if not path.is_file():
             parser.error("build the matching benchmark first: " + str(path))
@@ -186,6 +191,7 @@ def main():
     report = {
         "source": identity, "spec": "ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md",
         "seed": SEED, "sizes": sizes, "cases": cases, "backends": backends,
+        "layers": layers,
         "samples": args.samples, "discarded_iterations": 1,
         "os": platform.platform(), "machine": platform.machine(),
         "cpu": command_text("sysctl", "-n", "machdep.cpu.brand_string") if sys.platform == "darwin" else platform.processor(),
@@ -200,6 +206,7 @@ def main():
         "python_extension_sha256": artifacts[str(args.python_extension)],
         "records": [], "summaries": [],
         "measurement_limits": [
+            "A selected layer/backend shard qualifies only its recorded groups; full-matrix acceptance requires complete coverage across shards.",
             "Process peak RSS includes runtime, fixture, setup and query; it is not a query-only allocation ledger.",
             "Allocator observations count Rust requests; Go/Python heaps and non-Rust workspace are separate." if args.native_profiles else "Go allocation counts exclude the native engine; run the separately instrumented matrix for native/Python profiles.",
             "Each iteration opens its own store; seeded read runs measure a warm store, not cold artifact reads.",
