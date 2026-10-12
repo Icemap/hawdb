@@ -518,7 +518,10 @@ fn external_symlink_root_preserves_writer_and_reader_behavior() {
     std::fs::create_dir_all(&target_root).unwrap();
     let _project = ProjectFileDescriptors::acquire(&project_root, 32).unwrap();
     let root = project_root.join("search");
+    #[cfg(unix)]
     std::os::unix::fs::symlink(&target_root, &root).unwrap();
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_dir(&target_root, &root).unwrap();
     assert!(!std::fs::canonicalize(&root)
         .unwrap()
         .starts_with(std::fs::canonicalize(&project_root).unwrap()));

@@ -21,15 +21,17 @@
 //! against the model, so unexpected visible changes cannot silently qualify.
 //! A snapshot survives later handle closure and its additional flushes.
 //!
-//! Qualification currently assumes POSIX file/directory synchronization and
-//! atomic same-directory rename. It does not claim Windows execution coverage.
+//! Qualification assumes completed file/directory barriers preserve bytes/names
+//! and same-directory replacement is atomic. On Windows the directory-flush
+//! assumption is conditional: native execution does not establish filesystem or
+//! device namespace durability. See `docs/BRANCH_POWER_LOSS_QUALIFICATION.md`.
 
 pub mod image;
 
 use crate::file_descriptors::{absolute_path_ref, FileOpenContext, ProjectFileDescriptors};
 use image::{CrashImage, CrashPlan, ImageEngine, ImageLimits, InodeId, UncoveredWrite};
 use std::collections::{BTreeMap, BTreeSet};
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -92,10 +94,10 @@ pub struct PowerLossSnapshot {
 
 impl PowerLossModel {
     pub fn attach(project: &ProjectFileDescriptors, limits: ImageLimits) -> io::Result<Self> {
-        if !cfg!(unix) {
+        if !cfg!(any(unix, windows)) {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
-                "power-loss capture currently requires POSIX synchronization",
+                "power-loss capture requires Unix or Windows native IO",
             ));
         }
         let engine = ImageEngine::new(limits)?;
@@ -388,9 +390,8 @@ fn verify_native_tree(
     let mut native_files = BTreeSet::new();
     let mut native_directories = BTreeSet::new();
     let mut directories = vec![root.to_path_buf()];
-    let mut inode_paths: BTreeMap<InodeId, PathBuf> = BTreeMap::new();
-    #[cfg(unix)]
-    let mut native_inodes = BTreeMap::new();
+    let mut native_by_inode: BTreeMap<InodeId, identity::NativeIdentity> = BTreeMap::new();
+    let mut inode_by_native = BTreeMap::new();
     while let Some(directory) = directories.pop() {
         native_directories.insert(
             directory
@@ -403,10 +404,9 @@ fn verify_native_tree(
         for entry in std::fs::read_dir(directory)? {
             let entry = entry?;
             let path = entry.path();
-            let kind = entry.file_type()?;
-            if kind.is_symlink() {
-                return Err(invalid("symlinks are outside the captured fault model"));
-            }
+            let metadata = entry.metadata()?;
+            identity::require_direct_entry(&metadata)?;
+            let kind = metadata.file_type();
             if kind.is_dir() {
                 directories.push(path);
                 continue;
@@ -422,7 +422,24 @@ fn verify_native_tree(
                 .ok_or_else(|| invalid("native file has no captured IO history"))?;
             let _file_permit =
                 context.acquire(crate::file_descriptors::DescriptorKind::Transient)?;
-            if std::fs::read(&path)?.as_slice() != expected {
+            let mut file = std::fs::File::open(&path)?;
+            let identity = identity::of_file(&file)?;
+            if file.metadata()?.len() != expected.len() as u64 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("uncaptured native length at {}", relative.display()),
+                ));
+            }
+            let mut bytes = Vec::new();
+            // Windows byte-range locks also cover bytes beyond EOF. Empty
+            // lease files need only the handle's identity and length checked;
+            // probing EOF through a second handle would violate their lock.
+            if !expected.is_empty() {
+                file.by_ref()
+                    .take((expected.len() as u64).saturating_add(1))
+                    .read_to_end(&mut bytes)?;
+            }
+            if bytes.as_slice() != expected {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("uncaptured native bytes at {}", relative.display()),
@@ -431,37 +448,35 @@ fn verify_native_tree(
             let inode = image
                 .file_inode(relative)
                 .ok_or_else(|| invalid("captured inode is absent"))?;
-            #[cfg(unix)]
+            if let Some(prior) = inode_by_native.insert(identity, inode)
+                && prior != inode
             {
-                use std::os::unix::fs::MetadataExt;
-                let metadata = entry.metadata()?;
-                if let Some(prior) = native_inodes.insert((metadata.dev(), metadata.ino()), inode)
-                    && prior != inode
-                {
-                    return Err(invalid(
-                        "native hard link has separate captured inode identities",
-                    ));
-                }
+                return Err(invalid(
+                    "native hard link has separate captured inode identities",
+                ));
             }
-            #[cfg(unix)]
-            if let Some(first) = inode_paths.get(&inode) {
-                use std::os::unix::fs::MetadataExt;
-                let first = std::fs::metadata(first)?;
-                let current = entry.metadata()?;
-                if (first.dev(), first.ino()) != (current.dev(), current.ino()) {
-                    return Err(invalid(
-                        "captured hard-link identity differs from native identity",
-                    ));
-                }
+            if let Some(prior) = native_by_inode.insert(inode, identity)
+                && prior != identity
+            {
+                return Err(invalid(
+                    "captured hard-link identity differs from native identity",
+                ));
             }
-            inode_paths.insert(inode, path.clone());
             native_files.insert(relative.to_path_buf());
         }
     }
-    if native_files != image.paths().map(Path::to_path_buf).collect()
-        || native_directories != image.directory_paths().map(Path::to_path_buf).collect()
-    {
-        return Err(invalid("captured namespace differs from native namespace"));
+    let captured_files = image.paths().map(Path::to_path_buf).collect();
+    let captured_directories = image.directory_paths().map(Path::to_path_buf).collect();
+    if native_files != captured_files || native_directories != captured_directories {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "captured namespace differs from native namespace: missing file {:?}, missing directory {:?}, unexpected directory {:?}",
+                captured_files.difference(&native_files).next(),
+                captured_directories.difference(&native_directories).next(),
+                native_directories.difference(&captured_directories).next(),
+            ),
+        ));
     }
     Ok(())
 }
@@ -474,8 +489,9 @@ fn poisoned() -> io::Error {
     invalid("power-loss capture was interrupted while recording IO")
 }
 
+mod identity;
 mod native;
 pub(crate) use native::NativeTrace;
 
-#[cfg(all(test, unix))]
+#[cfg(all(test, any(unix, windows)))]
 mod tests;

@@ -117,6 +117,10 @@ pub enum ImmutableObjectError {
     InvalidSealedRoot {
         source: crate::sealed_root::SealedRootError,
     },
+    ReclamationRoot {
+        root: ObjectReference,
+        source: Box<ImmutableObjectError>,
+    },
     BranchMetadataIncomplete(&'static str),
 }
 
@@ -158,6 +162,11 @@ impl Display for ImmutableObjectError {
                     "sealed root is invalid for reachability: {source}"
                 )
             }
+            Self::ReclamationRoot { root, source } => write!(
+                formatter,
+                "reclamation root {} cannot be verified: {source}",
+                root.sha256
+            ),
             Self::BranchMetadataIncomplete(message) => {
                 write!(
                     formatter,
@@ -173,6 +182,7 @@ impl std::error::Error for ImmutableObjectError {
         match self {
             Self::Io { source, .. } | Self::PublicationUncertain { source } => Some(source),
             Self::InvalidSealedRoot { source } => Some(source),
+            Self::ReclamationRoot { source, .. } => Some(source.as_ref()),
             _ => None,
         }
     }
@@ -467,27 +477,55 @@ impl ImmutableObjectStore {
         inventory: &[ObjectReference],
         roots: &[ObjectReference],
     ) -> Result<ReclamationReport, ImmutableObjectError> {
+        self.reclaim_unreachable_with_evidence(inventory, roots, &Default::default())
+    }
+
+    fn reclaim_unreachable_with_evidence(
+        &mut self,
+        inventory: &[ObjectReference],
+        roots: &[ObjectReference],
+        evidence: &crate::branch_abandonment::QuarantinedObjects,
+    ) -> Result<ReclamationReport, ImmutableObjectError> {
         if self.poisoned {
             return Err(ImmutableObjectError::PublisherPoisoned);
         }
 
         let inventory: BTreeSet<_> = inventory.iter().copied().collect();
         let mut reachable = BTreeSet::new();
-        let mut pending = roots.to_vec();
-        while let Some(reference) = pending.pop() {
+        // Keep the originating root for a failed dependency without changing
+        // the complete-mark-before-sweep boundary or duplicating validation.
+        let mut pending: Vec<_> = roots.iter().copied().enumerate().collect();
+        while let Some((root_index, reference)) = pending.pop() {
             if !reachable.insert(reference) {
                 continue;
             }
-            if reference.kind == ObjectKind::SealedRoot {
-                let bytes = self.read(reference)?;
-                let root = crate::sealed_root::SealedRoot::decode(&bytes)
-                    .map_err(|source| ImmutableObjectError::InvalidSealedRoot { source })?;
-                pending.push(root.durable_manifest);
-                pending.extend(root.checkpoint_references);
-                pending.extend(root.sealed_wals.into_iter().map(|wal| wal.object));
-            } else {
-                self.verify(reference)?;
-            }
+            let validation = (|| {
+                if reference.kind == ObjectKind::SealedRoot {
+                    let bytes = self.read(reference)?;
+                    let sealed = crate::sealed_root::SealedRoot::decode(&bytes)
+                        .map_err(|source| ImmutableObjectError::InvalidSealedRoot { source })?;
+                    pending.push((root_index, sealed.durable_manifest));
+                    pending.extend(
+                        sealed
+                            .checkpoint_references
+                            .into_iter()
+                            .map(|r| (root_index, r)),
+                    );
+                    pending.extend(
+                        sealed
+                            .sealed_wals
+                            .into_iter()
+                            .map(|wal| (root_index, wal.object)),
+                    );
+                } else {
+                    self.verify(reference)?;
+                }
+                Ok(())
+            })();
+            validation.map_err(|source| ImmutableObjectError::ReclamationRoot {
+                root: roots[root_index],
+                source: Box::new(source),
+            })?;
         }
 
         // Verify the complete caller-owned inventory before deleting anything.
@@ -499,6 +537,21 @@ impl ImmutableObjectStore {
                 Err(ImmutableObjectError::Io { source, .. })
                     if source.kind() == io::ErrorKind::NotFound
                         && !reachable.contains(reference) => {}
+                Err(error @ ImmutableObjectError::ExistingObjectCorrupt { .. })
+                | Err(error @ ImmutableObjectError::ReferenceMismatch)
+                    if !reachable.contains(reference) =>
+                {
+                    let preserved =
+                        evidence
+                            .preserves(&self.object_path(*reference))
+                            .map_err(|source| ImmutableObjectError::Io {
+                                operation: "verify quarantined source before reclamation",
+                                source: io::Error::other(source),
+                            })?;
+                    if !preserved {
+                        return Err(error);
+                    }
+                }
                 Err(error) => return Err(error),
             }
         }
@@ -560,6 +613,15 @@ impl ImmutableObjectStore {
         inventory: &BranchReclamationInventory,
         retained_roots: &[ObjectReference],
     ) -> Result<ReclamationReport, ImmutableObjectError> {
+        self.reclaim_branches_with_evidence(inventory, retained_roots, &Default::default())
+    }
+
+    pub(crate) fn reclaim_branches_with_evidence(
+        &mut self,
+        inventory: &BranchReclamationInventory,
+        retained_roots: &[ObjectReference],
+        evidence: &crate::branch_abandonment::QuarantinedObjects,
+    ) -> Result<ReclamationReport, ImmutableObjectError> {
         let mut roots = retained_roots.to_vec();
         for branch in &inventory.branches {
             // A leased creator can still be preparing its first head. The
@@ -591,7 +653,8 @@ impl ImmutableObjectStore {
                 deferred_for_active_leases: true,
             });
         }
-        let mut report = self.reclaim_unreachable(&inventory.objects, &roots)?;
+        let mut report =
+            self.reclaim_unreachable_with_evidence(&inventory.objects, &roots, evidence)?;
         for branch in &inventory.branches {
             if matches!(branch.state, crate::branch_catalog::BranchState::Deleted)
                 && !branch.active_lease

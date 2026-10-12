@@ -23,8 +23,8 @@ use super::{
     branch_lifecycle::{BranchLifecycleError, BranchSelection},
     configure_relational_fast_paths, configure_search_projection_changefeed,
     search_projection_consumer, CascadesOptimizer, Catalog, Database, DatabaseConfig,
-    DurabilityPolicy, GraphStore, LocalQosScheduler, OptimizerPlanningCache, PlanCache, ReaderPins,
-    SharedState, TelemetrySink,
+    DatabaseInstanceIdentity, DurabilityPolicy, GraphStore, LocalQosScheduler,
+    OptimizerPlanningCache, PlanCache, ReaderPins, SharedState, TelemetrySink,
 };
 use crate::error::{HawDBError, Result};
 use hawdb_storage::branch_project::{ProjectMetadata, ProjectSelector};
@@ -63,6 +63,7 @@ pub(super) struct BranchRuntimeCell {
     admitted: OnceLock<Box<AdmittedBranchRuntime>>,
     pending: Option<DeferredBranchAdmission>,
     admission: Mutex<()>,
+    instance_identity: DatabaseInstanceIdentity,
 }
 
 impl BranchRuntimeCell {
@@ -71,6 +72,7 @@ impl BranchRuntimeCell {
             admitted: OnceLock::from(Box::new(runtime)),
             pending: None,
             admission: Mutex::new(()),
+            instance_identity: DatabaseInstanceIdentity::new(),
         }
     }
 
@@ -79,7 +81,12 @@ impl BranchRuntimeCell {
             admitted: OnceLock::new(),
             pending: Some(pending),
             admission: Mutex::new(()),
+            instance_identity: DatabaseInstanceIdentity::new(),
         }
+    }
+
+    pub(super) fn instance_identity(&self) -> DatabaseInstanceIdentity {
+        self.instance_identity.clone()
     }
 
     pub(super) fn get(&self) -> Result<&AdmittedBranchRuntime> {

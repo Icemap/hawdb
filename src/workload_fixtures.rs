@@ -700,7 +700,8 @@ fn error_class(error: &crate::HawDBError) -> String {
         | crate::HawDBError::FileDescriptors(_)
         | crate::HawDBError::StorageIntegrity(_)
         | crate::HawDBError::AppendSequenceExhausted { .. }
-        | crate::HawDBError::BranchBusy { .. } => "storage",
+        | crate::HawDBError::BranchBusy { .. }
+        | crate::HawDBError::BranchReclamationBlocked { .. } => "storage",
         crate::HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",
     }
     .to_string()

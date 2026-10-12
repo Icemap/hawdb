@@ -131,11 +131,13 @@ fn captured_native_clones_preserve_cursor_and_append_semantics() {
     file.write_all(b"abcdef").unwrap();
     let mut clone = file.try_clone().unwrap();
     clone.seek(SeekFrom::Start(2)).unwrap();
-    assert_eq!(
-        file.write_vectored(&[io::IoSlice::new(b"12"), io::IoSlice::new(b"34")])
-            .unwrap(),
-        4
-    );
+    let written = file
+        .write_vectored(&[io::IoSlice::new(b"12"), io::IoSlice::new(b"34")])
+        .unwrap();
+    // Windows may write only the first nonempty slice. Both paths must retain
+    // the shared cursor and record exactly the successful native prefix.
+    assert!((1..=4).contains(&written));
+    file.write_all(&b"1234"[written..]).unwrap();
     let mut append = fs::OpenOptions::new()
         .append(true)
         .open(fixture.root.join("wal"))
@@ -158,10 +160,47 @@ fn captured_native_clones_preserve_cursor_and_append_semantics() {
 }
 
 #[test]
+fn capture_verifies_empty_files_without_releasing_their_exclusive_locks() {
+    let fixture = Fixture::new(ImageLimits::default());
+    let path = fixture.root.join("lease");
+    let lease = fs::File::create(&path).unwrap();
+    lease.lock().unwrap();
+
+    let snapshot = fixture.model.capture().unwrap();
+    let image = snapshot.crash(&snapshot.persist_all_plan()).unwrap();
+    assert_eq!(image.bytes(Path::new("lease")), Some(b"".as_slice()));
+    let contender = fs::OpenOptions::new().write(true).open(&path).unwrap();
+    assert!(matches!(
+        contender.try_lock(),
+        Err(std::fs::TryLockError::WouldBlock)
+    ));
+    drop(contender);
+    drop(lease);
+    assert_eq!(fixture.model.project().metrics().open, 0);
+}
+
+#[test]
+fn capture_rejects_uncaptured_bytes_in_an_expected_empty_locked_file() {
+    let fixture = Fixture::new(ImageLimits::default());
+    let path = fixture.root.join("lease");
+    let lease = fs::File::create(&path).unwrap();
+    std::fs::write(&path, b"uncaptured").unwrap();
+    lease.lock().unwrap();
+
+    let error = fixture.model.capture().unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert!(error
+        .to_string()
+        .contains("uncaptured native length at lease"));
+    drop(lease);
+    assert_eq!(fixture.model.project().metrics().open, 0);
+}
+
+#[test]
 fn capture_rejects_uninstrumented_bytes_and_directory_changes() {
     let fixture = Fixture::new(ImageLimits::default());
     fs::write(fixture.root.join("wal"), b"captured").unwrap();
-    std::fs::write(fixture.root.join("wal"), b"not captured").unwrap();
+    std::fs::write(fixture.root.join("wal"), b"tampered").unwrap();
     assert!(fixture.model.capture().is_err());
     std::fs::write(fixture.root.join("wal"), b"captured").unwrap();
     fixture.model.capture().unwrap();
@@ -188,6 +227,59 @@ fn capture_admission_rejects_before_mutating_native_bytes() {
         .is_err());
     assert_eq!(std::fs::read(fixture.root.join("wal")).unwrap(), b"1234");
     fixture.model.capture().unwrap();
+}
+
+#[test]
+fn native_rename_of_existing_hard_links_matches_the_platform_namespace() {
+    let fixture = Fixture::new(ImageLimits::default());
+    let object_path = fixture.root.join("object");
+    let alias_path = fixture.root.join("alias");
+    let file = fs::File::create(&object_path).unwrap();
+    (&file).write_all(b"durable").unwrap();
+    file.sync_all().unwrap();
+    drop(file);
+    fs::hard_link(&object_path, &alias_path).unwrap();
+    crate::durability::sync_directory(&fixture.root).unwrap();
+
+    fs::rename(&alias_path, &object_path).unwrap();
+    let alias_exists = fs::try_exists(&alias_path).unwrap();
+    eprintln!("native-shared-inode-rename-v1 source_present={alias_exists}");
+    let before_barrier = fixture
+        .model
+        .capture()
+        .unwrap()
+        .crash(&CrashPlan::default())
+        .unwrap();
+    assert_eq!(
+        before_barrier.bytes(Path::new("alias")).unwrap(),
+        b"durable"
+    );
+    assert_eq!(
+        before_barrier.bytes(Path::new("object")).unwrap(),
+        b"durable"
+    );
+
+    crate::durability::sync_directory(&fixture.root).unwrap();
+    let after_barrier = fixture
+        .model
+        .capture()
+        .unwrap()
+        .crash(&CrashPlan::default())
+        .unwrap();
+    assert_eq!(
+        after_barrier.bytes(Path::new("object")).unwrap(),
+        b"durable"
+    );
+    assert_eq!(
+        after_barrier.bytes(Path::new("alias")).is_some(),
+        alias_exists
+    );
+    if alias_exists {
+        assert_eq!(
+            after_barrier.file_inode(Path::new("alias")),
+            after_barrier.file_inode(Path::new("object")),
+        );
+    }
 }
 
 #[test]
@@ -353,4 +445,115 @@ fn completed_kind_name_barrier_is_reused_without_omitting_object_barriers() {
             payload
         );
     }
+}
+
+#[test]
+fn capture_rejects_an_unrecorded_hard_link_between_equal_files() {
+    let fixture = Fixture::new(ImageLimits::default());
+    let first = fixture.root.join("first");
+    let second = fixture.root.join("second");
+    fs::write(&first, b"same bytes").unwrap();
+    fs::write(&second, b"same bytes").unwrap();
+    fixture.model.capture().unwrap();
+
+    std::fs::remove_file(&second).unwrap();
+    std::fs::hard_link(&first, &second).unwrap();
+    let error = fixture.model.capture().unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("native hard link has separate captured inode identities"));
+    std::fs::remove_file(&second).unwrap();
+    std::fs::write(&second, b"same bytes").unwrap();
+    fixture.model.capture().unwrap();
+    assert_eq!(fixture.model.project().metrics().open, 0);
+}
+
+#[test]
+fn capture_rejects_an_unrecorded_copy_replacing_a_hard_link() {
+    let fixture = Fixture::new(ImageLimits::default());
+    let first = fixture.root.join("first");
+    let second = fixture.root.join("second");
+    fs::write(&first, b"same bytes").unwrap();
+    fs::hard_link(&first, &second).unwrap();
+    fixture.model.capture().unwrap();
+
+    std::fs::remove_file(&second).unwrap();
+    std::fs::write(&second, b"same bytes").unwrap();
+    let error = fixture.model.capture().unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("captured hard-link identity differs from native identity"));
+    std::fs::remove_file(&second).unwrap();
+    std::fs::hard_link(&first, &second).unwrap();
+    fixture.model.capture().unwrap();
+    assert_eq!(fixture.model.project().metrics().open, 0);
+}
+
+#[test]
+fn observations_capture_native_directory_barriers_at_the_named_cut() {
+    for boundary in [ObservationBoundary::Before, ObservationBoundary::After] {
+        let fixture = Fixture::new(ImageLimits::default());
+        let directory = fixture.root.join("directory");
+        fs::create_dir(&directory).unwrap();
+        crate::durability::sync_directory(&fixture.root).unwrap();
+        let file = fs::File::create(directory.join("wal")).unwrap();
+        (&file).write_all(b"durable bytes, pending name").unwrap();
+        file.sync_all().unwrap();
+        fixture
+            .model
+            .observe(ObservationPoint {
+                event: IoEvent::DirectorySync,
+                relative_path: PathBuf::from("directory"),
+                boundary,
+                skip_matches: 0,
+                include_descendants: false,
+                keep_last: false,
+            })
+            .unwrap();
+        crate::durability::sync_directory(&directory).unwrap();
+        let snapshot = fixture.model.take_observation().unwrap().unwrap();
+        fixture.model.capture().unwrap();
+        let image = snapshot.crash(&CrashPlan::default()).unwrap();
+        assert_eq!(
+            image.bytes(Path::new("directory/wal")),
+            match boundary {
+                ObservationBoundary::Before => None,
+                ObservationBoundary::After => Some(b"durable bytes, pending name".as_slice()),
+            }
+        );
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn directory_capture_flags_never_hide_an_opaque_open_option() {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
+    const GENERIC_READ: u32 = 0x8000_0000;
+    let fixture = Fixture::new(ImageLimits::default());
+    for opaque_first in [false, true] {
+        let mut options = fs::OpenOptions::new();
+        options.read(true);
+        if opaque_first {
+            options.access_mode(GENERIC_READ);
+        }
+        options.custom_flags(FILE_FLAG_BACKUP_SEMANTICS);
+        if !opaque_first {
+            options.access_mode(GENERIC_READ);
+        }
+        let error = options.open(&fixture.root).unwrap_err();
+        assert!(error.to_string().contains("custom native open flags"));
+    }
+    let candidate = fixture.root.join("uncaptured");
+    let error = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .custom_flags(FILE_FLAG_DELETE_ON_CLOSE | FILE_FLAG_BACKUP_SEMANTICS)
+        .open(&candidate)
+        .unwrap_err();
+    assert!(error.to_string().contains("custom native open flags"));
+    assert!(!candidate.exists());
+    fixture.model.capture().unwrap();
+    assert_eq!(fixture.model.project().metrics().open, 0);
 }

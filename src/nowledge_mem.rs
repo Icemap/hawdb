@@ -2273,6 +2273,7 @@ pub struct NowledgeMemEmbeddedStoreHandle {
 
 #[derive(Debug)]
 struct PublishedCanonicalRead {
+    instance_identity: crate::DatabaseInstanceIdentity,
     snapshot: crate::api::DatabaseReadSnapshot,
     governor: RuntimeGovernor,
 }
@@ -2280,6 +2281,7 @@ struct PublishedCanonicalRead {
 impl PublishedCanonicalRead {
     fn capture(store: &NowledgeMemEmbeddedStore) -> Result<Self> {
         Ok(Self {
+            instance_identity: store.graph.database().instance_identity()?,
             snapshot: store.graph.database().read_snapshot()?,
             governor: store.graph.runtime_governor().clone(),
         })
@@ -2340,6 +2342,7 @@ impl Drop for EmbeddedStoreWriteGuard<'_> {
 }
 
 pub struct NowledgeMemReadSnapshot<'a> {
+    instance_identity: crate::DatabaseInstanceIdentity,
     transaction: crate::DatabaseReadTransaction,
     external: SearchProjectionExternalReadOperator<'a>,
     search_projection_source_graph_commit_epoch: Option<u64>,
@@ -2355,6 +2358,7 @@ pub struct NowledgeMemReadSnapshot<'a> {
 impl<'a> NowledgeMemReadSnapshot<'a> {
     fn new(
         transaction: crate::DatabaseReadTransaction,
+        instance_identity: crate::DatabaseInstanceIdentity,
         budget: NowledgeMemReadSnapshotBudget,
         projection: Option<&'a NowledgeMemSearchProjection>,
         out_of_core_projection: Option<&'a NowledgeMemOutOfCoreSearchProjection>,
@@ -2367,6 +2371,7 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
         };
         Self {
             transaction,
+            instance_identity,
             external: SearchProjectionExternalReadOperator {
                 projection,
                 out_of_core_projection,
@@ -2389,6 +2394,11 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
 
     pub fn commit_epoch(&self) -> u64 {
         self.transaction.commit_epoch()
+    }
+
+    /// Identity of the database supplying this exact immutable read view.
+    pub fn database_instance_identity(&self) -> &crate::DatabaseInstanceIdentity {
+        &self.instance_identity
     }
 
     pub fn query_cypher(
@@ -2986,13 +2996,15 @@ impl NowledgeMemEmbeddedStoreHandle {
             ));
         }
         if !pin_projection {
-            let (_permit, transaction) = self.canonical_read_transaction_with_context(
-                budget.max_payload_bytes,
-                Some(budget.max_rows),
-                task_context,
-            )?;
+            let (_permit, transaction, instance_identity) = self
+                .canonical_read_transaction_with_instance(
+                    budget.max_payload_bytes,
+                    Some(budget.max_rows),
+                    task_context,
+                )?;
             let mut snapshot = NowledgeMemReadSnapshot::new(
                 transaction,
+                instance_identity,
                 budget,
                 None,
                 None,
@@ -3026,6 +3038,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             .begin_read_transaction_with_context(&task_context)?;
         let mut snapshot = NowledgeMemReadSnapshot::new(
             transaction,
+            store.graph.database().instance_identity()?,
             budget,
             store.search_projection.as_ref(),
             store.out_of_core_search_projection.as_ref(),
@@ -3288,6 +3301,11 @@ impl NowledgeMemEmbeddedStoreHandle {
 
     pub fn runtime_status(&self) -> Result<NowledgeMemRuntimeStatus> {
         self.read_store()?.runtime_status()
+    }
+
+    /// Current admitted database instance; does not retain a target fence.
+    pub fn database_instance_identity(&self) -> Result<crate::DatabaseInstanceIdentity> {
+        self.read_store()?.graph.database().instance_identity()
     }
 
     pub fn production_resource_profile(
@@ -3625,6 +3643,24 @@ impl NowledgeMemEmbeddedStoreHandle {
         max_rows: Option<usize>,
         task_context: &RuntimeTaskContext,
     ) -> Result<(RuntimePermit, crate::DatabaseReadTransaction)> {
+        self.canonical_read_transaction_with_instance(
+            max_estimated_payload_bytes,
+            max_rows,
+            task_context,
+        )
+        .map(|(permit, transaction, _)| (permit, transaction))
+    }
+
+    fn canonical_read_transaction_with_instance(
+        &self,
+        max_estimated_payload_bytes: usize,
+        max_rows: Option<usize>,
+        task_context: &RuntimeTaskContext,
+    ) -> Result<(
+        RuntimePermit,
+        crate::DatabaseReadTransaction,
+        crate::DatabaseInstanceIdentity,
+    )> {
         // Admission emits host telemetry. Never invoke it while holding the
         // publication lock: a sink may reenter the embedded handle.
         let (governor, request) = {
@@ -3666,7 +3702,7 @@ impl NowledgeMemEmbeddedStoreHandle {
         }
         let task_context = permit.bind_task_context(task_context.clone());
         let transaction = published.snapshot.begin_read_transaction(&task_context)?;
-        Ok((permit, transaction))
+        Ok((permit, transaction, published.instance_identity.clone()))
     }
 
     fn finish_canonical_read<T>(&self, result: Result<T>) -> Result<T> {

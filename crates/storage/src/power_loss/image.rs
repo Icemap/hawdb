@@ -253,9 +253,9 @@ impl ImageEngine {
             .current_directory(destination_parent)?
             .get(&destination_name)
         {
-            // POSIX rename is a no-op when both names already link the same
-            // inode; removing the source would invent a namespace mutation.
-            if *existing == inode {
+            // POSIX preserves both hard-link names; Windows removes the source
+            // name even when the destination already names the same file.
+            if *existing == inode && !cfg!(windows) {
                 return Ok(());
             }
             if self.is_directory(*existing) != self.is_directory(inode)
@@ -729,7 +729,7 @@ mod tests {
     }
 
     #[test]
-    fn renaming_existing_hard_links_is_a_noop_and_empty_writes_do_not_extend_files() {
+    fn renaming_existing_hard_links_preserves_bytes_and_models_native_namespace() {
         let mut engine = ImageEngine::new(ImageLimits::default()).unwrap();
         let inode = durable_file(&mut engine, "object", b"durable");
         engine
@@ -740,11 +740,18 @@ mod tests {
         engine
             .rename(Path::new("alias"), Path::new("object"))
             .unwrap();
-        assert_eq!(engine.persist_all_plan(), before);
-        assert_eq!(engine.inode(Path::new("alias")).unwrap(), inode);
+        if cfg!(windows) {
+            assert!(engine.inode(Path::new("alias")).is_err());
+            assert_eq!(engine.pending_operations().len(), 1);
+        } else {
+            assert_eq!(engine.persist_all_plan(), before);
+            assert_eq!(engine.inode(Path::new("alias")).unwrap(), inode);
+        }
+        assert_eq!(engine.inode(Path::new("object")).unwrap(), inode);
+        let after_rename = engine.persist_all_plan();
         assert!(engine.write(inode, u64::MAX, &[]).is_err());
         assert_eq!(engine.current_bytes(inode).unwrap(), b"durable");
-        assert_eq!(engine.persist_all_plan(), before);
+        assert_eq!(engine.persist_all_plan(), after_rename);
         assert!(engine.create_file(Path::new(&"x".repeat(256))).is_err());
     }
 
