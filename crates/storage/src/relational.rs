@@ -1360,9 +1360,12 @@ const RELATIONAL_ROW_PAGE_TARGET_BYTES: usize = 1024 * 1024;
 ///
 /// A relational snapshot shares every page. A mutation clones only the page
 /// containing the affected primary key instead of cloning the entire table.
+type RelationalRowPage = crate::cow::CowSegment<BTreeMap<RelationalKey, RelationalRow>>;
+type RelationalRowDirectory = crate::cow::CowSegment<Vec<RelationalRowPage>>;
+
 #[derive(Debug, Clone, Default)]
 struct RelationalRowPages {
-    pages: Arc<Vec<Arc<BTreeMap<RelationalKey, RelationalRow>>>>,
+    pages: RelationalRowDirectory,
     len: usize,
 }
 
@@ -1378,17 +1381,17 @@ impl RelationalRowPages {
                 && (page.len() >= RELATIONAL_ROW_PAGE_MAX_ENTRIES
                     || page_bytes.saturating_add(entry_bytes) > RELATIONAL_ROW_PAGE_TARGET_BYTES)
             {
-                pages.push(Arc::new(std::mem::take(&mut page)));
+                pages.push(crate::cow::CowSegment::from(std::mem::take(&mut page)));
                 page_bytes = 0;
             }
             page_bytes = page_bytes.saturating_add(entry_bytes);
             page.insert(key, row);
         }
         if !page.is_empty() {
-            pages.push(Arc::new(page));
+            pages.push(crate::cow::CowSegment::from(page));
         }
         Self {
-            pages: Arc::new(pages),
+            pages: pages.into(),
             len,
         }
     }
@@ -1431,9 +1434,9 @@ impl RelationalRowPages {
     }
 
     fn append_value_to_all(&mut self, value: &RelationalValue) {
-        let pages = Arc::make_mut(&mut self.pages);
+        let pages = &mut *self.pages;
         for page in pages {
-            for row in Arc::make_mut(page).values_mut() {
+            for row in page.values_mut() {
                 let mut values = row.values().to_vec();
                 values.push(value.clone());
                 *row = RelationalRow::new(values);
@@ -1443,15 +1446,15 @@ impl RelationalRowPages {
 
     fn insert(&mut self, key: RelationalKey, row: RelationalRow) -> Option<RelationalRow> {
         if self.pages.is_empty() {
-            self.pages = Arc::new(vec![Arc::new(BTreeMap::from([(key, row)]))]);
+            self.pages = vec![crate::cow::CowSegment::from(BTreeMap::from([(key, row)]))].into();
             self.len = 1;
             return None;
         }
         let index = self
             .page_index(&key)
             .expect("non-empty relational row pages have a target page");
-        let pages = Arc::make_mut(&mut self.pages);
-        let previous = Arc::make_mut(&mut pages[index]).insert(key, row);
+        let pages = &mut *self.pages;
+        let previous = pages[index].insert(key, row);
         if previous.is_none() {
             self.len = self.len.saturating_add(1);
         }
@@ -1464,8 +1467,8 @@ impl RelationalRowPages {
         if !self.pages[index].contains_key(key) {
             return None;
         }
-        let pages = Arc::make_mut(&mut self.pages);
-        let removed = Arc::make_mut(&mut pages[index]).remove(key);
+        let pages = &mut *self.pages;
+        let removed = pages[index].remove(key);
         if removed.is_some() {
             self.len = self.len.saturating_sub(1);
             if pages[index].is_empty() {
@@ -1484,7 +1487,12 @@ impl RelationalRowPages {
     fn shared_page_count(&self, other: &Self) -> usize {
         self.pages
             .iter()
-            .filter(|left| other.pages.iter().any(|right| Arc::ptr_eq(left, right)))
+            .filter(|left| {
+                other
+                    .pages
+                    .iter()
+                    .any(|right| left.shares_storage_with(right))
+            })
             .count()
     }
 }
@@ -1561,11 +1569,8 @@ fn relational_replay_access_resident_bytes_parts(
         .checked_add(key_payload_bytes)
 }
 
-fn split_relational_row_page(
-    pages: &mut Vec<Arc<BTreeMap<RelationalKey, RelationalRow>>>,
-    index: usize,
-) {
-    let page = Arc::make_mut(&mut pages[index]);
+fn split_relational_row_page(pages: &mut Vec<RelationalRowPage>, index: usize) {
+    let page = &mut *pages[index];
     let page_bytes = page
         .iter()
         .map(|(key, row)| relational_row_entry_bytes(key, row))
@@ -1582,7 +1587,7 @@ fn split_relational_row_page(
         .cloned()
         .expect("oversized relational row page is non-empty");
     let right = page.split_off(&split_key);
-    pages.insert(index + 1, Arc::new(right));
+    pages.insert(index + 1, right.into());
 }
 
 const RELATIONAL_INDEX_PAGE_MAX_KEYS: usize = 256;
@@ -3532,10 +3537,7 @@ impl RelationalState {
                         .reserve(
                             std::mem::size_of::<RelationalTableSegment>()
                                 + 2 * std::mem::size_of::<usize>()
-                                + std::mem::size_of::<
-                                    Vec<Arc<BTreeMap<RelationalKey, RelationalRow>>>,
-                                >()
-                                + 2 * std::mem::size_of::<usize>(),
+                                + RelationalRowDirectory::checkpoint_ownership_bytes(),
                         )
                         .map_err(admission)?;
                     (
@@ -3664,34 +3666,37 @@ impl RelationalState {
                         .vector_capacity(directory_capacity)
                         .map_err(admission)?;
                     context
-                        .reserve(
-                            std::mem::size_of::<Vec<Arc<BTreeMap<RelationalKey, RelationalRow>>>>()
-                                + 2 * std::mem::size_of::<usize>(),
-                        )
+                        .reserve(RelationalRowDirectory::checkpoint_ownership_bytes())
                         .map_err(admission)?;
-                    segment.rows.pages = Arc::new(pages);
+                    segment.rows.pages = pages.into();
                 }
                 if new_page {
                     context
-                        .reserve(
-                            std::mem::size_of::<BTreeMap<RelationalKey, RelationalRow>>()
-                                + 2 * std::mem::size_of::<usize>(),
-                        )
+                        .reserve(RelationalRowPage::checkpoint_ownership_bytes())
                         .map_err(admission)?;
                     let unit = context
                         .start_unit()
                         .map_err(|error| RelationalError::Admission(error.to_string()))?;
-                    Arc::get_mut(&mut segment.rows.pages)
+                    segment
+                        .rows
+                        .pages
+                        .get_unique_mut()
                         .expect("private sparse directory")
-                        .push(Arc::new(BTreeMap::new()));
+                        .push(BTreeMap::new().into());
                     unit.finish();
                 }
                 let unit = context
                     .start_unit()
                     .map_err(|error| RelationalError::Admission(error.to_string()))?;
-                let pages =
-                    Arc::get_mut(&mut segment.rows.pages).expect("private sparse directory");
-                let replaced = Arc::get_mut(pages.last_mut().expect("sparse row page"))
+                let pages = segment
+                    .rows
+                    .pages
+                    .get_unique_mut()
+                    .expect("private sparse directory");
+                let replaced = pages
+                    .last_mut()
+                    .expect("sparse row page")
+                    .get_unique_mut()
                     .expect("private sparse row page")
                     .insert(hydrated.primary_key, row);
                 if replaced.is_none() {

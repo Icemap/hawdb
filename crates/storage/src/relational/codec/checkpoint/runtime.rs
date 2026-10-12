@@ -121,7 +121,7 @@ pub(crate) fn row_pages(
             && (page.len() >= RELATIONAL_ROW_PAGE_MAX_ENTRIES
                 || page_bytes.saturating_add(entry_bytes) > RELATIONAL_ROW_PAGE_TARGET_BYTES)
         {
-            pages.push(Arc::new(std::mem::take(&mut page)));
+            pages.push(crate::cow::CowSegment::from(std::mem::take(&mut page)));
             page_bytes = 0;
         }
         page_bytes = page_bytes.saturating_add(entry_bytes);
@@ -130,10 +130,10 @@ pub(crate) fn row_pages(
     }
     let unit = work.start_unit().map_err(work_error)?;
     if !page.is_empty() {
-        pages.push(Arc::new(page));
+        pages.push(crate::cow::CowSegment::from(page));
     }
     let result = RelationalRowPages {
-        pages: Arc::new(pages),
+        pages: pages.into(),
         len,
     };
     unit.finish();

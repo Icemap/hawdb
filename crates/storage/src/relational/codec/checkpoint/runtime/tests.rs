@@ -186,10 +186,10 @@ fn checkpoint_units_relational_runtime_rebuilds_all_postings_and_bidirectional_r
     }
     validate_foreign_keys(&actual, &work).unwrap();
     assert_complete(&source, &actual);
-    assert!(Arc::ptr_eq(
-        &actual.segments["children"].rows.pages,
-        &source.segments["children"].rows.pages
-    ));
+    assert!(actual.segments["children"]
+        .rows
+        .pages
+        .shares_storage_with(&source.segments["children"].rows.pages));
     let child = &actual.segments["children"];
     assert!(child.indexes["group_id"].pages.len() > 1);
     let group = &child.indexes["group"];

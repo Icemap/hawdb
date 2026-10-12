@@ -99,6 +99,10 @@ impl<T: Clone> DerefMut for CowSegment<T> {
 
 #[doc(hidden)]
 impl<T> CowSegment<T> {
+    pub(crate) fn get_unique_mut(&mut self) -> Option<&mut T> {
+        Arc::get_mut(&mut self.0).map(|data| &mut data.value)
+    }
+
     pub(crate) fn checkpoint_ownership_bytes() -> usize {
         std::mem::size_of::<CowData<T>>() + 2 * std::mem::size_of::<usize>()
     }
