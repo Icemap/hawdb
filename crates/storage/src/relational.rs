@@ -6409,13 +6409,27 @@ fn apply_update(
         .segments
         .get(table)
         .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
+    let match_context =
+        checkpoint_allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
     let mut matched = Vec::new();
     for (key, row) in segment.rows.iter() {
         if let Some(tracker) = replay_access_tracker.as_deref_mut() {
             tracker.record(table, key)?;
         }
         if predicate_truth(&schema, row, predicate)? == Some(true) {
-            matched.push((key.clone(), row.clone()));
+            let matched_key = match &match_context {
+                Some(context) => key.clone_with_allocations(context)?,
+                None => key.clone(),
+            };
+            match &match_context {
+                Some(context) => context
+                    .push(&mut matched, (matched_key, row.clone()))
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?,
+                None => matched.push((matched_key, row.clone())),
+            }
             if matched.len() > limits.max_rows.get() {
                 return Err(RelationalError::Admission(format!(
                     "relational UPDATE affects more than max_rows {}",
@@ -6429,7 +6443,17 @@ fn apply_update(
         &schema.primary_key,
         assignment_context.as_ref(),
     )?;
-    let mut updates = Vec::with_capacity(matched.len());
+    let update_context =
+        checkpoint_allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
+    let mut updates = match &update_context {
+        Some(context) => context
+            .vector_capacity(matched.len())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?,
+        None => Vec::with_capacity(matched.len()),
+    };
     for (old_key, row) in &matched {
         let replacement_context =
             checkpoint_allocations.map(|context| crate::background::CheckpointDecodeContext {
@@ -6478,7 +6502,19 @@ fn apply_update(
         overflow::externalize_row(state, &schema, &mut updated, overflow_config)?;
         let new_key =
             row_key_with_allocations(&updated, &primary_key_positions, checkpoint_allocations)?;
-        updates.push((old_key.clone(), new_key, updated));
+        let retained_old_key = match &update_context {
+            Some(context) => old_key.clone_with_allocations(context)?,
+            None => old_key.clone(),
+        };
+        let unit = update_context
+            .as_ref()
+            .map(|context| context.start_unit())
+            .transpose()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        updates.push((retained_old_key, new_key, updated));
+        if let Some(unit) = unit {
+            unit.finish();
+        }
     }
     let segment = state
         .segments
