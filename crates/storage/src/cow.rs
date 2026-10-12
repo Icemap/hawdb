@@ -99,6 +99,21 @@ impl<T: Clone> DerefMut for CowSegment<T> {
 
 #[doc(hidden)]
 impl<T> CowSegment<T> {
+    pub(crate) fn checkpoint_ownership_bytes() -> usize {
+        std::mem::size_of::<CowData<T>>() + 2 * std::mem::size_of::<usize>()
+    }
+
+    pub(crate) fn from_checkpoint_value(
+        value: T,
+        memory: crate::background::CheckpointAllocationOwner,
+    ) -> Self {
+        Self(Arc::new(CowData {
+            value,
+            growth: None,
+            _memory: memory,
+        }))
+    }
+
     pub fn shares_storage_with(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }

@@ -1294,7 +1294,7 @@ impl GraphStore {
                             .hydrate_sparse_relational_recovery_access(replay_access, row_limits)?,
                     };
                     self.relational_state
-                        .stage_sparse_transaction_for_authoritative_recovery_with_replay_access(
+                        .stage_sparse_transaction_for_authoritative_recovery_with_allocations(
                             RelationalSparseRecoveryStage {
                                 transaction,
                                 hydrated_access,
@@ -1304,6 +1304,7 @@ impl GraphStore {
                                 row_capture_limits: row_limits,
                                 expected_replay_access: replay_access,
                             },
+                            allocations.as_ref(),
                         )?
                 } else {
                     self.relational_state

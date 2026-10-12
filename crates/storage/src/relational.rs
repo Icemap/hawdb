@@ -1895,7 +1895,7 @@ impl<'a> RelationalIndexPosting<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RelationalState {
     schemas: BTreeMap<String, Arc<RelationalTableSchema>>,
     segments: BTreeMap<String, Arc<RelationalTableSegment>>,
@@ -1903,9 +1903,27 @@ pub struct RelationalState {
     materialized_index_postings_resident: bool,
     materialized_rows_resident: bool,
     canonical_row_metadata_only: bool,
-    detached_row_counts: Arc<BTreeMap<String, usize>>,
+    detached_row_counts: crate::cow::CowSegment<BTreeMap<String, usize>>,
     detached_total_row_count: usize,
     detached_row_bytes: u64,
+    _metadata_memory: crate::background::CheckpointAllocationOwner,
+}
+
+impl Clone for RelationalState {
+    fn clone(&self) -> Self {
+        Self {
+            schemas: self.schemas.clone(),
+            segments: self.segments.clone(),
+            overflow_segments: self.overflow_segments.clone(),
+            materialized_index_postings_resident: self.materialized_index_postings_resident,
+            materialized_rows_resident: self.materialized_rows_resident,
+            canonical_row_metadata_only: self.canonical_row_metadata_only,
+            detached_row_counts: self.detached_row_counts.clone(),
+            detached_total_row_count: self.detached_total_row_count,
+            detached_row_bytes: self.detached_row_bytes,
+            _metadata_memory: Default::default(),
+        }
+    }
 }
 
 impl Default for RelationalState {
@@ -1917,9 +1935,10 @@ impl Default for RelationalState {
             materialized_index_postings_resident: true,
             materialized_rows_resident: true,
             canonical_row_metadata_only: false,
-            detached_row_counts: Arc::new(BTreeMap::new()),
+            detached_row_counts: BTreeMap::new().into(),
             detached_total_row_count: 0,
             detached_row_bytes: 0,
+            _metadata_memory: Default::default(),
         }
     }
 }
@@ -2000,6 +2019,104 @@ impl AsRef<[u8]> for RelationalOverflowRead<'_> {
 }
 
 impl RelationalState {
+    pub(crate) fn clone_metadata_with_work_context(
+        &self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Self, RelationalError> {
+        let admission =
+            |error: hawdb_core::HawDBError| RelationalError::Admission(error.to_string());
+        let allocations = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        fn reserve_tree<K, V>(
+            len: usize,
+            context: &crate::background::CheckpointDecodeContext,
+        ) -> Result<(), RelationalError> {
+            if len == 0 {
+                return Ok(());
+            }
+            let bytes = (len / 4 + 2)
+                .checked_mul(crate::cow::checkpoint_tree_node_bytes::<K, V>())
+                .ok_or_else(|| {
+                    RelationalError::Admission("relational metadata tree capacity overflow".into())
+                })?;
+            context
+                .reserve(bytes)
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            Ok(())
+        }
+        reserve_tree::<String, Arc<RelationalTableSchema>>(self.schemas.len(), &allocations)?;
+        reserve_tree::<String, Arc<RelationalTableSegment>>(self.segments.len(), &allocations)?;
+        reserve_tree::<Sha256Digest, RelationalOverflowSegment>(
+            self.overflow_segments.len(),
+            &allocations,
+        )?;
+        let count_allocations = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        reserve_tree::<String, usize>(self.detached_row_counts.len(), &count_allocations)?;
+        count_allocations
+            .reserve(
+                crate::cow::CowSegment::<BTreeMap<String, usize>>::checkpoint_ownership_bytes(),
+            )
+            .map_err(admission)?;
+        let mut row_counts = BTreeMap::new();
+        for (name, count) in self.detached_row_counts.iter() {
+            let name = count_allocations.string(name).map_err(admission)?;
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            row_counts.insert(name, *count);
+            unit.finish();
+        }
+        let detached_row_counts = crate::cow::CowSegment::from_checkpoint_value(
+            row_counts,
+            count_allocations.memory.into_inner(),
+        );
+        let mut schemas = BTreeMap::new();
+        let mut segments = BTreeMap::new();
+        let mut overflow_segments = BTreeMap::new();
+        for (name, schema) in &self.schemas {
+            let name = allocations.string(name).map_err(admission)?;
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            schemas.insert(name, schema.clone());
+            unit.finish();
+        }
+        for (name, segment) in &self.segments {
+            let name = allocations.string(name).map_err(admission)?;
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            segments.insert(name, segment.clone());
+            unit.finish();
+        }
+        for (digest, segment) in &self.overflow_segments {
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            overflow_segments.insert(*digest, segment.clone());
+            unit.finish();
+        }
+        work.checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        Ok(Self {
+            schemas,
+            segments,
+            overflow_segments,
+            materialized_index_postings_resident: self.materialized_index_postings_resident,
+            materialized_rows_resident: self.materialized_rows_resident,
+            canonical_row_metadata_only: self.canonical_row_metadata_only,
+            detached_row_counts,
+            detached_total_row_count: self.detached_total_row_count,
+            detached_row_bytes: self.detached_row_bytes,
+            _metadata_memory: allocations.memory.into_inner(),
+        })
+    }
+
     pub fn is_empty(&self) -> bool {
         self.schemas.is_empty()
     }
@@ -2052,7 +2169,7 @@ impl RelationalState {
             .collect::<BTreeMap<_, _>>();
         self.detached_total_row_count = counts.values().copied().sum();
         self.detached_row_bytes = self.estimated_materialized_row_bytes();
-        self.detached_row_counts = Arc::new(counts);
+        self.detached_row_counts = counts.into();
         for segment in self.segments.values_mut() {
             *segment = Arc::new(RelationalTableSegment::default());
         }
@@ -2131,9 +2248,10 @@ impl RelationalState {
             materialized_index_postings_resident: false,
             materialized_rows_resident: false,
             canonical_row_metadata_only: true,
-            detached_row_counts: Arc::new(row_counts),
+            detached_row_counts: row_counts.into(),
             detached_total_row_count: total_rows,
             detached_row_bytes: manifest.page_artifact.encoded_len,
+            _metadata_memory: Default::default(),
         })
     }
 
@@ -2181,7 +2299,7 @@ impl RelationalState {
             ));
         }
         self.detached_total_row_count = total;
-        self.detached_row_counts = Arc::new(counts);
+        self.detached_row_counts = counts.into();
         Ok(())
     }
 
@@ -2881,6 +2999,21 @@ impl RelationalState {
         ),
         RelationalError,
     > {
+        self.stage_sparse_transaction_for_authoritative_recovery_with_allocations(stage, None)
+    }
+
+    pub(crate) fn stage_sparse_transaction_for_authoritative_recovery_with_allocations(
+        &self,
+        stage: RelationalSparseRecoveryStage<'_>,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<
+        (
+            Self,
+            RelationalIndexChangeCapture,
+            RelationalRowChangeCapture,
+        ),
+        RelationalError,
+    > {
         let RelationalSparseRecoveryStage {
             transaction,
             hydrated_access,
@@ -2904,7 +3037,11 @@ impl RelationalState {
                 row_capture_limits,
                 expected_replay_access,
             )?;
-        let metadata = self.merge_sparse_recovery_workspace(&workspace, &staged)?;
+        let metadata = self.merge_sparse_recovery_workspace_with_work_context(
+            &workspace,
+            &staged,
+            allocations.map(|context| &context.work),
+        )?;
         Ok((metadata, index_capture, row_capture))
     }
 
@@ -3397,9 +3534,10 @@ impl RelationalState {
                 materialized_index_postings_resident: false,
                 materialized_rows_resident: true,
                 canonical_row_metadata_only: false,
-                detached_row_counts: Arc::new(BTreeMap::new()),
+                detached_row_counts: BTreeMap::new().into(),
                 detached_total_row_count: 0,
                 detached_row_bytes: 0,
+                _metadata_memory: Default::default(),
             },
             supplied_access,
         ))
@@ -3578,6 +3716,15 @@ impl RelationalState {
         before: &RelationalState,
         after: &RelationalState,
     ) -> Result<Self, RelationalError> {
+        self.merge_sparse_recovery_workspace_with_work_context(before, after, None)
+    }
+
+    fn merge_sparse_recovery_workspace_with_work_context(
+        &self,
+        before: &RelationalState,
+        after: &RelationalState,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<Self, RelationalError> {
         if self.materialized_rows_resident
             || !self.canonical_row_metadata_only
             || !before.materialized_rows_resident
@@ -3589,8 +3736,11 @@ impl RelationalState {
                 "invalid sparse relational recovery workspace merge".to_string(),
             ));
         }
-        let mut metadata = self.clone();
-        let counts = Arc::make_mut(&mut metadata.detached_row_counts);
+        let mut metadata = match work {
+            Some(work) => self.clone_metadata_with_work_context(work)?,
+            None => self.clone(),
+        };
+        let counts = &mut *metadata.detached_row_counts;
         for table in self.schemas.keys() {
             let before_count = before
                 .segments

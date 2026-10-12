@@ -288,3 +288,145 @@ fn planning_preserves_resident_detached_and_file_backed_overflow_terms() {
     drop(decoded);
     std::fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn controlled_metadata_clone_denies_wide_names_and_keeps_shared_count_ownership() {
+    use crate::background::CheckpointWorkContext;
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let name = "t".repeat(128 * 1024);
+    let mut transaction = create_upsert_table();
+    let RelationalWrite::CreateTable(schema) = &mut transaction.writes[0] else {
+        panic!("fixture schema");
+    };
+    schema.name = name.clone();
+    let mut source = RelationalState::default()
+        .stage_transaction(
+            transaction,
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    source.omit_materialized_rows();
+    assert!(!source.materialized_rows_resident());
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let cloned = source.clone_metadata_with_work_context(&work);
+        let wide_allocations = observer.finish();
+        if succeeds {
+            let mut cloned = cloned.unwrap();
+            for _ in 0..32 {
+                cloned = cloned.clone_metadata_with_work_context(&work).unwrap();
+                assert!(
+                    matches!(work.task_context().reserve_working_memory(ceiling),
+                    Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes > ceiling - 448 * 1024)
+                );
+            }
+            assert_eq!(cloned.table_schema(&name), source.table_schema(&name));
+            assert_eq!(cloned.row_count(&name), 0);
+            assert!(!cloned
+                .detached_row_counts
+                .shares_storage_with(&source.detached_row_counts));
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                if available_bytes <= ceiling - 3 * 128 * 1024)
+            );
+            let retained = cloned.detached_row_counts.clone();
+            drop(cloned);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                if available_bytes <= ceiling - 128 * 1024 && available_bytes > ceiling - 160 * 1024)
+            );
+            assert_eq!(retained.get(&name), Some(&0));
+            drop(retained);
+        } else {
+            assert!(matches!(cloned, Err(RelationalError::Admission(_))));
+            assert_eq!(wide_allocations, 0);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        assert!(source.table_schema(&name).is_some());
+        assert_eq!(source.row_count(&name), 0);
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
+
+#[test]
+fn controlled_metadata_clone_cancellation_keeps_source_and_refunds_inventory() {
+    use crate::background::{CheckpointWorkContext, CheckpointWorkProbe};
+    use hawdb_qos::{
+        IoConcurrencyBudget, LocalQosPolicy, LocalQosScheduler, RuntimeGovernor,
+        RuntimeGovernorConfig, RuntimeTaskContext, RuntimeWorkRequest,
+    };
+    let mut source = RelationalState::default()
+        .stage_transaction(
+            create_upsert_table(),
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    source.omit_materialized_rows();
+    let ceiling = 1024 * 1024;
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(ceiling),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let scheduler = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe
+        .cancel_after
+        .store(2, std::sync::atomic::Ordering::SeqCst);
+    scheduler.set_telemetry_sink(Some(probe.clone()));
+    let task = permit.bind_task_context(RuntimeTaskContext::without_deadline(
+        probe.cancellation.clone(),
+    ));
+    let work = CheckpointWorkContext::new(task).with_scheduler(scheduler.clone());
+    let result = source.clone_metadata_with_work_context(&work);
+    assert!(matches!(result, Err(RelationalError::Admission(_))));
+    probe.assert_released(&scheduler);
+    assert!(source.table_schema("documents").is_some());
+    drop(work);
+    let retry = CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+    let copied = source.clone_metadata_with_work_context(&retry).unwrap();
+    assert_eq!(
+        copied.table_schema("documents"),
+        source.table_schema("documents")
+    );
+    drop(copied);
+    drop(retry);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
