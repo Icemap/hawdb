@@ -6352,3 +6352,56 @@ fn secondary_index_capture_keeps_unique_null_filter_and_nonunique_null_entries()
         .filter(|index| index.role.is_unique() && index.role != RelationalIndexRole::Primary)
         .all(|index| changes.iter().all(|change| change.index != index.name)));
 }
+
+#[test]
+fn sparse_workspace_checks_wide_access_before_copy_and_avoids_redundant_key_clones() {
+    let source = RelationalState::default()
+        .stage_transaction(
+            create_upsert_table(),
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let id = "k".repeat(128 * 1024);
+    let key = RelationalKey(vec![RelationalValue::Text(id.clone())]);
+    let hydrated = RelationalSparseRecoveryRow {
+        table: "documents".into(),
+        primary_key: key.clone(),
+        row: Some(upsert_row(&id, "owner-1", "body")),
+    };
+    let denied_input = vec![hydrated.clone()];
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let denied = source.sparse_workspace(
+        denied_input,
+        RelationalRowChangeCaptureLimits {
+            max_entries: NonZeroUsize::new(1).unwrap(),
+            max_bytes: NonZeroUsize::new(1).unwrap(),
+        },
+        "sparse relational recovery",
+    );
+    assert_eq!(observer.finish(), 0);
+    assert!(matches!(denied, Err(RelationalError::Admission(_))));
+    assert_eq!(source.row_count("documents"), 0);
+    let input = vec![hydrated];
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let (workspace, supplied) = source
+        .sparse_workspace(
+            input,
+            RelationalRowChangeCaptureLimits::default(),
+            "sparse relational recovery",
+        )
+        .unwrap();
+    assert_eq!(
+        observer.finish(),
+        1,
+        "only the retained supplied-access key is copied"
+    );
+    assert_eq!(workspace.row_count("documents"), 1);
+    assert_eq!(
+        workspace.row("documents", &key),
+        Some(&upsert_row(&id, "owner-1", "body"))
+    );
+    assert_eq!(supplied.len(), 1);
+    assert_eq!(supplied[0].primary_key, key);
+    assert_eq!(source.row_count("documents"), 0);
+}

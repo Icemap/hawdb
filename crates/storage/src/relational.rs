@@ -1522,15 +1522,18 @@ fn relational_sparse_recovery_entry_bytes(entry: &RelationalSparseRecoveryRow) -
 }
 
 fn relational_replay_access_resident_bytes(entry: &RelationalReplayAccess) -> Option<usize> {
-    let key_payload_bytes = entry
-        .primary_key
-        .0
-        .iter()
-        .try_fold(0usize, |bytes, value| {
-            bytes.checked_add(value.estimated_payload_bytes())
-        })?;
+    relational_replay_access_resident_bytes_parts(&entry.table, &entry.primary_key)
+}
+
+fn relational_replay_access_resident_bytes_parts(
+    table: &str,
+    primary_key: &RelationalKey,
+) -> Option<usize> {
+    let key_payload_bytes = primary_key.0.iter().try_fold(0usize, |bytes, value| {
+        bytes.checked_add(value.estimated_payload_bytes())
+    })?;
     std::mem::size_of::<RelationalReplayAccess>()
-        .checked_add(entry.table.len())?
+        .checked_add(table.len())?
         .checked_add(std::mem::size_of::<RelationalKey>())?
         .checked_add(key_payload_bytes)
 }
@@ -3446,20 +3449,19 @@ impl RelationalState {
 
         let mut workspace_bytes = 0usize;
         let mut supplied_access = Vec::with_capacity(hydrated_access.len());
-        let mut previous_access = None;
+
         let mut segments = self
             .schemas
             .keys()
             .map(|table| (table.clone(), Arc::new(RelationalTableSegment::default())))
             .collect::<BTreeMap<_, _>>();
         for hydrated in hydrated_access {
-            let access = RelationalReplayAccess {
-                table: hydrated.table.clone(),
-                primary_key: hydrated.primary_key.clone(),
-            };
-            if previous_access
-                .as_ref()
-                .is_some_and(|previous| previous >= &access)
+            if supplied_access
+                .last()
+                .is_some_and(|previous: &RelationalReplayAccess| {
+                    (&previous.table, &previous.primary_key)
+                        >= (&hydrated.table, &hydrated.primary_key)
+                })
             {
                 return Err(RelationalError::Corruption(format!(
                     "{context} hydration is not strictly ordered or repeats a key"
@@ -3469,10 +3471,13 @@ impl RelationalState {
                 relational_sparse_recovery_entry_bytes(&hydrated).ok_or_else(|| {
                     RelationalError::Admission(format!("{context} workspace byte count overflow"))
                 })?;
-            let access_bytes =
-                relational_replay_access_resident_bytes(&access).ok_or_else(|| {
-                    RelationalError::Admission(format!("{context} workspace byte count overflow"))
-                })?;
+            let access_bytes = relational_replay_access_resident_bytes_parts(
+                &hydrated.table,
+                &hydrated.primary_key,
+            )
+            .ok_or_else(|| {
+                RelationalError::Admission(format!("{context} workspace byte count overflow"))
+            })?;
             workspace_bytes = workspace_bytes
                 .checked_add(entry_bytes)
                 .and_then(|bytes| bytes.checked_add(access_bytes))
@@ -3485,8 +3490,10 @@ impl RelationalState {
                     limits.max_bytes
                 )));
             }
-            previous_access = Some(access.clone());
-            supplied_access.push(access);
+            supplied_access.push(RelationalReplayAccess {
+                table: hydrated.table.clone(),
+                primary_key: hydrated.primary_key.clone(),
+            });
             let schema = self.schemas.get(&hydrated.table).ok_or_else(|| {
                 RelationalError::Corruption(format!(
                     "{context} references unknown table {}",
@@ -3508,7 +3515,11 @@ impl RelationalState {
             }
             validate_row(schema, &row)?;
             let primary_key_positions = column_positions(schema, &schema.primary_key)?;
-            if row_key(&row, &primary_key_positions) != hydrated.primary_key {
+            if !primary_key_positions
+                .iter()
+                .map(|position| &row.values()[*position])
+                .eq(hydrated.primary_key.0.iter())
+            {
                 return Err(RelationalError::Corruption(format!(
                     "{context} row primary key differs from its hydrated key in table {}",
                     hydrated.table
