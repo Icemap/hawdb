@@ -20,6 +20,10 @@ use super::*;
 use crate::relational::RelationalRecoverySourceBuilder;
 use std::io::Write;
 
+#[path = "graph_checkpoint_candidate/reclamation.rs"]
+mod reclamation;
+pub use reclamation::CheckpointReclamationContext;
+
 #[cfg(test)]
 #[path = "graph_checkpoint_candidate/tests.rs"]
 mod checkpoint_wal_frame_tests;
@@ -790,11 +794,21 @@ impl CheckpointCandidate {
         &self,
         selected: &'a mut GraphStore,
     ) -> Result<(&'a mut DurableStore, u64, u64)> {
-        let prepared = self.prepared.as_ref().ok_or_else(|| {
+        self.prepared.as_ref().ok_or_else(|| {
             HawDBError::Storage("checkpoint candidate has no publication identity".into())
         })?;
         let durable = selected.durable.as_mut().ok_or_else(|| {
             HawDBError::Storage("checkpoint reclamation requires a durable runtime".into())
+        })?;
+        self.reclamation_durable_runtime(durable)
+    }
+
+    fn reclamation_durable_runtime<'a>(
+        &self,
+        durable: &'a mut DurableStore,
+    ) -> Result<(&'a mut DurableStore, u64, u64)> {
+        let prepared = self.prepared.as_ref().ok_or_else(|| {
+            HawDBError::Storage("checkpoint candidate has no publication identity".into())
         })?;
         if self.store.is_some()
             || durable.store_id() != self.source_store_id

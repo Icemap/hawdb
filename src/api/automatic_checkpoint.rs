@@ -24,7 +24,10 @@ use hawdb_qos::{
 use hawdb_storage::background::{
     CheckpointOperationError, CheckpointWorkContext, CheckpointWorkError,
 };
-use hawdb_storage::store::{CheckpointCandidate, CheckpointDebtSnapshot, CheckpointSourceIdentity};
+use hawdb_storage::store::{
+    CheckpointCandidate, CheckpointDebtSnapshot, CheckpointReclamationContext,
+    CheckpointSourceIdentity,
+};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, TryLockError, Weak};
 use std::thread::JoinHandle;
@@ -206,7 +209,7 @@ struct Selected {
 #[derive(Debug)]
 struct Retired {
     old: GraphStore,
-    selected: Source,
+    selected: CheckpointReclamationContext,
     candidate: CheckpointCandidate,
     admission: Admission,
 }
@@ -517,21 +520,29 @@ impl Control {
             return Ok(());
         };
         self.handoff_ready.store(false, Ordering::Release);
-        let old = match store.adopt_selected_checkpoint(selected.store, selected.expected) {
-            Ok(old) => old,
-            Err(error) => {
-                state.phase = Phase::Idle;
-                state.stopping = true;
-                state.report.waiting_for_handoff = false;
-                state.report.failed_attempts += 1;
-                self.failed.store(true, Ordering::Release);
-                self.notify_all();
-                return Err(error);
-            }
-        };
+        let (old, reclamation) =
+            match selected
+                .store
+                .checkpoint_reclamation_context()
+                .and_then(|context| {
+                    store
+                        .adopt_selected_checkpoint(selected.store, selected.expected)
+                        .map(|old| (old, context))
+                }) {
+                Ok(value) => value,
+                Err(error) => {
+                    state.phase = Phase::Idle;
+                    state.stopping = true;
+                    state.report.waiting_for_handoff = false;
+                    state.report.failed_attempts += 1;
+                    self.failed.store(true, Ordering::Release);
+                    self.notify_all();
+                    return Err(error);
+                }
+            };
         state.retired = Some(Retired {
             old,
-            selected: Source::capture(store, &Catalog::default()),
+            selected: reclamation,
             candidate: selected.candidate,
             admission: selected.admission,
         });
@@ -1844,7 +1855,7 @@ fn admit_retirement(
     retired.admission.runtime.pause();
     retired
         .candidate
-        .defer_published_generation_reclamation(&mut retired.selected.store)?;
+        .defer_published_generation_reclamation_with_context(&mut retired.selected)?;
     Ok(RetirementAdmission::Deferred)
 }
 
@@ -1855,7 +1866,7 @@ fn reclaim_retired_generations(retired: &mut Retired, pins: &Mutex<ReaderPins>) 
         .pinned_physical_generations();
     retired
         .candidate
-        .reclaim_published_generations(&mut retired.selected.store, &pinned)
+        .reclaim_published_generations_with_context(&mut retired.selected, &pinned)
 }
 
 fn release_retired_state(retired: Retired) {

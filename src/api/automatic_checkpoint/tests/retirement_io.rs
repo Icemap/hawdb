@@ -186,7 +186,7 @@ fn invalid_retirement_runtime_fails_closed_and_preserves_published_data() {
         let retired = state.retired.as_mut().unwrap();
         std::mem::replace(
             &mut retired.selected,
-            Source::capture(&other, &other_catalog),
+            other.checkpoint_reclamation_context().unwrap(),
         )
     };
     drop(replaced);
