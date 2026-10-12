@@ -106,8 +106,9 @@ pub use retained_query::{
     ArrowArray, ArrowArrayStream, ArrowSchema, RetainedArrowCodeOwner, RetainedArrowExport,
     RetainedArrowSchema, RetainedArrowStream, RetainedColumnRole, RetainedColumnSchema,
     RetainedColumnType, RetainedColumnValues, RetainedNodeCursor, RetainedNodeField,
-    RetainedNodeLabels, RetainedNodeView, RetainedQueryBatch, RetainedQueryCursor,
-    RetainedQueryError, RetainedQueryOptions, RetainedQueryProfile, RetainedQueryStatus,
+    RetainedNodeLabels, RetainedNodeTaskCursor, RetainedNodeView, RetainedQueryBatch,
+    RetainedQueryCursor, RetainedQueryError, RetainedQueryOptions, RetainedQueryProfile,
+    RetainedQueryStatus,
 };
 mod resource_profile;
 mod runtime_cell;

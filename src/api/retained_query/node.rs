@@ -199,6 +199,32 @@ pub struct RetainedNodeCursor {
     // Foreign cursor wrappers may outlive observation/source completion.
     _adapter_control: Option<(QueryMemoryLease, RuntimeRetainedMemory)>,
 }
+/// Task-bound active pull. The context is borrowed, so this cursor neither
+/// clones the cancellation ancestry nor retains a host I/O controller.
+/// Exported views own their source and admission independently of this borrow.
+#[derive(Debug)]
+pub struct RetainedNodeTaskCursor<'a> {
+    cursor: RetainedNodeCursor,
+    context: &'a RuntimeTaskContext,
+}
+impl RetainedNodeTaskCursor<'_> {
+    pub fn profile(&self) -> RetainedQueryProfile {
+        self.cursor.profile()
+    }
+    pub fn status(&self) -> RetainedQueryStatus {
+        self.cursor.status()
+    }
+    pub fn access_path(&self) -> &'static str {
+        self.cursor.access_path()
+    }
+    pub fn next_node(&mut self) -> Result<Option<RetainedNodeView>> {
+        self.cursor.next_node_inner(Some(self.context))
+    }
+    pub fn close(&mut self) {
+        self.cursor.close();
+    }
+}
+
 impl RetainedNodeCursor {
     pub fn profile(&self) -> RetainedQueryProfile {
         self.profile
@@ -210,6 +236,12 @@ impl RetainedNodeCursor {
         "retained_indexed_node_view"
     }
     pub fn next_node(&mut self) -> Result<Option<RetainedNodeView>> {
+        self.next_node_inner(None)
+    }
+    fn next_node_inner(
+        &mut self,
+        context: Option<&RuntimeTaskContext>,
+    ) -> Result<Option<RetainedNodeView>> {
         if self.status == RetainedQueryStatus::Closed {
             return Err(RetainedQueryError::Closed);
         }
@@ -222,6 +254,11 @@ impl RetainedNodeCursor {
         self.profile.pulls += 1;
         if self.status == RetainedQueryStatus::Completed {
             return Ok(None);
+        }
+        if let Some(context) = context
+            && let Err(reason) = context.checkpoint()
+        {
+            return Err(self.fail(RetainedQueryError::Stopped(reason)));
         }
         if let Err(error) = self
             .health
@@ -399,6 +436,31 @@ impl Database {
         parameters: &BTreeMap<String, Value>,
         options: RetainedQueryOptions,
     ) -> Result<RetainedNodeCursor> {
+        self.query_with_params_retained_node_inner(cypher, parameters, options, None)
+    }
+
+    /// Binds every open pull, including empty/post-delivery EOF, to this task.
+    /// Existing task reservations cap retained query/result admission. Views
+    /// can outlive the borrowed context through their independent admissions.
+    pub fn query_with_params_retained_node_context<'a>(
+        &self,
+        cypher: &str,
+        parameters: &BTreeMap<String, Value>,
+        options: RetainedQueryOptions,
+        context: &'a RuntimeTaskContext,
+    ) -> Result<RetainedNodeTaskCursor<'a>> {
+        let cursor =
+            self.query_with_params_retained_node_inner(cypher, parameters, options, Some(context))?;
+        Ok(RetainedNodeTaskCursor { cursor, context })
+    }
+
+    fn query_with_params_retained_node_inner(
+        &self,
+        cypher: &str,
+        parameters: &BTreeMap<String, Value>,
+        options: RetainedQueryOptions,
+        context: Option<&RuntimeTaskContext>,
+    ) -> Result<RetainedNodeCursor> {
         let execution_started = hawdb_core::time::Instant::now();
         let state = self.runtime.get()?;
         state.store.ensure_usable()?;
@@ -407,6 +469,9 @@ impl Database {
         let parse_nanos = prepared.parse_metrics.elapsed_nanos;
         let statement_kind = super::super::statement_kind(&prepared.statement);
         let result = (|| {
+            if let Some(context) = context {
+                context.checkpoint().map_err(RetainedQueryError::Stopped)?;
+            }
             super::super::query_work_request_for_statement(
                 &self.system_variables,
                 &prepared.statement,
@@ -428,11 +493,23 @@ impl Database {
             {
                 return Err(RetainedQueryError::CopyRequired);
             }
-            let ledger = QueryMemoryLedger::new(self.config.execution_memory.query_memory_bytes);
+            if let Some(context) = context {
+                context.checkpoint().map_err(RetainedQueryError::Stopped)?;
+            }
+            let query_budget = hawdb_executor::memory::enforced_query_memory_budget(
+                &self.config.execution_memory,
+                context,
+            )?
+            .min(self.config.execution_memory.query_memory_bytes);
+            let result_budget = hawdb_executor::memory::enforced_result_memory_budget(
+                &self.config.execution_memory,
+                context,
+            )?;
+            let ledger = QueryMemoryLedger::new(query_budget);
             let account = ledger.account(
                 QueryMemoryClass::ResultMaterialization,
                 "retained_node",
-                self.config.execution_memory.query_memory_bytes,
+                result_budget.min(query_budget),
             );
             let observation_bytes = std::mem::size_of::<RetainedNodeCursor>()
                 .checked_add(cypher.len())
@@ -525,6 +602,9 @@ impl Database {
                     }
                 }
             };
+            if let Some(context) = context {
+                context.checkpoint().map_err(RetainedQueryError::Stopped)?;
+            }
             let payload_bytes = profile.output_payload_bytes;
             profile.output_payload_bytes = 0;
             Ok(RetainedNodeCursor {
@@ -1177,6 +1257,183 @@ mod tests {
         ));
         assert!(view.field("text").unwrap().is_some());
         drop((db, cursor, view));
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+    #[test]
+    fn task_cancellation_is_sticky_before_delivery_and_at_empty_or_delivered_eof() {
+        for (key, deliver) in [(37, false), (37, true), (999, false)] {
+            let (db, governor) = fixture(4);
+            let context = RuntimeTaskContext::default();
+            let mut cursor = db
+                .query_with_params_retained_node_context(
+                    QUERY,
+                    &BTreeMap::from([("key".into(), Value::Int(key))]),
+                    RetainedQueryOptions::default(),
+                    &context,
+                )
+                .unwrap();
+            let view = deliver.then(|| cursor.next_node().unwrap().unwrap());
+            let payload_address = view.as_ref().map(|view| {
+                let Some(RetainedNodeField::Value(Value::String(text))) =
+                    view.field("text").unwrap()
+                else {
+                    panic!("borrowed text");
+                };
+                text.as_ptr()
+            });
+            context.cancellation().cancel();
+            let expected = RetainedQueryError::Stopped(RuntimeCancellationReason::Cancelled);
+            for _ in 0..2 {
+                assert_eq!(cursor.next_node().unwrap_err(), expected);
+                assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
+            }
+            cursor.close();
+            assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
+            assert_eq!(cursor.profile().emitted_rows, usize::from(deliver));
+            let digest = hawdb_query::QueryIdentity::new("cypher", QUERY);
+            let record = db
+                .statement_summary
+                .borrow()
+                .snapshot()
+                .into_iter()
+                .find(|record| record.digest == digest.query_digest())
+                .unwrap();
+            assert_eq!(record.execution_count, 1);
+            assert_eq!(record.error_count, 1);
+            assert_eq!(record.success_count, 0);
+            drop(cursor);
+            drop(context);
+            drop(db);
+            if let Some(view) = view.as_ref() {
+                assert_eq!(view.status(), RetainedQueryStatus::Failed);
+                let Some(RetainedNodeField::Value(Value::String(text))) =
+                    view.field("text").unwrap()
+                else {
+                    panic!("borrowed text");
+                };
+                assert_eq!(text.as_ptr(), payload_address.unwrap());
+                assert_eq!(text, "payload");
+                assert!(governor.retained_result_snapshot().retained_bytes > 0);
+            }
+            drop(view);
+            assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+    }
+
+    #[test]
+    fn expired_task_cannot_deliver_or_complete_an_open_cursor() {
+        for (key, deliver) in [(37, false), (37, true), (999, false)] {
+            let (db, governor) = fixture(4);
+            let mut inner = db
+                .query_with_params_retained_node(
+                    QUERY,
+                    &BTreeMap::from([("key".into(), Value::Int(key))]),
+                    RetainedQueryOptions::default(),
+                )
+                .unwrap();
+            let view = deliver.then(|| inner.next_node().unwrap().unwrap());
+            // Exercise the post-capture deadline transition without wall-clock
+            // sleeps or relying on constructor timing on a loaded CI host.
+            let context = RuntimeTaskContext::new(
+                hawdb_core::RuntimeCancellationToken::new(),
+                Some(hawdb_core::time::Instant::now()),
+            );
+            let mut cursor = RetainedNodeTaskCursor {
+                cursor: inner,
+                context: &context,
+            };
+            let expected = RetainedQueryError::Stopped(RuntimeCancellationReason::DeadlineExceeded);
+            assert_eq!(cursor.next_node().unwrap_err(), expected);
+            assert_eq!(cursor.next_node().unwrap_err(), expected);
+            assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
+            if let Some(view) = view.as_ref() {
+                assert_eq!(view.status(), RetainedQueryStatus::Failed);
+                assert!(view.field("text").unwrap().is_some());
+            }
+            drop((cursor, view, db));
+            assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+    }
+
+    #[test]
+    fn stopped_task_refuses_before_retained_admission() {
+        for reason in [
+            RuntimeCancellationReason::Cancelled,
+            RuntimeCancellationReason::DeadlineExceeded,
+        ] {
+            let (db, governor) = fixture(4);
+            let context = if reason == RuntimeCancellationReason::Cancelled {
+                let context = RuntimeTaskContext::default();
+                context.cancellation().cancel();
+                context
+            } else {
+                RuntimeTaskContext::new(
+                    hawdb_core::RuntimeCancellationToken::new(),
+                    Some(hawdb_core::time::Instant::now()),
+                )
+            };
+            let error = db
+                .query_with_params_retained_node_context(
+                    QUERY,
+                    &params(),
+                    RetainedQueryOptions::default(),
+                    &context,
+                )
+                .unwrap_err();
+            assert_eq!(error, RetainedQueryError::Stopped(reason));
+            assert!(db.retained_result_snapshot().is_none());
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+    }
+
+    #[test]
+    fn task_reservations_bound_all_retained_charges_and_never_widen_zero() {
+        for (query_bytes, result_bytes) in [(0, 8192), (8192, 0), (1, 8192), (8192, 1)] {
+            let (db, governor) = fixture(4);
+            let context = RuntimeTaskContext::default().with_memory_reservation(
+                hawdb_core::RuntimeMemoryReservation::new(query_bytes, result_bytes),
+            );
+            let error = db
+                .query_with_params_retained_node_context(
+                    QUERY,
+                    &params(),
+                    RetainedQueryOptions::default(),
+                    &context,
+                )
+                .unwrap_err();
+            assert!(matches!(
+                error,
+                RetainedQueryError::Execution(HawDBError::Execution(_))
+            ));
+            assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+        let (db, governor) = fixture(4);
+        let context = RuntimeTaskContext::default()
+            .with_memory_reservation(hawdb_core::RuntimeMemoryReservation::new(8192, 8192));
+        let mut cursor = db
+            .query_with_params_retained_node_context(
+                QUERY,
+                &params(),
+                RetainedQueryOptions::default(),
+                &context,
+            )
+            .unwrap();
+        let view = cursor.next_node().unwrap().unwrap();
+        assert!(cursor.profile().query_peak_bytes <= 8192);
+        assert!(matches!(
+            view.try_retain_with_metadata(8192),
+            Err(RetainedQueryError::Execution(HawDBError::Execution(_)))
+        ));
+        assert!(cursor.next_node().unwrap().is_none());
+        context.cancellation().cancel();
+        assert!(cursor.next_node().unwrap().is_none());
+        assert_eq!(cursor.status(), RetainedQueryStatus::Completed);
+        assert_eq!(view.status(), RetainedQueryStatus::Completed);
+        drop((cursor, view, db));
         assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
