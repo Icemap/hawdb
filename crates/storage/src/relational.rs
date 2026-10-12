@@ -774,10 +774,18 @@ pub(crate) fn decode_relational_primary_key_owned(
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RelationalRow {
     values: Arc<Vec<RelationalValue>>,
+    _memory: crate::background::CheckpointAllocationOwner,
 }
+
+impl PartialEq for RelationalRow {
+    fn eq(&self, other: &Self) -> bool {
+        self.values == other.values
+    }
+}
+impl Eq for RelationalRow {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RelationalIndexChangeKind {
@@ -1332,6 +1340,56 @@ impl RelationalRow {
         // accounting in the checkpoint resource ledger.
         Self {
             values: Arc::new(values),
+            _memory: Default::default(),
+        }
+    }
+
+    fn reconstruct_with_allocations<'a>(
+        source: &'a RelationalRow,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+        mut select: impl FnMut(usize) -> Result<RelationalValueRef<'a>, RelationalError>,
+    ) -> Result<Self, RelationalError> {
+        let owned = allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
+        let mut values = match &owned {
+            Some(context) => context
+                .vector_capacity(source.values().len())
+                .map_err(|error| RelationalError::Admission(error.to_string()))?,
+            None => Vec::with_capacity(source.values().len()),
+        };
+        for ordinal in 0..source.values().len() {
+            let value = select(ordinal)?;
+            let value = match &owned {
+                Some(context) => value.to_owned_value_with_allocations(context)?,
+                None => value.to_owned_value(),
+            };
+            let unit = owned
+                .as_ref()
+                .map(|context| context.start_unit())
+                .transpose()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            values.push(value);
+            if let Some(unit) = unit {
+                unit.finish();
+            }
+        }
+        if let Some(context) = owned {
+            context
+                .reserve(
+                    std::mem::size_of::<Vec<RelationalValue>>() + 2 * std::mem::size_of::<usize>(),
+                )
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            context
+                .checkpoint()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            Ok(Self {
+                values: Arc::new(values),
+                _memory: context.memory.into_inner(),
+            })
+        } else {
+            Ok(Self::new(values))
         }
     }
 
@@ -6118,17 +6176,26 @@ fn apply_upsert(
                 .rows
                 .get(&existing_primary_key)
                 .expect("conflict row was found in the same segment");
-            let mut values = existing.values().to_vec();
-            for (target, source, assignment) in &assignments {
-                values[*target] = match (source, *assignment) {
-                    (Some(source), _) => excluded.values()[*source].clone(),
-                    (None, RelationalUpsertValue::Value(value)) => value.clone(),
-                    (None, RelationalUpsertValue::ExcludedColumn(_)) => {
-                        unreachable!("excluded source position was resolved")
-                    }
-                };
-            }
-            let updated = RelationalRow::new(values);
+            let updated = RelationalRow::reconstruct_with_allocations(
+                existing,
+                checkpoint_allocations,
+                |ordinal| {
+                    let Some((_, source, assignment)) = assignments
+                        .iter()
+                        .rev()
+                        .find(|(target, _, _)| *target == ordinal)
+                    else {
+                        return Ok(existing.values()[ordinal].as_ref());
+                    };
+                    Ok(match (source, *assignment) {
+                        (Some(source), _) => excluded.values()[*source].as_ref(),
+                        (None, RelationalUpsertValue::Value(value)) => value.as_ref(),
+                        (None, RelationalUpsertValue::ExcludedColumn(_)) => {
+                            unreachable!("excluded source position was resolved")
+                        }
+                    })
+                },
+            )?;
             validate_row(&schema, &updated)?;
             let updated_primary_key =
                 row_key_with_allocations(&updated, &primary_key_positions, checkpoint_allocations)?;
@@ -6343,21 +6410,49 @@ fn apply_update(
     let primary_key_positions = column_positions(&schema, &schema.primary_key)?;
     let mut updates = Vec::with_capacity(matched.len());
     for (old_key, row) in &matched {
-        let mut values = row.values().to_vec();
+        let replacement_context =
+            checkpoint_allocations.map(|context| crate::background::CheckpointDecodeContext {
+                work: context.work.clone(),
+                memory: Default::default(),
+            });
+        let mut replacements = match &replacement_context {
+            Some(context) => context
+                .vector_capacity(resolved.len())
+                .map_err(|error| RelationalError::Admission(error.to_string()))?,
+            None => Vec::with_capacity(resolved.len()),
+        };
+        // Evaluate every assignment in source order, including one overwritten
+        // later, so arithmetic errors keep the ordinary transaction contract.
         for (target, value) in &resolved {
-            values[*target] = match value {
-                ResolvedUpdateValue::Column(source) => row.values()[*source].clone(),
-                ResolvedUpdateValue::Value(value) => value.clone(),
+            let value = match value {
+                ResolvedUpdateValue::Column(source) => row.values()[*source].as_ref(),
+                ResolvedUpdateValue::Value(value) => value.as_ref(),
                 ResolvedUpdateValue::BigIntArithmetic {
                     left,
                     operator,
                     right,
-                } => RelationalValue::BigInt(evaluate_bigint_arithmetic(
+                } => RelationalValueRef::BigInt(evaluate_bigint_arithmetic(
                     row, left, *operator, right,
                 )?),
             };
+            let unit = replacement_context
+                .as_ref()
+                .map(|context| context.start_unit())
+                .transpose()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            replacements.push((*target, value));
+            if let Some(unit) = unit {
+                unit.finish();
+            }
         }
-        let mut updated = RelationalRow::new(values);
+        let mut updated =
+            RelationalRow::reconstruct_with_allocations(row, checkpoint_allocations, |ordinal| {
+                Ok(replacements
+                    .iter()
+                    .rev()
+                    .find(|(target, _)| *target == ordinal)
+                    .map_or_else(|| row.values()[ordinal].as_ref(), |(_, value)| *value))
+            })?;
         validate_row(&schema, &updated)?;
         overflow::externalize_row(state, &schema, &mut updated, overflow_config)?;
         let new_key =

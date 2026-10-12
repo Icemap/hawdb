@@ -1024,3 +1024,179 @@ fn controlled_sparse_upsert_and_update_match_ordinary_recovery_captures() {
     }
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn controlled_row_reconstruction_retains_shared_values_and_skips_overwritten_payload() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let source = upsert_row("id", "owner", &"v".repeat(128 * 1024));
+    for (ceiling, replacement, succeeds) in [
+        (4096, false, false),
+        (4096, true, true),
+        (16 * 1024 * 1024, false, true),
+    ] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result =
+            RelationalRow::reconstruct_with_allocations(&source, Some(&context), |ordinal| {
+                Ok(if replacement && ordinal == 2 {
+                    RelationalValueRef::Text("short")
+                } else {
+                    source.values()[ordinal].as_ref()
+                })
+            });
+        let wide_allocations = observer.finish();
+        drop(context);
+        if succeeds {
+            let row = result.unwrap();
+            if replacement {
+                assert_eq!(wide_allocations, 0);
+                assert_eq!(row.values()[2], RelationalValue::Text("short".into()));
+            } else {
+                assert_eq!(row, source);
+            }
+            let retained = row.clone();
+            drop(row);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes < ceiling)
+            );
+            assert_eq!(retained.values()[0], source.values()[0]);
+            drop(retained);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(wide_allocations, 0);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+    assert_eq!(
+        source.values()[2],
+        RelationalValue::Text("v".repeat(128 * 1024))
+    );
+}
+
+#[test]
+fn overwritten_update_arithmetic_still_fails_before_recovery_publication() {
+    let mut create = create_upsert_table();
+    let RelationalWrite::CreateTable(schema) = &mut create.writes[0] else {
+        panic!("fixture schema");
+    };
+    schema.columns.push(RelationalColumnSchema {
+        name: "count".into(),
+        scalar_type: RelationalScalarType::BigInt,
+        nullable: false,
+        default: None,
+    });
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let base = RelationalState::default()
+        .stage_transaction(create, limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![RelationalRow::new(vec![
+                        RelationalValue::Text("id".into()),
+                        RelationalValue::Text("owner".into()),
+                        RelationalValue::Text("body".into()),
+                        RelationalValue::BigInt(i64::MAX),
+                    ])],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    let transaction = RelationalTransaction {
+        writes: vec![RelationalWrite::UpdateWhere {
+            table: "documents".into(),
+            assignments: vec![
+                RelationalUpdateAssignment {
+                    column: "count".into(),
+                    value: RelationalUpdateValue::BigIntArithmetic {
+                        left: RelationalBigIntOperand::Column("count".into()),
+                        operator: RelationalBigIntArithmeticOperator::Add,
+                        right: RelationalBigIntOperand::Value(RelationalValue::BigInt(1)),
+                    },
+                },
+                RelationalUpdateAssignment {
+                    column: "count".into(),
+                    value: RelationalUpdateValue::Value(RelationalValue::BigInt(0)),
+                },
+            ],
+            predicate: RelationalPredicate::Compare {
+                column: "id".into(),
+                op: RelationalComparisonOp::Eq,
+                value: RelationalValue::Text("id".into()),
+            },
+        }],
+    };
+    let expected = base
+        .stage_transaction(transaction.clone(), limits, overflow)
+        .unwrap_err()
+        .to_string();
+    assert!(expected.contains("overflow"));
+    let (directory, metadata) = canonical_metadata_state(&base, "overwritten-arithmetic");
+    let key = RelationalKey(vec![RelationalValue::Text("id".into())]);
+    let access = RelationalReplayAccessSet::from_decoded_entries(vec![RelationalReplayAccess {
+        table: "documents".into(),
+        primary_key: key.clone(),
+    }])
+    .unwrap();
+    let context = crate::background::CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    let error = metadata
+        .stage_sparse_transaction_for_authoritative_recovery_with_allocations(
+            RelationalSparseRecoveryStage {
+                transaction,
+                hydrated_access: vec![RelationalSparseRecoveryRow {
+                    table: "documents".into(),
+                    primary_key: key.clone(),
+                    row: base.row("documents", &key).cloned(),
+                }],
+                mutation_limits: limits,
+                overflow_config: overflow,
+                index_capture_limits: RelationalIndexChangeCaptureLimits::default(),
+                row_capture_limits: RelationalRowChangeCaptureLimits::default(),
+                expected_replay_access: &access,
+            },
+            Some(&context),
+        )
+        .unwrap_err();
+    assert_eq!(error.to_string(), expected);
+    assert_eq!(
+        base.row("documents", &key).unwrap().values()[3],
+        RelationalValue::BigInt(i64::MAX)
+    );
+    assert_eq!(metadata.row_count("documents"), 1);
+    std::fs::remove_dir_all(directory).unwrap();
+}
