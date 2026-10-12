@@ -1716,6 +1716,31 @@ fn bounded_read_snapshot_projection_scan_uses_out_of_core_pin_and_releases_admis
     );
     assert_eq!(report.document_count, 1);
     assert!(report.artifact_generation.is_some());
+    for cumulative in [
+        NowledgeMemReadSnapshotBudget {
+            max_rows: 1,
+            ..budget
+        },
+        NowledgeMemReadSnapshotBudget {
+            max_payload_bytes: report.payload_bytes,
+            ..budget
+        },
+    ] {
+        handle
+            .with_bounded_read_snapshot(cumulative, |snapshot| {
+                snapshot.visit_search_projection(4096, |_| Ok(()))?;
+                let mut calls = 0;
+                assert!(snapshot
+                    .visit_search_projection(4096, |_| {
+                        calls += 1;
+                        Ok(())
+                    })
+                    .is_err());
+                assert_eq!(calls, 0);
+                Ok(())
+            })
+            .unwrap();
+    }
     assert!(handle
         .with_bounded_read_snapshot(budget, |snapshot| snapshot
             .visit_search_projection(16, |_| panic!("scratch refusal callback")))

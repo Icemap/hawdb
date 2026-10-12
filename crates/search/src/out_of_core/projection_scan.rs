@@ -15,10 +15,11 @@
 //! Complete reads use the same held artifact closure and visibility as serving.
 
 use super::*;
-use crate::build_memory::BuildMemory;
+use crate::build_memory::{reserve_capacity, BuildMemory};
 use crate::projection_scan::{add, checkpoint, payload_bytes};
 use crate::{SearchProjectionScanBudget, SearchProjectionScanReport};
 use hawdb_core::RuntimeTaskContext;
+use hawdb_executor::QueryMemoryLease;
 use std::io::BufRead;
 
 type ProjectionVisitor<'a> = &'a mut dyn FnMut(&SearchDocument) -> Result<()>;
@@ -27,6 +28,11 @@ impl SearchOutOfCoreReader {
     /// Exhaustively visits live documents under this reader's immutable pin.
     /// Order is unspecified. A prefix is not completion evidence. A validation
     /// and full logical-budget pass completes before any visitor callback.
+    /// Both passes read all physical payloads; only preflight probes visible ID
+    /// routes. Runtime depends on physical bytes, visible IDs and mapping-block
+    /// reads. A host holding a store read guard blocks publication for that time.
+    /// A callback can precede the emit pass's final checksum validation; an error
+    /// after callbacks still refuses completion evidence.
     pub fn visit_projection_documents(
         &self,
         budget: SearchProjectionScanBudget,
@@ -45,8 +51,10 @@ impl SearchOutOfCoreReader {
         })?;
         // Route validation owns one mapping block and its transient IDs. Admit
         // that capacity before any probe, not merely the payload decoder below.
-        let _probe_memory = memory.input.reserve(probe_bytes)?;
-        let preflight = self.scan_projection_pass(budget, task, &memory, None)?;
+        let preflight = {
+            let _probe_memory = memory.input.reserve(probe_bytes)?;
+            self.scan_projection_pass(budget, task, &memory, None)?
+        };
         let emitted = self.scan_projection_pass(budget, task, &memory, Some(visitor))?;
         if emitted != preflight {
             return Err(invalid("held projection changed between scan passes"));
@@ -90,21 +98,21 @@ impl SearchOutOfCoreReader {
                     self.config.max_uncompressed_segment_bytes.get(),
                     Some(admission),
                     |text| {
-                        let scratch = budget
-                            .max_encoded_record_bytes
-                            .checked_mul(2)
-                            .ok_or_else(|| invalid("record scratch overflow"))?;
-                        let _scratch = memory.spool.reserve(scratch)?;
-                        let mut line = String::with_capacity(budget.max_encoded_record_bytes);
-                        let mut previous = String::with_capacity(budget.max_encoded_record_bytes);
-                        if line.capacity() > budget.max_encoded_record_bytes
-                            || previous.capacity() > budget.max_encoded_record_bytes
-                        {
-                            return Err(invalid("record scratch capacity exceeds admission"));
-                        }
+                        let mut line_memory = memory.spool.reserve(0)?;
+                        let mut previous_memory = memory.spool.reserve(0)?;
+                        let mut line = Vec::new();
+                        let mut previous = Vec::new();
                         let mut physical_rows = 0;
-                        while read_record(text, &mut line, budget.max_encoded_record_bytes, task)? {
-                            let record = line.trim_end_matches(['\r', '\n']);
+                        while read_record(
+                            text,
+                            &mut line,
+                            budget.max_encoded_record_bytes,
+                            task,
+                            &mut line_memory,
+                        )? {
+                            let record = std::str::from_utf8(&line)
+                                .map_err(|_| invalid("non-ASCII encoded record"))?
+                                .trim_end_matches(['\r', '\n']);
                             if record.is_empty() || record == "HAWDB_SEARCH_SEGMENT_V1" {
                                 continue;
                             }
@@ -130,11 +138,12 @@ impl SearchOutOfCoreReader {
                             let id_bytes = add(raw_id.len() / 2, size_of::<String>())?;
                             let _id_memory = memory.input.reserve(id_bytes)?;
                             let id = crate::decode_string(raw_id)?;
-                            if physical_rows > 1 && previous >= id {
+                            if physical_rows > 1 && previous.as_slice() >= id.as_bytes() {
                                 return Err(invalid("segment IDs are not strictly ordered"));
                             }
                             previous.clear();
-                            previous.push_str(&id);
+                            reserve_capacity(&mut previous, id.len(), &mut previous_memory)?;
+                            previous.extend_from_slice(id.as_bytes());
                             if physical_rows == 1 && id != segment.first_document_id {
                                 return Err(invalid("first ID differs from descriptor"));
                             }
@@ -144,13 +153,18 @@ impl SearchOutOfCoreReader {
                                 rows = add(rows, 1)?;
                                 bytes = add(bytes, logical_bytes)?;
                                 budget.check(rows, bytes)?;
-                                let route = self.segment_for_document(&id)?.ok_or_else(|| {
-                                    invalid("visible document has no indexed route")
-                                })?;
-                                if self.segments[route.artifact_index].content_segment_id
-                                    != artifact.content_segment_id
-                                {
-                                    return Err(invalid("visible document route differs"));
+                                // The immutable pin and preflight establish routes for
+                                // both passes. Avoid repeating mapping-block I/O during emit.
+                                if visitor.is_none() {
+                                    let route =
+                                        self.segment_for_document(&id)?.ok_or_else(|| {
+                                            invalid("visible document has no indexed route")
+                                        })?;
+                                    if self.segments[route.artifact_index].content_segment_id
+                                        != artifact.content_segment_id
+                                    {
+                                        return Err(invalid("visible document route differs"));
+                                    }
                                 }
                             }
                             let _decode_memory = memory.input.reserve(decode_bytes)?;
@@ -163,7 +177,7 @@ impl SearchOutOfCoreReader {
                             }
                         }
                         if physical_rows != segment.document_count
-                            || previous != segment.last_document_id
+                            || previous.as_slice() != segment.last_document_id.as_bytes()
                         {
                             return Err(invalid("segment count or final ID differs"));
                         }
@@ -186,9 +200,10 @@ fn invalid(reason: &str) -> HawDBError {
 
 fn read_record(
     text: &mut dyn BufRead,
-    line: &mut String,
+    line: &mut Vec<u8>,
     limit: usize,
     task: &RuntimeTaskContext,
+    memory: &mut QueryMemoryLease,
 ) -> Result<bool> {
     line.clear();
     loop {
@@ -209,7 +224,12 @@ fn read_record(
         if !chunk.is_ascii() {
             return Err(invalid("non-ASCII encoded record"));
         }
-        line.push_str(chunk);
+        let required = add(line.len(), count)?;
+        if required > line.capacity() {
+            let capacity = required.max(line.capacity().saturating_mul(2)).min(limit);
+            reserve_capacity(line, capacity, memory)?;
+        }
+        line.extend_from_slice(chunk.as_bytes());
         let done = chunk.ends_with('\n');
         text.consume(count);
         if done {

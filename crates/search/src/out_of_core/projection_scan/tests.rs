@@ -213,3 +213,145 @@ fn projection_scan_preflights_budgets_and_corruption_before_callback() {
     drop(reader);
     fs::remove_dir_all(path).unwrap();
 }
+
+#[test]
+fn projection_scan_huge_record_cap_grows_only_for_actual_records() {
+    let path = super::super::tests::test_dir("projection-scan-incremental-scratch");
+    let document = row("a", "small body").into_document();
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&path, Default::default()).unwrap();
+    writer.push(document.clone()).unwrap();
+    writer.finish().unwrap();
+    let reader = SearchOutOfCoreReader::open(&path).unwrap();
+    let admitted = RuntimeTaskContext::default().with_memory_reservation(
+        hawdb_core::RuntimeMemoryReservation::new(8 * 1024 * 1024, 8 * 1024 * 1024),
+    );
+    for task in [&RuntimeTaskContext::default(), &admitted] {
+        let mut calls = 0;
+        reader
+            .visit_projection_documents(
+                SearchProjectionScanBudget {
+                    max_encoded_record_bytes: usize::MAX,
+                    ..budget()
+                },
+                task,
+                &mut |actual| {
+                    assert_eq!(actual, &document);
+                    calls += 1;
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(calls, 1);
+    }
+    drop(reader);
+    fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn projection_scan_exact_limits_span_multiple_descriptor_segments() {
+    let path = super::super::tests::test_dir("projection-scan-descriptor-boundaries");
+    let expected = (0..4)
+        .map(|index| row(&format!("{index}"), &"body".repeat(80)).into_document())
+        .collect::<Vec<_>>();
+    let options = SearchOutOfCoreGenerationBuildOptions {
+        max_record_bytes: std::num::NonZeroU64::new(1024).unwrap(),
+        max_segment_uncompressed_bytes: std::num::NonZeroU64::new(1024).unwrap(),
+        ..Default::default()
+    };
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&path, options).unwrap();
+    for document in &expected {
+        writer.push(document.clone()).unwrap();
+    }
+    writer.finish().unwrap();
+    let reader = SearchOutOfCoreReader::open(&path).unwrap();
+    assert_eq!(reader.segments.len(), 1);
+    assert!(reader.segments[0].descriptor.segments.len() > 1);
+    let exact = SearchProjectionScanBudget {
+        max_rows: expected.len(),
+        max_payload_bytes: expected
+            .iter()
+            .map(|document| payload_bytes(document).unwrap())
+            .sum(),
+        max_encoded_record_bytes: expected
+            .iter()
+            .map(|document| crate::encode_search_document_line(document).len())
+            .max()
+            .unwrap(),
+    };
+    let mut actual = Vec::new();
+    let report = reader
+        .visit_projection_documents(exact, &RuntimeTaskContext::default(), &mut |document| {
+            actual.push(document.clone());
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(actual, expected);
+    assert_eq!(report.document_count, exact.max_rows);
+    assert_eq!(report.payload_bytes, exact.max_payload_bytes);
+    drop(reader);
+    fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn projection_scan_cancellation_deadline_error_and_unwind_refuse_completion() {
+    let path = super::super::tests::test_dir("projection-scan-terminal-failures");
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&path, Default::default()).unwrap();
+    writer.push(row("a", "body").into_document()).unwrap();
+    writer.finish().unwrap();
+    let reader = SearchOutOfCoreReader::open(&path).unwrap();
+    let cancellation = hawdb_core::RuntimeCancellationToken::new();
+    let task = RuntimeTaskContext::without_deadline(cancellation.clone());
+    let mut calls = 0;
+    assert!(reader
+        .visit_projection_documents(budget(), &task, &mut |_| {
+            calls += 1;
+            cancellation.cancel();
+            Ok(())
+        })
+        .is_err());
+    assert_eq!(calls, 1);
+    let task = RuntimeTaskContext::new(
+        hawdb_core::RuntimeCancellationToken::new(),
+        Some(hawdb_core::time::Instant::now() + std::time::Duration::from_secs(1)),
+    );
+    calls = 0;
+    assert!(reader
+        .visit_projection_documents(budget(), &task, &mut |_| {
+            calls += 1;
+            std::thread::sleep(std::time::Duration::from_millis(1100));
+            Ok(())
+        })
+        .is_err());
+    assert_eq!(calls, 1);
+    let error = reader
+        .visit_projection_documents(budget(), &RuntimeTaskContext::default(), &mut |_| {
+            Err(HawDBError::Execution("visitor refused".into()))
+        })
+        .unwrap_err();
+    assert!(error.to_string().contains("visitor refused"));
+    let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        reader.visit_projection_documents(budget(), &RuntimeTaskContext::default(), &mut |_| {
+            panic!("visitor unwound")
+        })
+    }));
+    assert!(unwind.is_err());
+    assert_eq!(collect(&reader).0.document_count, 1);
+    drop(reader);
+    fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn projection_scan_missing_artifact_refuses_reopen_and_preserves_existing_pin() {
+    let path = super::super::tests::test_dir("projection-scan-missing-artifact");
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&path, Default::default()).unwrap();
+    writer.push(row("a", "body").into_document()).unwrap();
+    writer.finish().unwrap();
+    let reader = SearchOutOfCoreReader::open(&path).unwrap();
+    let before = collect(&reader);
+    fs::remove_file(path.join(&reader.manifest.segments[0].payload_file)).unwrap();
+    assert!(SearchOutOfCoreReader::open(&path).is_err());
+    // Existing open file handles retain the admitted immutable payload on Unix.
+    assert_eq!(collect(&reader), before);
+    drop(reader);
+    fs::remove_dir_all(path).unwrap();
+}
