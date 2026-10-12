@@ -462,6 +462,64 @@ impl Drop for ThreadPointAllocation {
 }
 
 #[test]
+fn point_source_preserves_host_refusal_before_pin() {
+    #[derive(Debug)]
+    enum AdmissionError {
+        Refused { retryable: bool, identity: Arc<()> },
+        Storage(HawDBError),
+    }
+    impl From<HawDBError> for AdmissionError {
+        fn from(error: HawDBError) -> Self {
+            Self::Storage(error)
+        }
+    }
+    let mut store = GraphStore::default();
+    let mut catalog = Catalog::default();
+    let id = store
+        .create_node(&mut catalog, "Item", BTreeMap::new())
+        .unwrap();
+    let (row, _) = store.nodes.retained_point_row_preflight(id).unwrap();
+    let owners = Arc::strong_count(row);
+    for retryable in [true, false] {
+        let identity = Arc::new(());
+        let result = store.materialized_node_point_read_with_admission(
+            id,
+            |_| -> std::result::Result<ThreadPointAllocation, AdmissionError> {
+                assert_eq!(Arc::strong_count(row), owners);
+                Err(AdmissionError::Refused {
+                    retryable,
+                    identity: Arc::clone(&identity),
+                })
+            },
+        );
+        match result {
+            Err(AdmissionError::Refused {
+                retryable: observed,
+                identity: observed_identity,
+            }) => {
+                assert_eq!(observed, retryable);
+                assert!(Arc::ptr_eq(&observed_identity, &identity));
+            }
+            Err(AdmissionError::Storage(error)) => panic!("host error was converted: {error}"),
+            Ok(_) => panic!("host refusal was ignored"),
+        }
+        assert_eq!(Arc::strong_count(row), owners);
+        store.ensure_usable().unwrap();
+    }
+    assert!(matches!(
+        store
+            .materialized_node_point_read_with_admission(
+                NodeId(u64::MAX),
+                |_| -> std::result::Result<ThreadPointAllocation, AdmissionError> {
+                    panic!("missing point must not invoke host admission");
+                },
+            )
+            .unwrap(),
+        MaterializedNodePointRead::Missing
+    ));
+}
+
+#[test]
 fn typed_point_source_preserves_auto_traits_and_cross_thread_release() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<MaterializedNodePointSource<ThreadPointAllocation>>();

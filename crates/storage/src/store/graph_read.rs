@@ -145,17 +145,34 @@ impl GraphStore {
         id: NodeId,
         allocate: impl FnOnce(usize) -> Result<A>,
     ) -> Result<MaterializedNodePointRead<A>> {
+        self.materialized_node_point_read_with_admission(id, allocate)
+    }
+
+    /// Preserve host admission errors without converting backpressure or a
+    /// working-unit refusal into a generic storage error.
+    #[doc(hidden)]
+    pub fn materialized_node_point_read_with_admission<A: GraphReadAllocation, E>(
+        &self,
+        id: NodeId,
+        allocate: impl FnOnce(usize) -> std::result::Result<A, E>,
+    ) -> std::result::Result<MaterializedNodePointRead<A>, E>
+    where
+        E: From<HawDBError>,
+    {
         self.materialized_node_point_read_with_policy(id, allocate, |allocation, bytes| {
             retain_point_allocation(allocation, bytes)
         })
     }
 
-    fn materialized_node_point_read_with_policy<A>(
+    fn materialized_node_point_read_with_policy<A, E>(
         &self,
         id: NodeId,
-        allocate: impl FnOnce(usize) -> Result<A>,
+        allocate: impl FnOnce(usize) -> std::result::Result<A, E>,
         retain: impl FnOnce(&mut A, usize) -> Result<()>,
-    ) -> Result<MaterializedNodePointRead<A>> {
+    ) -> std::result::Result<MaterializedNodePointRead<A>, E>
+    where
+        E: From<HawDBError>,
+    {
         self.ensure_usable()?;
         if self.is_out_of_core() || self.canonical_base.is_some() {
             return Ok(MaterializedNodePointRead::Unsupported);
