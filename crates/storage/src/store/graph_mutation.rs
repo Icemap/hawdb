@@ -1879,7 +1879,7 @@ fn collect_relational_primary_key_changes_from_wal_ops(
                     work.checkpoint().map_err(HawDBError::from_storage_error)?;
                 }
                 let batch = decode_relational_wal_batch(record, RelationalDecodeLimits::wal())
-                    .map_err(HawDBError::from_storage_error)?;
+                    .map_err(crate::relational::RelationalError::into_wal_recovery_error)?;
                 captures.push(batch.primary_key_changes.unwrap_or(
                     hawdb_storage::relational::RelationalPrimaryKeyChangeCapture::RequiresRebuild {
                         reason: hawdb_storage::relational::RelationalPrimaryKeyChangeRebuildReason::MissingWalCapture,

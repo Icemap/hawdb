@@ -1151,7 +1151,8 @@ impl GraphStore {
         ) -> Result<usize> {
             let mut total = 0usize;
             for operation in operations {
-                work.checkpoint().map_err(HawDBError::from_storage_error)?;
+                let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                unit.finish();
                 let incoming = match operation {
                     WalOp::Batch(operations) => count(operations, work)?,
                     WalOp::Relational { .. } => 1,
@@ -1181,14 +1182,7 @@ impl GraphStore {
                             RelationalDecodeLimits::wal(),
                             allocations,
                         )
-                        .map_err(|error| match error {
-                            crate::relational::RelationalError::Corruption(message) => {
-                                HawDBError::StorageIntegrity(format!(
-                                    "relational WAL corruption: {message}"
-                                ))
-                            }
-                            error => HawDBError::from_storage_error(error),
-                        })?;
+                        .map_err(crate::relational::RelationalError::into_wal_recovery_error)?;
                         if batch.epoch != epoch {
                             return Err(HawDBError::StorageIntegrity(format!(
                                 "relational WAL epoch mismatch: expected {epoch}, got {}",
@@ -1203,6 +1197,9 @@ impl GraphStore {
             Ok(())
         }
         let count = count(operations, allocations)?;
+        allocations
+            .checkpoint()
+            .map_err(HawDBError::from_storage_error)?;
         if count == 0 {
             return Ok(Vec::new());
         }

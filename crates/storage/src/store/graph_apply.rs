@@ -781,7 +781,7 @@ impl GraphStore {
             }
             WalOp::Relational { record } => {
                 let batch = decode_relational_wal_batch(&record, RelationalDecodeLimits::wal())
-                    .map_err(HawDBError::from_storage_error)?;
+                    .map_err(crate::relational::RelationalError::into_wal_recovery_error)?;
                 self.apply_recovered_relational_batch(batch, work)?;
             }
             WalOp::RelationalSnapshot { record } => {

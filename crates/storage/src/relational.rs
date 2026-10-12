@@ -4545,6 +4545,15 @@ impl std::error::Error for RelationalError {
 }
 
 impl RelationalError {
+    pub(crate) fn into_wal_recovery_error(self) -> hawdb_core::HawDBError {
+        match self {
+            Self::Corruption(message) => hawdb_core::HawDBError::StorageIntegrity(format!(
+                "relational WAL corruption: {message}"
+            )),
+            error => hawdb_core::HawDBError::from_storage_error(error),
+        }
+    }
+
     pub(crate) fn from_io(context: &str, error: std::io::Error) -> Self {
         match hawdb_core::error::file_descriptor_error(&error) {
             Some(error) => Self::FileDescriptors(error),
