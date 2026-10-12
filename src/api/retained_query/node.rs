@@ -193,6 +193,8 @@ pub struct RetainedNodeCursor {
     profile: RetainedQueryProfile,
     terminal_error: Option<RetainedQueryError>,
     payload_bytes: usize,
+    // Foreign cursor wrappers may outlive observation/source completion.
+    _adapter_control: Option<(QueryMemoryLease, RuntimeRetainedMemory)>,
 }
 impl RetainedNodeCursor {
     pub fn profile(&self) -> RetainedQueryProfile {
@@ -419,10 +421,18 @@ impl Database {
                 "retained_node",
                 self.config.execution_memory.query_memory_bytes,
             );
-            let control_bytes = std::mem::size_of::<RetainedNodeCursor>()
+            let observation_bytes = std::mem::size_of::<RetainedNodeCursor>()
                 .checked_add(cypher.len())
                 .and_then(|bytes| bytes.checked_add(options.adapter_metadata_bytes))
                 .and_then(|bytes| bytes.checked_add(64))
+                .ok_or(RetainedQueryError::SizeOverflow)?;
+            let adapter_control_bytes = if options.adapter_metadata_bytes == 0 {
+                0
+            } else {
+                observation_bytes
+            };
+            let control_bytes = observation_bytes
+                .checked_add(adapter_control_bytes)
                 .ok_or(RetainedQueryError::SizeOverflow)?;
             let working_limit = options
                 .batch_bytes
@@ -438,8 +448,16 @@ impl Database {
             let permit = governor.try_admit(
                 RuntimeWorkRequest::foreground_query(0, allowance).with_blocking(false),
             )?;
-            let memory = account.reserve(control_bytes)?;
-            let runtime_memory = permit.reserve_retained_memory(control_bytes as u64)?;
+            let memory = account.reserve(observation_bytes)?;
+            let runtime_memory = permit.reserve_retained_memory(observation_bytes as u64)?;
+            let adapter_control = if adapter_control_bytes == 0 {
+                None
+            } else {
+                Some((
+                    account.reserve(adapter_control_bytes)?,
+                    permit.reserve_retained_memory(adapter_control_bytes as u64)?,
+                ))
+            };
             drop(permit);
             let observation = NodeObservation {
                 recorder: self.statement_recorder(),
@@ -500,6 +518,7 @@ impl Database {
                 profile,
                 terminal_error: None,
                 payload_bytes,
+                _adapter_control: adapter_control,
             })
         })();
         if let Err(error) = &result {
@@ -990,6 +1009,30 @@ mod tests {
         assert_eq!(record.success_count, 1);
         assert_eq!(record.total_row_count, 0);
     }
+    #[test]
+    fn foreign_empty_cursor_control_remains_charged_until_drop() {
+        let (db, governor) = fixture(2);
+        let mut cursor = db
+            .query_with_params_retained_node(
+                QUERY,
+                &BTreeMap::from([("key".into(), Value::Int(999))]),
+                RetainedQueryOptions {
+                    adapter_metadata_bytes: 8192,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let before = governor.snapshot().admitted_memory_bytes;
+        assert!(before >= 2 * 8192);
+        assert!(cursor.next_node().unwrap().is_none());
+        let completed = governor.snapshot().admitted_memory_bytes;
+        assert!(completed >= 8192 && completed < before);
+        cursor.close();
+        assert_eq!(governor.snapshot().admitted_memory_bytes, completed);
+        drop(cursor);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+
     #[test]
     fn foreign_metadata_is_admitted_and_failed_delivery_preserves_payload() {
         let (db, governor) = fixture(4);

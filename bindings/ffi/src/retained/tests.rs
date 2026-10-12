@@ -76,7 +76,7 @@ fn registration_panic_after_pull_is_terminal_and_preserves_previous_batch() {
     unsafe { super::super::hawdb_close(db) };
 }
 
-fn size<T>() -> u32 {
+pub(super) fn size<T>() -> u32 {
     std::mem::size_of::<T>() as u32
 }
 fn fixture(config: DatabaseConfig) -> *mut HawdbDatabase {
@@ -94,7 +94,7 @@ fn fixture(config: DatabaseConfig) -> *mut HawdbDatabase {
         inner: Mutex::new(embedded),
     }))
 }
-fn request(query: &str, params: &str) -> HawdbRetainedQueryV1 {
+pub(super) fn request(query: &str, params: &str) -> HawdbRetainedQueryV1 {
     HawdbRetainedQueryV1 {
         abi_version: HAWDB_RETAINED_ABI_V1,
         struct_size: size::<HawdbRetainedQueryV1>(),
@@ -157,7 +157,7 @@ fn column(batch: HawdbRetainedBatchV1, index: u64) -> HawdbRetainedColumnV1 {
     );
     out
 }
-fn state(namespace: u64, id: u64) -> HawdbRetainedStateV1 {
+pub(super) fn state(namespace: u64, id: u64) -> HawdbRetainedStateV1 {
     let mut out = HawdbRetainedStateV1::default();
     assert_eq!(
         unsafe { hawdb_retained_state(namespace, id, &mut out, size::<HawdbRetainedStateV1>()) },
@@ -165,7 +165,7 @@ fn state(namespace: u64, id: u64) -> HawdbRetainedStateV1 {
     );
     out
 }
-fn release(namespace: u64, id: u64) {
+pub(super) fn release(namespace: u64, id: u64) {
     assert_eq!(hawdb_retained_release(namespace, id), HAWDB_RETAINED_OK);
 }
 fn selected_scores(column: HawdbRetainedColumnV1) -> Vec<i64> {
@@ -615,7 +615,7 @@ fn nullable_float_bits_and_node_identity_are_exposed_without_casting() {
     release(identity.owner_namespace, identity.owner_id);
 }
 
-fn constrained_governor(handles: usize) -> hawdb::RuntimeGovernor {
+pub(super) fn constrained_governor(handles: usize) -> hawdb::RuntimeGovernor {
     hawdb::RuntimeGovernor::new(
         hawdb::RuntimeGovernorConfig {
             retained_result_handle_limit: NonZeroUsize::new(handles).unwrap(),

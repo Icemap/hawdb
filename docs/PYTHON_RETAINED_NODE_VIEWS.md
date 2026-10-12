@@ -56,7 +56,10 @@ successful buffer acquisition. The row, labels and all nested values remain
 immutable across source updates, database closure and cursor completion.
 The final buffer release returns its view handle and source capacity.
 
-The cursor admits Python control metadata even for an empty result. Failure to
+The cursor admits Python control metadata even for an empty result. A separate
+shared-memory control reservation remains until the native cursor is destroyed,
+including after EOF; `cursor.close()` drops that native owner. Observation and
+control overlap is included in admission. Failure to
 allocate the Python root view aborts foreign delivery; successful EOF must not
 mark a failed handoff complete. Cursor close records unfinished failure and
 preserves already exported bytes. Independently retained owners keep the native
