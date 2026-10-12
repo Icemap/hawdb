@@ -82,8 +82,12 @@ impl Fixture {
             "hawdb-checkpoint-resume-{}",
             hawdb_core::generate_uuidv7().unwrap()
         ));
+        Self::at(root, DurabilityPolicy::SyncOnEveryWrite, false)
+    }
+
+    fn at(root: PathBuf, durability: DurabilityPolicy, covered_bootstrap: bool) -> Self {
         let mut catalog = Catalog::default();
-        let mut store = GraphStore::open(&root, &mut catalog).unwrap();
+        let mut store = GraphStore::open_with_durability(&root, &mut catalog, durability).unwrap();
         store
             .create_node(
                 &mut catalog,
@@ -94,6 +98,15 @@ impl Fixture {
                 ]),
             )
             .unwrap();
+        if covered_bootstrap {
+            // Cover the first complete transaction and its bootstrap namespace.
+            // The two following relaxed transactions remain unsynchronized.
+            fs::File::open(&store.durable.as_ref().unwrap().wal_path)
+                .unwrap()
+                .sync_all()
+                .unwrap();
+            crate::durability::sync_directory(&root).unwrap();
+        }
         let pinned = store.checkpoint_source();
         let candidate = pinned
             .prepare_checkpoint_candidate(&catalog)
@@ -413,3 +426,7 @@ fn pre_apply_memory_denial_keeps_the_same_checkpoint_base() {
 
 #[path = "resume_tests/failures.rs"]
 mod failures;
+
+#[cfg(all(unix, feature = "test-support"))]
+#[path = "resume_tests/power_loss.rs"]
+mod power_loss;
