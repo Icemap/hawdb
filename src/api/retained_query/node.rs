@@ -852,13 +852,11 @@ mod tests {
                 .poison_on_storage_error::<()>(&Err(HawDBError::StorageIntegrity(
                     "injected completion failure".into(),
                 )));
+            let expected = RetainedQueryError::Execution(
+                db.runtime.get().unwrap().store.ensure_usable().unwrap_err(),
+            );
             for _ in 0..2 {
-                assert!(matches!(
-                    cursor.next_node(),
-                    Err(RetainedQueryError::Execution(HawDBError::StorageIntegrity(
-                        _
-                    )))
-                ));
+                assert_eq!(cursor.next_node().unwrap_err(), expected);
                 assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
             }
             if let Some(view) = delivered.as_ref() {
