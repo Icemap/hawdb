@@ -6408,9 +6408,13 @@ fn capture_relational_primary_key_changes(
 
 fn estimated_row_change_encoding_bytes(change: &RelationalRowChange) -> Option<usize> {
     const FIXED_BYTES: usize = 1 + 3 * 4;
-    let key_bytes = ordered_key::encode_ordered_relational_key(&change.primary_key)
-        .ok()?
-        .len();
+    let key_bytes = ordered_key::CheckpointKeyEncoding::new(
+        &change.primary_key,
+        &[],
+        &crate::background::CheckpointWorkContext::default(),
+    )
+    .ok()?
+    .encoded_len();
     let row_bytes = match &change.row {
         Some(row) => row.estimated_payload_bytes().checked_add(
             row.values()
@@ -6427,9 +6431,13 @@ fn estimated_row_change_encoding_bytes(change: &RelationalRowChange) -> Option<u
 
 fn estimated_replay_access_encoding_bytes(change: &RelationalReplayAccess) -> Option<usize> {
     const FIXED_BYTES: usize = 2 * 8;
-    let key_bytes = ordered_key::encode_ordered_relational_key(&change.primary_key)
-        .ok()?
-        .len();
+    let key_bytes = ordered_key::CheckpointKeyEncoding::new(
+        &change.primary_key,
+        &[],
+        &crate::background::CheckpointWorkContext::default(),
+    )
+    .ok()?
+    .encoded_len();
     FIXED_BYTES
         .checked_add(change.table.len())?
         .checked_add(key_bytes)

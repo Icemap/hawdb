@@ -5959,3 +5959,64 @@ fn assert_relational_index_artifact_metadata(
     assert_eq!(expected.encoded_crc32c, actual.crc32c.as_u64());
     assert_eq!(expected.encoded_sha256, actual.sha256);
 }
+
+#[test]
+fn capture_size_estimates_match_wire_without_allocating_wide_keys() {
+    let key = RelationalKey(vec![
+        RelationalValue::Null,
+        RelationalValue::Boolean(true),
+        RelationalValue::BigInt(i64::MIN),
+        RelationalValue::DoublePrecision(-0.0),
+        RelationalValue::Text("\0x".repeat(64 * 1024)),
+        RelationalValue::Bytea(vec![0; 128 * 1024]),
+        RelationalValue::Uuid(Uuid::from_bytes([7; 16])),
+    ]);
+    let encoded_key_len = ordered_key::encode_ordered_relational_key(&key)
+        .unwrap()
+        .len();
+    for row in [
+        None,
+        Some(RelationalRow::new(vec![RelationalValue::Text(
+            "r".repeat(128 * 1024),
+        )])),
+    ] {
+        let change = RelationalRowChange {
+            table: "documents".into(),
+            primary_key: key.clone(),
+            row,
+        };
+        let access = RelationalReplayAccess {
+            table: change.table.clone(),
+            primary_key: key.clone(),
+        };
+        let row_bytes = change.row.as_ref().map_or(0, |row| {
+            row.estimated_payload_bytes() + std::mem::size_of_val(row.values())
+        });
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let row_estimate = estimated_row_change_encoding_bytes(&change);
+        let access_estimate = estimated_replay_access_encoding_bytes(&access);
+        let wide_allocations = observer.finish();
+        assert_eq!(wide_allocations, 0);
+        assert_eq!(
+            row_estimate,
+            Some(13 + change.table.len() + encoded_key_len + row_bytes)
+        );
+        assert_eq!(
+            access_estimate,
+            Some(16 + access.table.len() + encoded_key_len)
+        );
+    }
+    let empty = RelationalRowChange {
+        table: "documents".into(),
+        primary_key: RelationalKey(Vec::new()),
+        row: None,
+    };
+    assert_eq!(estimated_row_change_encoding_bytes(&empty), None);
+    assert_eq!(
+        estimated_replay_access_encoding_bytes(&RelationalReplayAccess {
+            table: empty.table,
+            primary_key: empty.primary_key,
+        }),
+        None
+    );
+}
