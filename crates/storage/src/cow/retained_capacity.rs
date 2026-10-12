@@ -7,7 +7,7 @@ use super::*;
 /// nodes and an allocated empty root. Every non-root node has at least five
 /// pairs; the root can have one. A tree with eleven pairs can therefore have
 /// three nodes, rather than one full leaf.
-fn tree_capacity<K, V>(len: usize) -> Option<usize> {
+pub(super) fn tree_capacity<K, V>(len: usize) -> Option<usize> {
     let nodes = 1usize.checked_add(len.saturating_sub(1) / 5)?;
     let node_bytes = std::mem::size_of::<(K, V)>()
         .checked_mul(11)?
@@ -16,7 +16,7 @@ fn tree_capacity<K, V>(len: usize) -> Option<usize> {
     nodes.checked_mul(node_bytes)
 }
 
-fn properties_capacity(values: &BTreeMap<String, Value>, depth: usize) -> Option<usize> {
+pub(super) fn properties_capacity(values: &BTreeMap<String, Value>, depth: usize) -> Option<usize> {
     values.iter().try_fold(
         tree_capacity::<String, Value>(values.len())?,
         |bytes, (name, value)| {
@@ -63,22 +63,7 @@ fn node_page_capacity(
     })
 }
 
-type RetainedNodePagePreflight<'a> = (&'a Arc<BTreeMap<NodeId, NodeRecord>>, Option<usize>);
-
 impl CowSegmentedMap<NodeId, NodeRecord> {
-    /// Borrow the exact page and bound its complete retained capacity before
-    /// adoption. No directory or page is cloned during this cold preflight.
-    pub(crate) fn retained_point_page_preflight(
-        &self,
-        id: NodeId,
-    ) -> Option<RetainedNodePagePreflight<'_>> {
-        let page = self.segments.get(self.segment_index(&id)?)?;
-        if !page.contains_key(&id) {
-            return None;
-        }
-        Some((page, node_page_capacity(page, 0, &mut 0)))
-    }
-
     /// Borrowed preflight of all allocations kept alive by a node snapshot.
     /// Unlike page-splitting weights, this uses owned buffer capacities, not
     /// logical lengths. It allocates/clones no source values. None refuses

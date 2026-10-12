@@ -792,7 +792,7 @@ pub struct GraphStore {
     version_index: hawdb_storage::version::VersionIndex,
     version_snapshot_pins: hawdb_storage::version::VersionSnapshotPins,
     version_snapshot_pin: Option<hawdb_storage::version::VersionSnapshotPin>,
-    nodes: CowSegmentedMap<NodeId, NodeRecord>,
+    nodes: crate::cow::CowNodeMap,
     relationships: CowSegmentedMap<RelId, RelRecord>,
     basic_statistics: BasicGraphStatistics,
     checkpoint_statistics: GraphStatistics,
@@ -1729,7 +1729,7 @@ impl GraphStore {
             version_index: hawdb_storage::version::VersionIndex::default(),
             version_snapshot_pins: Default::default(),
             version_snapshot_pin: None,
-            nodes: CowSegmentedMap::default(),
+            nodes: crate::cow::CowNodeMap::default(),
             relationships: CowSegmentedMap::default(),
             basic_statistics: BasicGraphStatistics::default(),
             checkpoint_statistics: GraphStatistics::default(),
@@ -11016,7 +11016,7 @@ mod tests {
 
     #[test]
     fn statistics_track_path_source_and_target_coverage() {
-        let nodes = [
+        let nodes: crate::cow::CowNodeMap = [
             (0, LabelId(0)),
             (1, LabelId(0)),
             (10, LabelId(1)),

@@ -53,7 +53,7 @@ mod retained_scan_tests;
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct MaterializedNodeReadSource {
-    nodes: CowSegmentedMap<NodeId, NodeRecord>,
+    nodes: crate::cow::CowNodeMap,
     integrity_poisoned: Arc<AtomicBool>,
     post_wal_apply_poisoned: Arc<AtomicBool>,
 }
@@ -88,12 +88,11 @@ pub enum MaterializedNodePointRead<A = Box<dyn GraphReadAllocation>> {
     Node(MaterializedNodePointSource<A>),
 }
 
-/// Own one immutable node page, without retaining the source directory.
-/// The admission permit outlives the page and all borrowed record access.
+/// Own one immutable node row, without retaining its page or directory.
+/// The admission permit outlives the row and all borrowed record access.
 #[doc(hidden)]
 pub struct MaterializedNodePointSource<A = Box<dyn GraphReadAllocation>> {
-    page: Arc<BTreeMap<NodeId, NodeRecord>>,
-    id: NodeId,
+    row: Arc<NodeRecord>,
     integrity_poisoned: Arc<AtomicBool>,
     post_wal_apply_poisoned: Arc<AtomicBool>,
     _allocation: A,
@@ -102,9 +101,7 @@ pub struct MaterializedNodePointSource<A = Box<dyn GraphReadAllocation>> {
 impl<A> MaterializedNodePointSource<A> {
     pub fn node(&self) -> Result<&NodeRecord> {
         ensure_graph_read_flags_usable(&self.integrity_poisoned, &self.post_wal_apply_poisoned)?;
-        self.page.get(&self.id).ok_or_else(|| {
-            HawDBError::Execution("retained point source lost its immutable node".into())
-        })
+        Ok(&self.row)
     }
 }
 
@@ -124,8 +121,8 @@ fn retain_point_allocation(allocation: &mut dyn GraphReadAllocation, bytes: usiz
 }
 
 impl GraphStore {
-    /// Admit the full selected page before pinning it, including unrelated
-    /// records and spare capacities. This does not construct Arrow arrays or
+    /// Admit the selected row before pinning it, including nested and spare
+    /// capacities. This does not construct Arrow arrays or
     /// establish a whole-process memory bound. Callers must supply their policy.
     #[doc(hidden)]
     pub fn materialized_node_point_read(
@@ -166,7 +163,7 @@ impl GraphStore {
         if self.node_tombstones.contains(&id) {
             return Ok(MaterializedNodePointRead::Missing);
         }
-        let Some((page, capacity)) = self.nodes.retained_point_page_preflight(id) else {
+        let Some((row, capacity)) = self.nodes.retained_point_row_preflight(id) else {
             return Ok(MaterializedNodePointRead::Missing);
         };
         let bytes = capacity
@@ -180,8 +177,7 @@ impl GraphStore {
         retain(&mut allocation, bytes)?;
         Ok(MaterializedNodePointRead::Node(
             MaterializedNodePointSource {
-                page: Arc::clone(page),
-                id,
+                row: Arc::clone(row),
                 integrity_poisoned: Arc::clone(&self.integrity_poisoned),
                 post_wal_apply_poisoned: Arc::clone(&self.post_wal_apply_poisoned),
                 _allocation: allocation,

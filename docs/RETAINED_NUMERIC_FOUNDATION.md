@@ -556,6 +556,9 @@ of those capabilities.
 
 ## Bounded point-page ownership proof
 
+This historical proof covers the earlier generic page owner. The resident
+point primitive below now retains an individual row instead.
+
 The storage regression
 `independent_point_page_preserves_values_without_retaining_other_pages`
 constructs an independent owner of one existing COW node page. It checks that
@@ -567,31 +570,34 @@ old page unchanged; dropping the final page owner must release it.
 This is an executable ownership proof, not a production query lease. It does
 not change the retained cursor's complete-source admission or implement source
 reuse, allocation/generation provenance, poison propagation, aggregate admission,
-or host views. A point lease must admit the complete page before retaining it;
+or host views. This historical page proof required admitting the complete page;
 charging only the selected fields would omit unrelated records pinned by that
 page. It must also account for COW replacement memory while a host retains the
 old page. Ordinary wide point reads remain on the owned path until those
 contracts and comprehensive performance are qualified.
 
 
-## Admitted resident point-page primitive
+## Admitted resident point-row primitive
 
 `GraphStore::materialized_node_point_read` is a root-internal ownership
-primitive. It distinguishes unsupported canonical/out-of-core sources from a
-missing resident node. Before cloning any source Arc, it borrows the selected
-page and computes a checked capacity bound for the entire page, including
-unrequested records, sparse tree nodes, nested values and spare buffer capacity.
-It obtains and validates a `GraphReadAllocation`, transfers retained state, then
-captures only that page and the two fail-closed poison signals. The permit is
-dropped after the source page. Mutation uses existing COW semantics; borrowed
-record and string addresses remain unchanged in the retained generation.
+primitive for resident nodes. Out-of-core or canonical-base stores return
+`Unsupported`; absent live rows and tombstones return `Missing`. The preflight
+borrows the exact row and checks its complete retained capacity, including
+nested values and spare buffers, before acquiring or transferring the caller's
+permit. Only then does it capture the row and two fail-closed poison signals.
+The row drops before the permit. Future borrows check the poison signals.
 
-This primitive is not connected to ordinary query execution or host bindings.
-Its cold preflight walks the selected page and has no per-page capacity cache;
-activating it for point queries requires performance qualification. Caller
-allocation policy must account for retained runtime/process memory and concurrent
-COW generations. It does not provide typed contiguous Arrow arrays, a host buffer
-lease, scan snapshot generations or end-to-end zero-copy qualification.
+Resident node COW pages contain immutable row owners. Detaching a page clones
+row references; mutating a selected row clones that row only when shared.
+The map preserves borrowed NodeRecord access, and snapshot-capacity caches
+are invalidated before mutable access. Point preflight walks the selected row
+without an eager write-time capacity cache and retains no page or directory.
+
+This still requires ordinary point-query and host performance qualification.
+Caller policies must cover source ownership, output materialization and COW
+replacement generations. It does not provide typed contiguous Arrow arrays,
+a host buffer handoff, or whole-process memory admission. Persistence encoding
+and the embedded facade remain unchanged.
 
 ### Concrete point allocation ownership
 
@@ -599,9 +605,9 @@ lease, scan snapshot generations or end-to-end zero-copy qualification.
 permit rather than erasing it into a boxed trait object. The point source keeps
 that type's automatic `Send`/`Sync` properties; the existing boxed entry point
 and standalone allocation trait remain unchanged. Both entry points use the
-same preflight/capture path and validate the complete page reservation before
+same preflight/capture path and validate the complete row reservation before
 and after retained-state transfer. A short permit, failed transfer or shrinking
-permit releases the allocation without capturing a source page.
+permit releases the allocation without capturing a source row.
 
 The typed ownership regression moves a source to another thread after COW
 mutation and store destruction, checks the original record address, then drops
@@ -609,3 +615,25 @@ the source and observes permit release. This establishes the native typed-owner
 mechanics, not Python/Arrow callback qualification or runtime/process admission.
 The caller must supply a real retained query/runtime allocation policy before
 host activation; no unsafe Send/Sync implementation or query routing is added.
+
+### Row ownership invariants
+
+For a selected immutable row `R`, the checked capacity estimate includes its
+Arc/record allocation, labels, keys, and recursively owned buffer capacities.
+Overflow or excessive nesting refuses admission. Preflight borrows `R`; a row
+Arc is cloned only after the permit is sufficient both before and after
+retained-state transfer. Refusal therefore does not extend payload lifetime.
+
+COW pages hold row Arcs. Detaching a page clones handles; `Arc::make_mut` gives
+a writer a distinct row when a reader retains the original. The retained row
+and its existing buffers preserve their addresses, and untouched rows remain
+shared. A point source retains no page or directory. Its row and poison signals
+are declared before its permit, so payload destruction precedes permit release.
+
+Point bounds are computed from the current row on adoption, with no eager
+write-time row-capacity cache. Mutable access invalidates the full-source
+capacity cache before mutation; detached snapshot generations keep independent
+bounds. The B-tree allocation estimate relies on the pinned Rust layout.
+Allocator fragmentation, process residency, host handoff, and crash safety
+require separate qualification; these ownership invariants do not establish
+those broader properties.

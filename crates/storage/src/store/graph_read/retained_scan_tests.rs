@@ -371,7 +371,7 @@ fn point_source_rejects_short_permits_before_pin_and_missing_skips_admission() {
     let id = store
         .create_node(&mut catalog, "Item", BTreeMap::new())
         .unwrap();
-    let (page, _) = store.nodes.retained_point_page_preflight(id).unwrap();
+    let (page, _) = store.nodes.retained_point_row_preflight(id).unwrap();
     let owners = Arc::strong_count(page);
     let mut short =
         |_| -> Result<Box<dyn GraphReadAllocation>> { Ok(Box::new(UnaccountedReadAllocation(0))) };
@@ -427,7 +427,7 @@ struct ThreadPointAllocation {
     retained: Arc<AtomicBool>,
     fail_retention: bool,
     retained_bytes: Option<usize>,
-    page_on_release: Option<std::sync::Weak<BTreeMap<NodeId, NodeRecord>>>,
+    row_on_release: Option<std::sync::Weak<NodeRecord>>,
 }
 
 impl GraphReadAllocation for ThreadPointAllocation {
@@ -454,8 +454,8 @@ impl GraphReadAllocation for ThreadPointAllocation {
 
 impl Drop for ThreadPointAllocation {
     fn drop(&mut self) {
-        if let Some(page) = &self.page_on_release {
-            assert_eq!(page.strong_count(), 0, "page must drop before its permit");
+        if let Some(page) = &self.row_on_release {
+            assert_eq!(page.strong_count(), 0, "row must drop before its permit");
         }
         self.released.store(true, AtomicOrdering::Release);
     }
@@ -475,7 +475,7 @@ fn typed_point_source_preserves_auto_traits_and_cross_thread_release() {
         )
         .unwrap();
     let address = std::ptr::from_ref(store.nodes.get(&id).unwrap()) as usize;
-    let page = Arc::downgrade(store.nodes.retained_point_page_preflight(id).unwrap().0);
+    let page = Arc::downgrade(store.nodes.retained_point_row_preflight(id).unwrap().0);
     let released = Arc::new(AtomicBool::new(false));
     let retained = Arc::new(AtomicBool::new(false));
     let MaterializedNodePointRead::Node(source) = store
@@ -486,7 +486,7 @@ fn typed_point_source_preserves_auto_traits_and_cross_thread_release() {
                 retained: Arc::clone(&retained),
                 fail_retention: false,
                 retained_bytes: None,
-                page_on_release: Some(page.clone()),
+                row_on_release: Some(page.clone()),
             })
         })
         .unwrap()
@@ -517,7 +517,7 @@ fn typed_point_admission_validates_before_and_after_retained_transfer() {
     let id = store
         .create_node(&mut catalog, "Item", BTreeMap::new())
         .unwrap();
-    let (page, _) = store.nodes.retained_point_page_preflight(id).unwrap();
+    let (page, _) = store.nodes.retained_point_row_preflight(id).unwrap();
     let owners = Arc::strong_count(page);
     for (short, fail, shrink, expected) in [
         (true, false, false, "insufficient allocation permit"),
@@ -534,7 +534,7 @@ fn typed_point_admission_validates_before_and_after_retained_transfer() {
                 retained: Arc::clone(&retained),
                 fail_retention: fail,
                 retained_bytes: shrink.then_some(0),
-                page_on_release: None,
+                row_on_release: None,
             })
         });
         assert!(matches!(result, Err(HawDBError::Execution(reason)) if reason.contains(expected)));

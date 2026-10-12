@@ -24,6 +24,11 @@ use std::sync::{Arc, OnceLock};
 #[path = "cow/retained_capacity.rs"]
 mod retained_capacity;
 
+#[path = "cow/node_map.rs"]
+mod node_map;
+#[doc(hidden)]
+pub use node_map::{CowNodeMap, NodeRecordRead, NodeRecordWrite};
+
 /// An immutable snapshot segment that is cloned only when a writer mutates it.
 ///
 /// Read transactions clone the `Arc`, so creating a graph snapshot is
@@ -293,13 +298,14 @@ impl<K, V> Default for CowSegmentedMap<K, V> {
     }
 }
 
-impl<K: Ord + CowPageWeight, V: CowPageWeight> From<BTreeMap<K, V>> for CowSegmentedMap<K, V> {
-    fn from(values: BTreeMap<K, V>) -> Self {
-        let len = values.len();
+impl<K: Ord + CowPageWeight, V: CowPageWeight> CowSegmentedMap<K, V> {
+    pub(crate) fn from_ordered_entries(values: impl IntoIterator<Item = (K, V)>) -> Self {
+        let mut len = 0;
         let mut segments = Vec::new();
         let mut segment = BTreeMap::new();
         let mut segment_bytes = 0usize;
         for (key, value) in values {
+            len += 1;
             let entry_bytes = cow_map_entry_bytes(&key, &value);
             if !segment.is_empty()
                 && (segment.len() >= COW_MAP_MAX_SEGMENT_ENTRIES
@@ -318,6 +324,12 @@ impl<K: Ord + CowPageWeight, V: CowPageWeight> From<BTreeMap<K, V>> for CowSegme
             segments: Arc::new(CowPageDirectory::new(segments)),
             len,
         }
+    }
+}
+
+impl<K: Ord + CowPageWeight, V: CowPageWeight> From<BTreeMap<K, V>> for CowSegmentedMap<K, V> {
+    fn from(values: BTreeMap<K, V>) -> Self {
+        Self::from_ordered_entries(values)
     }
 }
 
