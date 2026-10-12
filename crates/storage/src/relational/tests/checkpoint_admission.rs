@@ -720,3 +720,169 @@ fn controlled_row_page_copy_cancellation_keeps_directory_and_retries() {
     assert!(!target.pages.shares_storage_with(&source.pages));
     assert_eq!(target.get(&key), source.get(&key));
 }
+
+#[test]
+fn controlled_row_insert_denies_wide_empty_page_and_retains_new_key_ownership() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let id = "k".repeat(128 * 1024);
+    let key = RelationalKey(vec![RelationalValue::Text(id.clone())]);
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let mut target = RelationalRowPages::default();
+        let original = target.clone();
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let incoming = key.clone();
+        let row = upsert_row(&id, "owner", "body");
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = target.insert_with_allocations(incoming, row, Some(&context));
+        let wide_allocations = observer.finish();
+        drop(context);
+        if succeeds {
+            assert!(result.unwrap().is_none());
+            assert_eq!(target.len(), 1);
+            let retained = target.clone();
+            drop(target);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                if available_bytes <= ceiling - 128 * 1024)
+            );
+            assert!(retained.get(&key).is_some());
+            drop(retained);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(wide_allocations, 0);
+            assert_eq!(target.len(), 0);
+            assert!(target.pages.shares_storage_with(&original.pages));
+            drop(target);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
+
+#[test]
+fn controlled_row_insert_splits_match_ordinary_pages_and_keep_source_snapshot() {
+    use crate::background::CheckpointDecodeContext;
+    let rows = (0..256)
+        .map(|id| {
+            let id = format!("id-{id:04}");
+            (
+                RelationalKey(vec![RelationalValue::Text(id.clone())]),
+                upsert_row(&id, "owner", "body"),
+            )
+        })
+        .collect();
+    let source = RelationalRowPages::from_map(rows);
+    let mut ordinary = source.clone();
+    let mut controlled = source.clone();
+    let key = RelationalKey(vec![RelationalValue::Text("id-0256".into())]);
+    let row = upsert_row("id-0256", "owner", "body");
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    assert_eq!(
+        controlled
+            .insert_with_allocations(key.clone(), row.clone(), Some(&context))
+            .unwrap(),
+        ordinary.insert(key.clone(), row)
+    );
+    assert_eq!(controlled.page_count(), ordinary.page_count());
+    assert_eq!(
+        controlled
+            .pages
+            .iter()
+            .map(|page| page.len())
+            .collect::<Vec<_>>(),
+        ordinary
+            .pages
+            .iter()
+            .map(|page| page.len())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        controlled.iter().collect::<Vec<_>>(),
+        ordinary.iter().collect::<Vec<_>>()
+    );
+    assert_eq!(source.len(), 256);
+    assert!(source.get(&key).is_none());
+    assert_eq!(controlled.len(), 257);
+}
+
+#[test]
+fn controlled_row_insert_cancellation_keeps_source_and_retries() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkProbe};
+    use hawdb_qos::{LocalQosPolicy, LocalQosScheduler};
+    let old_key = RelationalKey(vec![RelationalValue::Text("id-1".into())]);
+    let source = RelationalRowPages::from_map(BTreeMap::from([(
+        old_key.clone(),
+        upsert_row("id-1", "owner", "body"),
+    )]));
+    let mut target = source.clone();
+    let key = RelationalKey(vec![RelationalValue::Text("id-2".into())]);
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe
+        .cancel_after
+        .store(2, std::sync::atomic::Ordering::SeqCst);
+    let scheduler = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let context = CheckpointDecodeContext {
+        work: probe.context(scheduler.clone()),
+        memory: Default::default(),
+    };
+    assert!(matches!(
+        target.insert_with_allocations(
+            key.clone(),
+            upsert_row("id-2", "owner", "body"),
+            Some(&context)
+        ),
+        Err(RelationalError::Admission(_))
+    ));
+    probe.assert_released(&scheduler);
+    assert!(target.pages.shares_storage_with(&source.pages));
+    assert_eq!(target.len(), 1);
+    assert!(target.get(&key).is_none());
+    assert_eq!(target.get(&old_key), source.get(&old_key));
+    let retry = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    target
+        .insert_with_allocations(
+            key.clone(),
+            upsert_row("id-2", "owner", "body"),
+            Some(&retry),
+        )
+        .unwrap();
+    assert_eq!(target.len(), 2);
+    assert!(target.get(&key).is_some());
+    assert_eq!(source.len(), 1);
+}

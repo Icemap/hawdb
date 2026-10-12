@@ -1449,6 +1449,130 @@ impl RelationalRowPages {
         Ok(())
     }
 
+    fn insert_with_allocations(
+        &mut self,
+        key: RelationalKey,
+        row: RelationalRow,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<Option<RelationalRow>, RelationalError> {
+        let Some(context) = allocations else {
+            return Ok(self.insert(key, row));
+        };
+        let work = &context.work;
+        let admission =
+            |error: hawdb_core::HawDBError| RelationalError::Admission(error.to_string());
+        let directory_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let page_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let split_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let index = self.page_index(&key).unwrap_or(0);
+        let previous_len = self.pages.get(index).map_or(0, |page| page.len());
+        let capacity =
+            self.pages.len().checked_add(1).ok_or_else(|| {
+                RelationalError::Admission("row directory growth overflow".into())
+            })?;
+        let mut directory = directory_context
+            .vector_capacity(capacity)
+            .map_err(admission)?;
+        directory_context
+            .reserve(RelationalRowDirectory::checkpoint_ownership_bytes())
+            .map_err(admission)?;
+        for page in self.pages.iter() {
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            directory.push(page.clone());
+            unit.finish();
+        }
+        let nodes = previous_len
+            .checked_add(3)
+            .ok_or_else(|| RelationalError::Admission("row page growth overflow".into()))?;
+        let bytes = nodes
+            .checked_mul(crate::cow::checkpoint_tree_node_bytes::<
+                RelationalKey,
+                RelationalRow,
+            >())
+            .and_then(|bytes| {
+                bytes.checked_add(2 * RelationalRowPage::checkpoint_ownership_bytes())
+            })
+            .ok_or_else(|| RelationalError::Admission("row page growth overflow".into()))?;
+        page_context.reserve(bytes).map_err(admission)?;
+        let mut rows = BTreeMap::new();
+        if let Some(page) = self.pages.get(index) {
+            for (key, row) in page.iter() {
+                let key = key.clone_with_allocations(&page_context)?;
+                let unit = work
+                    .start_unit()
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                rows.insert(key, row.clone());
+                unit.finish();
+            }
+        }
+        let key = key.clone_with_allocations(&page_context)?;
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let previous = rows.insert(key, row);
+        unit.finish();
+        let mut page_bytes = 0usize;
+        for (key, row) in &rows {
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            page_bytes = page_bytes.saturating_add(relational_row_entry_bytes(key, row));
+            unit.finish();
+        }
+        let right = if rows.len() > 1
+            && (rows.len() > RELATIONAL_ROW_PAGE_MAX_ENTRIES
+                || page_bytes > RELATIONAL_ROW_PAGE_TARGET_BYTES)
+        {
+            let split_key = rows
+                .keys()
+                .nth(rows.len() / 2)
+                .expect("nonempty split page")
+                .clone_with_allocations(&split_context)?;
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            let right = rows.split_off(&split_key);
+            unit.finish();
+            Some(right)
+        } else {
+            None
+        };
+        work.checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let memory = page_context.memory.into_inner();
+        let left = crate::cow::CowSegment::from_checkpoint_value(rows, memory.clone());
+        if directory.is_empty() {
+            directory.push(left);
+        } else {
+            directory[index] = left;
+        }
+        if let Some(right) = right {
+            directory.insert(
+                index + 1,
+                crate::cow::CowSegment::from_checkpoint_value(right, memory),
+            );
+        }
+        self.pages = crate::cow::CowSegment::from_checkpoint_value(
+            directory,
+            directory_context.memory.into_inner(),
+        );
+        if previous.is_none() {
+            self.len += 1;
+        }
+        Ok(previous)
+    }
+
     fn from_map(rows: BTreeMap<RelationalKey, RelationalRow>) -> Self {
         let len = rows.len();
         let mut pages = Vec::new();
@@ -5574,7 +5698,11 @@ fn apply_transaction_inner(
                             "duplicate primary key in table {table}"
                         )));
                     }
-                    segment.rows.insert(key.clone(), row);
+                    segment.rows.insert_with_allocations(
+                        key.clone(),
+                        row,
+                        checkpoint_allocations,
+                    )?;
                     changed_keys.entry(table.clone()).or_default().insert(key);
                 }
                 touched.insert(table.clone());
