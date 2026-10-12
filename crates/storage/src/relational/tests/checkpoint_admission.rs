@@ -1585,3 +1585,100 @@ fn controlled_conflict_map_denial_preserves_entries_and_replacement_reuses_nodes
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
+
+#[test]
+fn conflict_projection_compares_wide_values_without_owned_keys() {
+    let row = RelationalRow::new(vec![
+        RelationalValue::Text("t".repeat(128 * 1024)),
+        RelationalValue::Bytea(vec![0xff; 128 * 1024]),
+        RelationalValue::Null,
+    ]);
+    for positions in [vec![], vec![0], vec![1], vec![2], vec![1, 0, 1], vec![2, 0]] {
+        let expected = row_key(&row, &positions);
+        let mut wrong = expected.clone();
+        wrong.0.push(RelationalValue::Null);
+        let observer = crate::test_allocator::AllocationObservation::start();
+        assert!(row_matches_key(&row, &positions, &expected));
+        assert!(!row_matches_key(&row, &positions, &wrong));
+        assert_eq!(observer.finish(), 0);
+    }
+}
+
+#[test]
+fn controlled_primary_conflict_probe_denies_wide_result_before_copy() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let id = "k".repeat(128 * 1024);
+    let state = RelationalState::default()
+        .stage_transaction(
+            create_upsert_table(),
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![upsert_row(&id, "owner", "body")],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let key = RelationalKey(vec![RelationalValue::Text(id)]);
+    let schema = state.table_schema("documents").unwrap();
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = conflict_primary_key(
+            &state,
+            "documents",
+            schema,
+            &schema.primary_key,
+            &key,
+            &BTreeSet::new(),
+            RelationalConflictProbeContext {
+                constraint_index: None,
+                allocations: Some(&context),
+            },
+        );
+        let copies = observer.finish();
+        if succeeds {
+            assert_eq!(result.unwrap(), Some(key.clone()));
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+        }
+        assert!(state.row("documents", &key).is_some());
+        drop(context);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}

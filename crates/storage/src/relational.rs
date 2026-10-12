@@ -6288,7 +6288,10 @@ fn apply_upsert(
                 conflict_columns,
                 &conflict_key,
                 changed_keys,
-                constraint_index,
+                RelationalConflictProbeContext {
+                    constraint_index,
+                    allocations: conflict_context.as_ref(),
+                },
             )?
         };
 
@@ -6453,6 +6456,20 @@ fn insert_staged_conflict_with_allocations(
     Ok(previous)
 }
 
+#[derive(Clone, Copy)]
+struct RelationalConflictProbeContext<'a> {
+    constraint_index: Option<&'a dyn RelationalConstraintIndex>,
+    allocations: Option<&'a crate::background::CheckpointDecodeContext>,
+}
+
+fn row_matches_key(row: &RelationalRow, positions: &[usize], key: &RelationalKey) -> bool {
+    positions.len() == key.0.len()
+        && positions
+            .iter()
+            .zip(&key.0)
+            .all(|(position, value)| &row.values()[*position] == value)
+}
+
 fn conflict_primary_key(
     state: &RelationalState,
     table: &str,
@@ -6460,7 +6477,7 @@ fn conflict_primary_key(
     conflict_columns: &[String],
     conflict_key: &RelationalKey,
     changed_keys: &BTreeSet<RelationalKey>,
-    constraint_index: Option<&dyn RelationalConstraintIndex>,
+    context: RelationalConflictProbeContext<'_>,
 ) -> Result<Option<RelationalKey>, RelationalError> {
     let definition = schema
         .unique_index_definition(conflict_columns)
@@ -6469,7 +6486,7 @@ fn conflict_primary_key(
                 "UPSERT conflict target on table {table} is not materialized"
             ))
         })?;
-    if let Some(constraint_index) = constraint_index {
+    if context.constraint_index.is_some() {
         return constraints::authoritative_conflict_primary_key(
             state,
             table,
@@ -6477,18 +6494,22 @@ fn conflict_primary_key(
             conflict_columns,
             conflict_key,
             changed_keys,
-            constraint_index,
+            context,
         );
     }
     if definition.role == RelationalIndexRole::Primary {
-        return Ok(state.row(table, conflict_key).map(|_| conflict_key.clone()));
+        return state
+            .row(table, conflict_key)
+            .map(|_| clone_key_with_allocations(conflict_key, context.allocations))
+            .transpose();
     }
     if !state.materialized_index_postings_resident {
-        let positions = column_positions(schema, conflict_columns)?;
+        let positions =
+            column_positions_with_allocations(schema, conflict_columns, context.allocations)?;
         let mut matches = state
             .rows(table)
-            .filter(|(_, row)| row_key(row, &positions) == *conflict_key)
-            .map(|(primary_key, _)| primary_key.clone());
+            .filter(|(_, row)| row_matches_key(row, &positions, conflict_key))
+            .map(|(primary_key, _)| primary_key);
         let primary_key = matches.next();
         if matches.next().is_some() {
             return Err(RelationalError::Corruption(format!(
@@ -6496,20 +6517,24 @@ fn conflict_primary_key(
                 definition.name
             )));
         }
-        return Ok(primary_key);
+        return primary_key
+            .map(|key| clone_key_with_allocations(key, context.allocations))
+            .transpose();
     }
     let Some(postings) = state.index_lookup(table, &definition.name, conflict_key) else {
         return Ok(None);
     };
     let mut keys = postings.iter();
-    let primary_key = keys.next().cloned();
+    let primary_key = keys.next();
     if keys.next().is_some() {
         return Err(RelationalError::Corruption(format!(
             "unique conflict index {} on table {table} has multiple visible rows",
             definition.name
         )));
     }
-    Ok(primary_key)
+    primary_key
+        .map(|key| clone_key_with_allocations(key, context.allocations))
+        .transpose()
 }
 
 struct UpdateApplyContext<'a> {
