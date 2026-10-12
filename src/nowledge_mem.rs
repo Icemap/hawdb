@@ -2352,6 +2352,7 @@ pub struct NowledgeMemReadSnapshot<'a> {
     sql_statement_count: usize,
     output_rows: usize,
     output_payload_bytes: usize,
+    task_context: RuntimeTaskContext,
 }
 
 impl<'a> NowledgeMemReadSnapshot<'a> {
@@ -2361,6 +2362,7 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
         budget: NowledgeMemReadSnapshotBudget,
         projection: Option<&'a NowledgeMemSearchProjection>,
         out_of_core_projection: Option<&'a NowledgeMemOutOfCoreSearchProjection>,
+        task_context: RuntimeTaskContext,
     ) -> Self {
         let freshness = match (projection, out_of_core_projection) {
             (Some(projection), None) => Some(projection.freshness()),
@@ -2386,6 +2388,7 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
             sql_statement_count: 0,
             output_rows: 0,
             output_payload_bytes: 0,
+            task_context,
         }
     }
 
@@ -2491,6 +2494,56 @@ impl<'a> NowledgeMemReadSnapshot<'a> {
         self.consume(output_rows, output_payload_bytes)?;
         self.sql_statement_count = completed_statement_count;
         Ok(output)
+    }
+
+    /// Visits the complete current projection under this snapshot's retained pin.
+    /// The visitor runs synchronously under the store read guard. It must not
+    /// reenter the store or wait for an async source while retaining this guard.
+    ///
+    /// Order is unspecified. A visitor prefix is not exhaustion evidence: only
+    /// the successful returned report certifies completion. Retained copies are
+    /// caller-owned and require independent accounting. Encoded-record scratch
+    /// has its own finite cap, distinct from cumulative logical output bytes.
+    /// Scans charge UTF-8 strings, metadata and four bytes per embedding value;
+    /// Cypher/SQL reads charge `Value` payload estimates, including value overhead.
+    /// These charges share the cumulative cap but differ by output representation.
+    /// Out-of-core scans read all physical payloads twice and probe visible ID
+    /// routes during preflight. The read guard blocks writers throughout; lock
+    /// duration depends on physical bytes, inventory and storage throughput.
+    /// Emit callbacks may precede final checksum validation, so a later error
+    /// invalidates completion even after callbacks have run.
+    pub fn visit_search_projection(
+        &mut self,
+        max_encoded_record_bytes: usize,
+        mut visitor: impl FnMut(&SearchDocument) -> Result<()>,
+    ) -> Result<crate::search::SearchProjectionScanReport> {
+        let budget = crate::search::SearchProjectionScanBudget {
+            max_rows: self.statement_row_budget(self.budget.max_rows)?,
+            max_payload_bytes: self.remaining_payload_bytes()?,
+            max_encoded_record_bytes,
+        };
+        let report = match (
+            self.external.projection,
+            self.external.out_of_core_projection,
+        ) {
+            (Some(projection), None) => projection.index().visit_projection_documents(
+                budget,
+                &self.task_context,
+                &mut visitor,
+            )?,
+            (None, Some(projection)) => projection.reader().visit_projection_documents(
+                budget,
+                &self.task_context,
+                &mut visitor,
+            )?,
+            _ => {
+                return Err(HawDBError::Execution(
+                    "bounded projection scan requires exactly one pinned Search projection".into(),
+                ))
+            }
+        };
+        self.consume(report.document_count, report.payload_bytes)?;
+        Ok(report)
     }
 
     pub fn report(&self) -> NowledgeMemReadSnapshotReport {
@@ -2957,8 +3010,14 @@ impl NowledgeMemEmbeddedStoreHandle {
                     Some(budget.max_rows),
                     task_context,
                 )?;
-            let mut snapshot =
-                NowledgeMemReadSnapshot::new(transaction, instance_identity, budget, None, None);
+            let mut snapshot = NowledgeMemReadSnapshot::new(
+                transaction,
+                instance_identity,
+                budget,
+                None,
+                None,
+                _permit.bind_task_context(task_context.clone()),
+            );
             return self.finish_canonical_read(operation(&mut snapshot));
         }
         let permit = self.admit_typed_read(budget.max_payload_bytes)?;
@@ -2991,6 +3050,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             budget,
             store.search_projection.as_ref(),
             store.out_of_core_search_projection.as_ref(),
+            task_context,
         );
         operation(&mut snapshot)
     }

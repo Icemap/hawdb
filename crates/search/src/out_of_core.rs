@@ -54,6 +54,7 @@ use std::sync::{Arc, Mutex};
 
 mod generation_writer;
 mod hydration;
+mod projection_scan;
 mod verified_body;
 pub use verified_body::{SearchBodyReadOptions, SearchVerifiedBody};
 pub(crate) mod mutation_run;
