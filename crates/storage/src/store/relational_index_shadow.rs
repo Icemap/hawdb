@@ -80,6 +80,14 @@ pub(super) struct PreparedRelationalRecoveryTransaction {
     memory: crate::background::CheckpointAllocationOwner,
 }
 
+// Sparse hydration is scratch for the captures, not resident canonical data.
+// Drop any unconsumed capture before releasing its hydration inventory.
+struct RecoveredRelationalCaptures {
+    index: Option<RelationalIndexChangeCapture>,
+    row: Option<RelationalRowChangeCapture>,
+    _hydration: crate::background::CheckpointAllocationOwner,
+}
+
 pub use hawdb_storage::relational_index_view::{
     RelationalIndexQualificationProbe, RelationalIndexQualificationProbeKind,
     RelationalIndexQualificationProbeReport, RelationalIndexViewQualificationOptions,
@@ -1377,7 +1385,9 @@ impl GraphStore {
         work: Option<&crate::background::CheckpointWorkContext>,
     ) -> Result<(), hawdb_storage::relational::RelationalError> {
         let mut prepared = prepared;
-        if let Some(work) = work {
+        if !prepared.next.canonical_row_metadata_only()
+            && let Some(work) = work
+        {
             self.retain_decoded_checkpoint_memory(&mut prepared.memory, work)
                 .map_err(|error| {
                     hawdb_storage::relational::RelationalError::Admission(error.to_string())
@@ -1387,10 +1397,15 @@ impl GraphStore {
             next,
             index_capture,
             row_capture,
-            memory: _,
+            memory,
         } = prepared;
+        let mut captures = RecoveredRelationalCaptures {
+            index: index_capture,
+            row: row_capture,
+            _hydration: memory,
+        };
         self.relational_state = next;
-        if let Some(capture) = index_capture
+        if let Some(capture) = captures.index.take()
             && let Some(mut builder) = self.relational_index_shadow.recovery_builder.take()
         {
             let result = match work {
@@ -1422,7 +1437,7 @@ impl GraphStore {
         }
         self.record_relational_row_recovery_capture_with_work_context(
             expected_epoch,
-            row_capture,
+            captures.row.take(),
             work,
         )
     }
@@ -3497,6 +3512,125 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn sparse_recovery_releases_hydration_after_delta_encoding() {
+        use crate::background::CheckpointWorkContext;
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+            RuntimeWorkRequest,
+        };
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-sparse-hydration-release-{}",
+            hawdb_core::generate_uuidv7().unwrap()
+        ));
+        let mut catalog = Catalog::default();
+        let mut bootstrap = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                relational_index_mode: RelationalIndexMode::Shadow,
+                ..WalReplayConfig::default()
+            },
+        )
+        .unwrap();
+        let mut transaction = create_recovery_documents_table("doc-1");
+        if let RelationalWrite::CreateTable(schema) = &mut transaction.writes[0] {
+            schema
+                .columns
+                .push(hawdb_storage::relational::RelationalColumnSchema {
+                    name: "body".into(),
+                    scalar_type: RelationalScalarType::Text,
+                    nullable: false,
+                    default: None,
+                });
+        } else {
+            panic!("fixture schema");
+        }
+        if let RelationalWrite::Insert { rows, .. } = &mut transaction.writes[1] {
+            let mut values = rows[0].values().to_vec();
+            values.push(RelationalValue::Text("v".repeat(128 * 1024)));
+            rows[0] = hawdb_storage::relational::RelationalRow::new(values);
+        } else {
+            panic!("fixture insert");
+        }
+        bootstrap
+            .commit_relational_transaction(&mut catalog, transaction)
+            .unwrap();
+        bootstrap.checkpoint(&catalog).unwrap();
+        drop(bootstrap);
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                residency_mode: StorageResidencyMode::OutOfCore,
+                relational_index_mode: RelationalIndexMode::Authoritative,
+                ..WalReplayConfig::default()
+            },
+        )
+        .unwrap();
+        assert!(store.relational_state.canonical_row_metadata_only());
+        store.mount_relational_row_pages_for_recovery().unwrap();
+        store.mount_relational_index_shadow_for_recovery();
+        let key = RelationalKey(vec![RelationalValue::Text("doc-1".into())]);
+        let access =
+            hawdb_storage::relational::RelationalReplayAccessSet::from_decoded_entries(vec![
+                hawdb_storage::relational::RelationalReplayAccess {
+                    table: "documents".into(),
+                    primary_key: key.clone(),
+                },
+            ])
+            .unwrap();
+        let ceiling = 16 * 1024 * 1024;
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let prepared = store
+            .prepare_recovered_relational_transaction_with_work_context(
+                RelationalTransaction {
+                    writes: vec![RelationalWrite::DeleteByPrimaryKey {
+                        table: "documents".into(),
+                        keys: vec![key],
+                    }],
+                },
+                Some(access),
+                Some(&work),
+            )
+            .unwrap();
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+            if available_bytes <= ceiling - 128 * 1024)
+        );
+        store
+            .install_recovered_relational_transaction(prepared, store.commit_epoch + 1, Some(&work))
+            .unwrap();
+        assert!(store.relational_state.canonical_row_metadata_only());
+        assert_eq!(store.relational_state.row_count("documents"), 0);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+            if available_bytes > ceiling - 32 * 1024)
+        );
+        drop(store);
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     #[test]
