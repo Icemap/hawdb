@@ -5692,18 +5692,23 @@ fn apply_transaction_inner(
                 })?;
                 let segment = Arc::make_mut(segment);
                 for row in prepared_rows {
-                    let key = row_key(&row, &primary_key);
+                    let key = row_key_with_allocations(&row, &primary_key, checkpoint_allocations)?;
                     if mode == RelationalInsertMode::Error && segment.rows.contains_key(&key) {
                         return Err(RelationalError::Constraint(format!(
                             "duplicate primary key in table {table}"
                         )));
                     }
-                    segment.rows.insert_with_allocations(
-                        key.clone(),
-                        row,
-                        checkpoint_allocations,
-                    )?;
-                    changed_keys.entry(table.clone()).or_default().insert(key);
+                    let tracked_key = match checkpoint_allocations {
+                        Some(context) => key.clone_with_allocations(context)?,
+                        None => key.clone(),
+                    };
+                    segment
+                        .rows
+                        .insert_with_allocations(key, row, checkpoint_allocations)?;
+                    changed_keys
+                        .entry(table.clone())
+                        .or_default()
+                        .insert(tracked_key);
                 }
                 touched.insert(table.clone());
                 if let Some(logical_rows) = logical_rows {
@@ -5733,6 +5738,7 @@ fn apply_transaction_inner(
                         constraint_index,
                         replay_access_tracker: replay_access_tracker.as_mut(),
                         capture_mutation_outcome: capture_mutation_outcomes,
+                        checkpoint_allocations,
                     },
                 )?;
                 touched.insert(table.clone());
@@ -5873,6 +5879,8 @@ fn apply_transaction_inner(
                         overflow_config,
                         changed_keys: changed_keys.entry(table.clone()).or_default(),
                         replay_access_tracker: replay_access_tracker.as_mut(),
+
+                        checkpoint_allocations,
                     },
                 )?;
                 if capture_mutation_outcomes {
@@ -5983,6 +5991,7 @@ struct UpsertIndexContext<'a> {
     constraint_index: Option<&'a dyn RelationalConstraintIndex>,
     replay_access_tracker: Option<&'a mut RelationalReplayAccessTracker>,
     capture_mutation_outcome: bool,
+    checkpoint_allocations: Option<&'a crate::background::CheckpointDecodeContext>,
 }
 
 fn apply_upsert(
@@ -5999,6 +6008,7 @@ fn apply_upsert(
         constraint_index,
         mut replay_access_tracker,
         capture_mutation_outcome,
+        checkpoint_allocations,
     } = index_context;
     let schema = Arc::clone(
         state
@@ -6050,7 +6060,8 @@ fn apply_upsert(
         let Some(row) = state.row(table, primary_key) else {
             continue;
         };
-        let conflict_key = row_key(row, &conflict_positions);
+        let conflict_key =
+            row_key_with_allocations(row, &conflict_positions, checkpoint_allocations)?;
         if key_contains_null(&conflict_key) {
             continue;
         }
@@ -6068,7 +6079,8 @@ fn apply_upsert(
         validate_row(&schema, &excluded)?;
         let logical_excluded = capture_mutation_outcome.then(|| excluded.clone());
         overflow::externalize_row(state, &schema, &mut excluded, overflow_config)?;
-        let conflict_key = row_key(&excluded, &conflict_positions);
+        let conflict_key =
+            row_key_with_allocations(&excluded, &conflict_positions, checkpoint_allocations)?;
         let conflict_has_null = conflict_key
             .0
             .iter()
@@ -6118,21 +6130,35 @@ fn apply_upsert(
             }
             let updated = RelationalRow::new(values);
             validate_row(&schema, &updated)?;
-            let updated_primary_key = row_key(&updated, &primary_key_positions);
-            let updated_conflict_key = row_key(&updated, &conflict_positions);
+            let updated_primary_key =
+                row_key_with_allocations(&updated, &primary_key_positions, checkpoint_allocations)?;
+            let updated_conflict_key =
+                row_key_with_allocations(&updated, &conflict_positions, checkpoint_allocations)?;
             changed_keys.insert(existing_primary_key.clone());
             changed_keys.insert(updated_primary_key.clone());
             segment.rows.remove(&existing_primary_key);
-            segment.rows.insert(updated_primary_key.clone(), updated);
+            segment.rows.insert_with_allocations(
+                updated_primary_key.clone(),
+                updated,
+                checkpoint_allocations,
+            )?;
             staged_conflicts.insert(conflict_key, None);
             if !key_contains_null(&updated_conflict_key) {
                 staged_conflicts.insert(updated_conflict_key, Some(updated_primary_key));
             }
             affected_rows = affected_rows.saturating_add(1);
         } else {
-            let primary_key = row_key(&excluded, &primary_key_positions);
+            let primary_key = row_key_with_allocations(
+                &excluded,
+                &primary_key_positions,
+                checkpoint_allocations,
+            )?;
             changed_keys.insert(primary_key.clone());
-            if segment.rows.insert(primary_key.clone(), excluded).is_some() {
+            if segment
+                .rows
+                .insert_with_allocations(primary_key.clone(), excluded, checkpoint_allocations)?
+                .is_some()
+            {
                 return Err(RelationalError::Constraint(format!(
                     "duplicate primary key in table {table}"
                 )));
@@ -6217,6 +6243,7 @@ struct UpdateApplyContext<'a> {
     limits: RelationalMutationLimits,
     overflow_config: RelationalOverflowConfig,
     changed_keys: &'a mut BTreeSet<RelationalKey>,
+    checkpoint_allocations: Option<&'a crate::background::CheckpointDecodeContext>,
     replay_access_tracker: Option<&'a mut RelationalReplayAccessTracker>,
 }
 
@@ -6232,6 +6259,7 @@ fn apply_update(
         overflow_config,
         changed_keys,
         mut replay_access_tracker,
+        checkpoint_allocations,
     } = context;
     let schema = Arc::clone(
         state
@@ -6332,7 +6360,8 @@ fn apply_update(
         let mut updated = RelationalRow::new(values);
         validate_row(&schema, &updated)?;
         overflow::externalize_row(state, &schema, &mut updated, overflow_config)?;
-        let new_key = row_key(&updated, &primary_key_positions);
+        let new_key =
+            row_key_with_allocations(&updated, &primary_key_positions, checkpoint_allocations)?;
         updates.push((old_key.clone(), new_key, updated));
     }
     let segment = state
@@ -6346,7 +6375,11 @@ fn apply_update(
     }
     for (_, new_key, row) in updates {
         changed_keys.insert(new_key.clone());
-        if segment.rows.insert(new_key, row).is_some() {
+        if segment
+            .rows
+            .insert_with_allocations(new_key, row, checkpoint_allocations)?
+            .is_some()
+        {
             return Err(RelationalError::Constraint(format!(
                 "UPDATE creates a duplicate primary key in table {table}"
             )));
@@ -7461,6 +7494,33 @@ fn column_positions_with_allocations(
             .map_err(|error| RelationalError::Admission(error.to_string()))?;
     }
     Ok(positions)
+}
+
+fn row_key_with_allocations(
+    row: &RelationalRow,
+    positions: &[usize],
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalKey, RelationalError> {
+    let Some(context) = allocations else {
+        return Ok(row_key(row, positions));
+    };
+    let mut values = context
+        .vector_capacity(positions.len())
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    for position in positions {
+        let value = row.values()[*position]
+            .as_ref()
+            .to_owned_value_with_allocations(context)?;
+        let unit = context
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        values.push(value);
+        unit.finish();
+    }
+    context
+        .checkpoint()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    Ok(RelationalKey(values))
 }
 
 fn row_key(row: &RelationalRow, positions: &[usize]) -> RelationalKey {

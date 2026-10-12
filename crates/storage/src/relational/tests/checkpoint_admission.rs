@@ -886,3 +886,141 @@ fn controlled_row_insert_cancellation_keeps_source_and_retries() {
     assert!(target.get(&key).is_some());
     assert_eq!(source.len(), 1);
 }
+
+#[test]
+fn controlled_row_key_projection_denies_wide_values_before_copy() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let row = upsert_row(&"k".repeat(128 * 1024), "owner", "body");
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(4096),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(4096))
+        .unwrap();
+    let context = CheckpointDecodeContext {
+        work: CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default())),
+        memory: Default::default(),
+    };
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let denied = row_key_with_allocations(&row, &[0], Some(&context));
+    assert_eq!(observer.finish(), 0);
+    assert!(matches!(denied, Err(RelationalError::Admission(_))));
+    drop(context);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    assert_eq!(
+        row_key_with_allocations(&row, &[2, 0, 0], Some(&context)).unwrap(),
+        row_key(&row, &[2, 0, 0])
+    );
+}
+
+#[test]
+fn controlled_sparse_upsert_and_update_match_ordinary_recovery_captures() {
+    use crate::background::CheckpointDecodeContext;
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let index_limits = RelationalIndexChangeCaptureLimits::default();
+    let row_limits = RelationalRowChangeCaptureLimits::default();
+    let base = RelationalState::default()
+        .stage_transaction(create_upsert_table(), limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![upsert_row("id-1", "owner-1", "old")],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    let (directory, metadata) = canonical_metadata_state(&base, "controlled-sparse-mutation");
+    let transactions = [
+        RelationalTransaction {
+            writes: vec![RelationalWrite::Upsert {
+                table: "documents".into(),
+                rows: vec![upsert_row("id-1", "owner-1", "new")],
+                conflict_columns: vec!["id".into()],
+                action: RelationalConflictAction::Update(vec![RelationalUpsertAssignment {
+                    column: "payload".into(),
+                    value: RelationalUpsertValue::ExcludedColumn("payload".into()),
+                }]),
+            }],
+        },
+        RelationalTransaction {
+            writes: vec![RelationalWrite::UpdateWhere {
+                table: "documents".into(),
+                assignments: vec![RelationalUpdateAssignment {
+                    column: "owner".into(),
+                    value: RelationalUpdateValue::Value(RelationalValue::Text("owner-2".into())),
+                }],
+                predicate: RelationalPredicate::Compare {
+                    column: "id".into(),
+                    op: RelationalComparisonOp::Eq,
+                    value: RelationalValue::Text("id-1".into()),
+                },
+            }],
+        },
+    ];
+    for transaction in transactions {
+        let (ordinary, expected_indexes, expected_rows, access) = base
+            .stage_transaction_with_index_row_and_replay_access(
+                transaction.clone(),
+                limits,
+                overflow,
+                index_limits,
+                row_limits,
+            )
+            .unwrap();
+        let hydrated = access
+            .entries()
+            .iter()
+            .map(|entry| RelationalSparseRecoveryRow {
+                table: entry.table.clone(),
+                primary_key: entry.primary_key.clone(),
+                row: base.row(&entry.table, &entry.primary_key).cloned(),
+            })
+            .collect();
+        let context = CheckpointDecodeContext {
+            work: Default::default(),
+            memory: Default::default(),
+        };
+        let (controlled, indexes, rows) = metadata
+            .stage_sparse_transaction_for_authoritative_recovery_with_allocations(
+                RelationalSparseRecoveryStage {
+                    transaction,
+                    hydrated_access: hydrated,
+                    mutation_limits: limits,
+                    overflow_config: overflow,
+                    index_capture_limits: index_limits,
+                    row_capture_limits: row_limits,
+                    expected_replay_access: &access,
+                },
+                Some(&context),
+            )
+            .unwrap();
+        assert_eq!(indexes, expected_indexes);
+        assert_eq!(rows, expected_rows);
+        assert_eq!(
+            controlled.row_count("documents"),
+            ordinary.row_count("documents")
+        );
+        assert_eq!(metadata.row_count("documents"), 1);
+    }
+    std::fs::remove_dir_all(directory).unwrap();
+}
