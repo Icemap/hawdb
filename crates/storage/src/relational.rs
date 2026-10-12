@@ -5865,14 +5865,37 @@ fn apply_transaction_inner(
                     Arc::clone(next.schemas.get(&table).ok_or_else(|| {
                         RelationalError::Schema(format!("unknown table {table}"))
                     })?);
-                let primary_key = column_positions(&schema, &schema.primary_key)?;
+                let preparation_context = checkpoint_allocations.map(|context| {
+                    crate::background::CheckpointDecodeContext {
+                        work: context.work.clone(),
+                        memory: Default::default(),
+                    }
+                });
+                let primary_key = column_positions_with_allocations(
+                    &schema,
+                    &schema.primary_key,
+                    preparation_context.as_ref(),
+                )?;
                 let affected_rows = rows.len();
                 let logical_rows = capture_mutation_outcomes.then(|| rows.clone());
-                let mut prepared_rows = Vec::with_capacity(rows.len());
+                let mut prepared_rows = match &preparation_context {
+                    Some(context) => context
+                        .vector_capacity(rows.len())
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?,
+                    None => Vec::with_capacity(rows.len()),
+                };
                 for mut row in rows {
                     validate_row(&schema, &row)?;
                     overflow::externalize_row(&mut next, &schema, &mut row, overflow_config)?;
+                    let unit = preparation_context
+                        .as_ref()
+                        .map(|context| context.start_unit())
+                        .transpose()
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?;
                     prepared_rows.push(row);
+                    if let Some(unit) = unit {
+                        unit.finish();
+                    }
                 }
                 let segment = next.segments.get_mut(&table).ok_or_else(|| {
                     RelationalError::Schema(format!("missing row segment for table {table}"))
@@ -5973,13 +5996,19 @@ fn apply_transaction_inner(
                     .get_mut(&table)
                     .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
                 let segment = Arc::make_mut(segment);
+                let match_context = checkpoint_allocations.map(|context| {
+                    crate::background::CheckpointDecodeContext {
+                        work: context.work.clone(),
+                        memory: Default::default(),
+                    }
+                });
                 let mut keys = Vec::new();
                 for (key, row) in segment.rows.iter() {
                     if let Some(tracker) = replay_access_tracker.as_mut() {
                         tracker.record(&table, key)?;
                     }
                     if predicate_truth(schema, row, &predicate)? == Some(true) {
-                        keys.push(key.clone());
+                        push_cloned_key_with_allocations(&mut keys, key, match_context.as_ref())?;
                         if keys.len() > limits.max_rows.get() {
                             break;
                         }
@@ -6803,6 +6832,23 @@ fn apply_update(
         }
     }
     Ok(matched.len())
+}
+
+fn push_cloned_key_with_allocations(
+    keys: &mut Vec<RelationalKey>,
+    key: &RelationalKey,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<(), RelationalError> {
+    let key = clone_key_with_allocations(key, allocations)?;
+    match allocations {
+        Some(context) => context
+            .push(keys, key)
+            .map_err(|error| RelationalError::Admission(error.to_string())),
+        None => {
+            keys.push(key);
+            Ok(())
+        }
+    }
 }
 
 fn changed_table_keys_with_allocations<'a>(
