@@ -43,6 +43,8 @@ pub struct RelationalRowDeltaReader {
     manifest: Arc<RelationalRowDeltaManifest>,
     config: RelationalRowDeltaConfig,
     poisoned: AtomicBool,
+    // Drop decoded backing and the directory before their admitted leases.
+    _memory: crate::background::CheckpointAllocationOwner,
 }
 
 impl RelationalRowDeltaReader {
@@ -163,6 +165,39 @@ impl RelationalRowDeltaReader {
         )
     }
 
+    pub(crate) fn open_private_prefix_with_work_context(
+        path: &Path,
+        expected_base: &RelationalRowPageRootReader,
+        expected_recovery: RelationalRecoveryFence,
+        config: RelationalRowDeltaConfig,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Self, RelationalRowDeltaError> {
+        let directory = path.parent().ok_or_else(|| {
+            RelationalRowDeltaError::Admission("private row prefix has no directory".into())
+        })?;
+        // Keep the pair intact so early errors destroy its manifest before
+        // refunding decoded-memory ownership.
+        let mut owned = codec::read_manifest_with_work_context(path, config, work)?;
+        for bytes in [
+            std::mem::size_of::<RelationalRowDeltaManifest>() + 2 * std::mem::size_of::<usize>(),
+            std::mem::size_of::<Self>() + 2 * std::mem::size_of::<usize>(),
+            // The private serving view owns this reader. Its empty live
+            // overlay has no heap backing; retain the view Arc's charge too.
+            std::mem::size_of::<crate::relational::RelationalRowPageReadView>()
+                + 2 * std::mem::size_of::<usize>(),
+            directory.as_os_str().len(),
+        ] {
+            owned
+                .1
+                .reserve(bytes, work)
+                .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+        }
+        let mut reader =
+            Self::from_manifest(directory, owned.0, expected_base, expected_recovery, config)?;
+        reader._memory = owned.1;
+        Ok(reader)
+    }
+
     fn from_manifest(
         directory: &Path,
         manifest: RelationalRowDeltaManifest,
@@ -217,6 +252,7 @@ impl RelationalRowDeltaReader {
             manifest: Arc::new(manifest),
             config,
             poisoned: AtomicBool::new(false),
+            _memory: crate::background::CheckpointAllocationOwner::default(),
         })
     }
 

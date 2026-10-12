@@ -728,7 +728,8 @@ impl CheckpointCandidate {
             result,
             Err(crate::background::CheckpointOperationError::Work(_))
         ) {
-            // Work admission currently precedes cloning and prefix publication.
+            // Denial preserves unselected private evidence. A completed row
+            // seal is cached by its builder so reader admission can resume.
             self.failed = was_failed;
         }
         result

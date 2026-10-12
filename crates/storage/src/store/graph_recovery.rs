@@ -630,7 +630,7 @@ impl GraphStore {
             )
         };
         let row = self.finish_private_relational_row_page_recovery(identity, work)?;
-        let index = self.finish_private_relational_index_recovery(identity)?;
+        let index = self.finish_private_relational_index_recovery(identity, work)?;
         Ok([row, index])
     }
 

@@ -976,6 +976,7 @@ impl GraphStore {
             expected_recovery_source,
             None,
             None,
+            None,
         )
     }
 
@@ -985,6 +986,7 @@ impl GraphStore {
         expected_recovery_source: RelationalRecoverySourceIdentity,
         generation: Option<crate::relational::RelationalRowDeltaGeneration>,
         prefix: Option<&std::path::Path>,
+        work: Option<&crate::background::CheckpointWorkContext>,
     ) -> Result<
         (
             Arc<RelationalRowPageReadView>,
@@ -1010,12 +1012,21 @@ impl GraphStore {
         let fence =
             RelationalRecoveryFence::new(expected_visible_commit_epoch, expected_recovery_source);
         let delta = match (prefix, generation) {
-            (Some(path), _) => RelationalRowDeltaReader::open_private_prefix_with_recovery_fence(
-                path,
-                &base,
-                fence,
-                self.relational_row_pages.delta_config,
-            )?,
+            (Some(path), _) => match work {
+                Some(work) => RelationalRowDeltaReader::open_private_prefix_with_work_context(
+                    path,
+                    &base,
+                    fence,
+                    self.relational_row_pages.delta_config,
+                    work,
+                )?,
+                None => RelationalRowDeltaReader::open_private_prefix_with_recovery_fence(
+                    path,
+                    &base,
+                    fence,
+                    self.relational_row_pages.delta_config,
+                )?,
+            },
             (None, Some(generation)) => {
                 RelationalRowDeltaReader::open_generation_with_recovery_fence(
                     durable.root_path(),
@@ -1086,6 +1097,7 @@ impl GraphStore {
                 recovery_source,
                 None,
                 Some(&immutable),
+                Some(work),
             )
             .map_err(|error| {
                 super::HawDBError::Storage(format!("pin private row recovery: {error}"))

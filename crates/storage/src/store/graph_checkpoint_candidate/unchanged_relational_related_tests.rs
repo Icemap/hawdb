@@ -240,6 +240,15 @@ fn relational_suffix_after_unchanged_prefix_seals_and_keeps_all_later_prefixes_b
 
 #[test]
 fn private_relational_prefix_clone_denial_preserves_candidate_for_retry() {
+    for mode in [
+        RelationalIndexMode::Materialized,
+        RelationalIndexMode::Authoritative,
+    ] {
+        private_relational_prefix_clone_denial_case(mode);
+    }
+}
+
+fn private_relational_prefix_clone_denial_case(mode: RelationalIndexMode) {
     use hawdb_qos::{
         IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
         RuntimeResourceBudget, RuntimeResourceSnapshot,
@@ -257,7 +266,14 @@ fn private_relational_prefix_clone_denial_preserves_candidate_for_retry() {
         &root,
         &mut catalog,
         DurabilityPolicy::SyncOnEveryWrite,
-        WalReplayConfig::default(),
+        WalReplayConfig {
+            relational_index_mode: if mode == RelationalIndexMode::Authoritative {
+                RelationalIndexMode::Shadow
+            } else {
+                mode
+            },
+            ..WalReplayConfig::default()
+        },
     )
     .unwrap();
     let row = |value: &str| RelationalWrite::Insert {
@@ -290,6 +306,17 @@ fn private_relational_prefix_clone_denial_preserves_candidate_for_retry() {
         .commit_relational_transaction(&mut catalog, RelationalTransaction { writes })
         .unwrap();
     store.checkpoint(&catalog).unwrap();
+    drop(store);
+    let mut store = GraphStore::open_with_durability_and_replay_config(
+        &root,
+        &mut catalog,
+        DurabilityPolicy::SyncOnEveryWrite,
+        WalReplayConfig {
+            relational_index_mode: mode,
+            ..WalReplayConfig::default()
+        },
+    )
+    .unwrap();
     store
         .create_node(&mut catalog, "Memory", BTreeMap::new())
         .unwrap();
@@ -343,6 +370,170 @@ fn private_relational_prefix_clone_denial_preserves_candidate_for_retry() {
     assert!(!candidate.replay_finalized);
     assert!(!candidate.failed);
     assert!(candidate.recovery_selectors.iter().all(Option::is_none));
+    // Seal only, without preparing a selector: this is the real intermediate
+    // boundary preceding reader admission. Repeating the seal reuses evidence.
+    let identity = candidate
+        .recovery_source
+        .as_ref()
+        .unwrap()
+        .prefix_identity()
+        .unwrap();
+    let private = candidate.store.as_mut().unwrap();
+    let builder = private
+        .relational_row_pages
+        .recovery_builder
+        .as_mut()
+        .unwrap();
+    let report = builder
+        .seal_private_with_state(
+            private.commit_epoch,
+            identity,
+            None,
+            &private.relational_state,
+            &crate::background::CheckpointWorkContext::default(),
+        )
+        .unwrap();
+    let cached = builder
+        .seal_private_with_state(
+            private.commit_epoch,
+            identity,
+            None,
+            &private.relational_state,
+            &work,
+        )
+        .unwrap();
+    assert_eq!(cached, report);
+    let immutable = root.join(crate::relational::relational_row_delta_prefix_file(
+        report.generation.base_generation,
+        report.generation.delta_generation,
+        report.visible_commit_epoch,
+    ));
+    let sealed_bytes = std::fs::read(&immutable).unwrap();
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let result = candidate.finish_catch_up_with_work_context(&work);
+    let large_allocations = observer.finish();
+    assert!(matches!(
+        result,
+        Err(crate::background::CheckpointOperationError::Work(
+            crate::background::CheckpointWorkError::Memory(_)
+        ))
+    ));
+    assert_eq!(
+        large_allocations, 0,
+        "deny before reading the wide manifest"
+    );
+    assert!(!candidate.failed);
+    assert!(!candidate.replay_finalized);
+    assert!(candidate.recovery_selectors.iter().all(Option::is_none));
+    assert_eq!(std::fs::read(&immutable).unwrap(), sealed_bytes);
+    assert_eq!(store.checkpoint_source_identity(), before);
+    if mode == RelationalIndexMode::Authoritative {
+        let private = candidate.store.as_mut().unwrap();
+        let builder = private
+            .relational_index_shadow
+            .recovery_builder
+            .as_mut()
+            .unwrap();
+        let denied = work.classify(|work| {
+            builder.seal_private_with_recovery_source(private.commit_epoch, identity, work)
+        });
+        assert!(
+            matches!(
+                denied,
+                Err(crate::background::CheckpointOperationError::Work(
+                    crate::background::CheckpointWorkError::Memory(_)
+                ))
+            ),
+            "index clone/encoding must honor the same undersized work budget"
+        );
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 4096);
+        let index_report = builder
+            .seal_private_with_recovery_source(
+                private.commit_epoch,
+                identity,
+                &crate::background::CheckpointWorkContext::default(),
+            )
+            .unwrap();
+        let index_path = root.join(crate::relational::relational_index_recovery_prefix_file(
+            index_report.base_generation,
+            index_report.delta_generation,
+            index_report.recovered_commit_epoch,
+        ));
+        let index_bytes = std::fs::read(&index_path).unwrap();
+        let repeated = builder
+            .seal_private_with_recovery_source(private.commit_epoch, identity, &work)
+            .unwrap();
+        assert_eq!(repeated, index_report);
+        assert_eq!(std::fs::read(&index_path).unwrap(), index_bytes);
+        assert!(index_bytes.len() > 512);
+        let reader_governor = governor_for(512);
+        let reader_admission = reader_governor
+            .try_admit_incremental_maintenance(512, 512, 1, RuntimeTaskContext::default())
+            .unwrap();
+        let reader_work = crate::background::CheckpointWorkContext::new(
+            reader_admission.task_context().unwrap().clone(),
+        );
+        let durable = private.durable.as_ref().unwrap();
+        let base = private
+            .relational_index_shadow
+            .read_view
+            .as_ref()
+            .unwrap()
+            .pinned_base();
+        let denied = reader_work.classify(|work| {
+            crate::relational::RelationalIndexRecoveryReader::open_private_prefix_with_pinned_base(
+                &index_path,
+                Arc::clone(&base),
+                crate::relational::RelationalRecoveryFence::new(private.commit_epoch, identity),
+                crate::relational::RelationalIndexRecoveryConfig::default(),
+                Arc::clone(&durable.segment_cache),
+                durable.store_id(),
+                work,
+            )
+        });
+        assert!(
+            matches!(
+                denied,
+                Err(crate::background::CheckpointOperationError::Work(
+                    crate::background::CheckpointWorkError::Memory(_)
+                ))
+            ),
+            "an already sealed index still admits its reader buffer before allocation"
+        );
+        assert_eq!(std::fs::read(&index_path).unwrap(), index_bytes);
+        let binding = private
+            .relational_index_shadow
+            .generation_artifacts
+            .unwrap();
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let denied_base = reader_work.classify(|work| {
+            crate::relational::RelationalIndexShadowReader::open_bound_generation_with_work_context(
+                durable.root_path(),
+                binding,
+                crate::relational::RelationalIndexShadowConfig::default(),
+                Some(Arc::clone(&durable.segment_cache)),
+                durable.store_id(),
+                work,
+            )
+        });
+        let large_allocations = observer.finish();
+        assert!(
+            matches!(
+                denied_base,
+                Err(crate::background::CheckpointOperationError::Work(
+                    crate::background::CheckpointWorkError::Memory(_)
+                ))
+            ),
+            "first index-base open must admit the wide manifest before reading it"
+        );
+        assert_eq!(large_allocations, 0);
+        // Exercise the cold path on the positive retry. Production still uses
+        // a pinned base whenever its complete canonical binding matches.
+        private.relational_index_shadow.read_view = None;
+        drop((reader_work, reader_admission));
+        assert_eq!(reader_governor.snapshot().admitted_memory_bytes, 0);
+        assert_eq!(store.checkpoint_source_identity(), before);
+    }
     drop((work, admission));
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 
@@ -358,10 +549,92 @@ fn private_relational_prefix_clone_denial_preserves_candidate_for_retry() {
     assert!(candidate.replay_finalized);
     assert!(!candidate.failed);
     assert_eq!(store.checkpoint_source_identity(), before);
+    assert!(
+        retry_governor.snapshot().admitted_memory_bytes > 4096,
+        "decoded reader memory stays admitted after finalization"
+    );
+    assert_eq!(std::fs::read(&immutable).unwrap(), sealed_bytes);
     let private = candidate.store.as_ref().unwrap();
     assert_eq!(private.relational_state.row_count(&table), 2);
     assert_eq!(private.relational_state.table_schemas().count(), 128);
+    let pinned_index_base = private
+        .relational_index_shadow
+        .read_view
+        .as_ref()
+        .map(|view| view.pinned_base());
+    assert_eq!(
+        pinned_index_base.is_some(),
+        mode == RelationalIndexMode::Authoritative
+    );
+    let reader = private
+        .open_relational_row_snapshot_reader()
+        .unwrap()
+        .unwrap();
+    for key in ["kept", "new"] {
+        let (row, _) = reader
+            .point_projected(
+                &table,
+                &RelationalKey(vec![RelationalValue::Text(key.into())]),
+                &[0],
+                RelationalRowPageSnapshotReadLimits::default(),
+                &mut RelationalHydrationBudget::default(),
+                &RuntimeTaskContext::default(),
+            )
+            .unwrap();
+        assert_eq!(
+            row.unwrap().fields[0].value,
+            RelationalValue::Text(key.into())
+        );
+    }
+    store
+        .commit_relational_transaction(
+            &mut catalog,
+            RelationalTransaction {
+                writes: vec![row("later")],
+            },
+        )
+        .unwrap();
+    candidate.catch_up(&store).unwrap();
+    candidate
+        .finish_catch_up_with_work_context(&retry_work)
+        .unwrap();
+    let private = candidate.store.as_ref().unwrap();
+    assert_eq!(private.relational_state.row_count(&table), 3);
+    if let Some(base) = &pinned_index_base {
+        assert!(
+            Arc::ptr_eq(
+                base,
+                &private
+                    .relational_index_shadow
+                    .read_view
+                    .as_ref()
+                    .unwrap()
+                    .pinned_base()
+            ),
+            "later prefixes share the already validated index base without reloading metadata"
+        );
+    }
+    let (absent, _) = reader
+        .point_projected(
+            &table,
+            &RelationalKey(vec![RelationalValue::Text("later".into())]),
+            &[0],
+            RelationalRowPageSnapshotReadLimits::default(),
+            &mut RelationalHydrationBudget::default(),
+            &RuntimeTaskContext::default(),
+        )
+        .unwrap();
+    assert!(
+        absent.is_none(),
+        "the old snapshot retains its original prefix"
+    );
     drop((retry_work, retry, candidate, pinned, store));
+    drop(pinned_index_base);
+    assert!(
+        retry_governor.snapshot().admitted_memory_bytes > 0,
+        "a surviving snapshot retains decoded backing after the owner closes"
+    );
+    drop(reader);
     assert_eq!(retry_governor.snapshot().admitted_memory_bytes, 0);
     std::fs::remove_dir_all(root).unwrap();
 }

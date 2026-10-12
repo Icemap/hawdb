@@ -70,6 +70,10 @@ pub struct RelationalRowDeltaBuilder {
     peak_dirty_bytes: usize,
     row_root_selection: RowRootSelection,
     invalidated: Option<String>,
+    // A durable, unselected prefix survives a later reader-admission denial.
+    private_prefix: Option<(RelationalRecoverySourceIdentity, RelationalRowDeltaReport)>,
+    _runs_memory: crate::background::CheckpointAllocationOwner,
+    _bounds_memory: crate::background::CheckpointAllocationOwner,
 }
 
 impl RelationalRowDeltaBuilder {
@@ -226,6 +230,9 @@ impl RelationalRowDeltaBuilder {
             peak_dirty_bytes: 0,
             row_root_selection,
             invalidated: None,
+            private_prefix: None,
+            _runs_memory: crate::background::CheckpointAllocationOwner::default(),
+            _bounds_memory: crate::background::CheckpointAllocationOwner::default(),
         })
     }
 
@@ -319,6 +326,7 @@ impl RelationalRowDeltaBuilder {
         capture: RelationalRowChangeCapture,
     ) -> Result<(), RelationalRowDeltaError> {
         self.require_available()?;
+        self.private_prefix = None;
         let result = self.record_inner(epoch, capture);
         if let Err(error) = &result {
             self.invalidated = Some(error.to_string());
@@ -380,9 +388,17 @@ impl RelationalRowDeltaBuilder {
         final_state: &RelationalState,
         work: &crate::background::CheckpointWorkContext,
     ) -> Result<RelationalRowDeltaReport, RelationalRowDeltaError> {
+        self.require_available()?;
+        if let Some((identity, report)) = &self.private_prefix
+            && *identity == recovery_source
+            && report.visible_commit_epoch == expected_visible_commit_epoch
+            && self.visible_commit_epoch == expected_visible_commit_epoch
+        {
+            return Ok(report.clone());
+        }
         // Flush the live builder first. Cloning dirty entries before flushing
         // would reuse run ordinals and overwrite an already pinned prefix.
-        self.flush()?;
+        self.flush_with_work_context(work)?;
         // Admit every backing allocation copied by Clone before creating the
         // snapshot. The live builder remains reusable if admission fails.
         let mut memory = crate::background::CheckpointAllocationOwner::default();
@@ -416,16 +432,72 @@ impl RelationalRowDeltaBuilder {
         if let Some(reason) = &self.invalidated {
             reserve(reason.len())?;
         }
-        let result = self.clone().finish_with_state_inner(
-            expected_visible_commit_epoch,
-            recovery_source,
-            overflow_root,
-            final_state,
-            DeltaSelection::PrivatePrefix,
-        );
+        reserve(codec::manifest_encoding_workspace_bytes(
+            &self.tables,
+            &self.runs,
+        )?)?;
+        let result = (|| {
+            let mut sealed = self.clone();
+            sealed.refresh_private_table_metadata(final_state, work)?;
+            sealed.finish_selection_inner(
+                expected_visible_commit_epoch,
+                recovery_source,
+                overflow_root,
+                None,
+                DeltaSelection::PrivatePrefix,
+            )
+        })();
         // The cloned builder and its manifest are destroyed before refunding.
         drop(memory);
+        if let Ok(report) = &result {
+            self.private_prefix = Some((recovery_source, report.clone()));
+        }
         result
+    }
+
+    // A private prefix preserves the base schema. Validate borrowed schemas
+    // before updating counts in the admitted clone instead of cloning a second
+    // vector of table names just to replace the first one.
+    fn refresh_private_table_metadata(
+        &mut self,
+        state: &RelationalState,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), RelationalRowDeltaError> {
+        let mut changed = state.table_schemas().count() != self.tables.len();
+        for (schema, table) in state.table_schemas().zip(&self.tables) {
+            let columns = u32::try_from(schema.columns.len()).map_err(|_| {
+                RelationalRowDeltaError::Admission(format!(
+                    "row delta table {} column count does not fit u32",
+                    schema.name
+                ))
+            })?;
+            let columns = NonZeroU32::new(columns).ok_or_else(|| {
+                RelationalRowDeltaError::Corrupt(format!(
+                    "row delta table {} has no columns",
+                    schema.name
+                ))
+            })?;
+            let digest =
+                crate::relational::index_shadow::relational_schema_digest_with_work_context(
+                    schema, work,
+                )
+                .map_err(|error| RelationalRowDeltaError::Corrupt(error.to_string()))?;
+            changed |= table.table != schema.name
+                || table.schema_digest != digest
+                || table.column_count != columns;
+        }
+        if changed {
+            return Err(RelationalRowDeltaError::RequiresCheckpoint {
+                tables: state
+                    .table_schemas()
+                    .map(|schema| schema.name.clone())
+                    .collect(),
+            });
+        }
+        for table in &mut self.tables {
+            table.row_count = state.row_count(&table.table) as u64;
+        }
+        Ok(())
     }
 
     fn finish_with_state_inner(
@@ -830,6 +902,13 @@ impl RelationalRowDeltaBuilder {
     }
 
     fn flush(&mut self) -> Result<(), RelationalRowDeltaError> {
+        self.flush_with_work_context(&crate::background::CheckpointWorkContext::default())
+    }
+
+    fn flush_with_work_context(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), RelationalRowDeltaError> {
         if self.dirty.is_empty() {
             return Ok(());
         }
@@ -885,6 +964,64 @@ impl RelationalRowDeltaBuilder {
             upper_key.encoded_primary_key.len(),
             self.config,
         )?;
+        // All fallible admission precedes immutable publication. Reserve both
+        // vector backings during replacement, freeing the old one before refund.
+        if self.runs.len() == self.runs.capacity() {
+            let capacity = self
+                .runs
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| {
+                    RelationalRowDeltaError::Admission("row run capacity overflow".into())
+                })?
+                .max(self.runs.capacity().saturating_mul(2))
+                .min(self.config.max_runs.get());
+            let bytes = capacity
+                .checked_mul(std::mem::size_of::<RowDeltaRunDescriptor>())
+                .ok_or_else(|| {
+                    RelationalRowDeltaError::Admission("row run allocation size overflow".into())
+                })?;
+            let mut next_memory = crate::background::CheckpointAllocationOwner::default();
+            next_memory
+                .reserve(bytes, work)
+                .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+            let mut replacement = Vec::new();
+            replacement.try_reserve_exact(capacity).map_err(|error| {
+                let failure =
+                    work.record_failure(crate::background::CheckpointWorkError::Allocation {
+                        bytes: bytes as u64,
+                        reason: error.to_string(),
+                    });
+                RelationalRowDeltaError::Admission(failure.to_string())
+            })?;
+            if replacement.capacity() != capacity {
+                return Err(RelationalRowDeltaError::Admission(
+                    "row run allocation exceeded admitted capacity".into(),
+                ));
+            }
+            replacement.append(&mut self.runs);
+            let old = std::mem::replace(&mut self.runs, replacement);
+            drop(old);
+            self._runs_memory = next_memory;
+        }
+        let mut bounds_memory = crate::background::CheckpointAllocationOwner::default();
+        bounds_memory
+            .reserve(lower_key.encoded_primary_key.len(), work)
+            .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+        bounds_memory
+            .reserve(upper_key.encoded_primary_key.len(), work)
+            .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+        self._bounds_memory
+            .append(&mut bounds_memory, work)
+            .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+        let lower_bound = super::RowDeltaBound {
+            table_ordinal: lower_key.table_ordinal,
+            encoded_primary_key: lower_key.encoded_primary_key.clone(),
+        };
+        let upper_bound = super::RowDeltaBound {
+            table_ordinal: upper_key.table_ordinal,
+            encoded_primary_key: upper_key.encoded_primary_key.clone(),
+        };
         let descriptor = codec::write_run(
             &tmp_path,
             codec::RunWrite {
@@ -893,6 +1030,8 @@ impl RelationalRowDeltaBuilder {
                 schema_set_digest: self.schema_set_digest,
                 ordinal,
                 entries: &self.dirty,
+                lower_bound,
+                upper_bound,
             },
             self.config,
         )?;

@@ -399,6 +399,7 @@ impl GraphStore {
             recovered_commit_epoch,
             expected_recovery_source,
             None,
+            None,
         )
     }
 
@@ -407,6 +408,7 @@ impl GraphStore {
         recovered_commit_epoch: u64,
         expected_recovery_source: RelationalRecoverySourceIdentity,
         private_manifest: Option<&std::path::Path>,
+        work: Option<&crate::background::CheckpointWorkContext>,
     ) -> Result<Arc<RelationalIndexReadView>, RelationalIndexShadowError> {
         let durable = self.durable.as_ref().ok_or_else(|| {
             hawdb_storage::relational::RelationalIndexShadowError::Admission(
@@ -421,20 +423,47 @@ impl GraphStore {
                     "canonical manifest does not bind a relational index generation".to_string(),
                 )
             })?;
-        let open = if private_manifest.is_some() {
-            RelationalIndexRecoveryReader::open_private_bound_generation_with_cache
+        let fence = RelationalRecoveryFence::new(recovered_commit_epoch, expected_recovery_source);
+        let reader = if let Some(path) = private_manifest {
+            let pinned = self
+                .relational_index_shadow
+                .read_view
+                .as_ref()
+                .map(|view| view.pinned_base())
+                .filter(|base| base.matches_generation_binding(generation_artifacts));
+            let base = match pinned {
+                Some(base) => base,
+                None => Arc::new(
+                    RelationalIndexShadowReader::open_bound_generation_with_work_context(
+                        durable.root_path(),
+                        generation_artifacts,
+                        RelationalIndexShadowConfig::default(),
+                        Some(Arc::clone(&durable.segment_cache)),
+                        durable.store_id(),
+                        work.unwrap_or(&crate::background::CheckpointWorkContext::default()),
+                    )?,
+                ),
+            };
+            RelationalIndexRecoveryReader::open_private_prefix_with_pinned_base(
+                path,
+                base,
+                fence,
+                RelationalIndexRecoveryConfig::default(),
+                Arc::clone(&durable.segment_cache),
+                durable.store_id(),
+                work.unwrap_or(&crate::background::CheckpointWorkContext::default()),
+            )?
         } else {
-            RelationalIndexRecoveryReader::open_bound_generation_with_cache
+            RelationalIndexRecoveryReader::open_bound_generation_with_cache(
+                durable.root_path(),
+                generation_artifacts,
+                fence,
+                RelationalIndexShadowConfig::default(),
+                RelationalIndexRecoveryConfig::default(),
+                Arc::clone(&durable.segment_cache),
+                durable.store_id(),
+            )?
         };
-        let reader = open(
-            private_manifest.unwrap_or(durable.root_path()),
-            generation_artifacts,
-            RelationalRecoveryFence::new(recovered_commit_epoch, expected_recovery_source),
-            RelationalIndexShadowConfig::default(),
-            RelationalIndexRecoveryConfig::default(),
-            Arc::clone(&durable.segment_cache),
-            durable.store_id(),
-        )?;
         reader.validate_required_roots(&self.relational_state)?;
         Ok(Arc::new(RelationalIndexReadView::from_recovered(reader)))
     }
@@ -442,6 +471,7 @@ impl GraphStore {
     pub(super) fn finish_private_relational_index_recovery(
         &mut self,
         recovery_source: Option<RelationalRecoverySourceIdentity>,
+        work: &crate::background::CheckpointWorkContext,
     ) -> super::Result<Option<crate::relational::PreparedRelationalRecoverySelector>> {
         let Some(builder) = self.relational_index_shadow.recovery_builder.as_mut() else {
             return Ok(None);
@@ -453,7 +483,7 @@ impl GraphStore {
             HawDBError::StorageIntegrity("private index recovery source is missing".into())
         })?;
         let report = builder
-            .seal_private_with_recovery_source(self.commit_epoch, recovery_source)
+            .seal_private_with_recovery_source(self.commit_epoch, recovery_source, work)
             .map_err(|error| HawDBError::Storage(format!("private index recovery: {error}")))?;
         let root = self
             .durable
@@ -470,6 +500,7 @@ impl GraphStore {
                 report.recovered_commit_epoch,
                 recovery_source,
                 Some(&immutable),
+                Some(work),
             )
             .map_err(|error| HawDBError::Storage(format!("pin private index recovery: {error}")))?;
         let selector = crate::relational::PreparedRelationalRecoverySelector::prepare(
