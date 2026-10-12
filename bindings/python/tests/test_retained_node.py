@@ -27,8 +27,8 @@ def seed(db):
     # Tiny labels choose a scan even when an equality index exists. Exercise
     # the indexed delivery contract with enough distinct keys to select it.
     db.execute(
-        "UNWIND $keys AS key CREATE (:Item {id: key})",
-        {"keys": list(range(2, 129))},
+        "UNWIND $rows AS row CREATE (:Item {id: row.id})",
+        {"rows": [{"id": key} for key in range(2, 129)]},
     )
 
 
@@ -138,7 +138,7 @@ def test_node_admission_rolls_back_before_python_delivery(db):
     with pytest.raises(hawdb.exceptions.RetainedError) as failure:
         db.execute_retained_node(QUERY, {"id": 1}, options=hawdb.RetainedOptions(batch_bytes=1))
     assert failure.value.kind == "working_unit_too_large"
-    assert_empty(db)
+    assert db.retained_snapshot_copy() is None
     with db.transaction():
         with pytest.raises(hawdb.exceptions.RetainedError) as failure:
             db.execute_retained_node(QUERY, {"id": 1})
@@ -183,4 +183,5 @@ def test_tiny_cost_selected_scan_refuses_without_owned_fallback(db):
     with pytest.raises(hawdb.exceptions.RetainedError) as failure:
         db.execute_retained_node(QUERY, {"id": 1})
     assert failure.value.kind == "unsupported_plan"
-    assert_empty(db)
+    # Rejection precedes lazy retained-governor construction and source capture.
+    assert db.retained_snapshot_copy() is None
