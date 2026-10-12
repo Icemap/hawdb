@@ -24,8 +24,8 @@ use super::{
     branch_lifecycle::{BranchLifecycleError, BranchSelection},
     configure_relational_fast_paths, configure_search_projection_changefeed,
     search_projection_consumer, CascadesOptimizer, Catalog, Database, DatabaseConfig,
-    DurabilityPolicy, GraphStore, LocalQosScheduler, OptimizerPlanningCache, PlanCache, ReaderPins,
-    SharedState, TelemetrySink,
+    DatabaseInstanceIdentity, DurabilityPolicy, GraphStore, LocalQosScheduler,
+    OptimizerPlanningCache, PlanCache, ReaderPins, SharedState, TelemetrySink,
 };
 use crate::error::{HawDBError, Result};
 use hawdb_storage::branch_project::{ProjectMetadata, ProjectSelector};
@@ -69,6 +69,7 @@ pub(super) struct BranchRuntimeCell {
     admitted: Arc<SharedBranchRuntime>,
     pending: Option<DeferredBranchAdmission>,
     admission: Mutex<()>,
+    instance_identity: DatabaseInstanceIdentity,
     // Mutations and background selector publication share this barrier.
     // Reads borrow the stable frontend and only try to adopt a ready handoff.
     publication: Arc<Control>,
@@ -159,6 +160,7 @@ impl BranchRuntimeCell {
             publication,
             automatic: OnceLock::new(),
             automatic_start: Mutex::new(()),
+            instance_identity: DatabaseInstanceIdentity::new(),
         }
     }
 
@@ -173,7 +175,12 @@ impl BranchRuntimeCell {
             publication,
             automatic: OnceLock::new(),
             automatic_start: Mutex::new(()),
+            instance_identity: DatabaseInstanceIdentity::new(),
         }
+    }
+
+    pub(super) fn instance_identity(&self) -> DatabaseInstanceIdentity {
+        self.instance_identity.clone()
     }
 
     pub(super) fn get(&self) -> Result<RuntimeRead<'_>> {

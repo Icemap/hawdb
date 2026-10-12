@@ -160,6 +160,47 @@ impl RuntimeMemoryPermit for GovernorMemoryPermit {
     fn bytes(&self) -> u64 {
         self.bytes
     }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn merge(
+        &mut self,
+        mut incoming: Box<dyn RuntimeMemoryPermit>,
+    ) -> Result<(), Box<dyn RuntimeMemoryPermit>> {
+        let Some(source) = incoming
+            .as_any_mut()
+            .and_then(|value| value.downcast_mut::<Self>())
+        else {
+            return Err(incoming);
+        };
+        if !Arc::ptr_eq(&self.controller, &source.controller) {
+            return Err(incoming);
+        }
+        let Some(bytes) = self.bytes.checked_add(source.bytes) else {
+            return Err(incoming);
+        };
+        let Some(charged) = self.charged_bytes.checked_add(source.charged_bytes) else {
+            return Err(incoming);
+        };
+        // Transfer all charges before destroying the redundant permit. Its
+        // zero-charge destructor cannot release the closed controller owner.
+        self.bytes = bytes;
+        self.charged_bytes = charged;
+        source.bytes = 0;
+        source.charged_bytes = 0;
+        drop(incoming);
+        // Refund only the concrete permit payload that was just destroyed.
+        // Backing bytes, the surviving permit and the original owner stay live.
+        let released = std::mem::size_of::<Self>() as u64;
+        {
+            let mut state = mutex_lock(&self.controller.state);
+            state.charged_bytes -= released;
+        }
+        self.charged_bytes -= released;
+        Ok(())
+    }
 }
 
 impl Drop for GovernorMemoryPermit {

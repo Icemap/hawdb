@@ -155,6 +155,86 @@ impl CheckpointAllocationOwner {
         Ok(CheckpointAllocationToken(None))
     }
 
+    /// Transfer buffers whose callers will no longer grow or look them up.
+    /// Compatible leases are consolidated only in uniquely owned nodes. The
+    /// surviving lease retains every backing byte; metadata is refunded only
+    /// when its physical inventory node is destroyed. Partial consolidation
+    /// after cancellation still owns all buffers and may be retried safely.
+    pub(crate) fn append_retained(
+        &mut self,
+        incoming: &mut Self,
+        work: &CheckpointWorkContext,
+    ) -> Result<(), CheckpointWorkError> {
+        while let Some(head) = incoming.head.as_mut().and_then(Arc::get_mut) {
+            let Some(next) = head.next.as_mut().and_then(Arc::get_mut) else {
+                break;
+            };
+            let unit = work.start_unit()?;
+            let target = head.buffer.get_mut().unwrap_or_else(|p| p.into_inner());
+            let source = next.buffer.get_mut().unwrap_or_else(|p| p.into_inner());
+            let merged = match (target.as_mut(), source.take()) {
+                (_, None) => true,
+                (Some(target), Some(source_permit)) => match target.merge(source_permit) {
+                    Ok(()) => true,
+                    Err(source_permit) => {
+                        *source = Some(source_permit);
+                        false
+                    }
+                },
+                (None, Some(source_permit)) => {
+                    *target = Some(source_permit);
+                    true
+                }
+            };
+            if !merged {
+                unit.finish_without_progress();
+                break;
+            }
+            let suffix = next.next.take();
+            // The redundant buffer permit was destroyed by merge. Destroy the
+            // node before its metadata permit can refund inventory capacity.
+            let retired = head.next.take();
+            head.next = suffix;
+            drop(CheckpointAllocationOwner { head: retired });
+            unit.finish();
+        }
+        let unique_record = incoming
+            .head
+            .as_ref()
+            .is_some_and(|head| head.next.is_none());
+        if unique_record
+            && let Some(target) = self.head.as_mut().and_then(Arc::get_mut)
+            && let Some(source) = incoming.head.as_mut().and_then(Arc::get_mut)
+        {
+            let unit = work.start_unit()?;
+            let target = target.buffer.get_mut().unwrap_or_else(|p| p.into_inner());
+            let source = source.buffer.get_mut().unwrap_or_else(|p| p.into_inner());
+            let merged = match (target.as_mut(), source.take()) {
+                (_, None) => true,
+                (Some(target), Some(source_permit)) => match target.merge(source_permit) {
+                    Ok(()) => true,
+                    Err(source_permit) => {
+                        *source = Some(source_permit);
+                        false
+                    }
+                },
+                (None, Some(source_permit)) => {
+                    *target = Some(source_permit);
+                    true
+                }
+            };
+            if merged {
+                drop(CheckpointAllocationOwner {
+                    head: incoming.head.take(),
+                });
+                unit.finish();
+                return Ok(());
+            }
+            unit.finish_without_progress();
+        }
+        self.append(incoming, work)
+    }
+
     /// Incoming decoded ownership is unique. Existing COW snapshots may share
     /// the target inventory. Change only the incoming tail after all checks;
     /// a cancellation leaves both owners intact.
@@ -208,3 +288,6 @@ impl Drop for CheckpointAllocationOwner {
         }
     }
 }
+
+#[cfg(test)]
+mod retained_tests;

@@ -412,6 +412,8 @@ pub struct OpenOptions {
     read: bool,
     mutable: [bool; 5],
     native_options: bool,
+    #[cfg(any(test, feature = "test-support"))]
+    capture_opaque_options: bool,
 }
 
 impl Default for OpenOptions {
@@ -428,6 +430,8 @@ impl OpenOptions {
             read: false,
             mutable: [false; 5],
             native_options: false,
+            #[cfg(any(test, feature = "test-support"))]
+            capture_opaque_options: false,
         }
     }
     pub fn read(&mut self, value: bool) -> &mut Self {
@@ -523,7 +527,7 @@ impl OpenOptions {
                 path,
                 &self.inner,
                 self.mutable,
-                self.native_options,
+                self.capture_opaque_options,
             )
             .map(|(inner, trace)| (inner, Some(Box::new(trace))))
             .map_err(|error| context.map_open_error(error))?,
@@ -565,6 +569,10 @@ impl std::os::unix::fs::OpenOptionsExt for OpenOptions {
     }
     fn custom_flags(&mut self, flags: i32) -> &mut Self {
         self.native_options = true;
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            self.capture_opaque_options = true;
+        }
         self.inner.custom_flags(flags);
         self
     }
@@ -574,26 +582,50 @@ impl std::os::unix::fs::OpenOptionsExt for OpenOptions {
 impl std::os::windows::fs::OpenOptionsExt for OpenOptions {
     fn access_mode(&mut self, mode: u32) -> &mut Self {
         self.native_options = true;
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            self.capture_opaque_options = true;
+        }
         self.inner.access_mode(mode);
         self
     }
     fn share_mode(&mut self, mode: u32) -> &mut Self {
         self.native_options = true;
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            self.capture_opaque_options = true;
+        }
         self.inner.share_mode(mode);
         self
     }
     fn custom_flags(&mut self, flags: u32) -> &mut Self {
         self.native_options = true;
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            // BACKUP_SEMANTICS permits the production directory-barrier open;
+            // it does not alter the captured byte/cursor/namespace operations.
+            // Any opaque option remains opaque even if later flags are known.
+            const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+            self.capture_opaque_options |= flags & !FILE_FLAG_BACKUP_SEMANTICS != 0;
+        }
         self.inner.custom_flags(flags);
         self
     }
     fn attributes(&mut self, attributes: u32) -> &mut Self {
         self.native_options = true;
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            self.capture_opaque_options = true;
+        }
         self.inner.attributes(attributes);
         self
     }
     fn security_qos_flags(&mut self, flags: u32) -> &mut Self {
         self.native_options = true;
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            self.capture_opaque_options = true;
+        }
         self.inner.security_qos_flags(flags);
         self
     }

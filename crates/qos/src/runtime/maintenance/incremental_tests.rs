@@ -312,3 +312,70 @@ fn incremental_allocations_compete_across_governors_with_one_process_policy() {
     assert_eq!(second.snapshot().admitted_memory_bytes, 0);
     assert_eq!(policy.snapshot().unobserved_reserved_bytes, 0);
 }
+
+#[test]
+fn incremental_merge_refunds_only_destroyed_payload_and_retains_closed_owner() {
+    let governor = governor(None);
+    let work = work(&governor);
+    let task = work.task_context().unwrap().clone();
+    let mut first = task.reserve_working_memory(512).unwrap().unwrap();
+    let overhead = governor.snapshot().admitted_memory_bytes - OWNER_BYTES - 512;
+    let second = task.reserve_working_memory(256).unwrap().unwrap();
+    let before = governor.snapshot().admitted_memory_bytes;
+    drop(work);
+    first.merge(second).unwrap();
+    assert_eq!(first.bytes(), 768);
+    let after = governor.snapshot();
+    assert_eq!(after.admitted_memory_bytes, before - overhead);
+    assert_eq!(after.admitted_memory_bytes, OWNER_BYTES + 768 + overhead);
+    assert_eq!(after.active_cpu_slots, 0);
+    assert_eq!(after.active_background_tasks, 0);
+    drop(first);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, OWNER_BYTES);
+    drop(task);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn incremental_merge_preserves_partially_observed_process_charges() {
+    let policy = ProcessMemoryPolicy::new(ProcessMemoryPolicyConfig::new(
+        NonZeroU64::new(5000).unwrap(),
+    ));
+    let sample = |resident_bytes| ProcessMemorySnapshot {
+        capabilities: ProcessMemoryCapabilities {
+            resident_memory: true,
+            total_page_faults: false,
+            split_page_faults: false,
+        },
+        resident_bytes,
+        peak_resident_bytes: resident_bytes,
+        total_page_faults: None,
+        minor_page_faults: None,
+        major_page_faults: None,
+    };
+    policy.update(sample(64));
+    let governor = governor(Some(policy.clone()));
+    let work = work(&governor);
+    let task = work.task_context().unwrap().clone();
+    let mut first = task.reserve_working_memory(512).unwrap().unwrap();
+    let overhead = governor.snapshot().admitted_memory_bytes - OWNER_BYTES - 512;
+    let second = task.reserve_working_memory(256).unwrap().unwrap();
+    let before = governor.snapshot().admitted_memory_bytes;
+    // The entire fixed owner and part of the first lease have been observed.
+    policy.update(sample(64 + OWNER_BYTES + overhead + 8));
+    let unobserved = policy.snapshot().unobserved_reserved_bytes;
+    first.merge(second).unwrap();
+    assert_eq!(first.bytes(), 768);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, before - overhead);
+    assert_eq!(
+        policy.snapshot().unobserved_reserved_bytes,
+        unobserved.min(768 + overhead)
+    );
+    drop(work);
+    assert_eq!(governor.snapshot().active_cpu_slots, 0);
+    drop(first);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, OWNER_BYTES);
+    drop(task);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    assert_eq!(policy.snapshot().unobserved_reserved_bytes, 0);
+}

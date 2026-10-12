@@ -18,6 +18,22 @@ use super::*;
 /// Keep this lease until the allocation is destroyed, including retained state.
 pub trait RuntimeMemoryPermit: std::fmt::Debug + Send + Sync {
     fn bytes(&self) -> u64;
+
+    /// Combine compatible allocation ownership without admitting new backing.
+    /// On failure both charges stay unchanged and the incoming lease returns.
+    /// On success retain this lease until both backing allocations are destroyed.
+    fn merge(
+        &mut self,
+        incoming: Box<dyn RuntimeMemoryPermit>,
+    ) -> Result<(), Box<dyn RuntimeMemoryPermit>> {
+        Err(incoming)
+    }
+
+    /// Optional backend identity for merging compatible concrete leases.
+    #[doc(hidden)]
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        None
+    }
 }
 
 /// A shared allocation ledger belonging to an already admitted task.

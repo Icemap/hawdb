@@ -240,3 +240,99 @@ fn working_memory_retention_keeps_shared_process_policy_charged_and_releases_las
     assert_eq!(second.snapshot().admitted_memory_bytes, 0);
     assert_eq!(policy.snapshot().unobserved_reserved_bytes, 0);
 }
+
+#[test]
+fn merging_compatible_leases_refunds_only_destroyed_permit_payload() {
+    let governor = governor(None);
+    let permit = governor.try_admit(request()).unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let mut first = task.reserve_working_memory(40).unwrap().unwrap();
+    let second = task.reserve_working_memory(12).unwrap().unwrap();
+    assert!(task.reserve_working_memory(1).is_err());
+    first.merge(second).unwrap();
+    assert_eq!(first.bytes(), 52);
+    // Two payloads previously filled the 100-byte ledger. Exactly one
+    // redundant payload died; another zero-byte lease must fit exactly.
+    let replacement = task.reserve_working_memory(0).unwrap().unwrap();
+    assert!(task.reserve_working_memory(1).is_err());
+    assert_eq!(governor.snapshot().admissions, 1);
+    drop(permit);
+    assert_eq!(governor.snapshot().active_cpu_slots, 0);
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 100);
+    drop(replacement);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 100);
+    drop(first);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn merging_distinct_controllers_returns_incoming_ownership_without_refunds() {
+    let left = governor(None);
+    let right = governor(None);
+    let left_permit = left.try_admit(request()).unwrap();
+    let right_permit = right.try_admit(request()).unwrap();
+    let left_task = left_permit.bind_task_context(RuntimeTaskContext::default());
+    let right_task = right_permit.bind_task_context(RuntimeTaskContext::default());
+    let mut first = left_task.reserve_working_memory(40).unwrap().unwrap();
+    let second = right_task.reserve_working_memory(12).unwrap().unwrap();
+    let returned = first.merge(second).unwrap_err();
+    assert_eq!(first.bytes(), 40);
+    assert_eq!(returned.bytes(), 12);
+    let left_remainder = left_task.reserve_working_memory(12).unwrap().unwrap();
+    let right_remainder = right_task.reserve_working_memory(40).unwrap().unwrap();
+    assert!(left_task.reserve_working_memory(1).is_err());
+    assert!(right_task.reserve_working_memory(1).is_err());
+    drop((first, returned, left_remainder, right_remainder));
+    drop((left_permit, right_permit));
+    assert_eq!(left.snapshot().admitted_memory_bytes, 0);
+    assert_eq!(right.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn unsupported_merge_preserves_custom_controller_and_governor_ownership() {
+    #[derive(Debug)]
+    struct CustomLease;
+    impl RuntimeMemoryPermit for CustomLease {
+        fn bytes(&self) -> u64 {
+            7
+        }
+    }
+    let governor = governor(None);
+    let permit = governor.try_admit(request()).unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let mut first = task.reserve_working_memory(40).unwrap().unwrap();
+    let custom = first.merge(Box::new(CustomLease)).unwrap_err();
+    assert_eq!(custom.bytes(), 7);
+    assert_eq!(first.bytes(), 40);
+    let mut custom = custom;
+    let returned = custom.merge(first).unwrap_err();
+    assert_eq!(returned.bytes(), 40);
+    assert_eq!(custom.bytes(), 7);
+    let remainder = task.reserve_working_memory(12).unwrap().unwrap();
+    assert!(task.reserve_working_memory(1).is_err());
+    drop((returned, remainder, custom, permit));
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn merging_after_task_closure_preserves_owner_until_combined_backing_closes() {
+    let governor = governor(None);
+    let permit = governor.try_admit(request()).unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let mut first = task.reserve_working_memory(40).unwrap().unwrap();
+    let second = task.reserve_working_memory(12).unwrap().unwrap();
+    drop(permit);
+    first.merge(second).unwrap();
+    assert_eq!(first.bytes(), 52);
+    let snapshot = governor.snapshot();
+    assert_eq!(snapshot.active_cpu_slots, 0);
+    assert_eq!(snapshot.active_background_tasks, 0);
+    assert_eq!(snapshot.admitted_memory_bytes, 100);
+    assert!(matches!(
+        task.reserve_working_memory(1),
+        Err(RuntimeMemoryError::Closed)
+    ));
+    drop(first);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}

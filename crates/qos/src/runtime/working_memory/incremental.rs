@@ -83,6 +83,43 @@ impl RuntimeMemoryPermit for IncrementalMemoryPermit {
     fn bytes(&self) -> u64 {
         self.bytes
     }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn merge(
+        &mut self,
+        mut incoming: Box<dyn RuntimeMemoryPermit>,
+    ) -> Result<(), Box<dyn RuntimeMemoryPermit>> {
+        let Some(source) = incoming
+            .as_any_mut()
+            .and_then(|value| value.downcast_mut::<Self>())
+        else {
+            return Err(incoming);
+        };
+        if !Arc::ptr_eq(&self.controller, &source.controller) {
+            return Err(incoming);
+        }
+        let Some(bytes) = self.bytes.checked_add(source.bytes) else {
+            return Err(incoming);
+        };
+        if !self.memory.merge(&mut source.memory) {
+            return Err(incoming);
+        }
+        self.bytes = bytes;
+        source.bytes = 0;
+        drop(incoming);
+        // The redundant concrete permit is gone. Refund its payload from the
+        // controller and governor; partially observed RSS stays conservative.
+        let released = std::mem::size_of::<Self>() as u64;
+        {
+            let mut state = mutex_lock(&self.controller.state);
+            state.charged_bytes -= released;
+        }
+        self.memory.shrink_to(self.memory.bytes() - released);
+        Ok(())
+    }
 }
 
 impl Drop for IncrementalMemoryPermit {

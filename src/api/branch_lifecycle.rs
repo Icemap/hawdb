@@ -7,6 +7,10 @@
 use super::Database;
 use crate::error::HawDBError;
 use hawdb_core::Uuid;
+pub use hawdb_storage::branch_abandonment::{
+    BranchAbandonmentAcknowledgement, BranchAbandonmentLimits, BranchAbandonmentPlan,
+    BranchAbandonmentReport,
+};
 use hawdb_storage::branch_catalog as storage;
 use hawdb_storage::branch_head;
 pub use hawdb_storage::branch_reclamation::{BranchReclamationLimits, BranchReclamationReport};
@@ -2566,7 +2570,10 @@ pub(super) struct CurrentBranch {
 }
 
 fn create_result_info(branch: &storage::BranchRecord) -> Result<BranchInfo, BranchLifecycleError> {
-    if branch.create_outcome == storage::CreateOutcome::Aborted {
+    if matches!(
+        branch.create_outcome,
+        storage::CreateOutcome::Aborted | storage::CreateOutcome::Abandoned
+    ) {
         return Err(BranchLifecycleError::Transition(
             storage::CatalogTransitionError::InvalidState("branch creation was aborted"),
         ));
@@ -2658,6 +2665,40 @@ impl Database {
         let report = metadata.recover_pending_creates(limits)?;
         self.branch_create_recovery = Some(report.clone());
         Ok(report)
+    }
+
+    /// Plan explicit abandonment of a pending create without admitting main.
+    /// Close all data runtimes first. Evidence includes the complete immutable
+    /// namespace and is retained indefinitely, including unrelated objects.
+    pub fn inspect_pending_branch_abandonment(
+        &self,
+        branch_id: Uuid,
+        limits: BranchAbandonmentLimits,
+    ) -> crate::error::Result<BranchAbandonmentPlan> {
+        self.ensure_branch_writable()?;
+        self.ensure_branch_work_idle()?;
+        let root = self.project_root_path.as_ref().ok_or_else(|| {
+            HawDBError::Storage("branch abandonment requires a persistent project".into())
+        })?;
+        let metadata =
+            hawdb_storage::branch_project::ProjectMetadata::open(root, self.config.max_open_files)?;
+        metadata.inspect_pending_branch_abandonment(branch_id, limits)
+    }
+
+    /// Abandon only the exact inspected pending create after explicit approval
+    /// of possible data loss. Quarantine is durable before catalog publication.
+    pub fn abandon_pending_branch(
+        &mut self,
+        acknowledgement: BranchAbandonmentAcknowledgement,
+    ) -> crate::error::Result<BranchAbandonmentReport> {
+        self.ensure_branch_writable()?;
+        self.ensure_branch_work_idle()?;
+        let root = self.project_root_path.as_ref().ok_or_else(|| {
+            HawDBError::Storage("branch abandonment requires a persistent project".into())
+        })?;
+        let metadata =
+            hawdb_storage::branch_project::ProjectMetadata::open(root, self.config.max_open_files)?;
+        metadata.abandon_pending_branch(acknowledgement)
     }
 
     /// Reclaims unreachable immutable objects and deleted branch directories.
@@ -3274,7 +3315,7 @@ impl Database {
             }
             match existing.create_outcome {
                 storage::CreateOutcome::Succeeded => return Ok(branch_info(existing)),
-                storage::CreateOutcome::Aborted => {
+                storage::CreateOutcome::Aborted | storage::CreateOutcome::Abandoned => {
                     return Err(BranchLifecycleError::Transition(
                         storage::CatalogTransitionError::InvalidState(
                             "branch creation was aborted",

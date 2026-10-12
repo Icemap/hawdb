@@ -29,6 +29,40 @@ impl RuntimeRetainedMemory {
     pub const fn bytes(&self) -> u64 {
         self.bytes
     }
+
+    pub(super) fn merge(&mut self, incoming: &mut Self) -> bool {
+        if !Arc::ptr_eq(&self.governor, &incoming.governor) {
+            return false;
+        }
+        let Some(bytes) = self.bytes.checked_add(incoming.bytes) else {
+            return false;
+        };
+        match (&mut self.process_memory, &mut incoming.process_memory) {
+            (None, None) => {}
+            (Some(target), Some(source)) => {
+                if !target.merge(source) {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+        self.bytes = bytes;
+        incoming.bytes = 0;
+        true
+    }
+
+    pub(super) fn shrink_to(&mut self, bytes: u64) {
+        let released = self.bytes - bytes;
+        if let Some(memory) = &mut self.process_memory {
+            memory.shrink_to(bytes);
+        }
+        {
+            let mut state = mutex_lock(&self.governor.state);
+            state.admitted_memory_bytes -= released;
+        }
+        self.bytes = bytes;
+        self.governor.notify_next_admission_waiter();
+    }
 }
 
 impl RuntimePermit {

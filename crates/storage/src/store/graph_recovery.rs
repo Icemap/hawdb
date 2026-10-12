@@ -853,7 +853,7 @@ impl GraphStore {
         work: &crate::background::CheckpointWorkContext,
     ) -> Result<()> {
         self.checkpoint_allocations
-            .append(incoming, work)
+            .append_retained(incoming, work)
             .map_err(HawDBError::from_storage_error)
     }
 

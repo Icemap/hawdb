@@ -119,8 +119,9 @@ mod types;
 pub(crate) use hawdb_system_sql as system_sql;
 
 pub use branch_lifecycle::{
-    BranchCreateRequest, BranchInfo, BranchLifecycleError, BranchLifecycleState,
-    BranchReclamationLimits, BranchReclamationReport, BranchSelector,
+    BranchAbandonmentAcknowledgement, BranchAbandonmentLimits, BranchAbandonmentPlan,
+    BranchAbandonmentReport, BranchCreateRequest, BranchInfo, BranchLifecycleError,
+    BranchLifecycleState, BranchReclamationLimits, BranchReclamationReport, BranchSelector,
 };
 pub use hawdb_core::graph_rag::{
     MissingScoringFeature, ScoringCombination, ScoringProgram, ScoringProgramError,
@@ -249,6 +250,28 @@ fn hawdb_lightning_initial_import_source_fingerprint_key(
         fingerprint.relational_row_count,
     )
 }
+
+/// Equality-only identity of one admitted database runtime in this process.
+///
+/// Clones retain only a marker, not database resources. Reopening or switching
+/// to another branch creates a different identity, even at equal contents/epochs.
+/// This token is not a persistent identity or evidence of a retained fence.
+#[derive(Debug, Clone)]
+pub struct DatabaseInstanceIdentity(Arc<()>);
+
+impl DatabaseInstanceIdentity {
+    fn new() -> Self {
+        Self(Arc::new(()))
+    }
+}
+
+impl PartialEq for DatabaseInstanceIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for DatabaseInstanceIdentity {}
 
 #[derive(Debug)]
 pub struct Database {
@@ -1041,6 +1064,12 @@ impl Database {
 
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Identifies the actual admitted selected runtime, independently of epoch.
+    pub fn instance_identity(&self) -> Result<DatabaseInstanceIdentity> {
+        self.runtime.get()?.store.ensure_usable()?;
+        Ok(self.runtime.instance_identity())
     }
 
     pub fn into_concurrent(self) -> ConcurrentDatabase {
