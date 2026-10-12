@@ -5994,7 +5994,8 @@ fn capture_size_estimates_match_wire_without_allocating_wide_keys() {
         });
         let observer = crate::test_allocator::AllocationObservation::start();
         let row_estimate = estimated_row_change_encoding_bytes(&change);
-        let access_estimate = estimated_replay_access_encoding_bytes(&access);
+        let access_estimate =
+            estimated_replay_access_encoding_bytes(&access.table, &access.primary_key);
         let wide_allocations = observer.finish();
         assert_eq!(wide_allocations, 0);
         assert_eq!(
@@ -6013,10 +6014,7 @@ fn capture_size_estimates_match_wire_without_allocating_wide_keys() {
     };
     assert_eq!(estimated_row_change_encoding_bytes(&empty), None);
     assert_eq!(
-        estimated_replay_access_encoding_bytes(&RelationalReplayAccess {
-            table: empty.table,
-            primary_key: empty.primary_key,
-        }),
+        estimated_replay_access_encoding_bytes(&empty.table, &empty.primary_key),
         None
     );
 }
@@ -6076,4 +6074,35 @@ fn row_capture_rejects_wide_key_before_copy_and_keeps_canonical_state() {
     assert!(
         matches!(retry, RelationalRowChangeCapture::Captured { changes, .. } if changes.len() == 1 && changes[0].primary_key == key)
     );
+}
+
+#[test]
+fn replay_access_rejects_wide_key_before_copy_and_retries_atomically() {
+    let key = RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]);
+    let table = "documents";
+    let mut tracker = RelationalReplayAccessTracker::new(RelationalRowChangeCaptureLimits {
+        max_entries: NonZeroUsize::new(1).unwrap(),
+        max_bytes: NonZeroUsize::new(1).unwrap(),
+    });
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let denied = tracker.record(table, &key);
+    let wide_allocations = observer.finish();
+    assert_eq!(wide_allocations, 0);
+    assert!(matches!(denied, Err(RelationalError::Admission(_))));
+    assert!(tracker.entries.is_empty());
+    assert_eq!(tracker.entry_count, 0);
+    assert_eq!(tracker.encoded_bytes, 0);
+    tracker.limits = RelationalRowChangeCaptureLimits::default();
+    tracker.record(table, &key).unwrap();
+    let encoded_bytes = tracker.encoded_bytes;
+    tracker.limits.max_bytes = NonZeroUsize::new(1).unwrap();
+    let observer = crate::test_allocator::AllocationObservation::start();
+    tracker.record(table, &key).unwrap();
+    assert_eq!(observer.finish(), 0);
+    assert_eq!(tracker.entry_count, 1);
+    assert_eq!(tracker.encoded_bytes, encoded_bytes);
+    let access = tracker.finish();
+    assert_eq!(access.entries().len(), 1);
+    assert_eq!(access.entries()[0].table, table);
+    assert_eq!(access.entries()[0].primary_key, key);
 }

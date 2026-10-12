@@ -1218,15 +1218,12 @@ impl RelationalReplayAccessTracker {
         {
             return Ok(());
         }
-        let entry = RelationalReplayAccess {
-            table: table.to_string(),
-            primary_key: primary_key.clone(),
-        };
-        let entry_bytes = estimated_replay_access_encoding_bytes(&entry).ok_or_else(|| {
-            RelationalError::Admission(
-                "relational WAL replay access-set byte count overflow".to_string(),
-            )
-        })?;
+        let entry_bytes =
+            estimated_replay_access_encoding_bytes(table, primary_key).ok_or_else(|| {
+                RelationalError::Admission(
+                    "relational WAL replay access-set byte count overflow".to_string(),
+                )
+            })?;
         let encoded_bytes = self.encoded_bytes.checked_add(entry_bytes).ok_or_else(|| {
             RelationalError::Admission(
                 "relational WAL replay access-set byte count overflow".to_string(),
@@ -6442,18 +6439,19 @@ fn estimated_row_change_encoding_bytes_parts(
         .checked_add(row_bytes)
 }
 
-fn estimated_replay_access_encoding_bytes(change: &RelationalReplayAccess) -> Option<usize> {
+fn estimated_replay_access_encoding_bytes(
+    table: &str,
+    primary_key: &RelationalKey,
+) -> Option<usize> {
     const FIXED_BYTES: usize = 2 * 8;
     let key_bytes = ordered_key::CheckpointKeyEncoding::new(
-        &change.primary_key,
+        primary_key,
         &[],
         &crate::background::CheckpointWorkContext::default(),
     )
     .ok()?
     .encoded_len();
-    FIXED_BYTES
-        .checked_add(change.table.len())?
-        .checked_add(key_bytes)
+    FIXED_BYTES.checked_add(table.len())?.checked_add(key_bytes)
 }
 
 fn row_capture_limit_invalidated(
