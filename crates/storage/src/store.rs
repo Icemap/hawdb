@@ -110,6 +110,7 @@ mod graph_read;
 #[doc(hidden)]
 pub use graph_read::{
     MaterializedNodePointRead, MaterializedNodePointSource, MaterializedNodeReadSource,
+    MaterializedReadHealth,
 };
 #[path = "store/graph_recovery.rs"]
 mod graph_recovery;

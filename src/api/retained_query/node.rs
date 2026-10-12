@@ -10,7 +10,9 @@ use hawdb_core::schema::{RetainedLabelAllocation, RetainedLabelName};
 use hawdb_core::Catalog;
 use hawdb_plan_cypher::{PhysicalPlan, Predicate};
 use hawdb_storage::read_view::GraphReadAllocation;
-use hawdb_storage::store::{MaterializedNodePointRead, MaterializedNodePointSource};
+use hawdb_storage::store::{
+    MaterializedNodePointRead, MaterializedNodePointSource, MaterializedReadHealth,
+};
 
 #[derive(Debug)]
 struct PrepaidSource(usize);
@@ -188,6 +190,7 @@ impl NodeObservation {
 pub struct RetainedNodeCursor {
     observation: Option<NodeObservation>,
     view: Option<RetainedNodeView>,
+    health: Option<MaterializedReadHealth>,
     delivered: bool,
     status: RetainedQueryStatus,
     profile: RetainedQueryProfile,
@@ -217,6 +220,17 @@ impl RetainedNodeCursor {
                 .expect("failed cursor has a cause"));
         }
         self.profile.pulls += 1;
+        if self.status == RetainedQueryStatus::Completed {
+            return Ok(None);
+        }
+        if let Err(error) = self
+            .health
+            .as_ref()
+            .expect("open health barrier")
+            .validate_usable()
+        {
+            return Err(self.fail(error.into()));
+        }
         if self.delivered || self.view.is_none() {
             let observation = self.observation.take();
             let completion = NodeCompletionGuard {
@@ -248,18 +262,21 @@ impl RetainedNodeCursor {
                 self.profile.backpressure_events += 1;
                 Err(error)
             }
-            Err(error) => {
-                self.status = RetainedQueryStatus::Failed;
-                self.terminal_error = Some(error.clone());
-                if let Some(view) = self.view.take() {
-                    view.source.status.store(2, Ordering::Release);
-                }
-                if let Some(observation) = self.observation.take() {
-                    observation.record(Err(&error), &self.profile);
-                }
-                Err(error)
-            }
+            Err(error) => Err(self.fail(error)),
         }
+    }
+
+    fn fail(&mut self, error: RetainedQueryError) -> RetainedQueryError {
+        self.status = RetainedQueryStatus::Failed;
+        self.terminal_error = Some(error.clone());
+        if let Some(view) = self.view.take() {
+            view.source.status.store(2, Ordering::Release);
+        }
+        self.health.take();
+        if let Some(observation) = self.observation.take() {
+            observation.record(Err(&error), &self.profile);
+        }
+        error
     }
     pub fn close(&mut self) {
         if self.status == RetainedQueryStatus::Open {
@@ -267,6 +284,7 @@ impl RetainedNodeCursor {
                 view.source.status.store(3, Ordering::Release);
             }
             self.status = RetainedQueryStatus::Closed;
+            self.health.take();
             if let Some(observation) = self.observation.take() {
                 observation.record(Err(&RetainedQueryError::Closed), &self.profile);
             }
@@ -276,14 +294,7 @@ impl RetainedNodeCursor {
     /// A failed foreign handoff must never complete provisional views at EOF.
     pub fn abort_delivery(&mut self) {
         if self.status == RetainedQueryStatus::Open {
-            self.status = RetainedQueryStatus::Failed;
-            self.terminal_error = Some(RetainedQueryError::AdapterDelivery);
-            if let Some(view) = self.view.take() {
-                view.source.status.store(2, Ordering::Release);
-            }
-            if let Some(observation) = self.observation.take() {
-                observation.record(Err(&RetainedQueryError::AdapterDelivery), &self.profile);
-            }
+            self.fail(RetainedQueryError::AdapterDelivery);
         }
     }
 }
@@ -302,6 +313,7 @@ struct NodeCompletionGuard<'a> {
 impl NodeCompletionGuard<'_> {
     fn complete(mut self) {
         self.armed = false;
+        self.cursor.health.take();
         self.cursor.status = RetainedQueryStatus::Completed;
         if let Some(view) = self.cursor.view.take() {
             view.source.status.store(1, Ordering::Release);
@@ -313,6 +325,7 @@ impl Drop for NodeCompletionGuard<'_> {
         if self.armed {
             self.cursor.status = RetainedQueryStatus::Failed;
             self.cursor.terminal_error = Some(RetainedQueryError::AdapterDelivery);
+            self.cursor.health.take();
             if let Some(view) = self.cursor.view.take() {
                 view.source.status.store(2, Ordering::Release);
             }
@@ -423,6 +436,9 @@ impl Database {
             );
             let observation_bytes = std::mem::size_of::<RetainedNodeCursor>()
                 .checked_add(cypher.len())
+                .and_then(|bytes| {
+                    bytes.checked_add(MaterializedReadHealth::retained_capacity_bytes())
+                })
                 .and_then(|bytes| bytes.checked_add(options.adapter_metadata_bytes))
                 .and_then(|bytes| bytes.checked_add(64))
                 .ok_or(RetainedQueryError::SizeOverflow)?;
@@ -468,6 +484,7 @@ impl Database {
                 _memory: memory,
                 _runtime_memory: runtime_memory,
             };
+            let health = state.store.materialized_read_health()?;
             let mut profile = RetainedQueryProfile {
                 source_snapshot_rows: state.store.node_count_for_label(None),
                 query_peak_bytes: ledger.snapshot().peak_bytes,
@@ -513,6 +530,7 @@ impl Database {
             Ok(RetainedNodeCursor {
                 observation: Some(observation),
                 view,
+                health: Some(health),
                 delivered: false,
                 status: RetainedQueryStatus::Open,
                 profile,
@@ -574,7 +592,8 @@ fn admit_node(
             .ok_or(RetainedQueryError::SizeOverflow)
     })?;
     let metadata = std::mem::size_of::<NodeOwner>()
-        .checked_add(2 * std::mem::size_of::<usize>())
+        .checked_add(MaterializedReadHealth::retained_capacity_bytes())
+        .and_then(|bytes| bytes.checked_add(2 * std::mem::size_of::<usize>()))
         .and_then(|bytes| {
             bytes.checked_add(
                 row.labels
@@ -800,6 +819,67 @@ mod tests {
         drop(second);
         assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
         assert_eq!(governor.retained_result_snapshot().view_handles, 0);
+    }
+
+    #[test]
+    fn poisoned_source_cannot_complete_a_delivered_or_empty_node_cursor() {
+        for key in [37, 999] {
+            let (db, governor) = fixture(4);
+            let mut cursor = db
+                .query_with_params_retained_node(
+                    QUERY,
+                    &BTreeMap::from([("key".into(), Value::Int(key))]),
+                    RetainedQueryOptions::default(),
+                )
+                .unwrap();
+            let delivered = if key == 37 {
+                Some(cursor.next_node().unwrap().unwrap())
+            } else {
+                None
+            };
+            let payload = delivered.as_ref().map(|view| {
+                let Some(RetainedNodeField::Value(Value::String(value))) =
+                    view.field("text").unwrap()
+                else {
+                    panic!("expected original text");
+                };
+                value.as_bytes()
+            });
+            db.runtime
+                .get()
+                .unwrap()
+                .store
+                .poison_on_storage_error::<()>(&Err(HawDBError::StorageIntegrity(
+                    "injected completion failure".into(),
+                )));
+            for _ in 0..2 {
+                assert!(matches!(
+                    cursor.next_node(),
+                    Err(RetainedQueryError::Execution(HawDBError::StorageIntegrity(
+                        _
+                    )))
+                ));
+                assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
+            }
+            if let Some(view) = delivered.as_ref() {
+                assert_eq!(view.status(), RetainedQueryStatus::Failed);
+                assert_eq!(payload.unwrap(), b"payload");
+            }
+            let digest = hawdb_query::QueryIdentity::new("cypher", QUERY);
+            let summary = db
+                .statement_summary
+                .borrow()
+                .snapshot()
+                .into_iter()
+                .find(|entry| entry.digest == digest.query_digest())
+                .unwrap();
+            assert_eq!(summary.execution_count, 1);
+            assert_eq!(summary.error_count, 1);
+            assert_eq!(summary.success_count, 0);
+            drop((cursor, delivered, db));
+            assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
     }
 
     #[test]

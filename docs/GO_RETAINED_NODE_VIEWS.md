@@ -56,14 +56,17 @@ and JSON input. Input normalization/encoding is not claimed to be zero copy.
 
 ## Active pull, retention and memory
 
-There is no prefetch. Successful EOF makes provisional values final; unfinished
+There is no prefetch. Successful EOF makes provisional values final after a source-health barrier; unfinished
 close marks them Closed. Published owners remain readable after cursor, parent
 and database closure, and preserve the old generation across later writes.
 Readers should close each independently owned child promptly. Copying a Go
 wrapper shares one close state; `Retain` admits a distinct owner.
 
 The native runtime admits complete row/catalog source capacity and control
-metadata. Child/retain operations reserve registry/object/descriptor capacity,
+metadata. A lightweight health owner keeps only two shared poison signals,
+without a node directory, row payload or file lease. Its conservative shared
+atomic/header capacity is included in control admission; point owners also
+admit those signals because exported payload can outlive successful EOF. Child/retain operations reserve registry/object/descriptor capacity,
 a 512-byte foreign-wrapper allowance, and the complete index-path capacity
 before allocating the path or cloning the native view. The root/control options
 include the same allowance. Foreign cursor control has a separate shared-memory
@@ -103,10 +106,15 @@ not a machine-checked proof or a sanitizer qualification:
    against release. Go mappings live for the process lifetime; each scalar/byte
    read holds the same owner read lock that Close excludes. Go finalizers are a
    safety net, while explicit Close is the resource control path.
-6. Root handoff errors or registration panic abort the native cursor and preserve
+6. Each open pull, including empty or post-delivery EOF, checks both source
+   poison signals before completion. Detected integrity/apply failure becomes
+   sticky Failed, records one failed statement, and cannot publish successful
+   EOF. The barrier is a checkpoint of monotonic flags; faults arising after
+   its check do not retroactively invalidate an already completed result.
+7. Root handoff errors or registration panic abort the native cursor and preserve
    a sticky terminal failure. A later pull cannot convert that failure into EOF
    success. Existing state/release operations also recognize node owners.
-7. Immutable row/catalog generation ownership means subsequent writes publish a
+8. Immutable row/catalog generation ownership means subsequent writes publish a
    different generation when required. Removing one registry handle cannot free
    payload retained by another independently admitted view.
 

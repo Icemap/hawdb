@@ -602,3 +602,23 @@ fn typed_point_admission_validates_before_and_after_retained_transfer() {
         store.ensure_usable().unwrap();
     }
 }
+
+#[test]
+fn completion_health_guard_preserves_both_poison_signals_after_store_drop() {
+    for integrity in [false, true] {
+        let store = GraphStore::in_memory();
+        let health = store.materialized_read_health().unwrap();
+        health.validate_usable().unwrap();
+        if integrity {
+            store
+                .integrity_poisoned
+                .store(true, AtomicOrdering::Release);
+        } else {
+            store
+                .post_wal_apply_poisoned
+                .store(true, AtomicOrdering::Release);
+        }
+        drop(store);
+        assert!(health.validate_usable().is_err());
+    }
+}

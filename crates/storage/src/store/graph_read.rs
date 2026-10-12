@@ -58,6 +58,25 @@ pub struct MaterializedNodeReadSource {
     post_wal_apply_poisoned: Arc<AtomicBool>,
 }
 
+/// A root-internal completion barrier, without retaining rows or directories.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct MaterializedReadHealth {
+    integrity_poisoned: Arc<AtomicBool>,
+    post_wal_apply_poisoned: Arc<AtomicBool>,
+}
+
+impl MaterializedReadHealth {
+    pub fn validate_usable(&self) -> Result<()> {
+        ensure_graph_read_flags_usable(&self.integrity_poisoned, &self.post_wal_apply_poisoned)
+    }
+
+    /// Conservative shared-atomic/header allowance on supported 32/64-bit ABIs.
+    pub const fn retained_capacity_bytes() -> usize {
+        2 * (3 * std::mem::size_of::<usize>() + std::mem::size_of::<AtomicBool>())
+    }
+}
+
 impl MaterializedNodeReadSource {
     pub fn iter_after(&self, after: Option<NodeId>) -> Result<impl Iterator<Item = &NodeRecord>> {
         ensure_graph_read_flags_usable(&self.integrity_poisoned, &self.post_wal_apply_poisoned)?;
@@ -121,6 +140,15 @@ fn retain_point_allocation(allocation: &mut dyn GraphReadAllocation, bytes: usiz
 }
 
 impl GraphStore {
+    #[doc(hidden)]
+    pub fn materialized_read_health(&self) -> Result<MaterializedReadHealth> {
+        self.ensure_usable()?;
+        Ok(MaterializedReadHealth {
+            integrity_poisoned: Arc::clone(&self.integrity_poisoned),
+            post_wal_apply_poisoned: Arc::clone(&self.post_wal_apply_poisoned),
+        })
+    }
+
     /// Admit the selected row before pinning it, including nested and spare
     /// capacities. This does not construct Arrow arrays or
     /// establish a whole-process memory bound. Callers must supply their policy.

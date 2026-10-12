@@ -56,6 +56,11 @@ successful buffer acquisition. The row, labels and all nested values remain
 immutable across source updates, database closure and cursor completion.
 The final buffer release returns its view handle and source capacity.
 
+Every open pull, including empty/post-delivery EOF, checks the retained
+source-health signals. A detected poisoned source fails terminally instead of
+marking provisional results Completed; existing immutable buffer leases remain
+mapped. The health owner pins no rows or directories.
+
 The cursor admits Python control metadata even for an empty result. A separate
 shared-memory control reservation remains until the native cursor is destroyed,
 including after EOF; `cursor.close()` drops that native owner. Observation and
