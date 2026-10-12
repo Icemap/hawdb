@@ -6179,3 +6179,176 @@ fn primary_index_capture_rejects_wide_keys_before_copy_and_retries() {
             .sum::<usize>()
     );
 }
+
+#[test]
+fn secondary_index_capture_borrows_unchanged_and_rejected_wide_values() {
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let wide_owner = "o".repeat(128 * 1024);
+    let base = RelationalState::default()
+        .stage_transaction(create_upsert_table(), limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![upsert_row("id-1", &wide_owner, "old")],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    let key = RelationalKey(vec![RelationalValue::Text("id-1".into())]);
+    let changed = BTreeMap::from([("documents".into(), BTreeSet::from([key.clone()]))]);
+    let update = |column: &str, value: &str| RelationalTransaction {
+        writes: vec![RelationalWrite::UpdateWhere {
+            table: "documents".into(),
+            assignments: vec![RelationalUpdateAssignment {
+                column: column.into(),
+                value: RelationalUpdateValue::Value(RelationalValue::Text(value.into())),
+            }],
+            predicate: RelationalPredicate::Compare {
+                column: "id".into(),
+                op: RelationalComparisonOp::Eq,
+                value: RelationalValue::Text("id-1".into()),
+            },
+        }],
+    };
+    let same_key = base
+        .stage_transaction(update("payload", "new"), limits, overflow)
+        .unwrap();
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let unchanged = capture_relational_index_changes(
+        &base,
+        &same_key,
+        &changed,
+        &BTreeSet::new(),
+        RelationalIndexChangeCaptureLimits::default(),
+    );
+    assert_eq!(observer.finish(), 0);
+    assert!(
+        matches!(unchanged, RelationalIndexChangeCapture::Captured { changes, encoded_bytes: 0 } if changes.is_empty())
+    );
+    let next = base
+        .stage_transaction(update("owner", "owner-2"), limits, overflow)
+        .unwrap();
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let denied = capture_relational_index_changes(
+        &base,
+        &next,
+        &changed,
+        &BTreeSet::new(),
+        RelationalIndexChangeCaptureLimits {
+            max_entries: NonZeroUsize::new(2).unwrap(),
+            max_bytes: NonZeroUsize::new(1).unwrap(),
+        },
+    );
+    assert_eq!(observer.finish(), 0);
+    assert!(matches!(
+        denied,
+        RelationalIndexChangeCapture::Invalidated { .. }
+    ));
+    let retry = capture_relational_index_changes(
+        &base,
+        &next,
+        &changed,
+        &BTreeSet::new(),
+        RelationalIndexChangeCaptureLimits::default(),
+    );
+    let RelationalIndexChangeCapture::Captured {
+        changes,
+        encoded_bytes,
+    } = retry
+    else {
+        panic!("secondary capture retry");
+    };
+    assert_eq!(changes.len(), 2);
+    assert_eq!(changes[0].kind, RelationalIndexChangeKind::Delete);
+    assert_eq!(
+        changes[0].index_key,
+        RelationalKey(vec![RelationalValue::Text(wide_owner)])
+    );
+    assert_eq!(changes[1].kind, RelationalIndexChangeKind::Insert);
+    assert_eq!(
+        changes[1].index_key,
+        RelationalKey(vec![RelationalValue::Text("owner-2".into())])
+    );
+    assert!(changes.iter().all(|change| change.primary_key == key));
+    assert_eq!(
+        encoded_bytes,
+        changes
+            .iter()
+            .map(|change| change.estimated_encoded_bytes().unwrap())
+            .sum::<usize>()
+    );
+}
+
+#[test]
+fn secondary_index_capture_keeps_unique_null_filter_and_nonunique_null_entries() {
+    let mut schema = create_upsert_table();
+    let RelationalWrite::CreateTable(table) = &mut schema.writes[0] else {
+        panic!("fixture schema");
+    };
+    table.columns[1].nullable = true;
+    table.indexes.push(RelationalIndexSchema {
+        name: "owner_nonunique".into(),
+        columns: vec!["owner".into()],
+        unique: false,
+    });
+    let base = RelationalState::default()
+        .stage_transaction(
+            schema,
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let next = base
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![RelationalRow::new(vec![
+                        RelationalValue::Text("id-1".into()),
+                        RelationalValue::Null,
+                        RelationalValue::Text("body".into()),
+                    ])],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let key = RelationalKey(vec![RelationalValue::Text("id-1".into())]);
+    let changed = BTreeMap::from([("documents".into(), BTreeSet::from([key]))]);
+    let definitions = next
+        .table_schema("documents")
+        .unwrap()
+        .required_index_definitions();
+    let capture = capture_relational_index_changes(
+        &base,
+        &next,
+        &changed,
+        &BTreeSet::new(),
+        RelationalIndexChangeCaptureLimits::default(),
+    );
+    let RelationalIndexChangeCapture::Captured { changes, .. } = capture else {
+        panic!("nullable capture");
+    };
+    assert_eq!(changes.len(), 2);
+    let secondary = changes
+        .iter()
+        .find(|change| change.index != RELATIONAL_PRIMARY_INDEX_NAME)
+        .unwrap();
+    assert_eq!(secondary.index, "owner_nonunique");
+    assert_eq!(
+        secondary.index_key,
+        RelationalKey(vec![RelationalValue::Null])
+    );
+    assert!(definitions
+        .iter()
+        .filter(|index| index.role.is_unique() && index.role != RelationalIndexRole::Primary)
+        .all(|index| changes.iter().all(|change| change.index != index.name)));
+}

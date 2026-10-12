@@ -6233,46 +6233,52 @@ fn capture_relational_index_changes(
                         };
                     }
                 };
-                let previous_index_key = previous_row
-                    .map(|row| row_key(row, &positions))
-                    .filter(|key| index_includes_key(index, key));
-                let next_index_key = next_row
-                    .map(|row| row_key(row, &positions))
-                    .filter(|key| index_includes_key(index, key));
-                if previous_index_key == next_index_key {
+                let includes_row = |row: &&RelationalRow| {
+                    !index.role.is_unique()
+                        || !positions.iter().any(|position| {
+                            matches!(row.values()[*position], RelationalValue::Null)
+                        })
+                };
+                let previous_index_row = previous_row.filter(includes_row);
+                let next_index_row = next_row.filter(includes_row);
+                let equal = match (previous_index_row, next_index_row) {
+                    (None, None) => true,
+                    (Some(previous), Some(next)) => positions
+                        .iter()
+                        .all(|position| previous.values()[*position] == next.values()[*position]),
+                    _ => false,
+                };
+                if equal {
                     continue;
                 }
-                if let Some(index_key) = previous_index_key
-                    && !push_captured_index_change(
+                for (row, kind) in [
+                    (previous_index_row, RelationalIndexChangeKind::Delete),
+                    (next_index_row, RelationalIndexChangeKind::Insert),
+                ] {
+                    let Some(row) = row else { continue };
+                    let change_bytes = estimated_index_change_encoding_bytes_with_key_size(
+                        table,
+                        &index.name,
+                        estimated_relational_values_encoding_bytes(
+                            positions.iter().map(|position| &row.values()[*position]),
+                        ),
+                        primary_key,
+                    );
+                    if !push_captured_index_change_with_size(
                         &mut changes,
                         &mut encoded_bytes,
                         limits,
-                        RelationalIndexChange {
+                        change_bytes,
+                        || RelationalIndexChange {
                             table: table.clone(),
                             index: index.name.clone(),
-                            index_key,
+                            index_key: row_key(row, &positions),
                             primary_key: primary_key.clone(),
-                            kind: RelationalIndexChangeKind::Delete,
+                            kind,
                         },
-                    )
-                {
-                    return capture_limit_invalidated(limits);
-                }
-                if let Some(index_key) = next_index_key
-                    && !push_captured_index_change(
-                        &mut changes,
-                        &mut encoded_bytes,
-                        limits,
-                        RelationalIndexChange {
-                            table: table.clone(),
-                            index: index.name.clone(),
-                            index_key,
-                            primary_key: primary_key.clone(),
-                            kind: RelationalIndexChangeKind::Insert,
-                        },
-                    )
-                {
-                    return capture_limit_invalidated(limits);
+                    ) {
+                        return capture_limit_invalidated(limits);
+                    }
                 }
             }
         }
@@ -6479,21 +6485,6 @@ fn index_includes_key(index: &RelationalIndexDefinition, key: &RelationalKey) ->
             .any(|value| matches!(value, RelationalValue::Null))
 }
 
-fn push_captured_index_change(
-    changes: &mut Vec<RelationalIndexChange>,
-    encoded_bytes: &mut usize,
-    limits: RelationalIndexChangeCaptureLimits,
-    change: RelationalIndexChange,
-) -> bool {
-    push_captured_index_change_with_size(
-        changes,
-        encoded_bytes,
-        limits,
-        change.estimated_encoded_bytes(),
-        || change,
-    )
-}
-
 fn push_captured_index_change_with_size(
     changes: &mut Vec<RelationalIndexChange>,
     encoded_bytes: &mut usize,
@@ -6541,16 +6532,36 @@ fn estimated_index_change_encoding_bytes_parts(
     index_key: &RelationalKey,
     primary_key: &RelationalKey,
 ) -> Option<usize> {
+    estimated_index_change_encoding_bytes_with_key_size(
+        table,
+        index,
+        estimated_relational_key_encoding_bytes(index_key),
+        primary_key,
+    )
+}
+
+fn estimated_index_change_encoding_bytes_with_key_size(
+    table: &str,
+    index: &str,
+    index_key_bytes: Option<usize>,
+    primary_key: &RelationalKey,
+) -> Option<usize> {
     const FIXED_BYTES: usize = 1 + 4 * 4;
     FIXED_BYTES
         .checked_add(table.len())?
         .checked_add(index.len())?
-        .checked_add(estimated_relational_key_encoding_bytes(index_key)?)?
+        .checked_add(index_key_bytes?)?
         .checked_add(estimated_relational_key_encoding_bytes(primary_key)?)
 }
 
 fn estimated_relational_key_encoding_bytes(key: &RelationalKey) -> Option<usize> {
-    key.0.iter().try_fold(0usize, |bytes, value| {
+    estimated_relational_values_encoding_bytes(key.0.iter())
+}
+
+fn estimated_relational_values_encoding_bytes<'a>(
+    mut values: impl Iterator<Item = &'a RelationalValue>,
+) -> Option<usize> {
+    values.try_fold(0usize, |bytes, value| {
         let value_bytes = match value {
             RelationalValue::Null => 1,
             RelationalValue::Boolean(_) => 2,
