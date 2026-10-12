@@ -1,7 +1,10 @@
 # Experimental Python retained node views
 
 `Database.execute_retained_node` uses the native indexed complete-node cursor.
-It accepts an equality-index point plan returning one node variable. Missing
+It accepts an equality-index point plan returning one node variable. An existing
+index alone is insufficient: the optimizer may choose a scan for a tiny label,
+which refuses explicitly. The API does not force index selection or secretly
+materialize an owned fallback. Missing
 matches complete with no row owner. Multi-match seeks, scans, computed node
 projections, and layouts requiring hydration refuse explicitly. An open user
 transaction is rejected by the embedded facade, as for numeric retained queries.

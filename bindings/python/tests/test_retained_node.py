@@ -24,6 +24,12 @@ def seed(db):
             "items": [None, True, 42, {"text": TEXT}],
         }},
     )
+    # Tiny labels choose a scan even when an equality index exists. Exercise
+    # the indexed delivery contract with enough distinct keys to select it.
+    db.execute(
+        "UNWIND $keys AS key CREATE (:Item {id: key})",
+        {"keys": list(range(2, 129))},
+    )
 
 
 def test_node_payload_buffer_keeps_original_address_after_update_and_close(db):
@@ -101,7 +107,7 @@ def test_unfinished_close_preserves_buffer_and_terminal_status(db):
 
 def test_missing_seek_and_explicit_refusals_do_not_materialize(db):
     seed(db)
-    missing = db.execute_retained_node(QUERY, {"id": 99})
+    missing = db.execute_retained_node(QUERY, {"id": 999})
     assert db.retained_snapshot_copy()["retained_bytes"] == 0
     assert missing.next_node() is None
     missing.close()
@@ -166,4 +172,15 @@ def test_fixed_width_fields_export_original_read_only_scalar_storage(db):
     nested.close()
     node.close()
     cursor.close()
+    assert_empty(db)
+
+
+def test_tiny_cost_selected_scan_refuses_without_owned_fallback(db):
+    db.execute("CREATE NODE TABLE Item")
+    db.execute("CREATE INDEX ON :Item(id)")
+    db.execute("CREATE (:Item {id: 1})")
+    assert db.execute(QUERY, {"id": 1}).fetchone()["node"]["id"] == 1
+    with pytest.raises(hawdb.exceptions.RetainedError) as failure:
+        db.execute_retained_node(QUERY, {"id": 1})
+    assert failure.value.kind == "unsupported_plan"
     assert_empty(db)
