@@ -1655,41 +1655,7 @@ fn clone_sparse_recovery_key_with_work_context(
     key: &crate::relational::RelationalKey,
     context: &crate::background::CheckpointDecodeContext,
 ) -> Result<crate::relational::RelationalKey, RelationalError> {
-    let mut values = context
-        .vector_capacity(key.0.len())
-        .map_err(|error| RelationalError::Admission(error.to_string()))?;
-    for value in &key.0 {
-        let value = match value {
-            RelationalValue::Text(text) => RelationalValue::Text(
-                context
-                    .string(text)
-                    .map_err(|error| RelationalError::Admission(error.to_string()))?,
-            ),
-            RelationalValue::Bytea(bytes) => {
-                let mut copied = context
-                    .vector_capacity(bytes.len())
-                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
-                for block in bytes.chunks(64 * 1024) {
-                    let unit = context
-                        .start_unit()
-                        .map_err(|error| RelationalError::Admission(error.to_string()))?;
-                    copied.extend_from_slice(block);
-                    unit.finish();
-                }
-                RelationalValue::Bytea(copied)
-            }
-            value => value.clone(),
-        };
-        let unit = context
-            .start_unit()
-            .map_err(|error| RelationalError::Admission(error.to_string()))?;
-        values.push(value);
-        unit.finish();
-    }
-    context
-        .checkpoint()
-        .map_err(|error| RelationalError::Admission(error.to_string()))?;
-    Ok(crate::relational::RelationalKey(values))
+    key.clone_with_allocations(context)
 }
 
 fn map_sparse_snapshot_read_error(error: RelationalRowPageSnapshotReadError) -> RelationalError {

@@ -688,6 +688,29 @@ pub fn relational_foreign_key_index_name(ordinal: usize) -> String {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RelationalKey(pub Vec<RelationalValue>);
 
+impl RelationalKey {
+    pub(crate) fn clone_with_allocations(
+        &self,
+        context: &crate::background::CheckpointDecodeContext,
+    ) -> Result<Self, RelationalError> {
+        let mut values = context
+            .vector_capacity(self.0.len())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        for value in &self.0 {
+            let value = value.as_ref().to_owned_value_with_allocations(context)?;
+            let unit = context
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            values.push(value);
+            unit.finish();
+        }
+        context
+            .checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        Ok(Self(values))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RelationalIndexScanDirection {
     Forward,
@@ -3030,6 +3053,7 @@ impl RelationalState {
             hydrated_access,
             expected_replay_access,
             row_capture_limits,
+            allocations,
         )?;
         let (staged, index_capture, row_capture) = workspace
             .stage_transaction_for_authoritative_recovery_with_replay_access(
@@ -3414,6 +3438,7 @@ impl RelationalState {
         hydrated_access: Vec<RelationalSparseRecoveryRow>,
         expected_replay_access: &RelationalReplayAccessSet,
         limits: RelationalRowChangeCaptureLimits,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
     ) -> Result<Self, RelationalError> {
         self.require_sparse_workspace_source("sparse relational recovery")?;
         if hydrated_access.len() != expected_replay_access.entries.len()
@@ -3429,8 +3454,13 @@ impl RelationalState {
                     .to_string(),
             ));
         }
-        self.sparse_workspace(hydrated_access, limits, "sparse relational recovery")
-            .map(|(workspace, _)| workspace)
+        self.sparse_workspace_with_allocations(
+            hydrated_access,
+            limits,
+            "sparse relational recovery",
+            allocations,
+        )
+        .map(|(workspace, _)| workspace)
     }
 
     fn sparse_workspace(
@@ -3438,6 +3468,16 @@ impl RelationalState {
         hydrated_access: Vec<RelationalSparseRecoveryRow>,
         limits: RelationalRowChangeCaptureLimits,
         context: &'static str,
+    ) -> Result<(Self, Vec<RelationalReplayAccess>), RelationalError> {
+        self.sparse_workspace_with_allocations(hydrated_access, limits, context, None)
+    }
+
+    fn sparse_workspace_with_allocations(
+        &self,
+        hydrated_access: Vec<RelationalSparseRecoveryRow>,
+        limits: RelationalRowChangeCaptureLimits,
+        context: &'static str,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
     ) -> Result<(Self, Vec<RelationalReplayAccess>), RelationalError> {
         if hydrated_access.len() > limits.max_entries.get() {
             return Err(RelationalError::Admission(format!(
@@ -3447,14 +3487,67 @@ impl RelationalState {
             )));
         }
 
+        let admission =
+            |error: hawdb_core::HawDBError| RelationalError::Admission(error.to_string());
+        let workspace_allocations =
+            allocations.map(|context| crate::background::CheckpointDecodeContext {
+                work: context.work.clone(),
+                memory: Default::default(),
+            });
+        let directory_capacity = hydrated_access.len();
         let mut workspace_bytes = 0usize;
-        let mut supplied_access = Vec::with_capacity(hydrated_access.len());
-
-        let mut segments = self
-            .schemas
-            .keys()
-            .map(|table| (table.clone(), Arc::new(RelationalTableSegment::default())))
-            .collect::<BTreeMap<_, _>>();
+        let mut supplied_access = match allocations {
+            Some(context) => context
+                .vector_capacity(hydrated_access.len())
+                .map_err(admission)?,
+            None => Vec::with_capacity(hydrated_access.len()),
+        };
+        let mut schemas = BTreeMap::new();
+        let mut segments = BTreeMap::new();
+        if let Some(context) = &workspace_allocations {
+            let nodes = self.schemas.len().checked_add(2).ok_or_else(|| {
+                RelationalError::Admission("workspace metadata capacity overflow".into())
+            })?;
+            let node_bytes =
+                crate::cow::checkpoint_tree_node_bytes::<String, Arc<RelationalTableSchema>>()
+                    .checked_add(crate::cow::checkpoint_tree_node_bytes::<
+                        String,
+                        Arc<RelationalTableSegment>,
+                    >())
+                    .and_then(|bytes| bytes.checked_mul(nodes))
+                    .ok_or_else(|| {
+                        RelationalError::Admission("workspace metadata capacity overflow".into())
+                    })?;
+            context.reserve(node_bytes).map_err(admission)?;
+            context
+                .reserve(
+                    crate::cow::CowSegment::<BTreeMap<String, usize>>::checkpoint_ownership_bytes(),
+                )
+                .map_err(admission)?;
+        }
+        for (table, schema) in &self.schemas {
+            let (schema_name, segment_name) = match &workspace_allocations {
+                Some(context) => {
+                    context
+                        .reserve(
+                            std::mem::size_of::<RelationalTableSegment>()
+                                + 2 * std::mem::size_of::<usize>()
+                                + std::mem::size_of::<
+                                    Vec<Arc<BTreeMap<RelationalKey, RelationalRow>>>,
+                                >()
+                                + 2 * std::mem::size_of::<usize>(),
+                        )
+                        .map_err(admission)?;
+                    (
+                        context.string(table).map_err(admission)?,
+                        context.string(table).map_err(admission)?,
+                    )
+                }
+                None => (table.clone(), table.clone()),
+            };
+            schemas.insert(schema_name, schema.clone());
+            segments.insert(segment_name, Arc::new(RelationalTableSegment::default()));
+        }
         for hydrated in hydrated_access {
             if supplied_access
                 .last()
@@ -3490,9 +3583,15 @@ impl RelationalState {
                     limits.max_bytes
                 )));
             }
-            supplied_access.push(RelationalReplayAccess {
-                table: hydrated.table.clone(),
-                primary_key: hydrated.primary_key.clone(),
+            supplied_access.push(match allocations {
+                Some(context) => RelationalReplayAccess {
+                    table: context.string(&hydrated.table).map_err(admission)?,
+                    primary_key: hydrated.primary_key.clone_with_allocations(context)?,
+                },
+                None => RelationalReplayAccess {
+                    table: hydrated.table.clone(),
+                    primary_key: hydrated.primary_key.clone(),
+                },
             });
             let schema = self.schemas.get(&hydrated.table).ok_or_else(|| {
                 RelationalError::Corruption(format!(
@@ -3514,7 +3613,29 @@ impl RelationalState {
                 )));
             }
             validate_row(schema, &row)?;
-            let primary_key_positions = column_positions(schema, &schema.primary_key)?;
+            let position_allocations = workspace_allocations.as_ref().map(|context| {
+                crate::background::CheckpointDecodeContext {
+                    work: context.work.clone(),
+                    memory: Default::default(),
+                }
+            });
+            let primary_key_positions = match &position_allocations {
+                Some(context) => {
+                    let mut positions = context
+                        .vector_capacity(schema.primary_key.len())
+                        .map_err(admission)?;
+                    for column in &schema.primary_key {
+                        positions.push(schema.column_position(column).ok_or_else(|| {
+                            RelationalError::Schema(format!(
+                                "table {} references unknown column {column}",
+                                schema.name
+                            ))
+                        })?);
+                    }
+                    positions
+                }
+                None => column_positions(schema, &schema.primary_key)?,
+            };
             if !primary_key_positions
                 .iter()
                 .map(|position| &row.values()[*position])
@@ -3530,7 +3651,70 @@ impl RelationalState {
                     .get_mut(&hydrated.table)
                     .expect("known sparse recovery table has a workspace segment"),
             );
-            if segment.rows.insert(hydrated.primary_key, row).is_some() {
+            let replaced = if let Some(context) = &workspace_allocations {
+                // Authenticated hydration is sorted. Append bounded pages by
+                // moving keys, avoiding split-key clones and directory growth.
+                let entry_bytes = relational_row_entry_bytes(&hydrated.primary_key, &row);
+                let new_page = segment.rows.pages.last().is_none_or(|page| {
+                    page.len() >= RELATIONAL_ROW_PAGE_MAX_ENTRIES
+                        || (!page.is_empty()
+                            && page
+                                .iter()
+                                .map(|(key, row)| relational_row_entry_bytes(key, row))
+                                .sum::<usize>()
+                                .saturating_add(entry_bytes)
+                                > RELATIONAL_ROW_PAGE_TARGET_BYTES)
+                });
+                context
+                    .reserve(crate::cow::checkpoint_tree_node_bytes::<
+                        RelationalKey,
+                        RelationalRow,
+                    >())
+                    .map_err(admission)?;
+                if segment.rows.pages.is_empty() {
+                    let pages = context
+                        .vector_capacity(directory_capacity)
+                        .map_err(admission)?;
+                    context
+                        .reserve(
+                            std::mem::size_of::<Vec<Arc<BTreeMap<RelationalKey, RelationalRow>>>>()
+                                + 2 * std::mem::size_of::<usize>(),
+                        )
+                        .map_err(admission)?;
+                    segment.rows.pages = Arc::new(pages);
+                }
+                if new_page {
+                    context
+                        .reserve(
+                            std::mem::size_of::<BTreeMap<RelationalKey, RelationalRow>>()
+                                + 2 * std::mem::size_of::<usize>(),
+                        )
+                        .map_err(admission)?;
+                    let unit = context
+                        .start_unit()
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                    Arc::get_mut(&mut segment.rows.pages)
+                        .expect("private sparse directory")
+                        .push(Arc::new(BTreeMap::new()));
+                    unit.finish();
+                }
+                let unit = context
+                    .start_unit()
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                let pages =
+                    Arc::get_mut(&mut segment.rows.pages).expect("private sparse directory");
+                let replaced = Arc::get_mut(pages.last_mut().expect("sparse row page"))
+                    .expect("private sparse row page")
+                    .insert(hydrated.primary_key, row);
+                if replaced.is_none() {
+                    segment.rows.len += 1;
+                }
+                unit.finish();
+                replaced
+            } else {
+                segment.rows.insert(hydrated.primary_key, row)
+            };
+            if replaced.is_some() {
                 return Err(RelationalError::Corruption(format!(
                     "{context} hydration repeats a key"
                 )));
@@ -3539,7 +3723,7 @@ impl RelationalState {
 
         Ok((
             Self {
-                schemas: self.schemas.clone(),
+                schemas,
                 segments,
                 overflow_segments: BTreeMap::new(),
                 materialized_index_postings_resident: false,
@@ -3548,7 +3732,8 @@ impl RelationalState {
                 detached_row_counts: BTreeMap::new().into(),
                 detached_total_row_count: 0,
                 detached_row_bytes: 0,
-                _metadata_memory: Default::default(),
+                _metadata_memory: workspace_allocations
+                    .map_or_else(Default::default, |context| context.memory.into_inner()),
             },
             supplied_access,
         ))

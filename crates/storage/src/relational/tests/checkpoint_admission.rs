@@ -430,3 +430,137 @@ fn controlled_metadata_clone_cancellation_keeps_source_and_refunds_inventory() {
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
+
+#[test]
+fn controlled_sparse_workspace_denies_wide_key_before_copy_and_retains_only_workspace_nodes() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let source = RelationalState::default()
+        .stage_transaction(
+            create_upsert_table(),
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let id = "k".repeat(128 * 1024);
+    let hydrated = RelationalSparseRecoveryRow {
+        table: "documents".into(),
+        primary_key: RelationalKey(vec![RelationalValue::Text(id.clone())]),
+        row: Some(upsert_row(&id, "owner-1", "body")),
+    };
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let input = vec![hydrated.clone()];
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = source.sparse_workspace_with_allocations(
+            input,
+            RelationalRowChangeCaptureLimits::default(),
+            "sparse relational recovery",
+            Some(&context),
+        );
+        let wide_allocations = observer.finish();
+        if succeeds {
+            let (workspace, supplied) = result.unwrap();
+            assert_eq!(workspace.row_count("documents"), 1);
+            assert_eq!(supplied[0].primary_key, hydrated.primary_key);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                if available_bytes <= ceiling - 128 * 1024)
+            );
+            drop(supplied);
+            drop(context);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                if available_bytes > ceiling - 32 * 1024 && available_bytes < ceiling)
+            );
+            drop(workspace);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(wide_allocations, 0);
+            drop(context);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        assert_eq!(source.row_count("documents"), 0);
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
+
+#[test]
+fn controlled_sparse_workspace_moves_sorted_rows_into_bounded_pages() {
+    use crate::background::CheckpointDecodeContext;
+    let source = RelationalState::default()
+        .stage_transaction(
+            create_upsert_table(),
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let rows = (0..513)
+        .map(|id| {
+            let id = format!("id-{id:04}");
+            RelationalSparseRecoveryRow {
+                table: "documents".into(),
+                primary_key: RelationalKey(vec![RelationalValue::Text(id.clone())]),
+                row: Some(upsert_row(&id, "owner", "body")),
+            }
+        })
+        .collect::<Vec<_>>();
+    let (ordinary, expected_access) = source
+        .sparse_workspace(
+            rows.clone(),
+            RelationalRowChangeCaptureLimits::default(),
+            "sparse relational recovery",
+        )
+        .unwrap();
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    let (controlled, access) = source
+        .sparse_workspace_with_allocations(
+            rows,
+            RelationalRowChangeCaptureLimits::default(),
+            "sparse relational recovery",
+            Some(&context),
+        )
+        .unwrap();
+    assert_eq!(access, expected_access);
+    assert_eq!(controlled.row_count("documents"), 513);
+    let pages = &controlled.segments["documents"].rows.pages;
+    assert_eq!(pages.len(), 3);
+    assert!(pages
+        .iter()
+        .all(|page| page.len() <= RELATIONAL_ROW_PAGE_MAX_ENTRIES));
+    for entry in access {
+        assert_eq!(
+            controlled.row("documents", &entry.primary_key),
+            ordinary.row("documents", &entry.primary_key)
+        );
+    }
+}
