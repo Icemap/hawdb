@@ -6020,3 +6020,60 @@ fn capture_size_estimates_match_wire_without_allocating_wide_keys() {
         None
     );
 }
+
+#[test]
+fn row_capture_rejects_wide_key_before_copy_and_keeps_canonical_state() {
+    let base = RelationalState::default()
+        .stage_transaction(
+            create_upsert_table(),
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let id = "k".repeat(128 * 1024);
+    let next = base
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![upsert_row(&id, "owner-1", "body")],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let key = RelationalKey(vec![RelationalValue::Text(id)]);
+    let changed = BTreeMap::from([("documents".into(), BTreeSet::from([key.clone()]))]);
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let capture = capture_relational_row_changes(
+        &base,
+        &next,
+        &changed,
+        &BTreeSet::new(),
+        RelationalRowChangeCaptureLimits {
+            max_entries: NonZeroUsize::new(1).unwrap(),
+            max_bytes: NonZeroUsize::new(1).unwrap(),
+        },
+    );
+    let wide_allocations = observer.finish();
+    assert_eq!(wide_allocations, 0);
+    assert!(matches!(
+        capture,
+        RelationalRowChangeCapture::Invalidated { .. }
+    ));
+    assert_eq!(base.row_count("documents"), 0);
+    assert_eq!(next.row_count("documents"), 1);
+    assert!(next.row("documents", &key).is_some());
+    let retry = capture_relational_row_changes(
+        &base,
+        &next,
+        &changed,
+        &BTreeSet::new(),
+        RelationalRowChangeCaptureLimits::default(),
+    );
+    assert!(
+        matches!(retry, RelationalRowChangeCapture::Captured { changes, .. } if changes.len() == 1 && changes[0].primary_key == key)
+    );
+}

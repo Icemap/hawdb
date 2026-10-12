@@ -6302,12 +6302,9 @@ fn capture_relational_row_changes(
             if previous_row == next_row {
                 continue;
             }
-            let change = RelationalRowChange {
-                table: table.clone(),
-                primary_key: primary_key.clone(),
-                row: next_row.cloned(),
-            };
-            let Some(change_bytes) = estimated_row_change_encoding_bytes(&change) else {
+            let Some(change_bytes) =
+                estimated_row_change_encoding_bytes_parts(table, primary_key, next_row)
+            else {
                 return row_capture_limit_invalidated(limits);
             };
             let Some(next_bytes) = encoded_bytes.checked_add(change_bytes) else {
@@ -6316,7 +6313,11 @@ fn capture_relational_row_changes(
             if changes.len() >= limits.max_entries.get() || next_bytes > limits.max_bytes.get() {
                 return row_capture_limit_invalidated(limits);
             }
-            changes.push(change);
+            changes.push(RelationalRowChange {
+                table: table.clone(),
+                primary_key: primary_key.clone(),
+                row: next_row.cloned(),
+            });
             encoded_bytes = next_bytes;
         }
     }
@@ -6407,15 +6408,27 @@ fn capture_relational_primary_key_changes(
 }
 
 fn estimated_row_change_encoding_bytes(change: &RelationalRowChange) -> Option<usize> {
+    estimated_row_change_encoding_bytes_parts(
+        &change.table,
+        &change.primary_key,
+        change.row.as_ref(),
+    )
+}
+
+fn estimated_row_change_encoding_bytes_parts(
+    table: &str,
+    primary_key: &RelationalKey,
+    row: Option<&RelationalRow>,
+) -> Option<usize> {
     const FIXED_BYTES: usize = 1 + 3 * 4;
     let key_bytes = ordered_key::CheckpointKeyEncoding::new(
-        &change.primary_key,
+        primary_key,
         &[],
         &crate::background::CheckpointWorkContext::default(),
     )
     .ok()?
     .encoded_len();
-    let row_bytes = match &change.row {
+    let row_bytes = match row {
         Some(row) => row.estimated_payload_bytes().checked_add(
             row.values()
                 .len()
@@ -6424,7 +6437,7 @@ fn estimated_row_change_encoding_bytes(change: &RelationalRowChange) -> Option<u
         None => 0,
     };
     FIXED_BYTES
-        .checked_add(change.table.len())?
+        .checked_add(table.len())?
         .checked_add(key_bytes)?
         .checked_add(row_bytes)
 }
