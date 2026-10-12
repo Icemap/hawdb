@@ -31,6 +31,37 @@ pub struct Label {
     pub name: String,
 }
 
+/// The lookup directory shares the immutable symbol rather than allocating a
+/// second name. Ordering and borrowed lookup retain their string semantics.
+#[derive(Debug, Clone)]
+struct LabelNameKey(Arc<Label>);
+
+impl std::borrow::Borrow<str> for LabelNameKey {
+    fn borrow(&self) -> &str {
+        &self.0.name
+    }
+}
+
+impl PartialEq for LabelNameKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.name == other.0.name
+    }
+}
+
+impl Eq for LabelNameKey {}
+
+impl PartialOrd for LabelNameKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for LabelNameKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.name.cmp(&other.0.name)
+    }
+}
+
 /// Admission token for a retained immutable symbol. Standalone callers remain
 /// responsible for their allocation policy and complete backing capacity.
 #[doc(hidden)]
@@ -310,7 +341,7 @@ impl GraphStatistics {
 
 #[derive(Debug, Default, Clone)]
 pub struct Catalog {
-    labels_by_name: BTreeMap<String, LabelId>,
+    labels_by_name: BTreeMap<LabelNameKey, LabelId>,
     labels: Vec<Arc<Label>>,
     rel_types_by_name: BTreeMap<String, RelTypeId>,
     rel_types: Vec<RelType>,
@@ -342,11 +373,13 @@ impl Catalog {
             return *id;
         }
         let id = LabelId(self.labels.len() as u32);
-        self.labels.push(Arc::new(Label {
+        let label = Arc::new(Label {
             id,
             name: name.to_string(),
-        }));
-        self.labels_by_name.insert(name.to_string(), id);
+        });
+        self.labels_by_name
+            .insert(LabelNameKey(Arc::clone(&label)), id);
+        self.labels.push(label);
         id
     }
 
@@ -1030,11 +1063,11 @@ impl Catalog {
                 name: String::new(),
             }));
         }
-        self.labels[index] = Arc::new(Label {
-            id,
-            name: name.clone(),
-        });
-        self.labels_by_name.insert(name, id);
+        self.labels_by_name.remove(name.as_str());
+        let label = Arc::new(Label { id, name });
+        self.labels_by_name
+            .insert(LabelNameKey(Arc::clone(&label)), id);
+        self.labels[index] = label;
     }
 
     pub fn import_rel_type(&mut self, id: RelTypeId, name: String) {
@@ -1083,10 +1116,14 @@ mod tests {
         let mut catalog = Catalog::default();
         let id = catalog.get_or_create_label("original");
         let other = catalog.get_or_create_label("unrelated");
+        catalog.labels_by_name.remove("original");
         Arc::get_mut(&mut catalog.labels[id.0 as usize])
             .unwrap()
             .name
             .reserve(16 * 1024);
+        catalog
+            .labels_by_name
+            .insert(LabelNameKey(Arc::clone(&catalog.labels[id.0 as usize])), id);
         let capacity = catalog.labels[id.0 as usize].name.capacity();
         let snapshot = catalog.clone();
         assert_eq!(
@@ -1099,7 +1136,7 @@ mod tests {
         let address = catalog.label_name(id).unwrap().as_ptr() as usize;
         let source = catalog
             .retain_label_name_with_admission(id, |bytes| -> crate::Result<_> {
-                assert_eq!(original.strong_count(), 1);
+                assert_eq!(original.strong_count(), 2);
                 assert!(
                     bytes
                         >= std::mem::size_of::<Label>()
@@ -1198,8 +1235,33 @@ mod tests {
                 Err(HostError::Storage(error)) => panic!("host error was converted: {error}"),
                 Ok(_) => panic!("host refusal was ignored"),
             }
-            assert_eq!(Arc::strong_count(&catalog.labels[id.0 as usize]), 1);
+            assert_eq!(Arc::strong_count(&catalog.labels[id.0 as usize]), 2);
         }
+    }
+
+    #[test]
+    fn label_directory_shares_names_and_preserves_borrowed_lookup_order() {
+        let mut catalog = Catalog::default();
+        for name in ["zeta", "alpha", "beta"] {
+            let id = catalog.get_or_create_label(name);
+            let (key, indexed_id) = catalog.labels_by_name.get_key_value(name).unwrap();
+            assert_eq!(*indexed_id, id);
+            assert!(Arc::ptr_eq(&key.0, &catalog.labels[id.0 as usize]));
+        }
+        assert_eq!(
+            catalog
+                .labels_by_name
+                .keys()
+                .map(|key| key.0.name.as_str())
+                .collect::<Vec<_>>(),
+            ["alpha", "beta", "zeta"]
+        );
+        let id = catalog.label_id("alpha").unwrap();
+        catalog.import_label(id, "alpha".into());
+        let (key, indexed_id) = catalog.labels_by_name.get_key_value("alpha").unwrap();
+        assert_eq!(*indexed_id, id);
+        assert!(Arc::ptr_eq(&key.0, &catalog.labels[id.0 as usize]));
+        assert_eq!(catalog.get_or_create_label("alpha"), id);
     }
 
     #[test]

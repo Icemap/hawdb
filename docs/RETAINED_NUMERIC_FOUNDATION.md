@@ -657,6 +657,13 @@ string capacity, calls host admission, validates the returned byte allowance,
 then captures only that label owner. Missing IDs skip admission, and typed host
 refusals remain unchanged. The label drops before its allocation token.
 
+The private name-lookup directory also shares the same immutable label owner.
+Its keys compare and borrow by name, preserving string lookup and ordering
+without allocating another name. Same-name import replaces the directory key
+so it shares the newly published owner. Different-name import retains the
+existing alias lookup behavior. This removes duplicate symbol-name allocation;
+it does not establish a whole-query performance improvement.
+
 For a label owner `L`, let `B(L)` be the checked inline Label size, Arc header,
 and string capacity under the pinned Rust layout. Capture occurs only after
 `permit.bytes() >= B(L)`. Thus refusal acquires no additional label owner, a
@@ -679,3 +686,40 @@ Arrow layouts. Native row views and Arrow compatibility require separate
 qualification; a B-tree label set and recursive `Value` map are not contiguous
 Arrow arrays. Property-only projection, complete-node projection, host handoff,
 performance, and whole-operation memory remain explicit open gates.
+
+### Label ownership component cost
+
+A frozen standalone probe compiled the actual `hawdb-core` sources with Rust
+1.97.1 in release mode. Parent `ca347097` was compared first against the initial
+label-owner revision `60899139`, then against the shared-name-directory
+correction. The probe exercised catalog creation, catalog clone/drop, and the
+ordinary owned-name projection component. Names were prepared before timing;
+creation still included symbol lookup, allocation, insertion, and catalog drop.
+Owned-name projection consumed 100,000 label names per round and still copied
+their strings on both sides. All outputs had matching expected checksums.
+
+The first 432-observation experiment exposed a regression: clone improved
+1.27-1.83x, but creation time increased approximately 11-19%. A correction trial
+overlapped local fuzz compilation and is not qualification evidence. Both
+experiments remain separate from the repeat below.
+
+After local compilation and fuzz processes finished, the frozen original
+parent and corrected binaries ran in B/C/C/B order twice. Each process ran nine
+rounds per case with the first discarded: 864 raw observations, 768 measured,
+32 measured samples per side/case. Median ratios below are baseline time divided
+by candidate time; ratios below one are regressions.
+
+| Symbols | Name bytes | Creation | Clone/drop | Ordinary owned-name projection |
+| --- | --- | --- | --- | --- |
+| 100 | 16 | 1.068x | 3.345x | 1.074x |
+| 100 | 1,024 | 1.223x | 13.901x | 0.976x |
+| 10,000 | 16 | 1.082x | 3.680x | 0.984x |
+| 10,000 | 1,024 | 1.391x | 18.300x | 1.196x |
+
+The correction removes the creation regression in these measured fixtures;
+two owned-name projection medians still regress. This sequential local probe
+has no randomized confidence interval or system-wide workload isolation. It
+measures neither complete queries nor graph mutations, host delivery, resident
+memory, tail latency, durability, or source-to-host zero copy. The component
+ratios must not be multiplied by earlier point-source ratios or substituted
+for the complete performance gate.
