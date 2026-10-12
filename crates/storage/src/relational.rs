@@ -6195,11 +6195,17 @@ fn capture_relational_index_changes(
             let previous_row = previous_segment.and_then(|segment| segment.rows.get(primary_key));
             let next_row = next_segment.and_then(|segment| segment.rows.get(primary_key));
             if previous_row.is_some() != next_row.is_some()
-                && !push_captured_index_change(
+                && !push_captured_index_change_with_size(
                     &mut changes,
                     &mut encoded_bytes,
                     limits,
-                    RelationalIndexChange {
+                    estimated_index_change_encoding_bytes_parts(
+                        table,
+                        RELATIONAL_PRIMARY_INDEX_NAME,
+                        primary_key,
+                        primary_key,
+                    ),
+                    || RelationalIndexChange {
                         table: table.clone(),
                         index: RELATIONAL_PRIMARY_INDEX_NAME.to_string(),
                         index_key: primary_key.clone(),
@@ -6479,7 +6485,23 @@ fn push_captured_index_change(
     limits: RelationalIndexChangeCaptureLimits,
     change: RelationalIndexChange,
 ) -> bool {
-    let Some(change_bytes) = change.estimated_encoded_bytes() else {
+    push_captured_index_change_with_size(
+        changes,
+        encoded_bytes,
+        limits,
+        change.estimated_encoded_bytes(),
+        || change,
+    )
+}
+
+fn push_captured_index_change_with_size(
+    changes: &mut Vec<RelationalIndexChange>,
+    encoded_bytes: &mut usize,
+    limits: RelationalIndexChangeCaptureLimits,
+    change_bytes: Option<usize>,
+    make_change: impl FnOnce() -> RelationalIndexChange,
+) -> bool {
+    let Some(change_bytes) = change_bytes else {
         return false;
     };
     let Some(next_bytes) = encoded_bytes.checked_add(change_bytes) else {
@@ -6488,7 +6510,7 @@ fn push_captured_index_change(
     if changes.len() >= limits.max_entries.get() || next_bytes > limits.max_bytes.get() {
         return false;
     }
-    changes.push(change);
+    changes.push(make_change());
     *encoded_bytes = next_bytes;
     true
 }
@@ -6505,14 +6527,26 @@ fn capture_limit_invalidated(
 }
 
 fn estimated_index_change_encoding_bytes(change: &RelationalIndexChange) -> Option<usize> {
+    estimated_index_change_encoding_bytes_parts(
+        &change.table,
+        &change.index,
+        &change.index_key,
+        &change.primary_key,
+    )
+}
+
+fn estimated_index_change_encoding_bytes_parts(
+    table: &str,
+    index: &str,
+    index_key: &RelationalKey,
+    primary_key: &RelationalKey,
+) -> Option<usize> {
     const FIXED_BYTES: usize = 1 + 4 * 4;
     FIXED_BYTES
-        .checked_add(change.table.len())?
-        .checked_add(change.index.len())?
-        .checked_add(estimated_relational_key_encoding_bytes(&change.index_key)?)?
-        .checked_add(estimated_relational_key_encoding_bytes(
-            &change.primary_key,
-        )?)
+        .checked_add(table.len())?
+        .checked_add(index.len())?
+        .checked_add(estimated_relational_key_encoding_bytes(index_key)?)?
+        .checked_add(estimated_relational_key_encoding_bytes(primary_key)?)
 }
 
 fn estimated_relational_key_encoding_bytes(key: &RelationalKey) -> Option<usize> {

@@ -6106,3 +6106,76 @@ fn replay_access_rejects_wide_key_before_copy_and_retries_atomically() {
     assert_eq!(access.entries()[0].table, table);
     assert_eq!(access.entries()[0].primary_key, key);
 }
+
+#[test]
+fn primary_index_capture_rejects_wide_keys_before_copy_and_retries() {
+    let base = RelationalState::default()
+        .stage_transaction(
+            create_upsert_table(),
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let id = "k".repeat(128 * 1024);
+    let next = base
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![upsert_row(&id, "owner-1", "body")],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let key = RelationalKey(vec![RelationalValue::Text(id)]);
+    let changed = BTreeMap::from([("documents".into(), BTreeSet::from([key.clone()]))]);
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let capture = capture_relational_index_changes(
+        &base,
+        &next,
+        &changed,
+        &BTreeSet::new(),
+        RelationalIndexChangeCaptureLimits {
+            max_entries: NonZeroUsize::new(1).unwrap(),
+            max_bytes: NonZeroUsize::new(1).unwrap(),
+        },
+    );
+    assert_eq!(observer.finish(), 0);
+    assert!(matches!(
+        capture,
+        RelationalIndexChangeCapture::Invalidated { .. }
+    ));
+    assert_eq!(base.row_count("documents"), 0);
+    assert_eq!(next.row_count("documents"), 1);
+    let retry = capture_relational_index_changes(
+        &base,
+        &next,
+        &changed,
+        &BTreeSet::new(),
+        RelationalIndexChangeCaptureLimits::default(),
+    );
+    let RelationalIndexChangeCapture::Captured {
+        changes,
+        encoded_bytes,
+    } = retry
+    else {
+        panic!("capture retry");
+    };
+    let primary = changes
+        .iter()
+        .find(|change| change.index == RELATIONAL_PRIMARY_INDEX_NAME)
+        .unwrap();
+    assert_eq!(primary.kind, RelationalIndexChangeKind::Insert);
+    assert_eq!(primary.index_key, key);
+    assert_eq!(primary.primary_key, key);
+    assert_eq!(
+        encoded_bytes,
+        changes
+            .iter()
+            .map(|change| change.estimated_encoded_bytes().unwrap())
+            .sum::<usize>()
+    );
+}
