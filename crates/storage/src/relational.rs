@@ -5732,8 +5732,16 @@ fn apply_transaction_inner(
                         schema.name
                     )));
                 }
-                touched.insert(schema.name.clone());
-                full_index_rebuild.insert(schema.name.clone());
+                insert_table_name_with_allocations(
+                    &mut touched,
+                    &schema.name,
+                    checkpoint_allocations,
+                )?;
+                insert_table_name_with_allocations(
+                    &mut full_index_rebuild,
+                    &schema.name,
+                    checkpoint_allocations,
+                )?;
                 next.segments.insert(
                     schema.name.clone(),
                     Arc::new(RelationalTableSegment::default()),
@@ -5814,11 +5822,19 @@ fn apply_transaction_inner(
                     .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
                 Arc::make_mut(segment).rows.append_value_to_all(&fill);
                 next.schemas.insert(table.clone(), Arc::new(schema));
-                full_index_rebuild.insert(table.clone());
+                insert_table_name_with_allocations(
+                    &mut full_index_rebuild,
+                    &table,
+                    checkpoint_allocations,
+                )?;
                 if row_count != 0 {
-                    projection_rebuild_tables.insert(table.clone());
+                    insert_table_name_with_allocations(
+                        &mut projection_rebuild_tables,
+                        &table,
+                        checkpoint_allocations,
+                    )?;
                 }
-                touched.insert(table);
+                insert_table_name_with_allocations(&mut touched, &table, checkpoint_allocations)?;
             }
             RelationalWrite::CreateIndex { table, index } => {
                 let schema = next
@@ -5837,8 +5853,12 @@ fn apply_transaction_inner(
                     )));
                 }
                 schema.indexes.push(index);
-                full_index_rebuild.insert(table.clone());
-                touched.insert(table);
+                insert_table_name_with_allocations(
+                    &mut full_index_rebuild,
+                    &table,
+                    checkpoint_allocations,
+                )?;
+                insert_table_name_with_allocations(&mut touched, &table, checkpoint_allocations)?;
             }
             RelationalWrite::Insert { table, rows, mode } => {
                 let schema =
@@ -5865,19 +5885,17 @@ fn apply_transaction_inner(
                             "duplicate primary key in table {table}"
                         )));
                     }
-                    let tracked_key = match checkpoint_allocations {
-                        Some(context) => key.clone_with_allocations(context)?,
-                        None => key.clone(),
-                    };
+                    let keys = changed_table_keys_with_allocations(
+                        &mut changed_keys,
+                        &table,
+                        checkpoint_allocations,
+                    )?;
+                    insert_changed_key_with_allocations(keys, &key, checkpoint_allocations)?;
                     segment
                         .rows
                         .insert_with_allocations(key, row, checkpoint_allocations)?;
-                    changed_keys
-                        .entry(table.clone())
-                        .or_default()
-                        .insert(tracked_key);
                 }
-                touched.insert(table.clone());
+                insert_table_name_with_allocations(&mut touched, &table, checkpoint_allocations)?;
                 if let Some(logical_rows) = logical_rows {
                     mutation_outcomes.push(RelationalMutationOutcome {
                         table,
@@ -5901,14 +5919,18 @@ fn apply_transaction_inner(
                     &action,
                     overflow_config,
                     UpsertIndexContext {
-                        changed_keys: changed_keys.entry(table.clone()).or_default(),
+                        changed_keys: changed_table_keys_with_allocations(
+                            &mut changed_keys,
+                            &table,
+                            checkpoint_allocations,
+                        )?,
                         constraint_index,
                         replay_access_tracker: replay_access_tracker.as_mut(),
                         capture_mutation_outcome: capture_mutation_outcomes,
                         checkpoint_allocations,
                     },
                 )?;
-                touched.insert(table.clone());
+                insert_table_name_with_allocations(&mut touched, &table, checkpoint_allocations)?;
                 if capture_mutation_outcomes {
                     mutation_outcomes.push(outcome);
                 }
@@ -5920,10 +5942,17 @@ fn apply_transaction_inner(
                     .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
                 let segment = Arc::make_mut(segment);
                 for key in keys {
-                    changed_keys
-                        .entry(table.clone())
-                        .or_default()
-                        .insert(key.clone());
+                    let changed = changed_table_keys_with_allocations(
+                        &mut changed_keys,
+                        &table,
+                        checkpoint_allocations,
+                    )?;
+                    insert_changed_key_with_allocations(changed, &key, checkpoint_allocations)?;
+                    if let Some(context) = checkpoint_allocations {
+                        segment
+                            .rows
+                            .prepare_checkpoint_copy_for_key(&key, &context.work)?;
+                    }
                     if let Some(row) = segment.rows.remove(&key) {
                         deleted_rows.push_back(CascadeDelete {
                             table: table.clone(),
@@ -5931,7 +5960,7 @@ fn apply_transaction_inner(
                         });
                     }
                 }
-                touched.insert(table);
+                insert_table_name_with_allocations(&mut touched, &table, checkpoint_allocations)?;
             }
             RelationalWrite::DeleteWhere { table, predicate } => {
                 let schema = next
@@ -6010,10 +6039,17 @@ fn apply_transaction_inner(
                 }
                 let affected_rows = keys.len();
                 for key in keys {
-                    changed_keys
-                        .entry(table.clone())
-                        .or_default()
-                        .insert(key.clone());
+                    let changed = changed_table_keys_with_allocations(
+                        &mut changed_keys,
+                        &table,
+                        checkpoint_allocations,
+                    )?;
+                    insert_changed_key_with_allocations(changed, &key, checkpoint_allocations)?;
+                    if let Some(context) = checkpoint_allocations {
+                        segment
+                            .rows
+                            .prepare_checkpoint_copy_for_key(&key, &context.work)?;
+                    }
                     if let Some(row) = segment.rows.remove(&key) {
                         deleted_rows.push_back(CascadeDelete {
                             table: table.clone(),
@@ -6029,7 +6065,7 @@ fn apply_transaction_inner(
                         rows: Vec::new(),
                     });
                 }
-                touched.insert(table);
+                insert_table_name_with_allocations(&mut touched, &table, checkpoint_allocations)?;
             }
             RelationalWrite::UpdateWhere {
                 table,
@@ -6044,7 +6080,11 @@ fn apply_transaction_inner(
                     UpdateApplyContext {
                         limits,
                         overflow_config,
-                        changed_keys: changed_keys.entry(table.clone()).or_default(),
+                        changed_keys: changed_table_keys_with_allocations(
+                            &mut changed_keys,
+                            &table,
+                            checkpoint_allocations,
+                        )?,
                         replay_access_tracker: replay_access_tracker.as_mut(),
 
                         checkpoint_allocations,
@@ -6058,7 +6098,7 @@ fn apply_transaction_inner(
                         rows: Vec::new(),
                     });
                 }
-                touched.insert(table);
+                insert_table_name_with_allocations(&mut touched, &table, checkpoint_allocations)?;
             }
         }
     }
@@ -6763,6 +6803,68 @@ fn apply_update(
         }
     }
     Ok(matched.len())
+}
+
+fn changed_table_keys_with_allocations<'a>(
+    tables: &'a mut BTreeMap<String, BTreeSet<RelationalKey>>,
+    table: &str,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<&'a mut BTreeSet<RelationalKey>, RelationalError> {
+    if !tables.contains_key(table) {
+        let name = match allocations {
+            Some(context) => {
+                context
+                    .reserve(crate::cow::checkpoint_tree_node_bytes::<
+                        String,
+                        BTreeSet<RelationalKey>,
+                    >())
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                context
+                    .string(table)
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?
+            }
+            None => table.to_owned(),
+        };
+        let unit = allocations
+            .map(|context| context.start_unit())
+            .transpose()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        tables.insert(name, BTreeSet::new());
+        if let Some(unit) = unit {
+            unit.finish();
+        }
+    }
+    Ok(tables.get_mut(table).expect("admitted changed table"))
+}
+
+fn insert_table_name_with_allocations(
+    tables: &mut BTreeSet<String>,
+    table: &str,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<(), RelationalError> {
+    if tables.contains(table) {
+        return Ok(());
+    }
+    let name = match allocations {
+        Some(context) => {
+            context
+                .reserve(crate::cow::checkpoint_tree_node_bytes::<String, ()>())
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            context
+                .string(table)
+                .map_err(|error| RelationalError::Admission(error.to_string()))?
+        }
+        None => table.to_owned(),
+    };
+    let unit = allocations
+        .map(|context| context.start_unit())
+        .transpose()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    tables.insert(name);
+    if let Some(unit) = unit {
+        unit.finish();
+    }
+    Ok(())
 }
 
 fn insert_changed_key_with_allocations(

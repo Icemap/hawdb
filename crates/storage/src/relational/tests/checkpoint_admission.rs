@@ -1682,3 +1682,67 @@ fn controlled_primary_conflict_probe_denies_wide_result_before_copy() {
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }
+
+#[test]
+fn controlled_transaction_table_names_deny_before_copy_and_deduplicate() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let name = "t".repeat(128 * 1024);
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let mut changed = BTreeMap::new();
+        let mut touched = BTreeSet::new();
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let changed_result =
+            changed_table_keys_with_allocations(&mut changed, &name, Some(&context)).map(|_| ());
+        let touched_result =
+            insert_table_name_with_allocations(&mut touched, &name, Some(&context));
+        let copies = observer.finish();
+        if succeeds {
+            changed_result.unwrap();
+            touched_result.unwrap();
+            assert_eq!(changed.len(), 1);
+            assert!(changed[&name].is_empty());
+            assert!(touched.contains(&name));
+            let observer = crate::test_allocator::AllocationObservation::start();
+            changed_table_keys_with_allocations(&mut changed, &name, Some(&context)).unwrap();
+            insert_table_name_with_allocations(&mut touched, &name, Some(&context)).unwrap();
+            assert_eq!(observer.finish(), 0);
+        } else {
+            assert!(matches!(changed_result, Err(RelationalError::Admission(_))));
+            assert!(matches!(touched_result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+            assert!(changed.is_empty());
+            assert!(touched.is_empty());
+        }
+        drop(changed);
+        drop(touched);
+        drop(context);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
