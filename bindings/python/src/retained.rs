@@ -23,6 +23,26 @@ use std::ptr;
 use std::sync::{Arc, Mutex};
 
 mod arrow;
+pub(crate) mod node;
+
+fn check_buffer_flags(flags: c_int) -> PyResult<()> {
+    if flags & ffi::PyBUF_WRITABLE != 0 {
+        return Err(PyBufferError::new_err("retained buffers are read-only"));
+    }
+    let allowed = ffi::PyBUF_FULL_RO
+        | ffi::PyBUF_C_CONTIGUOUS
+        | ffi::PyBUF_F_CONTIGUOUS
+        | ffi::PyBUF_ANY_CONTIGUOUS;
+    if flags & !allowed != 0 {
+        return Err(PyBufferError::new_err("unsupported buffer request flags"));
+    }
+    if flags & (ffi::PyBUF_FORMAT | 0x10) != 0 && flags & ffi::PyBUF_ND == 0
+        || flags & 0x1e0 != 0 && flags & ffi::PyBUF_STRIDES != ffi::PyBUF_STRIDES
+    {
+        return Err(PyBufferError::new_err("inconsistent buffer request flags"));
+    }
+    Ok(())
+}
 
 pub(crate) fn error(py: Python<'_>, source: &RetainedQueryError) -> PyErr {
     let retryable = source.is_retryable();
@@ -634,21 +654,7 @@ impl RetainedBuffer {
             return Err(PyBufferError::new_err("null buffer output"));
         }
         unsafe { view.write(ffi::Py_buffer::new()) };
-        if flags & ffi::PyBUF_WRITABLE != 0 {
-            return Err(PyBufferError::new_err("retained buffers are read-only"));
-        }
-        let allowed = ffi::PyBUF_FULL_RO
-            | ffi::PyBUF_C_CONTIGUOUS
-            | ffi::PyBUF_F_CONTIGUOUS
-            | ffi::PyBUF_ANY_CONTIGUOUS;
-        if flags & !allowed != 0 {
-            return Err(PyBufferError::new_err("unsupported buffer request flags"));
-        }
-        if flags & (ffi::PyBUF_FORMAT | 0x10) != 0 && flags & ffi::PyBUF_ND == 0
-            || flags & 0x1e0 != 0 && flags & ffi::PyBUF_STRIDES != ffi::PyBUF_STRIDES
-        {
-            return Err(PyBufferError::new_err("inconsistent buffer request flags"));
-        }
+        check_buffer_flags(flags)?;
         let exporter = slf.try_borrow()?;
         let batch = exporter.required(py)?;
         let spec = spec(batch, exporter.kind).map_err(|source| error(py, &source))?;

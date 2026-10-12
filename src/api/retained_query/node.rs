@@ -101,6 +101,12 @@ impl RetainedNodeView {
         })
     }
 
+    /// Original identity storage. Signed logical identities preserve these
+    /// bits when exposed through a native-endian signed 64-bit buffer.
+    pub fn identity_storage(&self) -> Result<&u64> {
+        Ok(&self.source.node.node()?.id.0)
+    }
+
     /// Properties shadowed by the synthetic fields are deliberately omitted.
     pub fn properties(&self) -> Result<impl Iterator<Item = (&str, &Value)>> {
         Ok(self
@@ -114,9 +120,16 @@ impl RetainedNodeView {
     }
 
     pub fn try_retain(&self) -> Result<Self> {
+        self.try_retain_with_metadata(0)
+    }
+
+    /// Admit adapter-owned descriptors before allocating them. Payload remains
+    /// shared with the original row; the caller owns any extra allocation.
+    pub fn try_retain_with_metadata(&self, adapter_bytes: usize) -> Result<Self> {
         self.source.node.node()?;
         let metadata = std::mem::size_of::<Self>()
             .checked_add(self.source.adapter_metadata_bytes)
+            .and_then(|bytes| bytes.checked_add(adapter_bytes))
             .ok_or(RetainedQueryError::SizeOverflow)?;
         let runtime = self.runtime.try_retain(metadata as u64)?;
         let memory = self
@@ -257,6 +270,20 @@ impl RetainedNodeCursor {
             }
         }
     }
+
+    /// A failed foreign handoff must never complete provisional views at EOF.
+    pub fn abort_delivery(&mut self) {
+        if self.status == RetainedQueryStatus::Open {
+            self.status = RetainedQueryStatus::Failed;
+            self.terminal_error = Some(RetainedQueryError::AdapterDelivery);
+            if let Some(view) = self.view.take() {
+                view.source.status.store(2, Ordering::Release);
+            }
+            if let Some(observation) = self.observation.take() {
+                observation.record(Err(&RetainedQueryError::AdapterDelivery), &self.profile);
+            }
+        }
+    }
 }
 impl Drop for RetainedNodeCursor {
     fn drop(&mut self) {
@@ -394,6 +421,7 @@ impl Database {
             );
             let control_bytes = std::mem::size_of::<RetainedNodeCursor>()
                 .checked_add(cypher.len())
+                .and_then(|bytes| bytes.checked_add(options.adapter_metadata_bytes))
                 .and_then(|bytes| bytes.checked_add(64))
                 .ok_or(RetainedQueryError::SizeOverflow)?;
             let working_limit = options
@@ -962,6 +990,45 @@ mod tests {
         assert_eq!(record.success_count, 1);
         assert_eq!(record.total_row_count, 0);
     }
+    #[test]
+    fn foreign_metadata_is_admitted_and_failed_delivery_preserves_payload() {
+        let (db, governor) = fixture(4);
+        let mut cursor = db
+            .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap();
+        let view = cursor.next_node().unwrap().unwrap();
+        let before = governor.retained_result_snapshot();
+        let retained = view.try_retain_with_metadata(8192).unwrap();
+        let after = governor.retained_result_snapshot();
+        assert_eq!(after.view_handles, before.view_handles + 1);
+        assert!(after.retained_bytes >= before.retained_bytes + 8192);
+        assert!(matches!(
+            view.try_retain_with_metadata(usize::MAX),
+            Err(RetainedQueryError::SizeOverflow)
+        ));
+        assert_eq!(
+            governor.retained_result_snapshot().retained_bytes,
+            after.retained_bytes
+        );
+        drop(retained);
+        assert_eq!(
+            governor.retained_result_snapshot().retained_bytes,
+            before.retained_bytes
+        );
+        cursor.abort_delivery();
+        assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
+        assert_eq!(view.status(), RetainedQueryStatus::Failed);
+        assert!(matches!(
+            cursor.next_node(),
+            Err(RetainedQueryError::AdapterDelivery)
+        ));
+        assert!(view.field("text").unwrap().is_some());
+        cursor.abort_delivery();
+        drop((db, cursor, view));
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+
     #[test]
     fn observation_panic_never_completes_provisional_views() {
         #[derive(Debug)]

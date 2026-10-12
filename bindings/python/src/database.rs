@@ -166,6 +166,34 @@ impl Database {
         Ok(crate::retained::RetainedCursor::new(cursor, module))
     }
 
+    /// Indexed complete-node views; recursive payload stays in native owners.
+    #[pyo3(signature = (cypher, params = None, *, options = None))]
+    fn execute_retained_node(
+        &mut self,
+        py: Python<'_>,
+        cypher: &str,
+        params: Option<&Bound<'_, PyDict>>,
+        options: Option<PyRef<'_, crate::retained::RetainedOptions>>,
+    ) -> PyResult<crate::retained::node::RetainedNodeCursor> {
+        let options = options.map_or_else(
+            || crate::retained::options(py, None, None, None, true, false),
+            |options| Ok(options.inner),
+        )?;
+        let options = crate::retained::node::node_options(py, options)?;
+        let params = params
+            .map(py_dict_to_params)
+            .transpose()?
+            .unwrap_or_default();
+        let module = py.import("hawdb._hawdb")?.into_any().unbind();
+        let database = self.required()?;
+        let cursor = py
+            .detach(move || database.query_with_params_retained_node(cypher, &params, options))
+            .map_err(|source| crate::retained::error(py, &source))?;
+        Ok(crate::retained::node::RetainedNodeCursor::new(
+            cursor, module,
+        ))
+    }
+
     /// Explicit resource observation; interpreter/application RSS is separate.
     fn retained_snapshot_copy<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
         let database = self

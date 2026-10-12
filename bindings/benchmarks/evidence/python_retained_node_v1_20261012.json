@@ -1,0 +1,1453 @@
+{
+  "kind": "same_source_python_indexed_complete_node_delivery_diagnostic",
+  "qualification": false,
+  "source": {
+    "parent": "272a94f7790fc52ab808635cae773f69ebe949d1",
+    "source_hashes": {
+      "bindings/python/python/hawdb/__init__.py": "c319e49b51070a959547985b428eb800ec47f2e9e0a3c3b01c891524f447872d",
+      "bindings/python/python/hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6",
+      "bindings/python/python/hawdb/_hawdb.pyi": "3afb3dd283ce9f1912a88c80a401a14e8f2ab8d48407d7539981589787909968",
+      "bindings/python/src/database.rs": "79b95d96663fd7671462fa11b89432ac7ca57da4915a8ae8c64ab9ff0fdd7902",
+      "bindings/python/src/lib.rs": "3e42bb72cb1c16854a936c37d7b9dea2ebcc40e1d9ae899f396ec7de7795c105",
+      "bindings/python/src/retained.rs": "6908f89317bc224f8fd33a008e0263561454d8aeda275cedc98e63bf8dd841cd",
+      "src/api/retained_query/node.rs": "e3b036e801204bf58c6952ac6222a83bb4778c95d5447841b0d6ef5aaf91d3a4",
+      "src/embedded.rs": "e6a042576b96ac675fa12464572962fddf5f1fe9488ca784e25619d6ca75f662",
+      "bindings/python/src/retained/node.rs": "f3eacb015d698c4ae6843b7aaa8b5450f63b92a612995f62f6bf418383168ffd",
+      "bindings/python/tests/test_retained_node.py": "1af6fc4cb92b811ee9668e6d2926c9484ab116df83441d5c8b0a4229d5f59f2c",
+      "docs/PYTHON_RETAINED_NODE_VIEWS.md": "4cc055ebb89f607123d79b9745e0e63882cf2ec7ad6f964a36310db2ea69b4c5"
+    },
+    "binary_sha256": "e031ee4a8d77539ee39bc17a3dab50a61d1ebce54fbddde694c496d79f3f093a",
+    "driver_sha256": "8a1d64782f8841cc6586aa9b211be39afba95ba4b4f784cc656877b75293a4e6",
+    "build": "bazel build -c opt //bindings/python:extension; default configuration",
+    "python": "Python 3.13.13"
+  },
+  "run_status": {
+    "started": "2026-10-12T06:58:02.561967+00:00",
+    "exit_code": 0,
+    "finished": "2026-10-12T06:58:05.420826+00:00",
+    "source_unchanged": true
+  },
+  "audit": {
+    "raw": 72,
+    "measured": 64,
+    "groups": [
+      {
+        "count": 128,
+        "width": 256,
+        "ns_per_query": {
+          "owned": 35423.33984375,
+          "retained": 20228.02734375
+        },
+        "owned_over_retained": 1.7512009076206339
+      },
+      {
+        "count": 128,
+        "width": 16384,
+        "ns_per_query": {
+          "owned": 47825.84765625,
+          "retained": 24997.234375
+        },
+        "owned_over_retained": 1.9132455590399688
+      },
+      {
+        "count": 1000,
+        "width": 256,
+        "ns_per_query": {
+          "owned": 46267.646,
+          "retained": 22408.0415
+        },
+        "owned_over_retained": 2.064778664391531
+      },
+      {
+        "count": 1000,
+        "width": 16384,
+        "ns_per_query": {
+          "owned": 69027.27100000001,
+          "retained": 32907.8125
+        },
+        "owned_over_retained": 2.0975952442903947
+      }
+    ],
+    "goal_complete": false
+  },
+  "driver": "\"\"\"Same-source complete-node delivery diagnostic; not full qualification.\"\"\"\nimport gc\nimport hashlib\nimport json\nimport pathlib\nimport struct\nimport sys\nimport time\n\nsys.path.insert(0, sys.argv[1])\nimport hawdb\n\nQUERY = \"MATCH (n:Item {id: $id}) RETURN n AS node\"\n\n\ndef consume(db, count, retained):\n    checksum = hashlib.sha256()\n    for key in range(count):\n        if retained:\n            cursor = db.execute_retained_node(QUERY, {\"id\": key})\n            node = cursor.next_node()\n            assert node is not None\n            fields = [node.field(name) for name in (\"_id\", \"id\", \"score\", \"title\", \"nested\", \"labels\")]\n            nested = fields[4].field(\"items\")\n            nested_values = [nested.item(index) for index in range(3)]\n            label = fields[5].item(0)\n            checksum.update(struct.pack(\"<qqd\", fields[0].scalar_copy(), fields[1].scalar_copy(), fields[2].scalar_copy()))\n            for value in (fields[3], label):\n                buffer = memoryview(value)\n                checksum.update(struct.pack(\"<Q\", buffer.nbytes))\n                checksum.update(buffer)\n                buffer.release()\n            assert nested_values[0].scalar_copy() == key\n            assert nested_values[1].scalar_copy() is None\n            assert nested_values[2].scalar_copy() is True\n            checksum.update(struct.pack(\"<q\", nested_values[0].scalar_copy()))\n            assert cursor.next_node() is None\n            for value in (*fields, nested, *nested_values, label, node):\n                value.close()\n            cursor.close()\n        else:\n            node = db.execute(QUERY, {\"id\": key}).fetchone()[\"node\"]\n            checksum.update(struct.pack(\"<qqd\", node[\"_id\"], node[\"id\"], node[\"score\"]))\n            for value in (node[\"title\"], node[\"labels\"][0]):\n                buffer = value.encode(\"utf-8\")\n                checksum.update(struct.pack(\"<Q\", len(buffer)))\n                checksum.update(buffer)\n            assert node[\"nested\"][\"items\"] == [key, None, True]\n            checksum.update(struct.pack(\"<q\", key))\n    return checksum.hexdigest()\n\n\ndef main():\n    output = pathlib.Path(sys.argv[2])\n    with output.open(\"w\") as records:\n        for count in (128, 1000):\n            for width in (256, 16384):\n                db = hawdb.open()\n                db.execute(\"CREATE NODE TABLE Item\")\n                db.execute(\"CREATE INDEX ON :Item(id)\")\n                for key in range(count):\n                    db.execute(\"CREATE (:Item {id: $id, score: $score, title: $title, nested: $nested})\", {\n                        \"id\": key, \"score\": key + 0.5,\n                        \"title\": \"x\" * width + \"\\x00\\u754c\\U0001f642\",\n                        \"nested\": {\"items\": [key, None, True]},\n                    })\n                identity_base = db.execute(QUERY, {\"id\": 0}).fetchone()[\"node\"][\"_id\"]\n                independent = hashlib.sha256()\n                for key in range(count):\n                    independent.update(struct.pack(\"<qqd\", identity_base + key, key, key + 0.5))\n                    for value in ((\"x\" * width + \"\\x00\\u754c\\U0001f642\").encode(\"utf-8\"), b\"Item\"):\n                        independent.update(struct.pack(\"<Q\", len(value)))\n                        independent.update(value)\n                    independent.update(struct.pack(\"<q\", key))\n                expected = independent.hexdigest()\n                assert consume(db, count, False) == expected\n                assert consume(db, count, True) == expected\n                for iteration in range(9):\n                    for retained in ((False, True) if iteration % 2 == 0 else (True, False)):\n                        gc.collect()\n                        start = time.perf_counter_ns()\n                        checksum = consume(db, count, retained)\n                        elapsed = time.perf_counter_ns() - start\n                        assert checksum == expected\n                        snapshot = db.retained_snapshot_copy()\n                        assert snapshot[\"retained_bytes\"] == snapshot[\"view_handles\"] == 0\n                        records.write(json.dumps({\n                            \"mode\": \"retained\" if retained else \"owned\", \"count\": count,\n                            \"width\": width, \"iteration\": iteration, \"discarded\": iteration == 0,\n                            \"elapsed_ns\": elapsed, \"checksum\": checksum,\n                            \"retained_snapshot\": snapshot,\n                        }) + \"\\n\")\n                        records.flush()\n                db.close()\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "observations": [
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 256,
+      "iteration": 0,
+      "discarded": true,
+      "elapsed_ns": 4379042,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 256,
+      "iteration": 0,
+      "discarded": true,
+      "elapsed_ns": 2527542,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 256,
+      "iteration": 1,
+      "discarded": false,
+      "elapsed_ns": 2509625,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 256,
+      "iteration": 1,
+      "discarded": false,
+      "elapsed_ns": 4540917,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 256,
+      "iteration": 2,
+      "discarded": false,
+      "elapsed_ns": 4326875,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 256,
+      "iteration": 2,
+      "discarded": false,
+      "elapsed_ns": 2667709,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 256,
+      "iteration": 3,
+      "discarded": false,
+      "elapsed_ns": 2517000,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 256,
+      "iteration": 3,
+      "discarded": false,
+      "elapsed_ns": 4550000,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 256,
+      "iteration": 4,
+      "discarded": false,
+      "elapsed_ns": 4351917,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 256,
+      "iteration": 4,
+      "discarded": false,
+      "elapsed_ns": 2577792,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 256,
+      "iteration": 5,
+      "discarded": false,
+      "elapsed_ns": 2492583,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 256,
+      "iteration": 5,
+      "discarded": false,
+      "elapsed_ns": 4376500,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 256,
+      "iteration": 6,
+      "discarded": false,
+      "elapsed_ns": 4527458,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 256,
+      "iteration": 6,
+      "discarded": false,
+      "elapsed_ns": 2605416,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 256,
+      "iteration": 7,
+      "discarded": false,
+      "elapsed_ns": 2623917,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 256,
+      "iteration": 7,
+      "discarded": false,
+      "elapsed_ns": 4674292,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 256,
+      "iteration": 8,
+      "discarded": false,
+      "elapsed_ns": 4611250,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 256,
+      "iteration": 8,
+      "discarded": false,
+      "elapsed_ns": 2600583,
+      "checksum": "37838cc4e469fe9cf55ac9e2595227faf5abc9520e62cd862619c26b17f41918",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 16384,
+      "iteration": 0,
+      "discarded": true,
+      "elapsed_ns": 6223625,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 16384,
+      "iteration": 0,
+      "discarded": true,
+      "elapsed_ns": 3224000,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 16384,
+      "iteration": 1,
+      "discarded": false,
+      "elapsed_ns": 3239042,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 16384,
+      "iteration": 1,
+      "discarded": false,
+      "elapsed_ns": 6045583,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 16384,
+      "iteration": 2,
+      "discarded": false,
+      "elapsed_ns": 6157292,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 16384,
+      "iteration": 2,
+      "discarded": false,
+      "elapsed_ns": 3240833,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 16384,
+      "iteration": 3,
+      "discarded": false,
+      "elapsed_ns": 3137292,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 16384,
+      "iteration": 3,
+      "discarded": false,
+      "elapsed_ns": 6111084,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 16384,
+      "iteration": 4,
+      "discarded": false,
+      "elapsed_ns": 6138459,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 16384,
+      "iteration": 4,
+      "discarded": false,
+      "elapsed_ns": 3135458,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 16384,
+      "iteration": 5,
+      "discarded": false,
+      "elapsed_ns": 3160250,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 16384,
+      "iteration": 5,
+      "discarded": false,
+      "elapsed_ns": 6005625,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 16384,
+      "iteration": 6,
+      "discarded": false,
+      "elapsed_ns": 5960125,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 16384,
+      "iteration": 6,
+      "discarded": false,
+      "elapsed_ns": 3251250,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 16384,
+      "iteration": 7,
+      "discarded": false,
+      "elapsed_ns": 3156667,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 16384,
+      "iteration": 7,
+      "discarded": false,
+      "elapsed_ns": 6144583,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 128,
+      "width": 16384,
+      "iteration": 8,
+      "discarded": false,
+      "elapsed_ns": 6132333,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 128,
+      "width": 16384,
+      "iteration": 8,
+      "discarded": false,
+      "elapsed_ns": 3258417,
+      "checksum": "5ad81245efb1e0ce843888007d4beb419b517e26c4aa3280607172939e9548b9",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 256,
+      "iteration": 0,
+      "discarded": true,
+      "elapsed_ns": 43486834,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 256,
+      "iteration": 0,
+      "discarded": true,
+      "elapsed_ns": 22990250,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 256,
+      "iteration": 1,
+      "discarded": false,
+      "elapsed_ns": 21316916,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 256,
+      "iteration": 1,
+      "discarded": false,
+      "elapsed_ns": 43880709,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 256,
+      "iteration": 2,
+      "discarded": false,
+      "elapsed_ns": 46151625,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 256,
+      "iteration": 2,
+      "discarded": false,
+      "elapsed_ns": 22351625,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 256,
+      "iteration": 3,
+      "discarded": false,
+      "elapsed_ns": 21916708,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 256,
+      "iteration": 3,
+      "discarded": false,
+      "elapsed_ns": 46089583,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 256,
+      "iteration": 4,
+      "discarded": false,
+      "elapsed_ns": 46602875,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 256,
+      "iteration": 4,
+      "discarded": false,
+      "elapsed_ns": 22747417,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 256,
+      "iteration": 5,
+      "discarded": false,
+      "elapsed_ns": 22698500,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 256,
+      "iteration": 5,
+      "discarded": false,
+      "elapsed_ns": 47790334,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 256,
+      "iteration": 6,
+      "discarded": false,
+      "elapsed_ns": 47585292,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 256,
+      "iteration": 6,
+      "discarded": false,
+      "elapsed_ns": 22464458,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 256,
+      "iteration": 7,
+      "discarded": false,
+      "elapsed_ns": 23150625,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 256,
+      "iteration": 7,
+      "discarded": false,
+      "elapsed_ns": 46383667,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 256,
+      "iteration": 8,
+      "discarded": false,
+      "elapsed_ns": 45249708,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 256,
+      "iteration": 8,
+      "discarded": false,
+      "elapsed_ns": 22118250,
+      "checksum": "bef76a44578e5a7d8a629de851080bf70f09e047b38c9d950931e5b6a8429a2e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 23139,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 0,
+      "discarded": true,
+      "elapsed_ns": 63824625,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 0,
+      "discarded": true,
+      "elapsed_ns": 30689375,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 1,
+      "discarded": false,
+      "elapsed_ns": 30353917,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 1,
+      "discarded": false,
+      "elapsed_ns": 63018041,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 2,
+      "discarded": false,
+      "elapsed_ns": 64596667,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 2,
+      "discarded": false,
+      "elapsed_ns": 33659375,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 3,
+      "discarded": false,
+      "elapsed_ns": 32156250,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 3,
+      "discarded": false,
+      "elapsed_ns": 67844000,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 4,
+      "discarded": false,
+      "elapsed_ns": 76387584,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 4,
+      "discarded": false,
+      "elapsed_ns": 35048959,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 5,
+      "discarded": false,
+      "elapsed_ns": 39182500,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 5,
+      "discarded": false,
+      "elapsed_ns": 71541209,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 6,
+      "discarded": false,
+      "elapsed_ns": 70299125,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 6,
+      "discarded": false,
+      "elapsed_ns": 30949083,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 7,
+      "discarded": false,
+      "elapsed_ns": 34613708,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 7,
+      "discarded": false,
+      "elapsed_ns": 65973875,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "owned",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 8,
+      "discarded": false,
+      "elapsed_ns": 70210542,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    },
+    {
+      "mode": "retained",
+      "count": 1000,
+      "width": 16384,
+      "iteration": 8,
+      "discarded": false,
+      "elapsed_ns": 31210708,
+      "checksum": "46bd7e7c29ae93ab39af31ac1023e53b881cdc545768c4a36a38558c22bf134e",
+      "retained_snapshot": {
+        "budget_bytes": 16777216,
+        "handle_limit": 1024,
+        "retained_bytes": 0,
+        "peak_retained_bytes": 39267,
+        "buffer_owners": 0,
+        "view_handles": 0,
+        "peak_view_handles": 14,
+        "backpressure_events": 0
+      }
+    }
+  ],
+  "limitations": [
+    "Memory backend only, 128 and 1000 nodes, narrow properties with 256-byte and 16384-byte text",
+    "Same-source owned versus retained APIs, not baseline-versus-candidate performance qualification",
+    "Full every-ID warmup; 9 alternating rounds with first round discarded; checksums include complete fixture fields and synthetic identity/label",
+    "Nonisolated local macOS host; no process RSS, allocation, I/O, tail latency, graph, FTS, persistent writes or mixed-workload qualification",
+    "Native source reuse is proved by API ownership; this cost probe does not compare raw buffer pointers",
+    "Metadata is conservatively admitted; process memory and parameter/planning allocations are not fully qualified",
+    "v1 explicitly consumes copied fixed-width Python scalars; v2 consumes original readonly typed buffers; ratios across these different consumers are not a revision comparison"
+  ]
+}
