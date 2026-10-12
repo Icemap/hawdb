@@ -6230,6 +6230,11 @@ fn apply_upsert(
             assignment_context.as_ref(),
         )?,
     };
+    let conflict_context =
+        checkpoint_allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
     let mut staged_conflicts = BTreeMap::<RelationalKey, Option<RelationalKey>>::new();
     let mut affected_rows = 0usize;
     let mut conflict_rows = 0usize;
@@ -6239,13 +6244,18 @@ fn apply_upsert(
             continue;
         };
         let conflict_key =
-            row_key_with_allocations(row, &conflict_positions, checkpoint_allocations)?;
+            row_key_with_allocations(row, &conflict_positions, conflict_context.as_ref())?;
         if key_contains_null(&conflict_key) {
             continue;
         }
-        if staged_conflicts
-            .insert(conflict_key, Some(primary_key.clone()))
-            .is_some()
+        let primary_key = clone_key_with_allocations(primary_key, conflict_context.as_ref())?;
+        if insert_staged_conflict_with_allocations(
+            &mut staged_conflicts,
+            conflict_key,
+            Some(primary_key),
+            conflict_context.as_ref(),
+        )?
+        .is_some()
         {
             return Err(RelationalError::Constraint(format!(
                 "UPSERT conflict target on table {table} is not unique within the transaction"
@@ -6258,7 +6268,7 @@ fn apply_upsert(
         let logical_excluded = capture_mutation_outcome.then(|| excluded.clone());
         overflow::externalize_row(state, &schema, &mut excluded, overflow_config)?;
         let conflict_key =
-            row_key_with_allocations(&excluded, &conflict_positions, checkpoint_allocations)?;
+            row_key_with_allocations(&excluded, &conflict_positions, conflict_context.as_ref())?;
         let conflict_has_null = conflict_key
             .0
             .iter()
@@ -6266,7 +6276,10 @@ fn apply_upsert(
         let existing_primary_key = if conflict_has_null {
             None
         } else if let Some(staged) = staged_conflicts.get(&conflict_key) {
-            staged.clone()
+            staged
+                .as_ref()
+                .map(|key| clone_key_with_allocations(key, conflict_context.as_ref()))
+                .transpose()?
         } else {
             conflict_primary_key(
                 state,
@@ -6338,13 +6351,23 @@ fn apply_upsert(
             }
             segment.rows.remove(&existing_primary_key);
             segment.rows.insert_with_allocations(
-                updated_primary_key.clone(),
+                clone_key_with_allocations(&updated_primary_key, conflict_context.as_ref())?,
                 updated,
                 checkpoint_allocations,
             )?;
-            staged_conflicts.insert(conflict_key, None);
+            insert_staged_conflict_with_allocations(
+                &mut staged_conflicts,
+                conflict_key,
+                None,
+                conflict_context.as_ref(),
+            )?;
             if !key_contains_null(&updated_conflict_key) {
-                staged_conflicts.insert(updated_conflict_key, Some(updated_primary_key));
+                insert_staged_conflict_with_allocations(
+                    &mut staged_conflicts,
+                    updated_conflict_key,
+                    Some(updated_primary_key),
+                    conflict_context.as_ref(),
+                )?;
             }
             affected_rows = affected_rows.saturating_add(1);
         } else {
@@ -6360,7 +6383,11 @@ fn apply_upsert(
             )?;
             if segment
                 .rows
-                .insert_with_allocations(primary_key.clone(), excluded, checkpoint_allocations)?
+                .insert_with_allocations(
+                    clone_key_with_allocations(&primary_key, conflict_context.as_ref())?,
+                    excluded,
+                    checkpoint_allocations,
+                )?
                 .is_some()
             {
                 return Err(RelationalError::Constraint(format!(
@@ -6368,7 +6395,12 @@ fn apply_upsert(
                 )));
             }
             if !conflict_has_null {
-                staged_conflicts.insert(conflict_key, Some(primary_key));
+                insert_staged_conflict_with_allocations(
+                    &mut staged_conflicts,
+                    conflict_key,
+                    Some(primary_key),
+                    conflict_context.as_ref(),
+                )?;
             }
             affected_rows = affected_rows.saturating_add(1);
             if let Some(logical_excluded) = logical_excluded {
@@ -6382,6 +6414,43 @@ fn apply_upsert(
         conflict_rows,
         rows: returned_rows,
     })
+}
+
+fn clone_key_with_allocations(
+    key: &RelationalKey,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalKey, RelationalError> {
+    match allocations {
+        Some(context) => key.clone_with_allocations(context),
+        None => Ok(key.clone()),
+    }
+}
+
+fn insert_staged_conflict_with_allocations(
+    conflicts: &mut BTreeMap<RelationalKey, Option<RelationalKey>>,
+    key: RelationalKey,
+    value: Option<RelationalKey>,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<Option<Option<RelationalKey>>, RelationalError> {
+    if let Some(context) = allocations
+        && !conflicts.contains_key(&key)
+    {
+        context
+            .reserve(crate::cow::checkpoint_tree_node_bytes::<
+                RelationalKey,
+                Option<RelationalKey>,
+            >())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    }
+    let unit = allocations
+        .map(|context| context.start_unit())
+        .transpose()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    let previous = conflicts.insert(key, value);
+    if let Some(unit) = unit {
+        unit.finish();
+    }
+    Ok(previous)
 }
 
 fn conflict_primary_key(

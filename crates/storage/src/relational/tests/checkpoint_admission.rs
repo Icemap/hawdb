@@ -1506,3 +1506,82 @@ fn controlled_changed_key_tracking_admits_nodes_and_key_copies() {
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }
+
+#[test]
+fn controlled_conflict_map_denial_preserves_entries_and_replacement_reuses_nodes() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let ceiling = 4096;
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(ceiling),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let work = CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+    let context = CheckpointDecodeContext {
+        work: work.clone(),
+        memory: Default::default(),
+    };
+    let mut conflicts = BTreeMap::new();
+    let mut denied = false;
+    for id in 0..64 {
+        let key = RelationalKey(vec![RelationalValue::BigInt(id)]);
+        let before = conflicts.clone();
+        match insert_staged_conflict_with_allocations(
+            &mut conflicts,
+            key.clone(),
+            None,
+            Some(&context),
+        ) {
+            Ok(previous) => {
+                assert_eq!(previous, None);
+                let remaining = match work.task_context().reserve_working_memory(ceiling) {
+                    Err(hawdb_core::RuntimeMemoryError::ReservationExceeded {
+                        available_bytes,
+                        ..
+                    }) => available_bytes,
+                    other => panic!("unexpected reservation: {other:?}"),
+                };
+                assert_eq!(
+                    insert_staged_conflict_with_allocations(
+                        &mut conflicts,
+                        key.clone(),
+                        Some(key),
+                        Some(&context)
+                    )
+                    .unwrap(),
+                    Some(None)
+                );
+                assert!(
+                    matches!(work.task_context().reserve_working_memory(ceiling),
+                    Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == remaining)
+                );
+            }
+            Err(RelationalError::Admission(_)) => {
+                assert_eq!(conflicts, before);
+                denied = true;
+                break;
+            }
+            Err(error) => panic!("unexpected error: {error}"),
+        }
+    }
+    assert!(denied);
+    drop(conflicts);
+    drop(context);
+    assert!(
+        matches!(work.task_context().reserve_working_memory(ceiling),
+        Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+    );
+    drop(work);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
