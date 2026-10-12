@@ -187,7 +187,8 @@ pub use api::{
 pub use api::{
     ArrowArray, ArrowArrayStream, ArrowSchema, RetainedArrowCodeOwner, RetainedArrowExport,
     RetainedArrowSchema, RetainedArrowStream, RetainedColumnRole, RetainedColumnSchema,
-    RetainedColumnType, RetainedColumnValues, RetainedQueryBatch, RetainedQueryCursor,
+    RetainedColumnType, RetainedColumnValues, RetainedNodeCursor, RetainedNodeField,
+    RetainedNodeLabels, RetainedNodeView, RetainedQueryBatch, RetainedQueryCursor,
     RetainedQueryError, RetainedQueryOptions, RetainedQueryProfile, RetainedQueryStatus,
 };
 pub use background_maintenance_evidence::nowledge_background_maintenance_evidence_json;

@@ -39,10 +39,12 @@ use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 mod arrow;
+mod node;
 pub use arrow::{
     ArrowArray, ArrowArrayStream, ArrowSchema, RetainedArrowCodeOwner, RetainedArrowExport,
     RetainedArrowSchema, RetainedArrowStream,
 };
+pub use node::{RetainedNodeCursor, RetainedNodeField, RetainedNodeLabels, RetainedNodeView};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RetainedQueryError {
@@ -212,7 +214,7 @@ pub enum RetainedColumnValues<'a> {
 pub struct RetainedQueryOptions {
     /// Maximum source records inspected per pull, clamped by database configuration.
     pub batch_rows: NonZeroUsize,
-    /// Maximum admitted numeric owner/view capacity per batch, also clamped.
+    /// Maximum admitted payload owner/view capacity per batch, also clamped.
     pub batch_bytes: NonZeroUsize,
     /// Distinct live payload owners. Retaining a view does not consume another slot.
     pub outstanding_batches: NonZeroUsize,

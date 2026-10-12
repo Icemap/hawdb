@@ -723,3 +723,71 @@ measures neither complete queries nor graph mutations, host delivery, resident
 memory, tail latency, durability, or source-to-host zero copy. The component
 ratios must not be multiplied by earlier point-source ratios or substituted
 for the complete performance gate.
+
+### Experimental native indexed full-node delivery
+
+`Database::query_with_params_retained_node` prepares the parameterized Cypher
+query through the ordinary optimizer and accepts one complete-node projection
+over an actual equality index seek. A redundant matching equality filter and
+an outer zero-offset limit are supported. Other plans, null lookup values,
+canonical/out-of-core storage, and multiple matching nodes refuse explicitly;
+`LIMIT 1` does not justify silently dropping additional seek matches. The
+cursor exposes `retained_indexed_node_view` as its access path.
+
+One aggregate runtime result reservation and query-ledger lease cover the full
+selected row, all referenced immutable label-name backing capacities, and
+native owner/descriptor capacity before source owners are captured. Label
+capacity is observed by ID without scanning the catalog. Additional views
+reserve their own runtime handle and query-memory charge before cloning the
+source owner. Source destruction precedes charge release, including after
+cursor EOF/close, source mutation, or database drop. Missing seeks capture no
+source and reserve no retained result owner. Byte/handle backpressure retains
+the original view and does not advance the pull.
+
+`RetainedNodeView::field` returns borrowed property values or the synthetic
+identity/label-name views. `_id` and `labels` shadow raw properties exactly as
+ordinary node projection does; the property iterator omits those shadowed
+entries. Logical payload limits exclude shadowed raw properties, but backing
+capacity includes them because the row owner retains those allocations. A
+small logical result can therefore legitimately refuse a large physical
+working unit. No property map, label string, or Arrow array is constructed for
+the delivered native payload.
+
+The native result remains provisional until successful EOF. Existing views
+keep their immutable payload after close; subsequent borrowed access still
+checks source integrity flags. This initial entrypoint does not yet provide
+read-transaction/task-context integration, multiple-node streaming, Python/Go
+handoff, or an Arrow representation. Planning/index-key workspace, ledger and
+allocator residency, process-wide memory, query observability integration,
+performance, tail latency, and durability remain independent qualification
+gates. Passing the native ownership regressions does not establish the complete
+performance gate or authorize replacing ordinary host query delivery.
+
+#### Native query delivery diagnostic
+
+A local release probe compared the ordinary owned Rust API with the native
+indexed full-node API in the same candidate source. Both paths prepared the
+same parameterized equality query, warmed up every ID, and consumed every
+logical field with matching checksums. Each fixture used nine alternating
+rounds per path, discarded the first, and retained eight measured samples.
+The 54 raw observations and 48 measured observations cover 128, 1,000, and
+10,000 resident nodes with a 273-byte text attribute and shadowed reserved
+properties. No JSON conversion was inside either timed path.
+
+| Nodes | Owned median ns/query | Native median ns/query | Owned/native |
+| --- | --- | --- | --- |
+| 128 | 18,080 | 10,868 | 1.664x |
+| 1,000 | 27,157 | 10,545 | 2.575x |
+| 10,000 | 129,891 | 10,434 | 12.449x |
+
+This repeat froze parent `da02e302` plus the candidate source; the native module
+SHA-256 was `e6f476c034f3eb9331e397bbf96fb0932df8636232bf308bd63a56925856b252`.
+It is a same-source API diagnostic, not a before/after revision comparison.
+The owned API runs ordinary observers, whereas the native API currently uses
+its own profile and retained-result admission. These entrypoint differences
+prevent attributing the entire ratio to avoided payload copying. No Python/Go,
+Arrow, file/WAL, mixed/concurrent workload, tail latency, or RSS was measured.
+The earlier prototype observations remain separate. Raw observations and the
+standalone driver are preserved in
+[`native_indexed_node_controls_20261012.json`](../bindings/benchmarks/evidence/native_indexed_node_controls_20261012.json).
+Neither run satisfies the complete performance gate.

@@ -397,6 +397,20 @@ impl Catalog {
         self.labels.iter().map(Arc::as_ref)
     }
 
+    /// Complete immutable symbol backing capacity, observed without capture.
+    #[doc(hidden)]
+    pub fn retained_label_name_capacity_bytes(&self, id: LabelId) -> crate::Result<Option<usize>> {
+        self.labels
+            .get(id.0 as usize)
+            .map(|label| {
+                std::mem::size_of::<Label>()
+                    .checked_add(2 * std::mem::size_of::<usize>())
+                    .and_then(|bytes| bytes.checked_add(label.name.capacity()))
+                    .ok_or_else(|| crate::HawDBError::Execution("label capacity overflow".into()))
+            })
+            .transpose()
+    }
+
     /// Reserve a label's complete name capacity before retaining its immutable
     /// owner. Missing IDs do not invoke admission; host refusals stay typed.
     /// Container and adapter metadata require separate caller admission.
@@ -412,10 +426,9 @@ impl Catalog {
         let Some(label) = self.labels.get(id.0 as usize) else {
             return Ok(None);
         };
-        let bytes = std::mem::size_of::<Label>()
-            .checked_add(2 * std::mem::size_of::<usize>())
-            .and_then(|bytes| bytes.checked_add(label.name.capacity()))
-            .ok_or_else(|| crate::HawDBError::Execution("label capacity overflow".into()))?;
+        let bytes = self
+            .retained_label_name_capacity_bytes(id)?
+            .expect("borrowed label exists");
         let allocation = allocate(bytes)?;
         if allocation.bytes() < bytes {
             return Err(crate::HawDBError::Execution(
@@ -1134,9 +1147,14 @@ mod tests {
         let original = Arc::downgrade(&catalog.labels[id.0 as usize]);
         let unrelated = Arc::downgrade(&catalog.labels[other.0 as usize]);
         let address = catalog.label_name(id).unwrap().as_ptr() as usize;
+        let preflight = catalog
+            .retained_label_name_capacity_bytes(id)
+            .unwrap()
+            .unwrap();
         let source = catalog
             .retain_label_name_with_admission(id, |bytes| -> crate::Result<_> {
                 assert_eq!(original.strong_count(), 2);
+                assert_eq!(bytes, preflight);
                 assert!(
                     bytes
                         >= std::mem::size_of::<Label>()
