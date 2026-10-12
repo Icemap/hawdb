@@ -751,3 +751,110 @@ fn assert_no_temporary_files(directory: &std::path::Path) {
         );
     }
 }
+
+#[test]
+fn controlled_root_hydration_admits_input_and_retains_only_decoded_output() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
+    let raw = (0..128 * 1024)
+        .map(|_| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed as u8) & 0x7f
+        })
+        .collect::<Vec<_>>();
+    for bytes in [raw, "中".repeat(64 * 1024).into_bytes()] {
+        let directory = unique_test_dir("controlled-root-hydration");
+        let config = RelationalOverflowPublicationConfig::default();
+        let input = RelationalOverflowExtentInput::encode(
+            RelationalScalarType::Text,
+            &bytes,
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+        let reference = *input.reference();
+        RelationalOverflowPublisher::new(config)
+            .publish(&directory, 1, 10, None, vec![input])
+            .unwrap();
+        let root = RelationalOverflowRootReader::open_latest(&directory, config)
+            .unwrap()
+            .unwrap();
+        let artifact = directory.join(relational_overflow_extent_file(1));
+        let before = fs::read(&artifact).unwrap();
+        let mut expected_budget = RelationalHydrationBudget::default();
+        let expected = root
+            .hydrate(&reference, &mut expected_budget, None)
+            .unwrap();
+        for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+            let governor = RuntimeGovernor::detect(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(ceiling),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                IoConcurrencyBudget::new(2, 1),
+            );
+            governor.pin_resources();
+            let permit = governor
+                .try_admit(
+                    RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1),
+                )
+                .unwrap();
+            let work =
+                CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+            let mut budget = RelationalHydrationBudget::default();
+            let initial = budget;
+            let observation = crate::test_allocator::AllocationObservation::start();
+            let result = work.classify(|scoped| {
+                let context = CheckpointDecodeContext {
+                    work: scoped.clone(),
+                    memory: Default::default(),
+                };
+                let value = root.hydrate_with_allocations(&reference, &mut budget, &context)?;
+                Ok::<_, RelationalOverflowPublicationError>((value, context.memory.into_inner()))
+            });
+            let wide_allocations = observation.finish();
+            if succeeds {
+                let (value, memory) = result.unwrap();
+                assert_eq!(value, expected);
+                assert_eq!(budget, expected_budget);
+                assert!(
+                    matches!(work.task_context().reserve_working_memory(ceiling),
+                    Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                        if available_bytes <= ceiling - bytes.len() as u64
+                            && available_bytes > ceiling - bytes.len() as u64 - 16 * 1024)
+                );
+                drop(value);
+                drop(memory);
+            } else {
+                assert!(
+                    matches!(
+                        result,
+                        Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                            _
+                        )))
+                    ),
+                    "{result:?}"
+                );
+                assert_eq!(budget, initial);
+                assert_eq!(wide_allocations, 0);
+            }
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+            );
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+            assert_eq!(fs::read(&artifact).unwrap(), before);
+        }
+        drop(root);
+        fs::remove_dir_all(directory).unwrap();
+    }
+}

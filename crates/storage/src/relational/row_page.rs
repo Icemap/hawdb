@@ -93,6 +93,7 @@ pub use publication::{
     RELATIONAL_ROW_PAGE_MANIFEST_FILE,
 };
 pub use recovery::RelationalRowPageRecoveryStatus;
+pub(crate) use snapshot::ProjectedPointReadRequest as CheckpointSnapshotPointRequest;
 pub use snapshot::{
     RelationalRowPageSnapshotPointReport, RelationalRowPageSnapshotPointsReport,
     RelationalRowPageSnapshotRangeReport, RelationalRowPageSnapshotReadError,
@@ -238,6 +239,34 @@ pub struct RelationalProjectedRow {
     pub fields: Vec<RelationalProjectedField>,
 }
 
+impl RelationalProjectedRow {
+    pub(crate) fn into_relational_row_with_allocations(
+        self,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<RelationalRow, super::RelationalError> {
+        let Some(context) = allocations else {
+            return Ok(RelationalRow::new(
+                self.fields.into_iter().map(|field| field.value).collect(),
+            ));
+        };
+        let admission =
+            |error: hawdb_core::HawDBError| super::RelationalError::Admission(error.to_string());
+        let mut values = context
+            .vector_capacity(self.fields.len())
+            .map_err(admission)?;
+        context
+            .reserve(std::mem::size_of::<Vec<RelationalValue>>() + 2 * std::mem::size_of::<usize>())
+            .map_err(admission)?;
+        for field in self.fields {
+            context
+                .checkpoint()
+                .map_err(|error| super::RelationalError::Admission(error.to_string()))?;
+            values.push(field.value);
+        }
+        Ok(RelationalRow::new(values))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RelationalProjectedFieldRef<'a> {
     pub ordinal: usize,
@@ -313,6 +342,45 @@ impl<'a> RelationalProjectedRowView<'a> {
             Self::Borrowed(row) => row.to_owned_row(),
             Self::Owned(row) => row.clone(),
         }
+    }
+
+    pub(crate) fn to_owned_row_with_allocations(
+        self,
+        context: &crate::background::CheckpointDecodeContext,
+    ) -> Result<RelationalProjectedRow, super::RelationalError> {
+        let admission =
+            |error: hawdb_core::HawDBError| super::RelationalError::Admission(error.to_string());
+        let mut key_values = context
+            .vector_capacity(self.primary_key().0.len())
+            .map_err(admission)?;
+        for value in &self.primary_key().0 {
+            key_values.push(value.as_ref().to_owned_value_with_allocations(context)?);
+        }
+        let count = match self {
+            Self::Borrowed(row) => row.fields().len(),
+            Self::Owned(row) => row.fields.len(),
+        };
+        let mut fields = context.vector_capacity(count).map_err(admission)?;
+        for position in 0..count {
+            let (ordinal, value) = match self {
+                Self::Borrowed(row) => {
+                    let field = &row.fields()[position];
+                    (field.ordinal, field.value)
+                }
+                Self::Owned(row) => {
+                    let field = &row.fields[position];
+                    (field.ordinal, field.value.as_ref())
+                }
+            };
+            fields.push(RelationalProjectedField {
+                ordinal,
+                value: value.to_owned_value_with_allocations(context)?,
+            });
+        }
+        Ok(RelationalProjectedRow {
+            primary_key: RelationalKey(key_values),
+            fields,
+        })
     }
 
     pub const fn is_borrowed(self) -> bool {
@@ -407,8 +475,25 @@ pub struct RelationalRowPageView<'a> {
 
 #[derive(Debug, Clone)]
 pub(crate) struct VerifiedRowPage {
-    bytes: SegmentBytes,
+    bytes: VerifiedRowPageBytes,
     metadata: VerifiedRowPageMetadata,
+}
+
+#[derive(Debug, Clone)]
+enum VerifiedRowPageBytes {
+    Serving(SegmentBytes),
+    Checkpoint(crate::background::CheckpointSharedBytes),
+}
+
+impl std::ops::Deref for VerifiedRowPageBytes {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        match self {
+            Self::Serving(bytes) => bytes,
+            Self::Checkpoint(bytes) => bytes,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -458,7 +543,21 @@ impl VerifiedRowPageMetadata {
 impl VerifiedRowPage {
     pub(crate) fn new(bytes: SegmentBytes, metadata: VerifiedRowPageMetadata) -> Self {
         debug_assert_eq!(bytes.len(), metadata.encoded_len);
-        Self { bytes, metadata }
+        Self {
+            bytes: VerifiedRowPageBytes::Serving(bytes),
+            metadata,
+        }
+    }
+
+    pub(crate) fn new_checkpoint(
+        bytes: crate::background::CheckpointSharedBytes,
+        metadata: VerifiedRowPageMetadata,
+    ) -> Self {
+        debug_assert!(bytes.len() >= metadata.encoded_len);
+        Self {
+            bytes: VerifiedRowPageBytes::Checkpoint(bytes),
+            metadata,
+        }
     }
 
     pub(crate) fn view(&self) -> RelationalRowPageView<'_> {
@@ -709,17 +808,43 @@ impl<'a> RelationalRowPageView<'a> {
         ordinal: usize,
         requested_fields: &[usize],
     ) -> Result<RelationalProjectedRow, RelationalRowPageError> {
+        self.decode_projected_row_with_allocations(ordinal, requested_fields, None)
+    }
+
+    pub(crate) fn decode_projected_row_with_allocations(
+        &self,
+        ordinal: usize,
+        requested_fields: &[usize],
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<RelationalProjectedRow, RelationalRowPageError> {
         #[cfg(test)]
         PROJECTED_ROW_DECODES.with(|count| count.set(count.get() + 1));
         validate_requested_fields(requested_fields, self.column_count, self.limits)?;
         let slot = self.slot(ordinal)?;
-        let primary_key =
-            decode_ordered_relational_key(self.key_for_slot(slot)?).map_err(|error| {
-                RelationalRowPageError::Corrupt(format!("row {ordinal} primary key: {error}"))
-            })?;
+        let encoded_key = self.key_for_slot(slot)?;
+        let primary_key = match allocations {
+            Some(context) => {
+                super::ordered_key::decode_ordered_relational_key_owned(encoded_key, context)
+            }
+            None => decode_ordered_relational_key(encoded_key),
+        }
+        .map_err(|error| {
+            let message = format!("row {ordinal} primary key: {error}");
+            match error {
+                super::ordered_key::OrderedRelationalKeyError::Admission(_) => {
+                    RelationalRowPageError::Admission(message)
+                }
+                _ => RelationalRowPageError::Corrupt(message),
+            }
+        })?;
         let row = self.row_for_slot(slot)?;
-        let fields =
-            decode_row_fields(row, self.column_count, Some(requested_fields), self.limits)?;
+        let fields = value::decode_row_fields_with_allocations(
+            row,
+            self.column_count,
+            Some(requested_fields),
+            self.limits,
+            allocations,
+        )?;
         Ok(RelationalProjectedRow {
             primary_key,
             fields,

@@ -473,7 +473,7 @@ fn overlay_projection_drops_unrequested_large_values_before_residency() {
     validate_overlay_row(&value, 3).unwrap();
     let resident_bytes = projected_overlay_resident_bytes(&value, &[1]).unwrap();
     assert!(resident_bytes < 1024);
-    let projected = project_overlay_value(&value, &[1], true);
+    let projected = project_overlay_value(&value, &[1], true, None).unwrap();
     let RelationalRowPageProjectedOverlayValue::Present {
         fields,
         binds_overlay_overflow,
@@ -850,4 +850,226 @@ fn unique_test_dir(label: &str) -> PathBuf {
         std::process::id(),
         TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     ))
+}
+
+#[test]
+fn controlled_snapshot_points_preserve_canonical_live_recovery_and_deleted_sources() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let fixture = SnapshotFixture::new("controlled-source-precedence");
+    for id in [0, 1, 2, 3, 9] {
+        let target = key(id);
+        let mut expected_budget = RelationalHydrationBudget::default();
+        let expected = fixture
+            .reader
+            .point_projected(
+                "documents",
+                &target,
+                &[1],
+                RelationalRowPageSnapshotReadLimits::default(),
+                &mut expected_budget,
+                &RuntimeTaskContext::default(),
+            )
+            .unwrap();
+        let budgets = if id == 0 {
+            vec![(4096, false), (16 * 1024 * 1024, true)]
+        } else {
+            vec![(16 * 1024 * 1024, true)]
+        };
+        for (ceiling, succeeds) in budgets {
+            let governor = RuntimeGovernor::detect(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(ceiling),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                IoConcurrencyBudget::new(2, 1),
+            );
+            governor.pin_resources();
+            let permit = governor
+                .try_admit(
+                    RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1),
+                )
+                .unwrap();
+            let work =
+                CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+            let mut budget = RelationalHydrationBudget::default();
+            let initial = budget;
+            let result = work.classify(|scoped| {
+                let context = CheckpointDecodeContext {
+                    work: scoped.clone(),
+                    memory: Default::default(),
+                };
+                let output = fixture.reader.point_projected_with_hydration_mode(
+                    ProjectedPointReadRequest {
+                        table: "documents",
+                        primary_key: &target,
+                        requested_fields: &[1],
+                        limits: RelationalRowPageSnapshotReadLimits::default(),
+                        hydration: &mut budget,
+                        task: scoped.task_context(),
+                        hydration_fields: Some(&[1]),
+                        allocations: Some(&context),
+                    },
+                )?;
+                Ok::<_, RelationalRowPageSnapshotReadError>((output, context.memory.into_inner()))
+            });
+            if succeeds {
+                let ((row, report), memory) = result.unwrap();
+                assert_eq!(row, expected.0);
+                assert_eq!(report.source, expected.1.source);
+                assert_eq!(report.identity, expected.1.identity);
+                assert_eq!(
+                    report.live_batches_examined,
+                    expected.1.live_batches_examined
+                );
+                assert_eq!(report.demand.rows_decoded, expected.1.demand.rows_decoded);
+                assert_eq!(budget, expected_budget);
+                assert!(
+                    matches!(work.task_context().reserve_working_memory(ceiling),
+                    Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                        if available_bytes > ceiling - 64 * 1024)
+                );
+                drop(row);
+                drop(memory);
+            } else {
+                assert!(
+                    matches!(
+                        result,
+                        Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                            _
+                        )))
+                    ),
+                    "{result:?}"
+                );
+                assert_eq!(budget, initial);
+            }
+            assert!(!fixture.reader.is_poisoned());
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+            );
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+    }
+    fixture.remove();
+}
+
+#[test]
+fn controlled_snapshot_live_projection_denies_before_copy_and_releases_scratch() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let fixture = SnapshotFixture::new("controlled-wide-live");
+    let payload = "v".repeat(128 * 1024);
+    let view = Arc::new(
+        fixture
+            .view
+            .advance(
+                16,
+                Some(capture(vec![change(2, Some(&payload))])),
+                Default::default(),
+            )
+            .unwrap(),
+    );
+    let reader = RelationalRowPageSnapshotReader::new(
+        view,
+        Arc::clone(&fixture.overflow_root),
+        None,
+        Arc::new(SegmentCache::new(64 * 1024)),
+        StoreId(919),
+    )
+    .unwrap();
+    let target = key(2);
+    let mut ordinary_budget = RelationalHydrationBudget::default();
+    let ordinary = reader
+        .point_projected(
+            "documents",
+            &target,
+            &[1],
+            RelationalRowPageSnapshotReadLimits::default(),
+            &mut ordinary_budget,
+            &RuntimeTaskContext::default(),
+        )
+        .unwrap();
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let mut budget = RelationalHydrationBudget::default();
+        let initial = budget;
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let output = reader.point_projected_with_hydration_mode(ProjectedPointReadRequest {
+                table: "documents",
+                primary_key: &target,
+                requested_fields: &[1],
+                limits: RelationalRowPageSnapshotReadLimits::default(),
+                hydration: &mut budget,
+                task: scoped.task_context(),
+                hydration_fields: Some(&[1]),
+                allocations: Some(&context),
+            })?;
+            Ok::<_, RelationalRowPageSnapshotReadError>((output, context.memory.into_inner()))
+        });
+        let wide_allocations = observation.finish();
+        if succeeds {
+            let ((row, report), memory) = result.unwrap();
+            assert_eq!(row, ordinary.0);
+            assert_eq!(report.source, RelationalRowPageSnapshotRowSource::Live);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes <= ceiling - 128 * 1024 && available_bytes > ceiling - 256 * 1024)
+            );
+            drop(row);
+            drop(memory);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(wide_allocations, 0);
+        }
+        assert_eq!(budget, initial);
+        assert!(!reader.is_poisoned());
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+    drop(reader);
+    fixture.remove();
 }

@@ -537,3 +537,229 @@ fn checkpoint_units_row_root_wide_key_reads_hashes_and_comparisons_match_and_can
     }
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn checkpoint_descriptor_key_buffers_admit_before_copy_and_retain_result_inventory() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("descriptor-owned-keys");
+    let mut config = RelationalRowPagePublicationConfig::default();
+    config.page_limits.max_key_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    config.page_limits.max_inline_value_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    let mut schema = crate::relational::row_page::test_row_page_schema("documents", 1);
+    schema.columns[0].scalar_type = RelationalScalarType::Text;
+    let digest = crate::relational::index_shadow::relational_schema_digest(&schema).unwrap();
+    let value = "k".repeat(128 * 1024);
+    let page = ImmutableRelationalRowPage {
+        generation: 1,
+        source_commit_epoch: 10,
+        page_id: page_id(1),
+        schema_digest: digest,
+        column_count: 1,
+        rows: vec![RelationalRowPageEntry {
+            primary_key: RelationalKey(vec![RelationalValue::Text(value.clone())]),
+            row: RelationalRow::new(vec![RelationalValue::Text(value)]),
+        }],
+    };
+    RelationalRowPagePublisher::new(config)
+        .publish(
+            &directory,
+            1,
+            10,
+            None,
+            vec![RelationalRowPageTableDelta {
+                table: "documents".into(),
+                schema: Some(schema),
+                schema_digest: digest,
+                column_count: NonZeroU32::MIN,
+                next_page_id: NonZeroU64::new(2).unwrap(),
+                dirty_pages: vec![page],
+                deleted_page_ids: Vec::new(),
+            }],
+        )
+        .unwrap();
+    let reader = RelationalRowPageRootReader::open_latest(&directory, config)
+        .unwrap()
+        .unwrap();
+    let expected = reader.read_table_page_descriptor("documents", 0).unwrap();
+    let before = images(&directory, 1);
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+            .unwrap();
+        let work = CheckpointWorkContext::new(
+            permit.bind_task_context(hawdb_core::RuntimeTaskContext::default()),
+        );
+        let mut descriptors =
+            crate::file_io::File::open(directory.join(relational_row_page_root_descriptor_file(1)))
+                .unwrap();
+        let mut keys =
+            crate::file_io::File::open(directory.join(relational_row_page_root_key_file(1)))
+                .unwrap();
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let descriptor = root::checkpoint::read_descriptor_with_allocations(
+                &mut descriptors,
+                &mut keys,
+                0,
+                reader.manifest(),
+                config,
+                scoped,
+                Some(&context),
+            )?;
+            Ok::<_, RelationalRowPagePublicationError>((descriptor, context.memory.into_inner()))
+        });
+        let wide_allocations = observation.finish();
+        if succeeds {
+            let (descriptor, memory) = result.unwrap();
+            assert_eq!(descriptor, expected);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes <= ceiling - 256 * 1024)
+            );
+            drop(descriptor);
+            drop(memory);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(wide_allocations, 0);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(descriptors);
+        drop(keys);
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        assert_eq!(images(&directory, 1), before);
+    }
+    drop(reader);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn controlled_descriptor_search_releases_replaced_probe_keys_under_fixed_budget() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("descriptor-probe-ownership");
+    let mut config = RelationalRowPagePublicationConfig::default();
+    config.page_limits.max_key_bytes = NonZeroUsize::new(128 * 1024).unwrap();
+    config.page_limits.max_inline_value_bytes = NonZeroUsize::new(128 * 1024).unwrap();
+    let mut schema = crate::relational::row_page::test_row_page_schema("documents", 1);
+    schema.columns[0].scalar_type = RelationalScalarType::Text;
+    let digest = crate::relational::index_shadow::relational_schema_digest(&schema).unwrap();
+    let pages = (0..16)
+        .map(|id| {
+            let value = format!("{id:04}-{}", "k".repeat(64 * 1024));
+            ImmutableRelationalRowPage {
+                generation: 1,
+                source_commit_epoch: 10,
+                page_id: page_id(id + 1),
+                schema_digest: digest,
+                column_count: 1,
+                rows: vec![RelationalRowPageEntry {
+                    primary_key: RelationalKey(vec![RelationalValue::Text(value.clone())]),
+                    row: RelationalRow::new(vec![RelationalValue::Text(value)]),
+                }],
+            }
+        })
+        .collect();
+    RelationalRowPagePublisher::new(config)
+        .publish(
+            &directory,
+            1,
+            10,
+            None,
+            vec![RelationalRowPageTableDelta {
+                table: "documents".into(),
+                schema: Some(schema),
+                schema_digest: digest,
+                column_count: NonZeroU32::MIN,
+                next_page_id: NonZeroU64::new(17).unwrap(),
+                dirty_pages: pages,
+                deleted_page_ids: Vec::new(),
+            }],
+        )
+        .unwrap();
+    let reader = RelationalRowPageRootReader::open_latest(&directory, config)
+        .unwrap()
+        .unwrap();
+    let target =
+        crate::relational::ordered_key::encode_ordered_relational_key(&RelationalKey(vec![
+            RelationalValue::Text("!".into()),
+        ]))
+        .unwrap();
+    let ordinary = reader
+        .find_table_page_descriptor_accounted_encoded("documents", &target)
+        .unwrap();
+    assert_eq!(ordinary.1, 5);
+    let ceiling = 384 * 1024;
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(ceiling),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let work = CheckpointWorkContext::new(
+        permit.bind_task_context(hawdb_core::RuntimeTaskContext::default()),
+    );
+    let (selected, reads) = reader
+        .find_table_page_descriptor_accounted_encoded_with_work_context(
+            "documents",
+            &target,
+            Some(&work),
+        )
+        .unwrap();
+    assert_eq!(reads, ordinary.1);
+    let (ordinal, descriptor) = selected.unwrap();
+    let (expected_ordinal, expected) = ordinary.0.unwrap();
+    assert_eq!(ordinal, expected_ordinal);
+    assert_eq!(descriptor.descriptor, expected);
+    assert!(
+        matches!(work.task_context().reserve_working_memory(ceiling),
+        Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+            if available_bytes <= ceiling - 128 * 1024 && available_bytes > ceiling - 160 * 1024)
+    );
+    drop(descriptor);
+    assert!(
+        matches!(work.task_context().reserve_working_memory(ceiling),
+        Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+    );
+    drop(work);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    drop(reader);
+    fs::remove_dir_all(directory).unwrap();
+}

@@ -33,12 +33,11 @@ use hawdb_storage::{
         RelationalMutationOutcome, RelationalOverflowReferenceSet,
         RelationalOverflowReferenceSetBuilder, RelationalOverflowReferenceSortReport,
         RelationalRecoveryFence, RelationalRecoverySourceIdentity, RelationalReplayAccess,
-        RelationalReplayAccessSet, RelationalRow, RelationalRowChangeCapture,
-        RelationalRowChangeCaptureLimits, RelationalRowDeltaBuilder, RelationalRowDeltaError,
-        RelationalRowDeltaReader, RelationalRowDeltaReport, RelationalRowPageLiveError,
-        RelationalRowPageMutationPlanner, RelationalRowPageProjectedRange,
-        RelationalRowPagePublicationConfig, RelationalRowPageReadView,
-        RelationalRowPageRecoveredValue, RelationalRowPageRootReader,
+        RelationalReplayAccessSet, RelationalRowChangeCapture, RelationalRowChangeCaptureLimits,
+        RelationalRowDeltaBuilder, RelationalRowDeltaError, RelationalRowDeltaReader,
+        RelationalRowDeltaReport, RelationalRowPageLiveError, RelationalRowPageMutationPlanner,
+        RelationalRowPageProjectedRange, RelationalRowPagePublicationConfig,
+        RelationalRowPageReadView, RelationalRowPageRecoveredValue, RelationalRowPageRootReader,
         RelationalRowPageSnapshotReadError, RelationalRowPageSnapshotReadLimits,
         RelationalRowPageSnapshotReader, RelationalRowPageTableDelta, RelationalSparseLiveStage,
         RelationalSparseRecoveryRow, RelationalState, RelationalTransaction, RelationalValue,
@@ -577,16 +576,30 @@ impl GraphStore {
                         ..RelationalRowPageSnapshotReadLimits::default()
                     };
                     snapshot_limits.demand.max_bytes = remaining_bytes;
-                    let (projected, point_report) = reader
-                        .point_projected(
+                    let point = match allocations {
+                        Some(context) => reader.point_projected_with_hydration_mode(
+                            crate::relational::CheckpointSnapshotPointRequest {
+                                table: table.as_ref(),
+                                primary_key: primary_key.as_ref(),
+                                requested_fields: fields,
+                                limits: snapshot_limits,
+                                hydration: &mut hydration,
+                                task,
+                                hydration_fields: Some(fields),
+                                allocations: Some(context),
+                            },
+                        ),
+                        None => reader.point_projected(
                             table.as_ref(),
                             primary_key.as_ref(),
                             fields,
                             snapshot_limits,
                             &mut hydration,
                             task,
-                        )
-                        .map_err(map_sparse_snapshot_read_error)?;
+                        ),
+                    };
+                    let (projected, point_report) =
+                        point.map_err(map_sparse_snapshot_read_error)?;
                     charge_sparse_recovery_read_bytes(
                         &mut read_bytes,
                         u64::try_from(point_report.demand.bytes_read).map_err(|_| {
@@ -610,13 +623,7 @@ impl GraphStore {
                                     access.table
                                 )));
                             }
-                            Ok(RelationalRow::new(
-                                projected
-                                    .fields
-                                    .into_iter()
-                                    .map(|field| field.value)
-                                    .collect(),
-                            ))
+                            projected.into_relational_row_with_allocations(allocations)
                         })
                         .transpose()?
                 }

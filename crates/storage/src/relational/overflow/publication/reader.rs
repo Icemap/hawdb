@@ -214,6 +214,35 @@ impl RelationalOverflowRootReader {
             .map_err(publication_error)
     }
 
+    pub(crate) fn hydrate_with_allocations(
+        &self,
+        reference: &RelationalOverflowRef,
+        budget: &mut RelationalHydrationBudget,
+        allocations: &crate::background::CheckpointDecodeContext,
+    ) -> Result<RelationalValue, RelationalOverflowPublicationError> {
+        let descriptor = self
+            .find_descriptor_inner(reference, Some(allocations))?
+            .ok_or(RelationalOverflowPublicationError::MissingExtent(
+                reference.digest,
+            ))?;
+        admit_extent_hydration(reference, descriptor.envelope_bytes, budget)?;
+        // Input scratch is separate from the caller's retained output inventory.
+        let input = crate::background::CheckpointDecodeContext {
+            work: allocations.work.clone(),
+            memory: Default::default(),
+        };
+        let encoded =
+            self.read_encoded_extent_with_allocations(&descriptor, allocations, Some(&input))?;
+        crate::relational::overflow::envelope::decode_overflow_envelope_with_allocations(
+            reference,
+            &encoded,
+            budget,
+            Some(allocations.task_context()),
+            Some(allocations),
+        )
+        .map_err(publication_error)
+    }
+
     /// Reads and verifies one encoded envelope without decompressing it.
     /// Exact overflow compaction uses this path to rewrite physical closure
     /// while keeping memory bounded to one value.
@@ -275,6 +304,15 @@ impl RelationalOverflowRootReader {
         descriptor: &RelationalOverflowExtentDescriptor,
         work: &crate::background::CheckpointWorkContext,
     ) -> Result<Vec<u8>, RelationalOverflowPublicationError> {
+        self.read_encoded_extent_with_allocations(descriptor, work, None)
+    }
+
+    fn read_encoded_extent_with_allocations(
+        &self,
+        descriptor: &RelationalOverflowExtentDescriptor,
+        work: &crate::background::CheckpointWorkContext,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<Vec<u8>, RelationalOverflowPublicationError> {
         use super::publisher::checkpoint;
 
         let reference = descriptor.reference;
@@ -309,7 +347,12 @@ impl RelationalOverflowRootReader {
                 )
             })
         })?;
-        let mut encoded = checkpoint::cpu(Some(work), || Ok(Vec::with_capacity(envelope_bytes)))?;
+        let mut encoded = match allocations {
+            Some(context) => context.vector_capacity(envelope_bytes).map_err(|error| {
+                RelationalOverflowPublicationError::Admission(error.to_string())
+            })?,
+            None => checkpoint::cpu(Some(work), || Ok(Vec::with_capacity(envelope_bytes)))?,
+        };
         let mut artifact = checkpoint::io(Some(work), || {
             File::open(path).map_err(durability("open overflow extent artifact"))
         })?;

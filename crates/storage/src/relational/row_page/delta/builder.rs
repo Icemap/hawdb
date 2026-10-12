@@ -30,7 +30,6 @@ use crate::relational::{
     RelationalRowChange, RelationalRowChangeCapture, RelationalRowChangeCaptureLimits,
     RelationalRowPagePublicationConfig, RelationalState,
 };
-use std::collections::BTreeMap;
 use std::io::Write;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
@@ -63,7 +62,7 @@ pub struct RelationalRowDeltaBuilder {
     schema_set_digest: hawdb_integrity::Sha256Digest,
     visible_commit_epoch: u64,
     replayed_batches: u64,
-    dirty: BTreeMap<RowDeltaKey, RowDeltaValue>,
+    dirty: super::DirtyEntries,
     dirty_bytes: usize,
     runs: Vec<RowDeltaRunDescriptor>,
     run_bytes: u64,
@@ -223,7 +222,7 @@ impl RelationalRowDeltaBuilder {
             schema_set_digest,
             visible_commit_epoch: base.source_commit_epoch,
             replayed_batches: 0,
-            dirty: BTreeMap::new(),
+            dirty: super::DirtyEntries::default(),
             dirty_bytes: 0,
             runs: Vec::new(),
             run_bytes: 0,
@@ -326,9 +325,14 @@ impl RelationalRowDeltaBuilder {
                 self.config.row_limits.max_key_bytes
             )));
         }
+        if let Some(context) = key_allocations.as_ref() {
+            context
+                .reserve(std::mem::size_of::<Vec<u8>>() + 2 * std::mem::size_of::<usize>())
+                .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+        }
         let key = RowDeltaKey {
             table_ordinal,
-            encoded_primary_key,
+            encoded_primary_key: encoded_primary_key.into(),
         };
         if let Some(value) = self.dirty.get(&key) {
             let value = match allocations {
@@ -834,7 +838,7 @@ impl RelationalRowDeltaBuilder {
         for change in changes {
             work.checkpoint()
                 .map_err(super::super::checkpoint::work_error)?;
-            let (key, value) = self.encode_change(epoch, change)?;
+            let (key, value) = self.encode_change(epoch, change, work)?;
             self.insert_change(key, value, work)?;
         }
         if advances_epoch {
@@ -852,6 +856,7 @@ impl RelationalRowDeltaBuilder {
         &self,
         epoch: u64,
         change: RelationalRowChange,
+        work: &crate::background::CheckpointWorkContext,
     ) -> Result<(RowDeltaKey, RowDeltaValue), RelationalRowDeltaError> {
         let table_ordinal = self
             .tables
@@ -863,12 +868,39 @@ impl RelationalRowDeltaBuilder {
                 ))
             })?;
         let table = &self.tables[table_ordinal];
-        let encoded_primary_key =
-            encode_ordered_relational_key(&change.primary_key).map_err(|error| {
-                RelationalRowDeltaError::Corrupt(format!(
-                    "row delta primary key cannot be encoded: {error}"
-                ))
-            })?;
+        let key_allocations = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let map_key_error = |error| match error {
+            crate::relational::ordered_key::CheckpointKeyEncodeError::Work(error) => {
+                RelationalRowDeltaError::Admission(error.to_string())
+            }
+            crate::relational::ordered_key::CheckpointKeyEncodeError::Key(
+                crate::relational::RelationalError::Corruption(message),
+            ) => RelationalRowDeltaError::Corrupt(format!(
+                "row delta primary key cannot be encoded: {message}"
+            )),
+            crate::relational::ordered_key::CheckpointKeyEncodeError::Key(error) => {
+                RelationalRowDeltaError::Admission(error.to_string())
+            }
+        };
+        let encoding =
+            CheckpointKeyEncoding::new(&change.primary_key, &[], work).map_err(map_key_error)?;
+        if encoding.encoded_len() > self.config.row_limits.max_key_bytes.get() {
+            return Err(RelationalRowDeltaError::Admission(format!(
+                "row delta key contains {} bytes, exceeding limit {}",
+                encoding.encoded_len(),
+                self.config.row_limits.max_key_bytes
+            )));
+        }
+        let encoded_primary_key = encoding
+            .encode_owned(&key_allocations)
+            .map_err(map_key_error)?;
+        key_allocations
+            .reserve(std::mem::size_of::<Vec<u8>>() + 2 * std::mem::size_of::<usize>())
+            .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+        let encoded_primary_key = std::sync::Arc::new(encoded_primary_key);
         if encoded_primary_key.len() > self.config.row_limits.max_key_bytes.get() {
             return Err(RelationalRowDeltaError::Admission(format!(
                 "row delta key contains {} bytes, exceeding limit {}",
@@ -876,17 +908,23 @@ impl RelationalRowDeltaBuilder {
                 self.config.row_limits.max_key_bytes
             )));
         }
+        let row_allocations = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
         let (is_present, encoded_row) = match change.row {
             Some(row) => (
                 true,
-                super::super::value::encode_row(
+                super::super::value::encode_row_with_allocations(
                     &row,
                     table.column_count.get() as usize,
                     self.config.row_limits,
+                    Some(&row_allocations),
                 )?,
             ),
             None => (false, Vec::new()),
         };
+        let encoded_row = super::RowDeltaBytes::from_encoded(encoded_row, &row_allocations)?;
         let charged_bytes =
             codec::charged_entry_bytes(encoded_primary_key.len(), encoded_row.len())?;
         Ok((
@@ -899,6 +937,7 @@ impl RelationalRowDeltaBuilder {
                 encoded_row,
                 last_modified_epoch: epoch,
                 charged_bytes,
+                _key_memory: key_allocations.memory.into_inner(),
             },
         ))
     }
@@ -944,7 +983,7 @@ impl RelationalRowDeltaBuilder {
         {
             self.flush_with_work_context(work)?;
         }
-        let replaced = self.dirty.insert(key, value);
+        let replaced = self.dirty.insert(key, value, work)?;
         if let Some(replaced) = replaced {
             self.dirty_bytes = self
                 .dirty_bytes
@@ -1083,11 +1122,11 @@ impl RelationalRowDeltaBuilder {
             .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
         let lower_bound = super::RowDeltaBound {
             table_ordinal: lower_key.table_ordinal,
-            encoded_primary_key: lower_key.encoded_primary_key.clone(),
+            encoded_primary_key: lower_key.encoded_primary_key.to_vec(),
         };
         let upper_bound = super::RowDeltaBound {
             table_ordinal: upper_key.table_ordinal,
-            encoded_primary_key: upper_key.encoded_primary_key.clone(),
+            encoded_primary_key: upper_key.encoded_primary_key.to_vec(),
         };
         let descriptor = codec::write_run(
             &tmp_path,

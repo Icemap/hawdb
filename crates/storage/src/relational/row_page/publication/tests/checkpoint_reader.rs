@@ -548,3 +548,95 @@ fn checkpoint_units_row_reader_rejects_all_canonical_binding_drift_without_sourc
     }
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn checkpoint_page_input_denies_before_copy_and_retains_lease_across_clones() {
+    use crate::background::{CheckpointOperationError, CheckpointWorkContext, CheckpointWorkError};
+    use crate::cache::{SegmentCache, StoreId};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("admitted-page-input");
+    let config = RelationalRowPagePublicationConfig::default();
+    RelationalRowPagePublisher::new(config)
+        .publish(
+            &directory,
+            1,
+            10,
+            None,
+            vec![table_delta("documents", vec![page(1, 1, 10, 1, 2)])],
+        )
+        .unwrap();
+    let root = RelationalRowPageRootReader::open_latest(&directory, config)
+        .unwrap()
+        .unwrap();
+    let descriptor = root.read_table_page_descriptor("documents", 0).unwrap();
+    let expected = root.read_page(&descriptor).unwrap();
+    let artifact = directory.join(relational_row_page_artifact_file(1));
+    let before = fs::read(&artifact).unwrap();
+    let cache = SegmentCache::new(8 * 1024 * 1024);
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+            .unwrap();
+        let work = CheckpointWorkContext::new(
+            permit.bind_task_context(hawdb_core::RuntimeTaskContext::default()),
+        );
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            root.read_page_slot_accounted_with_work_context(
+                &descriptor,
+                &cache,
+                StoreId(1),
+                Some(scoped),
+            )
+        });
+        let wide_allocations = observation.finish();
+        if succeeds {
+            let read = result.unwrap();
+            assert!(!read.cache_hit && !read.cache_miss && !read.cache_admission_rejected);
+            assert_eq!(
+                read.page.view().decode_row(0).unwrap(),
+                expected.rows[0].row
+            );
+            let cloned = read.page.clone();
+            drop(read);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes <= ceiling - config.page_limits.max_page_bytes.get() as u64)
+            );
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().active_background_tasks, 0);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, ceiling);
+            assert_eq!(cloned.view().decode_row(0).unwrap(), expected.rows[0].row);
+            drop(cloned);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(wide_allocations, 0);
+            drop(work);
+            drop(permit);
+        }
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        assert_eq!(fs::read(&artifact).unwrap(), before);
+    }
+    drop(root);
+    fs::remove_dir_all(directory).unwrap();
+}

@@ -34,6 +34,15 @@ pub(super) trait EncodeWork {
     ) -> Result<std::cmp::Ordering, RelationalRowPageError>;
     fn append(&self, output: &mut Vec<u8>, bytes: &[u8]) -> Result<(), RelationalRowPageError>;
     fn integrity(&self, encoded: &mut [u8]) -> Result<(), RelationalRowPageError>;
+    fn scratch_vector_capacity<T>(
+        &self,
+        capacity: usize,
+    ) -> Result<Vec<T>, RelationalRowPageError> {
+        Ok(Vec::with_capacity(capacity))
+    }
+    fn output_vector_capacity<T>(&self, capacity: usize) -> Result<Vec<T>, RelationalRowPageError> {
+        Ok(Vec::with_capacity(capacity))
+    }
 }
 
 pub(super) struct NoWork;
@@ -119,6 +128,58 @@ impl EncodeWork for ControlledWork<'_> {
         encoded[108..140].copy_from_slice(digest.sha256.as_bytes());
         unit.finish();
         Ok(())
+    }
+}
+
+pub(super) struct AllocatedRowWork<'a> {
+    pub(super) output: &'a crate::background::CheckpointDecodeContext,
+    pub(super) scratch: &'a crate::background::CheckpointDecodeContext,
+}
+
+impl EncodeWork for AllocatedRowWork<'_> {
+    type Unit = CheckpointWorkUnit;
+    fn start_unit(&self) -> Result<Self::Unit, RelationalRowPageError> {
+        ControlledWork(self.output).start_unit()
+    }
+    fn checkpoint(&self) -> Result<(), RelationalRowPageError> {
+        ControlledWork(self.output).checkpoint()
+    }
+    fn ordered_key(&self, key: &RelationalKey) -> Result<Vec<u8>, RelationalRowPageError> {
+        ControlledWork(self.output).ordered_key(key)
+    }
+    fn compare(
+        &self,
+        left: &[u8],
+        right: &[u8],
+    ) -> Result<std::cmp::Ordering, RelationalRowPageError> {
+        ControlledWork(self.output).compare(left, right)
+    }
+    fn append(&self, output: &mut Vec<u8>, bytes: &[u8]) -> Result<(), RelationalRowPageError> {
+        if bytes.len() > output.capacity() - output.len() {
+            return Err(checkpoint::work_error(self.output.record_failure(
+                crate::background::CheckpointWorkError::Allocation {
+                    bytes: bytes.len() as u64,
+                    reason: "row encoder exceeded admitted capacity".into(),
+                },
+            )));
+        }
+        ControlledWork(self.output).append(output, bytes)
+    }
+    fn integrity(&self, encoded: &mut [u8]) -> Result<(), RelationalRowPageError> {
+        ControlledWork(self.output).integrity(encoded)
+    }
+    fn scratch_vector_capacity<T>(
+        &self,
+        capacity: usize,
+    ) -> Result<Vec<T>, RelationalRowPageError> {
+        self.scratch
+            .vector_capacity(capacity)
+            .map_err(|error| RelationalRowPageError::Admission(error.to_string()))
+    }
+    fn output_vector_capacity<T>(&self, capacity: usize) -> Result<Vec<T>, RelationalRowPageError> {
+        self.output
+            .vector_capacity(capacity)
+            .map_err(|error| RelationalRowPageError::Admission(error.to_string()))
     }
 }
 
@@ -297,8 +358,24 @@ pub(super) fn encode_row<W: EncodeWork>(
             limits.max_row_bytes
         )));
     }
-    let mut slots = Vec::with_capacity(column_count);
-    let mut payload = Vec::new();
+    // Count with the same value grammar before allocating payload backing.
+    // Check each cumulative row extent in the same order as materialization.
+    let mut count = value::CountingValueOutput::default();
+    for value in row.values() {
+        u32_len(count.length, "value offset")?;
+        value::encode_value_with_work(&mut count, value, limits, &NoWork)?;
+        let projected_len = header_len.checked_add(count.length).ok_or_else(|| {
+            RelationalRowPageError::Admission("encoded row length overflow".to_string())
+        })?;
+        if projected_len > limits.max_row_bytes.get() {
+            return Err(RelationalRowPageError::Admission(format!(
+                "encoded row would contain {projected_len} bytes, exceeding limit {}",
+                limits.max_row_bytes
+            )));
+        }
+    }
+    let mut slots = work.scratch_vector_capacity(column_count)?;
+    let mut payload = work.scratch_vector_capacity(count.length)?;
     unit.finish();
     for value in row.values() {
         let unit = work.start_unit()?;
@@ -323,7 +400,7 @@ pub(super) fn encode_row<W: EncodeWork>(
         unit.finish();
     }
     let unit = work.start_unit()?;
-    let mut encoded = Vec::with_capacity(header_len + payload.len());
+    let mut encoded = work.output_vector_capacity(header_len + payload.len())?;
     encoded.extend_from_slice(&u32_len(column_count, "row value count")?.to_le_bytes());
     unit.finish();
     for (offset, length) in slots {

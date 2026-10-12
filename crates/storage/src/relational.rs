@@ -37,6 +37,7 @@ mod ordered_key;
 pub(crate) mod overflow;
 mod recovery;
 mod row_page;
+pub(crate) use row_page::CheckpointSnapshotPointRequest;
 
 pub use codec::{
     decode_relational_checkpoint, decode_relational_checkpoint_file,
@@ -385,6 +386,33 @@ impl<'a> RelationalValueRef<'a> {
             Self::Uuid(value) => RelationalValue::Uuid(value),
             Self::Overflow(reference) => RelationalValue::Overflow(reference),
         }
+    }
+
+    pub(crate) fn to_owned_value_with_allocations(
+        self,
+        context: &crate::background::CheckpointDecodeContext,
+    ) -> Result<RelationalValue, RelationalError> {
+        let admission =
+            |error: hawdb_core::HawDBError| RelationalError::Admission(error.to_string());
+        let value = match self {
+            Self::Text(value) => RelationalValue::Text(context.string(value).map_err(admission)?),
+            Self::Bytea(value) => {
+                let mut bytes = context.vector_capacity(value.len()).map_err(admission)?;
+                for chunk in value.chunks(64 * 1024) {
+                    let unit = context
+                        .start_unit()
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                    bytes.extend_from_slice(chunk);
+                    unit.finish();
+                }
+                RelationalValue::Bytea(bytes)
+            }
+            _ => self.to_owned_value(),
+        };
+        context
+            .checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        Ok(value)
     }
 
     const fn kind_rank(self) -> u8 {

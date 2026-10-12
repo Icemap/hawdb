@@ -129,7 +129,7 @@ pub(super) fn sync(
 }
 
 pub(in crate::relational::row_page::publication) use reader::{
-    read_descriptor, validate_descriptor,
+    read_descriptor, read_descriptor_with_allocations, validate_descriptor,
 };
 mod reader;
 

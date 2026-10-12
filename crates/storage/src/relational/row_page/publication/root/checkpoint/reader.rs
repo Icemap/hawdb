@@ -32,6 +32,26 @@ pub(in crate::relational::row_page::publication) fn read_descriptor(
     config: RelationalRowPagePublicationConfig,
     work: &CheckpointWorkContext,
 ) -> Result<RelationalRowPageRootDescriptor, RelationalRowPagePublicationError> {
+    super::read_descriptor_with_allocations(
+        descriptors,
+        keys,
+        ordinal,
+        manifest,
+        config,
+        work,
+        None,
+    )
+}
+
+pub(in crate::relational::row_page::publication) fn read_descriptor_with_allocations(
+    descriptors: &mut File,
+    keys: &mut File,
+    ordinal: u64,
+    manifest: &RelationalRowPageRootManifest,
+    config: RelationalRowPagePublicationConfig,
+    work: &CheckpointWorkContext,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalRowPageRootDescriptor, RelationalRowPagePublicationError> {
     let unit = work.start_unit().map_err(work_error)?;
     if ordinal >= manifest.root_page_count {
         return Err(RelationalRowPagePublicationError::Corrupt(format!(
@@ -70,7 +90,7 @@ pub(in crate::relational::row_page::publication) fn read_descriptor(
         manifest.root_key_artifact.encoded_len,
         config,
         "lower",
-        work,
+        KeyReadWork { work, allocations },
     )?;
     let upper_bound = read_key(
         keys,
@@ -79,7 +99,7 @@ pub(in crate::relational::row_page::publication) fn read_descriptor(
         manifest.root_key_artifact.encoded_len,
         config,
         "upper",
-        work,
+        KeyReadWork { work, allocations },
     )?;
     let mut hasher = IntegrityHasher::new();
     super::hash(&mut hasher, &manifest.generation.to_le_bytes(), work)?;
@@ -147,6 +167,11 @@ pub(in crate::relational::row_page::publication) fn read_descriptor(
     Ok(descriptor)
 }
 
+struct KeyReadWork<'a> {
+    work: &'a CheckpointWorkContext,
+    allocations: Option<&'a crate::background::CheckpointDecodeContext>,
+}
+
 fn read_key(
     file: &mut File,
     offset: u64,
@@ -154,8 +179,9 @@ fn read_key(
     artifact_len: u64,
     config: RelationalRowPagePublicationConfig,
     bound: &str,
-    work: &CheckpointWorkContext,
+    context: KeyReadWork<'_>,
 ) -> Result<Vec<u8>, RelationalRowPagePublicationError> {
+    let work = context.work;
     let unit = work.start_unit().map_err(work_error)?;
     let len = len as usize;
     if len == 0 || len > config.page_limits.max_key_bytes.get() {
@@ -171,7 +197,12 @@ fn read_key(
             "row-page {bound} key exceeds its artifact"
         )));
     }
-    let mut bytes = Vec::with_capacity(len);
+    let mut bytes = match context.allocations {
+        Some(allocations) => allocations
+            .vector_capacity(len)
+            .map_err(|error| RelationalRowPagePublicationError::Admission(error.to_string()))?,
+        None => Vec::with_capacity(len),
+    };
     unit.finish();
     while bytes.len() < len {
         let unit = work.start_unit().map_err(work_error)?;

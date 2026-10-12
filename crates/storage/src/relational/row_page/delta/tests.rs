@@ -1541,3 +1541,241 @@ fn unique_test_dir(label: &str) -> PathBuf {
         TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     ))
 }
+
+#[test]
+fn controlled_record_replacements_keep_key_and_latest_payload_leases_without_accumulation() {
+    use crate::background::CheckpointWorkContext;
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("record-replacement-leases");
+    let base = publish_and_open_base(&directory);
+    let mut config = RelationalRowDeltaConfig::default();
+    config.row_limits.max_key_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    config.row_limits.max_inline_value_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    let mut builder = builder(&directory, &base, 1, None, config);
+    let target = RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]);
+    let ceiling = 2 * 1024 * 1024;
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(ceiling),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let work = CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+    let capture = || RelationalRowChangeCapture::Captured {
+        changes: vec![RelationalRowChange {
+            table: "documents".into(),
+            primary_key: target.clone(),
+            row: Some(RelationalRow::new(vec![
+                RelationalValue::Text("k".repeat(128 * 1024)),
+                RelationalValue::Text("v".repeat(128 * 1024)),
+            ])),
+        }],
+        encoded_bytes: 0,
+    };
+    for epoch in 2..=65 {
+        builder
+            .record_with_work_context(epoch, capture(), &work)
+            .unwrap();
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                if available_bytes <= ceiling - 384 * 1024 && available_bytes > ceiling - 416 * 1024)
+        );
+    }
+    assert_eq!(builder.visible_commit_epoch(), 65);
+    let cloned = builder.clone();
+    drop(builder);
+    assert!(
+        matches!(work.task_context().reserve_working_memory(ceiling),
+        Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+            if available_bytes <= ceiling - 384 * 1024)
+    );
+    let (value, report) = cloned.lookup_staged("documents", &target).unwrap();
+    assert_eq!(report.runs_read, 0);
+    assert!(matches!(
+        value,
+        Some(RelationalRowPageRecoveredValue::Present(_))
+    ));
+    drop(value);
+    drop(cloned);
+    assert!(
+        matches!(work.task_context().reserve_working_memory(ceiling),
+        Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+    );
+    drop(work);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    drop(base);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn controlled_record_denies_key_and_row_buffers_before_wide_allocations() {
+    use crate::background::{CheckpointOperationError, CheckpointWorkContext, CheckpointWorkError};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    for wide_key in [false, true] {
+        let directory = unique_test_dir("record-buffer-denial");
+        let base = publish_and_open_base(&directory);
+        let mut config = RelationalRowDeltaConfig::default();
+        config.row_limits.max_key_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+        config.row_limits.max_inline_value_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+        let mut builder = builder(&directory, &base, 1, None, config);
+        let target = if wide_key {
+            RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))])
+        } else {
+            key(2)
+        };
+        let capture = RelationalRowChangeCapture::Captured {
+            changes: vec![RelationalRowChange {
+                table: "documents".into(),
+                primary_key: target,
+                row: Some(row(2, &"v".repeat(128 * 1024))),
+            }],
+            encoded_bytes: 0,
+        };
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(4096),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(4096))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| builder.record_with_work_context(2, capture, scoped));
+        let wide_allocations = observation.finish();
+        assert!(
+            matches!(
+                result,
+                Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                    _
+                )))
+            ),
+            "{result:?}"
+        );
+        assert_eq!(wide_allocations, 0);
+        assert_eq!(builder.visible_commit_epoch(), 1);
+        assert!(!directory
+            .join(relational_row_delta_run_file(1, 1, 0))
+            .exists());
+        drop(builder);
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        drop(base);
+        fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[test]
+fn dirty_backing_cow_preserves_sorted_snapshot_and_denies_unfunded_copy() {
+    use crate::background::CheckpointWorkContext;
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let make_entry = |id: u8| {
+        (
+            RowDeltaKey {
+                table_ordinal: 0,
+                encoded_primary_key: std::sync::Arc::new(vec![id]),
+            },
+            RowDeltaValue {
+                is_present: false,
+                encoded_row: Vec::new().into(),
+                last_modified_epoch: u64::from(id),
+                charged_bytes: 1,
+                _key_memory: Default::default(),
+            },
+        )
+    };
+    let mut entries = super::DirtyEntries::default();
+    for id in (0..64).rev() {
+        let (key, value) = make_entry(id);
+        entries
+            .insert(key, value, &CheckpointWorkContext::default())
+            .unwrap();
+    }
+    let snapshot = entries.clone();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(4096),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(4096))
+        .unwrap();
+    let work = CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+    let (key, mut value) = make_entry(20);
+    value.last_modified_epoch = 100;
+    assert!(matches!(
+        entries.insert(key, value, &work),
+        Err(RelationalRowDeltaError::Admission(_))
+    ));
+    assert_eq!(
+        entries
+            .iter()
+            .map(|(key, _)| key.encoded_primary_key[0])
+            .collect::<Vec<_>>(),
+        (0..64).collect::<Vec<_>>()
+    );
+    let (key, mut value) = make_entry(20);
+    value.last_modified_epoch = 100;
+    entries
+        .insert(key, value, &CheckpointWorkContext::default())
+        .unwrap();
+    let (key, _) = make_entry(20);
+    assert_eq!(entries.get(&key).unwrap().last_modified_epoch, 100);
+    assert_eq!(snapshot.get(&key).unwrap().last_modified_epoch, 20);
+    let (key, value) = make_entry(64);
+    entries
+        .insert(key, value, &CheckpointWorkContext::default())
+        .unwrap();
+    let probe = std::sync::Arc::new(crate::background::CheckpointWorkProbe::default());
+    probe.cancel_after.store(3, Ordering::SeqCst);
+    let scheduler = hawdb_qos::LocalQosScheduler::new(hawdb_qos::LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let cancelled = probe.context(scheduler.clone());
+    let (mut key, value) = make_entry(0);
+    key.encoded_primary_key = std::sync::Arc::new(Vec::new());
+    assert!(matches!(
+        entries.insert(key, value, &cancelled),
+        Err(RelationalRowDeltaError::Admission(_))
+    ));
+    assert_eq!(
+        entries
+            .iter()
+            .map(|(key, _)| key.encoded_primary_key[0])
+            .collect::<Vec<_>>(),
+        (0..65).collect::<Vec<_>>()
+    );
+    probe.assert_released(&scheduler);
+    entries.clear();
+    assert!(entries.is_empty());
+    assert_eq!(snapshot.len(), 64);
+    drop(work);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}

@@ -64,17 +64,27 @@ impl CheckpointSharedBytes {
         work: &CheckpointWorkContext,
         write: impl FnOnce(&mut CheckpointBytes) -> Result<(), CheckpointWorkError>,
     ) -> Result<Self, CheckpointWorkError> {
+        Self::build_with_error(capacity, work, std::convert::identity, write)
+    }
+
+    pub(crate) fn build_with_error<E>(
+        capacity: usize,
+        work: &CheckpointWorkContext,
+        map_work: impl Fn(CheckpointWorkError) -> E,
+        write: impl FnOnce(&mut CheckpointBytes) -> Result<(), E>,
+    ) -> Result<Self, E> {
         // The pinned standard Arc layout owns two usize reference counters.
         // Include the concrete shared cell as well as its exact Vec capacity.
         // Allocator metadata/fragmentation remain platform assumptions.
         let ownership_bytes = std::mem::size_of::<CheckpointBytes>()
             + 2 * std::mem::size_of::<std::sync::atomic::AtomicUsize>();
-        let mut bytes = CheckpointBytes::new_with_ownership(capacity, ownership_bytes, work)?;
+        let mut bytes = CheckpointBytes::new_with_ownership(capacity, ownership_bytes, work)
+            .map_err(&map_work)?;
         write(&mut bytes)?;
-        let unit = work.start_unit()?;
+        let unit = work.start_unit().map_err(&map_work)?;
         let output = Self(Arc::new(bytes));
         unit.finish();
-        work.checkpoint()?;
+        work.checkpoint().map_err(map_work)?;
         Ok(output)
     }
 }

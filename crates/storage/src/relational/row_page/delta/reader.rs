@@ -577,12 +577,27 @@ impl RelationalRowDeltaReader {
         ),
         RelationalRowDeltaError,
     > {
+        self.lookup_with_allocations(table, primary_key, None)
+    }
+
+    pub(crate) fn lookup_with_allocations(
+        &self,
+        table: &str,
+        primary_key: &RelationalKey,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<
+        (
+            Option<RelationalRowPageRecoveredValue>,
+            RelationalRowDeltaReadReport,
+        ),
+        RelationalRowDeltaError,
+    > {
         if self.is_poisoned() {
             return Err(RelationalRowDeltaError::Corrupt(
                 "row delta reader is poisoned".to_string(),
             ));
         }
-        let result = self.lookup_inner(table, primary_key);
+        let result = self.lookup_inner(table, primary_key, allocations);
         if result.as_ref().is_err_and(should_poison) {
             self.poisoned.store(true, Ordering::Release);
         }
@@ -593,6 +608,7 @@ impl RelationalRowDeltaReader {
         &self,
         table: &str,
         primary_key: &RelationalKey,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
     ) -> Result<
         (
             Option<RelationalRowPageRecoveredValue>,
@@ -600,7 +616,7 @@ impl RelationalRowDeltaReader {
         ),
         RelationalRowDeltaError,
     > {
-        lookup_runs(
+        lookup_runs_with_allocations(
             RowDeltaRunContext {
                 directory: &self.directory,
                 base: self.manifest.base,
@@ -612,23 +628,9 @@ impl RelationalRowDeltaReader {
             &self.manifest.runs,
             table,
             primary_key,
+            allocations,
         )
     }
-}
-
-pub(super) fn lookup_runs(
-    context: RowDeltaRunContext<'_>,
-    runs: &[RowDeltaRunDescriptor],
-    table: &str,
-    primary_key: &RelationalKey,
-) -> Result<
-    (
-        Option<RelationalRowPageRecoveredValue>,
-        RelationalRowDeltaReadReport,
-    ),
-    RelationalRowDeltaError,
-> {
-    lookup_runs_with_allocations(context, runs, table, primary_key, None)
 }
 
 pub(super) fn lookup_runs_with_allocations(

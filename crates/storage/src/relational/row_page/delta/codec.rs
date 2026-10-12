@@ -21,7 +21,6 @@ use crate::file_io::{self as fs, File, OpenOptions};
 use crate::relational::row_page::{RelationalRowPageRootReader, RelationalRowPageTableRoot};
 use crate::relational::{RelationalRecoverySourceIdentity, RELATIONAL_RECOVERY_SOURCE_BYTES};
 use hawdb_integrity::{IntegrityDigest, IntegrityHasher, Sha256Digest, SHA256_BYTES};
-use std::collections::BTreeMap;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
@@ -859,13 +858,13 @@ pub(super) struct RunWrite<'a> {
     pub delta_generation: u64,
     pub schema_set_digest: Sha256Digest,
     pub ordinal: u32,
-    pub entries: &'a BTreeMap<RowDeltaKey, RowDeltaValue>,
+    pub entries: &'a super::DirtyEntries,
     pub lower_bound: RowDeltaBound,
     pub upper_bound: RowDeltaBound,
 }
 
 pub(super) fn estimated_run_encoded_len(
-    entries: &BTreeMap<RowDeltaKey, RowDeltaValue>,
+    entries: &super::DirtyEntries,
 ) -> Result<u64, RelationalRowDeltaError> {
     let descriptor_bytes = u64::try_from(entries.len())
         .ok()
@@ -1008,7 +1007,7 @@ pub(super) fn write_run(
         content_hasher.update(&descriptor);
     }
     debug_assert_eq!(payload_offset, payload_bytes);
-    for (key, value) in run.entries {
+    for (key, value) in run.entries.iter() {
         file.write_all(&key.encoded_primary_key)
             .map_err(durability("write row delta primary key"))?;
         file.write_all(&value.encoded_row)

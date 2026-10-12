@@ -15,16 +15,93 @@
 use super::*;
 use hawdb_core::Uuid;
 
-pub(super) fn encode_row(
+pub(super) fn encode_row_with_allocations(
     row: &RelationalRow,
     column_count: usize,
     limits: RelationalRowPageLimits,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
 ) -> Result<Vec<u8>, RelationalRowPageError> {
-    super::encoding::encode_row(row, column_count, limits, &super::encoding::NoWork)
+    match allocations {
+        Some(output) => {
+            let scratch = crate::background::CheckpointDecodeContext {
+                work: output.work.clone(),
+                memory: Default::default(),
+            };
+            super::encoding::encode_row(
+                row,
+                column_count,
+                limits,
+                &super::encoding::AllocatedRowWork {
+                    output,
+                    scratch: &scratch,
+                },
+            )
+        }
+        None => super::encoding::encode_row(row, column_count, limits, &super::encoding::NoWork),
+    }
 }
 
-pub(super) fn encode_value_with_work<W: super::encoding::EncodeWork>(
-    encoded: &mut Vec<u8>,
+pub(super) trait ValueOutput {
+    fn push(&mut self, byte: u8) -> Result<(), RelationalRowPageError>;
+    fn extend_from_slice(&mut self, bytes: &[u8]) -> Result<(), RelationalRowPageError>;
+    fn append<W: super::encoding::EncodeWork>(
+        &mut self,
+        bytes: &[u8],
+        work: &W,
+    ) -> Result<(), RelationalRowPageError>;
+}
+
+impl ValueOutput for Vec<u8> {
+    fn push(&mut self, byte: u8) -> Result<(), RelationalRowPageError> {
+        Vec::push(self, byte);
+        Ok(())
+    }
+    fn extend_from_slice(&mut self, bytes: &[u8]) -> Result<(), RelationalRowPageError> {
+        Vec::extend_from_slice(self, bytes);
+        Ok(())
+    }
+    fn append<W: super::encoding::EncodeWork>(
+        &mut self,
+        bytes: &[u8],
+        work: &W,
+    ) -> Result<(), RelationalRowPageError> {
+        work.append(self, bytes)
+    }
+}
+
+#[derive(Default)]
+pub(super) struct CountingValueOutput {
+    pub(super) length: usize,
+}
+
+impl CountingValueOutput {
+    fn add(&mut self, bytes: usize) -> Result<(), RelationalRowPageError> {
+        self.length = self.length.checked_add(bytes).ok_or_else(|| {
+            RelationalRowPageError::Admission("encoded value length overflow".into())
+        })?;
+        Ok(())
+    }
+}
+
+impl ValueOutput for CountingValueOutput {
+    fn push(&mut self, _: u8) -> Result<(), RelationalRowPageError> {
+        self.add(1)
+    }
+    fn extend_from_slice(&mut self, bytes: &[u8]) -> Result<(), RelationalRowPageError> {
+        self.add(bytes.len())
+    }
+    fn append<W: super::encoding::EncodeWork>(
+        &mut self,
+        bytes: &[u8],
+        work: &W,
+    ) -> Result<(), RelationalRowPageError> {
+        self.add(bytes.len())?;
+        work.checkpoint()
+    }
+}
+
+pub(super) fn encode_value_with_work<W: super::encoding::EncodeWork, O: ValueOutput>(
+    encoded: &mut O,
     value: &RelationalValue,
     limits: RelationalRowPageLimits,
     work: &W,
@@ -32,46 +109,46 @@ pub(super) fn encode_value_with_work<W: super::encoding::EncodeWork>(
     use super::encoding::EncodeUnit;
     let unit = work.start_unit()?;
     match value {
-        RelationalValue::Null => encoded.push(0),
+        RelationalValue::Null => encoded.push(0)?,
         RelationalValue::Boolean(value) => {
-            encoded.push(1);
-            encoded.push(u8::from(*value));
+            encoded.push(1)?;
+            encoded.push(u8::from(*value))?;
         }
         RelationalValue::BigInt(value) => {
-            encoded.push(2);
-            encoded.extend_from_slice(&value.to_le_bytes());
+            encoded.push(2)?;
+            encoded.extend_from_slice(&value.to_le_bytes())?;
         }
         RelationalValue::DoublePrecision(value) => {
-            encoded.push(3);
-            encoded.extend_from_slice(&value.to_bits().to_le_bytes());
+            encoded.push(3)?;
+            encoded.extend_from_slice(&value.to_bits().to_le_bytes())?;
         }
         RelationalValue::Text(value) => {
             validate_inline_value_len(value.len(), limits)?;
-            encoded.push(4);
-            encoded.extend_from_slice(&u32_len(value.len(), "TEXT length")?.to_le_bytes());
+            encoded.push(4)?;
+            encoded.extend_from_slice(&u32_len(value.len(), "TEXT length")?.to_le_bytes())?;
             unit.finish();
-            work.append(encoded, value.as_bytes())?;
+            encoded.append(value.as_bytes(), work)?;
             return work.checkpoint();
         }
         RelationalValue::Bytea(value) => {
             validate_inline_value_len(value.len(), limits)?;
-            encoded.push(5);
-            encoded.extend_from_slice(&u32_len(value.len(), "BYTEA length")?.to_le_bytes());
+            encoded.push(5)?;
+            encoded.extend_from_slice(&u32_len(value.len(), "BYTEA length")?.to_le_bytes())?;
             unit.finish();
-            work.append(encoded, value)?;
+            encoded.append(value, work)?;
             return work.checkpoint();
         }
         RelationalValue::Uuid(value) => {
-            encoded.push(7);
-            encoded.extend_from_slice(value.as_bytes());
+            encoded.push(7)?;
+            encoded.extend_from_slice(value.as_bytes())?;
         }
         RelationalValue::Overflow(reference) => {
             validate_overflow_shape(reference, limits, ErrorClass::Admission)?;
-            encoded.push(6);
-            encoded.push(scalar_type_tag(reference.scalar_type));
-            encoded.extend_from_slice(&reference.compressed_bytes.to_le_bytes());
-            encoded.extend_from_slice(&reference.uncompressed_bytes.to_le_bytes());
-            encoded.extend_from_slice(reference.digest.as_bytes());
+            encoded.push(6)?;
+            encoded.push(scalar_type_tag(reference.scalar_type))?;
+            encoded.extend_from_slice(&reference.compressed_bytes.to_le_bytes())?;
+            encoded.extend_from_slice(&reference.uncompressed_bytes.to_le_bytes())?;
+            encoded.extend_from_slice(reference.digest.as_bytes())?;
         }
     }
     unit.finish();
