@@ -637,3 +637,45 @@ bounds. The B-tree allocation estimate relies on the pinned Rust layout.
 Allocator fragmentation, process residency, host handoff, and crash safety
 require separate qualification; these ownership invariants do not establish
 those broader properties.
+
+
+## Full-node projection and symbol ownership
+
+Ordinary `RETURN n` is not just a node-record view. The expression runtime
+clones the property map and overwrites its `_id` and `labels` entries with
+synthetic identity and catalog-derived label names. Retaining a row Arc alone
+therefore does not qualify source reuse for this logical result. A leased
+projection must preserve those shadowing semantics and must not silently
+substitute raw properties or label IDs for the existing logical fields.
+
+The catalog now stores immutable label owners internally. `Label` and the
+borrowed `labels()` / `label_name()` interfaces remain unchanged, as do catalog
+replay/import and persistence encodings. Snapshot cloning shares the original
+label strings; label replacement publishes a new owner. The internal
+`retain_label_name_with_admission` preflights the full Arc/Label allocation and
+string capacity, calls host admission, validates the returned byte allowance,
+then captures only that label owner. Missing IDs skip admission, and typed host
+refusals remain unchanged. The label drops before its allocation token.
+
+For a label owner `L`, let `B(L)` be the checked inline Label size, Arc header,
+and string capacity under the pinned Rust layout. Capture occurs only after
+`permit.bytes() >= B(L)`. Thus refusal acquires no additional label owner, a
+retained name preserves its source allocation after catalog replacement/drop,
+and unrelated symbols are not retained by this lease. Container/adapter
+metadata, allocator fragmentation, and process residency are separate bounds.
+Callers remain responsible for a real query/runtime policy; a claimed byte
+allowance alone is not a whole-process admission mechanism.
+
+Full-node query activation still requires one coherent admitted owner for the
+row, every referenced symbol, virtual-field descriptors, and independent host
+views. Shared source capacity must stay charged until the last view is released,
+including after cursor close/cancellation. Result-budget accounting must include
+source payload retained by a delivered result, not just descriptor metadata.
+Admission must precede row/symbol capture and must preserve retryable versus
+working-unit refusal. A generation nonce does not replace pointer/range proof.
+
+This symbol primitive does not enable retained full-node queries or construct
+Arrow layouts. Native row views and Arrow compatibility require separate
+qualification; a B-tree label set and recursive `Value` map are not contiguous
+Arrow arrays. Property-only projection, complete-node projection, host handoff,
+performance, and whole-operation memory remain explicit open gates.
