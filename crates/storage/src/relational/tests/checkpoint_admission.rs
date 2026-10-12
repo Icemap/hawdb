@@ -622,3 +622,101 @@ fn controlled_column_positions_share_results_errors_and_deny_capacity_before_all
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
+
+#[test]
+fn controlled_row_page_copy_denies_before_wide_keys_and_retains_snapshot_leases() {
+    use crate::background::CheckpointWorkContext;
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let id = "k".repeat(128 * 1024);
+    let key = RelationalKey(vec![RelationalValue::Text(id.clone())]);
+    let source = RelationalRowPages::from_map(BTreeMap::from([(
+        key.clone(),
+        upsert_row(&id, "owner", "body"),
+    )]));
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let mut target = source.clone();
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = target.prepare_checkpoint_copy_for_key(&key, &work);
+        let wide_allocations = observer.finish();
+        if succeeds {
+            result.unwrap();
+            assert!(!target.pages.shares_storage_with(&source.pages));
+            assert_eq!(target.shared_page_count(&source), 0);
+            assert_eq!(target.get(&key), source.get(&key));
+            let retained = target.clone();
+            drop(target);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                if available_bytes <= ceiling - 128 * 1024)
+            );
+            assert_eq!(retained.get(&key), source.get(&key));
+            drop(retained);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(wide_allocations, 0);
+            assert!(target.pages.shares_storage_with(&source.pages));
+            assert_eq!(target.shared_page_count(&source), 1);
+            assert_eq!(target.get(&key), source.get(&key));
+            drop(target);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
+
+#[test]
+fn controlled_row_page_copy_cancellation_keeps_directory_and_retries() {
+    use crate::background::CheckpointWorkProbe;
+    use hawdb_qos::{LocalQosPolicy, LocalQosScheduler};
+    let key = RelationalKey(vec![RelationalValue::Text("id".into())]);
+    let source = RelationalRowPages::from_map(BTreeMap::from([(
+        key.clone(),
+        upsert_row("id", "owner", "body"),
+    )]));
+    let mut target = source.clone();
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe
+        .cancel_after
+        .store(2, std::sync::atomic::Ordering::SeqCst);
+    let scheduler = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let work = probe.context(scheduler.clone());
+    assert!(matches!(
+        target.prepare_checkpoint_copy_for_key(&key, &work),
+        Err(RelationalError::Admission(_))
+    ));
+    probe.assert_released(&scheduler);
+    assert!(target.pages.shares_storage_with(&source.pages));
+    assert_eq!(target.shared_page_count(&source), 1);
+    assert_eq!(target.get(&key), source.get(&key));
+    target
+        .prepare_checkpoint_copy_for_key(&key, &Default::default())
+        .unwrap();
+    assert!(!target.pages.shares_storage_with(&source.pages));
+    assert_eq!(target.get(&key), source.get(&key));
+}

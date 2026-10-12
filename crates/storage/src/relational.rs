@@ -1370,6 +1370,85 @@ struct RelationalRowPages {
 }
 
 impl RelationalRowPages {
+    fn prepare_checkpoint_copy_for_key(
+        &mut self,
+        key: &RelationalKey,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), RelationalError> {
+        let Some(index) = self.page_index(key) else {
+            return Ok(());
+        };
+        let copy_directory = self.pages.is_shared();
+        let copy_page = copy_directory || self.pages[index].is_shared();
+        if !copy_page {
+            return Ok(());
+        }
+        let admission =
+            |error: hawdb_core::HawDBError| RelationalError::Admission(error.to_string());
+        // Inventories precede temporary buffers, so denied copies destroy data first.
+        let directory_allocations = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let page_allocations = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let mut directory = if copy_directory {
+            let mut pages = directory_allocations
+                .vector_capacity(self.pages.len())
+                .map_err(admission)?;
+            directory_allocations
+                .reserve(RelationalRowDirectory::checkpoint_ownership_bytes())
+                .map_err(admission)?;
+            for page in self.pages.iter() {
+                let unit = work
+                    .start_unit()
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                pages.push(page.clone());
+                unit.finish();
+            }
+            Some(pages)
+        } else {
+            None
+        };
+        let node_bytes = (self.pages[index].len() / 4 + 2)
+            .checked_mul(crate::cow::checkpoint_tree_node_bytes::<
+                RelationalKey,
+                RelationalRow,
+            >())
+            .ok_or_else(|| RelationalError::Admission("row page copy capacity overflow".into()))?;
+        page_allocations.reserve(node_bytes).map_err(admission)?;
+        page_allocations
+            .reserve(RelationalRowPage::checkpoint_ownership_bytes())
+            .map_err(admission)?;
+        let mut rows = BTreeMap::new();
+        for (key, row) in self.pages[index].iter() {
+            let key = key.clone_with_allocations(&page_allocations)?;
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            rows.insert(key, row.clone());
+            unit.finish();
+        }
+        work.checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let replacement = crate::cow::CowSegment::from_checkpoint_value(
+            rows,
+            page_allocations.memory.into_inner(),
+        );
+        if let Some(mut pages) = directory.take() {
+            pages[index] = replacement;
+            self.pages = crate::cow::CowSegment::from_checkpoint_value(
+                pages,
+                directory_allocations.memory.into_inner(),
+            );
+        } else {
+            self.pages.get_unique_mut().expect("private row directory")[index] = replacement;
+        }
+        Ok(())
+    }
+
     fn from_map(rows: BTreeMap<RelationalKey, RelationalRow>) -> Self {
         let len = rows.len();
         let mut pages = Vec::new();
@@ -2411,6 +2490,8 @@ impl RelationalState {
                 constraint_index,
                 index_mode,
                 capture_mutation_outcomes: true,
+                checkpoint_allocations: None,
+                checkpoint_access: None,
             },
         )?;
         Ok(RelationalTransactionStageResult {
@@ -2439,6 +2520,8 @@ impl RelationalState {
             overflow_config,
             TransactionApplyOptions {
                 capture_mutation_outcomes: true,
+                checkpoint_allocations: None,
+                checkpoint_access: None,
                 ..TransactionApplyOptions::materialized()
             },
         )?;
@@ -2694,6 +2777,8 @@ impl RelationalState {
                 constraint_index: None,
                 index_mode: TransactionIndexMode::AuthoritativeRecovery,
                 capture_mutation_outcomes: false,
+                checkpoint_allocations: None,
+                checkpoint_access: None,
             },
         )?;
         Ok((
@@ -2771,6 +2856,8 @@ impl RelationalState {
                 constraint_index: Some(constraint_index),
                 index_mode: TransactionIndexMode::Authoritative,
                 capture_mutation_outcomes: true,
+                checkpoint_allocations: None,
+                checkpoint_access: None,
                 ..TransactionApplyOptions::materialized()
             },
         )?;
@@ -2826,6 +2913,8 @@ impl RelationalState {
                 constraint_index: Some(constraint_index),
                 index_mode: TransactionIndexMode::Authoritative,
                 capture_mutation_outcomes: false,
+                checkpoint_allocations: None,
+                checkpoint_access: None,
             },
         )?;
         Ok((
@@ -2881,6 +2970,8 @@ impl RelationalState {
                 constraint_index: Some(constraint_index),
                 index_mode: TransactionIndexMode::Authoritative,
                 capture_mutation_outcomes: false,
+                checkpoint_allocations: None,
+                checkpoint_access: None,
             },
         )?;
         Ok((
@@ -2937,6 +3028,8 @@ impl RelationalState {
                 constraint_index: Some(constraint_index),
                 index_mode: TransactionIndexMode::Authoritative,
                 capture_mutation_outcomes: true,
+                checkpoint_allocations: None,
+                checkpoint_access: None,
             },
         )?;
         Ok((
@@ -2993,6 +3086,8 @@ impl RelationalState {
                 constraint_index: None,
                 index_mode: TransactionIndexMode::AuthoritativeRecovery,
                 capture_mutation_outcomes: false,
+                checkpoint_allocations: None,
+                checkpoint_access: None,
             },
         )?;
         let replay_access =
@@ -3060,15 +3155,40 @@ impl RelationalState {
             row_capture_limits,
             allocations,
         )?;
-        let (staged, index_capture, row_capture) = workspace
-            .stage_transaction_for_authoritative_recovery_with_replay_access(
-                transaction,
-                mutation_limits,
-                overflow_config,
-                index_capture_limits,
-                row_capture_limits,
-                expected_replay_access,
-            )?;
+        admit_transaction(&transaction, mutation_limits)?;
+        if transaction.changes_index_schema() {
+            return Err(RelationalError::Admission("authoritative relational recovery rejects schema-changing WAL until new canonical row and index generations are published".into()));
+        }
+        let TransactionApplyResult {
+            state: staged,
+            index_capture,
+            row_capture,
+            replay_access,
+            ..
+        } = apply_transaction_inner(
+            &workspace,
+            transaction,
+            mutation_limits,
+            overflow_config,
+            TransactionApplyOptions {
+                index_capture_limits: Some(index_capture_limits),
+                row_capture_limits: Some(row_capture_limits),
+                replay_access_limits: Some(row_capture_limits),
+                primary_key_capture_limits: None,
+                constraint_index: None,
+                index_mode: TransactionIndexMode::AuthoritativeRecovery,
+                capture_mutation_outcomes: false,
+                checkpoint_allocations: allocations,
+                checkpoint_access: Some(expected_replay_access),
+            },
+        )?;
+        if replay_access.as_ref() != Some(expected_replay_access) {
+            return Err(RelationalError::Corruption(
+                "relational WAL replay access set does not match the recovered transaction".into(),
+            ));
+        }
+        let index_capture = index_capture.expect("index recovery capture");
+        let row_capture = row_capture.expect("row recovery capture");
         let metadata = self.merge_sparse_recovery_workspace_with_work_context(
             &workspace,
             &staged,
@@ -3795,6 +3915,8 @@ impl RelationalState {
                 constraint_index: None,
                 index_mode: TransactionIndexMode::AuthoritativeRecovery,
                 capture_mutation_outcomes: false,
+                checkpoint_allocations: None,
+                checkpoint_access: None,
             },
         )?;
         Ok((
@@ -5025,6 +5147,8 @@ struct TransactionApplyOptions<'a> {
     constraint_index: Option<&'a dyn RelationalConstraintIndex>,
     index_mode: TransactionIndexMode,
     capture_mutation_outcomes: bool,
+    checkpoint_allocations: Option<&'a crate::background::CheckpointDecodeContext>,
+    checkpoint_access: Option<&'a RelationalReplayAccessSet>,
 }
 
 impl TransactionApplyOptions<'_> {
@@ -5037,6 +5161,8 @@ impl TransactionApplyOptions<'_> {
             constraint_index: None,
             index_mode: TransactionIndexMode::Materialized,
             capture_mutation_outcomes: false,
+            checkpoint_allocations: None,
+            checkpoint_access: None,
         }
     }
 }
@@ -5067,6 +5193,8 @@ fn apply_transaction_with_index_changes(
             constraint_index,
             index_mode,
             capture_mutation_outcomes: false,
+            checkpoint_allocations: None,
+            checkpoint_access: None,
         },
     )?;
     Ok((
@@ -5254,8 +5382,31 @@ fn apply_transaction_inner(
         constraint_index,
         index_mode,
         capture_mutation_outcomes,
+        checkpoint_allocations,
+        checkpoint_access,
     } = options;
-    let mut next = state.clone();
+    let mut next = match checkpoint_allocations {
+        Some(context) => state.clone_metadata_with_work_context(&context.work)?,
+        None => state.clone(),
+    };
+    if let (Some(context), Some(access)) = (checkpoint_allocations, checkpoint_access) {
+        for entry in access.entries() {
+            let Some(segment) = next.segments.get_mut(&entry.table) else {
+                continue;
+            };
+            if Arc::strong_count(segment) > 1 {
+                context
+                    .reserve(
+                        std::mem::size_of::<RelationalTableSegment>()
+                            + 2 * std::mem::size_of::<usize>(),
+                    )
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            }
+            Arc::make_mut(segment)
+                .rows
+                .prepare_checkpoint_copy_for_key(&entry.primary_key, &context.work)?;
+        }
+    }
     match index_mode {
         TransactionIndexMode::Materialized => {
             if !state.materialized_index_postings_resident {

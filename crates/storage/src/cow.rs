@@ -99,6 +99,10 @@ impl<T: Clone> DerefMut for CowSegment<T> {
 
 #[doc(hidden)]
 impl<T> CowSegment<T> {
+    pub(crate) fn is_shared(&self) -> bool {
+        Arc::strong_count(&self.0) > 1
+    }
+
     pub(crate) fn get_unique_mut(&mut self) -> Option<&mut T> {
         Arc::get_mut(&mut self.0).map(|data| &mut data.value)
     }
