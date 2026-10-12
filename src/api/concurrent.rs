@@ -432,6 +432,7 @@ impl ConcurrentDatabase {
                     .as_ref()
                     .ok()
                     .map(|profiled| &profiled.execution_profile),
+                retained_profile: None,
                 access_control: None,
                 parse_nanos,
             },

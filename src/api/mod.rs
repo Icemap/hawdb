@@ -754,6 +754,7 @@ impl ProjectionRelationalReadBinding {
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct StatementExecutionContext<'a> {
     execution_profile: Option<&'a executor::ReadExecutionProfile>,
+    retained_profile: Option<&'a RetainedQueryProfile>,
     access_control: Option<&'a QueryAccessControlContext>,
     parse_nanos: u64,
 }

@@ -131,10 +131,49 @@ impl RetainedNodeView {
     }
 }
 
+struct NodeObservation {
+    recorder: super::super::observability::StatementRecorder,
+    query: String,
+    statement_kind: &'static str,
+    started: hawdb_core::time::Instant,
+    parse_nanos: u64,
+    // Release query text/recorder ownership before their capacity reservations.
+    _memory: QueryMemoryLease,
+    _runtime_memory: RuntimeRetainedMemory,
+}
+impl std::fmt::Debug for NodeObservation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NodeObservation")
+            .field("statement_kind", &self.statement_kind)
+            .finish_non_exhaustive()
+    }
+}
+impl NodeObservation {
+    fn record(
+        self,
+        result: std::result::Result<usize, &dyn std::fmt::Display>,
+        profile: &RetainedQueryProfile,
+    ) {
+        self.recorder.record_statement_row_count(
+            "cypher",
+            &self.query,
+            self.statement_kind,
+            self.started,
+            result,
+            super::super::StatementExecutionContext {
+                parse_nanos: self.parse_nanos,
+                retained_profile: result.is_ok().then_some(profile),
+                ..Default::default()
+            },
+        );
+    }
+}
+
 /// One-row active pull, provisional until successful EOF. Multi-match seeks
 /// refuse explicitly rather than silently truncating the logical query.
 #[derive(Debug)]
 pub struct RetainedNodeCursor {
+    observation: Option<NodeObservation>,
     view: Option<RetainedNodeView>,
     delivered: bool,
     status: RetainedQueryStatus,
@@ -164,10 +203,18 @@ impl RetainedNodeCursor {
         }
         self.profile.pulls += 1;
         if self.delivered || self.view.is_none() {
-            self.status = RetainedQueryStatus::Completed;
-            if let Some(view) = self.view.take() {
-                view.source.status.store(1, Ordering::Release);
+            let observation = self.observation.take();
+            let completion = NodeCompletionGuard {
+                cursor: self,
+                armed: true,
+            };
+            if let Some(observation) = observation {
+                observation.record(
+                    Ok(completion.cursor.profile.emitted_rows),
+                    &completion.cursor.profile,
+                );
             }
+            completion.complete();
             return Ok(None);
         }
         let result = self.view.as_ref().expect("source checked").try_retain();
@@ -192,6 +239,9 @@ impl RetainedNodeCursor {
                 if let Some(view) = self.view.take() {
                     view.source.status.store(2, Ordering::Release);
                 }
+                if let Some(observation) = self.observation.take() {
+                    observation.record(Err(&error), &self.profile);
+                }
                 Err(error)
             }
         }
@@ -202,12 +252,42 @@ impl RetainedNodeCursor {
                 view.source.status.store(3, Ordering::Release);
             }
             self.status = RetainedQueryStatus::Closed;
+            if let Some(observation) = self.observation.take() {
+                observation.record(Err(&RetainedQueryError::Closed), &self.profile);
+            }
         }
     }
 }
 impl Drop for RetainedNodeCursor {
     fn drop(&mut self) {
         self.close();
+    }
+}
+
+// Successful EOF is published only after observation callbacks return. A sink
+// panic preserves unwinding but never leaves exported provisional views complete.
+struct NodeCompletionGuard<'a> {
+    cursor: &'a mut RetainedNodeCursor,
+    armed: bool,
+}
+impl NodeCompletionGuard<'_> {
+    fn complete(mut self) {
+        self.armed = false;
+        self.cursor.status = RetainedQueryStatus::Completed;
+        if let Some(view) = self.cursor.view.take() {
+            view.source.status.store(1, Ordering::Release);
+        }
+    }
+}
+impl Drop for NodeCompletionGuard<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            self.cursor.status = RetainedQueryStatus::Failed;
+            self.cursor.terminal_error = Some(RetainedQueryError::AdapterDelivery);
+            if let Some(view) = self.cursor.view.take() {
+                view.source.status.store(2, Ordering::Release);
+            }
+        }
     }
 }
 
@@ -277,80 +357,137 @@ impl Database {
         parameters: &BTreeMap<String, Value>,
         options: RetainedQueryOptions,
     ) -> Result<RetainedNodeCursor> {
+        let execution_started = hawdb_core::time::Instant::now();
         let state = self.runtime.get()?;
         state.store.ensure_usable()?;
         let prepared = query_runtime::parse_runtime_execution(cypher)?;
-        super::super::query_work_request_for_statement(
-            &self.system_variables,
-            &prepared.statement,
-        )?;
-        let optimized = self.optimized_query_plan_for_request(
-            cypher,
-            &prepared.statement,
-            parameters,
-            None,
-            super::super::PlanTraceMode::Template,
-            None,
-        )?;
-        let plan =
-            point_plan(&optimized.physical_plan).ok_or(RetainedQueryError::UnsupportedPlan)?;
-        if state
-            .store
-            .try_scan_materialized_nodes_after(None, None)?
-            .is_none()
-        {
-            return Err(RetainedQueryError::CopyRequired);
+        let started = prepared.statement_started.unwrap_or(execution_started);
+        let parse_nanos = prepared.parse_metrics.elapsed_nanos;
+        let statement_kind = super::super::statement_kind(&prepared.statement);
+        let result = (|| {
+            super::super::query_work_request_for_statement(
+                &self.system_variables,
+                &prepared.statement,
+            )?;
+            let optimized = self.optimized_query_plan_for_request(
+                cypher,
+                &prepared.statement,
+                parameters,
+                None,
+                super::super::PlanTraceMode::Template,
+                None,
+            )?;
+            let plan =
+                point_plan(&optimized.physical_plan).ok_or(RetainedQueryError::UnsupportedPlan)?;
+            if state
+                .store
+                .try_scan_materialized_nodes_after(None, None)?
+                .is_none()
+            {
+                return Err(RetainedQueryError::CopyRequired);
+            }
+            let ledger = QueryMemoryLedger::new(self.config.execution_memory.query_memory_bytes);
+            let account = ledger.account(
+                QueryMemoryClass::ResultMaterialization,
+                "retained_node",
+                self.config.execution_memory.query_memory_bytes,
+            );
+            let control_bytes = std::mem::size_of::<RetainedNodeCursor>()
+                .checked_add(cypher.len())
+                .and_then(|bytes| bytes.checked_add(64))
+                .ok_or(RetainedQueryError::SizeOverflow)?;
+            let working_limit = options
+                .batch_bytes
+                .get()
+                .min(self.config.execution_memory.batch_payload_bytes.get());
+            if control_bytes > working_limit {
+                return Err(RetainedQueryError::WorkingUnitTooLarge);
+            }
+            let governor = self
+                .retained_runtime
+                .governor(options.minimum_shared_handles.get())?;
+            let allowance = governor.snapshot().limits.result_budget_bytes;
+            let permit = governor.try_admit(
+                RuntimeWorkRequest::foreground_query(0, allowance).with_blocking(false),
+            )?;
+            let memory = account.reserve(control_bytes)?;
+            let runtime_memory = permit.reserve_retained_memory(control_bytes as u64)?;
+            drop(permit);
+            let observation = NodeObservation {
+                recorder: self.statement_recorder(),
+                query: cypher.to_owned(),
+                statement_kind,
+                started,
+                parse_nanos,
+                _memory: memory,
+                _runtime_memory: runtime_memory,
+            };
+            let mut profile = RetainedQueryProfile {
+                source_snapshot_rows: state.store.node_count_for_label(None),
+                query_peak_bytes: ledger.snapshot().peak_bytes,
+                ..Default::default()
+            };
+            let view = if plan.empty {
+                None
+            } else {
+                let label = state
+                    .catalog
+                    .label_id(plan.label)
+                    .ok_or(RetainedQueryError::UnsupportedPlan)?;
+                let mut found =
+                    state
+                        .store
+                        .seek_nodes_by_property(label, plan.property, plan.value);
+                match found.next() {
+                    None => None,
+                    Some(row) => {
+                        if found.next().is_some() {
+                            return Err(RetainedQueryError::UnsupportedPlan);
+                        }
+                        Some(admit_node(
+                            &state.store,
+                            &state.catalog,
+                            row.id,
+                            plan.column,
+                            NodeAdmission {
+                                config: &self.config,
+                                runtime: &self.retained_runtime,
+                                options,
+                                ledger: &ledger,
+                                account: &account,
+                                control_bytes,
+                            },
+                            &mut profile,
+                        )?)
+                    }
+                }
+            };
+            let payload_bytes = profile.output_payload_bytes;
+            profile.output_payload_bytes = 0;
+            Ok(RetainedNodeCursor {
+                observation: Some(observation),
+                view,
+                delivered: false,
+                status: RetainedQueryStatus::Open,
+                profile,
+                terminal_error: None,
+                payload_bytes,
+            })
+        })();
+        if let Err(error) = &result {
+            self.record_statement_row_count(
+                "cypher",
+                cypher,
+                statement_kind,
+                started,
+                Err(error),
+                super::super::StatementExecutionContext {
+                    parse_nanos,
+                    ..Default::default()
+                },
+            );
         }
-        let mut profile = RetainedQueryProfile {
-            source_snapshot_rows: state.store.node_count_for_label(None),
-            ..Default::default()
-        };
-        let empty = || RetainedNodeCursor {
-            view: None,
-            delivered: false,
-            status: RetainedQueryStatus::Open,
-            profile,
-            terminal_error: None,
-            payload_bytes: 0,
-        };
-        if plan.empty {
-            return Ok(empty());
-        }
-        let label = state
-            .catalog
-            .label_id(plan.label)
-            .ok_or(RetainedQueryError::UnsupportedPlan)?;
-        let mut found = state
-            .store
-            .seek_nodes_by_property(label, plan.property, plan.value);
-        let Some(row) = found.next() else {
-            return Ok(empty());
-        };
-        if found.next().is_some() {
-            return Err(RetainedQueryError::UnsupportedPlan);
-        }
-        let view = admit_node(
-            &state.store,
-            &state.catalog,
-            row.id,
-            plan.column,
-            NodeAdmission {
-                config: &self.config,
-                runtime: &self.retained_runtime,
-                options,
-            },
-            &mut profile,
-        )?;
-        let payload_bytes = profile.output_payload_bytes;
-        profile.output_payload_bytes = 0;
-        Ok(RetainedNodeCursor {
-            view: Some(view),
-            delivered: false,
-            status: RetainedQueryStatus::Open,
-            profile,
-            terminal_error: None,
-            payload_bytes,
-        })
+        result
     }
 }
 
@@ -358,6 +495,9 @@ struct NodeAdmission<'a> {
     config: &'a DatabaseConfig,
     runtime: &'a RetainedRuntime,
     options: RetainedQueryOptions,
+    ledger: &'a QueryMemoryLedger,
+    account: &'a QueryMemoryAccount,
+    control_bytes: usize,
 }
 
 fn admit_node(
@@ -372,6 +512,9 @@ fn admit_node(
         config,
         runtime,
         options,
+        ledger,
+        account,
+        control_bytes,
     } = admission;
     let row = store.node(id).ok_or(RetainedQueryError::UnsupportedPlan)?;
     let symbol_bytes = row.labels.iter().try_fold(0usize, |total, id| {
@@ -394,18 +537,11 @@ fn admit_node(
         })
         .and_then(|bytes| bytes.checked_add(column.len()))
         .and_then(|bytes| bytes.checked_add(options.adapter_metadata_bytes))
-        .and_then(|bytes| bytes.checked_add(std::mem::size_of::<RetainedNodeCursor>() + 64))
         .ok_or(RetainedQueryError::SizeOverflow)?;
     let governor = runtime.governor(options.minimum_shared_handles.get())?;
     let allowance = governor.snapshot().limits.result_budget_bytes;
     let permit = governor
         .try_admit(RuntimeWorkRequest::foreground_query(0, allowance).with_blocking(false))?;
-    let ledger = QueryMemoryLedger::new(config.execution_memory.query_memory_bytes);
-    let account = ledger.account(
-        QueryMemoryClass::ResultMaterialization,
-        "retained_node",
-        config.execution_memory.query_memory_bytes,
-    );
     let mut charges = None;
     let read = store.materialized_node_point_read_with_admission(id, |row_bytes| -> Result<_> {
         let capacity = row_bytes
@@ -413,6 +549,8 @@ fn admit_node(
             .and_then(|bytes| bytes.checked_add(metadata))
             .ok_or(RetainedQueryError::SizeOverflow)?;
         if capacity
+            .checked_add(control_bytes)
+            .ok_or(RetainedQueryError::SizeOverflow)?
             > options
                 .batch_bytes
                 .get()
@@ -490,8 +628,8 @@ fn admit_node(
             labels,
             column: column.to_owned(),
             status: AtomicU8::new(0),
-            account,
-            ledger,
+            account: account.clone(),
+            ledger: ledger.clone(),
             adapter_metadata_bytes: options.adapter_metadata_bytes,
             _memory: memory,
         }),
@@ -687,5 +825,171 @@ mod tests {
         assert!(missing.next_node().unwrap().is_none());
         assert_eq!(missing.profile().source_pinned_rows, 0);
         assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    }
+    #[derive(Debug, Clone)]
+    struct ObservedQuery {
+        digest: String,
+        success: bool,
+        rows: usize,
+        parse_nanos: u64,
+        payload_bytes: usize,
+    }
+    #[derive(Debug, Default)]
+    struct QuerySink(std::sync::Mutex<Vec<ObservedQuery>>);
+    impl crate::telemetry::TelemetrySink for QuerySink {
+        fn record_query(&self, event: crate::telemetry::QueryTelemetry<'_>) {
+            self.0.lock().unwrap().push(ObservedQuery {
+                digest: event.query_digest.to_owned(),
+                success: event.success,
+                rows: event.row_count,
+                parse_nanos: event.parse_nanos,
+                payload_bytes: event.output_payload_bytes,
+            });
+        }
+    }
+
+    #[test]
+    fn node_observation_records_terminal_outcomes_once_without_materializing() {
+        let (mut db, governor) = fixture(2);
+        db.config.slow_query_log_threshold_micros = 0;
+        let sink = Arc::new(QuerySink::default());
+        db.set_telemetry_sink(Some(sink.clone()));
+        db.query_with_params(QUERY, &params()).unwrap();
+        assert_eq!(sink.0.lock().unwrap().len(), 1);
+        let mut cursor = db
+            .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap();
+        let parse_nanos = cursor.observation.as_ref().unwrap().parse_nanos;
+        assert_eq!(sink.0.lock().unwrap().len(), 1);
+        let view = cursor.next_node().unwrap().unwrap();
+        assert_eq!(sink.0.lock().unwrap().len(), 1);
+        assert!(view.try_retain().unwrap_err().is_retryable());
+        assert_eq!(sink.0.lock().unwrap().len(), 1);
+        assert!(cursor.next_node().unwrap().is_none());
+        assert!(cursor.next_node().unwrap().is_none());
+        cursor.close();
+        assert_eq!(sink.0.lock().unwrap().len(), 2);
+        assert!(view.field("text").unwrap().is_some());
+        drop(view);
+        let mut missing = db
+            .query_with_params_retained_node(
+                QUERY,
+                &BTreeMap::from([("key".into(), Value::Int(999))]),
+                RetainedQueryOptions::default(),
+            )
+            .unwrap();
+        assert!(missing.next_node().unwrap().is_none());
+        let options = RetainedQueryOptions {
+            max_result_payload_bytes: Some(0),
+            ..Default::default()
+        };
+        assert!(matches!(
+            db.query_with_params_retained_node(QUERY, &params(), options),
+            Err(RetainedQueryError::ResultBudget { .. })
+        ));
+        let mut closed = db
+            .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap();
+        closed.close();
+        closed.close();
+        drop((cursor, missing, closed));
+        let events = sink.0.lock().unwrap().clone();
+        assert_eq!(events.len(), 5);
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| (event.success, event.rows))
+                .collect::<Vec<_>>(),
+            [(true, 1), (true, 1), (true, 0), (false, 0), (false, 0)]
+        );
+        assert_eq!(events[1].parse_nanos, parse_nanos);
+        assert!(events[1].payload_bytes > 0);
+        assert_eq!(events[1].payload_bytes, events[0].payload_bytes);
+        assert!(events[2..].iter().all(|event| event.payload_bytes == 0));
+        let digest = hawdb_query::QueryIdentity::new("cypher", QUERY);
+        assert!(events
+            .iter()
+            .all(|event| event.digest == digest.query_digest()));
+        let summary = db
+            .statement_summary
+            .borrow()
+            .snapshot()
+            .into_iter()
+            .find(|summary| summary.digest == digest.query_digest())
+            .unwrap();
+        assert_eq!(summary.execution_count, 5);
+        assert_eq!(summary.success_count, 3);
+        assert_eq!(summary.error_count, 2);
+        assert_eq!(summary.total_row_count, 2);
+        assert_eq!(
+            db.slow_query_log_snapshot()
+                .iter()
+                .filter(|record| record.query_digest == digest.query_digest())
+                .count(),
+            3
+        );
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+
+    #[test]
+    fn empty_cursor_control_is_admitted_and_records_after_database_drop() {
+        let (db, governor) = fixture(2);
+        let summary = Arc::clone(&db.statement_summary);
+        let mut cursor = db
+            .query_with_params_retained_node(
+                QUERY,
+                &BTreeMap::from([("key".into(), Value::Int(999))]),
+                RetainedQueryOptions::default(),
+            )
+            .unwrap();
+        assert_eq!(cursor.profile().source_pinned_rows, 0);
+        assert!(cursor.profile().query_peak_bytes > 0);
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert!(governor.snapshot().admitted_memory_bytes > 0);
+        assert_eq!(governor.snapshot().active_foreground_tasks, 0);
+        drop(db);
+        assert!(cursor.next_node().unwrap().is_none());
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        let digest = hawdb_query::QueryIdentity::new("cypher", QUERY);
+        let record = summary
+            .borrow()
+            .snapshot()
+            .into_iter()
+            .find(|record| record.digest == digest.query_digest())
+            .unwrap();
+        assert_eq!(record.execution_count, 1);
+        assert_eq!(record.success_count, 1);
+        assert_eq!(record.total_row_count, 0);
+    }
+    #[test]
+    fn observation_panic_never_completes_provisional_views() {
+        #[derive(Debug)]
+        struct PanickingSink;
+        impl crate::telemetry::TelemetrySink for PanickingSink {
+            fn record_query(&self, _: crate::telemetry::QueryTelemetry<'_>) {
+                panic!("injected query observation panic");
+            }
+        }
+        let (mut db, governor) = fixture(2);
+        db.set_telemetry_sink(Some(Arc::new(PanickingSink)));
+        let mut cursor = db
+            .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap();
+        let view = cursor.next_node().unwrap().unwrap();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { cursor.next_node() }))
+                .is_err()
+        );
+        assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
+        assert_eq!(view.status(), RetainedQueryStatus::Failed);
+        assert!(matches!(
+            cursor.next_node(),
+            Err(RetainedQueryError::AdapterDelivery)
+        ));
+        assert!(view.field("text").unwrap().is_some());
+        drop((db, cursor, view));
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }

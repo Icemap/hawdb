@@ -758,7 +758,7 @@ keep their immutable payload after close; subsequent borrowed access still
 checks source integrity flags. This initial entrypoint does not yet provide
 read-transaction/task-context integration, multiple-node streaming, Python/Go
 handoff, or an Arrow representation. Planning/index-key workspace, ledger and
-allocator residency, process-wide memory, query observability integration,
+allocator residency, process-wide memory, execution/RSS profiling,
 performance, tail latency, and durability remain independent qualification
 gates. Passing the native ownership regressions does not establish the complete
 performance gate or authorize replacing ordinary host query delivery.
@@ -791,3 +791,41 @@ The earlier prototype observations remain separate. Raw observations and the
 standalone driver are preserved in
 [`native_indexed_node_controls_20261012.json`](../bindings/benchmarks/evidence/native_indexed_node_controls_20261012.json).
 Neither run satisfies the complete performance gate.
+
+#### Terminal observation and admitted cursor control
+
+The native cursor shares the ordinary statement-summary, successful slow-log,
+and telemetry recorder. The recorder accepts row counts and typed error display
+references, without constructing an owned `QueryOutput`. Native success is
+recorded exactly once at EOF, including empty results; close records an unfinished
+statement failure. Constructor failures are recorded after successful parsing,
+as in the ordinary query path. Retryable view backpressure does not finish the
+statement. Telemetry receives actual native output payload bytes on successful
+completion; unavailable operator/RSS samples are not synthesized.
+
+Query text and cursor recording state have independent runtime retained-memory
+and query-ledger reservations before their allocation/capture. The selected row
+and recording control use the same query account, and their combined capacity
+must fit the working-unit limit. Empty cursors retain no row/result owner but
+still admit their recording control. EOF/close releases that control; immutable
+exported views retain their own row/result charges. The recorder can finish after
+the database is dropped. An unwind guard marks cursor/views failed if a completion
+callback panics; it never publishes successful EOF before callbacks return.
+
+The guarded repeat uses the same full-field/all-ID fixtures and round policy as
+the prior diagnostic, with statement-summary execution/row/error counts checked
+outside each warmup and timing interval. Its native module SHA-256 was
+`7a7365635313d3bf54240250971ffb03a1efd9f8968ef3ac8b0f4e631c282efd`.
+
+| Nodes | Owned median ns/query | Native median ns/query | Owned/native |
+| --- | --- | --- | --- |
+| 128 | 24,417 | 16,935 | 1.442x |
+| 1,000 | 25,808 | 11,700 | 2.206x |
+| 10,000 | 130,370 | 12,196 | 10.690x |
+
+[Raw observations and driver](../bindings/benchmarks/evidence/native_observed_node_controls_20261012.json)
+remain a same-source API diagnostic. Shared statement recording removes a known
+missing-observation difference, but execution/RSS profiling and retained-result
+admission still differ. No before/after revision improvement or complete
+performance gate is established. Python/Go, Arrow, graph/FTS, writes, mixed/large
+workloads, memory residency, tail latency and durability still require evidence.
