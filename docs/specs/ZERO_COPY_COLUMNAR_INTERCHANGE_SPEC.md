@@ -49,6 +49,40 @@ Related contracts:
 - [Large-document lifecycle](LARGE_DOCUMENT_LIFECYCLE_SPEC.md).
 - [Selected-document hydration](../STREAMING_SEARCH_HYDRATION.md).
 
+## Experimental implementation status
+
+The proposal below retains its broad prospective scope. Experimental work in
+[PR #986](https://github.com/nowledge-co/hawdb/pull/986) adopts narrower,
+explicitly named capabilities; publishing this status does not qualify their
+production use or satisfy the complete performance gate.
+
+| Capability | Implemented direction | Remaining boundary |
+| --- | --- | --- |
+| Retained numeric scan/filter/project | Bounded produced numeric buffers, native/foreign ownership, compatible Arrow C Data/C Stream and Python capsules | These buffers are constructed from row properties; strict canonical source reuse still refuses |
+| Indexed single-match complete node | Original immutable row/catalog owners, recursive native/C/Go/Python views | Materialized actual index plans only; scans, multi-match and hydration refuse, with no Arrow repacking fallback |
+| Rust task-bound node pull | Borrowed task context, cancellation/deadline on every open pull/EOF, configured/admitted query and result minima | Consumed read snapshots, foreign task binding, interruptible planning and whole-operation memory remain open |
+| SIMD, graph and FTS extensions | Prospective contracts in this proposal | No general implementation or performance qualification is established by the narrow pilots |
+
+Current ownership/eligibility details and evidence limits are recorded in the
+[retained foundation](../RETAINED_NUMERIC_FOUNDATION.md),
+[Python node contract](../PYTHON_RETAINED_NODE_VIEWS.md),
+[C/Go node contract](../GO_RETAINED_NODE_VIEWS.md), and
+[Rust task lifecycle](../RETAINED_NODE_TASK_LIFECYCLE.md).
+The foundations/gaps section below describes the original proposal baseline;
+it must not be read as denying these later, scoped implementations.
+
+Point/full-row lookup continues to use row-oriented storage and retained row
+views. Column batches are a separate execution/delivery representation for
+eligible numeric workloads. A storage transpose or second canonical column
+store is not required for Arrow interoperability. General Arrow node export
+and row/column crossover still require their own layout and workload evidence.
+
+At the user's current review decision, performance qualification is deferred,
+particularly write/load timings on the loaded local machine. This deferral does
+not turn historical diagnostic ratios into acceptance, remove adverse controls,
+weaken durability/budgets, or close the measurement gates below. The complete
+before/after workload matrix and total-memory qualification remain open.
+
 ## Existing foundations and gaps
 
 The executor has typed `ColumnVector` values, validity bitmaps, adaptive

@@ -32,19 +32,25 @@ column buffers may still make a column view efficient.
 
 | Workload | Delivery direction to measure | Important cost |
 | --- | --- | --- |
-| Indexed point lookup, many fields or recursive values | Owned row today; a separately qualified leased row/span view when justified | Seek and required-property decoding, per-call overhead, row-owner lifetime |
+| Indexed point lookup, many fields or recursive values | Owned row or the experimental single-match retained node view; no forced column transpose | Seek and required-property decoding, per-call overhead, row-owner lifetime |
 | A few scalar fields already in compatible column buffers | Native scalar or column views; Arrow only when the consumer needs it | Descriptor/handle cost and whether the consumer converts back to rows |
 | Many rows, narrow numeric projection, vectorized host work | Bounded retained column batches and compatible Arrow export | Batch admission, selection compatibility, amortized crossing cost |
 | Graph expansion or FTS top-k followed by hydration | Bound candidate identities first, then hydrate requested fields | Candidate/page budget, adjacency/posting access, large-document pins |
 
-A future strict row view would need owner-bearing references into already
-validated immutable row/decoded buffers, with independently releasable leases.
-It must not transpose owned rows into Arrow to claim zero-copy. Compressed or
+The experimental indexed node view now supplies owner-bearing references into
+original immutable row/catalog allocations, with independently admitted native
+and C/Go/Python views. See [native delivery](#experimental-native-indexed-full-node-delivery),
+[Python ownership](PYTHON_RETAINED_NODE_OWNERSHIP.md), and
+[C/Go views](GO_RETAINED_NODE_VIEWS.md). Its single-match materialized index plan
+refuses scans, multi-match seeks and hydration; this does not make the numeric
+scan producer source-reusing. A strict row view must not transpose owned rows
+into Arrow to claim zero-copy. Compressed or
 encoded row pages still need decoding unless their original representation is
 directly consumable. Referenced pages, strings and large-document content must
 remain charged at their full retained capacity, even for a tiny visible span;
 source/planning workspace cannot be omitted from a whole-operation bound.
-This is a direction for separate qualification, not an API implemented here.
+The indexed pilot is implemented; broader row/span eligibility and whole-operation
+qualification remain open.
 
 Choose the requested representation explicitly. Strict column requests retain
 their refusal semantics; they do not silently switch to a copying row path.
@@ -755,9 +761,14 @@ the delivered native payload.
 
 The native result remains provisional until successful EOF. Existing views
 keep their immutable payload after close; subsequent borrowed access still
-checks source integrity flags. This initial entrypoint does not yet provide
-read-transaction/task-context integration, multiple-node streaming, Python/Go
-handoff, or an Arrow representation. Planning/index-key workspace, ledger and
+checks source integrity flags. The context-free entrypoint remains independent
+of a host task. The [task-bound Rust cursor](RETAINED_NODE_TASK_LIFECYCLE.md)
+borrows the host context, checks open pulls and EOF for cancellation/deadline,
+and honors existing query/result reservations. [Python](PYTHON_RETAINED_NODE_VIEWS.md)
+and [C/Go](GO_RETAINED_NODE_VIEWS.md) adapters provide independently owned
+recursive views for this same narrow plan. Consumed read-transaction snapshots,
+foreign task binding, multiple-node streaming and an Arrow node representation
+remain open. Planning/index-key workspace, ledger and
 allocator residency, process-wide memory, execution/RSS profiling,
 performance, tail latency, and durability remain independent qualification
 gates. Passing the native ownership regressions does not establish the complete
