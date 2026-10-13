@@ -2656,6 +2656,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "tokio-runtime")]
     fn native_tokio_idle_checkpoint_uses_the_host_governor() {
         let fixture = Fixture::new();
         let options =
