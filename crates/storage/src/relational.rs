@@ -1005,6 +1005,15 @@ pub struct RelationalSparseRecoveryRow {
 /// workspace unchanged. The byte accounting deliberately includes the later
 /// replay-access ledger because sparse preparation and final staging retain
 /// both views at the same time.
+pub(crate) struct RelationalResidentRecoveryStage<'a> {
+    pub(crate) transaction: RelationalTransaction,
+    pub(crate) mutation_limits: RelationalMutationLimits,
+    pub(crate) overflow_config: RelationalOverflowConfig,
+    pub(crate) index_capture_limits: RelationalIndexChangeCaptureLimits,
+    pub(crate) row_capture_limits: RelationalRowChangeCaptureLimits,
+    pub(crate) expected_replay_access: &'a RelationalReplayAccessSet,
+}
+
 #[derive(Debug)]
 pub struct RelationalSparseWorkspaceBuilder {
     rows: BTreeMap<RelationalReplayAccess, Option<RelationalRow>>,
@@ -1513,10 +1522,46 @@ impl RelationalRow {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 struct RelationalTableSegment {
     rows: RelationalRowPages,
     indexes: BTreeMap<String, RelationalIndexPages>,
+    _memory: crate::background::CheckpointAllocationOwner,
+}
+
+impl Clone for RelationalTableSegment {
+    fn clone(&self) -> Self {
+        Self {
+            rows: self.rows.clone(),
+            indexes: self.indexes.clone(),
+            _memory: Default::default(),
+        }
+    }
+}
+
+impl RelationalTableSegment {
+    fn checkpoint_without_indexes(
+        &self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Arc<Self>, RelationalError> {
+        let context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        context
+            .reserve(std::mem::size_of::<Self>() + 2 * std::mem::size_of::<usize>())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let unit = context
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let output = Arc::new(Self {
+            rows: self.rows.clone(),
+            indexes: BTreeMap::new(),
+            _memory: context.memory.into_inner(),
+        });
+        unit.finish();
+        Ok(output)
+    }
 }
 
 const RELATIONAL_ROW_PAGE_MAX_ENTRIES: usize = 256;
@@ -2727,6 +2772,22 @@ impl RelationalState {
         self.materialized_index_postings_resident = false;
     }
 
+    fn omit_materialized_index_postings_with_work_context(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), RelationalError> {
+        if !self.materialized_index_postings_resident {
+            return Ok(());
+        }
+        for segment in self.segments.values_mut() {
+            *segment = segment.checkpoint_without_indexes(work)?;
+        }
+        self.materialized_index_postings_resident = false;
+        work.checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        Ok(())
+    }
+
     /// Stages one canonical transaction and derives every bounded live-view
     /// capture from the same before/after state.
     ///
@@ -3351,6 +3412,39 @@ impl RelationalState {
         ),
         RelationalError,
     > {
+        self.stage_resident_transaction_for_authoritative_recovery_with_allocations(
+            RelationalResidentRecoveryStage {
+                transaction,
+                mutation_limits: limits,
+                overflow_config,
+                index_capture_limits,
+                row_capture_limits,
+                expected_replay_access,
+            },
+            None,
+        )
+    }
+
+    pub(crate) fn stage_resident_transaction_for_authoritative_recovery_with_allocations(
+        &self,
+        stage: RelationalResidentRecoveryStage<'_>,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<
+        (
+            Self,
+            RelationalIndexChangeCapture,
+            RelationalRowChangeCapture,
+        ),
+        RelationalError,
+    > {
+        let RelationalResidentRecoveryStage {
+            transaction,
+            mutation_limits: limits,
+            overflow_config,
+            index_capture_limits,
+            row_capture_limits,
+            expected_replay_access,
+        } = stage;
         self.require_materialized_rows("relational recovery")?;
         admit_transaction(&transaction, limits)?;
         if transaction.changes_index_schema() {
@@ -3378,8 +3472,8 @@ impl RelationalState {
                 constraint_index: None,
                 index_mode: TransactionIndexMode::AuthoritativeRecovery,
                 capture_mutation_outcomes: false,
-                checkpoint_allocations: None,
-                checkpoint_access: None,
+                checkpoint_allocations: allocations,
+                checkpoint_access: Some(expected_replay_access),
             },
         )?;
         let replay_access =
@@ -5807,24 +5901,6 @@ fn apply_transaction_inner(
         Some(context) => state.clone_metadata_with_work_context(&context.work)?,
         None => state.clone(),
     };
-    if let (Some(context), Some(access)) = (checkpoint_allocations, checkpoint_access) {
-        for entry in access.entries() {
-            let Some(segment) = next.segments.get_mut(&entry.table) else {
-                continue;
-            };
-            if Arc::strong_count(segment) > 1 {
-                context
-                    .reserve(
-                        std::mem::size_of::<RelationalTableSegment>()
-                            + 2 * std::mem::size_of::<usize>(),
-                    )
-                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
-            }
-            Arc::make_mut(segment)
-                .rows
-                .prepare_checkpoint_copy_for_key(&entry.primary_key, &context.work)?;
-        }
-    }
     match index_mode {
         TransactionIndexMode::Materialized => {
             if !state.materialized_index_postings_resident {
@@ -5835,7 +5911,30 @@ fn apply_transaction_inner(
             }
         }
         TransactionIndexMode::Authoritative | TransactionIndexMode::AuthoritativeRecovery => {
-            next.omit_materialized_index_postings();
+            match checkpoint_allocations {
+                Some(context) => {
+                    next.omit_materialized_index_postings_with_work_context(&context.work)?
+                }
+                None => next.omit_materialized_index_postings(),
+            }
+        }
+    }
+    if let (Some(context), Some(access)) = (checkpoint_allocations, checkpoint_access) {
+        for entry in access.entries() {
+            let Some(segment) = next.segments.get_mut(&entry.table) else {
+                continue;
+            };
+            if Arc::strong_count(segment) > 1 {
+                if !segment.indexes.is_empty() {
+                    return Err(RelationalError::Corruption(
+                        "controlled recovery row copy requires omitted postings".into(),
+                    ));
+                }
+                *segment = segment.checkpoint_without_indexes(&context.work)?;
+            }
+            Arc::make_mut(segment)
+                .rows
+                .prepare_checkpoint_copy_for_key(&entry.primary_key, &context.work)?;
         }
     }
     let admitted_rows = transaction.estimated_mutation_rows();

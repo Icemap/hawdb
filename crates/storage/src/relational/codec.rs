@@ -826,6 +826,7 @@ fn decode_relational_checkpoint_from_decoder<I: DecodeInput>(
             Arc::new(RelationalTableSegment {
                 rows,
                 indexes: BTreeMap::new(),
+                _memory: Default::default(),
             }),
         );
         if let Some(unit) = unit {

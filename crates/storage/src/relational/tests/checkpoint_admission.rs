@@ -2404,3 +2404,160 @@ fn controlled_secondary_index_capture_admits_projection_keys_before_copy() {
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }
+
+#[test]
+fn controlled_resident_recovery_matches_captures_and_rejects_before_wide_cow_copy() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let id = "k".repeat(128 * 1024);
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let previous = RelationalState::default()
+        .stage_transaction(create_upsert_table(), limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![upsert_row(&id, "owner", "old")],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    let key = RelationalKey(vec![RelationalValue::Text(id.clone())]);
+    let access = RelationalReplayAccessSet::from_decoded_entries(vec![RelationalReplayAccess {
+        table: "documents".into(),
+        primary_key: key.clone(),
+    }])
+    .unwrap();
+    let transaction = RelationalTransaction {
+        writes: vec![RelationalWrite::Insert {
+            table: "documents".into(),
+            rows: vec![upsert_row(&id, "owner", "new")],
+            mode: RelationalInsertMode::Replace,
+        }],
+    };
+    let (expected, expected_indexes, expected_rows) = previous
+        .stage_transaction_for_authoritative_recovery_with_replay_access(
+            transaction.clone(),
+            limits,
+            overflow,
+            RelationalIndexChangeCaptureLimits::default(),
+            RelationalRowChangeCaptureLimits::default(),
+            &access,
+        )
+        .unwrap();
+    for (ceiling, succeeds) in [(16 * 1024, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let input = transaction.clone();
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = previous
+            .stage_resident_transaction_for_authoritative_recovery_with_allocations(
+                RelationalResidentRecoveryStage {
+                    transaction: input,
+                    mutation_limits: limits,
+                    overflow_config: overflow,
+                    index_capture_limits: RelationalIndexChangeCaptureLimits::default(),
+                    row_capture_limits: RelationalRowChangeCaptureLimits::default(),
+                    expected_replay_access: &access,
+                },
+                Some(&context),
+            );
+        let copies = observer.finish();
+        if succeeds {
+            let (actual, indexes, rows) = result.unwrap();
+            assert_eq!(
+                actual.row("documents", &key),
+                expected.row("documents", &key)
+            );
+            assert_eq!(indexes, expected_indexes);
+            assert_eq!(rows, expected_rows);
+            assert!(!actual.materialized_index_postings_resident());
+            drop(rows);
+            drop(indexes);
+            drop(actual);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+        }
+        assert_eq!(
+            previous.row("documents", &key).unwrap().values()[2],
+            RelationalValue::Text("old".into())
+        );
+        assert!(previous.materialized_index_postings_resident());
+        drop(context);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
+
+#[test]
+fn controlled_table_shell_omission_skips_wide_index_names_and_owns_arc_backing() {
+    use crate::background::CheckpointWorkContext;
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let source = RelationalTableSegment {
+        rows: Default::default(),
+        indexes: BTreeMap::from([("i".repeat(128 * 1024), RelationalIndexPages::default())]),
+        _memory: Default::default(),
+    };
+    let ceiling = 4096;
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(ceiling),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+        .unwrap();
+    let work = CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+    let observer = crate::test_allocator::AllocationObservation::start();
+    let copy = source.checkpoint_without_indexes(&work).unwrap();
+    assert_eq!(observer.finish(), 0);
+    assert!(copy.indexes.is_empty());
+    assert_eq!(source.indexes.len(), 1);
+    assert!(copy.rows.pages.shares_storage_with(&source.rows.pages));
+    let snapshot = copy.clone();
+    drop(copy);
+    assert!(
+        matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes < ceiling)
+    );
+    drop(snapshot);
+    assert!(
+        matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+    );
+    drop(work);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}

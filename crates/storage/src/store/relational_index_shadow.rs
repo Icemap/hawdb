@@ -1308,13 +1308,16 @@ impl GraphStore {
                         )?
                 } else {
                     self.relational_state
-                        .stage_transaction_for_authoritative_recovery_with_replay_access(
-                            transaction,
-                            self.relational_mutation_limits,
-                            self.relational_overflow_config,
-                            index_limits,
-                            row_limits,
-                            replay_access,
+                        .stage_resident_transaction_for_authoritative_recovery_with_allocations(
+                            crate::relational::RelationalResidentRecoveryStage {
+                                transaction,
+                                mutation_limits: self.relational_mutation_limits,
+                                overflow_config: self.relational_overflow_config,
+                                index_capture_limits: index_limits,
+                                row_capture_limits: row_limits,
+                                expected_replay_access: replay_access,
+                            },
+                            allocations.as_ref(),
                         )?
                 };
                 (next, Some(index_capture), Some(row_capture))

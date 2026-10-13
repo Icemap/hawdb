@@ -322,6 +322,7 @@ pub(crate) fn rebuild_indexes(
     let replacement = RelationalTableSegment {
         rows: segment.rows.clone(),
         indexes,
+        _memory: Default::default(),
     };
     let name = clone_string(table, work)?;
     let unit = work.start_unit().map_err(work_error)?;

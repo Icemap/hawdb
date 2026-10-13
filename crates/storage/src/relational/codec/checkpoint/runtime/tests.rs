@@ -120,6 +120,7 @@ fn fixture() -> RelationalState {
             Arc::new(RelationalTableSegment {
                 rows: RelationalRowPages::from_map(rows),
                 indexes: BTreeMap::new(),
+                _memory: Default::default(),
             }),
         );
         state.schemas.insert(schema.name.clone(), Arc::new(schema));
