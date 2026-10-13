@@ -226,17 +226,17 @@ fn index_pages(
         let postings = posting_pages(postings, work)?;
         let unit = work.start_unit().map_err(work_error)?;
         if page.len() == RELATIONAL_INDEX_PAGE_MAX_KEYS {
-            pages.push(Arc::new(std::mem::take(&mut page)));
+            pages.push(std::mem::take(&mut page).into());
         }
         page.insert(key, postings);
         unit.finish();
     }
     let unit = work.start_unit().map_err(work_error)?;
     if !page.is_empty() {
-        pages.push(Arc::new(page));
+        pages.push(page.into());
     }
     let result = RelationalIndexPages {
-        pages: Arc::new(pages),
+        pages: pages.into(),
     };
     unit.finish();
     work.checkpoint().map_err(work_error)?;

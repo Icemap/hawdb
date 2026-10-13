@@ -2017,6 +2017,32 @@ struct RelationalKeySetPages {
 }
 
 impl RelationalKeySetPages {
+    fn checkpoint_singleton(
+        key: &RelationalKey,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Self, RelationalError> {
+        let context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        context
+            .reserve(RelationalPostingDirectory::checkpoint_ownership_bytes())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let mut output = Self {
+            pages: RelationalPostingDirectory::from_checkpoint_value(
+                Vec::new(),
+                context.memory.into_inner(),
+            ),
+            len: 0,
+        };
+        unit.finish();
+        output.change_with_work_context(key, true, work)?;
+        Ok(output)
+    }
+
     fn page_index(&self, key: &RelationalKey) -> Option<usize> {
         if self.pages.is_empty() {
             return None;
@@ -2264,9 +2290,12 @@ impl RelationalKeySetPages {
     }
 }
 
+type RelationalIndexPage = crate::cow::CowSegment<BTreeMap<RelationalKey, RelationalKeySetPages>>;
+type RelationalIndexDirectory = crate::cow::CowSegment<Vec<RelationalIndexPage>>;
+
 #[derive(Debug, Clone, Default)]
 struct RelationalIndexPages {
-    pages: Arc<Vec<Arc<BTreeMap<RelationalKey, RelationalKeySetPages>>>>,
+    pages: RelationalIndexDirectory,
 }
 
 impl RelationalIndexPages {
@@ -2287,17 +2316,198 @@ impl RelationalIndexPages {
     }
 
     fn insert_posting(&mut self, index_key: RelationalKey, primary_key: RelationalKey) -> bool {
+        self.insert_posting_with_allocations(index_key, primary_key, None)
+            .expect("ordinary index insertion has no allocation refusal")
+    }
+
+    fn insert_posting_with_allocations(
+        &mut self,
+        index_key: RelationalKey,
+        primary_key: RelationalKey,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<bool, RelationalError> {
+        match allocations {
+            Some(context) => {
+                self.change_posting_with_work_context(&index_key, &primary_key, true, &context.work)
+            }
+            None => Ok(self.insert_posting_ordinary(index_key, primary_key)),
+        }
+    }
+
+    fn remove_posting(&mut self, index_key: &RelationalKey, primary_key: &RelationalKey) {
+        self.remove_posting_with_allocations(index_key, primary_key, None)
+            .expect("ordinary index removal has no allocation refusal");
+    }
+
+    fn remove_posting_with_allocations(
+        &mut self,
+        index_key: &RelationalKey,
+        primary_key: &RelationalKey,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<(), RelationalError> {
+        match allocations {
+            Some(context) => self
+                .change_posting_with_work_context(index_key, primary_key, false, &context.work)
+                .map(|_| ()),
+            None => {
+                self.remove_posting_ordinary(index_key, primary_key);
+                Ok(())
+            }
+        }
+    }
+
+    fn change_posting_with_work_context(
+        &mut self,
+        index_key: &RelationalKey,
+        primary_key: &RelationalKey,
+        insert: bool,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<bool, RelationalError> {
+        let target = self.page_index(index_key);
+        let present = self.get(index_key).is_some_and(|postings| {
+            postings
+                .page_index(primary_key)
+                .is_some_and(|index| postings.pages[index].contains(primary_key))
+        });
+        if present == insert {
+            return Ok(false);
+        }
+        let directory_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let page_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let split_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let capacity = self.pages.len().checked_add(1).ok_or_else(|| {
+            RelationalError::Admission("index directory capacity overflow".into())
+        })?;
+        let mut directory = directory_context
+            .vector_capacity(capacity)
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        directory_context
+            .reserve(RelationalIndexDirectory::checkpoint_ownership_bytes())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        for page in self.pages.iter() {
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            directory.push(page.clone());
+            unit.finish();
+        }
+        let index = target.unwrap_or(0);
+        let previous_len = target.map_or(0, |index| self.pages[index].len());
+        let node_bytes = previous_len
+            .checked_add(3)
+            .and_then(|count| {
+                count.checked_mul(crate::cow::checkpoint_tree_node_bytes::<
+                    RelationalKey,
+                    RelationalKeySetPages,
+                >())
+            })
+            .and_then(|bytes| {
+                bytes.checked_add(2 * RelationalIndexPage::checkpoint_ownership_bytes())
+            })
+            .ok_or_else(|| RelationalError::Admission("index page capacity overflow".into()))?;
+        page_context
+            .reserve(node_bytes)
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let mut page = BTreeMap::new();
+        if let Some(index) = target {
+            for (key, postings) in self.pages[index].iter() {
+                let key = key.clone_with_allocations(&page_context)?;
+                let unit = work
+                    .start_unit()
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                page.insert(key, postings.clone());
+                unit.finish();
+            }
+        }
+        if let Some(postings) = page.get_mut(index_key) {
+            postings.change_with_work_context(primary_key, insert, work)?;
+            if postings.is_empty() {
+                page.remove(index_key);
+            }
+        } else {
+            let postings = RelationalKeySetPages::checkpoint_singleton(primary_key, work)?;
+            let key = index_key.clone_with_allocations(&page_context)?;
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            page.insert(key, postings);
+            unit.finish();
+        }
+        let right = if page.len() > RELATIONAL_INDEX_PAGE_MAX_KEYS {
+            let split = page
+                .keys()
+                .nth(page.len() / 2)
+                .expect("oversized index page")
+                .clone_with_allocations(&split_context)?;
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            let right = page.split_off(&split);
+            unit.finish();
+            Some(right)
+        } else {
+            None
+        };
+        if page.is_empty() {
+            directory.remove(index);
+        } else {
+            let memory = page_context.memory.into_inner();
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            let page = RelationalIndexPage::from_checkpoint_value(page, memory.clone());
+            if target.is_some() {
+                directory[index] = page;
+            } else {
+                directory.push(page);
+            }
+            if let Some(right) = right {
+                directory.insert(
+                    index + 1,
+                    RelationalIndexPage::from_checkpoint_value(right, memory),
+                );
+            }
+            unit.finish();
+        }
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let output = RelationalIndexDirectory::from_checkpoint_value(
+            directory,
+            directory_context.memory.into_inner(),
+        );
+        unit.finish();
+        work.checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        self.pages = output;
+        Ok(true)
+    }
+
+    fn insert_posting_ordinary(
+        &mut self,
+        index_key: RelationalKey,
+        primary_key: RelationalKey,
+    ) -> bool {
         if self.pages.is_empty() {
             let mut postings = RelationalKeySetPages::default();
             postings.insert(primary_key);
-            self.pages = Arc::new(vec![Arc::new(BTreeMap::from([(index_key, postings)]))]);
+            self.pages = vec![BTreeMap::from([(index_key, postings)]).into()].into();
             return true;
         }
         let index = self
             .page_index(&index_key)
             .expect("non-empty index pages have a target page");
-        let pages = Arc::make_mut(&mut self.pages);
-        let page = Arc::make_mut(&mut pages[index]);
+        let pages = &mut *self.pages;
+        let page = &mut *pages[index];
         let inserted = page.entry(index_key).or_default().insert(primary_key);
         if page.len() > RELATIONAL_INDEX_PAGE_MAX_KEYS {
             let split_key = page
@@ -2306,20 +2516,20 @@ impl RelationalIndexPages {
                 .cloned()
                 .expect("oversized index page is non-empty");
             let right = page.split_off(&split_key);
-            pages.insert(index + 1, Arc::new(right));
+            pages.insert(index + 1, right.into());
         }
         inserted
     }
 
-    fn remove_posting(&mut self, index_key: &RelationalKey, primary_key: &RelationalKey) {
+    fn remove_posting_ordinary(&mut self, index_key: &RelationalKey, primary_key: &RelationalKey) {
         let Some(index) = self.page_index(index_key) else {
             return;
         };
         if !self.pages[index].contains_key(index_key) {
             return;
         }
-        let pages = Arc::make_mut(&mut self.pages);
-        let page = Arc::make_mut(&mut pages[index]);
+        let pages = &mut *self.pages;
+        let page = &mut *pages[index];
         let remove_key = page
             .get_mut(index_key)
             .is_some_and(|postings| postings.remove(primary_key) && postings.is_empty());
