@@ -5516,6 +5516,53 @@ struct DeleteCascadeContext<'a> {
     changed_keys: &'a mut BTreeMap<String, BTreeSet<RelationalKey>>,
     touched: &'a mut BTreeSet<String>,
     replay_access_tracker: Option<&'a mut RelationalReplayAccessTracker>,
+    checkpoint_allocations: Option<&'a crate::background::CheckpointDecodeContext>,
+    queue_allocations: Option<&'a crate::background::CheckpointDecodeContext>,
+}
+
+fn push_cascade_delete_with_allocations(
+    queue: &mut VecDeque<CascadeDelete>,
+    table: &str,
+    row: RelationalRow,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<(), RelationalError> {
+    let Some(context) = allocations else {
+        queue.push_back(CascadeDelete {
+            table: table.to_owned(),
+            row,
+        });
+        return Ok(());
+    };
+    let table = context
+        .string(table)
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    if queue.len() == queue.capacity() {
+        let capacity =
+            queue.capacity().max(2).checked_mul(2).ok_or_else(|| {
+                RelationalError::Admission("cascade queue capacity overflow".into())
+            })?;
+        let mut replacement = context
+            .vector_capacity(capacity)
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        // Conversion reuses the admitted Vec backing. Cancellation while
+        // moving requires the caller to discard its private transaction stage.
+        while !queue.is_empty() {
+            let unit = context
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            replacement.push(queue.pop_front().expect("nonempty cascade queue"));
+            unit.finish();
+        }
+        *queue = VecDeque::from(replacement);
+        // Keep conservative credits for replaced capacities until this
+        // statement's queue inventory drops, after every queued row.
+    }
+    let unit = context
+        .start_unit()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    queue.push_back(CascadeDelete { table, row });
+    unit.finish();
+    Ok(())
 }
 
 fn apply_delete_cascades(
@@ -5532,6 +5579,8 @@ fn apply_delete_cascades(
         changed_keys,
         touched,
         mut replay_access_tracker,
+        checkpoint_allocations,
+        queue_allocations,
     } = context;
     let mut cascade_rows = 0usize;
     let mut cascade_payload_bytes = 0usize;
@@ -5539,50 +5588,82 @@ fn apply_delete_cascades(
         let referenced_schema = Arc::clone(state.schemas.get(&table).ok_or_else(|| {
             RelationalError::Schema(format!("unknown table {table} during delete cascade"))
         })?);
-        let inbound = state
-            .schemas
-            .iter()
-            .flat_map(|(child_table, child_schema)| {
-                child_schema
-                    .foreign_keys
-                    .iter()
-                    .filter(|foreign_key| {
-                        foreign_key.referenced_table == table
-                            && foreign_key.on_delete == RelationalReferentialAction::Cascade
-                    })
-                    .cloned()
-                    .map(|foreign_key| (child_table.clone(), foreign_key))
-            })
-            .collect::<Vec<_>>();
-        for (child_table, foreign_key) in inbound {
-            let referenced_positions =
-                column_positions(&referenced_schema, &foreign_key.referenced_columns)?;
-            let referenced_key = row_key(&row, &referenced_positions);
+        let inbound_context =
+            checkpoint_allocations.map(|context| crate::background::CheckpointDecodeContext {
+                work: context.work.clone(),
+                memory: Default::default(),
+            });
+        let mut inbound = Vec::new();
+        for (child_table, child_schema) in &state.schemas {
+            for (ordinal, foreign_key) in child_schema.foreign_keys.iter().enumerate() {
+                let unit = inbound_context
+                    .as_ref()
+                    .map(|context| context.start_unit())
+                    .transpose()
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                if foreign_key.referenced_table == table
+                    && foreign_key.on_delete == RelationalReferentialAction::Cascade
+                {
+                    let name = match &inbound_context {
+                        Some(context) => context
+                            .string(child_table)
+                            .map_err(|error| RelationalError::Admission(error.to_string()))?,
+                        None => child_table.clone(),
+                    };
+                    let entry = (name, Arc::clone(child_schema), ordinal);
+                    match &inbound_context {
+                        Some(context) => context
+                            .push(&mut inbound, entry)
+                            .map_err(|error| RelationalError::Admission(error.to_string()))?,
+                        None => inbound.push(entry),
+                    }
+                }
+                if let Some(unit) = unit {
+                    unit.finish();
+                }
+            }
+        }
+        for (child_table, child_schema, ordinal) in inbound {
+            let foreign_key = &child_schema.foreign_keys[ordinal];
+            let child_context =
+                checkpoint_allocations.map(|context| crate::background::CheckpointDecodeContext {
+                    work: context.work.clone(),
+                    memory: Default::default(),
+                });
+            let referenced_positions = column_positions_with_allocations(
+                &referenced_schema,
+                &foreign_key.referenced_columns,
+                child_context.as_ref(),
+            )?;
+            let referenced_key =
+                row_key_with_allocations(&row, &referenced_positions, child_context.as_ref())?;
             if key_contains_null(&referenced_key) {
                 continue;
             }
-            let child_schema = Arc::clone(state.schemas.get(&child_table).ok_or_else(|| {
+            let local_positions = column_positions_with_allocations(
+                &child_schema,
+                &foreign_key.columns,
+                child_context.as_ref(),
+            )?;
+            let child_segment = state.segments.get(&child_table).ok_or_else(|| {
                 RelationalError::Schema(format!(
-                    "unknown child table {child_table} during delete cascade"
+                    "missing row segment for child table {child_table} during delete cascade"
                 ))
-            })?);
-            let local_positions = column_positions(&child_schema, &foreign_key.columns)?;
-            let child_keys = state
-                .segments
-                .get(&child_table)
-                .ok_or_else(|| {
-                    RelationalError::Schema(format!(
-                        "missing row segment for child table {child_table} during delete cascade"
-                    ))
-                })?
-                .rows
-                .iter()
-                .filter_map(|(key, candidate)| {
-                    let local_key = row_key(candidate, &local_positions);
-                    (!key_contains_null(&local_key) && local_key == referenced_key)
-                        .then(|| key.clone())
-                })
-                .collect::<Vec<_>>();
+            })?;
+            let mut child_keys = Vec::new();
+            for (key, candidate) in child_segment.rows.iter() {
+                let unit = child_context
+                    .as_ref()
+                    .map(|context| context.start_unit())
+                    .transpose()
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                if row_matches_key(candidate, &local_positions, &referenced_key) {
+                    push_cloned_key_with_allocations(&mut child_keys, key, child_context.as_ref())?;
+                }
+                if let Some(unit) = unit {
+                    unit.finish();
+                }
+            }
             if child_keys.is_empty() {
                 continue;
             }
@@ -5634,23 +5715,31 @@ fn apply_delete_cascades(
                 if let Some(tracker) = replay_access_tracker.as_deref_mut() {
                     tracker.record(&child_table, &key)?;
                 }
-                let row = Arc::make_mut(state.segments.get_mut(&child_table).ok_or_else(|| {
-                    RelationalError::Schema(format!(
-                        "missing row segment for child table {child_table} during delete cascade"
-                    ))
-                })?)
-                .rows
-                .remove(&key)
-                .expect("cascade target was selected from the current child segment");
-                changed_keys
-                    .entry(child_table.clone())
-                    .or_default()
-                    .insert(key);
-                touched.insert(child_table.clone());
-                deleted_rows.push_back(CascadeDelete {
-                    table: child_table.clone(),
+                let changed = changed_table_keys_with_allocations(
+                    changed_keys,
+                    &child_table,
+                    checkpoint_allocations,
+                )?;
+                insert_changed_key_with_allocations(changed, &key, checkpoint_allocations)?;
+                insert_table_name_with_allocations(touched, &child_table, checkpoint_allocations)?;
+                let segment = Arc::make_mut(state.segments.get_mut(&child_table).ok_or_else(|| {
+                    RelationalError::Schema(format!("missing row segment for child table {child_table} during delete cascade"))
+                })?);
+                if let Some(context) = checkpoint_allocations {
+                    segment
+                        .rows
+                        .prepare_checkpoint_copy_for_key(&key, &context.work)?;
+                }
+                let row = segment
+                    .rows
+                    .remove(&key)
+                    .expect("cascade target was selected from the current child segment");
+                push_cascade_delete_with_allocations(
+                    deleted_rows,
+                    &child_table,
                     row,
-                });
+                    queue_allocations,
+                )?;
             }
         }
     }
@@ -5714,6 +5803,11 @@ fn apply_transaction_inner(
     let admitted_payload_bytes = transaction.estimated_payload_bytes();
     let mut unbounded_delete_rows = 0usize;
     let mut unbounded_delete_payload_bytes = 0usize;
+    let deletion_context =
+        checkpoint_allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
     let mut deleted_rows = VecDeque::new();
     let mut touched = BTreeSet::new();
     let mut changed_keys = BTreeMap::<String, BTreeSet<RelationalKey>>::new();
@@ -5977,10 +6071,12 @@ fn apply_transaction_inner(
                             .prepare_checkpoint_copy_for_key(&key, &context.work)?;
                     }
                     if let Some(row) = segment.rows.remove(&key) {
-                        deleted_rows.push_back(CascadeDelete {
-                            table: table.clone(),
+                        push_cascade_delete_with_allocations(
+                            &mut deleted_rows,
+                            &table,
                             row,
-                        });
+                            deletion_context.as_ref(),
+                        )?;
                     }
                 }
                 insert_table_name_with_allocations(&mut touched, &table, checkpoint_allocations)?;
@@ -6080,10 +6176,12 @@ fn apply_transaction_inner(
                             .prepare_checkpoint_copy_for_key(&key, &context.work)?;
                     }
                     if let Some(row) = segment.rows.remove(&key) {
-                        deleted_rows.push_back(CascadeDelete {
-                            table: table.clone(),
+                        push_cascade_delete_with_allocations(
+                            &mut deleted_rows,
+                            &table,
                             row,
-                        });
+                            deletion_context.as_ref(),
+                        )?;
                     }
                 }
                 if capture_mutation_outcomes {
@@ -6143,6 +6241,8 @@ fn apply_transaction_inner(
             changed_keys: &mut changed_keys,
             touched: &mut touched,
             replay_access_tracker: replay_access_tracker.as_mut(),
+            checkpoint_allocations,
+            queue_allocations: deletion_context.as_ref(),
         },
     )?;
     overflow::prune_unreachable_segments(&mut next);

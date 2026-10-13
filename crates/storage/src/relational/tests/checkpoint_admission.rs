@@ -1802,3 +1802,155 @@ fn controlled_delete_match_keys_deny_before_copy_and_release_capacity() {
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }
+
+#[test]
+fn controlled_transitive_cascade_matches_ordinary_captures_and_preserves_source() {
+    use crate::background::CheckpointDecodeContext;
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let base = RelationalState::default()
+        .stage_transaction(create_cascade_tables(), limits, overflow)
+        .unwrap()
+        .stage_transaction(seed_cascade_rows(), limits, overflow)
+        .unwrap();
+    let transaction = RelationalTransaction {
+        writes: vec![RelationalWrite::DeleteByPrimaryKey {
+            table: "cascade_parents".into(),
+            keys: vec![RelationalKey(vec![RelationalValue::Text(
+                "parent-1".into(),
+            )])],
+        }],
+    };
+    let options = TransactionApplyOptions {
+        index_capture_limits: Some(RelationalIndexChangeCaptureLimits::default()),
+        row_capture_limits: Some(RelationalRowChangeCaptureLimits::default()),
+        replay_access_limits: Some(RelationalRowChangeCaptureLimits::default()),
+        ..TransactionApplyOptions::materialized()
+    };
+    let expected =
+        apply_transaction_inner(&base, transaction.clone(), limits, overflow, options).unwrap();
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    let actual = apply_transaction_inner(
+        &base,
+        transaction,
+        limits,
+        overflow,
+        TransactionApplyOptions {
+            checkpoint_allocations: Some(&context),
+            ..options
+        },
+    )
+    .unwrap();
+    assert_eq!(actual.index_capture, expected.index_capture);
+    assert_eq!(actual.row_capture, expected.row_capture);
+    assert_eq!(actual.replay_access, expected.replay_access);
+    for table in [
+        "cascade_parents",
+        "cascade_children",
+        "cascade_grandchildren",
+    ] {
+        assert_eq!(actual.state.row_count(table), 0);
+        assert_eq!(expected.state.row_count(table), 0);
+        assert_eq!(base.row_count(table), 1);
+    }
+}
+
+#[test]
+fn controlled_cascade_queue_growth_preserves_wrapped_fifo_order() {
+    use crate::background::CheckpointDecodeContext;
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    let mut queue = VecDeque::new();
+    for id in 0..16 {
+        push_cascade_delete_with_allocations(
+            &mut queue,
+            "table",
+            RelationalRow::new(vec![RelationalValue::BigInt(id)]),
+            Some(&context),
+        )
+        .unwrap();
+    }
+    for id in 0..10 {
+        assert_eq!(
+            queue.pop_front().unwrap().row.values()[0],
+            RelationalValue::BigInt(id)
+        );
+    }
+    for id in 16..32 {
+        push_cascade_delete_with_allocations(
+            &mut queue,
+            "table",
+            RelationalRow::new(vec![RelationalValue::BigInt(id)]),
+            Some(&context),
+        )
+        .unwrap();
+    }
+    for id in 10..32 {
+        let entry = queue.pop_front().unwrap();
+        assert_eq!(entry.table, "table");
+        assert_eq!(entry.row.values()[0], RelationalValue::BigInt(id));
+    }
+    assert!(queue.is_empty());
+}
+
+#[test]
+fn controlled_cascade_queue_denies_wide_name_before_copy_and_releases_inventory() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let name = "t".repeat(128 * 1024);
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let mut queue = VecDeque::new();
+        let row = RelationalRow::new(vec![RelationalValue::BigInt(17)]);
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = push_cascade_delete_with_allocations(&mut queue, &name, row, Some(&context));
+        let copies = observer.finish();
+        if succeeds {
+            result.unwrap();
+            assert_eq!(queue.len(), 1);
+            assert_eq!(queue[0].table, name);
+            assert_eq!(queue[0].row.values()[0], RelationalValue::BigInt(17));
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes < ceiling - 128 * 1024)
+            );
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+            assert!(queue.is_empty());
+        }
+        drop(queue);
+        drop(context);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
