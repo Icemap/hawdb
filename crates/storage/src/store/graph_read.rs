@@ -46,6 +46,10 @@ mod ordered_range_tests;
 #[path = "graph_read/relationship_scan_tests.rs"]
 mod relationship_scan_tests;
 
+#[cfg(test)]
+#[path = "graph_read/relationship_stream_tests.rs"]
+mod relationship_stream_tests;
+
 impl GraphStore {
     pub fn canonical_node_from_segments(&self, id: NodeId) -> Result<Option<NodeRecord>> {
         self.durable
@@ -346,31 +350,34 @@ impl GraphStore {
         let Some(reader) = self.canonical_base.as_ref() else {
             return Ok(AdmittedRelationshipRead::Missing);
         };
-        let Some(bytes) = reader
-            .relationship_allocation_bytes(id)
-            .map_err(canonical_segment_error)?
-        else {
-            return Ok(AdmittedRelationshipRead::Missing);
-        };
-        let Some(allocation) = admit(bytes)? else {
-            return Ok(AdmittedRelationshipRead::Stopped);
-        };
-        if allocation.bytes() < bytes {
-            return Err(HawDBError::Execution(
-                "relationship admission returned an insufficient allocation permit".into(),
-            ));
-        }
+        let mut result = Ok(AdmittedRelationshipRead::Missing);
         reader
-            .get_relationship(id)
-            .map_err(canonical_segment_error)
-            .map(|relationship| {
-                relationship.map_or(AdmittedRelationshipRead::Missing, |relationship| {
-                    AdmittedRelationshipRead::Relationship(AdmittedRelationshipRecord::new(
-                        relationship,
-                        allocation,
-                    ))
-                })
+            .visit_relationship_payload(id, |layout, payload| {
+                let allocation = match admit(layout.allocation_bytes) {
+                    Ok(Some(allocation)) => allocation,
+                    Ok(None) => {
+                        result = Ok(AdmittedRelationshipRead::Stopped);
+                        return Ok(());
+                    }
+                    Err(error) => {
+                        result = Err(error);
+                        return Ok(());
+                    }
+                };
+                if allocation.bytes() < layout.allocation_bytes {
+                    result = Err(HawDBError::Execution(
+                        "relationship admission returned an insufficient allocation permit".into(),
+                    ));
+                    return Ok(());
+                }
+                let relationship = reader.decode_scanned_relationship(id, payload)?;
+                result = Ok(AdmittedRelationshipRead::Relationship(
+                    AdmittedRelationshipRecord::new(relationship, allocation),
+                ));
+                Ok(())
             })
+            .map_err(canonical_segment_error)?;
+        result
     }
 
     pub fn visit_nodes_owned(

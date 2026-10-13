@@ -1941,6 +1941,26 @@ impl CanonicalSegmentReader {
         })
     }
 
+    pub(crate) fn visit_relationship_payload(
+        &self,
+        id: RelId,
+        mut consumer: impl FnMut(
+            CanonicalRelationshipLayout,
+            &[u8],
+        ) -> Result<(), CanonicalSegmentError>,
+    ) -> Result<(), CanonicalSegmentError> {
+        self.point_allocation_bytes(CanonicalSegmentKind::Relationships, id.0, |payload| {
+            let layout = relationship_payload_layout(
+                payload,
+                Some(self.property_keys()),
+                self.property_spills.as_ref(),
+            )?;
+            consumer(layout, payload)?;
+            Ok(None)
+        })?;
+        Ok(())
+    }
+
     fn point_allocation_bytes(
         &self,
         kind: CanonicalSegmentKind,
@@ -2213,6 +2233,22 @@ impl CanonicalSegmentReader {
                 )?,
             )
         })
+    }
+
+    pub(crate) fn decode_scanned_relationship(
+        &self,
+        id: RelId,
+        payload: &[u8],
+    ) -> Result<RelRecord, CanonicalSegmentError> {
+        self.ensure_healthy()?;
+        let result = decode_relationship_with_property_spills(
+            id.0,
+            payload,
+            self.property_spills.as_ref(),
+            Some(self.property_keys()),
+        );
+        self.poison_on_physical_failure(&result);
+        result
     }
 
     fn scan_relationship_payloads_control(
