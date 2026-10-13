@@ -3747,13 +3747,31 @@ mod tests {
             .unwrap();
         let work =
             CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
-        let result = work.classify(|scoped| {
+        // Controlled preparation must fail atomically before installation on
+        // this quota. Verify that boundary before targeting the flush itself.
+        let denied = work.classify(|scoped| {
             store.stage_recovered_relational_transaction(
                 transaction(3),
                 None,
                 first_epoch + 1,
                 Some(scoped),
             )
+        });
+        assert!(matches!(
+            denied,
+            Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                _
+            )))
+        ));
+        assert_eq!(store.relational_state.row_count("documents"), 2);
+        assert!(store.relational_row_pages.recovery_builder.is_some());
+        // Prepare outside the constrained installation scope so the same
+        // 64-byte quota reaches the record flush rather than staging metadata.
+        let prepared = store
+            .prepare_recovered_relational_transaction(transaction(3), None)
+            .unwrap();
+        let result = work.classify(|scoped| {
+            store.install_recovered_relational_transaction(prepared, first_epoch + 1, Some(scoped))
         });
         assert!(
             matches!(
