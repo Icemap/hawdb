@@ -175,18 +175,22 @@ class DriverTests(unittest.TestCase):
 
 
 class ComparisonTests(unittest.TestCase):
+    keys = {("python", "point", 1000, "file")}
+
     def report(self, elapsed=20):
-        return {"samples": 2, "terminal": True, "records": [
+        return {"samples": 2, "terminal": True, "discarded_iterations": 1,
+                "layers": ["python"], "cases": ["point"], "sizes": [1000], "backends": ["file"],
+                "records": [
             {"layer": "python", "case": "point", "size": 1000, "backend": "file",
-             "iteration": iteration, "discarded": False, "status": "ok",
+             "iteration": iteration, "discarded": iteration == 0, "status": "ok",
              "process_exit": 0, "parity": True, "profile_valid": True,
              "phase_timing_valid": True, "elapsed_ns": elapsed,
              "query_boundary_ns": elapsed, "write_boundary_ns": 0, "read_boundary_ns": elapsed}
-            for iteration in (1, 2)
+            for iteration in (0, 1, 2)
         ]}
 
     def test_complete_groups_compare_independent_read_and_write_phases(self):
-        group = compare.summarize(self.report(), self.report(10))[0]
+        group = compare.summarize(self.report(), self.report(10), self.keys)[0]
         self.assertTrue(group["qualified"])
         self.assertEqual(group["read_boundary_ns_median_speedup"], 2)
         self.assertIsNone(group["write_boundary_ns_median_speedup"])
@@ -194,7 +198,7 @@ class ComparisonTests(unittest.TestCase):
     def test_one_refusal_prevents_median_speedup_claim(self):
         after = self.report(10)
         after["records"][1].update(status="error", parity=None, process_exit=1)
-        group = compare.summarize(self.report(), after)[0]
+        group = compare.summarize(self.report(), after, self.keys)[0]
         self.assertFalse(group["qualified"])
         self.assertNotIn("elapsed_ns_median_speedup", group)
 
@@ -206,12 +210,57 @@ class ComparisonTests(unittest.TestCase):
                     after["records"].pop()
                 else:
                     after["terminal"] = False
-                self.assertFalse(compare.summarize(self.report(), after)[0]["qualified"])
+                self.assertFalse(compare.summarize(self.report(), after, self.keys)[0]["qualified"])
 
     def test_failed_parity_cannot_qualify_even_with_zero_exit(self):
         after = self.report()
         after["records"][0]["parity"] = False
-        self.assertFalse(compare.summarize(self.report(), after)[0]["qualified"])
+        self.assertFalse(compare.summarize(self.report(), after, self.keys)[0]["qualified"])
+
+    def test_group_missing_from_both_reports_still_blocks_full_matrix(self):
+        before, after = self.report(), self.report(10)
+        for report in (before, after):
+            report["cases"].append("select")
+        requested = self.keys | {("python", "select", 1000, "file")}
+        groups = compare.summarize(before, after, requested)
+        self.assertEqual(len(groups), 2)
+        missing = next(group for group in groups if group["case"] == "select")
+        self.assertFalse(missing["qualified"])
+        self.assertEqual((missing["before_samples"], missing["after_samples"]), (0, 0))
+        self.assertNotIn("elapsed_ns_median_speedup", missing)
+        self.assertFalse(all(group["qualified"] for group in groups))
+
+    def test_duplicate_or_shifted_iterations_cannot_replace_a_sample(self):
+        for iterations in ((1, 1), (2, 3), (True, 2)):
+            with self.subTest(iterations=iterations):
+                after = self.report(10)
+                for record, iteration in zip(after["records"][1:], iterations):
+                    record["iteration"] = iteration
+                group = compare.summarize(self.report(), after, self.keys)[0]
+                self.assertFalse(group["qualified"])
+                self.assertNotIn("elapsed_ns_median_speedup", group)
+
+    def test_missing_failed_or_duplicate_warmup_cannot_qualify(self):
+        for kind in ("missing", "failed", "duplicate"):
+            with self.subTest(kind=kind):
+                after = self.report(10)
+                if kind == "missing":
+                    after["records"].pop(0)
+                elif kind == "failed":
+                    after["records"][0]["parity"] = False
+                else:
+                    after["records"].append(after["records"][0].copy())
+                self.assertFalse(compare.summarize(self.report(), after, self.keys)[0]["qualified"])
+
+    def test_selection_mismatch_or_unrequested_record_cannot_qualify(self):
+        for kind in ("selection", "record"):
+            with self.subTest(kind=kind):
+                after = self.report(10)
+                if kind == "selection":
+                    after["sizes"] = [100000]
+                else:
+                    after["records"].append(dict(after["records"][1], case="select"))
+                self.assertFalse(compare.summarize(self.report(), after, self.keys)[0]["qualified"])
 
     def test_baseline_adapter_refuses_unqualified_or_mutable_revision(self):
         compare.validate_revision(compare.BASELINE)

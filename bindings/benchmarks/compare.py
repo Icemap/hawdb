@@ -5,6 +5,7 @@
 
 import argparse
 import hashlib
+import itertools
 import json
 import os
 import pathlib
@@ -196,19 +197,36 @@ def build_producer(repository, directory):
     return frozen
 
 
-def summarize(before, after):
+def selection_keys(selection):
+    return set(itertools.product(selection.get("layers", []), selection.get("cases", []),
+                                 selection.get("sizes", []), selection.get("backends", [])))
+
+
+def summarize(before, after, expected_keys):
     summaries = []
-    keys = sorted({(r["layer"], r["case"], r["size"], r["backend"])
-                   for report in (before, after) for r in report["records"]})
-    for key in keys:
-        groups = [[r for r in report["records"] if not r["discarded"]
-                   and (r["layer"], r["case"], r["size"], r["backend"]) == key]
-                  for report in (before, after)]
+    keys = set(expected_keys)
+    observed = {(r["layer"], r["case"], r["size"], r["backend"])
+                for report in (before, after) for r in report["records"]}
+    scope_matches = (observed <= keys
+                     and all(selection_keys(report) == keys for report in (before, after)))
+    # Enumerate the requested matrix, not only groups that survived execution.
+    for key in sorted(keys):
+        records = [[r for r in report["records"]
+                    if (r["layer"], r["case"], r["size"], r["backend"]) == key]
+                   for report in (before, after)]
+        groups = [[r for r in group if r["discarded"] is False] for group in records]
+        warmups = [[r for r in group if r["discarded"] is True] for group in records]
         expected = before["samples"]
-        complete = (before["terminal"] and after["terminal"]
-                    and expected > 0 and expected == after["samples"]
-                    and all(len(group) == expected and all(matrix.qualified_record(r) for r in group)
-                            for group in groups))
+        complete = (scope_matches and before["terminal"] is True and after["terminal"] is True
+                    and type(expected) is int and expected > 0 and expected == after["samples"]
+                    and all(report.get("discarded_iterations") == 1 for report in (before, after))
+                    and all(len(group) == expected
+                            and {r["iteration"] for r in group} == set(range(1, expected + 1))
+                            for group in groups)
+                    and all(len(group) == 1 and group[0]["iteration"] == 0 for group in warmups)
+                    and all(len(group) == expected + 1
+                            and all(type(r["iteration"]) is int and matrix.qualified_record(r)
+                                    for r in group) for group in records))
         item = dict(zip(("layer", "case", "size", "backend"), key))
         item.update(qualified=complete, before_samples=len(groups[0]), after_samples=len(groups[1]))
         if complete:
@@ -292,7 +310,10 @@ def main():
         print(name, "driver exit", statuses[name], flush=True)
     identity["driver_exits"] = statuses
     if len(reports) == 2:
-        identity["groups"] = summarize(reports["baseline"], reports["candidate"])
+        requested = selection_keys({"sizes": [int(size) for size in args.sizes.split(",")],
+                                    "cases": args.cases.split(","), "layers": layers,
+                                    "backends": args.backends.split(",")})
+        identity["groups"] = summarize(reports["baseline"], reports["candidate"], requested)
     identity["all_paths_succeeded"] = (
         len(reports) == 2 and all(status == 0 for status in statuses.values())
         and all(report.get("terminal") and report.get("all_paths_succeeded") for report in reports.values())

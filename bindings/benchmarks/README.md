@@ -129,6 +129,11 @@ native/launcher hashes and all raw matrix outcomes remain in the artifact.
 Each driver's source/artifact guards still apply. Result ratios are ratios of
 medians from sequential baseline/candidate runs, not alternated paired samples.
 Any refused, incomplete or failed sample prevents a group speedup claim.
+Comparison coverage is derived from the requested matrix, including groups
+missing from both reports. Each group requires exactly one successful discarded
+iteration and all distinct measured iteration IDs. Mismatched selections or
+unrequested records refuse qualification; no median is published for a failed
+group. This guards evidence completeness without running or shortening workloads.
 
 ```console
 gh workflow run native-bindings.yml --ref feat/978-boundary-baseline \
