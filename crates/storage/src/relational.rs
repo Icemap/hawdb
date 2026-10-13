@@ -6300,15 +6300,25 @@ fn apply_transaction_inner(
             }
         }
     }
-    let index_capture = index_capture_limits.map(|capture_limits| {
-        capture_relational_index_changes(
-            state,
-            &next,
-            &changed_keys,
-            &full_index_rebuild,
-            capture_limits,
-        )
-    });
+    let index_capture = index_capture_limits
+        .map(|capture_limits| match checkpoint_allocations {
+            Some(context) => capture_relational_index_changes_with_allocations(
+                state,
+                &next,
+                &changed_keys,
+                &full_index_rebuild,
+                capture_limits,
+                Some(context),
+            ),
+            None => Ok(capture_relational_index_changes(
+                state,
+                &next,
+                &changed_keys,
+                &full_index_rebuild,
+                capture_limits,
+            )),
+        })
+        .transpose()?;
     let row_capture = row_capture_limits
         .map(|capture_limits| match checkpoint_allocations {
             Some(context) => capture_relational_row_changes_with_allocations(
@@ -7526,6 +7536,115 @@ fn refresh_indexes_for_keys(
     Ok(())
 }
 
+fn clone_string_with_allocations(
+    text: &str,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<String, RelationalError> {
+    match allocations {
+        Some(context) => context
+            .string(text)
+            .map_err(|error| RelationalError::Admission(error.to_string())),
+        None => Ok(text.to_owned()),
+    }
+}
+
+fn required_index_definitions_with_allocations(
+    schema: &RelationalTableSchema,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<Vec<RelationalIndexDefinition>, RelationalError> {
+    let Some(context) = allocations else {
+        return Ok(schema.required_index_definitions());
+    };
+    let count = 1usize
+        .checked_add(schema.unique_constraints.len())
+        .and_then(|count| count.checked_add(schema.indexes.len()))
+        .and_then(|count| count.checked_add(schema.foreign_keys.len()))
+        .ok_or_else(|| RelationalError::Admission("index definition capacity overflow".into()))?;
+    let mut definitions = context
+        .vector_capacity(count)
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    let mut push = |name, columns: &[String], role| -> Result<(), RelationalError> {
+        let columns = collect_results_with_allocations(
+            columns
+                .iter()
+                .map(|column| clone_string_with_allocations(column, Some(context))),
+            columns.len(),
+            Some(context),
+        )?;
+        let unit = context
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        definitions.push(RelationalIndexDefinition {
+            name,
+            columns,
+            role,
+        });
+        unit.finish();
+        Ok(())
+    };
+    push(
+        clone_string_with_allocations(RELATIONAL_PRIMARY_INDEX_NAME, Some(context))?,
+        &schema.primary_key,
+        RelationalIndexRole::Primary,
+    )?;
+    for (ordinal, columns) in schema.unique_constraints.iter().enumerate() {
+        push(
+            admitted_ordinal_index_name(RELATIONAL_UNIQUE_INDEX_PREFIX, ordinal, context)?,
+            columns,
+            RelationalIndexRole::UniqueConstraint,
+        )?;
+    }
+    for index in &schema.indexes {
+        push(
+            clone_string_with_allocations(&index.name, Some(context))?,
+            &index.columns,
+            if index.unique {
+                RelationalIndexRole::DeclaredUnique
+            } else {
+                RelationalIndexRole::Secondary
+            },
+        )?;
+    }
+    for (ordinal, key) in schema.foreign_keys.iter().enumerate() {
+        push(
+            admitted_ordinal_index_name(RELATIONAL_FOREIGN_KEY_INDEX_PREFIX, ordinal, context)?,
+            &key.columns,
+            RelationalIndexRole::ForeignKeySupport,
+        )?;
+    }
+    context
+        .checkpoint()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    Ok(definitions)
+}
+
+fn admitted_ordinal_index_name(
+    prefix: &str,
+    ordinal: usize,
+    context: &crate::background::CheckpointDecodeContext,
+) -> Result<String, RelationalError> {
+    use std::fmt::Write;
+    let digits = if ordinal == 0 {
+        1
+    } else {
+        ordinal.ilog10() as usize + 1
+    };
+    let capacity = prefix
+        .len()
+        .checked_add(digits)
+        .ok_or_else(|| RelationalError::Admission("index name capacity overflow".into()))?;
+    let mut name = context
+        .string_capacity(capacity)
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    let unit = context
+        .start_unit()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    write!(&mut name, "{prefix}{ordinal}")
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    unit.finish();
+    Ok(name)
+}
+
 fn capture_relational_index_changes(
     previous: &RelationalState,
     next: &RelationalState,
@@ -7533,8 +7652,27 @@ fn capture_relational_index_changes(
     full_index_rebuild: &BTreeSet<String>,
     limits: RelationalIndexChangeCaptureLimits,
 ) -> RelationalIndexChangeCapture {
+    capture_relational_index_changes_with_allocations(
+        previous,
+        next,
+        changed_keys,
+        full_index_rebuild,
+        limits,
+        None,
+    )
+    .expect("ordinary index capture has no allocation refusal")
+}
+
+fn capture_relational_index_changes_with_allocations(
+    previous: &RelationalState,
+    next: &RelationalState,
+    changed_keys: &BTreeMap<String, BTreeSet<RelationalKey>>,
+    full_index_rebuild: &BTreeSet<String>,
+    limits: RelationalIndexChangeCaptureLimits,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalIndexChangeCapture, RelationalError> {
     if !full_index_rebuild.is_empty() {
-        return RelationalIndexChangeCapture::Invalidated {
+        return Ok(RelationalIndexChangeCapture::Invalidated {
             reason: format!(
                 "schema-changing WAL requires new index roots for tables {}",
                 full_index_rebuild
@@ -7543,7 +7681,7 @@ fn capture_relational_index_changes(
                     .collect::<Vec<_>>()
                     .join(",")
             ),
-        };
+        });
     }
 
     let mut changes = Vec::new();
@@ -7554,19 +7692,25 @@ fn capture_relational_index_changes(
             .get(table)
             .or_else(|| previous.schemas.get(table))
         else {
-            return RelationalIndexChangeCapture::Invalidated {
+            return Ok(RelationalIndexChangeCapture::Invalidated {
                 reason: format!("changed table {table} has no relational schema"),
-            };
+            });
         };
         let previous_segment = previous.segments.get(table);
         let next_segment = next.segments.get(table);
-        let indexes = schema.required_index_definitions();
+        let definition_context =
+            allocations.map(|context| crate::background::CheckpointDecodeContext {
+                work: context.work.clone(),
+                memory: Default::default(),
+            });
+        let indexes =
+            required_index_definitions_with_allocations(schema, definition_context.as_ref())?;
 
         for primary_key in keys {
             let previous_row = previous_segment.and_then(|segment| segment.rows.get(primary_key));
             let next_row = next_segment.and_then(|segment| segment.rows.get(primary_key));
             if previous_row.is_some() != next_row.is_some()
-                && !push_captured_index_change_with_size(
+                && !push_captured_index_change_with_allocations(
                     &mut changes,
                     &mut encoded_bytes,
                     limits,
@@ -7576,32 +7720,50 @@ fn capture_relational_index_changes(
                         primary_key,
                         primary_key,
                     ),
-                    || RelationalIndexChange {
-                        table: table.clone(),
-                        index: RELATIONAL_PRIMARY_INDEX_NAME.to_string(),
-                        index_key: primary_key.clone(),
-                        primary_key: primary_key.clone(),
-                        kind: if next_row.is_some() {
-                            RelationalIndexChangeKind::Insert
-                        } else {
-                            RelationalIndexChangeKind::Delete
-                        },
+                    allocations,
+                    || {
+                        Ok(RelationalIndexChange {
+                            table: clone_string_with_allocations(table, allocations)?,
+                            index: clone_string_with_allocations(
+                                RELATIONAL_PRIMARY_INDEX_NAME,
+                                allocations,
+                            )?,
+                            index_key: clone_key_with_allocations(primary_key, allocations)?,
+                            primary_key: clone_key_with_allocations(primary_key, allocations)?,
+                            kind: if next_row.is_some() {
+                                RelationalIndexChangeKind::Insert
+                            } else {
+                                RelationalIndexChangeKind::Delete
+                            },
+                        })
                     },
-                )
+                )?
             {
-                return capture_limit_invalidated(limits);
+                return Ok(capture_limit_invalidated(limits));
             }
 
             for index in indexes
                 .iter()
                 .filter(|index| index.role != RelationalIndexRole::Primary)
             {
-                let positions = match column_positions(schema, &index.columns) {
+                let position_context =
+                    allocations.map(|context| crate::background::CheckpointDecodeContext {
+                        work: context.work.clone(),
+                        memory: Default::default(),
+                    });
+                let positions = match column_positions_with_allocations(
+                    schema,
+                    &index.columns,
+                    position_context.as_ref(),
+                ) {
                     Ok(positions) => positions,
+                    Err(error @ RelationalError::Admission(_)) if allocations.is_some() => {
+                        return Err(error)
+                    }
                     Err(error) => {
-                        return RelationalIndexChangeCapture::Invalidated {
+                        return Ok(RelationalIndexChangeCapture::Invalidated {
                             reason: error.to_string(),
-                        };
+                        })
                     }
                 };
                 let includes_row = |row: &&RelationalRow| {
@@ -7635,29 +7797,37 @@ fn capture_relational_index_changes(
                         ),
                         primary_key,
                     );
-                    if !push_captured_index_change_with_size(
+                    if !push_captured_index_change_with_allocations(
                         &mut changes,
                         &mut encoded_bytes,
                         limits,
                         change_bytes,
-                        || RelationalIndexChange {
-                            table: table.clone(),
-                            index: index.name.clone(),
-                            index_key: row_key(row, &positions),
-                            primary_key: primary_key.clone(),
-                            kind,
+                        allocations,
+                        || {
+                            Ok(RelationalIndexChange {
+                                table: clone_string_with_allocations(table, allocations)?,
+                                index: clone_string_with_allocations(&index.name, allocations)?,
+                                index_key: row_key_with_allocations(row, &positions, allocations)?,
+                                primary_key: clone_key_with_allocations(primary_key, allocations)?,
+                                kind,
+                            })
                         },
-                    ) {
-                        return capture_limit_invalidated(limits);
+                    )? {
+                        return Ok(capture_limit_invalidated(limits));
                     }
                 }
             }
         }
     }
-    RelationalIndexChangeCapture::Captured {
+    if let Some(context) = allocations {
+        context
+            .checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    }
+    Ok(RelationalIndexChangeCapture::Captured {
         changes,
         encoded_bytes,
-    }
+    })
 }
 
 fn capture_relational_row_changes(
@@ -7901,25 +8071,32 @@ fn index_includes_key(index: &RelationalIndexDefinition, key: &RelationalKey) ->
             .any(|value| matches!(value, RelationalValue::Null))
 }
 
-fn push_captured_index_change_with_size(
+fn push_captured_index_change_with_allocations(
     changes: &mut Vec<RelationalIndexChange>,
     encoded_bytes: &mut usize,
     limits: RelationalIndexChangeCaptureLimits,
     change_bytes: Option<usize>,
-    make_change: impl FnOnce() -> RelationalIndexChange,
-) -> bool {
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+    make_change: impl FnOnce() -> Result<RelationalIndexChange, RelationalError>,
+) -> Result<bool, RelationalError> {
     let Some(change_bytes) = change_bytes else {
-        return false;
+        return Ok(false);
     };
     let Some(next_bytes) = encoded_bytes.checked_add(change_bytes) else {
-        return false;
+        return Ok(false);
     };
     if changes.len() >= limits.max_entries.get() || next_bytes > limits.max_bytes.get() {
-        return false;
+        return Ok(false);
     }
-    changes.push(make_change());
+    let change = make_change()?;
+    match allocations {
+        Some(context) => context
+            .push(changes, change)
+            .map_err(|error| RelationalError::Admission(error.to_string()))?,
+        None => changes.push(change),
+    }
     *encoded_bytes = next_bytes;
-    true
+    Ok(true)
 }
 
 fn capture_limit_invalidated(
