@@ -144,6 +144,29 @@ impl OwnerPauseProbe {
     }
 }
 
+#[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+pub(super) struct HandoffPauseForTest {
+    observed: std::sync::mpsc::Receiver<()>,
+    resume: std::sync::mpsc::Sender<()>,
+}
+
+#[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+impl HandoffPauseForTest {
+    pub(super) fn wait(
+        &self,
+        remaining: Duration,
+    ) -> std::result::Result<(), std::sync::mpsc::RecvTimeoutError> {
+        self.observed.recv_timeout(remaining)
+    }
+}
+
+#[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+impl Drop for HandoffPauseForTest {
+    fn drop(&mut self) {
+        let _ = self.resume.send(());
+    }
+}
+
 #[derive(Debug)]
 pub(super) struct Source {
     store: GraphStore,
@@ -625,6 +648,17 @@ impl Control {
             && state.selected.is_none()
             && state.retired.is_none()
             && state.task.is_none())
+    }
+
+    #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+    pub(super) fn pause_idle_handoff_for_test(&self) -> Result<HandoffPauseForTest> {
+        let (paused, observed) = std::sync::mpsc::channel();
+        let (resume, continuation) = std::sync::mpsc::channel();
+        self.lock()?.idle_handoff_probe = Some(Arc::new(OwnerPauseProbe {
+            paused,
+            resume: Mutex::new(continuation),
+        }));
+        Ok(HandoffPauseForTest { observed, resume })
     }
 
     pub(super) fn has_pending_handoff(&self) -> bool {

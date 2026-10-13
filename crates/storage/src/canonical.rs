@@ -871,6 +871,17 @@ pub enum CanonicalSegmentError {
     Corrupt(String),
 }
 
+impl CanonicalSegmentError {
+    /// Canonical reads keep work refusal resumable, while an unreadable or
+    /// corrupt source must invalidate every snapshot sharing its live handle.
+    pub(crate) fn into_checkpoint_read_error(self) -> hawdb_core::HawDBError {
+        match self {
+            Self::Work(error) => hawdb_core::HawDBError::from_storage_error(error),
+            error => hawdb_core::HawDBError::StorageIntegrity(error.to_string()),
+        }
+    }
+}
+
 impl Display for CanonicalSegmentError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match self {

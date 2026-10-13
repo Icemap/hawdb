@@ -35,6 +35,12 @@ fn selected_checkpoint_does_not_make_cached_reads_wait_for_the_writer() {
     let sequencer = CommitSequencer::new(database, WalGroupCommitConfig::default());
     let previous = sequencer.read_view().unwrap();
     let before = previous.snapshot.0.published_read_view();
+    // Keep the selected generation pending: an idle owner normally adopts it
+    // before a polling reader can observe this deliberately intermediate state.
+    let handoff = sequencer
+        .checkpoint_control
+        .pause_idle_handoff_for_test()
+        .unwrap();
     drop(suspension);
     let deadline = Instant::now() + Duration::from_secs(15);
     while !sequencer
@@ -47,6 +53,9 @@ fn selected_checkpoint_does_not_make_cached_reads_wait_for_the_writer() {
         assert!(Instant::now() < deadline, "owner did not publish");
         std::thread::sleep(Duration::from_millis(5));
     }
+    handoff
+        .wait(deadline.saturating_duration_since(Instant::now()))
+        .expect("owner did not reach handoff pause");
     let (sent, received) = mpsc::channel();
     let result = std::thread::scope(|scope| {
         let writer = sequencer.lock().unwrap();
@@ -75,6 +84,7 @@ fn selected_checkpoint_does_not_make_cached_reads_wait_for_the_writer() {
     drop(adopted);
     drop(current);
     drop(previous);
+    drop(handoff);
     drop(sequencer);
     let mut reopened = Database::open(&path).unwrap();
     assert_eq!(

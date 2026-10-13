@@ -80,10 +80,7 @@ impl<'a, R: OverlayRecord + CheckpointCanonicalRecord + 'a, D: Iterator<Item = &
             .and_then(Iterator::next)
             .expect("peeked base record exists")
             .map(CheckpointRecordRef::Owned)
-            .map_err(|error| match error {
-                CanonicalSegmentError::Work(error) => HawDBError::from_storage_error(error),
-                error => HawDBError::StorageIntegrity(error.to_string()),
-            })
+            .map_err(CanonicalSegmentError::into_checkpoint_read_error)
     }
     fn next_step(&mut self) -> Option<Result<Option<CheckpointRecordRef<'a, R>>>> {
         if let Err(error) = self.work.checkpoint() {

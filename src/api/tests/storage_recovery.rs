@@ -2702,12 +2702,19 @@ fn user_invalidates_old_snapshots_when_checkpoint_or_projection_reads_corrupt_ca
         };
         let error = result.unwrap_err();
         assert!(
+            matches!(error, crate::HawDBError::StorageIntegrity(_)),
+            "checkpoint={checkpoint}, error={error:?}"
+        );
+        assert!(
             error
                 .to_string()
                 .contains("failed content digest verification"),
             "{error}"
         );
-        assert!(db.storage_handle_poisoned().unwrap());
+        assert!(
+            db.storage_handle_poisoned().unwrap(),
+            "checkpoint={checkpoint}, error={error:?}"
+        );
         // Then a query of the independent empty SQL table fails without reading the damaged graph segment.
         assert!(snapshot
             .query_sql("SELECT id FROM snapshot_probe WHERE id = 1")

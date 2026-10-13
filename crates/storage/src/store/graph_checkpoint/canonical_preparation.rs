@@ -107,7 +107,7 @@ impl CanonicalPreparationState {
             while let Some(node) = self
                 .nodes
                 .peek(work)
-                .map_err(HawDBError::from_storage_error)?
+                .map_err(CanonicalSegmentError::into_checkpoint_read_error)?
             {
                 self.writer
                     .append_node(node, work)
@@ -123,7 +123,7 @@ impl CanonicalPreparationState {
             while let Some(relationship) = self
                 .relationships
                 .peek(work)
-                .map_err(HawDBError::from_storage_error)?
+                .map_err(CanonicalSegmentError::into_checkpoint_read_error)?
             {
                 self.writer
                     .append_relationship(relationship, work)
