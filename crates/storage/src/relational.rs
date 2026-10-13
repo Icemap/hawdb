@@ -575,6 +575,172 @@ pub struct RelationalTableSchema {
     pub indexes: Vec<RelationalIndexSchema>,
 }
 
+#[derive(Debug)]
+struct RelationalSchemaData {
+    schema: RelationalTableSchema,
+    _memory: crate::background::CheckpointAllocationOwner,
+}
+
+impl PartialEq for RelationalSchemaData {
+    fn eq(&self, other: &Self) -> bool {
+        self.schema == other.schema
+    }
+}
+impl Eq for RelationalSchemaData {}
+
+impl RelationalSchemaData {
+    fn checkpoint_edit(
+        &self,
+        work: &crate::background::CheckpointWorkContext,
+        edit: impl FnOnce(
+            &mut RelationalTableSchema,
+            &crate::background::CheckpointDecodeContext,
+        ) -> Result<(), RelationalError>,
+    ) -> Result<Arc<Self>, RelationalError> {
+        let context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        context
+            .reserve(std::mem::size_of::<Self>() + 2 * std::mem::size_of::<usize>())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let mut schema = clone_schema_with_allocations(&self.schema, &context)?;
+        edit(&mut schema, &context)?;
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let output = Arc::new(Self {
+            schema,
+            _memory: context.memory.into_inner(),
+        });
+        unit.finish();
+        work.checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        Ok(output)
+    }
+}
+
+fn clone_schema_strings(
+    values: &[String],
+    context: &crate::background::CheckpointDecodeContext,
+) -> Result<Vec<String>, RelationalError> {
+    collect_results_with_allocations(
+        values
+            .iter()
+            .map(|value| clone_string_with_allocations(value, Some(context))),
+        values.len(),
+        Some(context),
+    )
+}
+
+fn clone_column_with_allocations(
+    column: &RelationalColumnSchema,
+    context: &crate::background::CheckpointDecodeContext,
+) -> Result<RelationalColumnSchema, RelationalError> {
+    let default = match &column.default {
+        Some(RelationalColumnDefault::Literal(value)) => Some(RelationalColumnDefault::Literal(
+            value.as_ref().to_owned_value_with_allocations(context)?,
+        )),
+        Some(RelationalColumnDefault::UuidV7) => Some(RelationalColumnDefault::UuidV7),
+        None => None,
+    };
+    Ok(RelationalColumnSchema {
+        name: clone_string_with_allocations(&column.name, Some(context))?,
+        scalar_type: column.scalar_type,
+        nullable: column.nullable,
+        default,
+    })
+}
+
+fn clone_index_schema_with_allocations(
+    index: &RelationalIndexSchema,
+    context: &crate::background::CheckpointDecodeContext,
+) -> Result<RelationalIndexSchema, RelationalError> {
+    Ok(RelationalIndexSchema {
+        name: clone_string_with_allocations(&index.name, Some(context))?,
+        columns: clone_schema_strings(&index.columns, context)?,
+        unique: index.unique,
+    })
+}
+
+fn clone_schema_with_allocations(
+    schema: &RelationalTableSchema,
+    context: &crate::background::CheckpointDecodeContext,
+) -> Result<RelationalTableSchema, RelationalError> {
+    Ok(RelationalTableSchema {
+        name: clone_string_with_allocations(&schema.name, Some(context))?,
+        columns: collect_results_with_allocations(
+            schema
+                .columns
+                .iter()
+                .map(|column| clone_column_with_allocations(column, context)),
+            schema.columns.len(),
+            Some(context),
+        )?,
+        primary_key: clone_schema_strings(&schema.primary_key, context)?,
+        unique_constraints: collect_results_with_allocations(
+            schema
+                .unique_constraints
+                .iter()
+                .map(|columns| clone_schema_strings(columns, context)),
+            schema.unique_constraints.len(),
+            Some(context),
+        )?,
+        foreign_keys: collect_results_with_allocations(
+            schema.foreign_keys.iter().map(|key| {
+                Ok(RelationalForeignKeySchema {
+                    columns: clone_schema_strings(&key.columns, context)?,
+                    referenced_table: clone_string_with_allocations(
+                        &key.referenced_table,
+                        Some(context),
+                    )?,
+                    referenced_columns: clone_schema_strings(&key.referenced_columns, context)?,
+                    on_delete: key.on_delete,
+                    on_update: key.on_update,
+                })
+            }),
+            schema.foreign_keys.len(),
+            Some(context),
+        )?,
+        indexes: collect_results_with_allocations(
+            schema
+                .indexes
+                .iter()
+                .map(|index| clone_index_schema_with_allocations(index, context)),
+            schema.indexes.len(),
+            Some(context),
+        )?,
+    })
+}
+
+impl Clone for RelationalSchemaData {
+    fn clone(&self) -> Self {
+        Self::from(self.schema.clone())
+    }
+}
+
+impl From<RelationalTableSchema> for RelationalSchemaData {
+    fn from(schema: RelationalTableSchema) -> Self {
+        Self {
+            schema,
+            _memory: Default::default(),
+        }
+    }
+}
+
+impl std::ops::Deref for RelationalSchemaData {
+    type Target = RelationalTableSchema;
+    fn deref(&self) -> &Self::Target {
+        &self.schema
+    }
+}
+
+impl std::ops::DerefMut for RelationalSchemaData {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.schema
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RelationalIndexRole {
     Primary,
@@ -2787,7 +2953,7 @@ impl<'a> RelationalIndexPosting<'a> {
 
 #[derive(Debug)]
 pub struct RelationalState {
-    schemas: BTreeMap<String, Arc<RelationalTableSchema>>,
+    schemas: BTreeMap<String, Arc<RelationalSchemaData>>,
     segments: BTreeMap<String, Arc<RelationalTableSegment>>,
     overflow_segments: BTreeMap<Sha256Digest, RelationalOverflowSegment>,
     materialized_index_postings_resident: bool,
@@ -2938,7 +3104,7 @@ impl RelationalState {
                 .map_err(|error| RelationalError::Admission(error.to_string()))?;
             Ok(())
         }
-        reserve_tree::<String, Arc<RelationalTableSchema>>(self.schemas.len(), &allocations)?;
+        reserve_tree::<String, Arc<RelationalSchemaData>>(self.schemas.len(), &allocations)?;
         reserve_tree::<String, Arc<RelationalTableSegment>>(self.segments.len(), &allocations)?;
         reserve_tree::<Sha256Digest, RelationalOverflowSegment>(
             self.overflow_segments.len(),
@@ -3119,7 +3285,7 @@ impl RelationalState {
                 )
             })?;
             if schemas
-                .insert(table.table.clone(), Arc::new(table.schema.clone()))
+                .insert(table.table.clone(), Arc::new(table.schema.clone().into()))
                 .is_some()
             {
                 return Err(RelationalError::Corruption(format!(
@@ -4506,7 +4672,7 @@ impl RelationalState {
                 RelationalError::Admission("workspace metadata capacity overflow".into())
             })?;
             let node_bytes =
-                crate::cow::checkpoint_tree_node_bytes::<String, Arc<RelationalTableSchema>>()
+                crate::cow::checkpoint_tree_node_bytes::<String, Arc<RelationalSchemaData>>()
                     .checked_add(crate::cow::checkpoint_tree_node_bytes::<
                         String,
                         Arc<RelationalTableSegment>,
@@ -4977,7 +5143,7 @@ impl RelationalState {
     }
 
     pub fn table_schema(&self, table: &str) -> Option<&RelationalTableSchema> {
-        self.schemas.get(table).map(Arc::as_ref)
+        self.schemas.get(table).map(|schema| &schema.schema)
     }
 
     pub fn table_schema_digest(
@@ -4991,7 +5157,7 @@ impl RelationalState {
     }
 
     pub fn table_schemas(&self) -> impl DoubleEndedIterator<Item = &RelationalTableSchema> {
-        self.schemas.values().map(Arc::as_ref)
+        self.schemas.values().map(|schema| &schema.schema)
     }
 
     pub fn row(&self, table: &str, key: &RelationalKey) -> Option<&RelationalRow> {
@@ -6464,13 +6630,14 @@ fn apply_transaction_inner(
                     schema.name.clone(),
                     Arc::new(RelationalTableSegment::default()),
                 );
-                next.schemas.insert(schema.name.clone(), Arc::new(schema));
+                next.schemas
+                    .insert(schema.name.clone(), Arc::new(schema.into()));
             }
             RelationalWrite::AddColumn { table, column } => {
                 let mut schema = next
                     .schemas
                     .get(&table)
-                    .map(|schema| schema.as_ref().clone())
+                    .map(|schema| schema.schema.clone())
                     .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
                 if schema.column_position(&column.name).is_some() {
                     return Err(RelationalError::Schema(format!(
@@ -6539,7 +6706,7 @@ fn apply_transaction_inner(
                     .get_mut(&table)
                     .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
                 Arc::make_mut(segment).rows.append_value_to_all(&fill);
-                next.schemas.insert(table.clone(), Arc::new(schema));
+                next.schemas.insert(table.clone(), Arc::new(schema.into()));
                 insert_table_name_with_allocations(
                     &mut full_index_rebuild,
                     &table,
@@ -6559,7 +6726,6 @@ fn apply_transaction_inner(
                     .schemas
                     .get_mut(&table)
                     .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
-                let schema = Arc::make_mut(schema);
                 validate_column_list(schema, &index.columns, "index")?;
                 if index.name.is_empty()
                     || is_reserved_relational_index_name(&index.name)
@@ -6570,7 +6736,19 @@ fn apply_transaction_inner(
                         index.name
                     )));
                 }
-                schema.indexes.push(index);
+                match checkpoint_allocations {
+                    Some(context) => {
+                        *schema =
+                            schema.checkpoint_edit(&context.work, |schema, allocations| {
+                                let index =
+                                    clone_index_schema_with_allocations(&index, allocations)?;
+                                allocations
+                                    .push(&mut schema.indexes, index)
+                                    .map_err(|error| RelationalError::Admission(error.to_string()))
+                            })?;
+                    }
+                    None => Arc::make_mut(schema).indexes.push(index),
+                }
                 insert_table_name_with_allocations(
                     &mut full_index_rebuild,
                     &table,

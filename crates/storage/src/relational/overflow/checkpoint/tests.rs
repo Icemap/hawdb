@@ -513,7 +513,7 @@ fn deltas(state: &RelationalState) -> Vec<RelationalRowPageTableDelta> {
         },
         RelationalRowPageTableDelta {
             table: "messages".into(),
-            schema: Some(schema.clone()),
+            schema: Some(schema.schema.clone()),
             schema_digest,
             column_count: NonZeroU32::new(4).unwrap(),
             next_page_id: NonZeroU64::new(pages.len() as u64 + 1).unwrap(),

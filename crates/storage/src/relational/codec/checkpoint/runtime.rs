@@ -244,7 +244,7 @@ fn index_pages(
 }
 
 pub(crate) fn rebuild_indexes(
-    schemas: &BTreeMap<String, Arc<RelationalTableSchema>>,
+    schemas: &BTreeMap<String, Arc<crate::relational::RelationalSchemaData>>,
     segments: &mut BTreeMap<String, Arc<RelationalTableSegment>>,
     table: &str,
     work: &CheckpointWorkContext,

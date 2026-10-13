@@ -123,7 +123,9 @@ fn fixture() -> RelationalState {
                 _memory: Default::default(),
             }),
         );
-        state.schemas.insert(schema.name.clone(), Arc::new(schema));
+        state
+            .schemas
+            .insert(schema.name.clone(), Arc::new(schema.into()));
     }
     crate::relational::rebuild_indexes(&mut state, "children").unwrap();
     crate::relational::rebuild_indexes(&mut state, "parents").unwrap();

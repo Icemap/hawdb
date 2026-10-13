@@ -820,7 +820,7 @@ fn decode_relational_checkpoint_from_decoder<I: DecodeInput>(
             .as_ref()
             .map(|work| work.start_unit().map_err(checkpoint::work_error))
             .transpose()?;
-        state.schemas.insert(schema_name, Arc::new(schema));
+        state.schemas.insert(schema_name, Arc::new(schema.into()));
         state.segments.insert(
             name,
             Arc::new(RelationalTableSegment {

@@ -3086,3 +3086,102 @@ fn controlled_materialized_dml_denies_wide_directory_copy_without_source_mutatio
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }
+
+#[test]
+fn controlled_schema_copy_preserves_nested_metadata_and_releases_after_last_clone() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let mut transaction = create_upsert_table();
+    let RelationalWrite::CreateTable(mut schema) = transaction.writes.remove(0) else {
+        panic!("fixture schema");
+    };
+    schema.columns[2].default = Some(RelationalColumnDefault::Literal(RelationalValue::Text(
+        "d".repeat(128 * 1024),
+    )));
+    schema.foreign_keys.push(RelationalForeignKeySchema {
+        columns: vec!["owner".into()],
+        referenced_table: "parents".into(),
+        referenced_columns: vec!["id".into()],
+        on_delete: RelationalReferentialAction::Cascade,
+        on_update: RelationalReferentialAction::NoAction,
+    });
+    schema.indexes.push(RelationalIndexSchema {
+        name: "by_owner".into(),
+        columns: vec!["owner".into()],
+        unique: false,
+    });
+    let source = RelationalSchemaData::from(schema);
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = source.checkpoint_edit(&context.work, |_, _| Ok(()));
+        let copies = observer.finish();
+        if succeeds {
+            let copy = result.unwrap();
+            assert_eq!(copy.schema, source.schema);
+            let snapshot = copy.clone();
+            drop(copy);
+            drop(context);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes < ceiling - 128 * 1024)
+            );
+            drop(snapshot);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+            drop(context);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
+
+#[test]
+fn controlled_schema_edit_admits_index_vector_growth_and_keeps_source_unchanged() {
+    use crate::background::CheckpointWorkContext;
+    let mut transaction = create_upsert_table();
+    let RelationalWrite::CreateTable(schema) = transaction.writes.remove(0) else {
+        panic!("fixture schema");
+    };
+    let source = RelationalSchemaData::from(schema);
+    let added = RelationalIndexSchema {
+        name: "by_payload".into(),
+        columns: vec!["payload".into()],
+        unique: false,
+    };
+    let actual = source
+        .checkpoint_edit(&CheckpointWorkContext::default(), |schema, context| {
+            let owned = clone_index_schema_with_allocations(&added, context)?;
+            context
+                .push(&mut schema.indexes, owned)
+                .map_err(|error| RelationalError::Admission(error.to_string()))
+        })
+        .unwrap();
+    assert!(source.indexes.is_empty());
+    assert_eq!(actual.indexes, vec![added]);
+    assert_eq!(actual.columns, source.columns);
+    assert_eq!(actual.unique_constraints, source.unique_constraints);
+}
