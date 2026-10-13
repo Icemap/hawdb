@@ -2934,7 +2934,7 @@ fn controlled_materialized_dml_matches_all_capture_combinations_and_unique_swap(
                 memory: Default::default(),
             };
             let (actual, indexes, rows) = previous
-                .stage_materialized_dml_recovery_with_allocations(
+                .stage_materialized_recovery_with_allocations(
                     RelationalMaterializedRecoveryStage {
                         transaction: transaction.clone(),
                         mutation_limits: limits,
@@ -3037,7 +3037,7 @@ fn controlled_materialized_dml_denies_wide_directory_copy_without_source_mutatio
         };
         let input = transaction.clone();
         let observer = crate::test_allocator::AllocationObservation::start();
-        let result = previous.stage_materialized_dml_recovery_with_allocations(
+        let result = previous.stage_materialized_recovery_with_allocations(
             RelationalMaterializedRecoveryStage {
                 transaction: input,
                 mutation_limits: limits,
@@ -3694,4 +3694,201 @@ fn controlled_add_column_denies_wide_default_without_partial_schema_or_rows() {
         drop(permit);
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
+}
+
+#[test]
+fn controlled_materialized_schema_recovery_matches_all_capture_combinations_and_foreign_keys() {
+    use crate::background::CheckpointDecodeContext;
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let mut transaction = create_content_tables();
+    transaction.writes.extend([
+        RelationalWrite::Insert {
+            table: "content_anchors".into(),
+            rows: vec![anchor_row("anchor", "document")],
+            mode: RelationalInsertMode::Error,
+        },
+        RelationalWrite::Insert {
+            table: "content_documents".into(),
+            rows: vec![document_row("document")],
+            mode: RelationalInsertMode::Error,
+        },
+        RelationalWrite::AddColumn {
+            table: "content_anchors".into(),
+            column: RelationalColumnSchema {
+                name: "label".into(),
+                scalar_type: RelationalScalarType::Text,
+                nullable: false,
+                default: Some(RelationalColumnDefault::Literal(RelationalValue::Text(
+                    "label".into(),
+                ))),
+            },
+        },
+        RelationalWrite::CreateIndex {
+            table: "content_anchors".into(),
+            index: RelationalIndexSchema {
+                name: "label_index".into(),
+                columns: vec!["label".into()],
+                unique: false,
+            },
+        },
+    ]);
+    let previous = RelationalState::default();
+    for index_capture_limits in [None, Some(RelationalIndexChangeCaptureLimits::default())] {
+        for row_capture_limits in [None, Some(RelationalRowChangeCaptureLimits::default())] {
+            let expected = apply_transaction_inner(
+                &previous,
+                transaction.clone(),
+                limits,
+                overflow,
+                TransactionApplyOptions {
+                    index_capture_limits,
+                    row_capture_limits,
+                    ..TransactionApplyOptions::materialized()
+                },
+            )
+            .unwrap();
+            let context = CheckpointDecodeContext {
+                work: Default::default(),
+                memory: Default::default(),
+            };
+            let (actual, indexes, rows) = previous
+                .stage_materialized_recovery_with_allocations(
+                    RelationalMaterializedRecoveryStage {
+                        transaction: transaction.clone(),
+                        mutation_limits: limits,
+                        overflow_config: overflow,
+                        index_capture_limits,
+                        row_capture_limits,
+                    },
+                    &context,
+                )
+                .unwrap();
+            assert_eq!(indexes, expected.index_capture);
+            assert_eq!(rows, expected.row_capture);
+            for table in ["content_documents", "content_anchors"] {
+                assert_eq!(
+                    actual.table_schema(table),
+                    expected.state.table_schema(table)
+                );
+                assert_eq!(
+                    actual.rows(table).collect::<Vec<_>>(),
+                    expected.state.rows(table).collect::<Vec<_>>()
+                );
+            }
+            for (name, postings) in &expected.state.segments["content_anchors"].indexes {
+                let actual_postings = &actual.segments["content_anchors"].indexes[name];
+                assert_eq!(
+                    actual_postings
+                        .pages
+                        .iter()
+                        .flat_map(|page| page.iter())
+                        .map(|(key, set)| (key, set.iter().collect::<Vec<_>>()))
+                        .collect::<Vec<_>>(),
+                    postings
+                        .pages
+                        .iter()
+                        .flat_map(|page| page.iter())
+                        .map(|(key, set)| (key, set.iter().collect::<Vec<_>>()))
+                        .collect::<Vec<_>>()
+                );
+            }
+            let deletion = RelationalTransaction {
+                writes: vec![RelationalWrite::DeleteByPrimaryKey {
+                    table: "content_documents".into(),
+                    keys: vec![RelationalKey(vec![RelationalValue::Text(
+                        "document".into(),
+                    )])],
+                }],
+            };
+            let rejected = actual.stage_materialized_recovery_with_allocations(
+                RelationalMaterializedRecoveryStage {
+                    transaction: deletion,
+                    mutation_limits: limits,
+                    overflow_config: overflow,
+                    index_capture_limits,
+                    row_capture_limits,
+                },
+                &context,
+            );
+            assert!(matches!(rejected, Err(RelationalError::Constraint(_))));
+            assert_eq!(actual.row_count("content_documents"), 1);
+        }
+    }
+    assert!(previous.table_schema("content_documents").is_none());
+}
+
+#[test]
+fn controlled_foreign_key_validation_denies_wide_key_before_copy_and_retries() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let id = "k".repeat(128 * 1024);
+    let source = RelationalState::default()
+        .stage_transaction(create_content_tables(), limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![
+                    RelationalWrite::Insert {
+                        table: "content_documents".into(),
+                        rows: vec![document_row(&id)],
+                        mode: RelationalInsertMode::Error,
+                    },
+                    RelationalWrite::Insert {
+                        table: "content_anchors".into(),
+                        rows: vec![anchor_row("anchor", &id)],
+                        mode: RelationalInsertMode::Error,
+                    },
+                ],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    let full = BTreeSet::from(["content_anchors".into()]);
+    let changed = BTreeMap::new();
+    for (ceiling, succeeds) in [(16 * 1024, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result =
+            validate_foreign_keys_incremental(&source, &source, &changed, &full, Some(&context));
+        let copies = observation.finish();
+        if succeeds {
+            result.unwrap();
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(context);
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+    assert_eq!(source.row_count("content_documents"), 1);
+    assert_eq!(source.row_count("content_anchors"), 1);
 }

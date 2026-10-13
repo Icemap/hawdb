@@ -3678,7 +3678,7 @@ impl RelationalState {
         apply_transaction(self, transaction, limits, overflow_config)
     }
 
-    pub(crate) fn stage_materialized_dml_recovery_with_allocations(
+    pub(crate) fn stage_materialized_recovery_with_allocations(
         &self,
         stage: RelationalMaterializedRecoveryStage,
         allocations: &crate::background::CheckpointDecodeContext,
@@ -3699,11 +3699,6 @@ impl RelationalState {
         } = stage;
         self.require_materialized_rows("relational transaction")?;
         admit_transaction(&transaction, mutation_limits)?;
-        if transaction.changes_index_schema() {
-            return Err(RelationalError::Admission(
-                "controlled materialized DML recovery requires schema-stable WAL".into(),
-            ));
-        }
         let result = apply_transaction_inner(
             self,
             transaction,
@@ -7493,7 +7488,13 @@ fn apply_transaction_inner(
     };
     match (index_mode, constraint_index) {
         (TransactionIndexMode::Materialized, None) => {
-            validate_foreign_keys_incremental(state, &next, &changed_keys, &full_index_rebuild)?;
+            validate_foreign_keys_incremental(
+                state,
+                &next,
+                &changed_keys,
+                &full_index_rebuild,
+                checkpoint_allocations,
+            )?;
         }
         (TransactionIndexMode::Authoritative, Some(constraint_index)) => {
             let changes = index_capture
@@ -8816,6 +8817,48 @@ fn clone_string_with_allocations(
     }
 }
 
+fn unique_index_definition_with_allocations(
+    schema: &RelationalTableSchema,
+    columns: &[String],
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<Option<RelationalIndexDefinition>, RelationalError> {
+    let Some(context) = allocations else {
+        return Ok(schema.unique_index_definition(columns));
+    };
+    let (name, role) = if columns == schema.primary_key {
+        (
+            clone_string_with_allocations(RELATIONAL_PRIMARY_INDEX_NAME, Some(context))?,
+            RelationalIndexRole::Primary,
+        )
+    } else if let Some(ordinal) = schema
+        .unique_constraints
+        .iter()
+        .position(|candidate| candidate.as_slice() == columns)
+    {
+        (
+            admitted_ordinal_index_name(RELATIONAL_UNIQUE_INDEX_PREFIX, ordinal, context)?,
+            RelationalIndexRole::UniqueConstraint,
+        )
+    } else if let Some(index) = schema
+        .indexes
+        .iter()
+        .find(|index| index.unique && index.columns == columns)
+    {
+        (
+            clone_string_with_allocations(&index.name, Some(context))?,
+            RelationalIndexRole::DeclaredUnique,
+        )
+    } else {
+        return Ok(None);
+    };
+    let columns = clone_schema_strings(columns, context)?;
+    Ok(Some(RelationalIndexDefinition {
+        name,
+        columns,
+        role,
+    }))
+}
+
 fn required_index_definitions_with_allocations(
     schema: &RelationalTableSchema,
     allocations: Option<&crate::background::CheckpointDecodeContext>,
@@ -9517,13 +9560,23 @@ fn validate_foreign_keys_incremental(
     next: &RelationalState,
     changed_keys: &BTreeMap<String, BTreeSet<RelationalKey>>,
     full_validation_tables: &BTreeSet<String>,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
 ) -> Result<(), RelationalError> {
     for (table, schema) in &next.schemas {
         let Some(segment) = next.segments.get(table) else {
             continue;
         };
         for foreign_key in &schema.foreign_keys {
-            let local_positions = column_positions(schema, &foreign_key.columns)?;
+            let position_context =
+                allocations.map(|context| crate::background::CheckpointDecodeContext {
+                    work: context.work.clone(),
+                    memory: Default::default(),
+                });
+            let local_positions = column_positions_with_allocations(
+                schema,
+                &foreign_key.columns,
+                position_context.as_ref(),
+            )?;
             let referenced_schema =
                 next.schemas
                     .get(&foreign_key.referenced_table)
@@ -9533,8 +9586,11 @@ fn validate_foreign_keys_incremental(
                             foreign_key.referenced_table
                         ))
                     })?;
-            let referenced_positions =
-                column_positions(referenced_schema, &foreign_key.referenced_columns)?;
+            let referenced_positions = column_positions_with_allocations(
+                referenced_schema,
+                &foreign_key.referenced_columns,
+                position_context.as_ref(),
+            )?;
             validate_foreign_key_shape(
                 table,
                 schema,
@@ -9546,12 +9602,26 @@ fn validate_foreign_keys_incremental(
 
             if full_validation_tables.contains(table) {
                 for row in segment.rows.values() {
-                    validate_foreign_key_row(next, table, row, foreign_key, &local_positions)?;
+                    validate_foreign_key_row(
+                        next,
+                        table,
+                        row,
+                        foreign_key,
+                        &local_positions,
+                        allocations,
+                    )?;
                 }
             } else if let Some(keys) = changed_keys.get(table) {
                 for key in keys {
                     if let Some(row) = segment.rows.get(key) {
-                        validate_foreign_key_row(next, table, row, foreign_key, &local_positions)?;
+                        validate_foreign_key_row(
+                            next,
+                            table,
+                            row,
+                            foreign_key,
+                            &local_positions,
+                            allocations,
+                        )?;
                     }
                 }
             }
@@ -9566,14 +9636,35 @@ fn validate_foreign_keys_incremental(
                 else {
                     continue;
                 };
-                let previous_target = row_key(previous_row, &referenced_positions);
-                if foreign_key_target_exists(next, foreign_key, &previous_target)? {
+                let key_context =
+                    allocations.map(|context| crate::background::CheckpointDecodeContext {
+                        work: context.work.clone(),
+                        memory: Default::default(),
+                    });
+                let previous_target = row_key_with_allocations(
+                    previous_row,
+                    &referenced_positions,
+                    key_context.as_ref(),
+                )?;
+                if foreign_key_target_exists(next, foreign_key, &previous_target, allocations)? {
                     continue;
                 }
-                if segment.rows.values().any(|row| {
-                    let local_key = row_key(row, &local_positions);
-                    !key_contains_null(&local_key) && local_key == previous_target
-                }) {
+                let mut referenced = false;
+                for row in segment.rows.values() {
+                    let unit = allocations
+                        .map(|context| context.start_unit())
+                        .transpose()
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                    referenced = !key_contains_null(&previous_target)
+                        && row_matches_key(row, &local_positions, &previous_target);
+                    if let Some(unit) = unit {
+                        unit.finish();
+                    }
+                    if referenced {
+                        break;
+                    }
+                }
+                if referenced {
                     return Err(RelationalError::Constraint(format!(
                         "foreign key from {table} to {} prevents removing a visible target",
                         foreign_key.referenced_table
@@ -9593,9 +9684,16 @@ fn validate_foreign_key_shape(
     local_positions: &[usize],
     referenced_positions: &[usize],
 ) -> Result<(), RelationalError> {
-    let references_unique_key = referenced_schema
-        .unique_index_definition(&foreign_key.referenced_columns)
-        .is_some();
+    let columns = &foreign_key.referenced_columns;
+    let references_unique_key = *columns == referenced_schema.primary_key
+        || referenced_schema
+            .unique_constraints
+            .iter()
+            .any(|candidate| candidate == columns)
+        || referenced_schema
+            .indexes
+            .iter()
+            .any(|index| index.unique && index.columns == *columns);
     if !references_unique_key {
         return Err(RelationalError::Schema(format!(
             "foreign key from {table} must reference a primary or unique key on {}",
@@ -9620,9 +9718,15 @@ fn validate_foreign_key_row(
     row: &RelationalRow,
     foreign_key: &RelationalForeignKeySchema,
     local_positions: &[usize],
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
 ) -> Result<(), RelationalError> {
-    let key = row_key(row, local_positions);
-    if key_contains_null(&key) || foreign_key_target_exists(state, foreign_key, &key)? {
+    let key_context = allocations.map(|context| crate::background::CheckpointDecodeContext {
+        work: context.work.clone(),
+        memory: Default::default(),
+    });
+    let key = row_key_with_allocations(row, local_positions, key_context.as_ref())?;
+    if key_contains_null(&key) || foreign_key_target_exists(state, foreign_key, &key, allocations)?
+    {
         return Ok(());
     }
     Err(RelationalError::Constraint(format!(
@@ -9635,6 +9739,7 @@ fn foreign_key_target_exists(
     state: &RelationalState,
     foreign_key: &RelationalForeignKeySchema,
     key: &RelationalKey,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
 ) -> Result<bool, RelationalError> {
     let schema = state
         .schemas
@@ -9645,14 +9750,22 @@ fn foreign_key_target_exists(
                 foreign_key.referenced_table
             ))
         })?;
-    let definition = schema
-        .unique_index_definition(&foreign_key.referenced_columns)
-        .ok_or_else(|| {
-            RelationalError::Schema(format!(
-                "foreign key references non-unique columns on {}",
-                foreign_key.referenced_table
-            ))
-        })?;
+    let definition_context =
+        allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
+    let definition = unique_index_definition_with_allocations(
+        schema,
+        &foreign_key.referenced_columns,
+        definition_context.as_ref(),
+    )?
+    .ok_or_else(|| {
+        RelationalError::Schema(format!(
+            "foreign key references non-unique columns on {}",
+            foreign_key.referenced_table
+        ))
+    })?;
     if definition.role == RelationalIndexRole::Primary {
         return Ok(state.row(&foreign_key.referenced_table, key).is_some());
     }

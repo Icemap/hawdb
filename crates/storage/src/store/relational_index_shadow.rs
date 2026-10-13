@@ -1274,10 +1274,9 @@ impl GraphStore {
         let (next, index_capture, row_capture) =
             if let Some(context) = allocations.as_ref()
                 && !authoritative
-                && !transaction.changes_schema()
             {
                 self.relational_state
-                    .stage_materialized_dml_recovery_with_allocations(
+                    .stage_materialized_recovery_with_allocations(
                         crate::relational::RelationalMaterializedRecoveryStage {
                             transaction,
                             mutation_limits: self.relational_mutation_limits,
@@ -3534,6 +3533,76 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn controlled_shadow_schema_recovery_admits_before_wide_copy_and_preserves_source() {
+        use crate::background::CheckpointWorkContext;
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+            RuntimeWorkRequest,
+        };
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-controlled-shadow-schema-{}",
+            hawdb_core::generate_uuidv7().unwrap()
+        ));
+        let mut catalog = Catalog::default();
+        let store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                relational_index_mode: RelationalIndexMode::Shadow,
+                ..WalReplayConfig::default()
+            },
+        )
+        .unwrap();
+        let mut transaction = create_recovery_documents_table("doc-1");
+        let RelationalWrite::CreateTable(schema) = &mut transaction.writes[0] else {
+            panic!("fixture schema");
+        };
+        schema.indexes[0].name = "i".repeat(128 * 1024);
+        for (ceiling, succeeds) in [(16 * 1024, false), (16 * 1024 * 1024, true)] {
+            let governor = RuntimeGovernor::detect(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(ceiling),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                IoConcurrencyBudget::new(2, 1),
+            );
+            governor.pin_resources();
+            let permit = governor
+                .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+                .unwrap();
+            let work =
+                CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+            let input = transaction.clone();
+            let observation = crate::test_allocator::AllocationObservation::start();
+            let prepared = store.prepare_recovered_relational_transaction_with_work_context(
+                input,
+                None,
+                Some(&work),
+            );
+            let copies = observation.finish();
+            if succeeds {
+                let prepared = prepared.unwrap();
+                assert_eq!(prepared.next.row_count("documents"), 1);
+                assert!(prepared.next.table_schema("documents").is_some());
+                drop(prepared);
+            } else {
+                assert!(matches!(
+                    prepared,
+                    Err(hawdb_storage::relational::RelationalError::Admission(_))
+                ));
+                assert_eq!(copies, 0);
+            }
+            assert!(store.relational_state.table_schema("documents").is_none());
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+        drop(store);
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     #[test]
