@@ -3185,3 +3185,203 @@ fn controlled_schema_edit_admits_index_vector_growth_and_keeps_source_unchanged(
     assert_eq!(actual.columns, source.columns);
     assert_eq!(actual.unique_constraints, source.unique_constraints);
 }
+
+#[test]
+fn controlled_index_rebuild_matches_all_postings_and_preserves_shared_rows() {
+    use crate::background::CheckpointDecodeContext;
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let source = RelationalState::default()
+        .stage_transaction(create_cascade_tables(), limits, overflow)
+        .unwrap()
+        .stage_transaction(seed_cascade_rows(), limits, overflow)
+        .unwrap();
+    let mut expected = source.clone();
+    let mut actual = source.clone();
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    for table in [
+        "cascade_parents",
+        "cascade_children",
+        "cascade_grandchildren",
+    ] {
+        rebuild_indexes(&mut expected, table).unwrap();
+        rebuild_indexes_with_allocations(&mut actual, table, &context).unwrap();
+        assert!(actual.segments[table]
+            .rows
+            .pages
+            .shares_storage_with(&source.segments[table].rows.pages));
+        for definition in source
+            .table_schema(table)
+            .unwrap()
+            .required_index_definitions()
+        {
+            if definition.role == RelationalIndexRole::Primary {
+                continue;
+            }
+            let positions =
+                column_positions(source.table_schema(table).unwrap(), &definition.columns).unwrap();
+            for (_, row) in source.rows(table) {
+                let key = row_key(row, &positions);
+                assert_eq!(
+                    actual
+                        .index_lookup(table, &definition.name, &key)
+                        .map(|set| set.iter().collect::<Vec<_>>()),
+                    expected
+                        .index_lookup(table, &definition.name, &key)
+                        .map(|set| set.iter().collect::<Vec<_>>())
+                );
+            }
+        }
+    }
+    assert_eq!(source.total_row_count(), 3);
+}
+
+#[test]
+fn controlled_index_rebuild_denies_wide_name_before_copy_and_retains_output_inventory() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let mut create = create_upsert_table();
+    let RelationalWrite::CreateTable(schema) = &mut create.writes[0] else {
+        panic!("fixture schema");
+    };
+    let name = "i".repeat(128 * 1024);
+    schema.indexes.push(RelationalIndexSchema {
+        name: name.clone(),
+        columns: vec!["owner".into()],
+        unique: false,
+    });
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let source = RelationalState::default()
+        .stage_transaction(create, limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![upsert_row("id", "owner", "body")],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    for (ceiling, succeeds) in [(16 * 1024, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let mut target = source.clone();
+        let original = target.segments["documents"].clone();
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = rebuild_indexes_with_allocations(&mut target, "documents", &context);
+        let copies = observer.finish();
+        if succeeds {
+            result.unwrap();
+            assert!(!Arc::ptr_eq(&target.segments["documents"], &original));
+            let key = RelationalKey(vec![RelationalValue::Text("owner".into())]);
+            assert_eq!(
+                target.index_lookup("documents", &name, &key).unwrap().len(),
+                1
+            );
+            let snapshot = target.clone();
+            drop(target);
+            drop(context);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes < ceiling - 128 * 1024)
+            );
+            drop(snapshot);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+            assert!(Arc::ptr_eq(&target.segments["documents"], &original));
+            drop(target);
+            drop(context);
+        }
+        drop(original);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
+
+#[test]
+fn controlled_index_rebuild_cancellation_preserves_segment_and_retries() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkProbe};
+    use hawdb_qos::{LocalQosPolicy, LocalQosScheduler};
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let source = RelationalState::default()
+        .stage_transaction(create_upsert_table(), limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![upsert_row("id", "owner", "body")],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    let mut target = source.clone();
+    let original = target.segments["documents"].clone();
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe
+        .cancel_after
+        .store(10, std::sync::atomic::Ordering::SeqCst);
+    let scheduler = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let context = CheckpointDecodeContext {
+        work: probe.context(scheduler.clone()),
+        memory: Default::default(),
+    };
+    assert!(matches!(
+        rebuild_indexes_with_allocations(&mut target, "documents", &context),
+        Err(RelationalError::Admission(_))
+    ));
+    probe.assert_released(&scheduler);
+    assert!(Arc::ptr_eq(&target.segments["documents"], &original));
+    let retry = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    rebuild_indexes_with_allocations(&mut target, "documents", &retry).unwrap();
+    assert!(!Arc::ptr_eq(&target.segments["documents"], &original));
+    let key = RelationalKey(vec![RelationalValue::Text("owner".into())]);
+    assert_eq!(
+        target
+            .index_lookup("documents", &relational_unique_index_name(0), &key)
+            .unwrap()
+            .len(),
+        1
+    );
+}

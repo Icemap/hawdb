@@ -2527,6 +2527,29 @@ struct RelationalIndexPages {
 }
 
 impl RelationalIndexPages {
+    fn checkpoint_empty(
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Self, RelationalError> {
+        let context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        context
+            .reserve(RelationalIndexDirectory::checkpoint_ownership_bytes())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let output = Self {
+            pages: RelationalIndexDirectory::from_checkpoint_value(
+                Vec::new(),
+                context.memory.into_inner(),
+            ),
+        };
+        unit.finish();
+        Ok(output)
+    }
+
     fn page_index(&self, key: &RelationalKey) -> Option<usize> {
         if self.pages.is_empty() {
             return None;
@@ -7057,7 +7080,10 @@ fn apply_transaction_inner(
     if index_mode == TransactionIndexMode::Materialized {
         for table in &touched {
             if full_index_rebuild.contains(table) {
-                rebuild_indexes(&mut next, table)?;
+                match checkpoint_allocations {
+                    Some(context) => rebuild_indexes_with_allocations(&mut next, table, context)?,
+                    None => rebuild_indexes(&mut next, table)?,
+                }
             } else if let Some(keys) = changed_keys.get(table) {
                 match checkpoint_allocations {
                     Some(context) => refresh_indexes_for_keys_with_allocations(
@@ -8194,6 +8220,94 @@ fn validate_value_type(
             value.scalar_type()
         )));
     }
+    Ok(())
+}
+
+fn rebuild_indexes_with_allocations(
+    state: &mut RelationalState,
+    table: &str,
+    allocations: &crate::background::CheckpointDecodeContext,
+) -> Result<(), RelationalError> {
+    let schema = state
+        .schemas
+        .get(table)
+        .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
+    let source = state
+        .segments
+        .get(table)
+        .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
+    let work = &allocations.work;
+    let definition_context = crate::background::CheckpointDecodeContext {
+        work: work.clone(),
+        memory: Default::default(),
+    };
+    let owned_context = crate::background::CheckpointDecodeContext {
+        work: work.clone(),
+        memory: Default::default(),
+    };
+    owned_context
+        .reserve(std::mem::size_of::<RelationalTableSegment>() + 2 * std::mem::size_of::<usize>())
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    let definitions =
+        required_index_definitions_with_allocations(schema, Some(&definition_context))?;
+    let mut indexes = BTreeMap::new();
+    for index in definitions
+        .iter()
+        .filter(|index| index.role != RelationalIndexRole::Primary)
+    {
+        let position_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let positions =
+            column_positions_with_allocations(schema, &index.columns, Some(&position_context))?;
+        let mut postings = RelationalIndexPages::checkpoint_empty(work)?;
+        for (primary_key, row) in source.rows.iter() {
+            let key_context = crate::background::CheckpointDecodeContext {
+                work: work.clone(),
+                memory: Default::default(),
+            };
+            let key = row_key_with_allocations(row, &positions, Some(&key_context))?;
+            if index.role.is_unique() && key_contains_null(&key) {
+                continue;
+            }
+            if index.role.is_unique() && postings.get(&key).is_some_and(|keys| !keys.is_empty()) {
+                return Err(RelationalError::Constraint(format!(
+                    "unique index {} on table {table} has a duplicate key",
+                    index.name
+                )));
+            }
+            let primary_key = clone_key_with_allocations(primary_key, Some(&key_context))?;
+            postings.insert_posting_with_allocations(key, primary_key, Some(allocations))?;
+        }
+        owned_context
+            .reserve(crate::cow::checkpoint_tree_node_bytes::<
+                String,
+                RelationalIndexPages,
+            >())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let name = clone_string_with_allocations(&index.name, Some(&owned_context))?;
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        indexes.insert(name, postings);
+        unit.finish();
+    }
+    let unit = work
+        .start_unit()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    let replacement = Arc::new(RelationalTableSegment {
+        rows: source.rows.clone(),
+        indexes,
+        _memory: owned_context.memory.into_inner(),
+    });
+    unit.finish();
+    work.checkpoint()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    *state
+        .segments
+        .get_mut(table)
+        .expect("validated rebuild table") = replacement;
     Ok(())
 }
 
