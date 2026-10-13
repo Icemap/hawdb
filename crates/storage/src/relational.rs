@@ -2007,9 +2007,12 @@ fn split_relational_row_page(pages: &mut Vec<RelationalRowPage>, index: usize) {
 const RELATIONAL_INDEX_PAGE_MAX_KEYS: usize = 256;
 const RELATIONAL_POSTING_PAGE_MAX_KEYS: usize = 256;
 
+type RelationalPostingPage = crate::cow::CowSegment<BTreeSet<RelationalKey>>;
+type RelationalPostingDirectory = crate::cow::CowSegment<Vec<RelationalPostingPage>>;
+
 #[derive(Debug, Clone, Default)]
 struct RelationalKeySetPages {
-    pages: Arc<Vec<Arc<BTreeSet<RelationalKey>>>>,
+    pages: RelationalPostingDirectory,
     len: usize,
 }
 
@@ -2025,41 +2028,206 @@ impl RelationalKeySetPages {
     }
 
     fn insert(&mut self, key: RelationalKey) -> bool {
+        self.insert_with_allocations(key, None)
+            .expect("ordinary posting insertion has no allocation refusal")
+    }
+
+    fn insert_with_allocations(
+        &mut self,
+        key: RelationalKey,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<bool, RelationalError> {
+        match allocations {
+            Some(context) => self.change_with_work_context(&key, true, &context.work),
+            None => Ok(self.insert_ordinary(key)),
+        }
+    }
+
+    fn remove(&mut self, key: &RelationalKey) -> bool {
+        self.remove_with_allocations(key, None)
+            .expect("ordinary posting removal has no allocation refusal")
+    }
+
+    fn remove_with_allocations(
+        &mut self,
+        key: &RelationalKey,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<bool, RelationalError> {
+        match allocations {
+            Some(context) => self.change_with_work_context(key, false, &context.work),
+            None => Ok(self.remove_ordinary(key)),
+        }
+    }
+
+    fn change_with_work_context(
+        &mut self,
+        key: &RelationalKey,
+        insert: bool,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<bool, RelationalError> {
+        let target = self.page_index(key);
+        let present = target.is_some_and(|index| self.pages[index].contains(key));
+        if present == insert {
+            return Ok(false);
+        }
+        let directory_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let page_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let split_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let capacity = self.pages.len().checked_add(1).ok_or_else(|| {
+            RelationalError::Admission("posting directory capacity overflow".into())
+        })?;
+        let mut directory = directory_context
+            .vector_capacity(capacity)
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        directory_context
+            .reserve(RelationalPostingDirectory::checkpoint_ownership_bytes())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        for page in self.pages.iter() {
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            directory.push(page.clone());
+            unit.finish();
+        }
+        let index = target.unwrap_or(0);
+        let previous_len = target.map_or(0, |index| self.pages[index].len());
+        let node_bytes = previous_len
+            .checked_add(3)
+            .and_then(|count| {
+                count.checked_mul(crate::cow::checkpoint_tree_node_bytes::<RelationalKey, ()>())
+            })
+            .and_then(|bytes| {
+                bytes.checked_add(2 * RelationalPostingPage::checkpoint_ownership_bytes())
+            })
+            .ok_or_else(|| RelationalError::Admission("posting page capacity overflow".into()))?;
+        page_context
+            .reserve(node_bytes)
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let mut page = BTreeSet::new();
+        if let Some(index) = target {
+            for old in self.pages[index].iter() {
+                let owned = old.clone_with_allocations(&page_context)?;
+                let unit = work
+                    .start_unit()
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                page.insert(owned);
+                unit.finish();
+            }
+        }
+        let incoming = if insert {
+            Some(key.clone_with_allocations(&page_context)?)
+        } else {
+            None
+        };
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        if let Some(incoming) = incoming {
+            page.insert(incoming);
+        } else {
+            page.remove(key);
+        }
+        unit.finish();
+        let right = if page.len() > RELATIONAL_POSTING_PAGE_MAX_KEYS {
+            let split = page
+                .iter()
+                .nth(page.len() / 2)
+                .expect("oversized posting page")
+                .clone_with_allocations(&split_context)?;
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            let right = page.split_off(&split);
+            unit.finish();
+            Some(right)
+        } else {
+            None
+        };
+        if page.is_empty() {
+            directory.remove(index);
+        } else {
+            let memory = page_context.memory.into_inner();
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            let page = RelationalPostingPage::from_checkpoint_value(page, memory.clone());
+            if target.is_some() {
+                directory[index] = page;
+            } else {
+                directory.push(page);
+            }
+            if let Some(right) = right {
+                directory.insert(
+                    index + 1,
+                    RelationalPostingPage::from_checkpoint_value(right, memory),
+                );
+            }
+            unit.finish();
+        }
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let output = RelationalPostingDirectory::from_checkpoint_value(
+            directory,
+            directory_context.memory.into_inner(),
+        );
+        unit.finish();
+        work.checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        self.pages = output;
+        self.len = if insert {
+            self.len.saturating_add(1)
+        } else {
+            self.len.saturating_sub(1)
+        };
+        Ok(true)
+    }
+
+    fn insert_ordinary(&mut self, key: RelationalKey) -> bool {
         if self.pages.is_empty() {
-            self.pages = Arc::new(vec![Arc::new(BTreeSet::from([key]))]);
+            self.pages = vec![BTreeSet::from([key]).into()].into();
             self.len = 1;
             return true;
         }
         let index = self
             .page_index(&key)
             .expect("non-empty posting pages have a target page");
-        let pages = Arc::make_mut(&mut self.pages);
-        let inserted = Arc::make_mut(&mut pages[index]).insert(key);
+        let pages = &mut *self.pages;
+        let inserted = pages[index].insert(key);
         if inserted {
             self.len = self.len.saturating_add(1);
         }
         if pages[index].len() > RELATIONAL_POSTING_PAGE_MAX_KEYS {
-            let page = Arc::make_mut(&mut pages[index]);
+            let page = &mut *pages[index];
             let split_key = page
                 .iter()
                 .nth(page.len() / 2)
                 .cloned()
                 .expect("oversized posting page is non-empty");
             let right = page.split_off(&split_key);
-            pages.insert(index + 1, Arc::new(right));
+            pages.insert(index + 1, right.into());
         }
         inserted
     }
 
-    fn remove(&mut self, key: &RelationalKey) -> bool {
+    fn remove_ordinary(&mut self, key: &RelationalKey) -> bool {
         let Some(index) = self.page_index(key) else {
             return false;
         };
         if !self.pages[index].contains(key) {
             return false;
         }
-        let pages = Arc::make_mut(&mut self.pages);
-        let removed = Arc::make_mut(&mut pages[index]).remove(key);
+        let pages = &mut *self.pages;
+        let removed = pages[index].remove(key);
         if removed {
             self.len = self.len.saturating_sub(1);
             if pages[index].is_empty() {
@@ -2086,7 +2254,12 @@ impl RelationalKeySetPages {
     fn shared_page_count(&self, other: &Self) -> usize {
         self.pages
             .iter()
-            .filter(|left| other.pages.iter().any(|right| Arc::ptr_eq(left, right)))
+            .filter(|left| {
+                other
+                    .pages
+                    .iter()
+                    .any(|right| left.shares_storage_with(right))
+            })
             .count()
     }
 }

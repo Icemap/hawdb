@@ -2561,3 +2561,162 @@ fn controlled_table_shell_omission_skips_wide_index_names_and_owns_arc_backing()
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
+
+#[test]
+fn controlled_posting_split_and_removal_match_ordinary_page_boundaries() {
+    use crate::background::CheckpointDecodeContext;
+    let mut source = RelationalKeySetPages::default();
+    for id in 0..256 {
+        source.insert(RelationalKey(vec![RelationalValue::BigInt(id)]));
+    }
+    let mut ordinary = source.clone();
+    let mut controlled = source.clone();
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    let added = RelationalKey(vec![RelationalValue::BigInt(256)]);
+    assert_eq!(
+        controlled
+            .insert_with_allocations(added.clone(), Some(&context))
+            .unwrap(),
+        ordinary.insert(added.clone())
+    );
+    assert_eq!(controlled.page_count(), ordinary.page_count());
+    assert_eq!(
+        controlled
+            .pages
+            .iter()
+            .map(|page| page.len())
+            .collect::<Vec<_>>(),
+        ordinary
+            .pages
+            .iter()
+            .map(|page| page.len())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        controlled.iter().collect::<Vec<_>>(),
+        ordinary.iter().collect::<Vec<_>>()
+    );
+    assert!(!controlled
+        .insert_with_allocations(added, Some(&context))
+        .unwrap());
+    for id in [0, 127, 128, 256] {
+        let key = RelationalKey(vec![RelationalValue::BigInt(id)]);
+        assert_eq!(
+            controlled
+                .remove_with_allocations(&key, Some(&context))
+                .unwrap(),
+            ordinary.remove(&key)
+        );
+    }
+    assert_eq!(
+        controlled.iter().collect::<Vec<_>>(),
+        ordinary.iter().collect::<Vec<_>>()
+    );
+    assert_eq!(source.len, 256);
+    assert_eq!(source.page_count(), 1);
+}
+
+#[test]
+fn controlled_posting_cancellation_preserves_shared_snapshot_and_retries() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkProbe};
+    use hawdb_qos::{LocalQosPolicy, LocalQosScheduler};
+    let mut source = RelationalKeySetPages::default();
+    source.insert(RelationalKey(vec![RelationalValue::BigInt(0)]));
+    let mut target = source.clone();
+    let probe = Arc::new(CheckpointWorkProbe::default());
+    probe
+        .cancel_after
+        .store(2, std::sync::atomic::Ordering::SeqCst);
+    let scheduler = LocalQosScheduler::new(LocalQosPolicy {
+        max_background_operations: Some(1),
+        max_total_background_operations: Some(1),
+        ..Default::default()
+    });
+    let context = CheckpointDecodeContext {
+        work: probe.context(scheduler.clone()),
+        memory: Default::default(),
+    };
+    let key = RelationalKey(vec![RelationalValue::BigInt(1)]);
+    assert!(matches!(
+        target.insert_with_allocations(key.clone(), Some(&context)),
+        Err(RelationalError::Admission(_))
+    ));
+    probe.assert_released(&scheduler);
+    assert!(target.pages.shares_storage_with(&source.pages));
+    assert_eq!(
+        target.iter().collect::<Vec<_>>(),
+        source.iter().collect::<Vec<_>>()
+    );
+    let retry = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    assert!(target.insert_with_allocations(key, Some(&retry)).unwrap());
+    assert_eq!(target.len, 2);
+    assert_eq!(source.len, 1);
+}
+
+#[test]
+fn controlled_posting_removal_denies_wide_copy_and_refunds_destroyed_page() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let key = RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]);
+    let mut source = RelationalKeySetPages::default();
+    source.insert(key.clone());
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let mut target = source.clone();
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = target.remove_with_allocations(&key, Some(&context));
+        let copies = observer.finish();
+        if succeeds {
+            assert!(result.unwrap());
+            assert!(target.is_empty());
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes > ceiling - 32 * 1024 && available_bytes < ceiling)
+            );
+            let snapshot = target.clone();
+            drop(target);
+            drop(context);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes < ceiling)
+            );
+            drop(snapshot);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+            assert!(target.pages.shares_storage_with(&source.pages));
+            drop(target);
+            drop(context);
+        }
+        assert_eq!(source.len, 1);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}

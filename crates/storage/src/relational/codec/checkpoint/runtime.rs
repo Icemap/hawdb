@@ -198,17 +198,17 @@ fn posting_pages(
     for key in keys {
         let unit = work.start_unit().map_err(work_error)?;
         if page.len() == RELATIONAL_POSTING_PAGE_MAX_KEYS {
-            pages.push(Arc::new(std::mem::take(&mut page)));
+            pages.push(std::mem::take(&mut page).into());
         }
         page.insert(key);
         unit.finish();
     }
     let unit = work.start_unit().map_err(work_error)?;
     if !page.is_empty() {
-        pages.push(Arc::new(page));
+        pages.push(page.into());
     }
     let result = RelationalKeySetPages {
-        pages: Arc::new(pages),
+        pages: pages.into(),
         len,
     };
     unit.finish();
