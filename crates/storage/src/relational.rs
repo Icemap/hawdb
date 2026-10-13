@@ -1005,6 +1005,14 @@ pub struct RelationalSparseRecoveryRow {
 /// workspace unchanged. The byte accounting deliberately includes the later
 /// replay-access ledger because sparse preparation and final staging retain
 /// both views at the same time.
+pub(crate) struct RelationalMaterializedRecoveryStage {
+    pub(crate) transaction: RelationalTransaction,
+    pub(crate) mutation_limits: RelationalMutationLimits,
+    pub(crate) overflow_config: RelationalOverflowConfig,
+    pub(crate) index_capture_limits: Option<RelationalIndexChangeCaptureLimits>,
+    pub(crate) row_capture_limits: Option<RelationalRowChangeCaptureLimits>,
+}
+
 pub(crate) struct RelationalResidentRecoveryStage<'a> {
     pub(crate) transaction: RelationalTransaction,
     pub(crate) mutation_limits: RelationalMutationLimits,
@@ -1540,6 +1548,48 @@ impl Clone for RelationalTableSegment {
 }
 
 impl RelationalTableSegment {
+    fn checkpoint_clone(
+        &self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Arc<Self>, RelationalError> {
+        let context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        context
+            .reserve(std::mem::size_of::<Self>() + 2 * std::mem::size_of::<usize>())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let mut indexes = BTreeMap::new();
+        for (name, pages) in &self.indexes {
+            context
+                .reserve(crate::cow::checkpoint_tree_node_bytes::<
+                    String,
+                    RelationalIndexPages,
+                >())
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            let name = context
+                .string(name)
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            indexes.insert(name, pages.clone());
+            unit.finish();
+        }
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let output = Arc::new(Self {
+            rows: self.rows.clone(),
+            indexes,
+            _memory: context.memory.into_inner(),
+        });
+        unit.finish();
+        work.checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        Ok(output)
+    }
+
     fn checkpoint_without_indexes(
         &self,
         work: &crate::background::CheckpointWorkContext,
@@ -1562,6 +1612,18 @@ impl RelationalTableSegment {
         unit.finish();
         Ok(output)
     }
+}
+
+fn mutable_segment_with_allocations<'a>(
+    segment: &'a mut Arc<RelationalTableSegment>,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<&'a mut RelationalTableSegment, RelationalError> {
+    if let Some(context) = allocations
+        && Arc::strong_count(segment) > 1
+    {
+        *segment = segment.checkpoint_clone(&context.work)?;
+    }
+    Ok(Arc::make_mut(segment))
 }
 
 const RELATIONAL_ROW_PAGE_MAX_ENTRIES: usize = 256;
@@ -3273,6 +3335,47 @@ impl RelationalState {
         self.require_materialized_rows("relational transaction")?;
         admit_transaction(&transaction, limits)?;
         apply_transaction(self, transaction, limits, overflow_config)
+    }
+
+    pub(crate) fn stage_materialized_dml_recovery_with_allocations(
+        &self,
+        stage: RelationalMaterializedRecoveryStage,
+        allocations: &crate::background::CheckpointDecodeContext,
+    ) -> Result<
+        (
+            Self,
+            Option<RelationalIndexChangeCapture>,
+            Option<RelationalRowChangeCapture>,
+        ),
+        RelationalError,
+    > {
+        let RelationalMaterializedRecoveryStage {
+            transaction,
+            mutation_limits,
+            overflow_config,
+            index_capture_limits,
+            row_capture_limits,
+        } = stage;
+        self.require_materialized_rows("relational transaction")?;
+        admit_transaction(&transaction, mutation_limits)?;
+        if transaction.changes_index_schema() {
+            return Err(RelationalError::Admission(
+                "controlled materialized DML recovery requires schema-stable WAL".into(),
+            ));
+        }
+        let result = apply_transaction_inner(
+            self,
+            transaction,
+            mutation_limits,
+            overflow_config,
+            TransactionApplyOptions {
+                index_capture_limits,
+                row_capture_limits,
+                checkpoint_allocations: Some(allocations),
+                ..TransactionApplyOptions::materialized()
+            },
+        )?;
+        Ok((result.state, result.index_capture, result.row_capture))
     }
 
     pub fn stage_transaction_with_index_changes(
@@ -6238,9 +6341,9 @@ fn apply_delete_cascades(
                 )?;
                 insert_changed_key_with_allocations(changed, &key, checkpoint_allocations)?;
                 insert_table_name_with_allocations(touched, &child_table, checkpoint_allocations)?;
-                let segment = Arc::make_mut(state.segments.get_mut(&child_table).ok_or_else(|| {
+                let segment = mutable_segment_with_allocations(state.segments.get_mut(&child_table).ok_or_else(|| {
                     RelationalError::Schema(format!("missing row segment for child table {child_table} during delete cascade"))
-                })?);
+                })?, checkpoint_allocations)?;
                 if let Some(context) = checkpoint_allocations {
                     segment
                         .rows
@@ -6521,7 +6624,7 @@ fn apply_transaction_inner(
                 let segment = next.segments.get_mut(&table).ok_or_else(|| {
                     RelationalError::Schema(format!("missing row segment for table {table}"))
                 })?;
-                let segment = Arc::make_mut(segment);
+                let segment = mutable_segment_with_allocations(segment, checkpoint_allocations)?;
                 for row in prepared_rows {
                     let key = row_key_with_allocations(&row, &primary_key, checkpoint_allocations)?;
                     if mode == RelationalInsertMode::Error && segment.rows.contains_key(&key) {
@@ -6584,7 +6687,7 @@ fn apply_transaction_inner(
                     .segments
                     .get_mut(&table)
                     .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
-                let segment = Arc::make_mut(segment);
+                let segment = mutable_segment_with_allocations(segment, checkpoint_allocations)?;
                 for key in keys {
                     let changed = changed_table_keys_with_allocations(
                         &mut changed_keys,
@@ -6618,7 +6721,7 @@ fn apply_transaction_inner(
                     .segments
                     .get_mut(&table)
                     .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
-                let segment = Arc::make_mut(segment);
+                let segment = mutable_segment_with_allocations(segment, checkpoint_allocations)?;
                 let match_context = checkpoint_allocations.map(|context| {
                     crate::background::CheckpointDecodeContext {
                         work: context.work.clone(),
@@ -6778,7 +6881,17 @@ fn apply_transaction_inner(
             if full_index_rebuild.contains(table) {
                 rebuild_indexes(&mut next, table)?;
             } else if let Some(keys) = changed_keys.get(table) {
-                refresh_indexes_for_keys(state, &mut next, table, keys, true)?;
+                match checkpoint_allocations {
+                    Some(context) => refresh_indexes_for_keys_with_allocations(
+                        state,
+                        &mut next,
+                        table,
+                        keys,
+                        true,
+                        Some(context),
+                    )?,
+                    None => refresh_indexes_for_keys(state, &mut next, table, keys, true)?,
+                }
             }
         }
     }
@@ -7021,7 +7134,7 @@ fn apply_upsert(
             .segments
             .get_mut(table)
             .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
-        let segment = Arc::make_mut(segment);
+        let segment = mutable_segment_with_allocations(segment, checkpoint_allocations)?;
         if let Some(existing_primary_key) = existing_primary_key {
             conflict_rows = conflict_rows.saturating_add(1);
             if let Some(tracker) = replay_access_tracker.as_deref_mut() {
@@ -7468,7 +7581,7 @@ fn apply_update(
         .segments
         .get_mut(table)
         .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
-    let segment = Arc::make_mut(segment);
+    let segment = mutable_segment_with_allocations(segment, checkpoint_allocations)?;
     for (old_key, _, _) in &updates {
         insert_changed_key_with_allocations(changed_keys, old_key, checkpoint_allocations)?;
         if let Some(context) = checkpoint_allocations {
@@ -7954,24 +8067,47 @@ fn refresh_indexes_for_keys(
     keys: &BTreeSet<RelationalKey>,
     enforce_unique: bool,
 ) -> Result<(), RelationalError> {
+    refresh_indexes_for_keys_with_allocations(previous, next, table, keys, enforce_unique, None)
+}
+
+fn refresh_indexes_for_keys_with_allocations(
+    previous: &RelationalState,
+    next: &mut RelationalState,
+    table: &str,
+    keys: &BTreeSet<RelationalKey>,
+    enforce_unique: bool,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<(), RelationalError> {
     let schema = Arc::clone(
         next.schemas
             .get(table)
             .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?,
     );
-    let index_definitions = schema.required_index_definitions();
+    let definition_context =
+        allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
+    let index_definitions =
+        required_index_definitions_with_allocations(&schema, definition_context.as_ref())?;
     let previous_segment = previous.segments.get(table);
     let next_segment = next
         .segments
         .get_mut(table)
         .ok_or_else(|| RelationalError::Schema(format!("unknown table {table}")))?;
-    let next_segment = Arc::make_mut(next_segment);
+    let next_segment = mutable_segment_with_allocations(next_segment, allocations)?;
 
     for index in index_definitions
         .into_iter()
         .filter(|index| index.role != RelationalIndexRole::Primary)
     {
-        let positions = column_positions(&schema, &index.columns)?;
+        let position_context =
+            allocations.map(|context| crate::background::CheckpointDecodeContext {
+                work: context.work.clone(),
+                memory: Default::default(),
+            });
+        let positions =
+            column_positions_with_allocations(&schema, &index.columns, position_context.as_ref())?;
         let postings = next_segment.indexes.get_mut(&index.name).ok_or_else(|| {
             RelationalError::Corruption(format!(
                 "table {table} is missing materialized index {}",
@@ -7982,15 +8118,33 @@ fn refresh_indexes_for_keys(
             if let Some(previous_row) =
                 previous_segment.and_then(|segment| segment.rows.get(primary_key))
             {
-                let index_key = row_key(previous_row, &positions);
-                postings.remove_posting(&index_key, primary_key);
+                let key_context =
+                    allocations.map(|context| crate::background::CheckpointDecodeContext {
+                        work: context.work.clone(),
+                        memory: Default::default(),
+                    });
+                let index_key =
+                    row_key_with_allocations(previous_row, &positions, key_context.as_ref())?;
+                match allocations {
+                    Some(context) => postings.remove_posting_with_allocations(
+                        &index_key,
+                        primary_key,
+                        Some(context),
+                    )?,
+                    None => postings.remove_posting(&index_key, primary_key),
+                }
             }
         }
         for primary_key in keys {
             let Some(row) = next_segment.rows.get(primary_key) else {
                 continue;
             };
-            let index_key = row_key(row, &positions);
+            let key_context =
+                allocations.map(|context| crate::background::CheckpointDecodeContext {
+                    work: context.work.clone(),
+                    memory: Default::default(),
+                });
+            let index_key = row_key_with_allocations(row, &positions, key_context.as_ref())?;
             if index.role.is_unique()
                 && index_key
                     .0
@@ -8012,7 +8166,8 @@ fn refresh_indexes_for_keys(
                     index.name
                 )));
             }
-            postings.insert_posting(index_key, primary_key.clone());
+            let primary_key = clone_key_with_allocations(primary_key, key_context.as_ref())?;
+            postings.insert_posting_with_allocations(index_key, primary_key, allocations)?;
         }
     }
     Ok(())

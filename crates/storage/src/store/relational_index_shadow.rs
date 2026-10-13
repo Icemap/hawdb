@@ -1271,19 +1271,34 @@ impl GraphStore {
             ));
         }
         let row_limits = self.relational_row_recovery_capture_limits();
-        let (next, index_capture, row_capture) = match (index_limits, row_limits) {
-            (Some(index_limits), Some(row_limits)) if authoritative => {
-                let replay_access = replay_access.as_ref().ok_or_else(|| {
-                    hawdb_storage::relational::RelationalError::Corruption(
+        let (next, index_capture, row_capture) =
+            if let Some(context) = allocations.as_ref()
+                && !authoritative
+                && !transaction.changes_schema()
+            {
+                self.relational_state
+                    .stage_materialized_dml_recovery_with_allocations(
+                        crate::relational::RelationalMaterializedRecoveryStage {
+                            transaction,
+                            mutation_limits: self.relational_mutation_limits,
+                            overflow_config: self.relational_overflow_config,
+                            index_capture_limits: index_limits,
+                            row_capture_limits: row_limits,
+                        },
+                        context,
+                    )?
+            } else {
+                match (index_limits, row_limits) {
+                    (Some(index_limits), Some(row_limits)) if authoritative => {
+                        let replay_access = replay_access.as_ref().ok_or_else(|| {
+                            hawdb_storage::relational::RelationalError::Corruption(
                         "authoritative relational WAL is missing its exact replay access set"
                             .to_string(),
                     )
-                })?;
-                let (next, index_capture, row_capture) = if self
-                    .relational_state
-                    .canonical_row_metadata_only()
-                {
-                    let hydrated_access = match allocations.as_ref() {
+                        })?;
+                        let (next, index_capture, row_capture) =
+                            if self.relational_state.canonical_row_metadata_only() {
+                                let hydrated_access = match allocations.as_ref() {
                         Some(context) => self
                             .hydrate_sparse_relational_recovery_access_with_work_context(
                                 replay_access,
@@ -1293,7 +1308,7 @@ impl GraphStore {
                         None => self
                             .hydrate_sparse_relational_recovery_access(replay_access, row_limits)?,
                     };
-                    self.relational_state
+                                self.relational_state
                         .stage_sparse_transaction_for_authoritative_recovery_with_allocations(
                             RelationalSparseRecoveryStage {
                                 transaction,
@@ -1306,8 +1321,8 @@ impl GraphStore {
                             },
                             allocations.as_ref(),
                         )?
-                } else {
-                    self.relational_state
+                            } else {
+                                self.relational_state
                         .stage_resident_transaction_for_authoritative_recovery_with_allocations(
                             crate::relational::RelationalResidentRecoveryStage {
                                 transaction,
@@ -1319,60 +1334,63 @@ impl GraphStore {
                             },
                             allocations.as_ref(),
                         )?
-                };
-                (next, Some(index_capture), Some(row_capture))
-            }
-            (Some(index_limits), Some(row_limits)) => {
-                let (next, index_capture, row_capture) = self
-                    .relational_state
-                    .stage_transaction_with_index_and_row_changes(
-                        transaction,
-                        self.relational_mutation_limits,
-                        self.relational_overflow_config,
-                        index_limits,
-                        row_limits,
-                    )?;
-                (next, Some(index_capture), Some(row_capture))
-            }
-            (Some(index_limits), None) if authoritative => {
-                let (next, capture) = self
-                    .relational_state
-                    .stage_transaction_for_authoritative_recovery(
-                        transaction,
-                        self.relational_mutation_limits,
-                        self.relational_overflow_config,
-                        index_limits,
-                    )?;
-                (next, Some(capture), None)
-            }
-            (Some(index_limits), None) => {
-                let (next, capture) = self.relational_state.stage_transaction_with_index_changes(
-                    transaction,
-                    self.relational_mutation_limits,
-                    self.relational_overflow_config,
-                    index_limits,
-                )?;
-                (next, Some(capture), None)
-            }
-            (None, Some(row_limits)) => {
-                let (next, capture) = self.relational_state.stage_transaction_with_row_changes(
-                    transaction,
-                    self.relational_mutation_limits,
-                    self.relational_overflow_config,
-                    row_limits,
-                )?;
-                (next, None, Some(capture))
-            }
-            (None, None) => (
-                self.relational_state.stage_transaction(
-                    transaction,
-                    self.relational_mutation_limits,
-                    self.relational_overflow_config,
-                )?,
-                None,
-                None,
-            ),
-        };
+                            };
+                        (next, Some(index_capture), Some(row_capture))
+                    }
+                    (Some(index_limits), Some(row_limits)) => {
+                        let (next, index_capture, row_capture) = self
+                            .relational_state
+                            .stage_transaction_with_index_and_row_changes(
+                                transaction,
+                                self.relational_mutation_limits,
+                                self.relational_overflow_config,
+                                index_limits,
+                                row_limits,
+                            )?;
+                        (next, Some(index_capture), Some(row_capture))
+                    }
+                    (Some(index_limits), None) if authoritative => {
+                        let (next, capture) = self
+                            .relational_state
+                            .stage_transaction_for_authoritative_recovery(
+                                transaction,
+                                self.relational_mutation_limits,
+                                self.relational_overflow_config,
+                                index_limits,
+                            )?;
+                        (next, Some(capture), None)
+                    }
+                    (Some(index_limits), None) => {
+                        let (next, capture) =
+                            self.relational_state.stage_transaction_with_index_changes(
+                                transaction,
+                                self.relational_mutation_limits,
+                                self.relational_overflow_config,
+                                index_limits,
+                            )?;
+                        (next, Some(capture), None)
+                    }
+                    (None, Some(row_limits)) => {
+                        let (next, capture) =
+                            self.relational_state.stage_transaction_with_row_changes(
+                                transaction,
+                                self.relational_mutation_limits,
+                                self.relational_overflow_config,
+                                row_limits,
+                            )?;
+                        (next, None, Some(capture))
+                    }
+                    (None, None) => (
+                        self.relational_state.stage_transaction(
+                            transaction,
+                            self.relational_mutation_limits,
+                            self.relational_overflow_config,
+                        )?,
+                        None,
+                        None,
+                    ),
+                }
+            };
         Ok(PreparedRelationalRecoveryTransaction {
             next,
             index_capture,
