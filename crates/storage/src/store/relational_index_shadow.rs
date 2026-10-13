@@ -1406,15 +1406,9 @@ impl GraphStore {
         expected_epoch: u64,
         work: Option<&crate::background::CheckpointWorkContext>,
     ) -> Result<(), hawdb_storage::relational::RelationalError> {
-        let mut prepared = prepared;
-        if !prepared.next.canonical_row_metadata_only()
-            && let Some(work) = work
-        {
-            self.retain_decoded_checkpoint_memory(&mut prepared.memory, work)
-                .map_err(|error| {
-                    hawdb_storage::relational::RelationalError::Admission(error.to_string())
-                })?;
-        }
+        // Staged schemas, row/index pages and overflow buffers carry their own
+        // shared inventory. This owner covers temporary change sets and capture
+        // payloads only; retain it until both captures have been encoded.
         let PreparedRelationalRecoveryTransaction {
             next,
             index_capture,
@@ -3603,6 +3597,79 @@ mod tests {
             assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
         }
         drop(store);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn resident_recovery_releases_capture_inventory_and_snapshot_retains_row_pages() {
+        use crate::background::CheckpointWorkContext;
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+            RuntimeWorkRequest,
+        };
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-resident-capture-release-{}",
+            hawdb_core::generate_uuidv7().unwrap()
+        ));
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                relational_index_mode: RelationalIndexMode::Shadow,
+                ..WalReplayConfig::default()
+            },
+        )
+        .unwrap();
+        let id = "k".repeat(128 * 1024);
+        let ceiling = 16 * 1024 * 1024;
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let prepared = store
+            .prepare_recovered_relational_transaction_with_work_context(
+                create_recovery_documents_table(&id),
+                None,
+                Some(&work),
+            )
+            .unwrap();
+        let available = |work: &CheckpointWorkContext| match work
+            .task_context()
+            .reserve_working_memory(ceiling)
+        {
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded {
+                available_bytes, ..
+            }) => available_bytes,
+            result => panic!("expected retained inventory: {result:?}"),
+        };
+        let before = available(&work);
+        let snapshot = prepared.next.clone();
+        store
+            .install_recovered_relational_transaction(prepared, store.commit_epoch + 1, Some(&work))
+            .unwrap();
+        assert!(store.checkpoint_allocations.is_empty());
+        let after = available(&work);
+        assert!(after >= before + 128 * 1024);
+        assert!(after <= ceiling - 128 * 1024);
+        drop(store);
+        drop(work);
+        assert!(governor.snapshot().admitted_memory_bytes >= 128 * 1024);
+        let key = RelationalKey(vec![RelationalValue::Text(id)]);
+        assert!(snapshot.row("documents", &key).is_some());
+        drop(snapshot);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
         std::fs::remove_dir_all(path).unwrap();
     }
 
