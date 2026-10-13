@@ -140,6 +140,122 @@ pub(super) fn externalize_row(
     Ok(())
 }
 
+pub(super) fn externalize_row_with_allocations(
+    state: &mut RelationalState,
+    schema: &RelationalTableSchema,
+    row: &mut RelationalRow,
+    config: RelationalOverflowConfig,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<(), RelationalError> {
+    let Some(context) = allocations else {
+        return externalize_row(state, schema, row, config);
+    };
+    let protection_context = crate::background::CheckpointDecodeContext {
+        work: context.work.clone(),
+        memory: Default::default(),
+    };
+    let protected = protected_column_positions_with_allocations(schema, &protection_context)?;
+    if Arc::strong_count(&row.values) != 1 {
+        *row = RelationalRow::reconstruct_with_allocations(row, Some(context), |ordinal| {
+            Ok(row.values()[ordinal].as_ref())
+        })?;
+    }
+    let values = Arc::get_mut(&mut row.values).expect("externalization has unique row backing");
+    for (position, value) in values.iter_mut().enumerate() {
+        let unit = context
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let input = if protected.contains(&position) {
+            None
+        } else {
+            match value {
+                RelationalValue::Text(text) if text.len() >= config.threshold_bytes => {
+                    Some((RelationalScalarType::Text, text.as_bytes()))
+                }
+                RelationalValue::Bytea(bytes) if bytes.len() >= config.threshold_bytes => {
+                    Some((RelationalScalarType::Bytea, bytes.as_slice()))
+                }
+                _ => None,
+            }
+        };
+        unit.finish();
+        let Some((scalar_type, raw)) = input else {
+            continue;
+        };
+        let encoded =
+            encode_overflow_envelope_with_work_context(scalar_type, raw, config, &context.work)?;
+        let digest = encoded.reference.digest;
+        if !state.overflow_segments.contains_key(&digest) {
+            let node_context = crate::background::CheckpointDecodeContext {
+                work: context.work.clone(),
+                memory: Default::default(),
+            };
+            node_context
+                .reserve(crate::cow::checkpoint_tree_node_bytes::<
+                    Sha256Digest,
+                    RelationalOverflowSegment,
+                >())
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            // Transfer node ownership before allocating the map entry. Refusal
+            // during transfer cannot leave a live node without its inventory.
+            let mut memory = node_context.memory.into_inner();
+            state
+                ._metadata_memory
+                .append_retained(&mut memory, &context.work)
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            let unit = context
+                .start_unit()
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+            state.overflow_segments.insert(
+                digest,
+                RelationalOverflowSegment::CheckpointInline(encoded.bytes),
+            );
+            unit.finish();
+        }
+        *value = RelationalValue::Overflow(encoded.reference);
+    }
+    context
+        .checkpoint()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    Ok(())
+}
+
+fn protected_column_positions_with_allocations(
+    schema: &RelationalTableSchema,
+    context: &crate::background::CheckpointDecodeContext,
+) -> Result<BTreeSet<usize>, RelationalError> {
+    let mut positions = BTreeSet::new();
+    for name in schema
+        .primary_key
+        .iter()
+        .chain(schema.unique_constraints.iter().flatten())
+        .chain(
+            schema
+                .foreign_keys
+                .iter()
+                .flat_map(|key| key.columns.iter()),
+        )
+        .chain(schema.indexes.iter().flat_map(|index| index.columns.iter()))
+    {
+        let position = schema.column_position(name).ok_or_else(|| {
+            RelationalError::Schema(format!(
+                "overflow protection references unknown column {name}"
+            ))
+        })?;
+        if !positions.contains(&position) {
+            context
+                .reserve(crate::cow::checkpoint_tree_node_bytes::<usize, ()>())
+                .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        }
+        let unit = context
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        positions.insert(position);
+        unit.finish();
+    }
+    Ok(positions)
+}
+
 pub(super) fn hydrate_row(
     state: &RelationalState,
     row: &RelationalRow,
@@ -344,6 +460,65 @@ pub(super) fn prune_unreachable_segments(state: &mut RelationalState) {
     state
         .overflow_segments
         .retain(|digest, _| reachable.contains(digest));
+}
+
+pub(super) fn prune_unreachable_segments_with_allocations(
+    state: &mut RelationalState,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<(), RelationalError> {
+    let Some(context) = allocations else {
+        prune_unreachable_segments(state);
+        return Ok(());
+    };
+    let scratch = crate::background::CheckpointDecodeContext {
+        work: context.work.clone(),
+        memory: Default::default(),
+    };
+    let mut reachable = BTreeSet::new();
+    for segment in state.segments.values() {
+        for row in segment.rows.values() {
+            for value in row.values.iter() {
+                if let RelationalValue::Overflow(reference) = value
+                    && !reachable.contains(&reference.digest)
+                {
+                    scratch
+                        .reserve(crate::cow::checkpoint_tree_node_bytes::<Sha256Digest, ()>())
+                        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                }
+                let unit = scratch
+                    .start_unit()
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                if let RelationalValue::Overflow(reference) = value {
+                    reachable.insert(reference.digest);
+                }
+                unit.finish();
+            }
+        }
+    }
+    let mut refusal = None;
+    state.overflow_segments.retain(|digest, _| {
+        if refusal.is_some() {
+            return true;
+        }
+        match scratch.start_unit() {
+            Ok(unit) => {
+                let keep = reachable.contains(digest);
+                unit.finish();
+                keep
+            }
+            Err(error) => {
+                refusal = Some(error);
+                true
+            }
+        }
+    });
+    if let Some(error) = refusal {
+        return Err(RelationalError::Admission(error.to_string()));
+    }
+    scratch
+        .checkpoint()
+        .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    Ok(())
 }
 
 fn protected_column_positions(

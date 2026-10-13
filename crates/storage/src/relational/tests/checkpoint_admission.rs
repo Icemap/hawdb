@@ -1954,3 +1954,134 @@ fn controlled_cascade_queue_denies_wide_name_before_copy_and_releases_inventory(
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }
+
+#[test]
+fn controlled_overflow_staging_denies_before_copy_and_extent_retains_ownership() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let fixture = RelationalState::default()
+        .stage_transaction(
+            create_upsert_table(),
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let mut random = 0x9e37_79b9_7f4a_7c15_u64;
+    let bytes = (0..128 * 1024)
+        .map(|_| {
+            random ^= random << 13;
+            random ^= random >> 7;
+            random ^= random << 17;
+            random as u8
+        })
+        .collect::<Vec<_>>();
+    for payload in [
+        RelationalValue::Text("中".repeat(64 * 1024)),
+        RelationalValue::Bytea(bytes),
+    ] {
+        let mut schema = fixture.table_schema("documents").unwrap().clone();
+        schema.columns[2].scalar_type = match &payload {
+            RelationalValue::Text(_) => RelationalScalarType::Text,
+            _ => RelationalScalarType::Bytea,
+        };
+        let original = RelationalRow::new(vec![
+            RelationalValue::Text("id".into()),
+            RelationalValue::Text("owner".into()),
+            payload.clone(),
+        ]);
+        let raw = match &payload {
+            RelationalValue::Text(text) => text.as_bytes(),
+            RelationalValue::Bytea(bytes) => bytes.as_slice(),
+            _ => unreachable!(),
+        };
+        let ordinary = overflow::encode_overflow_envelope(
+            schema.columns[2].scalar_type,
+            raw,
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+        for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+            let governor = RuntimeGovernor::detect(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(ceiling),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                IoConcurrencyBudget::new(2, 1),
+            );
+            governor.pin_resources();
+            let permit = governor
+                .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+                .unwrap();
+            let work =
+                CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+            let context = CheckpointDecodeContext {
+                work: work.clone(),
+                memory: Default::default(),
+            };
+            let mut state = RelationalState::default();
+            let mut row = original.clone();
+            let observer = crate::test_allocator::AllocationObservation::start();
+            let result = overflow::externalize_row_with_allocations(
+                &mut state,
+                &schema,
+                &mut row,
+                RelationalOverflowConfig::default(),
+                Some(&context),
+            );
+            let copies = observer.finish();
+            if succeeds {
+                result.unwrap();
+                let RelationalValue::Overflow(reference) = row.values()[2] else {
+                    panic!("externalized payload");
+                };
+                assert_eq!(reference, ordinary.reference);
+                let input = state.inline_overflow_extent_input(&reference).unwrap();
+                assert!(matches!(
+                    &input,
+                    RelationalOverflowExtentInput::CheckpointWrite { .. }
+                ));
+                assert_eq!(input.encoded_bytes().unwrap(), ordinary.bytes.as_ref());
+                assert_eq!(
+                    overflow::decode_overflow_envelope(
+                        &reference,
+                        input.encoded_bytes().unwrap(),
+                        &mut RelationalHydrationBudget::default(),
+                        None
+                    )
+                    .unwrap(),
+                    payload
+                );
+                let snapshot = state.clone();
+                drop(row);
+                drop(state);
+                drop(context);
+                assert!(
+                    matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes < ceiling)
+                );
+                drop(snapshot);
+                assert!(
+                    matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes < ceiling)
+                );
+                drop(input);
+            } else {
+                assert!(matches!(result, Err(RelationalError::Admission(_))));
+                assert_eq!(copies, 0);
+                assert_eq!(row, original);
+                assert_eq!(state.overflow_segment_count(), 0);
+                drop(row);
+                drop(state);
+                drop(context);
+            }
+            assert_eq!(original.values()[2], payload);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+            );
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+    }
+}

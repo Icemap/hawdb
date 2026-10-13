@@ -2346,6 +2346,7 @@ impl Default for RelationalState {
 #[derive(Debug, Clone)]
 enum RelationalOverflowSegment {
     Inline(Arc<[u8]>),
+    CheckpointInline(crate::background::CheckpointSharedBytes),
     FileRange {
         reader: Arc<FileSegmentRangeReader>,
         range: SegmentReadRange,
@@ -2378,6 +2379,7 @@ impl RelationalOverflowSegment {
         }
         match self {
             Self::Inline(bytes) => Ok(RelationalOverflowRead::Inline(bytes)),
+            Self::CheckpointInline(bytes) => Ok(RelationalOverflowRead::Inline(bytes)),
             Self::FileRange { reader, range } => reader
                 .read_range(range)
                 .map(RelationalOverflowRead::FileRange)
@@ -4569,6 +4571,7 @@ impl RelationalState {
             .fold(0u64, |bytes, segment| {
                 bytes.saturating_add(match segment {
                     RelationalOverflowSegment::Inline(value) => value.len() as u64,
+                    RelationalOverflowSegment::CheckpointInline(value) => value.len() as u64,
                     RelationalOverflowSegment::FileRange { range, .. } => range.length.get(),
                 })
             });
@@ -4602,6 +4605,7 @@ impl RelationalState {
             visit()?;
             checkpoint = checkpoint.saturating_add(match segment {
                 RelationalOverflowSegment::Inline(value) => value.len() as u64,
+                RelationalOverflowSegment::CheckpointInline(value) => value.len() as u64,
                 RelationalOverflowSegment::FileRange { range, .. } => range.length.get(),
             });
         }
@@ -4845,6 +4849,34 @@ impl RelationalState {
     pub fn inline_overflow_envelope(&self, reference: &RelationalOverflowRef) -> Option<Arc<[u8]>> {
         match self.overflow_segments.get(&reference.digest) {
             Some(RelationalOverflowSegment::Inline(encoded)) => Some(Arc::clone(encoded)),
+            // The ordinary API returns a fresh host-owned copy; controlled
+            // publishers use CheckpointWrite and preserve admitted ownership.
+            Some(RelationalOverflowSegment::CheckpointInline(encoded)) => {
+                Some(Arc::from(encoded.as_ref()))
+            }
+            Some(RelationalOverflowSegment::FileRange { .. }) | None => None,
+        }
+    }
+
+    /// Returns an inline extent while retaining its encoded allocation ownership.
+    #[doc(hidden)]
+    pub fn inline_overflow_extent_input(
+        &self,
+        reference: &RelationalOverflowRef,
+    ) -> Option<RelationalOverflowExtentInput> {
+        match self.overflow_segments.get(&reference.digest) {
+            Some(RelationalOverflowSegment::Inline(encoded)) => {
+                Some(RelationalOverflowExtentInput::Write {
+                    reference: *reference,
+                    encoded: Arc::clone(encoded),
+                })
+            }
+            Some(RelationalOverflowSegment::CheckpointInline(encoded)) => {
+                Some(RelationalOverflowExtentInput::CheckpointWrite {
+                    reference: *reference,
+                    encoded: encoded.clone(),
+                })
+            }
             Some(RelationalOverflowSegment::FileRange { .. }) | None => None,
         }
     }
@@ -4906,6 +4938,7 @@ impl RelationalState {
                             encoded: Arc::clone(encoded),
                         })
                     }
+                    RelationalOverflowSegment::CheckpointInline(encoded) => Ok(RelationalOverflowExtentInput::CheckpointWrite { reference, encoded: encoded.clone() }),
                     RelationalOverflowSegment::FileRange { .. } if has_base_generation => {
                         Ok(RelationalOverflowExtentInput::Reuse(reference))
                     }
@@ -4989,6 +5022,12 @@ impl RelationalState {
                         Ok(RelationalOverflowExtentInput::Write {
                             reference,
                             encoded: Arc::clone(encoded),
+                        })
+                    }
+                    Some(RelationalOverflowSegment::CheckpointInline(encoded)) => {
+                        Ok(RelationalOverflowExtentInput::CheckpointWrite {
+                            reference,
+                            encoded: encoded.clone(),
                         })
                     }
                     Some(RelationalOverflowSegment::FileRange { .. }) | None => {
@@ -5980,7 +6019,13 @@ fn apply_transaction_inner(
                 };
                 for mut row in rows {
                     validate_row(&schema, &row)?;
-                    overflow::externalize_row(&mut next, &schema, &mut row, overflow_config)?;
+                    overflow::externalize_row_with_allocations(
+                        &mut next,
+                        &schema,
+                        &mut row,
+                        overflow_config,
+                        checkpoint_allocations,
+                    )?;
                     let unit = preparation_context
                         .as_ref()
                         .map(|context| context.start_unit())
@@ -6245,7 +6290,7 @@ fn apply_transaction_inner(
             queue_allocations: deletion_context.as_ref(),
         },
     )?;
-    overflow::prune_unreachable_segments(&mut next);
+    overflow::prune_unreachable_segments_with_allocations(&mut next, checkpoint_allocations)?;
     if index_mode == TransactionIndexMode::Materialized {
         for table in &touched {
             if full_index_rebuild.contains(table) {
@@ -6435,7 +6480,13 @@ fn apply_upsert(
     for mut excluded in rows {
         validate_row(&schema, &excluded)?;
         let logical_excluded = capture_mutation_outcome.then(|| excluded.clone());
-        overflow::externalize_row(state, &schema, &mut excluded, overflow_config)?;
+        overflow::externalize_row_with_allocations(
+            state,
+            &schema,
+            &mut excluded,
+            overflow_config,
+            checkpoint_allocations,
+        )?;
         let conflict_key =
             row_key_with_allocations(&excluded, &conflict_positions, conflict_context.as_ref())?;
         let conflict_has_null = conflict_key
@@ -6888,7 +6939,13 @@ fn apply_update(
                     .map_or_else(|| row.values()[ordinal].as_ref(), |(_, value)| *value))
             })?;
         validate_row(&schema, &updated)?;
-        overflow::externalize_row(state, &schema, &mut updated, overflow_config)?;
+        overflow::externalize_row_with_allocations(
+            state,
+            &schema,
+            &mut updated,
+            overflow_config,
+            checkpoint_allocations,
+        )?;
         let new_key =
             row_key_with_allocations(&updated, &primary_key_positions, checkpoint_allocations)?;
         let retained_old_key = match &update_context {

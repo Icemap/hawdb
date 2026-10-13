@@ -204,6 +204,28 @@ impl RelationalOverflowPublisher {
             RelationalOverflowPublicationError,
         >,
     ) -> Result<RelationalOverflowExactPublicationReport, RelationalOverflowPublicationError> {
+        self.persist_generation_exact_inputs(request, |reference| {
+            resolve_new(reference).map(|encoded| {
+                encoded.map(|encoded| RelationalOverflowExtentInput::Write {
+                    reference: *reference,
+                    encoded,
+                })
+            })
+        })
+    }
+
+    /// Persists the exact closure while retaining admitted encoded-buffer ownership.
+    #[doc(hidden)]
+    pub fn persist_generation_exact_inputs(
+        &self,
+        request: RelationalOverflowExactGenerationRequest<'_>,
+        mut resolve_new: impl FnMut(
+            &RelationalOverflowRef,
+        ) -> Result<
+            Option<RelationalOverflowExtentInput>,
+            RelationalOverflowPublicationError,
+        >,
+    ) -> Result<RelationalOverflowExactPublicationReport, RelationalOverflowPublicationError> {
         let RelationalOverflowExactGenerationRequest {
             directory,
             generation,
@@ -587,13 +609,30 @@ fn validate_base_identity(
     Ok(())
 }
 
+fn exact_input_bytes<'a>(
+    reference: &RelationalOverflowRef,
+    input: &'a RelationalOverflowExtentInput,
+) -> Result<&'a [u8], RelationalOverflowPublicationError> {
+    if input.reference() != reference {
+        return Err(RelationalOverflowPublicationError::Corrupt(format!(
+            "new overflow input {} differs from the exact reference metadata",
+            reference.digest
+        )));
+    }
+    input
+        .encoded_bytes()
+        .ok_or(RelationalOverflowPublicationError::MissingExtent(
+            reference.digest,
+        ))
+}
+
 fn preflight_exact_references(
     base: &RelationalOverflowRootReader,
     references: &RelationalOverflowReferenceSet,
     resolve_new: &mut impl FnMut(
         &RelationalOverflowRef,
     ) -> Result<
-        Option<std::sync::Arc<[u8]>>,
+        Option<RelationalOverflowExtentInput>,
         RelationalOverflowPublicationError,
     >,
     config: RelationalOverflowPublicationConfig,
@@ -671,10 +710,9 @@ fn preflight_exact_references(
                     )
                 })?;
         } else {
-            let encoded = resolve_new(&reference)?.ok_or(
-                RelationalOverflowPublicationError::MissingExtent(reference.digest),
-            )?;
-            validate_encoded_extent(&reference, &encoded, config, work)?;
+            let input = resolve_new(&reference)?.ok_or(RelationalOverflowPublicationError::MissingExtent(reference.digest))?;
+            let encoded = exact_input_bytes(&reference, &input)?;
+            validate_encoded_extent(&reference, encoded, config, work)?;
             introduced_extent_count = introduced_extent_count.checked_add(1).ok_or_else(|| {
                 RelationalOverflowPublicationError::Admission(
                     "introduced overflow extent count overflow".to_string(),
@@ -704,7 +742,7 @@ fn preflight_exact_references(
 
 type NewExtentResolver<'a> = dyn FnMut(
         &RelationalOverflowRef,
-    ) -> Result<Option<std::sync::Arc<[u8]>>, RelationalOverflowPublicationError>
+    ) -> Result<Option<RelationalOverflowExtentInput>, RelationalOverflowPublicationError>
     + 'a;
 
 struct ExactArtifactWrite<'a> {
@@ -789,10 +827,11 @@ fn write_exact_artifacts(
                     }
                 }
             } else {
-                let encoded = resolve_new(&reference)?.ok_or(
+                let input = resolve_new(&reference)?.ok_or(
                     RelationalOverflowPublicationError::MissingExtent(reference.digest),
                 )?;
-                writer.emit_input(&RelationalOverflowExtentInput::Write { reference, encoded })?;
+                exact_input_bytes(&reference, &input)?;
+                writer.emit_input(&input)?;
             }
             Ok(true)
         },
@@ -1544,6 +1583,35 @@ mod lock_tests {
         crate::file_lock_tests::assert_state_machine(
             RELATIONAL_OVERFLOW_PUBLICATION_LOCK_FILE,
             acquire_publication_lock,
+        );
+    }
+}
+
+#[cfg(test)]
+mod exact_input_tests {
+    use super::*;
+
+    #[test]
+    fn exact_input_checks_reference_metadata_and_rejects_reuse_for_new_extents() {
+        let input = RelationalOverflowExtentInput::encode(
+            super::super::super::RelationalScalarType::Text,
+            b"new exact extent",
+            super::super::super::RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+        let reference = *input.reference();
+        assert_eq!(
+            exact_input_bytes(&reference, &input).unwrap(),
+            input.encoded_bytes().unwrap()
+        );
+        let mut mismatched = reference;
+        mismatched.uncompressed_bytes += 1;
+        assert!(matches!(
+            exact_input_bytes(&mismatched, &input),
+            Err(RelationalOverflowPublicationError::Corrupt(_))
+        ));
+        assert!(
+            matches!(exact_input_bytes(&reference, &RelationalOverflowExtentInput::Reuse(reference)), Err(RelationalOverflowPublicationError::MissingExtent(digest)) if digest == reference.digest)
         );
     }
 }

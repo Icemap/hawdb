@@ -231,6 +231,12 @@ pub(in crate::relational) fn generation_inputs(
                     encoded: Arc::clone(encoded),
                 })
             })?,
+            RelationalOverflowSegment::CheckpointInline(encoded) => cpu(work, || {
+                Ok(RelationalOverflowExtentInput::CheckpointWrite {
+                    reference,
+                    encoded: encoded.clone(),
+                })
+            })?,
             RelationalOverflowSegment::FileRange { .. } if has_base_generation => {
                 cpu(work, || Ok(RelationalOverflowExtentInput::Reuse(reference)))?
             }
@@ -315,6 +321,12 @@ pub(in crate::relational) fn delta_inputs(
                     RelationalOverflowExtentInput::Write {
                         reference,
                         encoded: Arc::clone(encoded),
+                    }
+                }
+                Some(RelationalOverflowSegment::CheckpointInline(encoded)) => {
+                    RelationalOverflowExtentInput::CheckpointWrite {
+                        reference,
+                        encoded: encoded.clone(),
                     }
                 }
                 Some(RelationalOverflowSegment::FileRange { .. }) | None => {

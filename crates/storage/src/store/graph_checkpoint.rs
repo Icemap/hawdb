@@ -1159,7 +1159,7 @@ impl GraphStore {
                     )
                 })?;
                 overflow_publisher
-                    .persist_generation_exact_references(
+                    .persist_generation_exact_inputs(
                         hawdb_storage::relational::RelationalOverflowExactGenerationRequest {
                             directory: durable.root_path(),
                             generation,
@@ -1169,7 +1169,7 @@ impl GraphStore {
                             references: exact.references,
                             task: exact.task,
                         },
-                        |reference| Ok(self.relational_state.inline_overflow_envelope(reference)),
+                        |reference| Ok(self.relational_state.inline_overflow_extent_input(reference)),
                     )
                     .map(|report| {
                         copied_base_extent_count = report.copied_base_extent_count;

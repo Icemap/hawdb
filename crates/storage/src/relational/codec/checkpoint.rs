@@ -273,6 +273,7 @@ fn overflow_with_work_context<'a>(
     work.checkpoint().map_err(work_error)?;
     match segment {
         RelationalOverflowSegment::Inline(bytes) => Ok(OverflowBytes::Borrowed(bytes)),
+        RelationalOverflowSegment::CheckpointInline(bytes) => Ok(OverflowBytes::Borrowed(bytes)),
         RelationalOverflowSegment::FileRange { reader, range } => reader
             .checkpoint_range_with_work_context(range, work)
             .map(OverflowBytes::Owned)
