@@ -3515,3 +3515,183 @@ fn controlled_create_table_denies_wide_default_before_copy_and_snapshot_keeps_sc
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 }
+
+#[test]
+fn controlled_add_column_matches_ordinary_shared_overflow_and_page_boundaries() {
+    use crate::background::CheckpointDecodeContext;
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let previous = RelationalState::default()
+        .stage_transaction(create_upsert_table(), limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![
+                        upsert_row("id-1", "owner-1", "old-1"),
+                        upsert_row("id-2", "owner-2", "old-2"),
+                    ],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    let transaction = RelationalTransaction {
+        writes: vec![RelationalWrite::AddColumn {
+            table: "documents".into(),
+            column: RelationalColumnSchema {
+                name: "added".into(),
+                scalar_type: RelationalScalarType::Text,
+                nullable: false,
+                default: Some(RelationalColumnDefault::Literal(RelationalValue::Text(
+                    "d".repeat(128 * 1024),
+                ))),
+            },
+        }],
+    };
+    let options = TransactionApplyOptions {
+        index_capture_limits: Some(RelationalIndexChangeCaptureLimits::default()),
+        row_capture_limits: Some(RelationalRowChangeCaptureLimits::default()),
+        ..TransactionApplyOptions::materialized()
+    };
+    let expected =
+        apply_transaction_inner(&previous, transaction.clone(), limits, overflow, options).unwrap();
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    let actual = apply_transaction_inner(
+        &previous,
+        transaction,
+        limits,
+        overflow,
+        TransactionApplyOptions {
+            checkpoint_allocations: Some(&context),
+            ..options
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        actual.state.table_schema("documents"),
+        expected.state.table_schema("documents")
+    );
+    assert_eq!(
+        actual.state.rows("documents").collect::<Vec<_>>(),
+        expected.state.rows("documents").collect::<Vec<_>>()
+    );
+    assert_eq!(actual.index_capture, expected.index_capture);
+    assert_eq!(actual.row_capture, expected.row_capture);
+    assert_eq!(actual.state.overflow_segment_count(), 1);
+    assert_eq!(
+        actual.state.segments["documents"].rows.page_count(),
+        previous.segments["documents"].rows.page_count()
+    );
+    let first = actual.state.rows("documents").next().unwrap().1.values()[3].clone();
+    assert!(actual
+        .state
+        .rows("documents")
+        .all(|(_, row)| row.values()[3] == first));
+    assert_eq!(previous.table_schema("documents").unwrap().columns.len(), 3);
+    assert!(previous
+        .rows("documents")
+        .all(|(_, row)| row.values().len() == 3));
+}
+
+#[test]
+fn controlled_add_column_denies_wide_default_without_partial_schema_or_rows() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let source = RelationalState::default()
+        .stage_transaction(create_upsert_table(), limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![upsert_row("id", "owner", "old")],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    let column = RelationalColumnSchema {
+        name: "added".into(),
+        scalar_type: RelationalScalarType::Text,
+        nullable: false,
+        default: Some(RelationalColumnDefault::Literal(RelationalValue::Text(
+            "d".repeat(128 * 1024),
+        ))),
+    };
+    for (ceiling, succeeds) in [(16 * 1024, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let mut target = source.clone();
+        let original_segment = target.segments["documents"].clone();
+        let original_schema = target.schemas["documents"].clone();
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = add_column_with_allocations(
+            &mut target,
+            "documents",
+            &column,
+            limits,
+            overflow,
+            &context,
+        );
+        let copies = observer.finish();
+        if succeeds {
+            assert_eq!(result.unwrap(), 1);
+            assert_eq!(target.table_schema("documents").unwrap().columns.len(), 4);
+            let snapshot = target.clone();
+            drop(target);
+            drop(context);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes < ceiling - 128 * 1024)
+            );
+            drop(snapshot);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+            assert!(Arc::ptr_eq(
+                &target.segments["documents"],
+                &original_segment
+            ));
+            assert!(Arc::ptr_eq(&target.schemas["documents"], &original_schema));
+            drop(target);
+            drop(context);
+        }
+        drop(original_segment);
+        drop(original_schema);
+        assert_eq!(source.table_schema("documents").unwrap().columns.len(), 3);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
