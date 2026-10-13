@@ -42,6 +42,10 @@ enum RangeRecord<'a> {
 #[path = "graph_read/ordered_range_tests.rs"]
 mod ordered_range_tests;
 
+#[cfg(test)]
+#[path = "graph_read/relationship_scan_tests.rs"]
+mod relationship_scan_tests;
+
 impl GraphStore {
     pub fn canonical_node_from_segments(&self, id: NodeId) -> Result<Option<NodeRecord>> {
         self.durable
@@ -590,41 +594,68 @@ impl GraphStore {
         admit: &mut ControlledGraphReadAllocator<'_>,
         consumer: &mut dyn FnMut(AdmittedRelationshipRecord) -> Result<GraphScanControl>,
     ) -> Result<GraphScanControl> {
-        let mut visit = |id| match self.relationship_with_allocation(id, admit)? {
-            AdmittedRelationshipRead::Missing => Ok(GraphScanControl::Continue),
-            AdmittedRelationshipRead::Stopped => Ok(GraphScanControl::Stop),
-            AdmittedRelationshipRead::Relationship(record) => consumer(record),
-        };
+        enum BaseVisit {
+            Continue,
+            Stop,
+            Decode(Box<dyn crate::read_view::GraphReadAllocation>),
+        }
         let mut delta = self.relationships.iter().peekable();
         if let Some(reader) = &self.canonical_base {
             let mut stopped = false;
             let mut callback_error = None;
             reader
-                .scan_relationship_layouts_control(|id, layout| {
+                .scan_relationship_inputs_control(|input| {
+                    let id = input.id;
                     let result = (|| {
+                        let mut visit = |id| match self.relationship_with_allocation(id, admit)? {
+                            AdmittedRelationshipRead::Missing => Ok(GraphScanControl::Continue),
+                            AdmittedRelationshipRead::Stopped => Ok(GraphScanControl::Stop),
+                            AdmittedRelationshipRead::Relationship(record) => consumer(record),
+                        };
                         while delta.peek().is_some_and(|(next, _)| **next < id) {
                             let (next, record) = delta.next().expect("peeked delta exists");
                             if !self.relationship_tombstones.contains(next)
                                 && self.relationship_matches_type(record, rel_type)
                                 && visit(*next)? == GraphScanControl::Stop
                             {
-                                return Ok(GraphScanControl::Stop);
+                                return Ok(BaseVisit::Stop);
                             }
                         }
                         if delta.peek().is_some_and(|(next, _)| **next == id) {
                             let (next, record) = delta.next().expect("matching delta exists");
                             if !self.relationship_tombstones.contains(next)
                                 && self.relationship_matches_type(record, rel_type)
+                                && visit(*next)? == GraphScanControl::Stop
                             {
-                                return visit(*next);
+                                return Ok(BaseVisit::Stop);
                             }
                         } else if !self.relationship_tombstones.contains(&id)
-                            && rel_type.is_none_or(|selected| selected == layout.rel_type)
+                            && rel_type.is_none_or(|selected| selected == input.layout.rel_type)
                         {
-                            return visit(id);
+                            let bytes = input.layout.allocation_bytes;
+                            let Some(allocation) = admit(bytes)? else {
+                                return Ok(BaseVisit::Stop);
+                            };
+                            if allocation.bytes() < bytes {
+                                return Err(HawDBError::Execution(
+                                    "relationship admission returned an insufficient allocation permit".into(),
+                                ));
+                            }
+                            return Ok(BaseVisit::Decode(allocation));
                         }
-                        Ok(GraphScanControl::Continue)
+                        Ok(BaseVisit::Continue)
                     })();
+                    let result = match result {
+                        Ok(BaseVisit::Continue) => Ok(GraphScanControl::Continue),
+                        Ok(BaseVisit::Stop) => Ok(GraphScanControl::Stop),
+                        Ok(BaseVisit::Decode(allocation)) => {
+                            // Decode failures reach the canonical reader's poison
+                            // boundary; caller errors below remain recoverable.
+                            let relationship = input.decode()?;
+                            consumer(AdmittedRelationshipRecord::new(relationship, allocation))
+                        }
+                        Err(error) => Err(error),
+                    };
                     match result {
                         Ok(GraphScanControl::Continue) => Ok(CanonicalScanControl::Continue),
                         Ok(GraphScanControl::Stop) => {
@@ -645,6 +676,11 @@ impl GraphStore {
                 return Ok(GraphScanControl::Stop);
             }
         }
+        let mut visit = |id| match self.relationship_with_allocation(id, admit)? {
+            AdmittedRelationshipRead::Missing => Ok(GraphScanControl::Continue),
+            AdmittedRelationshipRead::Stopped => Ok(GraphScanControl::Stop),
+            AdmittedRelationshipRead::Relationship(record) => consumer(record),
+        };
         for (id, record) in delta {
             if !self.relationship_tombstones.contains(id)
                 && self.relationship_matches_type(record, rel_type)

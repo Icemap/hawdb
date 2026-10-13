@@ -2173,6 +2173,29 @@ impl CanonicalSegmentReader {
         })
     }
 
+    /// Borrow each encoded relationship once so callers can admit ownership
+    /// before decoding without repeating a point lookup inside the scan.
+    pub(crate) fn scan_relationship_inputs_control(
+        &self,
+        mut consumer: impl FnMut(
+            CanonicalRelationshipInput<'_>,
+        ) -> Result<CanonicalScanControl, CanonicalSegmentError>,
+    ) -> Result<(CanonicalReadReport, CanonicalScanControl), CanonicalSegmentError> {
+        self.scan_relationship_payloads_control(|id, payload| {
+            consumer(CanonicalRelationshipInput {
+                id,
+                layout: relationship_payload_layout(
+                    payload,
+                    Some(self.property_keys()),
+                    self.property_spills.as_ref(),
+                )?,
+                payload,
+                property_keys: self.property_keys(),
+                property_spills: self.property_spills.as_ref(),
+            })
+        })
+    }
+
     pub(crate) fn scan_relationship_layouts_control(
         &self,
         mut consumer: impl FnMut(
@@ -3456,6 +3479,26 @@ fn node_payload_allocation_bytes(
         required_properties,
     )
     .map(|properties| bytes.saturating_add(properties))
+}
+
+pub(crate) struct CanonicalRelationshipInput<'a> {
+    pub(crate) id: RelId,
+    pub(crate) layout: CanonicalRelationshipLayout,
+    payload: &'a [u8],
+    property_keys: &'a [String],
+    property_spills: Option<&'a PropertySpillReader>,
+}
+
+impl CanonicalRelationshipInput<'_> {
+    /// Call only after admission of `layout.allocation_bytes`.
+    pub(crate) fn decode(self) -> Result<RelRecord, CanonicalSegmentError> {
+        decode_relationship_with_property_spills(
+            self.id.0,
+            self.payload,
+            self.property_spills,
+            Some(self.property_keys),
+        )
+    }
 }
 
 pub(crate) struct CanonicalRelationshipLayout {
