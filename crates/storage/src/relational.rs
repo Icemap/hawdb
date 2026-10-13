@@ -6309,15 +6309,25 @@ fn apply_transaction_inner(
             capture_limits,
         )
     });
-    let row_capture = row_capture_limits.map(|capture_limits| {
-        capture_relational_row_changes(
-            state,
-            &next,
-            &changed_keys,
-            &full_index_rebuild,
-            capture_limits,
-        )
-    });
+    let row_capture = row_capture_limits
+        .map(|capture_limits| match checkpoint_allocations {
+            Some(context) => capture_relational_row_changes_with_allocations(
+                state,
+                &next,
+                &changed_keys,
+                &full_index_rebuild,
+                capture_limits,
+                Some(context),
+            ),
+            None => Ok(capture_relational_row_changes(
+                state,
+                &next,
+                &changed_keys,
+                &full_index_rebuild,
+                capture_limits,
+            )),
+        })
+        .transpose()?;
     let primary_key_changes = primary_key_capture_limits.map(|capture_limits| {
         capture_relational_primary_key_changes(
             state,
@@ -7657,10 +7667,37 @@ fn capture_relational_row_changes(
     rewritten_tables: &BTreeSet<String>,
     limits: RelationalRowChangeCaptureLimits,
 ) -> RelationalRowChangeCapture {
+    capture_relational_row_changes_with_allocations(
+        previous,
+        next,
+        changed_keys,
+        rewritten_tables,
+        limits,
+        None,
+    )
+    .expect("ordinary row capture has no allocation refusal")
+}
+
+fn capture_relational_row_changes_with_allocations(
+    previous: &RelationalState,
+    next: &RelationalState,
+    changed_keys: &BTreeMap<String, BTreeSet<RelationalKey>>,
+    rewritten_tables: &BTreeSet<String>,
+    limits: RelationalRowChangeCaptureLimits,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalRowChangeCapture, RelationalError> {
     if !rewritten_tables.is_empty() {
-        return RelationalRowChangeCapture::RequiresCheckpoint {
-            tables: rewritten_tables.iter().cloned().collect(),
-        };
+        let tables = collect_results_with_allocations(
+            rewritten_tables.iter().map(|name| match allocations {
+                Some(context) => context
+                    .string(name)
+                    .map_err(|error| RelationalError::Admission(error.to_string())),
+                None => Ok(name.clone()),
+            }),
+            rewritten_tables.len(),
+            allocations,
+        )?;
+        return Ok(RelationalRowChangeCapture::RequiresCheckpoint { tables });
     }
 
     let mut changes = Vec::new();
@@ -7675,26 +7712,44 @@ fn capture_relational_row_changes(
             let Some(change_bytes) =
                 estimated_row_change_encoding_bytes_parts(table, primary_key, next_row)
             else {
-                return row_capture_limit_invalidated(limits);
+                return Ok(row_capture_limit_invalidated(limits));
             };
             let Some(next_bytes) = encoded_bytes.checked_add(change_bytes) else {
-                return row_capture_limit_invalidated(limits);
+                return Ok(row_capture_limit_invalidated(limits));
             };
             if changes.len() >= limits.max_entries.get() || next_bytes > limits.max_bytes.get() {
-                return row_capture_limit_invalidated(limits);
+                return Ok(row_capture_limit_invalidated(limits));
             }
-            changes.push(RelationalRowChange {
-                table: table.clone(),
-                primary_key: primary_key.clone(),
+            let table = match allocations {
+                Some(context) => context
+                    .string(table)
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?,
+                None => table.clone(),
+            };
+            let primary_key = clone_key_with_allocations(primary_key, allocations)?;
+            let change = RelationalRowChange {
+                table,
+                primary_key,
                 row: next_row.cloned(),
-            });
+            };
+            match allocations {
+                Some(context) => context
+                    .push(&mut changes, change)
+                    .map_err(|error| RelationalError::Admission(error.to_string()))?,
+                None => changes.push(change),
+            }
             encoded_bytes = next_bytes;
         }
     }
-    RelationalRowChangeCapture::Captured {
+    if let Some(context) = allocations {
+        context
+            .checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+    }
+    Ok(RelationalRowChangeCapture::Captured {
         changes,
         encoded_bytes,
-    }
+    })
 }
 
 fn capture_relational_primary_key_changes(
