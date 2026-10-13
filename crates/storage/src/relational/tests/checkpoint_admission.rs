@@ -3385,3 +3385,133 @@ fn controlled_index_rebuild_cancellation_preserves_segment_and_retries() {
         1
     );
 }
+
+#[test]
+fn controlled_create_table_and_insert_match_ordinary_schema_rows_and_indexes() {
+    use crate::background::CheckpointDecodeContext;
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let mut transaction = create_upsert_table();
+    transaction.writes.push(RelationalWrite::Insert {
+        table: "documents".into(),
+        rows: vec![upsert_row("id", "owner", "body")],
+        mode: RelationalInsertMode::Error,
+    });
+    let previous = RelationalState::default();
+    let expected = apply_transaction_inner(
+        &previous,
+        transaction.clone(),
+        limits,
+        overflow,
+        TransactionApplyOptions::materialized(),
+    )
+    .unwrap();
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    let actual = apply_transaction_inner(
+        &previous,
+        transaction,
+        limits,
+        overflow,
+        TransactionApplyOptions {
+            checkpoint_allocations: Some(&context),
+            ..TransactionApplyOptions::materialized()
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        actual.state.table_schema("documents"),
+        expected.state.table_schema("documents")
+    );
+    assert_eq!(
+        actual.state.rows("documents").collect::<Vec<_>>(),
+        expected.state.rows("documents").collect::<Vec<_>>()
+    );
+    let key = RelationalKey(vec![RelationalValue::Text("owner".into())]);
+    assert_eq!(
+        actual
+            .state
+            .index_lookup("documents", &relational_unique_index_name(0), &key)
+            .map(|set| set.iter().collect::<Vec<_>>()),
+        expected
+            .state
+            .index_lookup("documents", &relational_unique_index_name(0), &key)
+            .map(|set| set.iter().collect::<Vec<_>>())
+    );
+    assert!(previous.table_schema("documents").is_none());
+}
+
+#[test]
+fn controlled_create_table_denies_wide_default_before_copy_and_snapshot_keeps_schema_inventory() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let mut transaction = create_upsert_table();
+    let RelationalWrite::CreateTable(schema) = &mut transaction.writes[0] else {
+        panic!("fixture schema");
+    };
+    schema.columns[2].default = Some(RelationalColumnDefault::Literal(RelationalValue::Text(
+        "d".repeat(128 * 1024),
+    )));
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    for (ceiling, succeeds) in [(16 * 1024, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let previous = RelationalState::default();
+        let input = transaction.clone();
+        let observer = crate::test_allocator::AllocationObservation::start();
+        let result = apply_transaction_inner(
+            &previous,
+            input,
+            limits,
+            overflow,
+            TransactionApplyOptions {
+                checkpoint_allocations: Some(&context),
+                ..TransactionApplyOptions::materialized()
+            },
+        );
+        let copies = observer.finish();
+        if succeeds {
+            let actual = result.unwrap();
+            assert_eq!(actual.state.row_count("documents"), 0);
+            let snapshot = actual.state.clone();
+            drop(actual);
+            drop(context);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes < ceiling - 128 * 1024)
+            );
+            drop(snapshot);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+            drop(context);
+        }
+        assert!(previous.table_schema("documents").is_none());
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling), Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}

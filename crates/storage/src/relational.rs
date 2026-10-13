@@ -589,6 +589,31 @@ impl PartialEq for RelationalSchemaData {
 impl Eq for RelationalSchemaData {}
 
 impl RelationalSchemaData {
+    fn checkpoint_copy(
+        schema: &RelationalTableSchema,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Arc<Self>, RelationalError> {
+        let context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        context
+            .reserve(std::mem::size_of::<Self>() + 2 * std::mem::size_of::<usize>())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let schema = clone_schema_with_allocations(schema, &context)?;
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let output = Arc::new(Self {
+            schema,
+            _memory: context.memory.into_inner(),
+        });
+        unit.finish();
+        work.checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        Ok(output)
+    }
+
     fn checkpoint_edit(
         &self,
         work: &crate::background::CheckpointWorkContext,
@@ -1714,6 +1739,44 @@ impl Clone for RelationalTableSegment {
 }
 
 impl RelationalTableSegment {
+    fn checkpoint_empty(
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Arc<Self>, RelationalError> {
+        let context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        context
+            .reserve(std::mem::size_of::<Self>() + 2 * std::mem::size_of::<usize>())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let directory_context = crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        directory_context
+            .reserve(RelationalRowDirectory::checkpoint_ownership_bytes())
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let unit = work
+            .start_unit()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        let rows = RelationalRowPages {
+            pages: RelationalRowDirectory::from_checkpoint_value(
+                Vec::new(),
+                directory_context.memory.into_inner(),
+            ),
+            len: 0,
+        };
+        let output = Arc::new(Self {
+            rows,
+            indexes: BTreeMap::new(),
+            _memory: context.memory.into_inner(),
+        });
+        unit.finish();
+        work.checkpoint()
+            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+        Ok(output)
+    }
+
     fn checkpoint_clone(
         &self,
         work: &crate::background::CheckpointWorkContext,
@@ -6649,12 +6712,51 @@ fn apply_transaction_inner(
                     &schema.name,
                     checkpoint_allocations,
                 )?;
-                next.segments.insert(
-                    schema.name.clone(),
-                    Arc::new(RelationalTableSegment::default()),
-                );
-                next.schemas
-                    .insert(schema.name.clone(), Arc::new(schema.into()));
+                match checkpoint_allocations {
+                    Some(context) => {
+                        let owned_schema =
+                            RelationalSchemaData::checkpoint_copy(&schema, &context.work)?;
+                        let segment = RelationalTableSegment::checkpoint_empty(&context.work)?;
+                        let map_context = crate::background::CheckpointDecodeContext {
+                            work: context.work.clone(),
+                            memory: Default::default(),
+                        };
+                        map_context
+                            .reserve(crate::cow::checkpoint_tree_node_bytes::<
+                                String,
+                                Arc<RelationalSchemaData>,
+                            >())
+                            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                        map_context
+                            .reserve(crate::cow::checkpoint_tree_node_bytes::<
+                                String,
+                                Arc<RelationalTableSegment>,
+                            >())
+                            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                        let schema_name =
+                            clone_string_with_allocations(&schema.name, Some(&map_context))?;
+                        let segment_name =
+                            clone_string_with_allocations(&schema.name, Some(&map_context))?;
+                        let mut memory = map_context.memory.into_inner();
+                        next._metadata_memory
+                            .append_retained(&mut memory, &context.work)
+                            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                        let unit = context
+                            .start_unit()
+                            .map_err(|error| RelationalError::Admission(error.to_string()))?;
+                        next.segments.insert(segment_name, segment);
+                        next.schemas.insert(schema_name, owned_schema);
+                        unit.finish();
+                    }
+                    None => {
+                        next.segments.insert(
+                            schema.name.clone(),
+                            Arc::new(RelationalTableSegment::default()),
+                        );
+                        next.schemas
+                            .insert(schema.name.clone(), Arc::new(schema.into()));
+                    }
+                }
             }
             RelationalWrite::AddColumn { table, column } => {
                 let mut schema = next
