@@ -1351,11 +1351,12 @@ impl GraphStore {
                     (Some(index_limits), None) if authoritative => {
                         let (next, capture) = self
                             .relational_state
-                            .stage_transaction_for_authoritative_recovery(
+                            .stage_legacy_transaction_for_authoritative_recovery_with_allocations(
                                 transaction,
                                 self.relational_mutation_limits,
                                 self.relational_overflow_config,
                                 index_limits,
+                                allocations.as_ref(),
                             )?;
                         (next, Some(capture), None)
                     }

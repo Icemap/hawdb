@@ -3892,6 +3892,23 @@ impl RelationalState {
         overflow_config: RelationalOverflowConfig,
         capture_limits: RelationalIndexChangeCaptureLimits,
     ) -> Result<(Self, RelationalIndexChangeCapture), RelationalError> {
+        self.stage_legacy_transaction_for_authoritative_recovery_with_allocations(
+            transaction,
+            limits,
+            overflow_config,
+            capture_limits,
+            None,
+        )
+    }
+
+    pub(crate) fn stage_legacy_transaction_for_authoritative_recovery_with_allocations(
+        &self,
+        transaction: RelationalTransaction,
+        limits: RelationalMutationLimits,
+        overflow_config: RelationalOverflowConfig,
+        capture_limits: RelationalIndexChangeCaptureLimits,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<(Self, RelationalIndexChangeCapture), RelationalError> {
         self.require_materialized_rows("relational recovery")?;
         admit_transaction(&transaction, limits)?;
         if transaction.changes_index_schema() {
@@ -3900,15 +3917,22 @@ impl RelationalState {
                     .to_string(),
             ));
         }
-        apply_transaction_with_index_changes(
+        let result = apply_transaction_inner(
             self,
             transaction,
             limits,
             overflow_config,
-            capture_limits,
-            None,
-            TransactionIndexMode::AuthoritativeRecovery,
-        )
+            TransactionApplyOptions {
+                index_capture_limits: Some(capture_limits),
+                index_mode: TransactionIndexMode::AuthoritativeRecovery,
+                checkpoint_allocations: allocations,
+                ..TransactionApplyOptions::materialized()
+            },
+        )?;
+        Ok((
+            result.state,
+            result.index_capture.expect("legacy index recovery capture"),
+        ))
     }
 
     pub fn stage_transaction_for_authoritative_recovery_with_row_changes(
@@ -7563,7 +7587,17 @@ fn apply_upsert(
         });
     let conflict_positions =
         column_positions_with_allocations(&schema, conflict_columns, assignment_context.as_ref())?;
-    if conflict_columns.is_empty() || schema.unique_index_definition(conflict_columns).is_none() {
+    if conflict_columns.is_empty()
+        || !(conflict_columns == schema.primary_key
+            || schema
+                .unique_constraints
+                .iter()
+                .any(|columns| columns == conflict_columns)
+            || schema
+                .indexes
+                .iter()
+                .any(|index| index.unique && index.columns == conflict_columns))
+    {
         return Err(RelationalError::Schema(format!(
             "UPSERT conflict target on table {table} must name a primary or unique key"
         )));
@@ -7858,13 +7892,23 @@ fn conflict_primary_key(
     changed_keys: &BTreeSet<RelationalKey>,
     context: RelationalConflictProbeContext<'_>,
 ) -> Result<Option<RelationalKey>, RelationalError> {
-    let definition = schema
-        .unique_index_definition(conflict_columns)
-        .ok_or_else(|| {
-            RelationalError::Schema(format!(
-                "UPSERT conflict target on table {table} is not materialized"
-            ))
-        })?;
+    let definition_context =
+        context
+            .allocations
+            .map(|context| crate::background::CheckpointDecodeContext {
+                work: context.work.clone(),
+                memory: Default::default(),
+            });
+    let definition = unique_index_definition_with_allocations(
+        schema,
+        conflict_columns,
+        definition_context.as_ref(),
+    )?
+    .ok_or_else(|| {
+        RelationalError::Schema(format!(
+            "UPSERT conflict target on table {table} is not materialized"
+        ))
+    })?;
     if context.constraint_index.is_some() {
         return constraints::authoritative_conflict_primary_key(
             state,

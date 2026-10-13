@@ -3892,3 +3892,159 @@ fn controlled_foreign_key_validation_denies_wide_key_before_copy_and_retries() {
     assert_eq!(source.row_count("content_documents"), 1);
     assert_eq!(source.row_count("content_anchors"), 1);
 }
+
+#[test]
+fn controlled_legacy_authoritative_recovery_matches_ordinary_and_rejects_schema_changes() {
+    use crate::background::CheckpointDecodeContext;
+    let limits = RelationalMutationLimits::default();
+    let overflow = RelationalOverflowConfig::default();
+    let captures = RelationalIndexChangeCaptureLimits::default();
+    let source = RelationalState::default()
+        .stage_transaction(create_upsert_table(), limits, overflow)
+        .unwrap()
+        .stage_transaction(
+            RelationalTransaction {
+                writes: vec![RelationalWrite::Insert {
+                    table: "documents".into(),
+                    rows: vec![upsert_row("id", "owner", "old")],
+                    mode: RelationalInsertMode::Error,
+                }],
+            },
+            limits,
+            overflow,
+        )
+        .unwrap();
+    for writes in [
+        vec![RelationalWrite::Insert {
+            table: "documents".into(),
+            rows: vec![upsert_row("id", "owner", "new")],
+            mode: RelationalInsertMode::Replace,
+        }],
+        vec![RelationalWrite::DeleteByPrimaryKey {
+            table: "documents".into(),
+            keys: vec![RelationalKey(vec![RelationalValue::Text("id".into())])],
+        }],
+    ] {
+        let transaction = RelationalTransaction { writes };
+        let expected = source
+            .stage_transaction_for_authoritative_recovery(
+                transaction.clone(),
+                limits,
+                overflow,
+                captures,
+            )
+            .unwrap();
+        let context = CheckpointDecodeContext {
+            work: Default::default(),
+            memory: Default::default(),
+        };
+        let actual = source
+            .stage_legacy_transaction_for_authoritative_recovery_with_allocations(
+                transaction,
+                limits,
+                overflow,
+                captures,
+                Some(&context),
+            )
+            .unwrap();
+        assert_eq!(actual.1, expected.1);
+        assert_eq!(
+            actual.0.rows("documents").collect::<Vec<_>>(),
+            expected.0.rows("documents").collect::<Vec<_>>()
+        );
+        assert!(!actual.0.materialized_index_postings_resident);
+        assert!(actual.0.segments["documents"].indexes.is_empty());
+        assert_eq!(source.row_count("documents"), 1);
+    }
+    let context = CheckpointDecodeContext {
+        work: Default::default(),
+        memory: Default::default(),
+    };
+    assert!(matches!(
+        source.stage_legacy_transaction_for_authoritative_recovery_with_allocations(
+            create_content_tables(),
+            limits,
+            overflow,
+            captures,
+            Some(&context)
+        ),
+        Err(RelationalError::Admission(_))
+    ));
+    assert!(source.table_schema("content_documents").is_none());
+}
+
+#[test]
+fn controlled_conflict_probe_admits_selected_unique_definition_before_wide_copy() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let mut transaction = create_upsert_table();
+    let RelationalWrite::CreateTable(schema) = &mut transaction.writes[0] else {
+        panic!("fixture schema");
+    };
+    schema.unique_constraints.clear();
+    schema.indexes.push(RelationalIndexSchema {
+        name: "i".repeat(128 * 1024),
+        columns: vec!["owner".into()],
+        unique: true,
+    });
+    let state = RelationalState::default()
+        .stage_transaction(
+            transaction,
+            RelationalMutationLimits::default(),
+            RelationalOverflowConfig::default(),
+        )
+        .unwrap();
+    let columns = vec!["owner".into()];
+    let key = RelationalKey(vec![RelationalValue::Text("owner".into())]);
+    let changed = BTreeSet::new();
+    for (ceiling, succeeds) in [(16 * 1024, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let context = CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        };
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result = conflict_primary_key(
+            &state,
+            "documents",
+            state.table_schema("documents").unwrap(),
+            &columns,
+            &key,
+            &changed,
+            RelationalConflictProbeContext {
+                constraint_index: None,
+                allocations: Some(&context),
+            },
+        );
+        let copies = observation.finish();
+        if succeeds {
+            assert_eq!(result.unwrap(), None);
+        } else {
+            assert!(matches!(result, Err(RelationalError::Admission(_))));
+            assert_eq!(copies, 0);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(context);
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
