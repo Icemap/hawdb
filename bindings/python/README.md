@@ -60,8 +60,12 @@ MATCH (s:Stock {code: $code}) RETURN s.code
 
 Every `%%cypher` and `%%sql` cell reads the notebook's `params` variable, so
 set `params = None` once a query no longer needs it. The magic line takes no
-options. The cell body is sent unchanged and the `QueryResult` is returned;
-`%hawdb close` closes the selected database.
+options. The cell body is sent unchanged. `%%sql` returns the `QueryResult`;
+`%%cypher` returns it wrapped so that, when the displayed rows hold nodes or
+relationships (`MATCH (a)-[r]->(b) RETURN a, r, b`), they are drawn as an
+inline SVG graph above the table. The wrapper forwards everything else to the
+`QueryResult`, which its `result` attribute holds. `%hawdb close` closes the
+selected database.
 
 ### Lite profile
 

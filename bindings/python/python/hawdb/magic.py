@@ -42,6 +42,7 @@ be closed by the caller. `%unload_ext hawdb.magic` removes the magics.
 import sys
 
 import hawdb
+from hawdb import _display
 
 _selected = None
 _owned = False  # whether `_selected` was opened by `%hawdb open`
@@ -137,10 +138,62 @@ def hawdb_line(line):
     raise ValueError(_LINE_USAGE)
 
 
+# Rows fetched per call while a graph display scans past its window.
+_SCAN_BATCH_ROWS = 1000
+
+
+class CypherResult:
+    """What `%%cypher` returns: its `QueryResult`, drawn as a graph when possible.
+
+    Attribute access, iteration, `len` and the text `repr` go to the wrapped
+    `QueryResult`, which `result` exposes. In the notebook, the nodes and
+    relationships in the displayed rows are drawn above the usual table.
+    """
+
+    def __init__(self, result):
+        self.result = result
+
+    def __getattr__(self, name):
+        if name == "result":  # not set yet, e.g. during `copy.copy`
+            raise AttributeError(name)
+        return getattr(self.result, name)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self.result)
+
+    def __len__(self):
+        return len(self.result)
+
+    def __repr__(self):
+        return repr(self.result)
+
+    def _repr_html_(self):
+        limit = _display.DISPLAY_ROW_LIMIT
+        rows = self.result._display_rows(0, limit)
+        table = _display.render_html(self.result.columns, rows, len(self.result), limit)
+        graph = _display.render_graph(
+            rows,
+            self._rows_after(limit),
+            limit=limit,
+            scan_limit=_display.GRAPH_SCAN_ROW_LIMIT,
+        )
+        return graph + table
+
+    def _rows_after(self, start):
+        # Lazy and batched: rows past the window are fetched only when the
+        # window holds something to draw, and only as far as the scan reads.
+        while batch := self.result._display_rows(start, start + _SCAN_BATCH_ROWS):
+            yield from batch
+            start += len(batch)
+
+
 def cypher_cell(line, cell):
     """Implementation of `%%cypher`: run the cell as one Cypher statement."""
     params = _params("%%cypher", line, dict)
-    return _database().execute(cell, params)
+    return CypherResult(_database().execute(cell, params))
 
 
 def sql_cell(line, cell):
