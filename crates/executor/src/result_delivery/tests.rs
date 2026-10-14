@@ -377,35 +377,50 @@ fn compact_owned_results_charge_spare_nested_payload_capacity() {
 
 #[test]
 fn compact_owned_results_roll_back_failed_segment_boundary_payload() {
-    let ledger = QueryMemoryLedger::new(NonZeroUsize::new(12000).unwrap());
-    let mut output = QueryOutputAccumulator::new_owned(
+    let scalar = |id| Binding::values(Row::from([("value".into(), Value::Int(id))]));
+    let control_ledger =
+        QueryMemoryLedger::new(ExecutionMemoryConfig::default().query_memory_bytes);
+    let mut control = QueryOutputAccumulator::new_owned(
         OutputLimits::default(),
-        NonZeroUsize::new(12000).unwrap(),
-        &ledger,
+        ExecutionMemoryConfig::default().batch_payload_bytes,
+        &control_ledger,
     )
     .unwrap();
+    for id in 0..257 {
+        control.emit(scalar(id)).unwrap();
+    }
+    // Admit the same scalar path's growth overlap on every supported ABI.
+    let budget = NonZeroUsize::new(control_ledger.snapshot().peak_bytes).unwrap();
+    drop(control);
+    assert_eq!(control_ledger.snapshot().used_bytes, 0);
+    let ledger = QueryMemoryLedger::new(budget);
+    let mut output =
+        QueryOutputAccumulator::new_owned(OutputLimits::default(), budget, &ledger).unwrap();
     for id in 0..256 {
-        output
+        output.emit(scalar(id)).unwrap();
+    }
+    let headroom = budget.get() - ledger.snapshot().used_bytes;
+    // Incoming and retained payload overlap, in addition to segment metadata.
+    let payload_capacity = headroom / 2;
+    assert!(payload_capacity > 0);
+    let mut failed_used_bytes = None;
+    for _ in 0..2 {
+        let error = output
             .emit(Binding::values(Row::from([(
                 "value".into(),
-                Value::Int(id),
+                Value::Binary(Vec::with_capacity(payload_capacity)),
             )])))
-            .unwrap();
+            .unwrap_err();
+        assert!(error.to_string().contains("result_materialization"));
+        assert_eq!(output.metrics().rows, 256);
+        let used_bytes = ledger.snapshot().used_bytes;
+        if let Some(previous) = failed_used_bytes {
+            assert_eq!(used_bytes, previous);
+        }
+        failed_used_bytes = Some(used_bytes);
+        assert!(ledger.snapshot().peak_bytes <= budget.get());
     }
-    let error = output
-        .emit(Binding::values(Row::from([(
-            "value".into(),
-            Value::Binary(Vec::with_capacity(2000)),
-        )])))
-        .unwrap_err();
-    assert!(error.to_string().contains("result_materialization"));
-    assert_eq!(output.metrics().rows, 256);
-    output
-        .emit(Binding::values(Row::from([(
-            "value".into(),
-            Value::Int(256),
-        )])))
-        .unwrap();
+    output.emit(scalar(256)).unwrap();
     let rows = output.take_owned_rows().unwrap();
     assert_eq!(rows.len(), 257);
     for ordinal in 0..257 {
