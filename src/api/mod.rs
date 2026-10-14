@@ -3844,6 +3844,10 @@ impl Database {
 
     pub fn rebuild_projected_graph_artifacts(&mut self) -> Result<()> {
         self.ensure_writable()?;
+        let _suspension = self.runtime.suspend_automatic_checkpoint()?;
+        // This derived write has no WAL record, so the next candidate must
+        // capture the rebuilt runtime rather than reuse the prior source.
+        self.runtime.release_suspended_checkpoint_source()?;
         {
             let mut branch_runtime_access = self.runtime.get_mut()?;
             let branch_runtime = &mut *branch_runtime_access;

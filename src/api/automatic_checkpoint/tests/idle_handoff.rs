@@ -43,6 +43,51 @@ fn database(root: &PathBuf) -> Database {
 }
 
 #[test]
+fn projected_artifact_rebuild_invalidates_paused_checkpoint_source() {
+    let fixture = Fixture::new();
+    let mut db = database(&fixture.0);
+    db.query("CREATE (:Memory {id: 1})-[:LINKS]->(:Entity {id: 2})")
+        .unwrap();
+    db.query("CALL project_graph('G', ['Memory', 'Entity'], ['LINKS'])")
+        .unwrap();
+    db.checkpoint().unwrap();
+
+    let control = db.runtime.checkpoint_control_for_test();
+    let suspension = db.runtime.suspend_automatic_checkpoint().unwrap();
+    db.query("CREATE (:Memory {id: 3})").unwrap();
+    let (sealed, observed) = std::sync::mpsc::channel();
+    let (resume, continuation) = std::sync::mpsc::channel();
+    control.lock().unwrap().prefix_seal_probe = Some(Arc::new(PrefixSealProbe {
+        sealed,
+        resume: Mutex::new(continuation),
+    }));
+    drop(suspension);
+    observed.recv_timeout(Duration::from_secs(15)).unwrap();
+
+    let rebuild = std::thread::spawn(move || {
+        let result = db.rebuild_projected_graph_artifacts();
+        (db, result)
+    });
+    wait(&control, |state| state.suspensions > 0);
+    control.lock().unwrap().prefix_seal_probe = None;
+    resume.send(()).unwrap();
+    let (db, result) = rebuild.join().unwrap();
+    result.unwrap();
+    wait(&control, |state| {
+        state.phase == Phase::Idle && state.report.completed_checkpoints > 0
+    });
+    let status = &db.projected_graph_statuses().unwrap()[0];
+    assert!(status.reusable);
+    assert_eq!(status.node_count, Some(3));
+    drop(db);
+
+    let reopened = database(&fixture.0);
+    let status = &reopened.projected_graph_statuses().unwrap()[0];
+    assert!(status.reusable);
+    assert_eq!(status.node_count, Some(3));
+}
+
+#[test]
 fn idle_handle_adopts_and_retires_two_generations_without_frontend_access() {
     let fixture = Fixture::new();
     let mut db = database(&fixture.0);

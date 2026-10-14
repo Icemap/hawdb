@@ -742,13 +742,7 @@ impl Database {
             .into_iter()
             .map(|status| (status.name.clone(), status))
             .collect::<BTreeMap<_, _>>();
-        {
-            let mut branch_runtime_access = self.runtime.get_mut()?;
-            let branch_runtime = &mut *branch_runtime_access;
-            branch_runtime
-                .store
-                .rebuild_projected_graph_artifacts(&branch_runtime.catalog)
-        }?;
+        self.rebuild_projected_graph_artifacts()?;
         let rows = self
             .runtime
             .get()?
