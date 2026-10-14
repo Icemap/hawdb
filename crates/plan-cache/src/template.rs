@@ -175,6 +175,20 @@ pub fn bind_physical_plan_parameters(
     Ok(plan)
 }
 
+/// Resolves a borrowed cost input from the same template as the physical plan.
+/// Keep marker interpretation here so planning never reconstructs its encoding.
+#[doc(hidden)]
+pub fn resolve_plan_template_value<'a>(
+    template: &'a Value,
+    parameters: &'a BTreeMap<String, Value>,
+    has_slots: bool,
+) -> Result<&'a Value> {
+    if has_slots && let Some((name, path)) = marker_name_and_path(template) {
+        return resolve_parameter_marker(parameters, name, path);
+    }
+    Ok(template)
+}
+
 fn parameter_value_shape(value: &Value) -> ParameterValueShape {
     match value {
         Value::Null => ParameterValueShape::Null,
@@ -1060,24 +1074,32 @@ fn bind_values(values: &mut [Value], parameters: &BTreeMap<String, Value>) -> Re
     Ok(())
 }
 
+fn resolve_parameter_marker<'a>(
+    parameters: &'a BTreeMap<String, Value>,
+    name: &str,
+    path: Vec<usize>,
+) -> Result<&'a Value> {
+    let mut bound = parameters
+        .get(name)
+        .ok_or_else(|| HawDBError::Semantic(format!("missing parameter '${name}'")))?;
+    for index in path {
+        let Value::List(values) = bound else {
+            return Err(HawDBError::Semantic(format!(
+                "parameter '${name}' changed shape while binding a cached plan"
+            )));
+        };
+        bound = values.get(index).ok_or_else(|| {
+            HawDBError::Semantic(format!(
+                "parameter '${name}' changed shape while binding a cached plan"
+            ))
+        })?;
+    }
+    Ok(bound)
+}
+
 fn bind_value(value: &mut Value, parameters: &BTreeMap<String, Value>) -> Result<()> {
     if let Some((name, path)) = marker_name_and_path(value) {
-        let mut bound = parameters
-            .get(name)
-            .ok_or_else(|| HawDBError::Semantic(format!("missing parameter '${name}'")))?;
-        for index in path {
-            let Value::List(values) = bound else {
-                return Err(HawDBError::Semantic(format!(
-                    "parameter '${name}' changed shape while binding a cached plan"
-                )));
-            };
-            bound = values.get(index).ok_or_else(|| {
-                HawDBError::Semantic(format!(
-                    "parameter '${name}' changed shape while binding a cached plan"
-                ))
-            })?;
-        }
-        *value = bound.clone();
+        *value = resolve_parameter_marker(parameters, name, path)?.clone();
         return Ok(());
     }
     match value {
@@ -1091,8 +1113,8 @@ fn bind_value(value: &mut Value, parameters: &BTreeMap<String, Value>) -> Result
 mod tests {
     use super::{
         bind_physical_plan_parameters, marker_use_in_logical_plan, parameter_marker,
-        parameterize_logical_plan, MarkerUse, ParameterCacheValue, PARAMETER_SLOT_NAME_KEY,
-        PARAMETER_SLOT_PATH_KEY,
+        parameterize_logical_plan, resolve_plan_template_value, MarkerUse, ParameterCacheValue,
+        PARAMETER_SLOT_NAME_KEY, PARAMETER_SLOT_PATH_KEY,
     };
     use hawdb_core::Value;
     use hawdb_cypher as cypher;
@@ -1102,6 +1124,34 @@ mod tests {
         PhysicalPlan,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    fn cost_operand_resolution_borrows_values_and_preserves_literal_markers() {
+        let parameters = BTreeMap::from([("id".into(), Value::String("point".into()))]);
+        let marker = parameter_marker("id", &parameters["id"], &[]);
+        let resolved = resolve_plan_template_value(&marker, &parameters, true).unwrap();
+        assert!(std::ptr::eq(resolved, &parameters["id"]));
+        assert!(std::ptr::eq(
+            resolve_plan_template_value(&marker, &BTreeMap::new(), false).unwrap(),
+            &marker
+        ));
+        assert!(resolve_plan_template_value(&marker, &BTreeMap::new(), true).is_err());
+        let parameters = BTreeMap::from([("ids".into(), Value::List(vec![Value::Int(7)]))]);
+        let Value::List(markers) = parameter_marker("ids", &parameters["ids"], &[]) else {
+            panic!("expected list markers")
+        };
+        let resolved = resolve_plan_template_value(&markers[0], &parameters, true).unwrap();
+        let Value::List(values) = &parameters["ids"] else {
+            panic!("expected list operand")
+        };
+        assert!(std::ptr::eq(resolved, &values[0]));
+        assert!(resolve_plan_template_value(
+            &markers[0],
+            &BTreeMap::from([("ids".into(), Value::Int(7))]),
+            true
+        )
+        .is_err());
+    }
 
     #[test]
     fn general_case_preserves_exact_cache_keys_and_rebinds_explicit_template_slots() {

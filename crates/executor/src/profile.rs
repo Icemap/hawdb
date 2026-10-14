@@ -843,6 +843,9 @@ pub struct PipelineMemoryReport {
     pub intermediate_payload_bytes: usize,
     pub peak_batch_rows: usize,
     pub peak_batch_payload_bytes: usize,
+    /// Rows projected from source property references before owned output admission.
+    /// This counter does not claim source-to-host zero-copy delivery.
+    pub borrowed_node_projection_rows: usize,
     /// Number of typed columnar batches evaluated by eligible pipeline fragments.
     pub columnar_batches: usize,
     /// Rows loaded into typed columns before selection.
