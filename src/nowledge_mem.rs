@@ -3527,6 +3527,63 @@ impl NowledgeMemEmbeddedStoreHandle {
             &SearchProjectionChangeBatch,
         ) -> Result<SearchProjectionRelationalDelta>,
     {
+        self.catch_up_search_projection_with_batch_hydrator_inner(
+            max_change_operations_per_batch,
+            max_projection_operations_per_batch,
+            max_batches,
+            |_| Ok(()),
+            batch_hydrator,
+        )
+    }
+
+    /// Validates caller-owned target state and runs bounded Search catch-up
+    /// under one embedded write owner. A rejected guard cannot publish a
+    /// projection batch, and another mutation through this handle cannot
+    /// change the guarded Graph state before catch-up completes.
+    ///
+    /// The guard must use bounded reads and must not reenter this handle.
+    pub fn catch_up_search_projection_with_guard_and_batch_hydrator<G, F>(
+        &self,
+        max_change_operations_per_batch: usize,
+        max_projection_operations_per_batch: usize,
+        max_batches: usize,
+        guard: G,
+        batch_hydrator: F,
+    ) -> Result<SearchProjectionCatchUpReport>
+    where
+        G: FnOnce(&mut DatabaseReadTransaction) -> Result<()>,
+        F: FnMut(
+            &mut DatabaseReadTransaction,
+            &SearchProjectionChangeBatch,
+        ) -> Result<SearchProjectionRelationalDelta>,
+    {
+        self.catch_up_search_projection_with_batch_hydrator_inner(
+            max_change_operations_per_batch,
+            max_projection_operations_per_batch,
+            max_batches,
+            |store| {
+                let mut snapshot = store.graph().database().begin_read_transaction()?;
+                guard(&mut snapshot)
+            },
+            batch_hydrator,
+        )
+    }
+
+    fn catch_up_search_projection_with_batch_hydrator_inner<G, F>(
+        &self,
+        max_change_operations_per_batch: usize,
+        max_projection_operations_per_batch: usize,
+        max_batches: usize,
+        guard: G,
+        batch_hydrator: F,
+    ) -> Result<SearchProjectionCatchUpReport>
+    where
+        G: FnOnce(&mut NowledgeMemEmbeddedStore) -> Result<()>,
+        F: FnMut(
+            &mut DatabaseReadTransaction,
+            &SearchProjectionChangeBatch,
+        ) -> Result<SearchProjectionRelationalDelta>,
+    {
         let estimated_operations = max_change_operations_per_batch
             .max(max_projection_operations_per_batch)
             .saturating_mul(max_batches);
@@ -3534,6 +3591,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             estimated_operations.saturating_mul(SEARCH_PROJECTION_CHANGEFEED_OPERATION_BYTES);
         let permit = self.admit_search_projection_maintenance(estimated_input_bytes)?;
         let mut store = self.write_store()?;
+        guard(&mut store)?;
         if store.incremental_search_enabled() {
             store.catch_up_incremental_search_with_batch_hydrator(
                 max_change_operations_per_batch,
@@ -12689,6 +12747,171 @@ mod tests {
         );
         assert!(!report.search_production_qualification_bound);
         (root, handle, options)
+    }
+
+    fn check_catch_up_binding(
+        snapshot: &mut crate::DatabaseReadTransaction,
+        expected: &str,
+    ) -> crate::Result<()> {
+        let rows = snapshot
+            .query(
+                "MATCH (binding:CatchUpBinding {id: 'target'}) \
+                 RETURN binding.incarnation AS incarnation LIMIT 2",
+            )?
+            .rows;
+        if rows.len() == 1
+            && rows[0].get("incarnation") == Some(&Value::String(expected.to_string()))
+        {
+            Ok(())
+        } else {
+            Err(HawDBError::Execution("target binding changed".into()))
+        }
+    }
+
+    #[test]
+    fn guarded_incremental_catch_up_rejects_stale_binding_and_reopens_after_retry() {
+        let (root, handle, options) =
+            incremental_maintenance_fixture("guarded_incremental_catch_up", Default::default());
+        handle
+            .with_transaction(|transaction| {
+                transaction.query("CREATE (:CatchUpBinding {id: 'target', incarnation: 'old'})")?;
+                transaction.query("CREATE (:Memory {id: 'm', title: 'Guarded'})")?;
+                Ok(())
+            })
+            .unwrap();
+        handle
+            .query_with_report(
+                "MATCH (binding:CatchUpBinding {id: 'target'}) \
+                 SET binding.incarnation = 'current'",
+            )
+            .unwrap();
+        let before = handle
+            .runtime_status()
+            .unwrap()
+            .projection_freshness
+            .unwrap();
+        let manifest = root.join("search/search_projection.out_of_core.manifest.hawdb");
+        let before_manifest = std::fs::read(&manifest).unwrap();
+        let mut hydrated = false;
+        let error = handle
+            .catch_up_search_projection_with_guard_and_batch_hydrator(
+                16,
+                16,
+                4,
+                |snapshot| check_catch_up_binding(snapshot, "old"),
+                |_, _| {
+                    hydrated = true;
+                    Ok(SearchProjectionRelationalDelta::default())
+                },
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("target binding changed"));
+        assert!(!hydrated);
+        assert_eq!(std::fs::read(&manifest).unwrap(), before_manifest);
+        assert!(handle
+            .search_projection_documents(&["memory:m".into()], 1)
+            .is_err());
+        let after = handle
+            .runtime_status()
+            .unwrap()
+            .projection_freshness
+            .unwrap();
+        assert_eq!(
+            after.source_graph_commit_epoch,
+            before.source_graph_commit_epoch
+        );
+        assert_eq!(
+            after.durable_source_graph_commit_epoch,
+            before.durable_source_graph_commit_epoch
+        );
+
+        let report = handle
+            .catch_up_search_projection_with_guard_and_batch_hydrator(
+                16,
+                16,
+                4,
+                |snapshot| check_catch_up_binding(snapshot, "current"),
+                |_, _| Ok(SearchProjectionRelationalDelta::default()),
+            )
+            .unwrap();
+        assert!(report.complete);
+        assert_eq!(report.end_applied_epoch, report.end_durable_epoch);
+        drop(handle);
+
+        let (reopened, _) = NowledgeMemEmbeddedStoreHandle::open_with_options(options).unwrap();
+        assert_eq!(
+            reopened
+                .search_projection_documents(&["memory:m".into()], 1)
+                .unwrap()[0]
+                .title,
+            "Guarded"
+        );
+        let retry = reopened
+            .catch_up_search_projection_with_guard_and_batch_hydrator(
+                16,
+                16,
+                4,
+                |snapshot| check_catch_up_binding(snapshot, "current"),
+                |_, _| Ok(SearchProjectionRelationalDelta::default()),
+            )
+            .unwrap();
+        assert!(retry.complete);
+        assert_eq!(retry.end_durable_epoch, report.end_durable_epoch);
+        drop(reopened);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn guarded_incremental_catch_up_holds_write_owner_until_publication() {
+        let (root, handle, _options) =
+            incremental_maintenance_fixture("guarded_incremental_lock", Default::default());
+        handle
+            .with_transaction(|transaction| {
+                transaction
+                    .query("CREATE (:CatchUpBinding {id: 'target', incarnation: 'current'})")?;
+                transaction.query("CREATE (:Memory {id: 'm', title: 'Guarded'})")?;
+                Ok(())
+            })
+            .unwrap();
+        let (guard_entered_tx, guard_entered_rx) = mpsc::channel();
+        let (mutation_started_tx, mutation_started_rx) = mpsc::channel();
+        let writer_handle = handle.clone();
+        let writer = thread::spawn(move || {
+            guard_entered_rx.recv().unwrap();
+            mutation_started_tx.send(()).unwrap();
+            writer_handle
+                .query_with_report(
+                    "MATCH (binding:CatchUpBinding {id: 'target'}) \
+                     SET binding.incarnation = 'next'",
+                )
+                .unwrap();
+        });
+
+        let report = handle
+            .catch_up_search_projection_with_guard_and_batch_hydrator(
+                16,
+                16,
+                4,
+                |snapshot| {
+                    check_catch_up_binding(snapshot, "current")?;
+                    guard_entered_tx.send(()).unwrap();
+                    mutation_started_rx.recv().unwrap();
+                    Ok(())
+                },
+                |snapshot, _| {
+                    check_catch_up_binding(snapshot, "current")?;
+                    assert!(handle.inner.try_write().is_err());
+                    Ok(SearchProjectionRelationalDelta::default())
+                },
+            )
+            .unwrap();
+        assert!(report.complete);
+        writer.join().unwrap();
+        handle
+            .with_read_transaction(4096, |snapshot| check_catch_up_binding(snapshot, "next"))
+            .unwrap();
+        drop(handle);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
