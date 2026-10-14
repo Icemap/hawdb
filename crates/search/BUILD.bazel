@@ -592,7 +592,8 @@ rust_test(
 # Non-FTS profiles also run the shared persistence/recovery suite. Their former
 # 300s deadlines expired locally; use 900s while issue #872 measures decomposition.
 # The text-only and text/background FTS profiles exceeded 900s in Prow; give
-# only those two unit targets the next standard deadline. See issue #1034.
+# only those two unit targets the next standard deadline.
+# Evidence: https://github.com/nowledge-co/hawdb/issues/1034.
 [
     rust_test(
         name = "hawdb_search_%s_tests" % profile,
