@@ -464,6 +464,9 @@ impl Database {
         options: RetainedQueryOptions,
         context: Option<&RuntimeTaskContext>,
     ) -> Result<RetainedNodeCursor> {
+        if let Some(context) = context {
+            context.checkpoint().map_err(RetainedQueryError::Stopped)?;
+        }
         let execution_started = hawdb_core::time::Instant::now();
         let state = self.runtime.get()?;
         state.store.ensure_usable()?;
@@ -1679,7 +1682,7 @@ mod tests {
     }
 
     #[test]
-    fn stopped_task_refuses_before_retained_admission() {
+    fn stopped_task_refuses_before_parsing_or_retained_admission() {
         for reason in [
             RuntimeCancellationReason::Cancelled,
             RuntimeCancellationReason::DeadlineExceeded,
@@ -1695,17 +1698,21 @@ mod tests {
                     Some(hawdb_core::time::Instant::now()),
                 )
             };
-            let error = db
-                .query_with_params_retained_node_context(
-                    QUERY,
-                    &params(),
-                    RetainedQueryOptions::default(),
-                    &context,
-                )
-                .unwrap_err();
-            assert_eq!(error, RetainedQueryError::Stopped(reason));
-            assert!(db.retained_result_snapshot().is_none());
-            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+            let malformed = "MATCH (";
+            assert!(query_runtime::parse_runtime_execution(malformed).is_err());
+            for query in [QUERY, malformed] {
+                let error = db
+                    .query_with_params_retained_node_context(
+                        query,
+                        &params(),
+                        RetainedQueryOptions::default(),
+                        &context,
+                    )
+                    .unwrap_err();
+                assert_eq!(error, RetainedQueryError::Stopped(reason));
+                assert!(db.retained_result_snapshot().is_none());
+                assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+            }
         }
     }
 

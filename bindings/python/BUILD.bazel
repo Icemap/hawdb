@@ -131,7 +131,7 @@ rust_shared_library(
         "//conditions:default": [],
     }),
     tags = ["manual"],
-    version = "0.6.0",
+    version = "0.8.0",
     deps = [
         "//:hawdb",
         "@python_crates//:pyo3",

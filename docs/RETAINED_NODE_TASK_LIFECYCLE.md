@@ -9,9 +9,11 @@ Issue Number: ref #987, ref #1008
 indexed single-node physical plan and original immutable row owners as the
 context-free API. The wrapper exposes no context-free pull or inner-cursor
 escape. Every open pull checks cancellation/deadline before delivering a row
-or publishing empty/post-delivery EOF. Checkpoints also surround constructor
-planning and capture; planning remains synchronous and is not interruptible
-inside each parser/optimizer operation.
+or publishing empty/post-delivery EOF. Construction checks the task before
+runtime access or parsing, after parsing, before admission and after capture.
+An already stopped task preserves its exact stop cause even for malformed
+Cypher. Planning remains synchronous and is not interruptible inside each
+parser/optimizer operation.
 
 The cursor does not clone the context, cancellation ancestry or I/O controller.
 Its Rust borrow requires the host to keep the context alive through cursor use.
@@ -69,8 +71,10 @@ Assume the existing cancellation/deadline checkpoint and retained admission
 primitives satisfy their contracts, immutable row/catalog owners preserve their
 allocations, and the observer respects its synchronous callback contract.
 
-1. Construction checkpoints the task before admission and after capture. Failure
-   unwinds provisional owners and all leases without delivering `E`.
+1. Construction checkpoints the task before runtime access/parsing, before
+   admission and after capture. A pre-existing stop refuses without parsing or
+   binding the retained governor. Failure unwinds provisional owners and all
+   leases without delivering `E`.
 2. An open pull checks the borrowed task. On failure, `fail(Stopped(reason))`
    changes `S` to Failed, publishes Failed to the shared source, drops `V` and
    the health barrier, and records one failed statement. Subsequent pulls return
@@ -93,8 +97,9 @@ allocations, and the observer respects its synchronous callback contract.
 
 These are source-level invariants and an induction over constructor/pull/close/
 release transitions, not a machine-checked proof. Regressions cover cancelled
-construction, expired construction deadlines and post-capture pulls, cancellation before delivery and
-at delivered/empty EOF, exact sticky causes, one failed observation, original
+construction (including malformed Cypher), expired construction deadlines and
+post-capture pulls, cancellation before delivery and at delivered/empty EOF,
+exact sticky causes, one failed observation, original
 payload addresses after all task/database owners drop, zero/undersized query
 and result reservations, duplicate metadata refusal, completed EOF stability,
 and final zero quotas. Runtime execution belongs to exact-head platform CI.
