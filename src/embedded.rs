@@ -458,10 +458,9 @@ impl HawDBEmbedded {
         } else {
             let max_rows = self.database.config().max_read_result_rows;
             let max_payload_bytes = usize::try_from(request.result_bytes).unwrap_or(usize::MAX);
-            let mut rows = Vec::new();
             self.database
                 .begin_read_transaction()?
-                .query_with_params_streaming_context(
+                .query_with_params_owned_context(
                     cypher_text,
                     parameters,
                     QueryStreamOptions {
@@ -469,12 +468,7 @@ impl HawDBEmbedded {
                         max_payload_bytes: Some(max_payload_bytes),
                     },
                     &execution_task_context,
-                    |row| {
-                        rows.push(row);
-                        Ok(())
-                    },
                 )
-                .map(|_| QueryOutput { rows: rows.into() })
         };
         if !is_mutation {
             self.check_admitted_query_context(task_context)?;
@@ -969,6 +963,68 @@ mod tests {
         assert_eq!(snapshot.completions, 4);
         assert_eq!(snapshot.admitted_memory_bytes, 0);
         assert!(engine.admitted_query_path_readiness().admission_safe);
+    }
+
+    #[test]
+    fn admitted_owned_reads_preserve_output_limits_and_release_permits() {
+        for (row_limit, payload_limit, should_succeed, resource) in [
+            (Some(1), None, false, hawdb_core::ReadBudgetResource::Rows),
+            (Some(2), None, true, hawdb_core::ReadBudgetResource::Rows),
+            (
+                None,
+                Some(19),
+                false,
+                hawdb_core::ReadBudgetResource::PayloadBytes,
+            ),
+            (
+                None,
+                Some(20),
+                true,
+                hawdb_core::ReadBudgetResource::PayloadBytes,
+            ),
+        ] {
+            let mut engine = HawDBEmbedded::open_in_memory_with_config(DatabaseConfig {
+                max_read_result_rows: row_limit,
+                max_read_result_payload_bytes: payload_limit,
+                ..DatabaseConfig::default()
+            });
+            for id in [1, 2] {
+                engine
+                    .database_mut()
+                    .query_with_params(
+                        "CREATE (:Item {id: $id})",
+                        &BTreeMap::from([("id".into(), Value::Int(id))]),
+                    )
+                    .unwrap();
+            }
+            let result = engine.query_admitted("MATCH (n:Item) RETURN n.id AS id ORDER BY id");
+            if should_succeed {
+                let output = result.unwrap();
+                assert_eq!(output.rows.len(), 2);
+                assert_eq!(output.rows[0].get("id"), Some(&Value::Int(1)));
+                assert_eq!(output.rows[1].get("id"), Some(&Value::Int(2)));
+            } else {
+                let Err(EmbeddedQueryError::Database(HawDBError::ReadBudgetExceeded(error))) =
+                    result
+                else {
+                    panic!("expected a typed output budget refusal");
+                };
+                assert_eq!(error.resource, resource);
+                assert_eq!(error.limit, row_limit.or(payload_limit).unwrap());
+            }
+            let retry = engine
+                .query_with_params_admitted(
+                    "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id",
+                    &BTreeMap::from([("id".into(), Value::Int(2))]),
+                )
+                .unwrap();
+            assert_eq!(retry.rows.len(), 1);
+            assert_eq!(retry.rows[0].get("id"), Some(&Value::Int(2)));
+            let governor = engine.runtime_governor().snapshot();
+            assert_eq!(governor.admissions, governor.completions);
+            assert_eq!(governor.admitted_memory_bytes, 0);
+            assert_eq!(governor.active_cpu_slots, 0);
+        }
     }
 
     #[test]

@@ -72,15 +72,9 @@ pub(super) fn execute_profiled_rows<S: ExecutionStore>(
     request: ExecutionRequest<'_>,
     resources: ExecutionResources<'_, S>,
 ) -> Result<ProfiledQueryRows> {
-    let mut rows = QueryRowsBuilder::new();
-    let streamed = execute_profiled_consumer(
-        request,
-        resources,
-        ConsumerMemoryMode::Retained,
-        &mut |row| rows.push_named_row(row),
-    )?;
+    let (streamed, rows) = execute_profiled_output(request, resources, OutputTarget::Owned)?;
     Ok(ProfiledQueryRows {
-        rows: rows.finish(),
+        rows: rows.expect("owned execution creates owned rows"),
         profile: streamed.profile,
     })
 }
@@ -91,6 +85,24 @@ pub(super) fn execute_profiled_consumer<S: ExecutionStore>(
     output_memory: ConsumerMemoryMode,
     consumer: &mut dyn FnMut(Row) -> Result<()>,
 ) -> Result<ProfiledQueryStream> {
+    execute_profiled_output(
+        request,
+        resources,
+        OutputTarget::Consumer(output_memory, consumer),
+    )
+    .map(|(streamed, _)| streamed)
+}
+
+enum OutputTarget<'a> {
+    Owned,
+    Consumer(ConsumerMemoryMode, &'a mut dyn FnMut(Row) -> Result<()>),
+}
+
+fn execute_profiled_output<S: ExecutionStore>(
+    request: ExecutionRequest<'_>,
+    resources: ExecutionResources<'_, S>,
+    target: OutputTarget<'_>,
+) -> Result<(ProfiledQueryStream, Option<QueryRows>)> {
     let ExecutionResources {
         catalog,
         store,
@@ -106,13 +118,18 @@ pub(super) fn execute_profiled_consumer<S: ExecutionStore>(
     let memory_ledger = QueryMemoryLedger::new(enforced_query_memory_budget(memory, task_context)?)
         .with_file_descriptors(store.file_descriptor_context());
     let result_memory_budget = enforced_result_memory_budget(memory, task_context)?;
-    let mut output = QueryOutputAccumulator::new(
-        output_limits,
-        result_memory_budget,
-        &memory_ledger,
-        output_memory,
-        consumer,
-    )?;
+    let mut output = match target {
+        OutputTarget::Consumer(output_memory, consumer) => QueryOutputAccumulator::new(
+            output_limits,
+            result_memory_budget,
+            &memory_ledger,
+            output_memory,
+            consumer,
+        )?,
+        OutputTarget::Owned => {
+            QueryOutputAccumulator::new_owned(output_limits, result_memory_budget, &memory_ledger)?
+        }
+    };
     let process_memory_start = hawdb_qos::ProcessMemorySnapshot::capture().ok();
     let execution_limit = ExecutionLimit::from_user_max_rows(output_limits.max_rows)?;
     let profile = ExecutionProfileBuilder::start(plan, output_limits.max_rows)?;
@@ -180,10 +197,14 @@ pub(super) fn execute_profiled_consumer<S: ExecutionStore>(
     let profile = profile.finish(observer, &memory_ledger, output.metrics(), |report| {
         record_process_memory(report, process_memory_start);
     });
-    Ok(ProfiledQueryStream {
-        fully_streamed,
-        profile,
-    })
+    let rows = output.take_owned_rows();
+    Ok((
+        ProfiledQueryStream {
+            fully_streamed,
+            profile,
+        },
+        rows,
+    ))
 }
 
 #[cfg(test)]
