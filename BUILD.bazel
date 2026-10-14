@@ -336,6 +336,9 @@ rust_test(
         # Finite headroom after two 900s deadline expirations; other partitions
         # retain their limit. Measured decomposition: https://github.com/nowledge-co/hawdb/issues/972.
         timeout = "eternal" if partition == "concurrent" else "long",
+        # RSS qualification must not compete with other test executables in
+        # this Bazel invocation. External worker contention remains possible.
+        tags = ["exclusive"] if partition == "analytics_rss" else [],
         srcs = ["scripts/run-root-unit-partition.sh"],
         args = [
             "$(rootpath :hawdb_unit_test_binary)",
@@ -345,8 +348,18 @@ rust_test(
         ],
         data = [":hawdb_unit_test_binary"],
     )
-    for partition in ["general", "concurrent", "analytics", "recovery"]
+    for partition in ["general", "concurrent", "analytics_core", "analytics_rss", "recovery"]
 ]
+
+# Preserve the public analytics label while isolating the edge-heavy RSS fixture.
+# Both owners retain the original finite deadline and the complete case inventory.
+test_suite(
+    name = "hawdb_unit_analytics_tests",
+    tests = [
+        ":hawdb_unit_analytics_core_tests",
+        ":hawdb_unit_analytics_rss_tests",
+    ],
+)
 
 sh_test(
     name = "root_unit_partition_script_test",

@@ -32,7 +32,13 @@ if [[ "${1:-}" == --list ]]; then
   if [[ "${PARTITION_PROBE_EMPTY:-0}" == 0 ]]; then
     echo 'api::tests::concurrent_transactions::owned: test'
   fi
-  echo 'api::tests::graph_analytics::owned: test'
+  if [[ "${PARTITION_PROBE_EMPTY_CORE:-0}" == 0 ]]; then
+    echo 'api::tests::graph_analytics::owned: test'
+  fi
+  if [[ "${PARTITION_PROBE_EMPTY_RSS:-0}" == 0 ]]; then
+    echo 'api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process: test'
+    echo 'api::tests::graph_analytics::rss_child: test'
+  fi
   echo 'api::tests::storage_recovery::owned: test'
   echo 'api::tests::query_execution::owned: test'
   if [[ "${PARTITION_PROBE_OVERLAP:-0}" == 1 ]]; then
@@ -43,7 +49,10 @@ if [[ "${1:-}" == --list ]]; then
     echo 'query_control::owned: test'
     echo 'api::tests::query_execution::query_control::owned: test'
   fi
-  echo '4 tests, 0 benchmarks'
+  if [[ "${PARTITION_PROBE_RSS_OVERLAP:-0}" == 1 ]]; then
+    echo 'api::tests::graph_analytics::rss_child_extension: test'
+  fi
+  echo '6 tests, 0 benchmarks'
   exit 0
 fi
 printf '%s\n' "$@" >"${PARTITION_PROBE_ARGS}"
@@ -51,24 +60,62 @@ exit "${PARTITION_PROBE_EXIT:-0}"
 EOF
 chmod +x "${fixture}/binary"
 
-for partition in general concurrent analytics recovery; do
+for partition in general concurrent analytics analytics_core analytics_rss recovery; do
   "${runner}" "${fixture}/binary" "${partition}" custom_filter --exact --skip user_skip
+  cp "${PARTITION_PROBE_ARGS}" "${fixture}/args.${partition}"
   python3 - "${PARTITION_PROBE_ARGS}" "${partition}" <<'PY'
 import pathlib
 import sys
 
 args = pathlib.Path(sys.argv[1]).read_text().splitlines()
-names = {
-    "concurrent": "api::tests::concurrent_transactions::owned",
-    "analytics": "api::tests::graph_analytics::owned",
-    "recovery": "api::tests::storage_recovery::owned",
-    "general": "api::tests::query_execution::owned",
+owners = {
+    "concurrent": {"api::tests::concurrent_transactions::owned"},
+    "analytics_core": {"api::tests::graph_analytics::owned"},
+    "analytics_rss": {
+        "api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process",
+        "api::tests::graph_analytics::rss_child",
+    },
+    "recovery": {"api::tests::storage_recovery::owned"},
+    "general": {"api::tests::query_execution::owned"},
 }
+all_names = set().union(*owners.values())
+owned = (
+    owners["analytics_core"] | owners["analytics_rss"]
+    if sys.argv[2] == "analytics"
+    else owners[sys.argv[2]]
+)
 skips = [args[i + 1] for i, value in enumerate(args[:-1]) if value == "--skip"]
-assert set(skips) == {name for owner, name in names.items() if owner != sys.argv[2]} | {"user_skip"}
+assert set(skips) == (all_names - owned) | {"user_skip"}
 assert args[-4:] == ["custom_filter", "--exact", "--skip", "user_skip"]
 PY
 done
+
+python3 - "${fixture}" <<'PY'
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+names = {
+    "api::tests::concurrent_transactions::owned",
+    "api::tests::graph_analytics::owned",
+    "api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process",
+    "api::tests::graph_analytics::rss_child",
+    "api::tests::storage_recovery::owned",
+    "api::tests::query_execution::owned",
+}
+
+def selected(partition):
+    args = (root / f"args.{partition}").read_text().splitlines()
+    skips = {args[i + 1] for i, arg in enumerate(args[:-1]) if arg == "--skip"}
+    return names - skips
+
+leaves = [selected(name) for name in [
+    "general", "concurrent", "analytics_core", "analytics_rss", "recovery"
+]]
+assert set().union(*leaves) == names
+assert sum(map(len, leaves)) == len(names)
+assert selected("analytics") == selected("analytics_core") | selected("analytics_rss")
+PY
 
 expect_exit() {
   local expected="$1"
@@ -84,11 +131,15 @@ expect_exit() {
 expect_exit 42 env PARTITION_PROBE_EXIT=42 "${runner}" "${fixture}/binary" general
 expect_exit 17 env PARTITION_PROBE_DISCOVERY_EXIT=17 "${runner}" "${fixture}/binary" general
 expect_exit 1 env PARTITION_PROBE_EMPTY=1 "${runner}" "${fixture}/binary" concurrent
+expect_exit 1 env PARTITION_PROBE_EMPTY_CORE=1 "${runner}" "${fixture}/binary" analytics_core
+expect_exit 1 env PARTITION_PROBE_EMPTY_RSS=1 "${runner}" "${fixture}/binary" analytics_rss
 expect_exit 64 "${runner}" "${fixture}/binary" unknown
 rm -f "${PARTITION_PROBE_ARGS}"
 expect_exit 1 env PARTITION_PROBE_OVERLAP=1 "${runner}" "${fixture}/binary" general
 [[ "$(<"${fixture}/error")" == *"root unit partition name overlap"* ]]
 [[ ! -e "${PARTITION_PROBE_ARGS}" ]]
+expect_exit 1 env PARTITION_PROBE_RSS_OVERLAP=1 "${runner}" "${fixture}/binary" analytics_core
+[[ "$(<"${fixture}/error")" == *"root unit partition name overlap"* ]]
 env PARTITION_PROBE_SAME_OWNER=1 "${runner}" "${fixture}/binary" general
 [[ "$(<"${PARTITION_PROBE_ARGS}")" != *"query_control::owned"* ]]
 echo "root unit partition ownership, caller arguments and failure propagation passed"
