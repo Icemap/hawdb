@@ -1019,17 +1019,13 @@ impl LockAcquireError {
     pub(super) fn aborts_transaction(&self) -> bool {
         matches!(self, Self::AbortTransaction(_))
     }
-
-    pub(super) fn into_error(self) -> HawDBError {
-        match self {
-            Self::Retryable(error) | Self::AbortTransaction(error) => error,
-        }
-    }
 }
 
 impl From<LockAcquireError> for HawDBError {
     fn from(error: LockAcquireError) -> Self {
-        error.into_error()
+        match error {
+            LockAcquireError::Retryable(error) | LockAcquireError::AbortTransaction(error) => error,
+        }
     }
 }
 

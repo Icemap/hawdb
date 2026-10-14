@@ -740,7 +740,7 @@ impl ConcurrentDatabaseTransaction {
             )
         {
             self.finished = true;
-            return Err(error.into_error());
+            return Err(error.into());
         }
 
         let retry_safe_conflict_noop = self.options.mode == ConcurrentTransactionMode::Optimistic
@@ -810,7 +810,7 @@ impl ConcurrentDatabaseTransaction {
             started,
             self.options.lock_timeout,
         ) {
-            let error = error.into_error();
+            let error: HawDBError = error.into();
             self.abort_after_lock_failure(error.to_string());
             return Err(error);
         }
@@ -858,7 +858,7 @@ impl ConcurrentDatabaseTransaction {
             self.options.lock_timeout,
         ) {
             let abort_transaction = error.aborts_transaction();
-            let error = error.into_error();
+            let error: HawDBError = error.into();
             if let Some(lock_savepoint) = lock_savepoint {
                 inner.locks.restore(self.transaction_id, lock_savepoint);
             }

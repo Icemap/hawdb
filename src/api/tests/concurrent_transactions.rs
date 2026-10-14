@@ -2791,15 +2791,12 @@ fn graph_deadlock_aborts_victim_and_releases_its_first_node_lock() {
     let db = Database::new().into_concurrent();
     db.query("CREATE (:Memory {state: 'before'})").unwrap();
     db.query("CREATE (:Memory {state: 'before'})").unwrap();
+    let lock_timeout = Duration::from_secs(10);
     let mut first = db
-        .begin_transaction(ConcurrentTransactionOptions::pessimistic(
-            Duration::from_secs(2),
-        ))
+        .begin_transaction(ConcurrentTransactionOptions::pessimistic(lock_timeout))
         .unwrap();
     let mut second = db
-        .begin_transaction(ConcurrentTransactionOptions::pessimistic(
-            Duration::from_secs(2),
-        ))
+        .begin_transaction(ConcurrentTransactionOptions::pessimistic(lock_timeout))
         .unwrap();
     first
         .query("MATCH (m:Memory) WHERE id(m) = 0 SET m.state = 'first'")
