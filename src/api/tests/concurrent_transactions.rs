@@ -2787,6 +2787,79 @@ fn point_lock_upgrade_cycle_selects_one_deadlock_victim() {
 }
 
 #[test]
+fn graph_deadlock_aborts_victim_and_releases_its_first_node_lock() {
+    let db = Database::new().into_concurrent();
+    db.query("CREATE (:Memory {state: 'before'})").unwrap();
+    db.query("CREATE (:Memory {state: 'before'})").unwrap();
+    let mut first = db
+        .begin_transaction(ConcurrentTransactionOptions::pessimistic(
+            Duration::from_secs(2),
+        ))
+        .unwrap();
+    let mut second = db
+        .begin_transaction(ConcurrentTransactionOptions::pessimistic(
+            Duration::from_secs(2),
+        ))
+        .unwrap();
+    first
+        .query("MATCH (m:Memory) WHERE id(m) = 0 SET m.state = 'first'")
+        .unwrap();
+    second
+        .query("MATCH (m:Memory) WHERE id(m) = 1 SET m.state = 'second'")
+        .unwrap();
+
+    let barrier = Arc::new(Barrier::new(2));
+    let first_barrier = Arc::clone(&barrier);
+    let first_handle = std::thread::spawn(move || {
+        first_barrier.wait();
+        let result = first.query("MATCH (m:Memory) WHERE id(m) = 1 SET m.state = 'first'");
+        let commit = first.commit();
+        (result, commit)
+    });
+    let second_handle = std::thread::spawn(move || {
+        barrier.wait();
+        let result = second.query("MATCH (m:Memory) WHERE id(m) = 0 SET m.state = 'second'");
+        let commit = second.commit();
+        (result, commit)
+    });
+    let results = [first_handle.join().unwrap(), second_handle.join().unwrap()];
+
+    assert_eq!(results.iter().filter(|(query, _)| query.is_ok()).count(), 1);
+    assert_eq!(
+        results.iter().filter(|(_, commit)| commit.is_ok()).count(),
+        1
+    );
+    let (victim_query, victim_commit) = results.iter().find(|(query, _)| query.is_err()).unwrap();
+    assert!(victim_query
+        .as_ref()
+        .unwrap_err()
+        .to_string()
+        .contains("deadlock detected"));
+    assert!(victim_commit
+        .as_ref()
+        .unwrap_err()
+        .to_string()
+        .contains("is aborted"));
+
+    let surviving_state = if results[0].1.is_ok() {
+        "first"
+    } else {
+        "second"
+    };
+    let rows = db
+        .query("MATCH (m:Memory) RETURN m.state AS state ORDER BY id(m)")
+        .unwrap()
+        .rows;
+    assert_eq!(rows.len(), 2);
+    for row in &rows {
+        assert_eq!(
+            row.get("state"),
+            Some(&Value::String(surviving_state.into()))
+        );
+    }
+}
+
+#[test]
 fn pessimistic_transaction_keeps_uncommitted_data_invisible_to_snapshot_readers() {
     let db = Database::new().into_concurrent();
     let mut tx = db

@@ -740,7 +740,7 @@ impl ConcurrentDatabaseTransaction {
             )
         {
             self.finished = true;
-            return Err(error);
+            return Err(error.into_error());
         }
 
         let retry_safe_conflict_noop = self.options.mode == ConcurrentTransactionMode::Optimistic
@@ -810,6 +810,7 @@ impl ConcurrentDatabaseTransaction {
             started,
             self.options.lock_timeout,
         ) {
+            let error = error.into_error();
             self.abort_after_lock_failure(error.to_string());
             return Err(error);
         }
@@ -856,12 +857,12 @@ impl ConcurrentDatabaseTransaction {
             started,
             self.options.lock_timeout,
         ) {
+            let abort_transaction = error.aborts_transaction();
+            let error = error.into_error();
             if let Some(lock_savepoint) = lock_savepoint {
                 inner.locks.restore(self.transaction_id, lock_savepoint);
             }
-            if error.to_string().contains("deadlock detected")
-                || error.to_string().contains("resource budget exceeded")
-            {
+            if abort_transaction {
                 self.abort_after_lock_failure(error.to_string());
             }
             return Err(error);

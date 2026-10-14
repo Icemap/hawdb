@@ -1007,6 +1007,32 @@ struct LockManagerState {
     waiters: LockWaitQueue,
 }
 
+/// A lock wait timeout leaves a graph statement retryable, while deadlocks and
+/// lock-manager failures must abort the transaction and release its locks.
+#[derive(Debug)]
+pub(super) enum LockAcquireError {
+    Retryable(HawDBError),
+    AbortTransaction(HawDBError),
+}
+
+impl LockAcquireError {
+    pub(super) fn aborts_transaction(&self) -> bool {
+        matches!(self, Self::AbortTransaction(_))
+    }
+
+    pub(super) fn into_error(self) -> HawDBError {
+        match self {
+            Self::Retryable(error) | Self::AbortTransaction(error) => error,
+        }
+    }
+}
+
+impl From<LockAcquireError> for HawDBError {
+    fn from(error: LockAcquireError) -> Self {
+        error.into_error()
+    }
+}
+
 impl LockManager {
     pub(super) fn savepoint(&self, transaction_id: u64) -> Result<LockSavepoint> {
         Ok(LockSavepoint {
@@ -1040,7 +1066,7 @@ impl LockManager {
         requests: &[LockRequest],
         started: Instant,
         timeout: Duration,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), LockAcquireError> {
         let result = self.acquire_inner(transaction_id, requests, started, timeout);
         if result.is_err() {
             // acquire_inner retires queue priority under the state mutex on
@@ -1056,8 +1082,10 @@ impl LockManager {
         requests: &[LockRequest],
         started: Instant,
         timeout: Duration,
-    ) -> Result<()> {
-        let mut state = self.lock_state()?;
+    ) -> std::result::Result<(), LockAcquireError> {
+        let mut state = self
+            .lock_state()
+            .map_err(LockAcquireError::AbortTransaction)?;
         let mut unique_requests = requests.to_vec();
         unique_requests.sort_by(LockRequest::acquisition_cmp);
         unique_requests.dedup();
@@ -1080,7 +1108,10 @@ impl LockManager {
                 blockers.extend(state.waiters.blockers(transaction_id, &request));
                 if blockers.is_empty() {
                     state.waiters.remove(transaction_id);
-                    state.locks.grant(transaction_id, request)?;
+                    state
+                        .locks
+                        .grant(transaction_id, request)
+                        .map_err(LockAcquireError::AbortTransaction)?;
                     break;
                 }
                 let admission = state
@@ -1091,12 +1122,12 @@ impl LockManager {
                     // Remove the closing dependency before another waiter can
                     // inspect the graph and select a second victim.
                     state.waiters.remove(transaction_id);
-                    return Err(error);
+                    return Err(LockAcquireError::AbortTransaction(error));
                 }
                 let remaining = timeout.saturating_sub(started.elapsed());
                 if remaining.is_zero() {
                     state.waiters.remove(transaction_id);
-                    return Err(lock_timeout_error(timeout));
+                    return Err(LockAcquireError::Retryable(lock_timeout_error(timeout)));
                 }
                 let waited = self.available.wait_timeout(state, remaining);
                 let (next, wait) = match waited {
@@ -1104,13 +1135,15 @@ impl LockManager {
                     Err(poisoned) => {
                         let (mut recovered, _) = poisoned.into_inner();
                         recovered.waiters.remove(transaction_id);
-                        return Err(lock_manager_poisoned_error());
+                        return Err(LockAcquireError::AbortTransaction(
+                            lock_manager_poisoned_error(),
+                        ));
                     }
                 };
                 state = next;
                 if wait.timed_out() {
                     state.waiters.remove(transaction_id);
-                    return Err(lock_timeout_error(timeout));
+                    return Err(LockAcquireError::Retryable(lock_timeout_error(timeout)));
                 }
             }
         }
@@ -1547,7 +1580,9 @@ mod lock_wait_tests {
         request: LockRequest,
         timeout: Duration,
     ) -> Result<()> {
-        manager.acquire(id, &[request], Instant::now(), timeout)
+        manager
+            .acquire(id, &[request], Instant::now(), timeout)
+            .map_err(Into::into)
     }
 
     fn wait_until_queued(manager: &LockManager, id: u64) {
@@ -1586,12 +1621,14 @@ mod lock_wait_tests {
         });
         wait_until_queued(&manager, 2);
         for id in 3..35 {
-            let result = acquire(&manager, id, optimistic.clone(), Duration::ZERO);
+            let result = manager.acquire(
+                id,
+                std::slice::from_ref(&optimistic),
+                Instant::now(),
+                Duration::ZERO,
+            );
             manager.release(id);
-            assert!(result
-                .unwrap_err()
-                .to_string()
-                .contains("transaction lock wait timed out"));
+            assert!(matches!(result, Err(LockAcquireError::Retryable(_))));
         }
         // Already-owned coverage is not a new grant and must remain usable.
         acquire(&manager, 1, optimistic.clone(), Duration::ZERO).unwrap();
@@ -1676,13 +1713,17 @@ mod lock_wait_tests {
             result
         });
         wait_until_queued(&manager, 2);
-        let error = acquire(
-            &manager,
-            1,
-            LockRequest::graph_node(LockMode::Exclusive, 2),
-            Duration::from_secs(1),
-        )
-        .unwrap_err();
+        let error = manager
+            .acquire(
+                1,
+                &[LockRequest::graph_node(LockMode::Exclusive, 2)],
+                Instant::now(),
+                Duration::from_secs(1),
+            )
+            .unwrap_err();
+        let LockAcquireError::AbortTransaction(error) = error else {
+            panic!("a deadlock must abort its victim");
+        };
         assert!(error
             .to_string()
             .contains("transaction 1 selected as victim"));
