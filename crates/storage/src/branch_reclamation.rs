@@ -85,6 +85,7 @@ pub(crate) fn reclaim_owned_project(
             "reclamation owner is no longer a ready catalog branch".into(),
         ));
     }
+    let proofs = crate::branch_abandonment::reclamation_evidence(directory, &catalog, limits)?;
     let paths: Vec<_> = catalog
         .branches
         .iter()
@@ -98,7 +99,7 @@ pub(crate) fn reclaim_owned_project(
         })
         .collect();
     let branches = branch_catalog::reclamation_entries(&catalog, &paths, Some((owner, head)))
-        .map_err(HawDBError::from_storage_error)?;
+        .map_err(HawDBError::from)?;
     let mut report = if branches.iter().any(|branch| branch.active_lease) {
         BranchReclamationReport::deferred()
     } else {
@@ -115,24 +116,40 @@ pub(crate) fn reclaim_owned_project(
             .branches
             .iter()
             .filter(|record| record.state != branch_catalog::BranchState::Deleted)
-            .filter_map(|record| record.base_root_digest)
-            .map(|digest| {
+            .filter_map(|record| record.base_root_digest.map(|digest| (record, digest)))
+            .map(|(record, digest)| {
                 roots.get(&digest).copied().ok_or_else(|| {
-                    HawDBError::StorageIntegrity(
+                    let cause = HawDBError::StorageIntegrity(
                         "catalog creation baseline is missing from the immutable inventory".into(),
-                    )
+                    );
+                    if record.state == branch_catalog::BranchState::Creating
+                        && record.create_outcome == branch_catalog::CreateOutcome::Pending
+                    {
+                        HawDBError::BranchReclamationBlocked {
+                            branch_id: record.id.as_uuid(),
+                            catalog_revision: catalog.revision,
+                            metadata_revision: record.metadata_revision,
+                            cause: Box::new(cause),
+                        }
+                    } else {
+                        cause
+                    }
                 })
             })
             .collect::<Result<Vec<_>>>()?;
+        let inventory_branches = BranchReclamationInventory {
+            objects: inventory.objects,
+            branches,
+        };
         let result = store
-            .reclaim_branches_with_roots(
-                &BranchReclamationInventory {
-                    objects: inventory.objects,
-                    branches,
-                },
-                &retained_roots,
-            )
-            .map_err(HawDBError::from_storage_error)?;
+            .reclaim_branches_with_evidence(&inventory_branches, &retained_roots, &proofs)
+            .map_err(|error| {
+                HawDBError::from(branch_catalog::reclamation_object_error(
+                    &catalog,
+                    &inventory_branches.branches,
+                    error,
+                ))
+            })?;
         let mut staging_bytes = 0;
         for (path, bytes) in &inventory.staging {
             fs::remove_file(path)?;

@@ -412,6 +412,34 @@ impl QueryResult {
         row
     }
 
+    /// Notebook HTML table of the first rows; the plain `repr` is unchanged.
+    ///
+    /// Always renders from the first row, independent of the fetch cursor.
+    /// The row cap lives in `hawdb._display`; only rows within it are handed
+    /// over, so large results do not build a full list to draw a few rows.
+    fn _repr_html_(&self, py: Python<'_>) -> PyResult<String> {
+        let display = py.import("hawdb._display")?;
+        let limit: usize = display.getattr("DISPLAY_ROW_LIMIT")?.extract()?;
+        let rows = PyList::new(py, self.rows.iter().take(limit).map(|row| row.bind(py)))?;
+        display
+            .getattr("render_html")?
+            .call1((self.columns.clone(), rows, self.rows.len()))?
+            .extract()
+    }
+
+    /// Rows `start..stop` for notebook display, independent of the fetch cursor.
+    ///
+    /// `stop` defaults to the row count; both bounds are clamped to it.
+    #[pyo3(signature = (start = 0, stop = None))]
+    fn _display_rows(&self, py: Python<'_>, start: usize, stop: Option<usize>) -> Vec<Py<PyDict>> {
+        let stop = stop.unwrap_or(self.rows.len()).min(self.rows.len());
+        let start = start.min(stop);
+        self.rows[start..stop]
+            .iter()
+            .map(|row| row.clone_ref(py))
+            .collect()
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "hawdb.QueryResult(columns={:?}, rows={})",

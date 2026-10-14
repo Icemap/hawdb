@@ -48,9 +48,7 @@ impl NativeTrace {
         };
         let native_exists = match std::fs::symlink_metadata(path) {
             Ok(metadata) => {
-                if metadata.file_type().is_symlink() {
-                    return Err(invalid("symlinks are outside the captured fault model"));
-                }
+                super::identity::require_direct_entry(&metadata)?;
                 true
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => false,

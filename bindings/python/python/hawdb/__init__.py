@@ -36,6 +36,8 @@ connect = open
 
 def __getattr__(name):
     # `hawdb.pydantic` needs the optional extra, so it loads on first use.
+    # `hawdb.magic` is deliberately absent: importing it registers IPython
+    # magics, so only an explicit import or `%load_ext` may load it.
     if name == "pydantic":
         import importlib
 

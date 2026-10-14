@@ -183,13 +183,14 @@ fn indexed_projection_admits_selected_source_before_residual_evaluation() {
             .query_memory_peak_bytes
             > memory.blocking_operator_bytes.get()
     );
-    assert_eq!(
-        output
-            .profile
-            .pipeline_memory_report
-            .query_memory_completion_bytes,
-        0
-    );
+    // An empty owned result still admits its immutable result/schema owner.
+    // Compare against a no-match lookup below to prove the rejected source
+    // allocation is gone without erasing the legitimate output charge.
+    let filtered_completion_bytes = output
+        .profile
+        .pipeline_memory_report
+        .query_memory_completion_bytes;
+    assert!(filtered_completion_bytes > 0);
     let memory = ExecutionMemoryConfig {
         query_memory_bytes: NonZeroUsize::new(4096).unwrap(),
         ..memory
@@ -211,6 +212,14 @@ fn indexed_projection_admits_selected_source_before_residual_evaluation() {
     )
     .unwrap();
     assert!(output.rows.is_empty());
+    assert_eq!(
+        filtered_completion_bytes,
+        output
+            .profile
+            .pipeline_memory_report
+            .query_memory_completion_bytes,
+        "residual-rejected source must leave only the same empty result owner as a no-match seek"
+    );
 }
 
 #[test]
