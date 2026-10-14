@@ -967,18 +967,23 @@ mod tests {
 
     #[test]
     fn admitted_owned_reads_preserve_output_limits_and_release_permits() {
+        // The admitted payload cap also bounds physical result capacity.
+        // Repeated names reach logical refusal before the last row is retained;
+        // successful collection needs room for physical ownership overhead too.
+        let payload_column = "c".repeat(2048);
+        let payload_boundary = 4 * (payload_column.len() + 8);
         for (row_limit, payload_limit, should_succeed, resource) in [
             (Some(1), None, false, hawdb_core::ReadBudgetResource::Rows),
             (Some(2), None, true, hawdb_core::ReadBudgetResource::Rows),
             (
                 None,
-                Some(19),
+                Some(payload_boundary - 1),
                 false,
                 hawdb_core::ReadBudgetResource::PayloadBytes,
             ),
             (
                 None,
-                Some(20),
+                Some(payload_boundary * 4),
                 true,
                 hawdb_core::ReadBudgetResource::PayloadBytes,
             ),
@@ -988,7 +993,13 @@ mod tests {
                 max_read_result_payload_bytes: payload_limit,
                 ..DatabaseConfig::default()
             });
-            for id in [1, 2] {
+            let row_count = if payload_limit.is_some() { 4 } else { 2 };
+            let column = if payload_limit.is_some() {
+                payload_column.as_str()
+            } else {
+                "id"
+            };
+            for id in 1..=row_count {
                 engine
                     .database_mut()
                     .query_with_params(
@@ -997,17 +1008,21 @@ mod tests {
                     )
                     .unwrap();
             }
-            let result = engine.query_admitted("MATCH (n:Item) RETURN n.id AS id ORDER BY id");
+            let result = engine.query_admitted(&format!(
+                "MATCH (n:Item) RETURN n.id AS {column} ORDER BY {column}"
+            ));
             if should_succeed {
                 let output = result.unwrap();
-                assert_eq!(output.rows.len(), 2);
-                assert_eq!(output.rows[0].get("id"), Some(&Value::Int(1)));
-                assert_eq!(output.rows[1].get("id"), Some(&Value::Int(2)));
+                assert_eq!(output.rows.len(), row_count as usize);
+                for (index, row) in output.rows.iter().enumerate() {
+                    assert_eq!(row.get(column), Some(&Value::Int(index as i64 + 1)));
+                }
             } else {
-                let Err(EmbeddedQueryError::Database(HawDBError::ReadBudgetExceeded(error))) =
-                    result
-                else {
-                    panic!("expected a typed output budget refusal");
+                let error = match result {
+                    Err(EmbeddedQueryError::Database(HawDBError::ReadBudgetExceeded(error))) => {
+                        error
+                    }
+                    actual => panic!("expected a typed output budget refusal, got {actual:?}"),
                 };
                 assert_eq!(error.resource, resource);
                 assert_eq!(error.limit, row_limit.or(payload_limit).unwrap());
@@ -1020,6 +1035,28 @@ mod tests {
                 .unwrap();
             assert_eq!(retry.rows.len(), 1);
             assert_eq!(retry.rows[0].get("id"), Some(&Value::Int(2)));
+            let governor = engine.runtime_governor().snapshot();
+            assert_eq!(governor.admissions, governor.completions);
+            assert_eq!(governor.admitted_memory_bytes, 0);
+            assert_eq!(governor.active_cpu_slots, 0);
+        }
+        for payload_limit in [19, 20] {
+            let mut engine = HawDBEmbedded::open_in_memory_with_config(DatabaseConfig {
+                max_read_result_payload_bytes: Some(payload_limit),
+                ..DatabaseConfig::default()
+            });
+            engine
+                .database_mut()
+                .query("CREATE (:Item {id: 1})")
+                .unwrap();
+            let error = engine
+                .query_admitted("MATCH (n:Item) RETURN n.id AS id")
+                .unwrap_err();
+            assert!(matches!(
+                &error,
+                EmbeddedQueryError::Database(HawDBError::Execution(_))
+            ));
+            assert!(error.to_string().contains("result_materialization"));
             let governor = engine.runtime_governor().snapshot();
             assert_eq!(governor.admissions, governor.completions);
             assert_eq!(governor.admitted_memory_bytes, 0);
