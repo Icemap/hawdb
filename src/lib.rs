@@ -190,9 +190,9 @@ pub use api::{
     ArrowArray, ArrowArrayStream, ArrowSchema, RetainedArrowCodeOwner, RetainedArrowExport,
     RetainedArrowSchema, RetainedArrowStream, RetainedColumnRole, RetainedColumnSchema,
     RetainedColumnType, RetainedColumnValues, RetainedNodeCursor, RetainedNodeField,
-    RetainedNodeLabels, RetainedNodeTaskCursor, RetainedNodeView, RetainedQueryBatch,
-    RetainedQueryCursor, RetainedQueryError, RetainedQueryOptions, RetainedQueryProfile,
-    RetainedQueryStatus,
+    RetainedNodeLabels, RetainedNodeSnapshotCursor, RetainedNodeTaskCursor, RetainedNodeView,
+    RetainedQueryBatch, RetainedQueryCursor, RetainedQueryError, RetainedQueryOptions,
+    RetainedQueryProfile, RetainedQueryStatus,
 };
 pub use background_maintenance_evidence::nowledge_background_maintenance_evidence_json;
 pub use blackbox::{

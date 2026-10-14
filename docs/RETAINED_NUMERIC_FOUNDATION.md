@@ -766,8 +766,10 @@ of a host task. The [task-bound Rust cursor](RETAINED_NODE_TASK_LIFECYCLE.md)
 borrows the host context, checks open pulls and EOF for cancellation/deadline,
 and honors existing query/result reservations. [Python](PYTHON_RETAINED_NODE_VIEWS.md)
 and [C/Go](GO_RETAINED_NODE_VIEWS.md) adapters provide independently owned
-recursive views for this same narrow plan. Consumed read-transaction snapshots,
-foreign task binding, multiple-node streaming and an Arrow node representation
+recursive views for this same narrow plan. Consumed materialized read snapshots
+use the same node owner/admission path and keep their owned task bound through
+EOF; consumption releases unrelated snapshot directories/caches and reader pins.
+Foreign task binding, multiple-node streaming and an Arrow node representation
 remain open. Planning/index-key workspace, ledger and
 allocator residency, process-wide memory, execution/RSS profiling,
 performance, tail latency, and durability remain independent qualification

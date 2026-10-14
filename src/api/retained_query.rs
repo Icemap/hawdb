@@ -45,8 +45,8 @@ pub use arrow::{
     RetainedArrowSchema, RetainedArrowStream,
 };
 pub use node::{
-    RetainedNodeCursor, RetainedNodeField, RetainedNodeLabels, RetainedNodeTaskCursor,
-    RetainedNodeView,
+    RetainedNodeCursor, RetainedNodeField, RetainedNodeLabels, RetainedNodeSnapshotCursor,
+    RetainedNodeTaskCursor, RetainedNodeView,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

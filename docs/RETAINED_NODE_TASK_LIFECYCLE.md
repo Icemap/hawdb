@@ -29,6 +29,39 @@ to a configured floor. Runtime retained reservations remain independently
 required; an existing host reservation does not exempt these owners from
 runtime admission. Conservative overlap is allowed.
 
+## Consumed read snapshots
+
+`DatabaseReadTransaction::into_retained_node_query` consumes a materialized
+snapshot and returns `RetainedNodeSnapshotCursor`. Eligibility, indexed lookup,
+row/label capture and admission use the same constructor as direct database
+node delivery, with the snapshot's own catalog and indexes. A later live index,
+property change or deletion cannot change the snapshot's result or turn a scan
+in that older snapshot into an eligible index plan.
+
+The wrapper owns a clone of the snapshot's optional task context and exposes
+no inner cursor or context-free pull. It checkpoints before parsing, around
+capture and on every open pull/EOF. Configured/admitted query and result limits
+remain the same minima, and its additional wrapper metadata is pre-admitted.
+Backpressure keeps the task bound; completion, terminal failure and explicit
+close release the owned context. Caller-owned context/controller workspace is
+not covered by this retained ledger.
+
+Consumption drops the read transaction's reader/file-retirement pin, catalog,
+relationship/index directories and planning caches after construction. The
+returned cursor/view keeps only the chosen original immutable row, its original
+catalog label owners, source health and independent quota leases. This does not
+undo the cost of creating the read snapshot. Views can survive cursor, task and
+database closure without cloning their property payload or label names.
+Snapshot queries do not publish into the live database's statement recorder,
+matching ordinary read-transaction observability; direct database cursors retain
+their existing success/failure observation contract.
+
+Regressions compare original row/label addresses across a live mutation, check
+immediate reader-pin release and exclusion of an unrelated large row, exercise
+cancellation before delivery and at delivered/empty EOF after the caller drops
+its context, preserve zero/undersized reservation refusals and completed EOF,
+and refuse an old snapshot's scan after a live index is added.
+
 ## State and ownership argument
 
 Let `S` be cursor status, `V` its initial source view and `E` exported views.
@@ -68,8 +101,8 @@ and final zero quotas. Runtime execution belongs to exact-head platform CI.
 
 ## Remaining scope
 
-This is Rust task-bound point delivery. Consumed read-transaction snapshots,
-foreign C/Go/Python task binding, interruptible planning, Arrow node layouts,
+This is Rust task-bound point delivery, including consumed read snapshots.
+Foreign C/Go/Python task binding, interruptible planning, Arrow node layouts,
 SIMD, graph/FTS, multi-row/wide workloads and total-memory qualification remain
 open. Existing context-free APIs remain independent of a host task. Performance
 qualification, especially write/load timing on the current machine, is deferred;

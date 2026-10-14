@@ -60,7 +60,7 @@ production use or satisfy the complete performance gate.
 | --- | --- | --- |
 | Retained numeric scan/filter/project | Bounded produced numeric buffers, native/foreign ownership, compatible Arrow C Data/C Stream and Python capsules | These buffers are constructed from row properties; strict canonical source reuse still refuses |
 | Indexed single-match complete node | Original immutable row/catalog owners, recursive native/C/Go/Python views | Materialized actual index plans only; scans, multi-match and hydration refuse, with no Arrow repacking fallback |
-| Rust task-bound node pull | Borrowed task context, cancellation/deadline on every open pull/EOF, configured/admitted query and result minima | Consumed read snapshots, foreign task binding, interruptible planning and whole-operation memory remain open |
+| Rust task-bound node pull | Borrowed host context or owned context from a consumed materialized read snapshot, cancellation/deadline on every open pull/EOF, configured/admitted query and result minima | Foreign task binding, interruptible planning and whole-operation memory remain open |
 | SIMD, graph and FTS extensions | Prospective contracts in this proposal | No general implementation or performance qualification is established by the narrow pilots |
 
 Current ownership/eligibility details and evidence limits are recorded in the

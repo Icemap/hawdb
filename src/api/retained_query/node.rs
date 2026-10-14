@@ -147,7 +147,7 @@ impl RetainedNodeView {
 }
 
 struct NodeObservation {
-    recorder: super::super::observability::StatementRecorder,
+    recorder: Option<super::super::observability::StatementRecorder>,
     query: String,
     statement_kind: &'static str,
     started: hawdb_core::time::Instant,
@@ -169,7 +169,10 @@ impl NodeObservation {
         result: std::result::Result<usize, &dyn std::fmt::Display>,
         profile: &RetainedQueryProfile,
     ) {
-        self.recorder.record_statement_row_count(
+        let Some(recorder) = self.recorder else {
+            return;
+        };
+        recorder.record_statement_row_count(
             "cypher",
             &self.query,
             self.statement_kind,
@@ -486,138 +489,25 @@ impl Database {
             )?;
             let plan =
                 point_plan(&optimized.physical_plan).ok_or(RetainedQueryError::UnsupportedPlan)?;
-            if state
-                .store
-                .try_scan_materialized_nodes_after(None, None)?
-                .is_none()
-            {
-                return Err(RetainedQueryError::CopyRequired);
-            }
-            if let Some(context) = context {
-                context.checkpoint().map_err(RetainedQueryError::Stopped)?;
-            }
-            let query_budget = hawdb_executor::memory::enforced_query_memory_budget(
-                &self.config.execution_memory,
-                context,
-            )?
-            .min(self.config.execution_memory.query_memory_bytes);
-            let result_budget = hawdb_executor::memory::enforced_result_memory_budget(
-                &self.config.execution_memory,
-                context,
-            )?;
-            let ledger = QueryMemoryLedger::new(query_budget);
-            let account = ledger.account(
-                QueryMemoryClass::ResultMaterialization,
-                "retained_node",
-                result_budget.min(query_budget),
-            );
-            let observation_bytes = std::mem::size_of::<RetainedNodeCursor>()
-                .checked_add(cypher.len())
-                .and_then(|bytes| {
-                    bytes.checked_add(MaterializedReadHealth::retained_capacity_bytes())
-                })
-                .and_then(|bytes| bytes.checked_add(options.adapter_metadata_bytes))
-                .and_then(|bytes| bytes.checked_add(64))
-                .ok_or(RetainedQueryError::SizeOverflow)?;
-            let adapter_control_bytes = if options.adapter_metadata_bytes == 0 {
-                0
-            } else {
-                observation_bytes
-            };
-            let control_bytes = observation_bytes
-                .checked_add(adapter_control_bytes)
-                .ok_or(RetainedQueryError::SizeOverflow)?;
-            let working_limit = options
-                .batch_bytes
-                .get()
-                .min(self.config.execution_memory.batch_payload_bytes.get());
-            if control_bytes > working_limit {
-                return Err(RetainedQueryError::WorkingUnitTooLarge);
-            }
-            let governor = self
-                .retained_runtime
-                .governor(options.minimum_shared_handles.get())?;
-            let allowance = governor.snapshot().limits.result_budget_bytes;
-            let permit = governor.try_admit(
-                RuntimeWorkRequest::foreground_query(0, allowance).with_blocking(false),
-            )?;
-            let memory = account.reserve(observation_bytes)?;
-            let runtime_memory = permit.reserve_retained_memory(observation_bytes as u64)?;
-            let adapter_control = if adapter_control_bytes == 0 {
-                None
-            } else {
-                Some((
-                    account.reserve(adapter_control_bytes)?,
-                    permit.reserve_retained_memory(adapter_control_bytes as u64)?,
-                ))
-            };
-            drop(permit);
-            let observation = NodeObservation {
-                recorder: self.statement_recorder(),
-                query: cypher.to_owned(),
-                statement_kind,
-                started,
-                parse_nanos,
-                _memory: memory,
-                _runtime_memory: runtime_memory,
-            };
-            let health = state.store.materialized_read_health()?;
-            let mut profile = RetainedQueryProfile {
-                source_snapshot_rows: state.store.node_count_for_label(None),
-                query_peak_bytes: ledger.snapshot().peak_bytes,
-                ..Default::default()
-            };
-            let view = if plan.empty {
-                None
-            } else {
-                let label = state
-                    .catalog
-                    .label_id(plan.label)
-                    .ok_or(RetainedQueryError::UnsupportedPlan)?;
-                let mut found =
-                    state
-                        .store
-                        .seek_nodes_by_property(label, plan.property, plan.value);
-                match found.next() {
-                    None => None,
-                    Some(row) => {
-                        if found.next().is_some() {
-                            return Err(RetainedQueryError::UnsupportedPlan);
-                        }
-                        Some(admit_node(
-                            &state.store,
-                            &state.catalog,
-                            row.id,
-                            plan.column,
-                            NodeAdmission {
-                                config: &self.config,
-                                runtime: &self.retained_runtime,
-                                options,
-                                ledger: &ledger,
-                                account: &account,
-                                control_bytes,
-                            },
-                            &mut profile,
-                        )?)
-                    }
-                }
-            };
-            if let Some(context) = context {
-                context.checkpoint().map_err(RetainedQueryError::Stopped)?;
-            }
-            let payload_bytes = profile.output_payload_bytes;
-            profile.output_payload_bytes = 0;
-            Ok(RetainedNodeCursor {
-                observation: Some(observation),
-                view,
-                health: Some(health),
-                delivered: false,
-                status: RetainedQueryStatus::Open,
-                profile,
-                terminal_error: None,
-                payload_bytes,
-                _adapter_control: adapter_control,
-            })
+            RetainedNodeCursor::from_point_plan(
+                plan,
+                NodeCursorConstruction {
+                    store: &state.store,
+                    catalog: &state.catalog,
+                    config: &self.config,
+                    runtime: &self.retained_runtime,
+                    options,
+                    context,
+                    cursor_metadata_bytes: 0,
+                    observation: NodeObservationRequest {
+                        recorder: Some(self.statement_recorder()),
+                        cypher,
+                        statement_kind,
+                        started,
+                        parse_nanos,
+                    },
+                },
+            )
         })();
         if let Err(error) = &result {
             self.record_statement_row_count(
@@ -633,6 +523,262 @@ impl Database {
             );
         }
         result
+    }
+}
+
+/// A consumed read snapshot's single-match node cursor. Every open pull uses
+/// the snapshot's owned task context; views retain only their immutable source
+/// row and catalog symbols, not the read transaction or its reader pin.
+#[derive(Debug)]
+pub struct RetainedNodeSnapshotCursor {
+    cursor: RetainedNodeCursor,
+    context: Option<RuntimeTaskContext>,
+}
+
+impl RetainedNodeSnapshotCursor {
+    pub fn profile(&self) -> RetainedQueryProfile {
+        self.cursor.profile()
+    }
+    pub fn status(&self) -> RetainedQueryStatus {
+        self.cursor.status()
+    }
+    pub fn access_path(&self) -> &'static str {
+        self.cursor.access_path()
+    }
+    pub fn next_node(&mut self) -> Result<Option<RetainedNodeView>> {
+        let result = self.cursor.next_node_inner(self.context.as_ref());
+        if self.cursor.status() != RetainedQueryStatus::Open {
+            self.context = None;
+        }
+        result
+    }
+    pub fn close(&mut self) {
+        self.cursor.close();
+        self.context = None;
+    }
+}
+
+impl DatabaseReadTransaction {
+    /// Consumes this snapshot for a single-match indexed full-node projection.
+    /// Planning uses this snapshot's schema/indexes. Other plans and layouts
+    /// refuse explicitly, and the snapshot's task remains bound through EOF.
+    pub fn into_retained_node_query(
+        self,
+        cypher: &str,
+        parameters: &BTreeMap<String, Value>,
+        options: RetainedQueryOptions,
+    ) -> Result<RetainedNodeSnapshotCursor> {
+        let context = self.task_context.clone();
+        if let Some(context) = context.as_ref() {
+            context.checkpoint().map_err(RetainedQueryError::Stopped)?;
+        }
+        self.store.ensure_usable()?;
+        let execution_started = hawdb_core::time::Instant::now();
+        let prepared = query_runtime::parse_runtime_execution(cypher)?;
+        super::super::query_work_request_for_statement(
+            &QuerySystemVariables::default(),
+            &prepared.statement,
+        )?;
+        let optimized = self.optimized_query_plan_for_request(
+            cypher,
+            &prepared.statement,
+            parameters,
+            None,
+            super::super::PlanTraceMode::Template,
+            None,
+        )?;
+        let plan =
+            point_plan(&optimized.physical_plan).ok_or(RetainedQueryError::UnsupportedPlan)?;
+        let cursor = RetainedNodeCursor::from_point_plan(
+            plan,
+            NodeCursorConstruction {
+                store: &self.store,
+                catalog: &self.catalog,
+                config: &self.config,
+                runtime: &self.retained_runtime,
+                options,
+                context: context.as_ref(),
+                cursor_metadata_bytes: std::mem::size_of::<RetainedNodeSnapshotCursor>()
+                    - std::mem::size_of::<RetainedNodeCursor>(),
+                observation: NodeObservationRequest {
+                    // Snapshot reads do not publish into the live database's
+                    // statement recorder, matching ordinary snapshot queries.
+                    recorder: None,
+                    cypher,
+                    statement_kind: super::super::statement_kind(&prepared.statement),
+                    started: prepared.statement_started.unwrap_or(execution_started),
+                    parse_nanos: prepared.parse_metrics.elapsed_nanos,
+                },
+            },
+        )?;
+        Ok(RetainedNodeSnapshotCursor { cursor, context })
+    }
+}
+
+struct NodeObservationRequest<'a> {
+    recorder: Option<super::super::observability::StatementRecorder>,
+    cypher: &'a str,
+    statement_kind: &'static str,
+    started: hawdb_core::time::Instant,
+    parse_nanos: u64,
+}
+
+struct NodeCursorConstruction<'a> {
+    store: &'a GraphStore,
+    catalog: &'a Catalog,
+    config: &'a DatabaseConfig,
+    runtime: &'a RetainedRuntime,
+    options: RetainedQueryOptions,
+    context: Option<&'a RuntimeTaskContext>,
+    cursor_metadata_bytes: usize,
+    observation: NodeObservationRequest<'a>,
+}
+
+impl RetainedNodeCursor {
+    fn from_point_plan(
+        plan: PointPlan<'_>,
+        construction: NodeCursorConstruction<'_>,
+    ) -> Result<Self> {
+        let NodeCursorConstruction {
+            store,
+            catalog,
+            config,
+            runtime,
+            options,
+            context,
+            cursor_metadata_bytes,
+            observation,
+        } = construction;
+        let NodeObservationRequest {
+            recorder,
+            cypher,
+            statement_kind,
+            started,
+            parse_nanos,
+        } = observation;
+        if store
+            .try_scan_materialized_nodes_after(None, None)?
+            .is_none()
+        {
+            return Err(RetainedQueryError::CopyRequired);
+        }
+        if let Some(context) = context {
+            context.checkpoint().map_err(RetainedQueryError::Stopped)?;
+        }
+        let query_budget = hawdb_executor::memory::enforced_query_memory_budget(
+            &config.execution_memory,
+            context,
+        )?
+        .min(config.execution_memory.query_memory_bytes);
+        let result_budget = hawdb_executor::memory::enforced_result_memory_budget(
+            &config.execution_memory,
+            context,
+        )?;
+        let ledger = QueryMemoryLedger::new(query_budget);
+        let account = ledger.account(
+            QueryMemoryClass::ResultMaterialization,
+            "retained_node",
+            result_budget.min(query_budget),
+        );
+        let observation_bytes = std::mem::size_of::<RetainedNodeCursor>()
+            .checked_add(cursor_metadata_bytes)
+            .and_then(|bytes| bytes.checked_add(cypher.len()))
+            .and_then(|bytes| bytes.checked_add(MaterializedReadHealth::retained_capacity_bytes()))
+            .and_then(|bytes| bytes.checked_add(options.adapter_metadata_bytes))
+            .and_then(|bytes| bytes.checked_add(64))
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        let adapter_control_bytes = if options.adapter_metadata_bytes == 0 {
+            0
+        } else {
+            observation_bytes
+        };
+        let control_bytes = observation_bytes
+            .checked_add(adapter_control_bytes)
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        let working_limit = options
+            .batch_bytes
+            .get()
+            .min(config.execution_memory.batch_payload_bytes.get());
+        if control_bytes > working_limit {
+            return Err(RetainedQueryError::WorkingUnitTooLarge);
+        }
+        let governor = runtime.governor(options.minimum_shared_handles.get())?;
+        let allowance = governor.snapshot().limits.result_budget_bytes;
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::foreground_query(0, allowance).with_blocking(false))?;
+        let memory = account.reserve(observation_bytes)?;
+        let runtime_memory = permit.reserve_retained_memory(observation_bytes as u64)?;
+        let adapter_control = if adapter_control_bytes == 0 {
+            None
+        } else {
+            Some((
+                account.reserve(adapter_control_bytes)?,
+                permit.reserve_retained_memory(adapter_control_bytes as u64)?,
+            ))
+        };
+        drop(permit);
+        let observation = NodeObservation {
+            recorder,
+            query: cypher.to_owned(),
+            statement_kind,
+            started,
+            parse_nanos,
+            _memory: memory,
+            _runtime_memory: runtime_memory,
+        };
+        let health = store.materialized_read_health()?;
+        let mut profile = RetainedQueryProfile {
+            source_snapshot_rows: store.node_count_for_label(None),
+            query_peak_bytes: ledger.snapshot().peak_bytes,
+            ..Default::default()
+        };
+        let view = if plan.empty {
+            None
+        } else {
+            let label = catalog
+                .label_id(plan.label)
+                .ok_or(RetainedQueryError::UnsupportedPlan)?;
+            let mut found = store.seek_nodes_by_property(label, plan.property, plan.value);
+            match found.next() {
+                None => None,
+                Some(row) => {
+                    if found.next().is_some() {
+                        return Err(RetainedQueryError::UnsupportedPlan);
+                    }
+                    Some(admit_node(
+                        store,
+                        catalog,
+                        row.id,
+                        plan.column,
+                        NodeAdmission {
+                            config,
+                            runtime,
+                            options,
+                            ledger: &ledger,
+                            account: &account,
+                            control_bytes,
+                        },
+                        &mut profile,
+                    )?)
+                }
+            }
+        };
+        if let Some(context) = context {
+            context.checkpoint().map_err(RetainedQueryError::Stopped)?;
+        }
+        let payload_bytes = profile.output_payload_bytes;
+        profile.output_payload_bytes = 0;
+        Ok(RetainedNodeCursor {
+            observation: Some(observation),
+            view,
+            health: Some(health),
+            delivered: false,
+            status: RetainedQueryStatus::Open,
+            profile,
+            terminal_error: None,
+            payload_bytes,
+            _adapter_control: adapter_control,
+        })
     }
 }
 
@@ -820,6 +966,180 @@ mod tests {
 
     fn params() -> BTreeMap<String, Value> {
         BTreeMap::from([("key".into(), Value::Int(37))])
+    }
+
+    #[test]
+    fn consumed_snapshot_preserves_old_indexed_row_and_releases_the_reader_pin() {
+        let (mut db, governor) = fixture(4);
+        db.query_with_params(
+            "CREATE (:Other {pad: $pad})",
+            &BTreeMap::from([("pad".into(), Value::String("x".repeat(1024 * 1024)))]),
+        )
+        .unwrap();
+        let pins = Arc::clone(&db.runtime.get().unwrap().reader_pins);
+        let snapshot = db.begin_read_transaction().unwrap();
+        let label = snapshot.catalog.label_id("Item").unwrap();
+        let row = snapshot
+            .store
+            .seek_nodes_by_property(label, "score", &Value::Int(37))
+            .next()
+            .unwrap();
+        let value_address = &row.properties["text"] as *const Value as usize;
+        let label_address = snapshot.catalog.label_name(label).unwrap().as_ptr() as usize;
+        assert_eq!(pins.lock().unwrap().active_views.len(), 1);
+        db.query_with_params(
+            "MATCH (n:Item {score: $key}) SET n.score = 999, n.text = 'changed'",
+            &params(),
+        )
+        .unwrap();
+        let mut cursor = snapshot
+            .into_retained_node_query(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap();
+        assert_eq!(pins.lock().unwrap().active_views.len(), 0);
+        assert!(cursor.profile().source_pinned_capacity_bytes < 1024 * 1024);
+        let view = cursor.next_node().unwrap().unwrap();
+        let Some(RetainedNodeField::Value(value)) = view.field("text").unwrap() else {
+            panic!("original snapshot property");
+        };
+        assert_eq!(value as *const Value as usize, value_address);
+        assert_eq!(value, &Value::String("payload".into()));
+        let Some(RetainedNodeField::Labels(labels)) = view.field("labels").unwrap() else {
+            panic!("snapshot catalog symbols");
+        };
+        assert_eq!(
+            labels.iter().next().unwrap().as_ptr() as usize,
+            label_address
+        );
+        assert!(cursor.next_node().unwrap().is_none());
+        assert_eq!(view.status(), RetainedQueryStatus::Completed);
+        drop((cursor, db));
+        assert!(matches!(view.field("text").unwrap(),
+            Some(RetainedNodeField::Value(Value::String(text))) if text == "payload"));
+        assert!(governor.retained_result_snapshot().retained_bytes > 0);
+        drop(view);
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.retained_result_snapshot().view_handles, 0);
+    }
+
+    #[test]
+    fn consumed_snapshot_keeps_task_cancellation_bound_through_empty_and_delivered_eof() {
+        for (key, deliver) in [(37, false), (37, true), (999, false)] {
+            let (db, governor) = fixture(4);
+            let token = hawdb_core::RuntimeCancellationToken::new();
+            let context = RuntimeTaskContext::without_deadline(token.clone());
+            let snapshot = db.begin_read_transaction_with_context(&context).unwrap();
+            drop(context);
+            let mut cursor = snapshot
+                .into_retained_node_query(
+                    QUERY,
+                    &BTreeMap::from([("key".into(), Value::Int(key))]),
+                    RetainedQueryOptions::default(),
+                )
+                .unwrap();
+            let view = deliver.then(|| cursor.next_node().unwrap().unwrap());
+            token.cancel();
+            let expected = RetainedQueryError::Stopped(RuntimeCancellationReason::Cancelled);
+            assert_eq!(cursor.next_node().unwrap_err(), expected);
+            assert_eq!(cursor.next_node().unwrap_err(), expected);
+            assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
+            if let Some(view) = view.as_ref() {
+                assert_eq!(view.status(), RetainedQueryStatus::Failed);
+                assert!(view.field("text").unwrap().is_some());
+            }
+            drop((cursor, view, db));
+            assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+            assert_eq!(governor.retained_result_snapshot().view_handles, 0);
+        }
+    }
+
+    #[test]
+    fn cancelled_consumed_snapshot_refuses_before_retained_admission_and_releases_its_pin() {
+        let (db, governor) = fixture(4);
+        let pins = Arc::clone(&db.runtime.get().unwrap().reader_pins);
+        let context = RuntimeTaskContext::default();
+        let snapshot = db.begin_read_transaction_with_context(&context).unwrap();
+        assert_eq!(pins.lock().unwrap().active_views.len(), 1);
+        context.cancellation().cancel();
+        assert_eq!(
+            snapshot
+                .into_retained_node_query(QUERY, &params(), RetainedQueryOptions::default())
+                .unwrap_err(),
+            RetainedQueryError::Stopped(RuntimeCancellationReason::Cancelled)
+        );
+        assert!(db.retained_result_snapshot().is_none());
+        assert_eq!(pins.lock().unwrap().active_views.len(), 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+
+    #[test]
+    fn consumed_snapshot_never_widens_task_reservations_and_completed_eof_is_stable() {
+        for (query_bytes, result_bytes) in [(0, 8192), (8192, 0), (1, 8192), (8192, 1)] {
+            let (db, governor) = fixture(4);
+            let context = RuntimeTaskContext::default().with_memory_reservation(
+                hawdb_core::RuntimeMemoryReservation::new(query_bytes, result_bytes),
+            );
+            let snapshot = db.begin_read_transaction_with_context(&context).unwrap();
+            assert!(matches!(
+                snapshot.into_retained_node_query(
+                    QUERY,
+                    &params(),
+                    RetainedQueryOptions::default(),
+                ),
+                Err(RetainedQueryError::Execution(HawDBError::Execution(_)))
+            ));
+            assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        }
+        let (db, governor) = fixture(4);
+        let context = RuntimeTaskContext::default()
+            .with_memory_reservation(hawdb_core::RuntimeMemoryReservation::new(8192, 8192));
+        let snapshot = db.begin_read_transaction_with_context(&context).unwrap();
+        let mut cursor = snapshot
+            .into_retained_node_query(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap();
+        let view = cursor.next_node().unwrap().unwrap();
+        assert!(cursor.profile().query_peak_bytes <= 8192);
+        assert!(cursor.next_node().unwrap().is_none());
+        context.cancellation().cancel();
+        assert!(cursor.next_node().unwrap().is_none());
+        assert_eq!(view.status(), RetainedQueryStatus::Completed);
+        drop((cursor, view, db));
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    }
+
+    #[test]
+    fn consumed_snapshot_uses_its_own_schema_when_live_database_adds_an_index() {
+        let mut db = Database::new();
+        // A different property has no declared index in the old snapshot.
+        db.query("CREATE NODE TABLE Plain").unwrap();
+        db.query("CREATE PROPERTY ON NODE TABLE Plain(key) TYPE INT")
+            .unwrap();
+        db.query_with_params(
+            "UNWIND $rows AS row CREATE (:Plain {key: row.key})",
+            &BTreeMap::from([(
+                "rows".into(),
+                Value::List(
+                    (0..17)
+                        .map(|key| Value::Map(BTreeMap::from([("key".into(), Value::Int(key))])))
+                        .collect(),
+                ),
+            )]),
+        )
+        .unwrap();
+        let snapshot = db.begin_read_transaction().unwrap();
+        db.query("CREATE INDEX ON :Plain(key)").unwrap();
+        let query = "MATCH (n:Plain {key: $key}) RETURN n AS node";
+        let parameters = BTreeMap::from([("key".into(), Value::Int(7))]);
+        assert!(matches!(
+            snapshot.into_retained_node_query(query, &parameters, RetainedQueryOptions::default(),),
+            Err(RetainedQueryError::UnsupportedPlan)
+        ));
+        let mut current = db
+            .begin_read_transaction()
+            .unwrap()
+            .into_retained_node_query(query, &parameters, RetainedQueryOptions::default())
+            .unwrap();
+        assert!(current.next_node().unwrap().is_some());
+        assert!(current.next_node().unwrap().is_none());
     }
 
     #[test]
