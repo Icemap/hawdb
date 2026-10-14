@@ -14,6 +14,7 @@
 
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::fmt::Write;
 
 pub const QUERY_DIGEST_PROTOCOL_VERSION: u16 = 1;
 pub const QUERY_TEXT_HASH_PROTOCOL_VERSION: u16 = 1;
@@ -92,12 +93,102 @@ fn hash_field(hasher: &mut Sha256, value: &[u8]) {
     hasher.update(value);
 }
 
+enum NormalizedToken<'a> {
+    Keyword(&'a str),
+    Identifier(&'a str),
+    ParameterName(&'a str),
+    ParameterOrdinal(usize),
+    LiteralShape(&'static str),
+    LiteralValue(&'a str),
+    LowercaseLiteralValue(&'a str),
+    SingleQuotedLiteral(&'a str),
+    DoubleQuotedLiteral(&'a str),
+    QuotedIdentifier(&'a str),
+    Symbol(&'a str),
+    InvalidQuote(char),
+}
+
+fn decimal_len(value: usize) -> usize {
+    if value == 0 {
+        1
+    } else {
+        value.ilog10() as usize + 1
+    }
+}
+
+impl NormalizedToken<'_> {
+    fn header(&self) -> (&'static str, usize) {
+        match self {
+            Self::Keyword(value) => ("keyword", value.len()),
+            Self::Identifier(value) => ("identifier", value.len()),
+            Self::ParameterName(value) => ("parameter", value.len()),
+            Self::ParameterOrdinal(value) => ("parameter", decimal_len(*value)),
+            Self::LiteralShape(value) => ("literal", value.len()),
+            Self::LiteralValue(value) | Self::LowercaseLiteralValue(value) => {
+                ("literal_value", value.len())
+            }
+            Self::SingleQuotedLiteral(value) | Self::DoubleQuotedLiteral(value) => (
+                "literal_value",
+                value
+                    .len()
+                    .checked_add(2)
+                    .expect("quoted token length overflow"),
+            ),
+            Self::QuotedIdentifier(value) => ("quoted_identifier", value.len()),
+            Self::Symbol(value) => ("symbol", value.len()),
+            Self::InvalidQuote(value) => ("invalid_quoted", value.len_utf8()),
+        }
+    }
+
+    fn serialized_len(&self) -> usize {
+        let (kind, value_len) = self.header();
+        kind.len()
+            .checked_add(2)
+            .and_then(|length| length.checked_add(decimal_len(value_len)))
+            .and_then(|length| length.checked_add(value_len))
+            .expect("normalized token length overflow")
+    }
+
+    fn append_to(self, output: &mut String) {
+        let (kind, value_len) = self.header();
+        write!(output, "{kind}:{value_len}:").expect("writing to a String cannot fail");
+        match self {
+            Self::Keyword(value) | Self::LowercaseLiteralValue(value) => {
+                // These variants come from the scanner's ASCII identifiers.
+                for byte in value.bytes() {
+                    output.push(char::from(byte.to_ascii_lowercase()));
+                }
+            }
+            Self::ParameterOrdinal(value) => {
+                write!(output, "{value}").expect("writing to a String cannot fail");
+            }
+            Self::SingleQuotedLiteral(value) => {
+                output.push('\'');
+                output.push_str(value);
+                output.push('\'');
+            }
+            Self::DoubleQuotedLiteral(value) => {
+                output.push('"');
+                output.push_str(value);
+                output.push('"');
+            }
+            Self::InvalidQuote(value) => output.push(value),
+            Self::Identifier(value)
+            | Self::ParameterName(value)
+            | Self::LiteralShape(value)
+            | Self::LiteralValue(value)
+            | Self::QuotedIdentifier(value)
+            | Self::Symbol(value) => output.push_str(value),
+        }
+    }
+}
+
 struct Normalizer<'a> {
     query_language: &'a str,
     input: &'a str,
     position: usize,
-    parameters: BTreeMap<String, usize>,
-    tokens: Vec<String>,
+    parameters: BTreeMap<&'a str, usize>,
+    tokens: Vec<NormalizedToken<'a>>,
     mode: NormalizationMode,
 }
 
@@ -132,37 +223,50 @@ impl<'a> Normalizer<'a> {
             } else if is_identifier_start(ch) {
                 self.normalize_word();
             } else {
+                let start = self.position;
                 self.advance();
-                self.push_token("symbol", &ch.to_string());
+                self.tokens
+                    .push(NormalizedToken::Symbol(&self.input[start..self.position]));
             }
         }
         while self
             .tokens
             .last()
-            .is_some_and(|token| token == "symbol:1:;")
+            .is_some_and(|token| matches!(token, NormalizedToken::Symbol(";")))
         {
             self.tokens.pop();
         }
-        self.tokens.join(" ")
+        let byte_len = self
+            .tokens
+            .iter()
+            .try_fold(self.tokens.len().saturating_sub(1), |length, token| {
+                length.checked_add(token.serialized_len())
+            })
+            .expect("normalized query length overflow");
+        let mut output = String::with_capacity(byte_len);
+        for (index, token) in self.tokens.into_iter().enumerate() {
+            if index != 0 {
+                output.push(' ');
+            }
+            token.append_to(&mut output);
+        }
+        output
     }
 
     fn normalize_parameter(&mut self) {
         self.advance();
         let name = self.consume_while(is_identifier_continue);
         if name.is_empty() {
-            self.push_token("symbol", "$");
+            self.tokens.push(NormalizedToken::Symbol("$"));
             return;
         }
         if self.mode == NormalizationMode::PlanCache {
-            self.push_token("parameter", name);
+            self.tokens.push(NormalizedToken::ParameterName(name));
             return;
         }
         let next_ordinal = self.parameters.len();
-        let ordinal = *self
-            .parameters
-            .entry(name.to_string())
-            .or_insert(next_ordinal);
-        self.push_token("parameter", &ordinal.to_string());
+        let ordinal = *self.parameters.entry(name).or_insert(next_ordinal);
+        self.tokens.push(NormalizedToken::ParameterOrdinal(ordinal));
     }
 
     fn normalize_quoted(&mut self, quote: char) {
@@ -191,17 +295,21 @@ impl<'a> Normalizer<'a> {
                 let value = &self.input[start..self.position];
                 self.advance();
                 if quote == '"' && !self.query_language.eq_ignore_ascii_case("cypher") {
-                    self.push_token("quoted_identifier", value);
+                    self.tokens.push(NormalizedToken::QuotedIdentifier(value));
                 } else if self.mode == NormalizationMode::PlanCache {
-                    self.push_token("literal_value", &format!("{quote}{value}{quote}"));
+                    self.tokens.push(match quote {
+                        '\'' => NormalizedToken::SingleQuotedLiteral(value),
+                        '"' => NormalizedToken::DoubleQuotedLiteral(value),
+                        _ => unreachable!("quoted normalization requires a quote"),
+                    });
                 } else {
-                    self.push_token("literal", "string");
+                    self.tokens.push(NormalizedToken::LiteralShape("string"));
                 }
                 return;
             }
             self.advance();
         }
-        self.push_token("invalid_quoted", &quote.to_string());
+        self.tokens.push(NormalizedToken::InvalidQuote(quote));
     }
 
     fn normalize_number(&mut self) {
@@ -218,32 +326,28 @@ impl<'a> Normalizer<'a> {
         }
         if self.mode == NormalizationMode::PlanCache {
             let value = &self.input[start..self.position];
-            self.push_token("literal_value", value);
+            self.tokens.push(NormalizedToken::LiteralValue(value));
         } else {
-            self.push_token("literal", kind);
+            self.tokens.push(NormalizedToken::LiteralShape(kind));
         }
     }
 
     fn normalize_word(&mut self) {
-        let word = self.consume_while(is_identifier_continue).to_string();
-        let lowercase = word.to_ascii_lowercase();
-        if matches!(lowercase.as_str(), "true" | "false") {
+        let word = self.consume_while(is_identifier_continue);
+        if word.eq_ignore_ascii_case("true") || word.eq_ignore_ascii_case("false") {
             if self.mode == NormalizationMode::PlanCache {
-                self.push_token("literal_value", &lowercase);
+                self.tokens
+                    .push(NormalizedToken::LowercaseLiteralValue(word));
             } else {
-                self.push_token("literal", "bool");
+                self.tokens.push(NormalizedToken::LiteralShape("bool"));
             }
         } else if word.eq_ignore_ascii_case("null") {
-            self.push_token("literal", "null");
-        } else if is_keyword(&word) {
-            self.push_token("keyword", &lowercase);
+            self.tokens.push(NormalizedToken::LiteralShape("null"));
+        } else if is_keyword(word) {
+            self.tokens.push(NormalizedToken::Keyword(word));
         } else {
-            self.push_token("identifier", &word);
+            self.tokens.push(NormalizedToken::Identifier(word));
         }
-    }
-
-    fn push_token(&mut self, kind: &str, value: &str) {
-        self.tokens.push(format!("{kind}:{}:{value}", value.len()));
     }
 
     fn consume_while(&mut self, predicate: impl Fn(char) -> bool) -> &'a str {
@@ -367,7 +471,11 @@ fn is_keyword(word: &str) -> bool {
         "yield",
     ];
     KEYWORDS
-        .binary_search(&word.to_ascii_lowercase().as_str())
+        .binary_search_by(|keyword| {
+            keyword
+                .bytes()
+                .cmp(word.bytes().map(|byte| byte.to_ascii_lowercase()))
+        })
         .is_ok()
 }
 
@@ -477,5 +585,65 @@ mod tests {
         assert_ne!(integer_one, integer_two);
         assert_ne!(bool_true, bool_false);
         assert_ne!(parameter_id, parameter_value);
+    }
+
+    #[test]
+    fn token_lengths_use_utf8_bytes_and_preserve_embedded_semicolons() {
+        let query = "RETURN '\u{77e5}\u{8bc6}\0\u{1f642}' AS value;;;";
+        assert_eq!(
+            normalize_query_for_plan_cache("cypher", query),
+            "keyword:6:return literal_value:13:'\u{77e5}\u{8bc6}\0\u{1f642}' keyword:2:as identifier:5:value"
+        );
+        assert_eq!(
+            normalize_query("cypher", query),
+            "keyword:6:return literal:6:string keyword:2:as identifier:5:value"
+        );
+        assert_eq!(
+            normalize_query_for_plan_cache("cypher", "RETURN 'symbol:1:;' ;;;"),
+            "keyword:6:return literal_value:12:'symbol:1:;'"
+        );
+        assert_eq!(normalize_query("cypher", "; ; ;\n"), "");
+        assert_eq!(
+            normalize_query("cypher", "\u{1f642};;"),
+            "symbol:4:\u{1f642}"
+        );
+    }
+
+    #[test]
+    fn parameter_ordinal_encoding_crosses_decimal_boundaries() {
+        let query = (0..101)
+            .map(|index| format!("$p{index}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let expected = (0..101)
+            .map(|index| format!("parameter:{}:{index}", index.to_string().len()))
+            .collect::<Vec<_>>()
+            .join(" symbol:1:, ");
+        assert_eq!(normalize_query("cypher", &query), expected);
+        let repeated = format!("{query},$p10,$p0");
+        assert_eq!(
+            normalize_query("cypher", &repeated),
+            format!("{expected} symbol:1:, parameter:2:10 symbol:1:, parameter:1:0")
+        );
+    }
+
+    #[test]
+    fn borrowed_literal_descriptors_keep_exact_output_capacity() {
+        let literal = "x".repeat(16 * 1024);
+        let query = format!("RETURN '{literal}' AS value;;;");
+        let identity = normalize_query("cypher", &query);
+        assert_eq!(
+            identity,
+            "keyword:6:return literal:6:string keyword:2:as identifier:5:value"
+        );
+        assert_eq!(identity.capacity(), identity.len());
+        let cache_key = normalize_query_for_plan_cache("cypher", &query);
+        assert_eq!(
+            cache_key,
+            format!(
+                "keyword:6:return literal_value:16386:'{literal}' keyword:2:as identifier:5:value"
+            )
+        );
+        assert_eq!(cache_key.capacity(), cache_key.len());
     }
 }
