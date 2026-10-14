@@ -62,29 +62,97 @@ fn projected_artifact_rebuild_invalidates_paused_checkpoint_source() {
         resume: Mutex::new(continuation),
     }));
     drop(suspension);
-    observed.recv_timeout(Duration::from_secs(15)).unwrap();
+    let sealed_epoch = observed.recv_timeout(Duration::from_secs(15)).unwrap();
+    let completed_before_rebuild = control.report().unwrap().unwrap().completed_checkpoints;
+    let hold_owner = control.suspend().unwrap();
 
+    let (finished, completion) = std::sync::mpsc::channel();
     let rebuild = std::thread::spawn(move || {
-        let result = db.rebuild_projected_graph_artifacts();
-        (db, result)
+        db.rebuild_projected_graph_artifacts().unwrap();
+        let first_epoch = db.projected_graph_statuses().unwrap()[0]
+            .projection_epoch
+            .unwrap();
+        db.schedule_projected_graph_artifact_rebuild("G");
+        let report = db.run_next_derived_artifact_job().unwrap().unwrap();
+        assert_eq!(
+            report.job.status,
+            crate::DerivedArtifactJobStatus::Succeeded
+        );
+        let rebuilt_epoch = db.projected_graph_statuses().unwrap()[0]
+            .projection_epoch
+            .unwrap();
+        assert!(rebuilt_epoch > first_epoch);
+        finished.send((db, rebuilt_epoch)).unwrap();
     });
-    wait(&control, |state| state.suspensions > 0);
+    wait(&control, |state| state.suspensions > 1);
     control.lock().unwrap().prefix_seal_probe = None;
     resume.send(()).unwrap();
-    let (db, result) = rebuild.join().unwrap();
-    result.unwrap();
+    let (mut db, rebuilt_epoch) = match completion.recv_timeout(Duration::from_secs(15)) {
+        Ok(completed) => completed,
+        Err(error) => {
+            std::mem::forget(fixture);
+            panic!("projected artifact rebuild did not complete: {error}");
+        }
+    };
+    rebuild.join().unwrap();
+    let captured_epoch = control
+        .lock()
+        .unwrap()
+        .latest
+        .as_ref()
+        .unwrap()
+        .store
+        .projected_graph_statuses()[0]
+        .projection_epoch;
+    assert_eq!(captured_epoch, Some(rebuilt_epoch));
+    assert!(control.is_idle_for_test().unwrap());
+    drop(hold_owner);
+
+    let completed_before_later_write = control.report().unwrap().unwrap().completed_checkpoints;
+    db.query("CREATE (:Other {id: 4})").unwrap();
     wait(&control, |state| {
-        state.phase == Phase::Idle && state.report.completed_checkpoints > 0
+        state.phase == Phase::Idle
+            && state.selected.is_none()
+            && state.retired.is_none()
+            && !state.report.waiting_for_handoff
+            && state.report.completed_checkpoints > completed_before_later_write
     });
+    assert!(
+        control.report().unwrap().unwrap().completed_checkpoints > completed_before_rebuild,
+        "sealed generation {sealed_epoch} must be followed by publication and retirement"
+    );
+    assert!(
+        db.runtime
+            .get()
+            .unwrap()
+            .store
+            .checkpoint_debt_snapshot()
+            .unwrap()
+            .checkpoint_commit_epoch
+            > sealed_epoch
+    );
     let status = &db.projected_graph_statuses().unwrap()[0];
     assert!(status.reusable);
     assert_eq!(status.node_count, Some(3));
+    assert!(status.projection_epoch.unwrap() >= rebuilt_epoch);
     drop(db);
 
     let reopened = database(&fixture.0);
     let status = &reopened.projected_graph_statuses().unwrap()[0];
     assert!(status.reusable);
     assert_eq!(status.node_count, Some(3));
+    assert!(status.projection_epoch.unwrap() >= rebuilt_epoch);
+    assert!(
+        reopened
+            .runtime
+            .get()
+            .unwrap()
+            .store
+            .checkpoint_debt_snapshot()
+            .unwrap()
+            .checkpoint_commit_epoch
+            > sealed_epoch
+    );
 }
 
 #[test]
