@@ -4,6 +4,12 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "src/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "scripts/cargo-test-required.sh"
       - "bindings/ffi/**"
       - "bindings/go/**"
       - "MODULE.bazel"
@@ -14,6 +20,12 @@ on:
   push:
     branches: [main]
     paths:
+      - "src/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "scripts/cargo-test-required.sh"
       - "bindings/ffi/**"
       - "bindings/go/**"
       - "MODULE.bazel"
@@ -51,3 +63,50 @@ jobs:
 
       - name: Test Go against the Bazel-built C ABI
         run: bazel test --test_output=errors --test_arg=-test.v //bindings/go:hawdb_go_tests
+
+  windows-native-contracts:
+    name: Windows native contracts
+    runs-on: windows-2025
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: clippy
+
+      - name: Record tested source and toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p windows-native-results
+          git log -1 --format='%H%n%T%n%P' > windows-native-results/source.txt
+          rustc --version --verbose > windows-native-results/toolchain.txt
+
+      - name: Run strict native Windows Clippy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
+            2>&1 | tee windows-native-results/clippy.txt
+
+      - name: Test abandonment GC power-loss cuts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
+            api::tests::power_loss::branch_abandonment::abandonment_gc_cuts_preserve_quarantine_and_live_branches \
+            -- --exact --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/abandonment.txt
+
+      - name: Preserve Windows validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-native-contracts-${{ github.sha }}
+          path: windows-native-results
+          if-no-files-found: error
