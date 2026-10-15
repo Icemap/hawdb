@@ -2456,6 +2456,7 @@ fn version_key_kind(key: &VersionKey) -> &'static str {
         VersionKey::Schema => "schema",
         VersionKey::ReadBarrier => "read_barrier",
         VersionKey::ReadNodeDomain(_) => "read_node_domain",
+        VersionKey::ReadNodeProperty { .. } => "read_node_property",
         VersionKey::GraphNode(_) => "graph_node",
         VersionKey::GraphRelationship(_) => "graph_relationship",
         VersionKey::GraphAdjacency { .. } => "graph_adjacency",

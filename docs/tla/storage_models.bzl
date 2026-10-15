@@ -36,6 +36,7 @@ STORAGE_MODELS = [
     "HawDBIndexPublication",
     "HawDBIndexRecovery",
     "HawDBIndexStatistics",
+    "HawDBIndexedProjectionReadValidation",
     "HawDBKnowledgeRetrievalPipeline",
     "HawDBLargeDocumentLifecycle",
     "HawDBLockWaitFairness",

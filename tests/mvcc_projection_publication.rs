@@ -414,3 +414,258 @@ fn dependency_conflict_is_rejected_before_synchronizing_source() {
         Err(ProjectionGenerationError::NotFound(_))
     ));
 }
+
+fn indexed_fixture() -> (TestRoot, Database) {
+    let (root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
+    db.query("CREATE (:Memory {id: 'unrelated', value: 0})")
+        .unwrap();
+    db.query("CREATE INDEX ON :Memory(id)").unwrap();
+    (root, db)
+}
+
+#[test]
+fn scalar_index_preparation_accepts_same_label_disjoint_write_before_first_query() {
+    let (_root, mut db) = indexed_fixture();
+    let mut preparation = db.begin_prepared_read(limits()).unwrap();
+    // Registration precedes knowledge of which property/value the later read
+    // will use. Do not lose writes in this capture-to-query window.
+    db.query("MATCH (n:Memory) WHERE n.id = 'unrelated' SET n.value = 2")
+        .unwrap();
+    preparation
+        .query_with_params(
+            "MATCH (n:Memory) WHERE n.id = $id RETURN n.value AS value",
+            &BTreeMap::from([("id".into(), Value::String("a".into()))]),
+        )
+        .unwrap();
+    let dependencies = preparation.finish().unwrap();
+    assert_eq!(dependencies.exact_node_property_count(), 1);
+    assert_eq!(dependencies.node_domain_count(), 0);
+    let store = db.projection_generation_store().unwrap();
+    let staged = seal(&store, "exact", dependencies.source_epoch(), None);
+    db.publish_prepared_projection(&dependencies, &staged)
+        .unwrap();
+}
+
+#[test]
+fn scalar_index_read_detects_payload_update_in_capture_to_query_window() {
+    let (_root, mut db) = indexed_fixture();
+    let mut preparation = db.begin_prepared_read(limits()).unwrap();
+    db.query("MATCH (n:Memory) WHERE n.id = 'a' SET n.value = 9")
+        .unwrap();
+    let result = preparation
+        .query_with_params(
+            "MATCH (n:Memory) WHERE n.id = $id RETURN n.value AS value",
+            &BTreeMap::from([("id".into(), Value::String("a".into()))]),
+        )
+        .unwrap();
+    assert_eq!(result.output.rows[0]["value"], Value::Int(1));
+    let dependencies = preparation.finish().unwrap();
+    assert_eq!(dependencies.exact_node_property_count(), 1);
+    let store = db.projection_generation_store().unwrap();
+    let staged = seal(&store, "stale", dependencies.source_epoch(), None);
+    assert!(matches!(
+        db.publish_prepared_projection(&dependencies, &staged),
+        Err(ProjectionPublicationError::Dependency(_))
+    ));
+}
+
+#[test]
+fn scalar_index_absence_detects_insert_and_move_into_key() {
+    for inserted in [false, true] {
+        let (_root, mut db) = indexed_fixture();
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        let output = preparation
+            .query_with_params(
+                "MATCH (n:Memory) WHERE n.id = $id RETURN n.value AS value",
+                &BTreeMap::from([("id".into(), Value::String("absent".into()))]),
+            )
+            .unwrap();
+        assert!(output.output.rows.is_empty());
+        let dependencies = preparation.finish().unwrap();
+        assert_eq!(dependencies.exact_node_property_count(), 1);
+        assert_eq!(dependencies.node_domain_count(), 0);
+        db.query(if inserted {
+            "CREATE (:Memory {id: 'absent', value: 1})"
+        } else {
+            "MATCH (n:Memory) WHERE n.id = 'unrelated' SET n.id = 'absent'"
+        })
+        .unwrap();
+        let store = db.projection_generation_store().unwrap();
+        let staged = seal(&store, "absent", dependencies.source_epoch(), None);
+        assert!(matches!(
+            db.publish_prepared_projection(&dependencies, &staged),
+            Err(ProjectionPublicationError::Dependency(_))
+        ));
+    }
+}
+
+#[test]
+fn scalar_index_read_detects_delete_and_move_out_of_key() {
+    for deleted in [false, true] {
+        let (_root, mut db) = indexed_fixture();
+        let dependencies = read(&db);
+        assert_eq!(dependencies.exact_node_property_count(), 1);
+        db.query(if deleted {
+            "MATCH (n:Memory) WHERE n.id = 'a' DELETE n"
+        } else {
+            "MATCH (n:Memory) WHERE n.id = 'a' SET n.id = 'moved'"
+        })
+        .unwrap();
+        let store = db.projection_generation_store().unwrap();
+        let staged = seal(&store, "removed", dependencies.source_epoch(), None);
+        assert!(matches!(
+            db.publish_prepared_projection(&dependencies, &staged),
+            Err(ProjectionPublicationError::Dependency(_))
+        ));
+    }
+}
+
+#[test]
+fn scalar_multi_seek_collects_all_absent_and_present_keys() {
+    let (_root, mut db) = indexed_fixture();
+    let mut preparation = db.begin_prepared_read(limits()).unwrap();
+    preparation
+        .query_with_params(
+            "MATCH (n:Memory) WHERE n.id IN $ids RETURN n.value AS value",
+            &BTreeMap::from([(
+                "ids".into(),
+                Value::List(vec![
+                    Value::String("a".into()),
+                    Value::String("absent".into()),
+                ]),
+            )]),
+        )
+        .unwrap();
+    let dependencies = preparation.finish().unwrap();
+    assert_eq!(dependencies.exact_node_property_count(), 2);
+    assert_eq!(dependencies.node_domain_count(), 0);
+    db.query("CREATE (:Memory {id: 'absent', value: 5})")
+        .unwrap();
+    let store = db.projection_generation_store().unwrap();
+    let staged = seal(&store, "multi", dependencies.source_epoch(), None);
+    assert!(matches!(
+        db.publish_prepared_projection(&dependencies, &staged),
+        Err(ProjectionPublicationError::Dependency(_))
+    ));
+}
+
+#[test]
+fn exact_index_dependencies_preserve_out_of_core_disjoint_writes_with_large_bodies() {
+    use hawdb::{DatabaseConfig, StorageResidencyMode};
+    for related in [false, true] {
+        let (root, mut db) = indexed_fixture();
+        db.query_with_params(
+            "MATCH (n:Memory) SET n.body = $body",
+            &BTreeMap::from([("body".into(), Value::String("x".repeat(1024 * 1024)))]),
+        )
+        .unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        let mut db = Database::open_with_config(
+            &root.0,
+            DatabaseConfig {
+                storage_residency_mode: StorageResidencyMode::OutOfCore,
+                ..DatabaseConfig::default()
+            },
+        )
+        .unwrap();
+        assert!(db.storage_residency_report().unwrap().out_of_core);
+        assert_eq!(db.storage_residency_report().unwrap().delta_node_count, 0);
+        let dependencies = read(&db);
+        assert_eq!(dependencies.exact_node_property_count(), 1);
+        assert_eq!(dependencies.node_domain_count(), 0);
+        assert_eq!(db.storage_residency_report().unwrap().delta_node_count, 0);
+        db.query_with_params(
+            "MATCH (n:Memory) WHERE n.id = $id SET n.value = 2",
+            &BTreeMap::from([(
+                "id".into(),
+                Value::String(if related { "a" } else { "unrelated" }.into()),
+            )]),
+        )
+        .unwrap();
+        let store = db.projection_generation_store().unwrap();
+        let staged = seal(&store, "cold", dependencies.source_epoch(), None);
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        if related {
+            assert!(matches!(
+                result,
+                Err(ProjectionPublicationError::Dependency(_))
+            ));
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
+#[test]
+fn bounded_pipeline_with_outer_filter_cannot_produce_partial_point_proof() {
+    let (_root, mut db) = indexed_fixture();
+    let query = "MATCH (n:Memory) WITH n ORDER BY n.value ASC LIMIT 1 WITH n WHERE n.id = $id RETURN n.value AS value";
+    let parameters = BTreeMap::from([("id".into(), Value::String("a".into()))]);
+    assert!(db
+        .query_with_params(query, &parameters)
+        .unwrap()
+        .rows
+        .is_empty());
+    let mut preparation = db.begin_prepared_read(limits()).unwrap();
+    // This pipeline currently lowers to an unqualified GraphMatch program.
+    // A proof for only the outer exact key would miss the other row's rank.
+    assert!(preparation.query_with_params(query, &parameters).is_err());
+    assert!(preparation.finish().is_err());
+    db.query("MATCH (n:Memory) WHERE n.id = 'unrelated' SET n.value = 10")
+        .unwrap();
+    assert_eq!(
+        db.query_with_params(query, &parameters).unwrap().rows.len(),
+        1
+    );
+}
+
+#[test]
+fn disjunction_does_not_turn_one_possible_key_into_a_necessary_dependency() {
+    let (_root, mut db) = indexed_fixture();
+    let query = "MATCH (n:Memory) WHERE n.id = $id OR n.value = 0 RETURN n.value AS value";
+    let parameters = BTreeMap::from([("id".into(), Value::String("a".into()))]);
+    let mut preparation = db.begin_prepared_read(limits()).unwrap();
+    assert_eq!(
+        preparation
+            .query_with_params(query, &parameters)
+            .unwrap()
+            .output
+            .rows
+            .len(),
+        2
+    );
+    let dependencies = preparation.finish().unwrap();
+    assert_eq!(dependencies.exact_node_property_count(), 0);
+    assert_eq!(dependencies.node_domain_count(), 1);
+    db.query("MATCH (n:Memory) WHERE n.id = 'unrelated' SET n.value = 10")
+        .unwrap();
+    let store = db.projection_generation_store().unwrap();
+    let staged = seal(&store, "disjunction", dependencies.source_epoch(), None);
+    assert!(matches!(
+        db.publish_prepared_projection(&dependencies, &staged),
+        Err(ProjectionPublicationError::Dependency(_))
+    ));
+}
+
+#[test]
+fn multiple_statements_share_one_dependency_budget_without_partial_proof() {
+    let (_root, db) = indexed_fixture();
+    let mut bounded = limits();
+    bounded.dependency_entries = NonZeroUsize::new(1).unwrap();
+    let mut preparation = db.begin_prepared_read(bounded).unwrap();
+    let query = "MATCH (n:Memory) WHERE n.id = $id RETURN n.value AS value";
+    preparation
+        .query_with_params(
+            query,
+            &BTreeMap::from([("id".into(), Value::String("a".into()))]),
+        )
+        .unwrap();
+    assert!(preparation
+        .query_with_params(
+            query,
+            &BTreeMap::from([("id".into(), Value::String("unrelated".into()))])
+        )
+        .is_err());
+    assert!(preparation.finish().is_err());
+}

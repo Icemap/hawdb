@@ -1458,6 +1458,12 @@ closure, cancellation, GC and lost-response recovery. Its
 [argument and controls](VERSIONED_PROJECTION_PUBLICATION_PROOF.md) distinguish
 the finite protocol evidence from the native integration still required by
 #231/#232. The
+[`HawDBIndexedProjectionReadValidation.tla`](HawDBIndexedProjectionReadValidation.tla)
+checks exact declared scalar-index read footprints against unpruned history and
+query results, including delayed query selection after capture, absent keys,
+payload changes, domain fallback, OR/bounded-phase qualification and pruning.
+Its [collector argument and ten controls](INDEXED_PROJECTION_READ_VALIDATION_PROOF.md)
+separate the qualified native paths from the remaining query families. The
 [`HawDBProjectionSourceDurability.tla`](HawDBProjectionSourceDurability.tla)
 model distinguishes OS-visible complete WAL records, file/namespace durability
 and runtime knowledge, including relaxed commits, process reopen, grouped sync

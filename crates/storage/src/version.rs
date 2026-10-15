@@ -32,6 +32,10 @@ use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 use std::sync::{Arc, Mutex};
 
+/// Bounds one exact read-invalidation key before copying query/data values.
+/// Larger identities retain a conservative read barrier instead.
+pub const MAX_NODE_PROPERTY_READ_KEY_BYTES: usize = 4096;
+
 // All storage snapshots register, including transaction workspaces, savepoints,
 // and snapshots from which another transaction might later be created.
 #[derive(Debug, Clone, Default)]
@@ -108,6 +112,13 @@ pub enum VersionKey {
     /// predicate-value changes as well as membership changes and empty scans.
     /// These summaries do not participate in write-write conflict validation.
     ReadNodeDomain(Option<String>),
+    /// All result changes for nodes currently or formerly matching this exact
+    /// declared scalar-index key, including updates to other properties.
+    ReadNodeProperty {
+        label: String,
+        property: String,
+        value: Box<crate::Value>,
+    },
     GraphNode(NodeId),
     GraphRelationship(RelId),
     GraphAdjacency {
@@ -138,6 +149,15 @@ impl CowPageWeight for VersionKey {
             Self::ReadNodeDomain(label) => {
                 base.saturating_add(label.as_ref().map_or(0, String::len))
             }
+            Self::ReadNodeProperty {
+                label,
+                property,
+                value,
+            } => base
+                .saturating_add(label.len())
+                .saturating_add(property.len())
+                .saturating_add(std::mem::size_of::<crate::Value>())
+                .saturating_add(value.cow_page_bytes()),
             Self::GraphNode(_) | Self::GraphRelationship(_) => base,
             Self::GraphAdjacency { .. } => base,
             Self::RelationalRow { table, primary_key } => base
@@ -153,6 +173,28 @@ impl CowPageWeight for VersionKey {
             Self::AppendTable(table) => base.saturating_add(table.len()),
         }
     }
+}
+
+/// Uses the same Value ordering/equality as the canonical graph scalar index.
+/// Keeping the value boxed avoids enlarging unrelated writer intent keys.
+pub fn node_property_read_key(
+    label: &str,
+    property: &str,
+    value: &crate::Value,
+) -> Option<VersionKey> {
+    if matches!(value, crate::Value::List(_) | crate::Value::Map(_)) {
+        return None;
+    }
+    let bytes = std::mem::size_of::<VersionKey>()
+        .saturating_add(label.len())
+        .saturating_add(property.len())
+        .saturating_add(std::mem::size_of::<crate::Value>())
+        .saturating_add(value.cow_page_bytes());
+    (bytes <= MAX_NODE_PROPERTY_READ_KEY_BYTES).then(|| VersionKey::ReadNodeProperty {
+        label: label.into(),
+        property: property.into(),
+        value: Box::new(value.clone()),
+    })
 }
 
 fn relational_key_bytes(key: &RelationalKey) -> usize {

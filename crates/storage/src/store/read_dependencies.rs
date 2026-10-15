@@ -25,6 +25,10 @@ use crate::version::{
 use crate::wal::WalOp;
 use std::fmt;
 
+#[path = "read_dependencies/indexed_nodes.rs"]
+mod indexed_nodes;
+use indexed_nodes::{record_stamp, IndexedNodeReadInvalidations};
+
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SourceSyncFailure {
@@ -70,6 +74,20 @@ impl GraphReadDependencies {
 
     pub fn requires_unchanged_database_epoch(&self) -> bool {
         self.keys.contains_key(&VersionKey::Database)
+    }
+
+    pub fn exact_node_property_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::ReadNodeProperty { .. }))
+            .count()
+    }
+
+    pub fn node_domain_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::ReadNodeDomain(_)))
+            .count()
     }
 
     /// Used by trusted query collectors, including absence/domain dependencies.
@@ -212,10 +230,12 @@ impl GraphStore {
                 committed_epoch: self.commit_epoch,
             }));
         }
-        let has_node_domain = captured
-            .keys
-            .iter()
-            .any(|(key, _)| matches!(key, VersionKey::ReadNodeDomain(_)));
+        let has_node_domain = captured.keys.iter().any(|(key, _)| {
+            matches!(
+                key,
+                VersionKey::ReadNodeDomain(_) | VersionKey::ReadNodeProperty { .. }
+            )
+        });
         let barrier_keys = [VersionKey::Database, VersionKey::Schema];
         let keys = captured
             .keys
@@ -248,48 +268,50 @@ impl GraphStore {
             return Ok(());
         }
         let mut created = BTreeMap::new();
-        self.collect_node_read_invalidations(catalog, ops, stamps, &mut created)
+        let indexes = IndexedNodeReadInvalidations::new(catalog);
+        self.collect_node_read_invalidations(&indexes, ops, stamps, &mut created)
     }
 
     fn collect_node_read_invalidations(
         &self,
-        catalog: &Catalog,
+        indexes: &IndexedNodeReadInvalidations<'_>,
         ops: &[WalOp],
         stamps: &mut VersionWriteSet,
         created: &mut BTreeMap<NodeId, String>,
     ) -> Result<()> {
-        let record = |stamps: &mut VersionWriteSet, key| {
-            stamps
-                .record_live(key)
-                .map_err(|error| HawDBError::Execution(error.to_string()))
-        };
         for op in ops {
             match op {
-                WalOp::CreateNode { id, label, .. } => {
+                WalOp::CreateNode {
+                    id,
+                    label,
+                    properties,
+                } => {
                     created.insert(*id, label.clone());
-                    record(stamps, VersionKey::ReadNodeDomain(None))?;
-                    record(stamps, VersionKey::ReadNodeDomain(Some(label.clone())))?;
+                    record_stamp(stamps, VersionKey::ReadNodeDomain(None))?;
+                    indexes.record_label(label, Some(properties), None, stamps)?;
                 }
                 WalOp::SetNodeProperty { id, .. } | WalOp::DeleteNode { id } => {
-                    record(stamps, VersionKey::ReadNodeDomain(None))?;
+                    record_stamp(stamps, VersionKey::ReadNodeDomain(None))?;
+                    let changed = match op {
+                        WalOp::SetNodeProperty {
+                            property, value, ..
+                        } => Some((property.as_str(), value)),
+                        _ => None,
+                    };
                     if let Some(label) = created.get(id) {
-                        record(stamps, VersionKey::ReadNodeDomain(Some(label.clone())))?;
+                        // Create already stamped its initial keys. Each later
+                        // indexed assignment adds its new key, including ABA.
+                        indexes.record_label(label, None, changed, stamps)?;
                     } else if let Some(node) = self.nodes.get(id) {
-                        for label in &node.labels {
-                            if let Some(label) = catalog.label_name(*label) {
-                                record(stamps, VersionKey::ReadNodeDomain(Some(label.into())))?;
-                            } else {
-                                record(stamps, VersionKey::ReadBarrier)?;
-                            }
-                        }
+                        indexes.record_node(&node.labels, &node.properties, changed, stamps)?;
+                    } else if let Some(node) = indexes.projected_before(self, *id)? {
+                        indexes.record_node(&node.labels, &node.properties, changed, stamps)?;
                     } else {
-                        // Unknown cold/absent identity: invalidate read domains
-                        // without introducing a false writer Database barrier.
-                        record(stamps, VersionKey::ReadBarrier)?;
+                        record_stamp(stamps, VersionKey::ReadBarrier)?;
                     }
                 }
                 WalOp::Batch(ops) => {
-                    self.collect_node_read_invalidations(catalog, ops, stamps, created)?
+                    self.collect_node_read_invalidations(indexes, ops, stamps, created)?
                 }
                 // Other data families are not narrowed by this collector.
                 // Their readers must use Database until separately qualified.

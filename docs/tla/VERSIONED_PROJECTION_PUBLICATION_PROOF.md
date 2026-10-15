@@ -90,8 +90,10 @@ operate on those inputs; filters are also checked recursively for hidden
 relationship-existence reads. Unsupported operators and adjacency predicates
 fail closed. An optimizer-folded empty plan records an observable database epoch
 dependency. Ignoring a statement or dependency-budget failure cannot produce a
-usable source token. Scalar index predicates currently use the whole label
-domain, not an exact scalar-key conflict identity.
+usable source token. Qualified declared scalar-index EQ/IN predicates now use exact keys even when
+the physical access is a scan; composite/range and other unsupported shapes retain
+the conservative domain. The [indexed-read argument and controls](INDEXED_PROJECTION_READ_VALIDATION_PROOF.md)
+cover that source refinement and the capture-to-query activation gap.
 
 Every node create stamps its declared label and the all-node domain; property
 changes and deletion use pre-commit labels or same-batch created labels. A cold

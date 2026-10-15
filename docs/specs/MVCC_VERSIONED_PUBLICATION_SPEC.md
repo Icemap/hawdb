@@ -242,6 +242,18 @@ Destination writes are validated before these summaries are added to the staged
 index; the union is admitted before WAL and installed with canonical commit.
 When no prepared source exists, ordinary commits do not build those summaries.
 
+Qualified scalar equality/membership reads now collect exact declared index
+keys, including necessary EQ/IN conditions under AND in node scan predicates.
+The footprint follows semantics rather than the optimizer's scan/seek cost choice.
+OR/NOT and conditions outside bounded candidate phases cannot supply that bound.
+The active preparation registration enables all declared scalar-index summaries
+before any later query chooses its values, closing the capture-to-query gap.
+Writers stamp old keys for every matching node mutation, plus new indexed values;
+cold preimages use admitted projected reads of indexed properties. Shared reader/
+writer key bounds and explicit metadata work/ownership bounds retain domain or
+read-barrier fallbacks. Precision counts are exposed on the prepared dependencies.
+See the [collector argument and controls](../tla/INDEXED_PROJECTION_READ_VALIDATION_PROOF.md).
+
 `publish_prepared_projection` validates the source identity, captured watermark
 and dependencies and calls the existing generation catalog under one exclusive
 database borrow. Its expected-head CAS protects the catalog head. It resolves an
@@ -266,10 +278,10 @@ a committed token does not remove the durable head root.
 
 This first path publishes full catalog generations. It does not yet move actual
 incremental Search preparation out of `NowledgeMemEmbeddedStoreHandle`, collect
-precise scalar index/relational/adjacency dependencies, validate host binding
+complete composite/range/relational/adjacency dependencies, validate host binding
 incarnations and batch receipts, integrate Search activation, or qualify power
-loss and 1/4/8-writer latency. Label domains deliberately conflict with changes
-anywhere in that label; they are not precise external-ID point dependencies.
+loss and 1/4/8-writer latency. Unsupported value/access shapes deliberately retain
+label domains or read barriers; those fallbacks are not advertised as exact keys.
 Those requirements remain in scope and must not be replaced by this subset.
 
 ## Formal argument and finite-model boundary
@@ -314,7 +326,7 @@ path do not prove starvation freedom.
 | Snapshot reads and per-key writer conflicts | Current commit protocol and native transaction/version tests | Audit collectors and compose every supported path; preserve SI boundary |
 | Version retention/admission | Existing history budget/pin models and tests | Churn/long-pin allocator/RSS and cleanup-latency qualification |
 | Publication protocol | [Finite safety model and 14 controls](../tla/VERSIONED_PROJECTION_PUBLICATION_PROOF.md), registered safety action and initial source-validation/catalog path | Complete source refinement and embedded integration |
-| Precise read dependencies | Pinned kernel tokens, node-domain summaries and bounded plan-derived Cypher preparation | Precise index/relational/adjacency collectors, host dependencies and completeness qualification |
+| Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain collectors and native cold/hot regressions | Composite/range/relational/adjacency collectors, host dependencies and full completeness qualification |
 | Invisible staging and durable activation | Existing `ProjectionGenerationStore` candidate/seal/head protocol and Search mutation components | Compose source validation and Search activation with complete receipt/closure and failure states |
 | Embedded owner concurrency | Current catch-up path and unmerged #1032 audit | Integrate on main; prove a competing disjoint writer commits while preparation is paused |
 | Recovery/power loss | Existing WAL/group/branch proofs, #820 fault harness | Compose new staging/selector/source barriers, cancellation, lost responses and replay |
