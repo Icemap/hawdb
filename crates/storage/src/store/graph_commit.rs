@@ -1929,6 +1929,10 @@ impl GraphStore {
         self.poison_on_storage_error(&row_publication_requirement);
         row_publication_requirement?;
         self.validate_constraints_for_ops(&working_catalog, &ops)?;
+        // Writer validation above consumes destinations only. Domain summaries
+        // invalidate prepared reads and must not serialize disjoint writers.
+        // Admission still completes before WAL; install all stamps atomically.
+        self.extend_read_invalidation_stamps(&working_catalog, &ops, &mut version_writes)?;
         let staged_versions = self
             .stage_version_index(&version_writes, next_commit_epoch)
             .or_else(|_| {
@@ -2450,6 +2454,8 @@ fn version_key_kind(key: &VersionKey) -> &'static str {
     match key {
         VersionKey::Database => "database",
         VersionKey::Schema => "schema",
+        VersionKey::ReadBarrier => "read_barrier",
+        VersionKey::ReadNodeDomain(_) => "read_node_domain",
         VersionKey::GraphNode(_) => "graph_node",
         VersionKey::GraphRelationship(_) => "graph_relationship",
         VersionKey::GraphAdjacency { .. } => "graph_adjacency",

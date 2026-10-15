@@ -102,6 +102,12 @@ pub const DEFAULT_MAX_VERSION_WRITE_SET_ENTRIES: usize =
 pub enum VersionKey {
     Database,
     Schema,
+    /// Read invalidation only; never a writer conflict intent.
+    ReadBarrier,
+    /// All node changes, optionally scoped to one label name. This includes
+    /// predicate-value changes as well as membership changes and empty scans.
+    /// These summaries do not participate in write-write conflict validation.
+    ReadNodeDomain(Option<String>),
     GraphNode(NodeId),
     GraphRelationship(RelId),
     GraphAdjacency {
@@ -128,7 +134,10 @@ impl CowPageWeight for VersionKey {
     fn cow_page_bytes(&self) -> usize {
         let base = std::mem::size_of::<Self>();
         match self {
-            Self::Database | Self::Schema => base,
+            Self::Database | Self::Schema | Self::ReadBarrier => base,
+            Self::ReadNodeDomain(label) => {
+                base.saturating_add(label.as_ref().map_or(0, String::len))
+            }
             Self::GraphNode(_) | Self::GraphRelationship(_) => base,
             Self::GraphAdjacency { .. } => base,
             Self::RelationalRow { table, primary_key } => base

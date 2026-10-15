@@ -107,6 +107,10 @@ mod graph_indexes;
 mod graph_mutation;
 #[path = "store/graph_read.rs"]
 mod graph_read;
+#[path = "store/read_dependencies.rs"]
+mod read_dependencies;
+#[doc(hidden)]
+pub use read_dependencies::{GraphReadDependencies, GraphReadDependencyError};
 #[path = "store/graph_recovery.rs"]
 mod graph_recovery;
 #[path = "store/immutable_root.rs"]
@@ -355,7 +359,7 @@ use search_projection_change_log::SearchProjectionChangeLog;
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use wal_codec::binary::encode_binary_wal_record;
 use wal_codec::frame::{
@@ -788,6 +792,7 @@ pub struct GraphStore {
     version_index: hawdb_storage::version::VersionIndex,
     version_snapshot_pins: hawdb_storage::version::VersionSnapshotPins,
     version_snapshot_pin: Option<hawdb_storage::version::VersionSnapshotPin>,
+    read_dependency_readers: Arc<AtomicUsize>,
     nodes: CowSegmentedMap<NodeId, NodeRecord>,
     relationships: CowSegmentedMap<RelId, RelRecord>,
     basic_statistics: BasicGraphStatistics,
@@ -1717,6 +1722,7 @@ impl GraphStore {
             version_index: hawdb_storage::version::VersionIndex::default(),
             version_snapshot_pins: Default::default(),
             version_snapshot_pin: None,
+            read_dependency_readers: Arc::new(AtomicUsize::new(0)),
             nodes: CowSegmentedMap::default(),
             relationships: CowSegmentedMap::default(),
             basic_statistics: BasicGraphStatistics::default(),
@@ -2180,6 +2186,7 @@ impl GraphStore {
             version_index: self.version_index.clone(),
             version_snapshot_pins: self.version_snapshot_pins.clone(),
             version_snapshot_pin: Some(self.version_snapshot_pins.pin(pin_epoch)),
+            read_dependency_readers: Arc::clone(&self.read_dependency_readers),
             nodes: self.nodes.clone(),
             relationships: self.relationships.clone(),
             basic_statistics: self.basic_statistics.clone(),

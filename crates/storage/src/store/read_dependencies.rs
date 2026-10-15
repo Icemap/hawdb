@@ -1,0 +1,531 @@
+// Copyright 2026 Nowledge
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Pinned read dependencies and read-only invalidation summaries.
+//!
+//! Kernel inputs must come from complete query collectors. Validation here is
+//! not publication authorization: a facade must retain its source/target fence
+//! through durable activation and separately check source durability.
+
+use super::*;
+use crate::version::{
+    VersionConflict, VersionKey, VersionSnapshotPin, VersionWriteSet, VersionWriteSetError,
+};
+use crate::wal::WalOp;
+use std::fmt;
+
+/// Opaque, bounded dependencies captured from the canonical source. Not Clone:
+/// one registration owns its source-history pin and summary-tracking lease.
+#[derive(Debug)]
+pub struct GraphReadDependencies {
+    source_epoch: u64,
+    keys: VersionWriteSet,
+    refused: bool,
+    readers: Arc<AtomicUsize>,
+    _pin: VersionSnapshotPin,
+}
+
+impl GraphReadDependencies {
+    pub fn source_epoch(&self) -> u64 {
+        self.source_epoch
+    }
+
+    pub fn estimated_bytes(&self) -> usize {
+        self.keys.estimated_bytes()
+    }
+
+    pub fn requires_unchanged_database_epoch(&self) -> bool {
+        self.keys.contains_key(&VersionKey::Database)
+    }
+
+    /// Used by trusted query collectors, including absence/domain dependencies.
+    /// An ignored budget error permanently invalidates this capture.
+    pub fn record(&mut self, key: VersionKey) -> std::result::Result<(), VersionWriteSetError> {
+        let result = self.keys.record_live(key);
+        self.refused |= result.is_err();
+        result
+    }
+}
+
+impl Drop for GraphReadDependencies {
+    fn drop(&mut self) {
+        let previous = self.readers.fetch_sub(1, AtomicOrdering::AcqRel);
+        debug_assert!(previous > 0, "read dependency lease underflow");
+    }
+}
+
+#[derive(Debug)]
+pub enum GraphReadDependencyError {
+    SourceChanged,
+    CaptureRefused,
+    Conflict(VersionConflict),
+    Unavailable(HawDBError),
+}
+
+impl fmt::Display for GraphReadDependencyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SourceChanged => {
+                f.write_str("read dependency source instance changed or is not canonical")
+            }
+            Self::CaptureRefused => f.write_str("read dependency capture exceeded its budget"),
+            Self::Conflict(conflict) => write!(
+                f,
+                "read dependency {:?} changed at epoch {}",
+                conflict.key, conflict.committed_epoch
+            ),
+            Self::Unavailable(error) => write!(f, "read dependency source unavailable: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for GraphReadDependencyError {}
+
+impl GraphStore {
+    /// Capture only from a live canonical owner. Register before that owner's
+    /// borrow escapes, then capture/query its snapshot under the same owner.
+    /// Starting from an older ordinary snapshot is forbidden: summaries were
+    /// not necessarily enabled during that snapshot's lifetime.
+    #[doc(hidden)]
+    pub fn capture_read_dependencies(
+        &self,
+        max_entries: usize,
+        max_bytes: usize,
+    ) -> Result<GraphReadDependencies> {
+        self.ensure_usable()?;
+        if self.version_snapshot_pin.is_some() {
+            return Err(HawDBError::Execution(
+                "read dependencies must be captured from the canonical source".into(),
+            ));
+        }
+        self.read_dependency_readers
+            .fetch_update(AtomicOrdering::AcqRel, AtomicOrdering::Acquire, |count| {
+                count.checked_add(1)
+            })
+            .map_err(|_| {
+                HawDBError::Execution("read dependency registration capacity exhausted".into())
+            })?;
+        Ok(GraphReadDependencies {
+            source_epoch: self.commit_epoch,
+            keys: VersionWriteSet::with_limits(max_entries, max_bytes),
+            refused: false,
+            readers: Arc::clone(&self.read_dependency_readers),
+            _pin: self.version_snapshot_pins.pin(self.commit_epoch),
+        })
+    }
+
+    /// Kernel-only validation under canonical ownership. The caller must retain
+    /// that ownership through publication; this check is not a reusable permit.
+    #[doc(hidden)]
+    pub fn validate_read_dependencies(
+        &self,
+        captured: &GraphReadDependencies,
+    ) -> std::result::Result<(), GraphReadDependencyError> {
+        self.ensure_usable()
+            .map_err(GraphReadDependencyError::Unavailable)?;
+        if self.version_snapshot_pin.is_some()
+            || !Arc::ptr_eq(&self.read_dependency_readers, &captured.readers)
+            || self.commit_epoch < captured.source_epoch
+        {
+            return Err(GraphReadDependencyError::SourceChanged);
+        }
+        if captured.refused {
+            return Err(GraphReadDependencyError::CaptureRefused);
+        }
+        if captured.keys.contains_key(&VersionKey::Database)
+            && self.commit_epoch != captured.source_epoch
+        {
+            return Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::Database,
+                committed_epoch: self.commit_epoch,
+            }));
+        }
+        let has_node_domain = captured
+            .keys
+            .iter()
+            .any(|(key, _)| matches!(key, VersionKey::ReadNodeDomain(_)));
+        let barrier_keys = [VersionKey::Database, VersionKey::Schema];
+        let keys = captured
+            .keys
+            .iter()
+            .map(|(key, _)| key)
+            .chain(barrier_keys.iter())
+            .chain(has_node_domain.then_some(&VersionKey::ReadBarrier));
+        for key in keys {
+            if let Some(stamp) = self.version_index.stamp(key)
+                && stamp.commit_epoch > captured.source_epoch
+            {
+                return Err(GraphReadDependencyError::Conflict(VersionConflict {
+                    key: key.clone(),
+                    committed_epoch: stamp.commit_epoch,
+                }));
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn extend_read_invalidation_stamps(
+        &self,
+        catalog: &Catalog,
+        ops: &[WalOp],
+        stamps: &mut VersionWriteSet,
+    ) -> Result<()> {
+        if self.version_snapshot_pin.is_some()
+            || self.read_dependency_readers.load(AtomicOrdering::Acquire) == 0
+        {
+            return Ok(());
+        }
+        let mut created = BTreeMap::new();
+        self.collect_node_read_invalidations(catalog, ops, stamps, &mut created)
+    }
+
+    fn collect_node_read_invalidations(
+        &self,
+        catalog: &Catalog,
+        ops: &[WalOp],
+        stamps: &mut VersionWriteSet,
+        created: &mut BTreeMap<NodeId, String>,
+    ) -> Result<()> {
+        let record = |stamps: &mut VersionWriteSet, key| {
+            stamps
+                .record_live(key)
+                .map_err(|error| HawDBError::Execution(error.to_string()))
+        };
+        for op in ops {
+            match op {
+                WalOp::CreateNode { id, label, .. } => {
+                    created.insert(*id, label.clone());
+                    record(stamps, VersionKey::ReadNodeDomain(None))?;
+                    record(stamps, VersionKey::ReadNodeDomain(Some(label.clone())))?;
+                }
+                WalOp::SetNodeProperty { id, .. } | WalOp::DeleteNode { id } => {
+                    record(stamps, VersionKey::ReadNodeDomain(None))?;
+                    if let Some(label) = created.get(id) {
+                        record(stamps, VersionKey::ReadNodeDomain(Some(label.clone())))?;
+                    } else if let Some(node) = self.nodes.get(id) {
+                        for label in &node.labels {
+                            if let Some(label) = catalog.label_name(*label) {
+                                record(stamps, VersionKey::ReadNodeDomain(Some(label.into())))?;
+                            } else {
+                                record(stamps, VersionKey::ReadBarrier)?;
+                            }
+                        }
+                    } else {
+                        // Unknown cold/absent identity: invalidate read domains
+                        // without introducing a false writer Database barrier.
+                        record(stamps, VersionKey::ReadBarrier)?;
+                    }
+                }
+                WalOp::Batch(ops) => {
+                    self.collect_node_read_invalidations(catalog, ops, stamps, created)?
+                }
+                // Other data families are not narrowed by this collector.
+                // Their readers must use Database until separately qualified.
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cow::CowPageWeight;
+    use crate::mutation::{GraphMutation, MutationLimits, PropertyFilter};
+    use crate::version::{VersionIndex, VersionStamp};
+
+    fn create(label: &str) -> GraphMutation {
+        GraphMutation::CreateNode {
+            label: label.into(),
+            properties: BTreeMap::new(),
+        }
+    }
+
+    fn update(id: u64, value: i64) -> GraphMutation {
+        GraphMutation::SetNodeProperty {
+            label: "Memory".into(),
+            filter: Some(PropertyFilter::IdEq {
+                value: Value::Int(id as i64),
+            }),
+            property: "value".into(),
+            value: Value::Int(value),
+        }
+    }
+
+    fn capture(store: &GraphStore, key: VersionKey) -> GraphReadDependencies {
+        let mut captured = store.capture_read_dependencies(16, 4096).unwrap();
+        captured.record(key).unwrap();
+        captured
+    }
+
+    #[test]
+    fn empty_domain_detects_insert_without_rejecting_another_label() {
+        let mut store = GraphStore::default();
+        let mut catalog = Catalog::default();
+        let captured = capture(&store, VersionKey::ReadNodeDomain(Some("Memory".into())));
+        store
+            .commit_mutations(&mut catalog, vec![create("Other")])
+            .unwrap();
+        store.validate_read_dependencies(&captured).unwrap();
+        store
+            .commit_mutations(&mut catalog, vec![create("Memory")])
+            .unwrap();
+        assert!(matches!(
+            store.validate_read_dependencies(&captured),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::ReadNodeDomain(_),
+                ..
+            }))
+        ));
+        store.reclaim_version_history();
+        assert!(store.validate_read_dependencies(&captured).is_err());
+    }
+
+    #[test]
+    fn absent_point_and_present_point_track_exact_identity() {
+        let mut store = GraphStore::default();
+        let mut catalog = Catalog::default();
+        let absent = capture(&store, VersionKey::GraphNode(NodeId(0)));
+        store
+            .commit_mutations(&mut catalog, vec![create("Memory"), create("Memory")])
+            .unwrap();
+        assert!(store.validate_read_dependencies(&absent).is_err());
+        drop(absent);
+        let point = capture(&store, VersionKey::GraphNode(NodeId(0)));
+        let snapshot = store.snapshot_for_read();
+        store
+            .commit_mutations(&mut catalog, vec![update(1, 10)])
+            .unwrap();
+        store.validate_read_dependencies(&point).unwrap();
+        assert!(!snapshot
+            .nodes
+            .get(&NodeId(1))
+            .unwrap()
+            .properties
+            .contains_key("value"));
+        store
+            .commit_mutations(&mut catalog, vec![update(0, 20)])
+            .unwrap();
+        store.reclaim_version_history();
+        assert!(matches!(
+            store.validate_read_dependencies(&point),
+            Err(GraphReadDependencyError::Conflict(_))
+        ));
+    }
+
+    #[test]
+    fn read_summaries_do_not_conflict_disjoint_stale_writers() {
+        let mut store = GraphStore::default();
+        let mut catalog = Catalog::default();
+        store
+            .commit_mutations(&mut catalog, vec![create("Memory"), create("Memory")])
+            .unwrap();
+        let captured = capture(&store, VersionKey::ReadNodeDomain(Some("Memory".into())));
+        let mut first = store.begin_mutation_transaction(&catalog);
+        let mut second = store.begin_mutation_transaction(&catalog);
+        first
+            .stage_mutation_with_limits(update(0, 10), MutationLimits::default())
+            .unwrap();
+        second
+            .stage_mutation_with_limits(update(1, 20), MutationLimits::default())
+            .unwrap();
+        for transaction in [first, second] {
+            store
+                .commit_mutation_transaction_and_relational(
+                    &mut catalog,
+                    transaction,
+                    RelationalTransaction::default(),
+                    MutationLimits::default(),
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            store.nodes.get(&NodeId(0)).unwrap().properties["value"],
+            Value::Int(10)
+        );
+        assert_eq!(
+            store.nodes.get(&NodeId(1)).unwrap().properties["value"],
+            Value::Int(20)
+        );
+        assert!(store.validate_read_dependencies(&captured).is_err());
+    }
+
+    #[test]
+    fn scopes_detect_predicate_changes_and_delete_not_only_insertions() {
+        for deletion in [false, true] {
+            let mut store = GraphStore::default();
+            let mut catalog = Catalog::default();
+            store
+                .commit_mutations(&mut catalog, vec![create("Memory")])
+                .unwrap();
+            let captured = capture(&store, VersionKey::ReadNodeDomain(Some("Memory".into())));
+            let mutation = if deletion {
+                GraphMutation::DeleteNode {
+                    label: "Memory".into(),
+                    filter: None,
+                    detach: false,
+                }
+            } else {
+                update(0, 99)
+            };
+            store
+                .commit_mutations(&mut catalog, vec![mutation])
+                .unwrap();
+            assert!(store.validate_read_dependencies(&captured).is_err());
+        }
+    }
+
+    #[test]
+    fn canonical_capture_rejects_snapshot_and_replacement_even_at_equal_epoch() {
+        let store = GraphStore::default();
+        let captured = capture(&store, VersionKey::GraphNode(NodeId(0)));
+        let snapshot = store.snapshot_for_read();
+        assert!(snapshot.capture_read_dependencies(16, 4096).is_err());
+        assert!(matches!(
+            snapshot.validate_read_dependencies(&captured),
+            Err(GraphReadDependencyError::SourceChanged)
+        ));
+        let replacement = GraphStore::default();
+        assert_eq!(replacement.commit_epoch(), captured.source_epoch());
+        assert!(matches!(
+            replacement.validate_read_dependencies(&captured),
+            Err(GraphReadDependencyError::SourceChanged)
+        ));
+    }
+
+    #[test]
+    fn dependency_budget_refusal_is_sticky_and_registration_is_released() {
+        let mut store = GraphStore::default();
+        let mut captured = store.capture_read_dependencies(0, 0).unwrap();
+        assert!(captured.record(VersionKey::GraphNode(NodeId(0))).is_err());
+        assert!(matches!(
+            store.validate_read_dependencies(&captured),
+            Err(GraphReadDependencyError::CaptureRefused)
+        ));
+        assert_eq!(
+            store.read_dependency_readers.load(AtomicOrdering::Acquire),
+            1
+        );
+        assert_eq!(store.version_snapshot_pins.oldest_epoch(), Some(0));
+        drop(captured);
+        assert_eq!(
+            store.read_dependency_readers.load(AtomicOrdering::Acquire),
+            0
+        );
+        assert_eq!(store.version_snapshot_pins.oldest_epoch(), None);
+        let mut catalog = Catalog::default();
+        store
+            .commit_mutations(&mut catalog, vec![create("Memory")])
+            .unwrap();
+        assert!(store
+            .version_index
+            .stamp(&VersionKey::ReadNodeDomain(None))
+            .is_none());
+    }
+
+    #[test]
+    fn late_capture_after_disabled_tracking_has_no_history_gap() {
+        let mut store = GraphStore::default();
+        let mut catalog = Catalog::default();
+        store
+            .commit_mutations(&mut catalog, vec![create("Memory")])
+            .unwrap();
+        let captured = capture(&store, VersionKey::ReadNodeDomain(Some("Memory".into())));
+        store.validate_read_dependencies(&captured).unwrap();
+        drop(captured);
+        store
+            .commit_mutations(&mut catalog, vec![update(0, 10)])
+            .unwrap();
+        let later = capture(&store, VersionKey::ReadNodeDomain(Some("Memory".into())));
+        store.validate_read_dependencies(&later).unwrap();
+        store
+            .commit_mutations(&mut catalog, vec![update(0, 20)])
+            .unwrap();
+        assert!(store.validate_read_dependencies(&later).is_err());
+    }
+
+    #[test]
+    fn opaque_and_legacy_paths_retain_conservative_invalidation() {
+        let mut store = GraphStore::default();
+        let mut catalog = Catalog::default();
+        let broad = capture(&store, VersionKey::Database);
+        store
+            .commit_mutations(&mut catalog, vec![create("Other")])
+            .unwrap();
+        assert!(store.validate_read_dependencies(&broad).is_err());
+        let scoped = capture(&store, VersionKey::ReadNodeDomain(Some("Memory".into())));
+        store
+            .create_node(&mut catalog, "Other", BTreeMap::new())
+            .unwrap();
+        assert!(matches!(
+            store.validate_read_dependencies(&scoped),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::Database,
+                ..
+            }))
+        ));
+    }
+
+    #[test]
+    fn read_summary_admission_failure_precedes_wal_and_reopen() {
+        let path = std::env::temp_dir().join(format!(
+            "hawdb_read_dependency_admission_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open(&path, &mut catalog).unwrap();
+        store
+            .create_node(&mut catalog, "Existing", BTreeMap::new())
+            .unwrap();
+        let reserve = VersionIndex::default().estimated_bytes();
+        let weight =
+            VersionKey::GraphNode(NodeId(0)).cow_page_bytes() + std::mem::size_of::<VersionStamp>();
+        store.version_index = VersionIndex::with_byte_limit(reserve + weight);
+        let captured = capture(&store, VersionKey::ReadNodeDomain(Some("Memory".into())));
+        let wal_path = store.durable.as_ref().unwrap().wal_path.clone();
+        let wal = std::fs::read(&wal_path).unwrap();
+        let epoch = store.commit_epoch();
+        let error = store
+            .commit_mutations(&mut catalog, vec![create("Memory")])
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("version index estimated payload budget"),
+            "{error}"
+        );
+        assert_eq!(store.commit_epoch(), epoch);
+        assert_eq!(store.node_count_for_label(None), 1);
+        assert_eq!(catalog.label_id("Memory"), None);
+        assert_eq!(std::fs::read(&wal_path).unwrap(), wal);
+        store.validate_read_dependencies(&captured).unwrap();
+        drop(store);
+        let mut recovered_catalog = Catalog::default();
+        let recovered = GraphStore::open(&path, &mut recovered_catalog).unwrap();
+        assert_eq!(recovered.commit_epoch(), epoch);
+        assert_eq!(recovered.node_count_for_label(None), 1);
+        assert!(matches!(
+            recovered.validate_read_dependencies(&captured),
+            Err(GraphReadDependencyError::SourceChanged)
+        ));
+        drop(captured);
+        drop(recovered);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+}

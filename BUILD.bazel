@@ -563,6 +563,8 @@ test_suite(
     name = "hawdb_unit_tests",
     tests = [
         ":hawdb_in_memory_portable_tests",
+        ":hawdb_mvcc_projection_publication_tests",
+        ":hawdb_mvcc_projection_publication_minimal_tests",
         ":hawdb_branch_project_open_tests",
         ":hawdb_branch_project_open_minimal_tests",
         ":hawdb_default_consumer_tests",
@@ -677,6 +679,20 @@ rust_test(
 )
 
 # External generation consumers in both supported dependency profiles.
+[
+    rust_test(
+        name = "hawdb_mvcc_projection_publication" + suffix + "_tests",
+        crate_root = "tests/mvcc_projection_publication.rs",
+        srcs = ["tests/mvcc_projection_publication.rs"],
+        edition = "2024",
+        deps = [library],
+    )
+    for suffix, library in [
+        ("", ":hawdb"),
+        ("_minimal", ":hawdb_minimal"),
+    ]
+]
+
 rust_test(
     name = "hawdb_search_generation_context_tests",
     crate_root = "tests/search_generation_context.rs",

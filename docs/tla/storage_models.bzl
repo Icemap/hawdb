@@ -86,6 +86,7 @@ STORAGE_MODELS = [
     "HawDBValidatedResultDelivery",
     "HawDBVerifiedRowPageCache",
     "HawDBVersionHistoryBudget",
+    "HawDBVersionedProjectionPublication",
     "HawDBWalDoctor",
     "HawDBWalGroupCommit",
 ]
