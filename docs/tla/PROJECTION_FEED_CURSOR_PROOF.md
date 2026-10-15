@@ -5,6 +5,11 @@ catch-up integration remain unimplemented. Enumeration success is **not**
 authorization to publish arbitrary callback output. See the complete
 [batch protocol](../specs/MVCC_SEARCH_BATCH_COVERAGE_SPEC.md).
 
+The [external mutation sorter](SEARCH_UNORDERED_MUTATIONS_PROOF.md) now supplies
+private output ordering and exact duplicate/conflict reduction. Its cumulative
+sort admission is separate from this primitive's per-step source budget;
+artifact-bound coverage and resumable per-step sort work remain outstanding.
+
 ## Source mapping and conditional argument
 
 `store/search_projection_change_log/cursor.rs` owns an immutable COW log directory,

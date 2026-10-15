@@ -70,7 +70,8 @@ pub use generation_writer::{
     SearchOutOfCoreMutationWriter, SearchOutOfCorePreparedGeneration,
     SearchOutOfCorePreparedUpdate, SearchOutOfCoreSegmentCompaction,
     SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
-    SearchOutOfCoreSegmentCompactionStopReason, SearchStagingCleanupReport,
+    SearchOutOfCoreSegmentCompactionStopReason, SearchOutOfCoreUnorderedMutationWriter,
+    SearchStagingCleanupReport, SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
 };
 pub(super) use publish_lease::SearchProjectionPublishLease;
 pub use text_seed::{SearchTextSeedOutput, SearchTextSeedReport};

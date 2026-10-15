@@ -468,3 +468,189 @@ fn prepared_feed_splits_one_canonical_transaction_and_counts_repeated_commits() 
     assert!(!feed.is_complete());
     assert!(feed.finish().is_err());
 }
+
+#[test]
+fn pinned_feed_and_external_sort_preserve_the_complete_final_graph_and_sql_set() {
+    use hawdb::{
+        ProjectionFeedItem, RelationalValue, RuntimeTaskContext, SearchUnorderedMutationLimits,
+    };
+    for cold in [false, true] {
+        for related in [false, true] {
+            let root = Directory::new();
+            let graph = root.0.join("graph");
+            let search = root.0.join("search");
+            let config = hawdb::DatabaseConfig {
+                storage_residency_mode: if cold {
+                    hawdb::StorageResidencyMode::OutOfCore
+                } else {
+                    hawdb::StorageResidencyMode::Materialized
+                },
+                ..Default::default()
+            };
+            let mut db = Database::open_with_config(&graph, config.clone()).unwrap();
+            db.query("CREATE (:Memory {id: 'a', title: 'old'})")
+                .unwrap();
+            db.query("CREATE (:Other {value: 1})").unwrap();
+            db.query_sql("CREATE TABLE records (id BIGINT PRIMARY KEY, body TEXT)")
+                .unwrap();
+            db.query_sql("INSERT INTO records (id, body) VALUES (1, 'old')")
+                .unwrap();
+            let start = db.commit_epoch().unwrap();
+            let document = |id: &str, body: &str| SearchDocument {
+                id: id.into(),
+                title: id.into(),
+                content: body.into(),
+                embedding: None,
+                metadata: BTreeMap::new(),
+            };
+            let mut baseline = SearchOutOfCoreGenerationWriter::create(
+                &search,
+                SearchOutOfCoreGenerationBuildOptions {
+                    source_graph_commit_epoch: Some(start),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            baseline.push(document("memory:a", "old")).unwrap();
+            baseline.push(document("record:1", "old")).unwrap();
+            baseline.finish().unwrap();
+            db.query("MATCH (n:Memory) SET n.title = 'intermediate'")
+                .unwrap();
+            db.query_sql("UPDATE records SET body = 'intermediate' WHERE id = 1")
+                .unwrap();
+            db.query("MATCH (n:Memory) DETACH DELETE n").unwrap();
+            db.query_sql("UPDATE records SET body = 'at-E' WHERE id = 1")
+                .unwrap();
+            if cold {
+                db.checkpoint().unwrap();
+                drop(db);
+                db = Database::open_with_config(&graph, config).unwrap();
+            }
+            let source = db.commit_epoch().unwrap();
+            let owner = Arc::new(DatabasePublicationOwner::new(State(db)));
+            let mut feed = owner
+                .with_read(|state| {
+                    state
+                        .0
+                        .begin_prepared_projection_feed(
+                            start,
+                            limits(),
+                            feed_limits(1000, 100, 10000),
+                        )
+                        .map_err(|error| hawdb::HawDBError::Execution(error.to_string()))
+                })
+                .unwrap();
+            let reader = SearchOutOfCoreReader::open(&search).unwrap();
+            let mut sorting = SearchOutOfCoreGenerationWriter::prepare_unordered_delta(
+                &reader,
+                SearchOutOfCoreGenerationBuildOptions {
+                    source_graph_commit_epoch: Some(source),
+                    ..Default::default()
+                },
+                SearchUnorderedMutationLimits {
+                    max_buffer_records: NonZeroUsize::new(1).unwrap(),
+                    ..Default::default()
+                },
+                RuntimeTaskContext::default(),
+            )
+            .unwrap();
+            // The actual public owner's writer completes before any hydration
+            // or sort resumes. All mapped data must still come from pinned E.
+            let foreground = Arc::clone(&owner);
+            let (tx, rx) = mpsc::sync_channel(1);
+            let worker = std::thread::spawn(move || {
+                foreground
+                    .with_write(|state| {
+                        if related {
+                            state
+                                .0
+                                .query_sql("UPDATE records SET body = 'later' WHERE id = 1")?;
+                        } else {
+                            state.0.query("MATCH (n:Other) SET n.value = 2")?;
+                        }
+                        Ok(())
+                    })
+                    .unwrap();
+                tx.send(()).unwrap();
+            });
+            rx.recv_timeout(Duration::from_secs(30)).unwrap();
+            worker.join().unwrap();
+            let mut callbacks = 0;
+            let mut end = false;
+            while !feed.is_complete() {
+                let step = feed
+                    .visit_next(feed_limits(8, 1, 2048), |read, item| {
+                        callbacks += 1;
+                        match item {
+                            ProjectionFeedItem::GraphNode { node_id, .. } => {
+                                assert!(read
+                                    .hydrate_search_projection_nodes(
+                                        &[node_id],
+                                        NonZeroUsize::new(2048).unwrap(),
+                                    )?
+                                    .is_empty());
+                            }
+                            ProjectionFeedItem::DeleteDocument { document_id, .. } => {
+                                sorting.delete(document_id)?
+                            }
+                            ProjectionFeedItem::RelationalKey { table, key, .. } => {
+                                assert_eq!(table, "records");
+                                let RelationalValue::BigInt(id) = key.0[0] else {
+                                    panic!("expected integer key")
+                                };
+                                let result = read.query_sql_with_params(
+                                    "SELECT body FROM records WHERE id = $1",
+                                    &[Value::Int(id)],
+                                )?;
+                                assert_eq!(result.rows[0]["body"], Value::String("at-E".into()));
+                                sorting.upsert(document(&format!("record:{id}"), "at-E"))?;
+                            }
+                            ProjectionFeedItem::End { source_epoch } => {
+                                assert_eq!(source_epoch, source);
+                                end = true;
+                            }
+                        }
+                        Ok(())
+                    })
+                    .unwrap();
+                assert!(step.usage.items <= 1);
+                assert_eq!(
+                    SearchOutOfCoreReader::open(&search).unwrap().generation(),
+                    reader.generation()
+                );
+            }
+            assert!(end && callbacks >= 4);
+            let dependencies = feed.finish().unwrap();
+            let (report, candidate) = sorting.prepare_publication().unwrap();
+            assert_eq!(report.output_operations, 2);
+            // This composes the primitives; callback correctness is a fixture
+            // premise. It does not mint an artifact-bound coverage receipt.
+            let result = owner
+                .with_write(|state| Ok(state.0.publish_prepared_search(&dependencies, candidate)))
+                .unwrap();
+            let current = SearchOutOfCoreReader::open(&search).unwrap();
+            if related {
+                assert!(matches!(
+                    result,
+                    Err(ProjectionPublicationError::Dependency(_))
+                ));
+                assert_eq!(current.generation(), reader.generation());
+                assert_eq!(current.source_graph_commit_epoch(), Some(start));
+                assert_eq!(current.document_count(), 2);
+            } else {
+                result.unwrap();
+                assert_eq!(current.source_graph_commit_epoch(), Some(source));
+                assert_eq!(current.document_count(), 1);
+                assert_eq!(
+                    current
+                        .hydrate_documents(&["record:1".into()])
+                        .unwrap()
+                        .documents[0]
+                        .content,
+                    "at-E"
+                );
+                assert!(current.hydrate_documents(&["memory:a".into()]).is_err());
+            }
+        }
+    }
+}

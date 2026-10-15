@@ -251,6 +251,20 @@ pub struct SearchOutOfCorePreparedUpdate {
 }
 
 impl SearchOutOfCorePreparedUpdate {
+    pub(super) fn from_streamed(
+        candidate: SearchOutOfCorePreparedGeneration,
+        delta_report: SearchProjectionDeltaReport,
+        source_read_metrics: SearchOutOfCoreMetrics,
+        memory: QueryMemoryLease,
+    ) -> Self {
+        Self {
+            candidate,
+            delta_report,
+            source_read_metrics,
+            _report_memory: memory,
+        }
+    }
+
     pub fn expected_active_generation(&self) -> Option<u64> {
         self.candidate.expected_active_generation()
     }

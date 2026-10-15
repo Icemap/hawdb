@@ -132,6 +132,14 @@ barriers and GC with fault images, not only process-kill/reopen tests.
 
 ## Required delivery evidence
 
+The [external mutation ordering component](../tla/SEARCH_UNORDERED_MUTATIONS_PROOF.md)
+now builds a private expected-base Search update from unordered fixed-E intents
+under payload/record, shared task-memory and cumulative I/O/merge admission.
+It checks exact duplicate bodies, coalesces retracts and rejects conflicts.
+This supplies output ordering for the session; it does not yet own feed-to-stage
+coverage, provide per-step resumable sorting, or authorize a complete watermark.
+The legacy partial-prefix catch-up path remains unchanged.
+
 The companion coverage model must reject legacy early-prefix publication,
 skipped/repeated cursor items, ignored mapper errors, missing delete reduction,
 wrong source/base/binding/schema and a released validation fence. Native tests

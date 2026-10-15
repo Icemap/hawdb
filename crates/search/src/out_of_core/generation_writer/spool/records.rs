@@ -79,6 +79,43 @@ impl SpoolRecord {
         Ok(())
     }
 
+    pub(in super::super) fn checksum(&self) -> u64 {
+        self.checksum
+    }
+
+    pub(in super::super) fn encoded_eq(
+        &self,
+        other: &Self,
+        memory: &BuildMemory,
+        task: &RuntimeTaskContext,
+    ) -> Result<bool> {
+        if self.encoded_bytes != other.encoded_bytes || self.checksum != other.checksum {
+            return Ok(false);
+        }
+        let _scratch = memory.spool.reserve(2 * SPOOL_BUFFER_BYTES)?;
+        let mut left = RangeReader {
+            file: &self.source.file,
+            offset: self.offset,
+            remaining: self.encoded_bytes,
+        };
+        let mut right = RangeReader {
+            file: &other.source.file,
+            offset: other.offset,
+            remaining: other.encoded_bytes,
+        };
+        let (mut a, mut b) = ([0; SPOOL_BUFFER_BYTES], [0; SPOOL_BUFFER_BYTES]);
+        while left.remaining > 0 {
+            checkpoint(task)?;
+            let count = left.remaining.min(SPOOL_BUFFER_BYTES as u64) as usize;
+            left.read_exact(&mut a[..count])?;
+            right.read_exact(&mut b[..count])?;
+            if a[..count] != b[..count] {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
     fn body(&self) -> Result<RangeReader<'_>> {
         Ok(RangeReader {
             file: &self.source.file,
@@ -237,6 +274,48 @@ pub(in super::super) struct SpoolCursor {
 }
 
 impl SpoolCursor {
+    pub(in super::super) fn length(&self) -> u64 {
+        self.length
+    }
+    pub(in super::super) fn read_exact_at(&self, offset: u64, bytes: &mut [u8]) -> Result<()> {
+        if offset
+            .checked_add(bytes.len() as u64)
+            .is_none_or(|end| end > self.length)
+        {
+            return Err(HawDBError::Storage(
+                "spool extent is outside its admitted file".into(),
+            ));
+        }
+        let mut input = RangeReader {
+            file: &self.source.file,
+            offset,
+            remaining: bytes.len() as u64,
+        };
+        input.read_exact(bytes)?;
+        Ok(())
+    }
+    pub(in super::super) fn record_at(&self, start: u64, end: u64) -> Result<SpoolRecord> {
+        if start < SPOOL_HEADER.len() as u64 || end < start || end > self.length {
+            return Err(HawDBError::Storage("invalid spool record range".into()));
+        }
+        let mut cursor = Self {
+            source: self.source.clone(),
+            offset: start,
+            length: end,
+            ordinal: 0,
+            document_count: 1,
+            max_record_bytes: self.max_record_bytes,
+            max_metadata_fields: self.max_metadata_fields,
+            previous: None,
+            memory: self.memory.clone(),
+            task: self.task.clone(),
+            _memory: self.memory.spool.reserve(size_of::<Self>())?,
+        };
+        cursor
+            .next()?
+            .ok_or_else(|| HawDBError::Storage("missing spool record".into()))
+    }
+
     pub(in super::super) fn position(&self) -> u64 {
         self.offset
     }

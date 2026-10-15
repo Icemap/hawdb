@@ -30,7 +30,7 @@ use std::io::Read;
 /// existing expected-generation check and never overwrites a newer head.
 pub struct SearchOutOfCoreMutationWriter<'reader> {
     reader: &'reader SearchOutOfCoreReader,
-    writer: SearchOutOfCoreGenerationWriter,
+    pub(super) writer: SearchOutOfCoreGenerationWriter,
     last_id: Option<Term>,
     operations: usize,
     deleted: usize,
@@ -137,7 +137,7 @@ impl<'reader> SearchOutOfCoreMutationWriter<'reader> {
         result
     }
 
-    fn target(&mut self, id: &str, operation: SearchMutationOperation) -> Result<()> {
+    pub(super) fn target(&mut self, id: &str, operation: SearchMutationOperation) -> Result<()> {
         if self.writer.poisoned {
             return Err(HawDBError::Storage(
                 "streamed mutation batch is poisoned".into(),
@@ -203,6 +203,11 @@ impl<'reader> SearchOutOfCoreMutationWriter<'reader> {
         SearchOutOfCoreGenerationBuildReport,
         SearchOutOfCoreMetrics,
     )> {
+        self.prepare_publication()?.publish()
+    }
+
+    /// Builds an invisible candidate while retaining the original base selector.
+    pub fn prepare_publication(self) -> Result<SearchOutOfCorePreparedUpdate> {
         let retracted = self
             .writer
             .mutations
@@ -230,8 +235,13 @@ impl<'reader> SearchOutOfCoreMutationWriter<'reader> {
             source_graph_commit_epoch_after: epoch,
             source_graph_commit_epoch_updated: self.epoch_updated,
         };
-        let build = self.writer.finish()?;
-        Ok((report, build, self.metrics))
+        let candidate = self.writer.prepare_publication()?;
+        Ok(SearchOutOfCorePreparedUpdate::from_streamed(
+            candidate,
+            report,
+            self.metrics,
+            self._report_memory,
+        ))
     }
 }
 
