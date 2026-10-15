@@ -333,7 +333,8 @@ binding/receipt authority still need their own integration. The current legacy
 bounded builder has a verified mixed-snapshot omission; the
 [pinned-source batch coverage design](MVCC_SEARCH_BATCH_COVERAGE_SPEC.md)
 specifies complete C..E preparation in bounded invisible steps and stage-bound
-coverage authority. That session/spool/receipt protocol is not implemented. Activation still
+coverage authority. The bounded pinned feed primitive is implemented; the
+artifact-owning session/spool/receipt protocol is not implemented. Activation still
 checksums/installs artifacts and performs cleanup under the Search lease, so a
 size-independent publication section has not been delivered. See the
 [Search lifecycle argument and ten controls](../tla/SEARCH_PREPARED_PUBLICATION_PROOF.md).

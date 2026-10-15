@@ -81,8 +81,8 @@ shows that B <= E and an operation limit do not establish B coverage.
 
 | Model seam | Current native state / required implementation |
 | --- | --- |
-| Immutable source world | Existing PreparedRead pins E; bounded feed cursor/session not yet implemented |
-| Visit / covered interval | Existing eager changefeed Vec and public batch counts do not supply this authority |
+| Immutable source world | Existing PreparedRead pins E; bounded feed cursor/context now implemented; artifact-owning session still missing |
+| Visit / covered interval | New bounded cursor/context enumerates inputs; eager Vec/public counts and enumeration alone do not supply output coverage authority |
 | Pinned graph hydration | Existing parameterized prepared Cypher helper; batch orchestration and relational/host mapping still required |
 | Rows/deletes reducer | Abstract sets only; governed external ordering/dedup and duplicate-ID policy still required |
 | Sealed / SubstituteStage | Existing Search candidates are sealed, but no stage-bound batch coverage token exists |

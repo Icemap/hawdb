@@ -358,6 +358,11 @@ use relational_row_pages::RelationalRowPageState;
 #[doc(hidden)]
 pub use relational_row_pages::RelationalTransactionRowView;
 use search_projection_change_log::SearchProjectionChangeLog;
+#[doc(hidden)]
+pub use search_projection_change_log::{
+    ProjectionFeedCursor, ProjectionFeedError, ProjectionFeedItem, ProjectionFeedLimits,
+    ProjectionFeedResource, ProjectionFeedStep, ProjectionFeedUsage,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::{Path, PathBuf};
@@ -1981,6 +1986,23 @@ impl GraphStore {
             .filter(|change| change.commit_epoch > commit_epoch)
             .map(|change| change.as_ref().clone())
             .collect()
+    }
+
+    /// Captures immutable feed input. Completion is not projection authorization.
+    #[doc(hidden)]
+    pub fn capture_projection_feed(
+        &self,
+        start_epoch: u64,
+        limits: ProjectionFeedLimits,
+    ) -> std::result::Result<ProjectionFeedCursor, ProjectionFeedError> {
+        self.ensure_usable().map_err(ProjectionFeedError::Source)?;
+        ProjectionFeedCursor::capture(
+            &self.search_projection_graph_changes,
+            self.search_projection_change_log_start_epoch,
+            self.commit_epoch,
+            start_epoch,
+            limits,
+        )
     }
 
     pub fn search_projection_changes_after(

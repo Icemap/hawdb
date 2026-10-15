@@ -2114,5 +2114,9 @@ explicit gap/rebuild semantics and the source-durability binding prerequisite.
 
 The [Search batch coverage design model](SEARCH_BATCH_COVERAGE_PROOF.md) checks
 complete-interval private preparation and a stage-bound publication boundary.
-Its native session, bounded feed cursor and Mem integration remain unimplemented;
+Its artifact-owning session and Mem integration remain unimplemented; the bounded feed primitive is now available.
 the linked specification includes a verified legacy partial-prefix failure.
+
+[Bounded pinned feed enumeration](PROJECTION_FEED_CURSOR_PROOF.md) maps the
+implemented graph/relational cursor and tracked callback context to its finite
+admission/prefix model. Enumeration does not authorize staged output or a watermark.

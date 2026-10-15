@@ -51,6 +51,7 @@ STORAGE_MODELS = [
     "HawDBProjectionChangeCapture",
     "HawDBProjectionChangefeed",
     "HawDBProjectionDurability",
+    "HawDBProjectionFeedCursor",
     "HawDBProjectionGenerationReplacement",
     "HawDBProjectionSourceDurability",
     "HawDBPropertyIndexPruning",

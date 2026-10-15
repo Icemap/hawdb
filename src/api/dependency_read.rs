@@ -24,6 +24,12 @@ use std::fmt;
 
 #[path = "dependency_read/graph_match.rs"]
 mod graph_match;
+#[path = "dependency_read/projection_feed.rs"]
+mod projection_feed;
+pub use projection_feed::{
+    PreparedProjectionFeed, ProjectionFeedError, ProjectionFeedItem, ProjectionFeedLimits,
+    ProjectionFeedRead, ProjectionFeedResource, ProjectionFeedStep, ProjectionFeedUsage,
+};
 #[path = "dependency_read/relational.rs"]
 mod relational;
 #[path = "dependency_read/search_projection.rs"]

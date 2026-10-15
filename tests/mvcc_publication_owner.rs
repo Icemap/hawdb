@@ -199,3 +199,272 @@ fn owner_composes_private_preparation_with_source_and_binding_validation() {
         }
     }
 }
+
+fn feed_limits(work: usize, items: usize, bytes: usize) -> hawdb::ProjectionFeedLimits {
+    hawdb::ProjectionFeedLimits {
+        work: NonZeroUsize::new(work).unwrap(),
+        items: NonZeroUsize::new(items).unwrap(),
+        bytes: NonZeroUsize::new(bytes).unwrap(),
+    }
+}
+
+#[test]
+fn prepared_feed_pins_graph_relational_inputs_across_trim_and_later_writes() {
+    use hawdb::{ProjectionFeedError, ProjectionFeedItem, RelationalValue};
+    for cold in [false, true] {
+        for related in [false, true] {
+            let root = Directory::new();
+            let config = hawdb::DatabaseConfig {
+                max_search_projection_change_log_entries: Some(3),
+                storage_residency_mode: if cold {
+                    hawdb::StorageResidencyMode::OutOfCore
+                } else {
+                    hawdb::StorageResidencyMode::Materialized
+                },
+                ..Default::default()
+            };
+            let mut db = Database::open_with_config(&root.0, config.clone()).unwrap();
+            db.query("CREATE (:Memory {id: 'a', title: 'old'})")
+                .unwrap();
+            db.query("CREATE (:Other {value: 1})").unwrap();
+            db.query_sql("CREATE TABLE records (id BIGINT PRIMARY KEY, body TEXT)")
+                .unwrap();
+            db.query_sql("INSERT INTO records (id, body) VALUES (2, 'unrelated')")
+                .unwrap();
+            let start = db.commit_epoch().unwrap();
+            db.query("MATCH (n:Memory) SET n.title = 'new'").unwrap();
+            db.query_sql("INSERT INTO records (id, body) VALUES (1, 'at-E')")
+                .unwrap();
+            db.query("MATCH (n:Memory) DETACH DELETE n").unwrap();
+            if cold {
+                db.checkpoint().unwrap();
+                drop(db);
+                db = Database::open_with_config(&root.0, config).unwrap();
+            }
+            let source = db.commit_epoch().unwrap();
+            let mut feed = db
+                .begin_prepared_projection_feed(start, limits(), feed_limits(1000, 100, 10000))
+                .unwrap();
+            assert_eq!(feed.source_epoch(), source);
+            assert_eq!(feed.start_epoch(), start);
+            db.query_sql(if related {
+                "UPDATE records SET body = 'later' WHERE id = 1"
+            } else {
+                "UPDATE records SET body = 'later' WHERE id = 2"
+            })
+            .unwrap();
+            db.query("MATCH (n:Other) SET n.value = 9").unwrap();
+            assert!(matches!(
+                db.begin_prepared_projection_feed(start, limits(), feed_limits(1000, 100, 10000)),
+                Err(ProjectionFeedError::BehindFloor { .. })
+            ));
+            let mut nodes = Vec::new();
+            let mut deletes = Vec::new();
+            let mut body = None;
+            let mut ends = 0;
+            while !feed.is_complete() {
+                let report = feed
+                    .visit_next(feed_limits(5, 1, 1024), |read, item| {
+                        assert_eq!(read.source_epoch(), source);
+                        match item {
+                            ProjectionFeedItem::GraphNode { node_id, .. } => {
+                                nodes.push(node_id);
+                                assert!(read
+                                    .hydrate_search_projection_nodes(
+                                        &[node_id],
+                                        NonZeroUsize::new(1024).unwrap()
+                                    )?
+                                    .is_empty());
+                            }
+                            ProjectionFeedItem::DeleteDocument { document_id, .. } => {
+                                deletes.push(document_id.to_owned())
+                            }
+                            ProjectionFeedItem::RelationalKey { table, key, .. } => {
+                                assert_eq!(table, "records");
+                                let RelationalValue::BigInt(id) = key.0[0] else {
+                                    panic!("expected integer key")
+                                };
+                                assert_eq!(id, 1);
+                                let output = read.query_sql_with_params(
+                                    "SELECT body FROM records WHERE id = $1",
+                                    &[Value::Int(id)],
+                                )?;
+                                assert_eq!(output.rows[0]["body"], Value::String("at-E".into()));
+                                body = Some("at-E".to_string());
+                            }
+                            ProjectionFeedItem::End { source_epoch } => {
+                                assert_eq!(source_epoch, source);
+                                ends += 1;
+                            }
+                        }
+                        Ok(())
+                    })
+                    .unwrap();
+                assert!(
+                    report.usage.work <= 5 && report.usage.items <= 1 && report.usage.bytes <= 1024
+                );
+            }
+            assert_eq!(nodes, [0]);
+            assert_eq!(deletes, ["memory:a"]);
+            assert_eq!(ends, 1);
+            let dependencies = feed.finish().unwrap();
+            assert_eq!(dependencies.exact_relational_row_count(), 1);
+            assert!(!dependencies.requires_unchanged_database_epoch());
+            let search = root.0.join("search");
+            let mut writer = SearchOutOfCoreGenerationWriter::create(
+                &search,
+                SearchOutOfCoreGenerationBuildOptions {
+                    source_graph_commit_epoch: Some(source),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            writer
+                .push(SearchDocument {
+                    id: "record:1".into(),
+                    title: "record:1".into(),
+                    content: body.unwrap(),
+                    embedding: None,
+                    metadata: BTreeMap::new(),
+                })
+                .unwrap();
+            let result =
+                db.publish_prepared_search(&dependencies, writer.prepare_publication().unwrap());
+            if related {
+                assert!(matches!(
+                    result,
+                    Err(ProjectionPublicationError::Dependency(_))
+                ));
+                assert!(SearchOutOfCoreReader::open(&search).is_err());
+            } else {
+                assert_eq!(result.unwrap().source_graph_commit_epoch, Some(source));
+                let reader = SearchOutOfCoreReader::open(&search).unwrap();
+                assert_eq!(
+                    reader
+                        .hydrate_documents(&["record:1".into()])
+                        .unwrap()
+                        .documents[0]
+                        .content,
+                    "at-E"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn prepared_feed_refuses_incomplete_ignored_error_and_panicked_callbacks() {
+    use hawdb::ProjectionFeedError;
+    let mut db = Database::new();
+    db.query("CREATE (:Memory {id: 'a'})").unwrap();
+    let source = db.commit_epoch().unwrap();
+    let feed = db
+        .begin_prepared_projection_feed(source, limits(), feed_limits(100, 100, 1000))
+        .unwrap();
+    assert!(matches!(
+        feed.finish(),
+        Err(ProjectionFeedError::Incomplete)
+    ));
+    let mut feed = db
+        .begin_prepared_projection_feed(source, limits(), feed_limits(100, 100, 1000))
+        .unwrap();
+    assert!(matches!(
+        feed.visit_next(feed_limits(100, 100, 1000), |read, _| {
+            assert!(read
+                .query_with_params("CREATE (:Forbidden)", &BTreeMap::new())
+                .is_err());
+            Ok(())
+        }),
+        Err(ProjectionFeedError::Callback(_))
+    ));
+    assert!(!feed.is_complete());
+    assert!(matches!(feed.finish(), Err(ProjectionFeedError::Failed)));
+    let mut feed = db
+        .begin_prepared_projection_feed(source, limits(), feed_limits(100, 100, 1000))
+        .unwrap();
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = feed.visit_next(feed_limits(100, 100, 1000), |_, _| panic!("mapping panic"));
+    }));
+    assert!(panic.is_err());
+    assert!(matches!(feed.finish(), Err(ProjectionFeedError::Failed)));
+    assert_eq!(
+        db.query("MATCH (n:Memory) RETURN n.id AS id")
+            .unwrap()
+            .rows
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn prepared_feed_splits_one_canonical_transaction_and_counts_repeated_commits() {
+    use hawdb::{ProjectionFeedError, ProjectionFeedItem, ProjectionFeedResource};
+    let mut db = Database::new();
+    let start = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    for id in 0..64 {
+        transaction
+            .query_with_params(
+                "CREATE (:Memory {id: $id})",
+                &BTreeMap::from([("id".into(), Value::Int(id))]),
+            )
+            .unwrap();
+    }
+    transaction.commit().unwrap();
+    assert_eq!(db.commit_epoch().unwrap(), start + 1);
+    let mut feed = db
+        .begin_prepared_projection_feed(start, limits(), feed_limits(1000, 1000, 10000))
+        .unwrap();
+    let mut nodes = Vec::new();
+    let mut ends = 0;
+    let mut steps = 0;
+    while !feed.is_complete() {
+        let report = feed
+            .visit_next(feed_limits(7, 3, 64), |_, item| {
+                match item {
+                    ProjectionFeedItem::GraphNode { node_id, .. } => nodes.push(node_id),
+                    ProjectionFeedItem::End { .. } => ends += 1,
+                    _ => panic!("unexpected input in node-only transaction"),
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert!(report.usage.items <= 3 && report.usage.work <= 7 && report.usage.bytes <= 64);
+        steps += 1;
+    }
+    assert_eq!(nodes, (0..64).collect::<Vec<_>>());
+    assert_eq!(ends, 1);
+    assert!(steps > 20);
+    feed.finish().unwrap();
+    let start = db.commit_epoch().unwrap();
+    for value in 0..16 {
+        db.query_with_params(
+            "MATCH (n:Memory) WHERE id(n) = 0 SET n.version = $value",
+            &BTreeMap::from([("value".into(), Value::Int(value))]),
+        )
+        .unwrap();
+    }
+    let mut feed = db
+        .begin_prepared_projection_feed(start, limits(), feed_limits(50, 1000, 10000))
+        .unwrap();
+    let mut repeated = 0;
+    loop {
+        let result = feed.visit_next(feed_limits(7, 3, 64), |_, item| {
+            if let ProjectionFeedItem::GraphNode { node_id, .. } = item {
+                assert_eq!(node_id, 0);
+                repeated += 1;
+            }
+            Ok(())
+        });
+        if let Err(error) = result {
+            assert!(matches!(
+                error,
+                ProjectionFeedError::BudgetExceeded(ProjectionFeedResource::Work)
+            ));
+            break;
+        }
+    }
+    assert!(repeated > 3 && repeated < 16);
+    assert!(!feed.is_complete());
+    assert!(feed.finish().is_err());
+}

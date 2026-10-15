@@ -1,7 +1,9 @@
 # Pinned-source Search batch coverage
 
-Status: protocol design and finite model; the native bounded preparation session,
-coverage receipts, spool and Mem integration below are **not implemented**.
+Status: pinned bounded feed enumeration and tracked callback context are
+implemented. The artifact-owning preparation session, coverage receipts, global
+spool and Mem integration below are **not implemented**. See the
+[primitive argument](../tla/PROJECTION_FEED_CURSOR_PROOF.md).
 This extends, rather than replaces, the full acceptance ledger in
 [the versioned-publication spec](MVCC_VERSIONED_PUBLICATION_SPEC.md).
 
