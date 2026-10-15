@@ -7,7 +7,7 @@ on:
         description: Qualification mode
         type: choice
         default: ordinary
-        options: [ordinary, go-bulk]
+        options: [ordinary, go-bulk, identity]
 
 permissions:
   contents: read
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   ordinary:
-    if: inputs.mode != 'go-bulk'
+    if: inputs.mode != 'go-bulk' && inputs.mode != 'identity'
     name: Ordinary ${{ matrix.case }} (${{ matrix.backend }})
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -133,4 +133,43 @@ jobs:
           path: |
             ${{ runner.temp }}/go-bulk-diagnostic
             ${{ runner.temp }}/diagnostic-host
+          if-no-files-found: error
+
+  identity:
+    if: inputs.mode == 'identity'
+    name: Dense identity phase diagnostic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      USE_BAZEL_VERSION: "9.3.0"
+    steps:
+      - name: Checkout qualification tools
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+
+      - name: Build both sources and diagnose the unchanged test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B qualification/independent-query-prs/diagnose-identity.py
+
+      - name: Preserve phase diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: identity-diagnostic-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/identity-diagnostic/*.json
+            ${{ runner.temp }}/identity-diagnostic/*.patch
+            ${{ runner.temp }}/identity-diagnostic/*.log
+            ${{ runner.temp }}/identity-diagnostic/*.stdout
+            ${{ runner.temp }}/identity-diagnostic/*.stderr
+            ${{ runner.temp }}/identity-diagnostic/*-test-binary
           if-no-files-found: error

@@ -55,6 +55,19 @@ A/A variation does not establish that adverse A/B observations are noise.
 gh workflow run native-bindings.yml --repo nowledge-co/hawdb --ref qualify/1028-1029-1036-linux-20261015 -f mode=go-bulk
 ```
 
+The `identity` mode diagnoses the unchanged dense-identity test that timed out
+in #1036's required root lane. It builds exact main `f7c4eb48` and the merge
+tree of that main with #1036 head `dc73bed5` (`ec799755`, verified against
+Prow's synthetic merge tree) with default Bazel fastbuild, adding only test-phase
+logging. Both builds finish before the frozen test binaries execute on one
+Linux host. Each runs the original exact test with its two residencies, two
+budgets, full fixtures and assertions, retaining the 900-second owner deadline.
+This diagnostic does not replace the required complete root selection.
+
+```console
+gh workflow run native-bindings.yml --repo nowledge-co/hawdb --ref qualify/1028-1029-1036-linux-20261015 -f mode=identity
+```
+
 ## Component evidence
 
 [Source-bound allocation records](component-evidence.tar.gz) and their
