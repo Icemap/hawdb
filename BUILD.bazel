@@ -338,9 +338,9 @@ rust_test(
         # Evidence: https://github.com/nowledge-co/hawdb/issues/972 and
         # https://github.com/nowledge-co/hawdb/issues/1027.
         timeout = "eternal" if partition in ["concurrent", "analytics_rss"] else "long",
-        # RSS qualification must not compete with other test executables in
-        # this Bazel invocation. External worker contention remains possible.
-        tags = ["exclusive"] if partition == "analytics_rss" else [],
+        # Dense identity and RSS fixtures must not compete with other test
+        # executables in this invocation. External contention remains possible.
+        tags = ["exclusive"] if partition in ["analytics_identity", "analytics_rss"] else [],
         srcs = ["scripts/run-root-unit-partition.sh"],
         args = [
             "$(rootpath :hawdb_unit_test_binary)",
@@ -350,11 +350,19 @@ rust_test(
         ],
         data = [":hawdb_unit_test_binary"],
     )
-    for partition in ["general", "concurrent", "analytics_core", "analytics_rss", "recovery"]
+    for partition in ["general", "concurrent", "analytics_core_general", "analytics_identity", "analytics_rss", "recovery"]
 ]
 
-# Preserve the public analytics label while isolating the edge-heavy RSS fixture.
-# Both owners retain the original finite deadline and the complete case inventory.
+# Keep aggregate labels stable while dense identity and RSS fixtures execute
+# alone within this Bazel invocation. Every original case remains in one leaf.
+test_suite(
+    name = "hawdb_unit_analytics_core_tests",
+    tests = [
+        ":hawdb_unit_analytics_core_general_tests",
+        ":hawdb_unit_analytics_identity_tests",
+    ],
+)
+
 test_suite(
     name = "hawdb_unit_analytics_tests",
     tests = [

@@ -35,6 +35,9 @@ if [[ "${1:-}" == --list ]]; then
   if [[ "${PARTITION_PROBE_EMPTY_CORE:-0}" == 0 ]]; then
     echo 'api::tests::graph_analytics::owned: test'
   fi
+  if [[ "${PARTITION_PROBE_EMPTY_IDENTITY:-0}" == 0 ]]; then
+    echo 'api::tests::projected_graph_execution::review_regressions::projected_identity_ignores_large_content_and_rejects_large_ids_without_a_prefix: test'
+  fi
   if [[ "${PARTITION_PROBE_EMPTY_RSS:-0}" == 0 ]]; then
     echo 'api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process: test'
     echo 'api::tests::graph_analytics::rss_child: test'
@@ -52,7 +55,10 @@ if [[ "${1:-}" == --list ]]; then
   if [[ "${PARTITION_PROBE_RSS_OVERLAP:-0}" == 1 ]]; then
     echo 'api::tests::graph_analytics::rss_child_extension: test'
   fi
-  echo '6 tests, 0 benchmarks'
+  if [[ "${PARTITION_PROBE_IDENTITY_OVERLAP:-0}" == 1 ]]; then
+    echo 'api::tests::projected_graph_execution::review_regressions::projected_identity_ignores_large_content_and_rejects_large_ids_without_a_prefix_extension: test'
+  fi
+  echo '7 tests, 0 benchmarks'
   exit 0
 fi
 printf '%s\n' "$@" >"${PARTITION_PROBE_ARGS}"
@@ -60,7 +66,7 @@ exit "${PARTITION_PROBE_EXIT:-0}"
 EOF
 chmod +x "${fixture}/binary"
 
-for partition in general concurrent analytics analytics_core analytics_rss recovery; do
+for partition in general concurrent analytics analytics_core analytics_core_general analytics_identity analytics_rss recovery; do
   "${runner}" "${fixture}/binary" "${partition}" custom_filter --exact --skip user_skip
   cp "${PARTITION_PROBE_ARGS}" "${fixture}/args.${partition}"
   python3 - "${PARTITION_PROBE_ARGS}" "${partition}" <<'PY'
@@ -70,7 +76,8 @@ import sys
 args = pathlib.Path(sys.argv[1]).read_text().splitlines()
 owners = {
     "concurrent": {"api::tests::concurrent_transactions::owned"},
-    "analytics_core": {"api::tests::graph_analytics::owned"},
+    "analytics_core_general": {"api::tests::graph_analytics::owned"},
+    "analytics_identity": {"api::tests::projected_graph_execution::review_regressions::projected_identity_ignores_large_content_and_rejects_large_ids_without_a_prefix"},
     "analytics_rss": {
         "api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process",
         "api::tests::graph_analytics::rss_child",
@@ -79,11 +86,13 @@ owners = {
     "general": {"api::tests::query_execution::owned"},
 }
 all_names = set().union(*owners.values())
-owned = (
-    owners["analytics_core"] | owners["analytics_rss"]
-    if sys.argv[2] == "analytics"
-    else owners[sys.argv[2]]
-)
+core = owners["analytics_core_general"] | owners["analytics_identity"]
+if sys.argv[2] == "analytics":
+    owned = core | owners["analytics_rss"]
+elif sys.argv[2] == "analytics_core":
+    owned = core
+else:
+    owned = owners[sys.argv[2]]
 skips = [args[i + 1] for i, value in enumerate(args[:-1]) if value == "--skip"]
 assert set(skips) == (all_names - owned) | {"user_skip"}
 assert args[-4:] == ["custom_filter", "--exact", "--skip", "user_skip"]
@@ -98,6 +107,7 @@ root = pathlib.Path(sys.argv[1])
 names = {
     "api::tests::concurrent_transactions::owned",
     "api::tests::graph_analytics::owned",
+    "api::tests::projected_graph_execution::review_regressions::projected_identity_ignores_large_content_and_rejects_large_ids_without_a_prefix",
     "api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process",
     "api::tests::graph_analytics::rss_child",
     "api::tests::storage_recovery::owned",
@@ -110,10 +120,11 @@ def selected(partition):
     return names - skips
 
 leaves = [selected(name) for name in [
-    "general", "concurrent", "analytics_core", "analytics_rss", "recovery"
+    "general", "concurrent", "analytics_core_general", "analytics_identity", "analytics_rss", "recovery"
 ]]
 assert set().union(*leaves) == names
 assert sum(map(len, leaves)) == len(names)
+assert selected("analytics_core") == selected("analytics_core_general") | selected("analytics_identity")
 assert selected("analytics") == selected("analytics_core") | selected("analytics_rss")
 PY
 
@@ -131,7 +142,9 @@ expect_exit() {
 expect_exit 42 env PARTITION_PROBE_EXIT=42 "${runner}" "${fixture}/binary" general
 expect_exit 17 env PARTITION_PROBE_DISCOVERY_EXIT=17 "${runner}" "${fixture}/binary" general
 expect_exit 1 env PARTITION_PROBE_EMPTY=1 "${runner}" "${fixture}/binary" concurrent
-expect_exit 1 env PARTITION_PROBE_EMPTY_CORE=1 "${runner}" "${fixture}/binary" analytics_core
+expect_exit 1 env PARTITION_PROBE_EMPTY_CORE=1 "${runner}" "${fixture}/binary" analytics_core_general
+expect_exit 1 env PARTITION_PROBE_EMPTY_IDENTITY=1 "${runner}" "${fixture}/binary" analytics_identity
+expect_exit 1 env PARTITION_PROBE_EMPTY_CORE=1 PARTITION_PROBE_EMPTY_IDENTITY=1 "${runner}" "${fixture}/binary" analytics_core
 expect_exit 1 env PARTITION_PROBE_EMPTY_RSS=1 "${runner}" "${fixture}/binary" analytics_rss
 expect_exit 64 "${runner}" "${fixture}/binary" unknown
 rm -f "${PARTITION_PROBE_ARGS}"
@@ -139,6 +152,8 @@ expect_exit 1 env PARTITION_PROBE_OVERLAP=1 "${runner}" "${fixture}/binary" gene
 [[ "$(<"${fixture}/error")" == *"root unit partition name overlap"* ]]
 [[ ! -e "${PARTITION_PROBE_ARGS}" ]]
 expect_exit 1 env PARTITION_PROBE_RSS_OVERLAP=1 "${runner}" "${fixture}/binary" analytics_core
+[[ "$(<"${fixture}/error")" == *"root unit partition name overlap"* ]]
+expect_exit 1 env PARTITION_PROBE_IDENTITY_OVERLAP=1 "${runner}" "${fixture}/binary" analytics_core_general
 [[ "$(<"${fixture}/error")" == *"root unit partition name overlap"* ]]
 env PARTITION_PROBE_SAME_OWNER=1 "${runner}" "${fixture}/binary" general
 [[ "$(<"${PARTITION_PROBE_ARGS}")" != *"query_control::owned"* ]]
