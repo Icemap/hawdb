@@ -38,3 +38,11 @@ py_test(
     deps = [":checksum"],
     tags = ["manual"],
 )
+
+py_test(
+    name = "retained_driver_tests",
+    srcs = ["retained_boundary.py", "test_retained_boundary.py"],
+    imports = ["."],
+    main = "test_retained_boundary.py",
+    tags = ["manual"],
+)

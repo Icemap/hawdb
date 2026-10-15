@@ -6,6 +6,70 @@ and references [#976](https://github.com/nowledge-co/hawdb/issues/976) and
 The complete samples, failures, source identity and artifact hashes are in
 [retained-observations.json](retained-observations.json).
 
+## Driver failure reporting
+
+`retained_boundary` validates each representation against the deterministic
+fresh fixture (scores and node IDs `0..rows-1`, including the repeated score).
+It also attempts the full owned reference, every selected warmup and every
+rotated sample even when another representation fails. A missing optional
+PyArrow consumer is recorded for each requested Arrow operation without
+suppressing owned/retained observations. Errors retain their type and message;
+the driver does not infer a supported refusal by matching error text.
+
+Any failed reference, warmup, sample or final close produces a nonzero exit and
+an error report. A mode receives qualified medians only when its owned
+reference, warmup and all requested samples succeed with ordered parity and
+released retained owners; a failed overall CLI run exports no qualified
+medians. A refused owned baseline supplies no qualified
+comparison medians or speedup. Successful records from the other modes remain
+diagnostic evidence; they do not make the complete comparison pass. The process
+RSS still covers setup and every mode and cannot attribute memory to one mode.
+
+Driver regressions are registered in the manual Bazel target
+`//bindings/benchmarks:retained_driver_tests`. The failure-reporting and cleanup
+change requires fresh measurements with identical consumer bytes for compared
+producers; historical observations below retain their original consumer and
+producer identities. This numeric tool does not replace the complete
+heterogeneous matrix, strict source-reuse, Arrow-copy or whole-memory gates.
+
+## Frozen Linux control before the driver repair
+
+[Run 38729110519](https://github.com/nowledge-co/hawdb/actions/runs/38729110519)
+uses engine `1554c7b6ef5d9dbff9b3bc21b0fee4f045aee349` and evidence commit
+`b229eb40e4e1bbb5c15082956afae4d45943c89b`. The evidence overlay changes only
+the manual workflow and its orchestration script; the original consumers and
+all production files match the engine commit. These observations precede the
+driver repair above and do not qualify its changed consumer bytes.
+
+All six downloaded artifact SHA-256 values match their GitHub upload digests.
+The packaged Python extension, package and consumer bytes match their recorded
+hashes. The Go executable, C FFI library and interpreter were not packaged;
+their recorded hashes alone do not independently verify those native bytes.
+The Python controls use CPython 3.14.8/PyArrow 26.0.0 and default Bazel opt.
+Independent fixture checksums, sample identities, timing summaries and final
+retained-release counters pass for all 84 measured numeric operations below.
+Paired complete-operation speedups are owned time divided by the other mode:
+
+| Rows / backend | Retained median / worst pair | Arrow median / worst pair |
+| --- | ---: | ---: |
+| 1,000 / memory | 2.56x / 2.36x | 2.40x / 2.32x |
+| 1,000 / file | 2.66x / 2.50x | 2.47x / 2.39x |
+| 100,000 / memory | 2.91x / 2.74x | 2.79x / 2.68x |
+| 100,000 / file | 3.20x / 3.10x | 3.22x / 3.09x |
+
+Both 1,000,000-row groups fail at the owned reference under the unchanged
+`max_read_result_rows = 100000`; neither retained nor Arrow is attempted by
+that old driver. Those groups have no qualified result or speedup.
+
+The separate 1k slow-reader control preserves all 48 warmup/measured records
+and verifies old-snapshot values, updated values and final release. Its open
+cursor has unfavorable paired write ratios of 0.853 (memory) and 0.845 (file),
+equivalent to about 17-18% slower writes at the paired median. The worst ratios
+are 0.763 and 0.795. Closed-cursor paired medians are 1.018 and 0.992. These
+adverse observations remain open; the numeric read gains do not satisfy the
+no-write-regression or complete original performance requirement. Process RSS
+includes setup and all modes, with no per-mode or foreign-heap bound.
+
 ## Current producer repeat after main integration
 
 Producer head `94bace8ae7a28087d81c3eac8edafe92eb9ac4f4`, tree
