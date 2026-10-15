@@ -26,6 +26,7 @@ use hawdb_executor::{QueryMemoryClass, QueryMemoryLedger};
 use hawdb_search::{SearchDocument, SearchOutOfCoreGenerationWriter, SearchOutOfCoreReader};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const QUERY: &str =
     "CALL text_search($text, topK := $window) YIELD id AS document_id, score AS original \
@@ -37,12 +38,38 @@ struct OwnedRoot(PathBuf);
 
 impl OwnedRoot {
     fn new() -> Self {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        Self(std::env::temp_dir().join(format!("hawdb-cypher-text-{}-{nonce}", std::process::id())))
+        static NEXT_ROOT: AtomicU64 = AtomicU64::new(0);
+        loop {
+            let serial = NEXT_ROOT
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                    value.checked_add(1)
+                })
+                .expect("text fixture root sequence exhausted");
+            let path = std::env::temp_dir()
+                .join(format!("hawdb-cypher-text-{}-{serial}", std::process::id()));
+            match Self::reserve(path) {
+                Ok(root) => return root,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("could not reserve text fixture root: {error}"),
+            }
+        }
     }
+
+    fn reserve(path: PathBuf) -> std::io::Result<Self> {
+        // Cleanup ownership begins only after this fixture creates the directory.
+        std::fs::create_dir(&path)?;
+        Ok(Self(path))
+    }
+}
+
+#[test]
+fn text_fixture_root_rejects_existing_directory_without_claiming_cleanup() {
+    let root = OwnedRoot::new();
+    let sentinel = root.0.join("retained-owner");
+    std::fs::write(&sentinel, b"original owner").unwrap();
+    let duplicate = OwnedRoot::reserve(root.0.clone());
+    assert!(matches!(duplicate, Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists));
+    assert_eq!(std::fs::read(&sentinel).unwrap(), b"original owner");
 }
 
 impl Drop for OwnedRoot {
