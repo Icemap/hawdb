@@ -93,21 +93,18 @@ valid source proof. No prefix of returned rows or progress is published on error
 
 ## Root-access performance boundary
 
-The observed hydration plan has `FilterExec(IdIn)` over `SeqNodeScan` as its
-root input. This physical shape alone does not establish a full scan: the
-resident, sufficiently small source uses existing ID candidate pruning and an
-observable IdIn scan report. However, `scan/owned.rs::visit_full_nodes` falls back
-to unfiltered ownership visits for out-of-core or large sources; that fallback
-admits/owns source records before residual ID filtering. Root count/output bounds
-therefore do not bound all source visits or avoid unrelated payload hydration.
-Eliminating repeated global relationship scans does not establish total cost.
+The hydration plan can retain `FilterExec(IdIn)` over `SeqNodeScan`; the
+physical operator name alone does not establish a full scan. Necessary positive
+ID bounds now select admitted point reads in ordinary roots, projected LabelScan
+roots and generic MATCH node patterns. The [source-linked refinement and
+regressions](INTERNAL_ID_POINT_ACCESS_PROOF.md) cover resident and checkpoint-open
+OutOfCore sources, residual/NULL semantics and unrelated large payloads.
 
-Before migrating Mem catch-up, extend/reuse observable internal-ID pruning for
-bounded admitted hot/cold point access, verify equivalence to the sequential
-oracle, and demonstrate that unrelated large node payloads are not owned/read.
-That gate is additional to the existing 1/4/8-writer benchmarks and retained-source
-RSS qualification. The current helper fails closed on runtime/admission limits
-and is not claimed as a completed performance delivery.
+This closes the eligible root ownership fallback. Unsupported shapes keep scan
+execution, and cold block/cache validation still has its existing I/O and memory
+costs. Adjacency and host query/mapping work need separate budgets. The original
+1/4/8-writer benchmarks and retained-source RSS qualification remain required;
+the helper is not a completed end-to-end performance delivery.
 
 ## Evidence and remaining scope
 
@@ -140,3 +137,7 @@ mappings; they do not prove arbitrary Cypher, all allocations, byte-level power
 loss or fairness/performance. Bounded changefeed coverage and exact relational
 hydration receipts, host incarnation/binding, Mem owner handoff, recovery/fault
 composition, retention/RSS and the full #231/#232 latency gates remain required.
+
+## Admitted internal-ID root refinement
+
+Qualified internal-ID roots now use the [point-access refinement](INTERNAL_ID_POINT_ACCESS_PROOF.md) in ordinary, projected LabelScan and generic MATCH execution. Actual hot/cold hydration with a 1 MiB unrelated node passes a 128 KiB query budget. These tests and the finite access model close the eligible root ownership gap; unsupported shapes and canonical block/cache I/O retain their existing limits. They do not prove batch coverage, complete host mapping, total RSS or publication latency.

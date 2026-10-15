@@ -33,8 +33,9 @@ impl PreparedRead {
     ///
     /// No watermark or batch-coverage authority is returned. The query result and
     /// one candidate shaped row can coexist with admitted retained output; this
-    /// is not a total allocation/RSS bound. Internal-ID predicates may still use
-    /// a sequential root scan; this API does not promise bounded source visits.
+    /// is not a total allocation/RSS bound. Qualified internal-ID roots use
+    /// admitted point reads; cold segment validation and adjacency work retain
+    /// their storage limits rather than a total physical-I/O bound.
     /// Any failure makes `finish` refuse.
     pub fn hydrate_search_projection_nodes(
         &mut self,

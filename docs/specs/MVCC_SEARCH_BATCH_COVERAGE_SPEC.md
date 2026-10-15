@@ -151,6 +151,7 @@ yields. A single record/comparison must fit a whole quantum or the attempt
 refuses. This supplies output ordering for the session; it does not yet own
 feed-to-stage coverage, make final artifact construction incremental, or
 authorize a complete watermark.
+Qualified internal-ID hydration roots now use [admitted point access](../tla/INTERNAL_ID_POINT_ACCESS_PROOF.md), including cold label preflight and unrelated-large-payload tests. This removes that root ownership fallback for eligible inputs, not the remaining cross-statement/query, encoded-block I/O, mapping or artifact governance.
 The legacy partial-prefix catch-up path remains unchanged.
 
 The companion coverage model must reject legacy early-prefix publication,

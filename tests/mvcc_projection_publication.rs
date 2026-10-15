@@ -2231,3 +2231,60 @@ fn oversized_projection_preimages_require_rebuild_without_losing_canonical_commi
         .unwrap()
         .is_none());
 }
+
+#[test]
+fn prepared_hydration_uses_internal_id_roots_without_owning_unrelated_bodies() {
+    for cold in [false, true] {
+        for business_labels in [false, true] {
+            let root = TestRoot::new();
+            let mut db = Database::open(&root.0).unwrap();
+            db.query_with_params(
+                "CREATE (:Memory {id: 'huge', body: $body})",
+                &BTreeMap::from([("body".into(), Value::String("x".repeat(1024 * 1024 + 137)))]),
+            )
+            .unwrap();
+            db.query("CREATE (:Memory {id: 'small', title: 'selected'})")
+                .unwrap();
+            let id = db
+                .query("MATCH (n:Memory {id: 'small'}) RETURN id(n) AS id")
+                .unwrap()
+                .rows[0]["id"]
+                .clone();
+            if business_labels {
+                db.query("CREATE (:Label {name: 'tag'})").unwrap();
+                db.query(
+                    "MATCH (n:Memory), (l:Label) WHERE n.id = 'small' CREATE (n)-[:HAS_LABEL]->(l)",
+                )
+                .unwrap();
+            }
+            db.checkpoint().unwrap();
+            drop(db);
+            let mut config = hawdb::DatabaseConfig {
+                storage_residency_mode: if cold {
+                    hawdb::StorageResidencyMode::OutOfCore
+                } else {
+                    hawdb::StorageResidencyMode::Materialized
+                },
+                ..Default::default()
+            };
+            config.execution_memory.query_memory_bytes = NonZeroUsize::new(128 * 1024).unwrap();
+            config.execution_memory.blocking_operator_bytes = NonZeroUsize::new(32 * 1024).unwrap();
+            config.execution_memory.batch_payload_bytes = NonZeroUsize::new(32 * 1024).unwrap();
+            let db = Database::open_with_config(&root.0, config).unwrap();
+            let Value::Int(id) = id else {
+                panic!("missing node ID")
+            };
+            let mut read = db.begin_prepared_read(limits()).unwrap();
+            let rows = read
+                .hydrate_search_projection_nodes(
+                    &[id as u64, id as u64, 999],
+                    NonZeroUsize::new(4096).unwrap(),
+                )
+                .unwrap_or_else(|e| panic!("cold={cold} labels={business_labels}: {e}"));
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].external_id, "small");
+            let dependencies = read.finish().unwrap();
+            assert!(!dependencies.requires_unchanged_database_epoch());
+        }
+    }
+}

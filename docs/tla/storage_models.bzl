@@ -49,6 +49,7 @@ STORAGE_MODELS = [
     "HawDBPageCacheAdmission",
     "HawDBPrimaryKeyPredicate",
     "HawDBProjectionCaptureClosure",
+    "HawDBInternalIdPointAccess",
     "HawDBProjectionChangeCapture",
     "HawDBProjectionChangefeed",
     "HawDBProjectionDurability",

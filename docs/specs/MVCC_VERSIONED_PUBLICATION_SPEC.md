@@ -277,9 +277,13 @@ shaper converts complete per-node rows. Missing catalog types still retain empty
 adjacency dependencies because implicit CREATE may not stamp Schema. Input,
 statement, dependency and retained logical-output limits fail the complete
 operation, including ignored shape errors. The method returns no watermark or
-batch authority. Its current internal-ID root may still use a sequential scan;
-an observable bounded ID access path and unrelated-large-payload qualification
-remain prerequisites for Mem migration and performance claims. See the [closure argument and evidence](../tla/PREPARED_SEARCH_GRAPH_HYDRATION_PROOF.md).
+batch authority. Qualified nonnegative internal-ID EQ/IN roots now use admitted
+point access for ordinary, projected LabelScan and generic MATCH sources; cold
+label headers reject wrong-label values before ownership. Native large-unrelated
+payload regressions exercise actual hydration. Unsupported predicates retain
+scan execution, and storage block/cache I/O remains outside a numeric source
+visit/RSS bound. See the [ID access refinement](../tla/INTERNAL_ID_POINT_ACCESS_PROOF.md)
+and [hydration closure](../tla/PREPARED_SEARCH_GRAPH_HYDRATION_PROOF.md).
 
 `publish_prepared_projection` validates the source identity, captured watermark
 and dependencies and calls the existing generation catalog under one exclusive

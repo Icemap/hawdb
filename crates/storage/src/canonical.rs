@@ -1762,6 +1762,16 @@ impl CanonicalSegmentReader {
         self.selected_node_allocation_bytes(id, Some(required_properties), None)
     }
 
+    /// Projected point ownership with label rejection from the encoded header.
+    pub fn projected_node_in_labels_allocation_bytes(
+        &self,
+        id: NodeId,
+        required_properties: &BTreeSet<String>,
+        label_ids: Option<&[LabelId]>,
+    ) -> Result<Option<usize>, CanonicalSegmentError> {
+        self.selected_node_allocation_bytes(id, Some(required_properties), label_ids)
+    }
+
     /// Full point-read ownership bound, with an optional borrowed label filter
     /// evaluated from the encoded header before any property is owned.
     pub fn node_allocation_bytes(
