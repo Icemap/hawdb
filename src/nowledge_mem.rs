@@ -148,7 +148,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, Mutex, MutexGuard, RwLockReadGuard};
 use std::time::Instant;
 
 #[cfg(test)]
@@ -2261,9 +2261,15 @@ pub struct NowledgeMemEmbeddedStore {
     retrieval_projection_advisor: NowledgeMemRetrievalProjectionAdvisor,
 }
 
+impl crate::DatabasePublicationState for NowledgeMemEmbeddedStore {
+    fn database(&self) -> &crate::Database {
+        self.graph.database()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct NowledgeMemEmbeddedStoreHandle {
-    inner: Arc<RwLock<NowledgeMemEmbeddedStore>>,
+    inner: Arc<crate::DatabasePublicationOwner<NowledgeMemEmbeddedStore>>,
     published_read: Arc<Mutex<Option<PublishedCanonicalRead>>>,
     // One-way: a failed or panicking write guard sets this and leaves the
     // last-good publication untouched, so readers fail closed instead of
@@ -2289,7 +2295,7 @@ impl PublishedCanonicalRead {
 }
 
 struct EmbeddedStoreWriteGuard<'a> {
-    store: RwLockWriteGuard<'a, NowledgeMemEmbeddedStore>,
+    store: crate::api::publication::DatabasePublicationWriteGuard<'a, NowledgeMemEmbeddedStore>,
     published: &'a Mutex<Option<PublishedCanonicalRead>>,
     read_publication_failed: &'a AtomicBool,
 }
@@ -2631,7 +2637,7 @@ impl NowledgeMemEmbeddedStoreHandle {
     pub fn new(store: NowledgeMemEmbeddedStore) -> Result<Self> {
         let published_read = PublishedCanonicalRead::capture(&store)?;
         Ok(Self {
-            inner: Arc::new(RwLock::new(store)),
+            inner: Arc::new(crate::DatabasePublicationOwner::new(store)),
             published_read: Arc::new(Mutex::new(Some(published_read))),
             read_publication_failed: Arc::new(AtomicBool::new(false)),
         })
@@ -3531,7 +3537,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             max_change_operations_per_batch,
             max_projection_operations_per_batch,
             max_batches,
-            |_| Ok(()),
+            None::<fn(&mut DatabaseReadTransaction) -> Result<()>>,
             batch_hydrator,
         )
     }
@@ -3561,10 +3567,7 @@ impl NowledgeMemEmbeddedStoreHandle {
             max_change_operations_per_batch,
             max_projection_operations_per_batch,
             max_batches,
-            |store| {
-                let mut snapshot = store.graph().database().begin_read_transaction()?;
-                guard(&mut snapshot)
-            },
+            Some(guard),
             batch_hydrator,
         )
     }
@@ -3574,11 +3577,11 @@ impl NowledgeMemEmbeddedStoreHandle {
         max_change_operations_per_batch: usize,
         max_projection_operations_per_batch: usize,
         max_batches: usize,
-        guard: G,
+        guard: Option<G>,
         batch_hydrator: F,
     ) -> Result<SearchProjectionCatchUpReport>
     where
-        G: FnOnce(&mut NowledgeMemEmbeddedStore) -> Result<()>,
+        G: FnOnce(&mut DatabaseReadTransaction) -> Result<()>,
         F: FnMut(
             &mut DatabaseReadTransaction,
             &SearchProjectionChangeBatch,
@@ -3591,7 +3594,9 @@ impl NowledgeMemEmbeddedStoreHandle {
             estimated_operations.saturating_mul(SEARCH_PROJECTION_CHANGEFEED_OPERATION_BYTES);
         let permit = self.admit_search_projection_maintenance(estimated_input_bytes)?;
         let mut store = self.write_store()?;
-        guard(&mut store)?;
+        if let Some(guard) = guard {
+            store.store.validate(guard)?;
+        }
         if store.incremental_search_enabled() {
             store.catch_up_incremental_search_with_batch_hydrator(
                 max_change_operations_per_batch,

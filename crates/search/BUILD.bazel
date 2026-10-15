@@ -220,11 +220,13 @@ rust_test(
 ]
 
 # Preserve each profile's complete source/token admission lifecycle in a
-# source-scoped executable with the same finite deadline as its former owner.
+# source-scoped executable. Five FTS profiles exceeded 900s in CI;
+# non-FTS profiles retain their finite deadline.
+# Evidence: https://github.com/nowledge-co/hawdb/issues/1034.
 [
     rust_test(
         name = "hawdb_search_source_policy_tests" if profile == "default" else "hawdb_search_%s_source_policy_tests" % profile,
-        timeout = "long",
+        timeout = "eternal" if "full-text-search" in settings[0] else "long",
         crate_features = settings[0],
         crate_root = "tests/generation_source_policy.rs",
         srcs = [
@@ -589,10 +591,13 @@ rust_test(
 # Keep optional-capability contracts executable without enabling every feature.
 # Non-FTS profiles also run the shared persistence/recovery suite. Their former
 # 300s deadlines expired locally; use 900s while issue #872 measures decomposition.
+# The text-only and text/background FTS profiles exceeded 900s in Prow; give
+# only those two unit targets the next standard deadline.
+# Evidence: https://github.com/nowledge-co/hawdb/issues/1034.
 [
     rust_test(
         name = "hawdb_search_%s_tests" % profile,
-        timeout = "long",
+        timeout = "eternal" if profile in ["text_only", "text_background"] else "long",
         crate_name = "hawdb_search",
         crate_root = "src/lib.rs",
         crate_features = settings[0],

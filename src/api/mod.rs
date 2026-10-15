@@ -99,6 +99,8 @@ pub use graph_analytics::{
 mod explain_format_tests;
 mod observability;
 mod plan_cache;
+pub(crate) mod publication;
+pub use publication::{DatabasePublicationOwner, DatabasePublicationState};
 mod query_request;
 mod query_runtime;
 mod resource_profile;

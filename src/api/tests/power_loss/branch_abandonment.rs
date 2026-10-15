@@ -33,7 +33,13 @@ fn abandonment_gc_cuts_preserve_quarantine_and_live_branches() {
             let private = PathBuf::from("branches").join(child.to_string());
             let head = fixture.root.join(&private).join("branch.head");
             fs::write(&head, b"damaged pending head").unwrap();
-            File::open(&head).unwrap().sync_all().unwrap();
+            // Windows requires a writable handle for the persistence barrier.
+            File::options()
+                .write(true)
+                .open(&head)
+                .unwrap()
+                .sync_all()
+                .unwrap();
             let mut objects =
                 ImmutableObjectStore::open(fixture.root.join("branches/objects")).unwrap();
             let orphan = ObjectReference::for_bytes(
@@ -46,7 +52,12 @@ fn abandonment_gc_cuts_preserve_quarantine_and_live_branches() {
                 .unwrap();
             let orphan_path = objects.object_path(orphan);
             fs::write(&orphan_path, b"retained corrupt object").unwrap();
-            File::open(&orphan_path).unwrap().sync_all().unwrap();
+            File::options()
+                .write(true)
+                .open(&orphan_path)
+                .unwrap()
+                .sync_all()
+                .unwrap();
             drop(database);
             let mut database = open(&fixture.root, durability);
             let plan = database
