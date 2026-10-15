@@ -54,6 +54,31 @@ Failure must publish no additional row, preserve earlier rows, and release
 temporary leases and any abandoned destination buffer. Existing capacity
 rollback and checked growth remain required.
 
+## Observable behavior and collector boundary
+
+All ordinary owned reads use this collector, including calls outside the
+synchronous admitted facade. Unchanged `result_materialization` limits can now
+refuse results that the old estimate accepted because retained capacity, buffer
+replacement overlap, and map nodes were undercharged. Successful values and
+ordering remain unchanged.
+
+The bounded-read EXPLAIN path also enforces the combined configured and
+caller-supplied payload cap. Its output is subject to
+`max_read_result_payload_bytes`, rather than having no payload limit in this
+path. This output limit is independent of optimizer-statistics refresh policy.
+
+`QueryRowsBuilder::new()` uses segmented storage for unknown cardinality;
+capacity/schema constructors retain their existing flat-storage path. The
+result-owner allowance includes two reference-count words for its storage Arc
+and two for the schema-column Arc. Column slots and string payloads are admitted
+separately.
+
+The lazily initialized `indexed_rows` compatibility cache allocates a row handle
+per row when callers index `QueryRows`. These post-delivery handle allocations
+are outside this collector's admission ledger, as are caller-created row maps
+and foreign representations. The collector bound must not be presented as a
+bound on those later accesses.
+
 ## Qualification scope
 
 The earlier heterogeneous witness on `47cb6523` retained 5,408 rows with a
