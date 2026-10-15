@@ -100,6 +100,7 @@ pub fn format_hawdb_error(error: &HawDBError) -> PyErr {
         HawDBError::FileDescriptors(_) => DescriptorError::new_err(message),
         HawDBError::StorageIntegrity(_) => IntegrityError::new_err(message),
         HawDBError::Execution(_)
+        | HawDBError::BranchEvidenceBudgetExceeded { .. }
         | HawDBError::ReadBudgetExceeded(_)
         | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. } => ExecutionError::new_err(message),
@@ -107,9 +108,9 @@ pub fn format_hawdb_error(error: &HawDBError) -> PyErr {
             ConflictError::new_err(message)
         }
         HawDBError::CapabilityUnavailable { .. } => CapabilityError::new_err(message),
-        HawDBError::BranchCommandUnsupported { .. } | HawDBError::BranchBusy { .. } => {
-            BranchError::new_err(message)
-        }
+        HawDBError::BranchCommandUnsupported { .. }
+        | HawDBError::BranchBusy { .. }
+        | HawDBError::BranchReclamationBlocked { .. } => BranchError::new_err(message),
     }
 }
 

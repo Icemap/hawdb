@@ -62,8 +62,8 @@ alone demonstrate power-loss safety.
 
 ## Platform assumptions and limits
 
-The model assumes completed POSIX synchronization is honored, same-directory
-rename is atomic, and the existing mount is durable. Host/controller/drive
+The model assumes completed file/directory synchronization is honored,
+same-directory replacement is atomic, and the existing mount is durable. Host/controller/drive
 behavior outside those assumptions requires physical-device qualification.
 The existing durable anchor and mount are outside capture. The facade matrix
 also observes descendant project installation and its newly created parents
@@ -81,9 +81,14 @@ requires `GENERIC_WRITE`. Its file/volume documentation does not establish a
 portable POSIX directory-fsync contract. A successful directory flush request or
 passing reopen test therefore does not qualify newly created ancestor names.
 The host may need write access to ancestor directories; failure must not silently
-relax the durable default. The recorder rejects Windows attachment.
-Windows namespace power-loss qualification remains open; do not infer it from
-the Unix model. The [facade matrix](BRANCH_POWER_LOSS_QUALIFICATION.md) adds ordinary runtime
+relax the durable default. The Windows recorder now captures the native directory
+opens and flushes, and audits hard-link identities with the full
+[volume serial and 128-bit file ID](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info).
+Its model remains conditional on the unverified direct-name persistence
+assumption. The native CI artifact records that limitation along with the OS and
+filesystem context; API/model success is not physical namespace qualification.
+Windows namespace power-loss qualification remains open. The
+[facade matrix](BRANCH_POWER_LOSS_QUALIFICATION.md) adds native runtime
 bootstrap, seal/rotation, create/delete, admission and residency/index evidence.
 Fine-grained concurrent GC and independent job-root schedules remain #820/#819
 obligations.

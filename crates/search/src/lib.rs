@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime};
+mod projection_scan;
+pub use projection_scan::{SearchProjectionScanBudget, SearchProjectionScanReport};
 #[doc(hidden)]
 pub mod candidate_evidence;
 #[doc(hidden)]

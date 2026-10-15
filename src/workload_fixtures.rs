@@ -691,6 +691,7 @@ fn error_class(error: &crate::HawDBError) -> String {
         crate::HawDBError::Parse(_) => "parse",
         crate::HawDBError::Semantic(_) => "semantic",
         crate::HawDBError::Execution(_)
+        | crate::HawDBError::BranchEvidenceBudgetExceeded { .. }
         | crate::HawDBError::ReadBudgetExceeded(_)
         | crate::HawDBError::GraphExpansionCandidateLimitExceeded { .. }
         | crate::HawDBError::GraphExpansionPayloadLimitExceeded { .. }
@@ -700,7 +701,8 @@ fn error_class(error: &crate::HawDBError) -> String {
         | crate::HawDBError::FileDescriptors(_)
         | crate::HawDBError::StorageIntegrity(_)
         | crate::HawDBError::AppendSequenceExhausted { .. }
-        | crate::HawDBError::BranchBusy { .. } => "storage",
+        | crate::HawDBError::BranchBusy { .. }
+        | crate::HawDBError::BranchReclamationBlocked { .. } => "storage",
         crate::HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",
     }
     .to_string()

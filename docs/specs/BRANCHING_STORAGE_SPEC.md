@@ -162,7 +162,7 @@ records, name mappings, and create-request outcomes. A branch record contains:
 | `metadata_revision`, `state` | Lifecycle compare-and-swap token and state described below. |
 | `owner` | Optional bounded host metadata; not an authorization mechanism. No expiry field is required by P0. |
 | `create_request_key`, `request_fingerprint` | Stable operation identity and canonical request fingerprint. |
-| `create_outcome` | Reserved UUID/name plus pending, succeeded, or terminal-aborted result; preserved after deletion. |
+| `create_outcome` | Reserved UUID/name plus pending, succeeded, recovery-aborted, or operator-abandoned result; preserved after deletion. |
 
 The branch-local head selector contains its own format version, project and
 branch UUIDs, monotonic physical generation, sealed-root digest, logical commit
@@ -642,9 +642,35 @@ before publishing a head. Adoption transfers that guard without fallible IO
 after durable head publication. The registration retains UUID ownership even
 when only a reader or detached candidate remains.
 
+Closed-source sealing holds the same metadata barrier from selector validation
+through complete WAL/root/head publication and root registration. A GC cannot
+mark the old head and then inventory a replacement published outside its mark.
+
+Quarantine verification uses `BranchReclamationLimits::evidence_limits`,
+independently of the current object inventory's `max_objects` and `max_bytes`.
+Both evidence defaults remain the existing 100,000-file / 1 GiB bounds. Exhaustion
+returns `BranchEvidenceBudgetExceeded` before any unlink and permits a retry with
+an explicitly selected evidence budget; it does not classify the archive as
+corrupt or change the object budget. Exhaustive Rust limit literals must include
+the new field or use `..Default::default()`.
+
+GC hashes the complete committed archives outside catalog publication
+serialization. Committed archives remain immutable under the HawDB protocol
+and are retained by GC. After verification, GC reacquires metadata ownership and
+compares the complete catalog snapshot before reading current heads and marking
+roots. A concurrent catalog change returns `BranchBusy` and retains all data for
+retry. Full hashing continues to detect equal-length archive damage; the final
+mark/sweep stays serialized against publishers. `metadata_lock_micros` measures
+that final mark/sweep interval after revalidation; total maintenance latency also
+includes catalog capture and evidence verification.
+
 Pending, running and failed host jobs retain their admitted immutable source
-guard through cancellation and retry; success retires it. Queueing on a deferred
-or in-memory source does not read persistent data or require an immutable guard.
+guard through cancellation and retry; success retires it.
+An admitted job pins its enqueue-time source, while execution uses the current
+runtime; a failed job that is never retried can retain that older root until the
+database is dropped. This is conservative retention, not a historical job view.
+Queueing on a deferred or in-memory source does not read persistent data or
+require an immutable guard.
 Unregistered internal jobs retain the typed `BranchBusy` maintenance gate.
 Unfinished jobs still prevent `USE BRANCH`; root registration does not change
 job execution or branch-selection semantics.
@@ -687,17 +713,15 @@ require complete, valid metadata before collection can proceed.
 
 A corrupt unleased pending head or immutable dependency blocks project-wide
 reclamation, even if other branches remain usable. Recovery retains that receipt
-and its evidence, while ordinary deletion rejects `Creating` records; there is
-currently no operator abandonment or quarantine transition. Repeated writable
-opens or explicit recovery retries revisit the receipt within the configured
-aggregate recovery budget. Hosts can identify its UUID through the existing
-`BranchCreateRecoveryReport`, but reclamation errors do not yet have a distinct
-pending-create blocker variant. The regression preserves the damaged head,
-catalog and otherwise collectible orphan across repeated recovery/GC attempts.
-[#778](https://github.com/nowledge-co/hawdb/issues/778) tracks typed blocker
-reporting and an explicitly authorized, revision-checked abandonment/quarantine
-protocol. Until that work is qualified, callers must retain the evidence rather
-than deleting or manually editing the pending receipt to resume GC.
+and its evidence, while ordinary deletion rejects `Creating` records.
+`BranchReclamationBlocked` identifies the pending UUID and observed catalog and
+record revisions. The explicit abandonment protocol below binds a separate
+operator acknowledgement to that receipt, preserves a complete evidence
+snapshot, then publishes `Deleted/Abandoned`. Corruption or a missing response
+never authorizes the transition. Quarantine remains mandatory after source
+reclamation; a missing or damaged archive fails closed. Independent reader/job
+roots and progress through foreign active publishers remain open in
+[#778](https://github.com/nowledge-co/hawdb/issues/778).
 
 Deleted UUID directories move to `.reclaim-<uuid>` before recursive cleanup.
 Unix retains the original OS lease across that move. Windows refuses directory
@@ -1439,6 +1463,81 @@ admission. Read-only opens skip repair and explicit recovery rejects writes.
 Catalog serialization rechecks pending state before creating a lease directory,
 so a stale recovery cannot recreate a reclaimed terminal branch.
 
+When an unleased `Creating/Pending` record prevents reclamation from validating
+its head, creation baseline or immutable closure, the facade returns
+`HawDBError::BranchReclamationBlocked` with the branch UUID, catalog revision,
+branch metadata revision and underlying cause. Root provenance survives the
+complete mark traversal; an unrelated corrupt inventory object remains an
+ordinary storage error. Descriptor admission failures retain their original
+`FileDescriptors` type instead of being attributed to the pending receipt.
+Live creators retain the existing lease deferral. No sweep or catalog mutation
+is performed on a failed mark.
+
+The diagnostic identifies one blocking pending owner; it does not assert that
+the failed dependency is exclusive to that branch. Shared live dependencies
+remain protected. Its revision fields are observations, not abandonment
+authorization. A caller must not edit the catalog or delete the reported
+branch directory to work around the blocker. Precise independent reader/job-root
+progress remains a separate requirement in #778.
+
+`Database::inspect_pending_branch_abandonment` returns an opaque plan bound to
+project/branch identity, the pending create fingerprint and metadata revision,
+and the current catalog revision. It admits no data runtime. All data branch
+handles, readers, jobs and publication candidates must retire first: inspection
+and execution reject any active UUID lease while holding metadata serialization.
+Read-only handles reject the operation. A stale plan or a now-Ready child cannot
+be abandoned. The caller explicitly invokes
+`plan.acknowledge_potential_data_loss()` and passes that acknowledgement to
+`Database::abandon_pending_branch`; a diagnostic or missing response is never
+an acknowledgement.
+
+This initial implementation always snapshots the complete immutable namespace,
+including staging and unrelated objects, plus the child's private regular files
+and original catalog. A damaged or missing root may conceal dependencies, so a
+partial traversal cannot determine a safe smaller evidence set. Missing files
+remain missing observations; the archive does not reconstruct missing data.
+The plan reports retained file and payload byte counts. Default limits allow
+100,000 filesystem entries and 1 GiB of payload; manifest encoding has a separate
+16 MiB ceiling. Directory entries also consume the file-count budget. Payload
+hashing/copying uses fixed 64 KiB buffers and counted project descriptors.
+Nonregular files, symlinks and unsupported paths fail closed.
+
+The per-UUID `branches/quarantine/<uuid>` archive contains a checksummed immutable
+intent, flat numbered evidence copies, and a final commit marker. It has no TTL
+and is outside ordinary GC. The archive directory freezes automatic recovery
+for that pending receipt, even when intent publication is interrupted. Copy retries verify/reuse completed files and replace only
+operation-owned partial files. After unrelated catalog changes the operator
+must inspect and acknowledge again; the original evidence snapshot remains
+reusable when the target identity and source bytes are unchanged. New unrelated
+objects published after that snapshot are not part of its forensic history.
+
+All evidence files, intent and directory ancestry are synchronized before
+publishing the terminal `Deleted/Abandoned` catalog receipt. Catalog outcome
+byte `3` distinguishes explicit abandonment from ordinary recovery aborts, so
+loss of the entire quarantine directory still prevents GC. Older binaries reject
+this unknown outcome rather than treating the branch as an ordinary tombstone.
+Projects using abandonment therefore require a reader supporting this outcome.
+The commit marker is published only after the catalog barrier succeeds. A visible terminal receipt
+without that marker cannot authorize GC. Replaying the same acknowledgement
+verifies the archive and reestablishes catalog durability before completing the
+marker, including after a lost response or after successful source reclamation.
+This protocol uses the same unconditional barriers under both durability modes.
+
+GC verifies complete archives and remaining private evidence before its first
+unlink. Only after the complete surviving live-root mark succeeds may an
+unreachable corrupt source be retired using an archive whose raw bytes, length
+and checksum match that exact source. Missing/damaged receipts or copies,
+changed source bytes, active ownership and budget exhaustion retain the entire
+sweep. Shared live corruption still fails the mark; quarantine never makes it
+safe to delete a surviving branch's dependency. The reclaimed-byte report counts
+removed originals, not net disk savings: full evidence snapshots remain retained.
+
+The storage-level power-loss regression captures real counted IO at intent,
+copy, catalog and commit publications and checks lost, torn and reordered
+persistence plus repeat execution. This is a bounded POSIX model, not physical
+device or native Windows namespace qualification. Independent cross-process
+reader/job pins and concurrent publication progress remain open in #778.
+
 An unchanged checkpoint is identified by its exact durable-manifest reference
 and recovery boundary. Seal reuses the validated root's checkpoint references
 and bindings, held under the runtime lease, and publishes only the new WAL
@@ -1499,12 +1598,12 @@ Retries compare the original request before resolving a name
 again, so rename, deletion, or name reuse cannot redirect a recorded request.
 
 The same key/fingerprint returns the reserved original identity and its current
-pending/succeeded/aborted/deleted outcome. It does not recreate a deleted branch.
+pending/succeeded/aborted/abandoned/deleted outcome. It does not recreate a deleted branch.
 Different input with the same key is always `IdempotencyConflict`, including
 after deletion. In-progress create can return
 `RecoveryPending` with the original ID; it cannot report a usable `Ready`
-handle before publication. A terminal-aborted result requires a new key to
-request a new branch.
+handle before publication. An aborted or abandoned result requires a new key
+to request a new branch.
 
 | Operation/state | Required outcome |
 | --- | --- |
@@ -1544,12 +1643,14 @@ revalidates leases; another process's live pending operation is not a crash.
 | Durable interruption point | Recovery decision |
 | --- | --- |
 | Objects/staging exist without a catalog create record | Retain while an owner is live; otherwise mark as orphan candidates. |
-| `Creating`, no durable child head | Publish terminal-aborted `Deleted` with the same receipt/UUID; release name reservation. |
+| `Creating`, quarantine directory exists | Retain the receipt for explicit operator retry, including an interrupted intent publication. |
+| `Creating`, no durable child head and no quarantine | Publish terminal-aborted `Deleted` with the same receipt/UUID; release name reservation. |
 | `Creating`, complete child head and base closure | Finish `Ready` with the same successful receipt/UUID. |
 | `Creating`, existing but corrupt/ambiguous child head | Fail closed; retain all possibly referenced objects and report integrity failure. |
 | Head switch during commit/seal/checkpoint | Use the complete selected old or new head and its exact WAL replay interval; do not mix generations. |
 | `Deleting`, any live owner/publication/snapshot pin | Keep it non-openable and retained; report cleanup pending. |
 | `Deleting`, no remaining owner/pins | Persist `Deleted` before physical cleanup and name reuse. |
+| `Deleted/Abandoned`, missing or damaged quarantine | Fail closed before any sweep; never infer ordinary abort from missing evidence. |
 | `Deleted`, interrupted directory cleanup or sweep | Retry bounded cleanup; retain receipt and identity tombstone. |
 
 GC computes the transitive closure of all `Ready` heads/bases,

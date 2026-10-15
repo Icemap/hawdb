@@ -59,7 +59,29 @@ impl RootRegistry {
         owner: Arc<DatabaseDirectoryLease>,
         root: ObjectReference,
     ) -> io::Result<Arc<RootPin>> {
-        let _metadata = CatalogMetadataLease::acquire_blocking(project_directory)?;
+        let metadata = CatalogMetadataLease::acquire_blocking(project_directory)?;
+        Self::open_with_metadata(
+            project_directory,
+            branch_directory,
+            project_id,
+            branch_id,
+            owner,
+            root,
+            &metadata,
+        )
+    }
+
+    /// Registers a closed-source publication while its caller still excludes
+    /// GC from reading the old head and sweeping newly published objects.
+    pub(crate) fn open_with_metadata(
+        project_directory: &Path,
+        branch_directory: &Path,
+        project_id: [u8; 16],
+        branch_id: [u8; 16],
+        owner: Arc<DatabaseDirectoryLease>,
+        root: ObjectReference,
+        _metadata: &CatalogMetadataLease,
+    ) -> io::Result<Arc<RootPin>> {
         if !owner.owns_directory(branch_directory)? {
             return Err(invalid("root registry does not own its UUID directory"));
         }

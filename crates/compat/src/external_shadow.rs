@@ -457,6 +457,18 @@ fn json_error_from_hawdb(error: HawDBError) -> serde_json::Value {
         HawDBError::Storage(message) => json_error("storage", message),
         HawDBError::StorageIntegrity(message) => json_error("storage", message),
         HawDBError::Execution(message) => json_error("execution", message),
+        error @ HawDBError::BranchEvidenceBudgetExceeded {
+            resource,
+            requested,
+            limit,
+        } => {
+            let mut response = json_error("execution", error);
+            response["error"]["details"] = serde_json::json!({
+                "kind": "branch_evidence_budget_exceeded", "resource": resource,
+                "requested": requested, "limit": limit,
+            });
+            response
+        }
         HawDBError::ReadBudgetExceeded(cause) => {
             let mut response = json_error("execution", &cause.message);
             let resource = match cause.resource {
@@ -472,7 +484,9 @@ fn json_error_from_hawdb(error: HawDBError) -> serde_json::Value {
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. }) => json_error("execution", error),
         error @ HawDBError::TransactionConflict { .. } => json_error("execution", error),
         error @ HawDBError::AppendSequenceExhausted { .. } => json_error("storage", error),
-        error @ HawDBError::BranchBusy { .. } => json_error("storage", error),
+        error @ (HawDBError::BranchBusy { .. } | HawDBError::BranchReclamationBlocked { .. }) => {
+            json_error("storage", error)
+        }
         HawDBError::FileDescriptors(error) => {
             let details = match &error {
                 FileDescriptorError::InvalidBudget { limit } => serde_json::json!({

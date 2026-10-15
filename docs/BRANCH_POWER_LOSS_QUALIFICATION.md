@@ -17,7 +17,8 @@ cargo test --locked -p hawdb --all-features --lib api::branch_lifecycle::tests::
 ```
 
 The facade matrix is registered in the existing Cargo library test target and
-requires `test-support` (included by `--all-features`). The recorder is Unix-only.
+requires `test-support` (included by `--all-features`). The recorder supports
+Unix and Windows under the explicit synchronization assumptions below.
 The existing Bazel storage unit target includes its recorder/image-engine tests
 under `cfg(test)`. The ordinary Bazel facade target does not enable the storage
 recorder; run the explicit Cargo matrix rather than claiming its filtered Bazel
@@ -25,8 +26,8 @@ invocation executes fault cases. Default/minimal project-open integration tests
 have existing Bazel targets.
 
 The weekly/manual [platform workflow](../.github/workflows/ci.yml) runs the
-complete facade matrix on Linux and macOS with locked dependencies and the pinned
-Rust toolchain. It retains the discovered cases, actual test output, source
+complete recorder and facade matrices on Linux, macOS and Windows with locked
+dependencies and the pinned Rust toolchain. It retains the discovered cases, actual test output, source
 revision, platform, toolchain and terminal status as artifacts. The existing
 required-test wrapper rejects a zero-test or fully ignored selection; a
 successful build or discovery step alone is not a qualification result. Cases
@@ -35,7 +36,9 @@ bound scratch occupancy. Artifacts include disk capacity before and after the
 matrix so native I/O failures retain resource context. A workflow
 definition does not establish a passing run: release evidence must identify a
 successful artifact for the exact candidate revision on each required platform.
-Windows namespace persistence remains outside this Unix recorder.
+Windows artifacts identify their directory-flush assumption as unqualified and
+record the OS build and workspace/temporary-volume filesystem context. Native
+execution is conditional implementation evidence, not proof of that assumption.
 The existing macOS/Windows storage jobs separately execute default and minimal
 project-open integration tests and the branch lifecycle suite. These include
 bounded pending-receipt recovery and the native file synchronization path;
@@ -64,6 +67,20 @@ image immediately before or after the named actual operation; later barriers
 or handle closure cannot strengthen that image. No callback executes inside
 storage locks. A final audited capture checks the complete fixture's IO coverage.
 Acknowledgment capture requires the host to exclude concurrent operations.
+
+The audit reads bytes, length and file identity from the same admitted native
+handle. Empty files are verified by identity and exact length without probing
+EOF: Windows exclusive byte-range locks also cover the nonexistent bytes in
+empty lease files. Nonempty files still require a complete byte comparison;
+an unreadable or length-mismatched file fails capture without releasing locks.
+Unix uses device/inode; Windows uses `GetFileInformationByHandleEx(FileIdInfo)`
+with the full volume serial and 128-bit file ID. Both directions of identity
+agreement are required: copied equal-byte files cannot impersonate a hard link,
+and an unrecorded hard link cannot merge independent model inodes. Unsupported
+identity queries fail capture rather than falling back to byte equality. Windows
+`FILE_FLAG_BACKUP_SEMANTICS` is admitted for the real directory open; unknown
+native options, symlinks and reparse points remain rejected. A later known flag
+cannot hide an earlier opaque access/share/attribute option.
 
 Completed file barriers preserve bytes and length; completed directory barriers
 preserve direct names. Synchronizing a child directory alone does not install
@@ -194,15 +211,19 @@ for its `SyncObject`, `ReadyHasDurableHead`, `SyncAcknowledgementsDurable`, and
 lifecycle states. The IO model separates inode contents from directory names;
 abstract atomic closure publication alone cannot prove that distinction.
 
-The model assumes reliable completed POSIX synchronization and atomic
-same-directory rename. Native execution validates the implementation against
-those assumptions; it does not certify a filesystem, controller or drive and
-does not power-cycle the host. Windows now requests counted write-capable
-directory-handle flushes and propagates failures; recorder attachment still
-rejects Windows. API success, cross-target Clippy or ordinary Windows recovery
-cannot establish the Windows ancestor-name barrier's semantics. See the
-[namespace assumptions](BRANCH_NAMESPACE_DURABILITY.md). Symlinks and
-custom native open flags are rejected by capture. IO outside the recorder must
+The model assumes reliable completed file and directory synchronization and
+atomic same-directory replacement. Native execution validates the implementation
+against those assumptions; it does not certify a filesystem, controller or drive
+and does not power-cycle the host. Windows requests counted write-capable
+directory-handle flushes and propagates failures. Its recorder observes these
+actual calls, but credits their direct names only under a conditional assumption
+that the filesystem honors such a namespace barrier. Neither
+[FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers)
+documentation nor a passing model supplies a portable directory-fsync guarantee.
+The Windows artifact explicitly records `windows-directory-flush-unqualified`
+and `namespace_semantics_qualified: false`. A green conditional model must not
+be promoted to complete Windows namespace qualification or close #820.
+See the [namespace assumptions](BRANCH_NAMESPACE_DURABILITY.md). IO outside the recorder must
 be added before claiming coverage of a new path. The finite named matrix is not
 exhaustive IO-interleaving exploration; physical devices, Windows namespace
 persistence and exhaustive concurrent GC interleavings remain explicit

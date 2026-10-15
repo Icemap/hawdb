@@ -450,6 +450,14 @@ impl GraphStore {
         request: BranchAdmissionRequest<'_>,
         expected_commit_epoch: u64,
     ) -> std::result::Result<SealedBranchSource, BranchAdmissionError> {
+        Self::seal_branch_from_head_with_revalidation(request, expected_commit_epoch, || {})
+    }
+
+    fn seal_branch_from_head_with_revalidation(
+        request: BranchAdmissionRequest<'_>,
+        expected_commit_epoch: u64,
+        before_publication: impl FnOnce(),
+    ) -> std::result::Result<SealedBranchSource, BranchAdmissionError> {
         let project_path =
             request
                 .catalog_path
@@ -490,6 +498,11 @@ impl GraphStore {
                 ))?;
         let lease =
             DatabaseDirectoryLease::acquire(directory).map_err(BranchAdmissionError::Lease)?;
+        // GC drops its per-branch lease probes before inventory and sweep.
+        // Keep the shared metadata barrier from before reading the selector
+        // through publication and registration of its replacement root.
+        let metadata = branch_catalog::CatalogMetadataLease::acquire_blocking(project_path)
+            .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
         let (head, mut root, mut objects) = (|| -> Result<_> {
             let head = branch_head::read_branch_head(request.head_path)
                 .map_err(HawDBError::from_storage_error)?;
@@ -524,11 +537,13 @@ impl GraphStore {
                 "branch source revision is stale: expected {expected_commit_epoch}, found {commit_epoch}"
             ))));
         }
-        ready_branch_record(
+        ready_branch_record_with_metadata(
             request.catalog_path,
             request.branch_id,
             request.expected_metadata_revision,
+            &metadata,
         )?;
+        before_publication();
         let head = if end_lsn == head.active_wal.replay_start_lsn {
             head
         } else {
@@ -581,7 +596,7 @@ impl GraphStore {
             })()
             .map_err(BranchAdmissionError::Recovery)?
         };
-        let root_pin = RootRegistry::open(
+        let root_pin = RootRegistry::open_with_metadata(
             request
                 .catalog_path
                 .parent()
@@ -593,6 +608,7 @@ impl GraphStore {
             head.branch_id,
             Arc::new(lease),
             head.sealed_root,
+            &metadata,
         )
         .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
         Ok(SealedBranchSource {
@@ -1978,6 +1994,20 @@ pub(super) fn ready_branch_record(
         }
         Err(error) => return Err(BranchAdmissionError::Catalog(error)),
     };
+    ready_branch_record_with_metadata(
+        catalog_path,
+        branch_id,
+        expected_metadata_revision,
+        &_metadata_lease,
+    )
+}
+
+fn ready_branch_record_with_metadata(
+    catalog_path: &Path,
+    branch_id: branch_catalog::BranchId,
+    expected_metadata_revision: u64,
+    _metadata: &branch_catalog::CatalogMetadataLease,
+) -> std::result::Result<ReadyBranchRecord, BranchAdmissionError> {
     let catalog =
         branch_catalog::read_catalog(catalog_path).map_err(BranchAdmissionError::Catalog)?;
     let branch = catalog
@@ -2825,6 +2855,88 @@ mod tests {
             assert_eq!(child.store().commit_epoch(), epoch);
             assert_eq!(child.store().relational_state().row_count("messages"), 2);
             assert_eq!(child.store().node_count_for_label(None), 3);
+        }
+    }
+
+    #[test]
+    fn closed_source_seal_excludes_gc_before_publishing_its_wal_and_root() {
+        for durability in [
+            DurabilityPolicy::SyncOnEveryWrite,
+            DurabilityPolicy::SyncOnCheckpoint,
+        ] {
+            let fixture = BranchFixture::new();
+            let mut main = fixture.admit(fixture.main, durability);
+            write_schema_and_graph(&mut main);
+            let (store, catalog) = main.store_and_catalog_mut();
+            store.checkpoint(catalog).unwrap();
+            let old_head = *main.head();
+            write_row(&mut main, "closed-source-wal");
+            let epoch = main.store().commit_epoch();
+            drop(main);
+            let catalog = branch_catalog::read_catalog(&fixture.catalog_path).unwrap();
+            let record = catalog
+                .branches
+                .iter()
+                .find(|record| record.id == fixture.main)
+                .unwrap();
+            let mut checked = false;
+            let source = GraphStore::seal_branch_from_head_with_revalidation(
+                BranchAdmissionRequest {
+                    catalog_path: &fixture.catalog_path,
+                    branch_id: fixture.main,
+                    expected_metadata_revision: record.metadata_revision,
+                    head_path: &fixture.head_path(fixture.main),
+                    immutable_store_root: &fixture.objects,
+                    durability,
+                    replay_config: WalReplayConfig::default(),
+                },
+                epoch,
+                || {
+                    // Pause the real seal before publishing immutable objects.
+                    // A GC on another thread must fail to enter mark/sweep.
+                    // No timeout or scheduling assumption establishes exclusion.
+                    let project = fixture.project.clone();
+                    let error = std::thread::spawn(move || {
+                        branch_catalog::CatalogMetadataLease::acquire(&project)
+                            .unwrap_err()
+                            .kind()
+                    })
+                    .join()
+                    .unwrap();
+                    assert_eq!(error, std::io::ErrorKind::WouldBlock);
+                    assert_eq!(
+                        branch_head::read_branch_head(&fixture.head_path(fixture.main)).unwrap(),
+                        old_head
+                    );
+                    checked = true;
+                },
+            )
+            .unwrap();
+            assert!(checked);
+            let head = *source.head();
+            assert_ne!(head.sealed_root, old_head.sealed_root);
+            let _metadata =
+                branch_catalog::CatalogMetadataLease::acquire_blocking(&fixture.project).unwrap();
+            let mut objects = ImmutableObjectStore::open(&fixture.objects).unwrap();
+            let inventory = objects.inventory(100_000, 1024 * 1024 * 1024).unwrap();
+            objects
+                .reclaim_unreachable(
+                    &inventory.objects,
+                    &[old_head.sealed_root, head.sealed_root],
+                )
+                .unwrap();
+            let root = SealedRoot::decode(&objects.read(head.sealed_root).unwrap()).unwrap();
+            assert_eq!(root.commit_epoch, epoch);
+            assert!(!root.sealed_wals.is_empty());
+            for wal in &root.sealed_wals {
+                objects.read(wal.object).unwrap();
+            }
+            drop(_metadata);
+            drop(source);
+            let reopened = fixture.admit(fixture.main, durability);
+            assert_eq!(reopened.store().commit_epoch(), epoch);
+            assert_eq!(reopened.store().relational_state().row_count("messages"), 2);
+            assert_eq!(reopened.store().node_count_for_label(None), 3);
         }
     }
 

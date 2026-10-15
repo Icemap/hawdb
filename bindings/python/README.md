@@ -39,6 +39,34 @@ uv pip install maturin pytest
 maturin develop
 ```
 
+### Notebooks
+
+In Jupyter or IPython a `QueryResult` renders as an HTML table (values escaped
+as text, at most 100 rows, with a note on how many were omitted); terminals keep
+the plain `repr`. `import hawdb.magic` (or `%load_ext hawdb.magic`) registers
+`%%cypher` and `%%sql` when IPython is running; `hawdb` itself never imports
+IPython.
+
+```python
+%load_ext hawdb.magic
+%hawdb open ./graph          # or: %hawdb use NAME / set a `hawdb_db` variable
+params = {"code": "603122"}  # optional; a list for %%sql
+```
+
+```cypher
+%%cypher
+MATCH (s:Stock {code: $code}) RETURN s.code
+```
+
+Every `%%cypher` and `%%sql` cell reads the notebook's `params` variable, so
+set `params = None` once a query no longer needs it. The magic line takes no
+options. The cell body is sent unchanged. `%%sql` returns the `QueryResult`;
+`%%cypher` returns it wrapped so that, when the displayed rows hold nodes or
+relationships (`MATCH (a)-[r]->(b) RETURN a, r, b`), they are drawn as an
+inline SVG graph above the table. The wrapper forwards everything else to the
+`QueryResult`, which its `result` attribute holds. `%hawdb close` closes the
+selected database.
+
 ### Lite profile
 
 Constrained hosts — including the Pyodide/JupyterLite build — can link the

@@ -155,6 +155,7 @@ pub const fn nowledge_query_fuzz_error_class(error: &HawDBError) -> &'static str
         HawDBError::Parse(_) => "parse",
         HawDBError::Semantic(_) => "semantic",
         HawDBError::Execution(_)
+        | HawDBError::BranchEvidenceBudgetExceeded { .. }
         | HawDBError::ReadBudgetExceeded(_)
         | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. }
@@ -164,7 +165,8 @@ pub const fn nowledge_query_fuzz_error_class(error: &HawDBError) -> &'static str
         | HawDBError::FileDescriptors(_)
         | HawDBError::StorageIntegrity(_)
         | HawDBError::AppendSequenceExhausted { .. }
-        | HawDBError::BranchBusy { .. } => "storage",
+        | HawDBError::BranchBusy { .. }
+        | HawDBError::BranchReclamationBlocked { .. } => "storage",
         HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",
     }
 }

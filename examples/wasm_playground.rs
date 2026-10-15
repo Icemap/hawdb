@@ -90,6 +90,10 @@ impl QueryBridge {
                     | HawDBError::GraphExpansionPayloadLimitExceeded { .. } => "execution",
                     HawDBError::BranchCommandUnsupported { .. } => "branch_command_unsupported",
                     HawDBError::BranchBusy { .. } => "branch_busy",
+                    HawDBError::BranchReclamationBlocked { .. } => "branch_reclamation_blocked",
+                    HawDBError::BranchEvidenceBudgetExceeded { .. } => {
+                        "branch_evidence_budget_exceeded"
+                    }
                     HawDBError::TransactionConflict { .. } => "transaction_conflict",
                     HawDBError::AppendSequenceExhausted { .. } => "append_sequence_exhausted",
                     HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",

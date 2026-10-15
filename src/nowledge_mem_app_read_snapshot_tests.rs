@@ -1525,3 +1525,290 @@ fn user_can_reenter_snapshot_reads_from_admission_and_completion_telemetry() {
         );
     }
 }
+
+#[test]
+fn bounded_read_snapshot_projection_scan_accounts_complete_output_and_requires_pin() {
+    let handle = app_read_handle();
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 4,
+        max_payload_bytes: 4096,
+    };
+    handle
+        .with_bounded_read_snapshot(budget, |snapshot| {
+            let mut documents = Vec::new();
+            let report = snapshot.visit_search_projection(4096, |document| {
+                documents.push(document.clone());
+                Ok(())
+            })?;
+            assert_eq!(report.document_count, 2);
+            assert_eq!(documents.len(), 2);
+            // Complete scans share the snapshot's cumulative budget with all reads.
+            snapshot.visit_search_projection(4096, |_| Ok(()))?;
+            let mut calls = 0;
+            assert!(snapshot
+                .visit_search_projection(4096, |_| {
+                    calls += 1;
+                    Ok(())
+                })
+                .is_err());
+            assert_eq!(calls, 0);
+            Ok(())
+        })
+        .unwrap();
+    handle
+        .with_bounded_graph_read_snapshot(budget, |snapshot| {
+            assert!(snapshot
+                .visit_search_projection(4096, |_| panic!("graph-only scan callback"))
+                .is_err());
+            Ok(())
+        })
+        .unwrap();
+}
+
+#[test]
+fn bounded_read_snapshot_projection_scan_observes_same_epoch_payload_and_bit_drift() {
+    let handle = app_read_handle();
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 16,
+        max_payload_bytes: 16384,
+    };
+    let mut row = SearchProjectionRow {
+        kind: SearchProjectionKind::Memory,
+        external_id: "nearest".into(),
+        title: "before".into(),
+        body: "complete body".into(),
+        embedding: Some(vec![1.0, -0.0]),
+        source_id: None,
+        metadata: BTreeMap::from([("space_id".into(), "default".into())]),
+    };
+    let apply = |row| {
+        handle
+            .apply_search_projection_delta_and_checkpoint(crate::SearchProjectionDelta {
+                upserts: vec![row],
+                source_graph_commit_epoch: Some(42),
+                ..Default::default()
+            })
+            .unwrap()
+    };
+    let capture = || {
+        handle
+            .with_bounded_read_snapshot(budget, |snapshot| {
+                let mut documents = BTreeMap::new();
+                let scan = snapshot.visit_search_projection(4096, |document| {
+                    documents.insert(document.id.clone(), document.clone());
+                    Ok(())
+                })?;
+                Ok((snapshot.report(), scan, documents))
+            })
+            .unwrap()
+    };
+    apply(row.clone());
+    let before = capture();
+    row.title = "after".into();
+    row.metadata.insert("new_key".into(), "new_value".into());
+    row.embedding = Some(vec![f32::from_bits(1.0_f32.to_bits() + 1), 0.0]);
+    apply(row);
+    let after = capture();
+    assert_eq!(before.0.commit_epoch, after.0.commit_epoch);
+    assert_eq!(
+        before.0.search_projection_source_graph_commit_epoch,
+        after.0.search_projection_source_graph_commit_epoch
+    );
+    assert_eq!(before.1.document_count, after.1.document_count);
+    let before_document = &before.2["memory:nearest"];
+    let after_document = &after.2["memory:nearest"];
+    assert_ne!(before_document.title, after_document.title);
+    assert_ne!(before_document.metadata, after_document.metadata);
+    assert_ne!(
+        before_document.embedding.as_ref().unwrap()[0].to_bits(),
+        after_document.embedding.as_ref().unwrap()[0].to_bits()
+    );
+    assert_eq!(
+        before_document.embedding.as_ref().unwrap()[1].to_bits(),
+        (-0.0_f32).to_bits()
+    );
+    assert_eq!(
+        after_document.embedding.as_ref().unwrap()[1].to_bits(),
+        0.0_f32.to_bits()
+    );
+}
+
+#[test]
+fn bounded_read_snapshot_projection_scan_unwind_releases_native_pin() {
+    let handle = app_read_handle();
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 4,
+        max_payload_bytes: 4096,
+    };
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = handle.with_bounded_read_snapshot(budget, |snapshot| {
+            snapshot.visit_search_projection(4096, |_| panic!("visitor unwound"))
+        });
+    }));
+    assert!(panic.is_err());
+    assert_eq!(
+        handle
+            .with_bounded_read_snapshot(budget, |snapshot| {
+                snapshot.visit_search_projection(4096, |_| Ok(()))
+            })
+            .unwrap()
+            .document_count,
+        2
+    );
+    // An exclusive store operation also succeeds after the visitor unwinds.
+    handle
+        .apply_search_projection_delta_and_checkpoint(crate::SearchProjectionDelta::default())
+        .unwrap();
+}
+
+#[test]
+fn bounded_read_snapshot_projection_scan_uses_out_of_core_pin_and_releases_admission() {
+    let root = SnapshotTestRoot::new();
+    let search_path = root.0.join("search");
+    let row = SearchProjectionRow {
+        kind: SearchProjectionKind::Memory,
+        external_id: "ooc".into(),
+        title: "complete".into(),
+        body: "pinned persistent projection".into(),
+        embedding: Some(vec![1.0, -0.0]),
+        source_id: None,
+        metadata: BTreeMap::from([("space_id".into(), "team".into())]),
+    };
+    let document = row.into_document();
+    let mut writer =
+        crate::SearchOutOfCoreGenerationWriter::create(&search_path, Default::default()).unwrap();
+    writer.push(document.clone()).unwrap();
+    writer.finish().unwrap();
+    let graph = NowledgeMemGraph::from_database_with_runtime_governor(
+        Database::new_with_config(DatabaseConfig {
+            max_read_result_rows: Some(16),
+            max_read_result_payload_bytes: Some(16384),
+            ..Default::default()
+        }),
+        NowledgeMemGraphMode::ShadowReadOnly,
+        snapshot_governor(),
+    );
+    let projection = super::NowledgeMemOutOfCoreSearchProjection::open(&search_path).unwrap();
+    let handle =
+        NowledgeMemEmbeddedStoreHandle::new(NowledgeMemEmbeddedStore::new_with_out_of_core_search(
+            graph,
+            projection,
+            Default::default(),
+        ))
+        .unwrap();
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 4,
+        max_payload_bytes: 4096,
+    };
+    let mut observed = Vec::new();
+    let report = handle
+        .with_bounded_read_snapshot(budget, |snapshot| {
+            snapshot.visit_search_projection(4096, |document| {
+                observed.push(document.clone());
+                Ok(())
+            })
+        })
+        .unwrap();
+    assert_eq!(observed, vec![document]);
+    assert_eq!(
+        observed[0].embedding.as_ref().unwrap()[1].to_bits(),
+        (-0.0_f32).to_bits()
+    );
+    assert_eq!(report.document_count, 1);
+    assert!(report.artifact_generation.is_some());
+    for cumulative in [
+        NowledgeMemReadSnapshotBudget {
+            max_rows: 1,
+            ..budget
+        },
+        NowledgeMemReadSnapshotBudget {
+            max_payload_bytes: report.payload_bytes,
+            ..budget
+        },
+    ] {
+        handle
+            .with_bounded_read_snapshot(cumulative, |snapshot| {
+                snapshot.visit_search_projection(4096, |_| Ok(()))?;
+                let mut calls = 0;
+                assert!(snapshot
+                    .visit_search_projection(4096, |_| {
+                        calls += 1;
+                        Ok(())
+                    })
+                    .is_err());
+                assert_eq!(calls, 0);
+                Ok(())
+            })
+            .unwrap();
+    }
+    assert!(handle
+        .with_bounded_read_snapshot(budget, |snapshot| snapshot
+            .visit_search_projection(16, |_| panic!("scratch refusal callback")))
+        .is_err());
+    let runtime = handle.runtime_governor_snapshot().unwrap();
+    assert_eq!(runtime.admissions, runtime.completions);
+    assert_eq!(runtime.admitted_memory_bytes, 0);
+    assert_eq!(runtime.active_foreground_io_slots, 0);
+    drop(handle);
+}
+
+#[test]
+fn database_instance_identity_tracks_the_exact_published_read_view() {
+    let handle = app_read_handle();
+    let cloned = handle.clone();
+    let old_identity = handle.database_instance_identity().unwrap();
+    assert_eq!(cloned.database_instance_identity().unwrap(), old_identity);
+    let replacement = app_read_handle();
+    let replacement_identity = replacement.database_instance_identity().unwrap();
+    assert_ne!(old_identity, replacement_identity);
+    assert_eq!(
+        handle.runtime_status().unwrap().graph_commit_epoch,
+        replacement.runtime_status().unwrap().graph_commit_epoch
+    );
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 4,
+        max_payload_bytes: 4096,
+    };
+    {
+        let mut writer = handle.write_store().unwrap();
+        let mut replacement_writer = replacement.write_store().unwrap();
+        std::mem::swap(
+            writer.graph_mut().database_mut(),
+            replacement_writer.graph_mut().database_mut(),
+        );
+        assert_eq!(
+            writer.graph().database().instance_identity().unwrap(),
+            replacement_identity
+        );
+        // The committed publication still owns the previous database snapshot.
+        handle
+            .with_bounded_graph_read_snapshot(budget, |snapshot| {
+                assert_eq!(snapshot.database_instance_identity(), &old_identity);
+                let rows = snapshot.query_cypher(
+                    "MATCH (n:Memory) RETURN n.id AS id",
+                    &BTreeMap::new(),
+                    4,
+                )?;
+                assert_eq!(rows.rows.len(), 1);
+                Ok(())
+            })
+            .unwrap();
+    }
+    assert_eq!(
+        handle.database_instance_identity().unwrap(),
+        replacement_identity
+    );
+    for pin_projection in [false, true] {
+        let check = |snapshot: &mut super::NowledgeMemReadSnapshot<'_>| {
+            assert_eq!(snapshot.database_instance_identity(), &replacement_identity);
+            Ok(())
+        };
+        if pin_projection {
+            handle.with_bounded_read_snapshot(budget, check).unwrap();
+        } else {
+            handle
+                .with_bounded_graph_read_snapshot(budget, check)
+                .unwrap();
+        }
+    }
+}

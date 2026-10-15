@@ -24,6 +24,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+mod branch_abandonment;
 mod runtime_roots;
 mod search_projection;
 
@@ -1264,7 +1265,10 @@ fn schema_indexes_and_nested_data_survive_power_loss_in_configured_residencies()
                 &paths,
             )
             .unwrap();
-            let snapshot = fixture.model.capture().unwrap();
+            let snapshot = fixture
+                .model
+                .capture()
+                .unwrap_or_else(|error| panic!("capture {mode:?}/{indexes:?}: {error}"));
             drop(database);
             let root = fixture.image(&snapshot, &CrashPlan::default());
             let mut recovered = Database::open_with_config(&root, config).unwrap();

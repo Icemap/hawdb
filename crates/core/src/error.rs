@@ -116,6 +116,19 @@ pub enum HawDBError {
     BranchBusy {
         resource: &'static str,
     },
+    BranchEvidenceBudgetExceeded {
+        resource: &'static str,
+        requested: u64,
+        limit: u64,
+    },
+    /// An unleased pending create prevents a complete reclamation mark.
+    /// This identifies retained evidence, not authorization to discard it.
+    BranchReclamationBlocked {
+        branch_id: crate::Uuid,
+        catalog_revision: u64,
+        metadata_revision: u64,
+        cause: Box<HawDBError>,
+    },
 }
 
 impl Display for HawDBError {
@@ -161,6 +174,19 @@ impl Display for HawDBError {
                 write!(f, "{command} is unavailable in {context}")
             }
             HawDBError::BranchBusy { resource } => write!(f, "branch is busy: {resource}"),
+            HawDBError::BranchEvidenceBudgetExceeded { resource, requested, limit } => write!(
+                f,
+                "branch quarantine evidence {resource} budget exceeded: requested {requested}, limit {limit}"
+            ),
+            HawDBError::BranchReclamationBlocked {
+                branch_id,
+                catalog_revision,
+                metadata_revision,
+                cause,
+            } => write!(
+                f,
+                "pending branch {branch_id} blocks reclamation at catalog revision {catalog_revision}, branch revision {metadata_revision}: {cause}"
+            ),
         }
     }
 }
@@ -170,6 +196,7 @@ impl std::error::Error for HawDBError {
         match self {
             Self::FileDescriptors(error) => Some(error),
             Self::ReadBudgetExceeded(error) => Some(error),
+            Self::BranchReclamationBlocked { cause, .. } => Some(cause.as_ref()),
             _ => None,
         }
     }
