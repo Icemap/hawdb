@@ -57,6 +57,7 @@ STORAGE_MODELS = [
     "HawDBRelationalIndexDemandRead",
     "HawDBRelationalIndexShadowPublication",
     "HawDBRelationalOverlayStreamingMerge",
+    "HawDBRelationalProjectionReadValidation",
     "HawDBRelationalRowDemandRead",
     "HawDBRelationalRowSnapshotRead",
     "HawDBRelationalStatementReadBudget",

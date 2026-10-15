@@ -1464,6 +1464,13 @@ query results, including delayed query selection after capture, absent keys,
 payload changes, domain fallback, OR/bounded-phase qualification and pruning.
 Its [collector argument and ten controls](INDEXED_PROJECTION_READ_VALIDATION_PROOF.md)
 separate the qualified native paths from the remaining query families. The
+[`HawDBRelationalProjectionReadValidation.tla`](HawDBRelationalProjectionReadValidation.tla)
+checks complete composite primary-key reads against an unpruned write history
+and captured/live query results, including absence, delayed first SQL statement,
+OR/partial fallback, broad/schema barriers, ABA, pin pruning and shared statement
+refusal. Its [argument and ten controls](RELATIONAL_PROJECTION_READ_VALIDATION_PROOF.md)
+map the existing writer identities, bounded SQL hydration and remaining query/
+embedded-owner obligations. The
 [`HawDBSearchPreparedPublication.tla`](HawDBSearchPreparedPublication.tla)
 checks two publishers preparing private candidates without retaining the root
 lease, exact valid/damaged selector revalidation, complete activation, consumer

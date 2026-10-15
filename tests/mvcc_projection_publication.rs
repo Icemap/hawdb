@@ -986,3 +986,438 @@ fn source_validated_search_does_not_infer_a_watermark_from_a_damaged_base() {
         .unwrap()
         .is_dir()));
 }
+
+fn relational_fixture() -> (TestRoot, Database) {
+    let (root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
+    db.query_sql(
+        "CREATE TABLE records (tenant TEXT, id BIGINT, body TEXT, PRIMARY KEY (tenant, id))",
+    )
+    .unwrap();
+    db.query_sql(
+        "INSERT INTO records (tenant, id, body) VALUES ('w', 1, 'one'), ('w', 2, 'two'), ('other', 1, 'other')",
+    )
+    .unwrap();
+    (root, db)
+}
+
+fn sql_point(preparation: &mut hawdb::PreparedRead, id: i64) -> hawdb::QueryOutput {
+    preparation
+        .query_sql_with_params(
+            "SELECT r.body FROM public.records AS r WHERE r.tenant = $1 AND r.id = $2",
+            &[Value::String("w".into()), Value::Int(id)],
+        )
+        .unwrap()
+}
+
+#[test]
+fn relational_point_dependencies_cover_the_capture_to_first_query_gap() {
+    for related in [false, true] {
+        let (_root, mut db) = relational_fixture();
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        db.query_sql(if related {
+            "UPDATE records SET body = 'changed' WHERE tenant = 'w' AND id = 1"
+        } else {
+            "UPDATE records SET body = 'changed' WHERE tenant = 'w' AND id = 2"
+        })
+        .unwrap();
+        let output = sql_point(&mut preparation, 1);
+        assert_eq!(output.rows[0]["body"], Value::String("one".into()));
+        let dependencies = preparation.finish().unwrap();
+        assert_eq!(dependencies.exact_relational_row_count(), 1);
+        assert!(!dependencies.requires_unchanged_database_epoch());
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "sql_point",
+            dependencies.source_epoch(),
+            None,
+        );
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        if related {
+            assert!(matches!(
+                result,
+                Err(ProjectionPublicationError::Dependency(_))
+            ));
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
+#[test]
+fn absent_relational_primary_keys_detect_phantoms_without_rejecting_other_keys() {
+    for related in [false, true] {
+        let (_root, mut db) = relational_fixture();
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        assert!(sql_point(&mut preparation, 99).rows.is_empty());
+        let dependencies = preparation.finish().unwrap();
+        db.query_sql(if related {
+            "INSERT INTO records (tenant, id, body) VALUES ('w', 99, 'phantom')"
+        } else {
+            "INSERT INTO records (tenant, id, body) VALUES ('elsewhere', 99, 'disjoint')"
+        })
+        .unwrap();
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "sql_absent",
+            dependencies.source_epoch(),
+            None,
+        );
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        if related {
+            assert!(matches!(
+                result,
+                Err(ProjectionPublicationError::Dependency(_))
+            ));
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
+#[test]
+fn relational_payload_deletion_aba_and_schema_changes_invalidate_point_reads() {
+    for change in ["payload", "delete", "aba", "schema"] {
+        let (_root, mut db) = relational_fixture();
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        sql_point(&mut preparation, 1);
+        let dependencies = preparation.finish().unwrap();
+        match change {
+            "delete" => {
+                db.query_sql("DELETE FROM records WHERE tenant = 'w' AND id = 1")
+                    .unwrap();
+            }
+            "schema" => {
+                db.query_sql("ALTER TABLE records ADD COLUMN extra TEXT")
+                    .unwrap();
+            }
+            _ => {
+                db.query_sql("UPDATE records SET body = 'temporary' WHERE tenant = 'w' AND id = 1")
+                    .unwrap();
+                if change == "aba" {
+                    db.query_sql("UPDATE records SET body = 'one' WHERE tenant = 'w' AND id = 1")
+                        .unwrap();
+                }
+            }
+        }
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "sql_changed",
+            dependencies.source_epoch(),
+            None,
+        );
+        assert!(matches!(
+            db.publish_prepared_projection(&dependencies, &staged),
+            Err(ProjectionPublicationError::Dependency(_))
+        ));
+    }
+}
+
+#[test]
+fn relational_or_and_partial_composite_keys_keep_the_epoch_fallback() {
+    for query in [
+        "SELECT body FROM records WHERE tenant = 'w' OR id = 1",
+        "SELECT body FROM records WHERE tenant = 'w'",
+        "SELECT body FROM records WHERE tenant = 'w' AND id = NULL",
+    ] {
+        let (_root, mut db) = relational_fixture();
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        preparation.query_sql_with_params(query, &[]).unwrap();
+        let dependencies = preparation.finish().unwrap();
+        assert_eq!(dependencies.exact_relational_row_count(), 0);
+        assert!(dependencies.requires_unchanged_database_epoch());
+        db.query("MATCH (n:Other) SET n.value = 3").unwrap();
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "sql_fallback",
+            dependencies.source_epoch(),
+            None,
+        );
+        assert!(matches!(
+            db.publish_prepared_projection(&dependencies, &staged),
+            Err(ProjectionPublicationError::Dependency(_))
+        ));
+    }
+}
+
+#[test]
+fn necessary_relational_primary_key_bound_survives_a_local_or_residual() {
+    let (_root, mut db) = relational_fixture();
+    let mut preparation = db.begin_prepared_read(limits()).unwrap();
+    let output = preparation.query_sql_with_params(
+        "SELECT body FROM records WHERE tenant = $1 AND id = $2 AND (body = 'one' OR body = 'alternate') ORDER BY body LIMIT 1",
+        &[Value::String("w".into()), Value::Int(1)],
+    ).unwrap();
+    assert_eq!(output.rows.len(), 1);
+    let dependencies = preparation.finish().unwrap();
+    assert_eq!(dependencies.exact_relational_row_count(), 1);
+    db.query_sql("UPDATE records SET body = 'changed' WHERE tenant = 'other' AND id = 1")
+        .unwrap();
+    let staged = seal(
+        &db.projection_generation_store().unwrap(),
+        "sql_residual",
+        dependencies.source_epoch(),
+        None,
+    );
+    db.publish_prepared_projection(&dependencies, &staged)
+        .unwrap();
+}
+
+#[test]
+fn relational_uuid_dependencies_use_the_same_coercion_as_query_and_write_keys() {
+    let (_root, mut db) = relational_fixture();
+    db.query_sql("CREATE TABLE uuid_keys (id UUID PRIMARY KEY, body TEXT)")
+        .unwrap();
+    let id = "018f4e6a-7c1b-7cc8-8f4d-1234567890ab";
+    db.query_sql_with_params(
+        "INSERT INTO uuid_keys (id, body) VALUES ($1, 'one')",
+        &[Value::String(id.into())],
+    )
+    .unwrap();
+    let mut preparation = db.begin_prepared_read(limits()).unwrap();
+    assert_eq!(
+        preparation
+            .query_sql_with_params(
+                "SELECT body FROM uuid_keys WHERE id = $1",
+                &[Value::String(id.into())]
+            )
+            .unwrap()
+            .rows
+            .len(),
+        1
+    );
+    let dependencies = preparation.finish().unwrap();
+    assert_eq!(dependencies.exact_relational_row_count(), 1);
+    db.query_sql_with_params(
+        "UPDATE uuid_keys SET body = 'changed' WHERE id = $1",
+        &[Value::Uuid(hawdb::Uuid::parse_str(id).unwrap())],
+    )
+    .unwrap();
+    let staged = seal(
+        &db.projection_generation_store().unwrap(),
+        "sql_uuid",
+        dependencies.source_epoch(),
+        None,
+    );
+    assert!(matches!(
+        db.publish_prepared_projection(&dependencies, &staged),
+        Err(ProjectionPublicationError::Dependency(_))
+    ));
+}
+
+#[test]
+fn unsupported_or_failed_sql_cannot_escape_as_a_source_proof() {
+    for sql in [
+        "SELECT lower(body) FROM records WHERE tenant = 'w' AND id = 1",
+        "SELECT * FROM records r JOIN records s ON r.id = s.id",
+        "SELECT * FROM pg_tables",
+        "SELECT body FROM records FOR UPDATE",
+        "UPDATE records SET body = 'not applied' WHERE tenant = 'w' AND id = 1",
+    ] {
+        let (_root, db) = relational_fixture();
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        assert!(
+            preparation.query_sql_with_params(sql, &[]).is_err(),
+            "{sql}"
+        );
+        assert!(preparation.finish().is_err(), "{sql}");
+        assert_eq!(
+            db.begin_read_transaction()
+                .unwrap()
+                .query_sql("SELECT body FROM records WHERE tenant = 'w' AND id = 1")
+                .unwrap()
+                .rows[0]["body"],
+            Value::String("one".into())
+        );
+    }
+}
+
+#[test]
+fn relational_reads_share_the_dependency_budget_and_enforce_input_output_limits() {
+    let (_root, db) = relational_fixture();
+    let mut budget = limits();
+    budget.dependency_entries = NonZeroUsize::new(1).unwrap();
+    let mut preparation = db.begin_prepared_read(budget).unwrap();
+    sql_point(&mut preparation, 1);
+    sql_point(&mut preparation, 1); // identical key deduplicates
+    assert!(preparation
+        .query_sql_with_params(
+            "SELECT body FROM records WHERE tenant = 'w' AND id = 2",
+            &[]
+        )
+        .is_err());
+    assert!(preparation.finish().is_err());
+    let mut preparation = db.begin_prepared_read(budget).unwrap();
+    sql_point(&mut preparation, 1);
+    assert!(preparation
+        .query_with_params("MATCH (n:Memory) RETURN n.id AS id", &BTreeMap::new())
+        .is_err());
+    assert!(preparation.finish().is_err());
+    for (sql, parameters) in [
+        (
+            "SELECT body FROM records WHERE tenant = $1 AND id = 1".to_string(),
+            vec![Value::String("x".repeat(64 * 1024))],
+        ),
+        ("SELECT body FROM records".to_string(), vec![]),
+    ] {
+        let mut budget = limits();
+        budget.statement_rows = NonZeroUsize::new(1).unwrap();
+        let mut preparation = db.begin_prepared_read(budget).unwrap();
+        assert!(preparation
+            .query_sql_with_params(&sql, &parameters)
+            .is_err());
+        assert!(preparation.finish().is_err());
+    }
+}
+
+#[test]
+fn large_relational_primary_keys_use_an_observable_bounded_fallback() {
+    let (_root, mut db) = relational_fixture();
+    db.query_sql("CREATE TABLE large_keys (id TEXT PRIMARY KEY, body TEXT)")
+        .unwrap();
+    let key = Value::String("k".repeat(5000));
+    db.query_sql_with_params(
+        "INSERT INTO large_keys (id, body) VALUES ($1, 'one')",
+        std::slice::from_ref(&key),
+    )
+    .unwrap();
+    let mut preparation = db.begin_prepared_read(limits()).unwrap();
+    assert_eq!(
+        preparation
+            .query_sql_with_params("SELECT body FROM large_keys WHERE id = $1", &[key])
+            .unwrap()
+            .rows
+            .len(),
+        1
+    );
+    let dependencies = preparation.finish().unwrap();
+    assert!(dependencies.requires_unchanged_database_epoch());
+    assert_eq!(dependencies.exact_relational_row_count(), 0);
+}
+
+#[test]
+fn prepared_relational_payload_and_statement_work_limits_fail_sticky() {
+    let (_root, mut db) = relational_fixture();
+    db.query_sql_with_params(
+        "UPDATE records SET body = $1 WHERE tenant = 'w' AND id = 1",
+        &[Value::String("x".repeat(8192))],
+    )
+    .unwrap();
+    for query in [
+        "SELECT body FROM records WHERE tenant = 'w' AND id = 1".to_string(),
+        format!(
+            "SELECT body FROM records WHERE tenant = 'w' AND id = 1 AND ({})",
+            (0..600)
+                .map(|_| "body = 'x'")
+                .collect::<Vec<_>>()
+                .join(" OR ")
+        ),
+    ] {
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        assert!(preparation.query_sql_with_params(&query, &[]).is_err());
+        assert!(preparation.finish().is_err());
+    }
+}
+
+#[test]
+fn relational_lexical_and_expression_admission_precede_recursive_ast_work() {
+    let (_root, db) = relational_fixture();
+    let deep = format!(
+        "SELECT body FROM records WHERE {}",
+        (0..600).map(|_| "id = 1").collect::<Vec<_>>().join(" OR ")
+    );
+    let escaped = format!(
+        r"SELECT body FROM records WHERE body = E'escaped \' OR inside' OR {}",
+        (0..600).map(|_| "id = 1").collect::<Vec<_>>().join(" OR ")
+    );
+    let mut preparation = db.begin_prepared_read(limits()).unwrap();
+    assert!(preparation
+        .query_sql_with_params(&escaped, &[])
+        .unwrap_err()
+        .to_string()
+        .contains("recursive SQL syntax"));
+    assert!(preparation.finish().is_err());
+    let flat = format!(
+        "SELECT body FROM records WHERE id IN ({})",
+        (0..1500).map(|_| "1").collect::<Vec<_>>().join(",")
+    );
+    for (sql, message) in [
+        (deep, "recursive SQL syntax"),
+        (flat, "expression exceeding metadata work"),
+    ] {
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        let error = preparation.query_sql_with_params(&sql, &[]).unwrap_err();
+        assert!(error.to_string().contains(message), "{error}");
+        assert!(preparation.finish().is_err());
+    }
+    let sql = format!(
+        "SELECT body FROM records WHERE tenant = 'w' AND id = 1 /* {} */ AND body != '{}'",
+        "OR ".repeat(600),
+        "OR ".repeat(600)
+    );
+    let mut preparation = db.begin_prepared_read(limits()).unwrap();
+    assert_eq!(
+        preparation
+            .query_sql_with_params(&sql, &[])
+            .unwrap()
+            .rows
+            .len(),
+        1
+    );
+    assert_eq!(
+        preparation.finish().unwrap().exact_relational_row_count(),
+        1
+    );
+}
+
+#[test]
+fn checkpointed_relational_points_preserve_disjoint_validation_with_unselected_large_payloads() {
+    for related in [false, true] {
+        let (root, mut db) = relational_fixture();
+        db.query_sql("ALTER TABLE records ADD COLUMN payload TEXT")
+            .unwrap();
+        db.query_sql_with_params(
+            "UPDATE records SET payload = $1 WHERE tenant = 'w' AND id = 1",
+            &[Value::String("x".repeat(1024 * 1024))],
+        )
+        .unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        let mut db = Database::open_with_config(
+            &root.0,
+            hawdb::DatabaseConfig {
+                storage_residency_mode: hawdb::StorageResidencyMode::OutOfCore,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(db.storage_residency_report().unwrap().out_of_core);
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        assert_eq!(
+            sql_point(&mut preparation, 1).rows[0]["body"],
+            Value::String("one".into())
+        );
+        let dependencies = preparation.finish().unwrap();
+        assert_eq!(dependencies.exact_relational_row_count(), 1);
+        db.query_sql(if related {
+            "UPDATE records SET body = 'changed' WHERE tenant = 'w' AND id = 1"
+        } else {
+            "UPDATE records SET body = 'changed' WHERE tenant = 'w' AND id = 2"
+        })
+        .unwrap();
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "sql_checkpointed",
+            dependencies.source_epoch(),
+            None,
+        );
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        if related {
+            assert!(matches!(
+                result,
+                Err(ProjectionPublicationError::Dependency(_))
+            ));
+        } else {
+            result.unwrap();
+        }
+    }
+}

@@ -276,6 +276,16 @@ heads, readers, sealed tokens and open writers as distinct roots. Dropping an
 unpublished token makes its candidate eligible for bounded reclamation; dropping
 a committed token does not remove the durable head root.
 
+Prepared SQL hydration now supports canonical public single-table SELECTs.
+A complete necessary primary-key tuple under AND records the existing relational
+row intent, including absent keys and UUID coercion shared with query/writer
+keys. Other admitted reads expose a Database-epoch fallback; joins, functions,
+system/projection-bound sources and locking/mutation statements fail closed.
+SQL and Cypher share one sticky dependency budget. Pre-parse admission uses the
+execution frontend's PostgreSQL tokenizer to bound recursive parser/lowering/drop
+work, with separate expression/key and existing row/payload limits. See the
+[relational collector argument and ten controls](../tla/RELATIONAL_PROJECTION_READ_VALIDATION_PROOF.md).
+
 The Search backend additionally exposes owned `prepare_publication` candidates
 for ordinary and partitioned full builds, incremental updates and governed
 wrappers. A short capture lease chooses the prospective generation; expensive
@@ -300,7 +310,7 @@ size-independent publication section has not been delivered. See the
 The catalog path publishes full generations; the native Search path activates
 owned backend candidates. It does not yet move actual
 incremental Search preparation out of `NowledgeMemEmbeddedStoreHandle`, collect
-complete composite/range/relational/adjacency dependencies, validate host binding
+complete graph composite/range/adjacency and additional relational dependencies, validate host binding
 incarnations and batch receipts, integrate source-validated Search activation
 into Mem catch-up, or qualify power loss and 1/4/8-writer latency. Unsupported value/access shapes deliberately retain
 label domains or read barriers; those fallbacks are not advertised as exact keys.
@@ -349,7 +359,7 @@ path do not prove starvation freedom.
 | Version retention/admission | Existing history budget/pin models and tests | Churn/long-pin allocator/RSS and cleanup-latency qualification |
 | Publication protocol | [Finite safety model and 14 controls](../tla/VERSIONED_PROJECTION_PUBLICATION_PROOF.md), registered safety action and initial source-validation/catalog path | Complete source refinement and embedded integration |
 | Search preparation/activation | Owned single/partitioned/update candidates, selector CAS, shared source-validation facade and lifecycle model | Mem catch-up/outer-owner migration, host bindings and bounded batch receipts, size-independent activation I/O and fault/performance composition |
-| Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain collectors and native cold/hot regressions | Composite/range/relational/adjacency collectors, host dependencies and full completeness qualification |
+| Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain and relational primary-tuple collectors, native cold/hot regressions | Graph composite/range/adjacency and relational multi-key/range/join/domain collectors, host dependencies and full completeness qualification |
 | Invisible staging and durable activation | Existing `ProjectionGenerationStore` candidate/seal/head protocol and Search mutation components | Compose source validation and Search activation with complete receipt/closure and failure states |
 | Embedded owner concurrency | Current catch-up path and unmerged #1032 audit | Integrate on main; prove a competing disjoint writer commits while preparation is paused |
 | Recovery/power loss | Existing WAL/group/branch proofs, #820 fault harness | Compose new staging/selector/source barriers, cancellation, lost responses and replay |

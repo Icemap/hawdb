@@ -83,6 +83,13 @@ impl GraphReadDependencies {
             .count()
     }
 
+    pub fn exact_relational_row_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::RelationalRow { .. }))
+            .count()
+    }
+
     pub fn node_domain_count(&self) -> usize {
         self.keys
             .iter()

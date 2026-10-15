@@ -22,6 +22,9 @@ use hawdb_storage::store::{GraphReadDependencies, GraphReadDependencyError};
 use hawdb_storage::version::VersionKey;
 use std::fmt;
 
+#[path = "dependency_read/relational.rs"]
+mod relational;
+
 /// Limits for one preparation. Output limits apply to each statement; callers
 /// must additionally bound cross-statement work and the artifact builder.
 #[derive(Debug, Clone, Copy)]
@@ -70,6 +73,10 @@ impl PreparedReadDependencies {
 
     pub fn exact_node_property_count(&self) -> usize {
         self.graph.exact_node_property_count()
+    }
+
+    pub fn exact_relational_row_count(&self) -> usize {
+        self.graph.exact_relational_row_count()
     }
 
     pub fn node_domain_count(&self) -> usize {
