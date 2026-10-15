@@ -280,7 +280,6 @@ impl Database {
             .map(|prepared| prepared.admission)
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn prepare_runtime_query(
         &self,
         cypher_text: String,

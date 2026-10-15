@@ -22,7 +22,7 @@ use crate::binding::{
 };
 use crate::expression::{
     evaluate_predicate_with_context, evaluate_projection_borrowed, prepare_borrowed_projection,
-    property_filter_from_predicate, push_borrowed_projection,
+    property_filter_from_predicate, push_borrowed_projection, ProjectedValue,
 };
 use crate::kernel::{push_bounded_operator_binding, OperatorMemoryTracker};
 use crate::observer::ExecutionObserver;
@@ -42,6 +42,7 @@ use hawdb_core::{
 };
 use hawdb_plan_cypher::{
     ComparisonOp, ExactPropertySeekBranch, NodeProjectionAccess, Predicate, Projection,
+    ProjectionExpression,
 };
 use hawdb_storage::{
     adjacency::AdjacencyDirection,
@@ -690,6 +691,44 @@ pub fn stream_node_projection_scan_batches(
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
+    let property_filter = spec
+        .predicate
+        .and_then(|predicate| property_filter_from_predicate(predicate).ok());
+    let mut resident_scan = if spec.access.is_label_scan()
+        && !context.store.is_out_of_core()
+        && let Some(label_id) = exact_label
+        && context
+            .store
+            .node_count_for_label(label_id)
+            .saturating_mul(std::mem::size_of::<&NodeRecord>())
+            <= context.memory_account.budget_bytes().get()
+    {
+        Some(context.pruned_scan(label_id, property_filter.as_ref())?)
+    } else {
+        None
+    };
+    if resident_scan.is_some()
+        && spec.predicate.is_none()
+        && !spec.items.is_empty()
+        && spec.items.iter().all(|item| match &item.expression {
+            ProjectionExpression::Property { variable, property } => {
+                variable == spec.variable && required_properties.contains(property)
+            }
+            ProjectionExpression::Id { variable } => variable == spec.variable,
+            ProjectionExpression::Literal(_) => true,
+            _ => false,
+        })
+        && let Some(scan) = resident_scan.take()
+    {
+        return stream_simple_node_projection_scan(
+            spec,
+            context,
+            scan,
+            &required_properties,
+            observer,
+            emit,
+        );
+    }
     let mut batch = context.output_batch("NodeProjectionScanExec");
     let mut emitted = 0usize;
     let mut visited = 0usize;
@@ -758,19 +797,7 @@ pub fn stream_node_projection_scan_batches(
             ScanControl::Continue
         })
     };
-    let property_filter = spec
-        .predicate
-        .and_then(|predicate| property_filter_from_predicate(predicate).ok());
-    if spec.access.is_label_scan()
-        && !context.store.is_out_of_core()
-        && let Some(label_id) = exact_label
-        && context
-            .store
-            .node_count_for_label(label_id)
-            .saturating_mul(std::mem::size_of::<&NodeRecord>())
-            <= context.memory_account.budget_bytes().get()
-    {
-        let scan = context.pruned_scan(label_id, property_filter.as_ref())?;
+    if let Some(scan) = resident_scan {
         observer.record_scan_pruning_report(scan.report.clone());
         let mut control = ScanControl::Continue;
         for node in scan.nodes {
@@ -825,49 +852,90 @@ pub fn stream_node_projection_scan_batches(
                 owned_bytes,
             )
         };
-    let control = match (exact_label_id, spec.access) {
-        (_, NodeProjectionAccess::LabelScan) => context.store.visit_projected_nodes_admitted(
-            exact_label_id,
-            &required_properties,
-            &mut admit,
-            &mut visit,
-        )?,
-        (Some(label_id), NodeProjectionAccess::PropertyUnion { branches }) => {
-            let key_account = context.retained_account("NodeProjectionScanExec union keys");
-            let mut allocate_keys =
-                |bytes| crate::store::admit_graph_read(&key_account, context.task_context, bytes);
-            let key_admission =
-                hawdb_storage::read_view::GraphReadAdmission::new(&mut allocate_keys);
-            let mut seen = hawdb_storage::read_view::AdmittedKeySet::new(&key_admission)?;
-            let mut control = ScanControl::Continue;
-            for branch in branches {
-                control = context.store.visit_projected_nodes_by_property_admitted(
-                    label_id,
-                    &branch.property,
-                    &branch.values,
-                    &required_properties,
-                    &mut admit,
-                    &mut |node| {
-                        if !seen.try_insert(node.id)? {
-                            return Ok(ScanControl::Continue);
-                        }
-                        visit(node)
-                    },
-                )?;
+    let indexed_nodes = match (exact_label_id, spec.access) {
+        (Some(label_id), NodeProjectionAccess::PropertyValues { property, values })
+            if !context.store.is_out_of_core()
+                && context
+                    .catalog
+                    .has_scalar_property_index(label_id, property) =>
+        {
+            match values.as_slice() {
+                [value] => context
+                    .store
+                    .scan_indexed_nodes_borrowed(label_id, property, value),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+    let control = if let Some(nodes) = indexed_nodes {
+        let mut control = ScanControl::Continue;
+        for candidate in nodes {
+            runtime_checkpoint(context.task_context)?;
+            // Keep the before-copy allocation through residual evaluation and
+            // projection, including the temporary binding's owned capacity.
+            let mut source_allocation = None;
+            if let Some(node) = context.store.projected_node_owned_admitted(
+                candidate.id,
+                &required_properties,
+                &mut |bytes| {
+                    source_allocation = Some(admit(bytes)?);
+                    Ok(())
+                },
+            )? {
+                control = visit(node)?;
                 if control == ScanControl::Stop {
                     break;
                 }
             }
-            control
         }
-        (Some(label_id), access) => context.store.visit_projected_nodes_by_access_admitted(
-            label_id,
-            access,
-            &required_properties,
-            &mut admit,
-            &mut visit,
-        )?,
-        (None, _) => ScanControl::Continue,
+        control
+    } else {
+        match (exact_label_id, spec.access) {
+            (_, NodeProjectionAccess::LabelScan) => context.store.visit_projected_nodes_admitted(
+                exact_label_id,
+                &required_properties,
+                &mut admit,
+                &mut visit,
+            )?,
+            (Some(label_id), NodeProjectionAccess::PropertyUnion { branches }) => {
+                let key_account = context.retained_account("NodeProjectionScanExec union keys");
+                let mut allocate_keys = |bytes| {
+                    crate::store::admit_graph_read(&key_account, context.task_context, bytes)
+                };
+                let key_admission =
+                    hawdb_storage::read_view::GraphReadAdmission::new(&mut allocate_keys);
+                let mut seen = hawdb_storage::read_view::AdmittedKeySet::new(&key_admission)?;
+                let mut control = ScanControl::Continue;
+                for branch in branches {
+                    control = context.store.visit_projected_nodes_by_property_admitted(
+                        label_id,
+                        &branch.property,
+                        &branch.values,
+                        &required_properties,
+                        &mut admit,
+                        &mut |node| {
+                            if !seen.try_insert(node.id)? {
+                                return Ok(ScanControl::Continue);
+                            }
+                            visit(node)
+                        },
+                    )?;
+                    if control == ScanControl::Stop {
+                        break;
+                    }
+                }
+                control
+            }
+            (Some(label_id), access) => context.store.visit_projected_nodes_by_access_admitted(
+                label_id,
+                access,
+                &required_properties,
+                &mut admit,
+                &mut visit,
+            )?,
+            (None, _) => ScanControl::Continue,
+        }
     };
     let candidate_count = context.store.node_count_for_label(exact_label_id);
     let pruned = !spec.access.is_label_scan();
@@ -892,6 +960,77 @@ pub fn stream_node_projection_scan_batches(
     } else {
         BatchControl::Continue
     })
+}
+
+fn stream_simple_node_projection_scan(
+    spec: NodeProjectionScanSpec<'_>,
+    context: NodeScanContext<'_>,
+    scan: crate::store::PrunedNodeScan<'_>,
+    required_properties: &BTreeSet<String>,
+    observer: &dyn ExecutionObserver,
+    emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
+) -> Result<BatchControl> {
+    observer.record_scan_pruning_report(scan.report);
+    let mut batch = context.output_batch("NodeProjectionScanExec");
+    let mut emitted = 0usize;
+    for input in scan.nodes {
+        runtime_checkpoint(context.task_context)?;
+        // Hydrating sources keep their own read boundary. Preserve the old
+        // selected-input allowance when the iterator supplies an owned record.
+        let _owned_input = if matches!(input, std::borrow::Cow::Owned(_)) {
+            Some(
+                context
+                    .memory_account
+                    .reserve(projected_node_binding_memory_bytes(
+                        spec.variable,
+                        input.as_ref(),
+                        required_properties,
+                    ))?,
+            )
+        } else {
+            None
+        };
+        let node = input.as_ref();
+        observer.record_borrowed_node_projection_rows(1);
+        let control = push_borrowed_projection(
+            &mut batch,
+            || {
+                prepare_borrowed_projection(
+                    spec.items,
+                    context.memory_account,
+                    None,
+                    |expression| {
+                        Ok(match expression {
+                            ProjectionExpression::Property { property, .. } => node
+                                .properties
+                                .get(property)
+                                .map(ProjectedValue::borrowed)
+                                .unwrap_or_else(|| ProjectedValue::scalar(Value::Null)),
+                            ProjectionExpression::Id { .. } => {
+                                ProjectedValue::scalar(Value::Int(node.id.0 as i64))
+                            }
+                            ProjectionExpression::Literal(value) => ProjectedValue::borrowed(value),
+                            _ => unreachable!("simple projection eligibility checks expressions"),
+                        })
+                    },
+                )
+            },
+            context.task_context,
+            emit,
+        )?;
+        if control == BatchControl::Stop {
+            return Ok(BatchControl::Stop);
+        }
+        emitted = emitted.saturating_add(1);
+        if batch.is_full() && batch.emit(emit)? == BatchControl::Stop {
+            return Ok(BatchControl::Stop);
+        }
+        if context.execution_limit.is_reached(emitted) {
+            batch.emit(emit)?;
+            return Ok(BatchControl::Stop);
+        }
+    }
+    batch.emit(emit)
 }
 
 fn node_projection_access_strategy(access: &NodeProjectionAccess) -> ScanPruningStrategy {
