@@ -168,13 +168,12 @@ fn mem_algorithm_iteration_and_final_phase_contracts_survive_both_residencies() 
     std::fs::remove_dir_all(path).unwrap();
 }
 
-#[test]
-fn projected_identity_ignores_large_content_and_rejects_large_ids_without_a_prefix() {
-    let path = unique_test_dir("projected_identity_admission");
+// The identity guards and isolated RSS child share one dense persisted fixture.
+pub(in crate::api::tests) fn prepare_dense_identity_fixture(path: &std::path::Path) {
     {
         let mut catalog = crate::schema::Catalog::default();
         let mut store = crate::store::GraphStore::open_with_durability(
-            &path,
+            path,
             &mut catalog,
             crate::DurabilityPolicy::SyncOnCheckpoint,
         )
@@ -217,14 +216,17 @@ fn projected_identity_ignores_large_content_and_rejects_large_ids_without_a_pref
         store.checkpoint(&catalog).unwrap();
     }
     {
-        let mut db = Database::open(&path).unwrap();
-        db.query("CALL project_graph('small', ['Memory'], ['LINK'])")
+        let mut db = Database::open(path).unwrap();
+        db.query("CALL project_graph('graph', ['Memory'], ['LINK'])")
             .unwrap();
         db.query("CALL project_graph('large', ['Oversized'], ['LINK'])")
             .unwrap();
         db.checkpoint().unwrap();
     }
-    let wal = read_test_wal(&path).unwrap();
+}
+
+pub(in crate::api::tests) fn assert_projected_identity_admission(path: &std::path::Path) {
+    let wal = read_test_wal(path).unwrap();
     for residency in [
         StorageResidencyMode::Materialized,
         StorageResidencyMode::OutOfCore,
@@ -240,11 +242,11 @@ fn projected_identity_ignores_large_content_and_rejects_large_ids_without_a_pref
             };
             config.execution_memory.blocking_operator_bytes =
                 std::num::NonZeroUsize::new(budget).unwrap();
-            let db = Database::open_with_config(&path, config).unwrap();
+            let db = Database::open_with_config(path, config).unwrap();
             let epoch = db.commit_epoch().unwrap();
             let mut snapshot = db.begin_read_transaction().unwrap();
             let mut rows = Vec::new();
-            let report = snapshot.query_streaming("CALL page_rank('small', maxIterations := 2) RETURN node, node_id, node_label, pagerank_score", QueryStreamOptions { max_rows: Some(128), max_payload_bytes: Some(64 * 1024) }, |row| { rows.push(row); Ok(()) }).unwrap();
+            let report = snapshot.query_streaming("CALL page_rank('graph', maxIterations := 2) RETURN node, node_id, node_label, pagerank_score", QueryStreamOptions { max_rows: Some(128), max_payload_bytes: Some(64 * 1024) }, |row| { rows.push(row); Ok(()) }).unwrap();
             assert_eq!(rows.len(), 128);
             assert!(rows
                 .iter()
@@ -279,8 +281,17 @@ fn projected_identity_ignores_large_content_and_rejects_large_ids_without_a_pref
             assert_eq!(db.commit_epoch().unwrap(), epoch);
             drop(snapshot);
             drop(db);
-            assert_eq!(read_test_wal(&path).unwrap(), wal);
+            assert_eq!(read_test_wal(path).unwrap(), wal);
         }
     }
+}
+
+// Browser tests cannot spawn the RSS child, so retain the identity-only entry.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+#[test]
+fn projected_identity_ignores_large_content_and_rejects_large_ids_without_a_prefix() {
+    let path = unique_test_dir("projected_identity_admission");
+    prepare_dense_identity_fixture(&path);
+    assert_projected_identity_admission(&path);
     std::fs::remove_dir_all(path).unwrap();
 }
