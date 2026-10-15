@@ -48,8 +48,10 @@ pub mod query_runtime_preflight;
 mod relational_sql;
 pub mod replacement_summary;
 pub mod search;
+pub mod sql_session;
 pub use hawdb_route_ownership as search_route_ownership;
 pub use hawdb_storage::store;
+pub use sql_session::{SqlSession, SqlSessionTransaction};
 
 #[cfg(test)]
 mod store_facade_tests;
