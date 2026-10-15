@@ -37,8 +37,9 @@ transaction, hydrates it, builds its delta, drops the snapshot and applies the
 incremental delta within the mutable store operation. The embedded handle's
 store-wide writer ownership serializes that work. PR #1032 merged into main at
 `cfbea1b` (2026-10-15 17:41:56 UTC). Its owner/fence API is now available on
-main; this feature branch still needs synchronization and actual integration.
-Keep the PR based directly on main rather than stacking on its former feature
+main and is incorporated into this feature branch. Actual prepared-session
+and Mem integration remain required. Keep the PR based directly on main rather
+than stacking on its former feature
 branch. The merged coarse owner alone does not remove this bottleneck.
 
 ## Turso reference and selected lessons
@@ -399,7 +400,7 @@ path do not prove starvation freedom.
 | Search preparation/activation | Owned single/partitioned/update candidates, selector CAS, shared source-validation facade and lifecycle model | Mem catch-up/outer-owner migration, host bindings and bounded batch receipts, size-independent activation I/O and fault/performance composition |
 | Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain, internal-ID/single-hop and relational primary-tuple collectors, native cold/hot regressions | Graph composite/range/other traversal and relational multi-key/range/join/domain collectors, host dependencies and full completeness qualification |
 | Invisible staging and durable activation | Existing `ProjectionGenerationStore` candidate/seal/head protocol and Search mutation components | Compose source validation and Search activation with complete receipt/closure and failure states |
-| Embedded owner concurrency | Current catch-up path; #1032 owner/fence merged on main at cfbea1b | Synchronize this branch and integrate on main; prove a competing disjoint writer commits while preparation is paused |
+| Embedded owner concurrency | Current catch-up path; #1032 owner/fence merged on main at cfbea1b | Merged main owner available; integrate prepared sessions into the actual path; prove a competing disjoint writer commits while preparation is paused |
 | Recovery/power loss | Existing WAL/group/branch proofs, #820 fault harness | Compose new staging/selector/source barriers, cancellation, lost responses and replay |
 | Scaling/fairness/latency | Existing 1/4/8-writer harness and retained adverse samples | Small/large catch-up enabled/disabled runs, p50/p95/p99, lock wait/hold time, unchanged latency gates |
 

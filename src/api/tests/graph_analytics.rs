@@ -662,45 +662,20 @@ fn rss_child() {
 #[test]
 fn persistent_edges_stream_with_bounded_rss_in_an_isolated_process() {
     let path = unique_test_dir("analytics_streaming_rss");
-    {
-        // Fixture preparation uses the existing library storage path; the
-        // measured child opens and queries through the normal Database facade.
-        let mut catalog = crate::schema::Catalog::default();
-        let mut store = crate::store::GraphStore::open_with_durability(
-            &path,
-            &mut catalog,
-            crate::DurabilityPolicy::SyncOnCheckpoint,
-        )
-        .unwrap();
-        let nodes: Vec<_> = (0..128)
-            .map(|id| {
-                store
-                    .create_node(
-                        &mut catalog,
-                        "Memory",
-                        BTreeMap::from([("id".into(), Value::Int(id))]),
-                    )
-                    .unwrap()
-            })
-            .collect();
-        for &source in &nodes {
-            for &target in &nodes {
-                if source == target {
-                    continue;
-                }
-                store
-                    .create_relationship(&mut catalog, source, target, "LINK", BTreeMap::new())
-                    .unwrap();
-            }
-        }
-        store.checkpoint(&catalog).unwrap();
-    }
-    {
-        let mut db = Database::open(&path).unwrap();
-        db.query("CALL project_graph('graph', ['Memory'], ['LINK'])")
-            .unwrap();
-        db.checkpoint().unwrap();
-    }
+    let setup_started = std::time::Instant::now();
+    super::projected_graph_execution::prepare_dense_identity_fixture(&path);
+    eprintln!(
+        "dense analytics fixture setup: {:?}",
+        setup_started.elapsed()
+    );
+    let identity_started = std::time::Instant::now();
+    super::projected_graph_execution::assert_projected_identity_admission(&path);
+    eprintln!(
+        "dense analytics identity checks: {:?}",
+        identity_started.elapsed()
+    );
+    // A fresh process keeps fixture construction and identity checks out of the
+    // measured child's allocator history and peak-RSS baseline.
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",

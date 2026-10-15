@@ -197,3 +197,23 @@ Native source-linked collector completeness, deterministic interleavings,
 paused-preparation writer progress, cancellation/cleanup ownership, fault images
 and 1/4/8-writer latency/throughput qualification are still required. Keep both
 issues open until the complete acceptance ledger is satisfied.
+
+## Main owner composition regression
+
+After incorporating main `cfbea1b` (#1032), the external consumer
+`tests/mvcc_publication_owner.rs` composes the real public
+DatabasePublicationOwner with PreparedRead and sealed Search activation in both
+default and minimal profiles. Preparation releases capture ownership, records a
+host-owned graph Binding dependency and pauses on a channel. A competing thread
+must commit through the same owner and report completion before preparation is
+released; starting a writer thread or observing a try-lock is insufficient.
+Delayed graph hydration still reads the captured value. Disjoint writes permit
+activation at the captured epoch; relevant writes, graph binding ABA despite an
+equal latest guard value, and replacement by a same-epoch database reject before
+selector/watermark visibility and reclaim the candidate stage.
+
+This is composition evidence for the reusable owner/engine APIs. The binding is
+a tracked graph row in this fixture; it does not qualify arbitrary external host
+binding storage, native bounded catch-up coverage or the actual Mem outer-owner
+handoff. Search activation still performs artifact I/O under publication
+exclusion. Those acceptance gates remain open.
