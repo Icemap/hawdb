@@ -70,6 +70,7 @@ STORAGE_MODELS = [
     "HawDBRowRecovery",
     "HawDBRuntimeAdmission",
     "HawDBSearchMutationPublication",
+    "HawDBSearchPreparedPublication",
     "HawDBSearchStageCleanup",
     "HawDBSourceSegmentPublication",
     "HawDBSparseRelationalActivation",

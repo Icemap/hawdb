@@ -205,17 +205,17 @@ pub use lexical_readiness::{
 pub use lexical_source_policy::SearchLexicalSourcePolicy;
 pub use lexical_term_policy::SearchLexicalTermPolicy;
 pub use out_of_core::{
-    GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter,
+    GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
     ScheduledSearchOutOfCoreSegmentCompactionReport, SearchBodyReadOptions,
     SearchGenerationAdmission, SearchOutOfCoreCandidate, SearchOutOfCoreConfig,
     SearchOutOfCoreExecutionContext, SearchOutOfCoreGenerationBuildOptions,
     SearchOutOfCoreGenerationBuildReport, SearchOutOfCoreGenerationUpdate,
     SearchOutOfCoreGenerationWriter, SearchOutOfCoreHydrationOutput, SearchOutOfCoreMetrics,
-    SearchOutOfCoreMutationWriter, SearchOutOfCoreOutput, SearchOutOfCoreReader,
-    SearchOutOfCoreRefreshReport, SearchOutOfCoreSegmentCompaction,
-    SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
-    SearchOutOfCoreSegmentCompactionStopReason, SearchStagingCleanupReport, SearchTextSeedOutput,
-    SearchTextSeedReport, SearchVerifiedBody,
+    SearchOutOfCoreMutationWriter, SearchOutOfCoreOutput, SearchOutOfCorePreparedGeneration,
+    SearchOutOfCorePreparedUpdate, SearchOutOfCoreReader, SearchOutOfCoreRefreshReport,
+    SearchOutOfCoreSegmentCompaction, SearchOutOfCoreSegmentCompactionPolicy,
+    SearchOutOfCoreSegmentCompactionReport, SearchOutOfCoreSegmentCompactionStopReason,
+    SearchStagingCleanupReport, SearchTextSeedOutput, SearchTextSeedReport, SearchVerifiedBody,
 };
 // These are internal ownership seams. Hosts continue to use the embedded facade.
 #[doc(hidden)]

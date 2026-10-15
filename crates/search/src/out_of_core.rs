@@ -63,11 +63,12 @@ mod reuse;
 mod text_seed;
 mod vector_serving;
 pub use generation_writer::{
-    GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter,
+    GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
     ScheduledSearchOutOfCoreSegmentCompactionReport, SearchGenerationAdmission,
     SearchOutOfCoreGenerationBuildOptions, SearchOutOfCoreGenerationBuildReport,
     SearchOutOfCoreGenerationUpdate, SearchOutOfCoreGenerationWriter,
-    SearchOutOfCoreMutationWriter, SearchOutOfCoreSegmentCompaction,
+    SearchOutOfCoreMutationWriter, SearchOutOfCorePreparedGeneration,
+    SearchOutOfCorePreparedUpdate, SearchOutOfCoreSegmentCompaction,
     SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
     SearchOutOfCoreSegmentCompactionStopReason, SearchStagingCleanupReport,
 };

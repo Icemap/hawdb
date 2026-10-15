@@ -1464,6 +1464,13 @@ query results, including delayed query selection after capture, absent keys,
 payload changes, domain fallback, OR/bounded-phase qualification and pruning.
 Its [collector argument and ten controls](INDEXED_PROJECTION_READ_VALIDATION_PROOF.md)
 separate the qualified native paths from the remaining query families. The
+[`HawDBSearchPreparedPublication.tla`](HawDBSearchPreparedPublication.tla)
+checks two publishers preparing private candidates without retaining the root
+lease, exact valid/damaged selector revalidation, complete activation, consumer
+exclusion, stage/active GC, cancellation, crash and lost response. Its
+[argument and ten controls](SEARCH_PREPARED_PUBLICATION_PROOF.md) map the owned
+Search candidates and source-validated facade while retaining the outer-owner,
+batch-receipt, power-loss and activation-I/O qualification gaps. The
 [`HawDBProjectionSourceDurability.tla`](HawDBProjectionSourceDurability.tla)
 model distinguishes OS-visible complete WAL records, file/namespace durability
 and runtime knowledge, including relaxed commits, process reopen, grouped sync

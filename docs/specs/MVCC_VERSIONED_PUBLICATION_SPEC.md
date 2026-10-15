@@ -276,11 +276,33 @@ heads, readers, sealed tokens and open writers as distinct roots. Dropping an
 unpublished token makes its candidate eligible for bounded reclamation; dropping
 a committed token does not remove the durable head root.
 
-This first path publishes full catalog generations. It does not yet move actual
+The Search backend additionally exposes owned `prepare_publication` candidates
+for ordinary and partitioned full builds, incremental updates and governed
+wrappers. A short capture lease chooses the prospective generation; expensive
+artifact/partition construction then uses unique private stages without that
+lease. Candidates keep stage cleanup and admission ownership while queued.
+Activation reacquires publication exclusion, rechecks the captured selector
+(including exact bounded bytes for the existing damaged-selector rebuild path),
+and retains exclusion through complete manifest-last installation. Competing
+same-name candidates cannot overwrite a winner after stale rejection.
+
+`Database::publish_prepared_search` composes the shared source/dependency/durability
+validator with those closed Search activation types under one exclusive database
+borrow. No arbitrary callback can implement the sealed activation trait. This
+path requires an exact capture watermark, rejects active-watermark regression
+and refuses a damaged base whose prior floor cannot be established; changefeed
+batch coverage and host
+binding/receipt authority still need their own integration. Activation still
+checksums/installs artifacts and performs cleanup under the Search lease, so a
+size-independent publication section has not been delivered. See the
+[Search lifecycle argument and ten controls](../tla/SEARCH_PREPARED_PUBLICATION_PROOF.md).
+
+The catalog path publishes full generations; the native Search path activates
+owned backend candidates. It does not yet move actual
 incremental Search preparation out of `NowledgeMemEmbeddedStoreHandle`, collect
 complete composite/range/relational/adjacency dependencies, validate host binding
-incarnations and batch receipts, integrate Search activation, or qualify power
-loss and 1/4/8-writer latency. Unsupported value/access shapes deliberately retain
+incarnations and batch receipts, integrate source-validated Search activation
+into Mem catch-up, or qualify power loss and 1/4/8-writer latency. Unsupported value/access shapes deliberately retain
 label domains or read barriers; those fallbacks are not advertised as exact keys.
 Those requirements remain in scope and must not be replaced by this subset.
 
@@ -326,6 +348,7 @@ path do not prove starvation freedom.
 | Snapshot reads and per-key writer conflicts | Current commit protocol and native transaction/version tests | Audit collectors and compose every supported path; preserve SI boundary |
 | Version retention/admission | Existing history budget/pin models and tests | Churn/long-pin allocator/RSS and cleanup-latency qualification |
 | Publication protocol | [Finite safety model and 14 controls](../tla/VERSIONED_PROJECTION_PUBLICATION_PROOF.md), registered safety action and initial source-validation/catalog path | Complete source refinement and embedded integration |
+| Search preparation/activation | Owned single/partitioned/update candidates, selector CAS, shared source-validation facade and lifecycle model | Mem catch-up/outer-owner migration, host bindings and bounded batch receipts, size-independent activation I/O and fault/performance composition |
 | Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain collectors and native cold/hot regressions | Composite/range/relational/adjacency collectors, host dependencies and full completeness qualification |
 | Invisible staging and durable activation | Existing `ProjectionGenerationStore` candidate/seal/head protocol and Search mutation components | Compose source validation and Search activation with complete receipt/closure and failure states |
 | Embedded owner concurrency | Current catch-up path and unmerged #1032 audit | Integrate on main; prove a competing disjoint writer commits while preparation is paused |

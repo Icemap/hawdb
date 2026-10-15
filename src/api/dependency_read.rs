@@ -361,6 +361,8 @@ fn predicate_reads_relationships(predicate: &crate::planner::Predicate) -> bool 
 pub enum ProjectionPublicationError {
     SourceChanged,
     SourceNotDurable,
+    SourceWatermarkMissing,
+    SourceWatermarkRegression { previous: u64, staged: u64 },
     SourceEpochMismatch { captured: u64, staged: u64 },
     Dependency(GraphReadDependencyError),
     Storage(HawDBError),
@@ -371,6 +373,13 @@ impl fmt::Display for ProjectionPublicationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::SourceChanged => f.write_str("projection source database instance changed"),
+            Self::SourceWatermarkMissing => {
+                f.write_str("prepared Search publication requires an explicit source watermark")
+            }
+            Self::SourceWatermarkRegression { previous, staged } => write!(
+                f,
+                "prepared Search watermark {staged} regresses the active watermark {previous}"
+            ),
             Self::SourceNotDurable => {
                 f.write_str("projection source requires a completed durability barrier")
             }
@@ -443,11 +452,71 @@ impl Database {
         if let Some(receipt) = catalog.published_receipt(sealed).map_err(E::Generation)? {
             return Ok(receipt);
         }
+        self.validate_prepared_projection_source(
+            dependencies,
+            sealed.manifest().begin.source_watermark,
+            source_durability,
+        )?;
+        catalog.publish(sealed).map_err(E::Generation)
+    }
+
+    /// Activates one closed Search candidate under the source database's
+    /// exclusive borrow. The host must also retain its target/binding authority
+    /// through this call. No arbitrary mutation callback can enter this fence.
+    pub fn publish_prepared_search<P: crate::search::PreparedSearchPublication>(
+        &mut self,
+        dependencies: &PreparedReadDependencies,
+        candidate: P,
+    ) -> std::result::Result<P::Report, ProjectionPublicationError> {
+        self.publish_prepared_search_with_source_durability(
+            dependencies,
+            candidate,
+            ProjectionSourceDurability::RequireKnownDurable,
+        )
+    }
+
+    /// Explicitly covers an uncovered source WAL prefix before Search activation.
+    /// Requires the candidate watermark to equal its captured source epoch;
+    /// bounded changefeed prefixes need their additional batch/receipt contract.
+    pub fn publish_prepared_search_with_source_durability<
+        P: crate::search::PreparedSearchPublication,
+    >(
+        &mut self,
+        dependencies: &PreparedReadDependencies,
+        candidate: P,
+        source_durability: ProjectionSourceDurability,
+    ) -> std::result::Result<P::Report, ProjectionPublicationError> {
+        let watermark = candidate
+            .source_graph_commit_epoch()
+            .ok_or(ProjectionPublicationError::SourceWatermarkMissing)?;
+        if let Some(previous) = candidate
+            .source_watermark_floor()
+            .map_err(ProjectionPublicationError::Storage)?
+            && watermark < previous
+        {
+            return Err(ProjectionPublicationError::SourceWatermarkRegression {
+                previous,
+                staged: watermark,
+            });
+        }
+        self.validate_prepared_projection_source(dependencies, watermark, source_durability)?;
+        candidate
+            .publish()
+            .map_err(ProjectionPublicationError::Storage)
+    }
+
+    fn validate_prepared_projection_source(
+        &mut self,
+        dependencies: &PreparedReadDependencies,
+        staged: u64,
+        source_durability: ProjectionSourceDurability,
+    ) -> std::result::Result<(), ProjectionPublicationError> {
+        use ProjectionPublicationError as E;
+        self.ensure_writable().map_err(E::Storage)?;
         if self.instance_identity().map_err(E::Storage)? != dependencies.source {
             return Err(E::SourceChanged);
         }
         let captured = dependencies.source_epoch();
-        let staged = sealed.manifest().begin.source_watermark;
         if captured != staged {
             return Err(E::SourceEpochMismatch { captured, staged });
         }
@@ -477,6 +546,6 @@ impl Database {
                 }
             }
         }
-        catalog.publish(sealed).map_err(E::Generation)
+        Ok(())
     }
 }

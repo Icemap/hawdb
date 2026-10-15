@@ -502,6 +502,8 @@ pub use search::rabitq_projection::{
     RaBitQCandidate, RaBitQCandidateOutput, RaBitQCandidateProjection,
     RaBitQCandidateProjectionBuildOptions, RaBitQCandidateScanOptions,
 };
+#[doc(hidden)]
+pub use search::PreparedSearchPublication;
 pub use search::{
     AdaptiveVectorSearchOptions, CompressedVectorSearchMode, GovernedSearchGenerationUpdate,
     GovernedSearchGenerationWriter, MetadataRepairOptions, MetadataRepairSummary,
@@ -515,7 +517,8 @@ pub use search::{
     SearchOutOfCoreGenerationBuildOptions, SearchOutOfCoreGenerationBuildReport,
     SearchOutOfCoreGenerationUpdate, SearchOutOfCoreGenerationWriter,
     SearchOutOfCoreHydrationOutput, SearchOutOfCoreMetrics, SearchOutOfCoreMutationWriter,
-    SearchOutOfCoreOutput, SearchOutOfCoreReader, SearchOutOfCoreSegmentCompaction,
+    SearchOutOfCoreOutput, SearchOutOfCorePreparedGeneration, SearchOutOfCorePreparedUpdate,
+    SearchOutOfCoreReader, SearchOutOfCoreSegmentCompaction,
     SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
     SearchPredicateFieldPruningReport, SearchPredicatePushdownReport,
     SearchProjectionCleanupOptions, SearchProjectionCleanupReport, SearchProjectionDelta,
