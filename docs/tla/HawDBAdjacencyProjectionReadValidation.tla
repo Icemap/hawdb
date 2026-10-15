@@ -8,7 +8,7 @@ Nodes == 1..4
 Roots == {1, 2}
 Edges == {1, 2}
 Dirs == {"out", "in"}
-Queries == {"point", "out", "in", "both", "filteredNode", "filteredEdge"}
+Queries == {"point", "out", "in", "both", "filteredNode", "filteredEdge", "optional", "optionalNode", "optionalEdge"}
 N(id) == <<"node", id, "">>
 R(id) == <<"rel", id, "">>
 A(id, dir) == <<"adj", id, dir>>
@@ -21,9 +21,10 @@ Neighbor(e) == e + 2
 Direction(e) == IF e = 1 THEN "out" ELSE "in"
 ReadDirs(q) == CASE q = "point" -> {} [] q = "in" -> {"in"} [] q = "both" -> Dirs [] OTHER -> {"out"}
 Scope(j) == {e \in Edges: j.root = 1 /\ j.edges[e].active /\ Direction(e) \in ReadDirs(j.query)}
-Visible(j, e) == CASE j.query = "filteredNode" -> j.nodes[Neighbor(e)].label /\ j.nodes[Neighbor(e)].payload = 1
-                     [] j.query = "filteredEdge" -> j.edges[e].weight = 1 [] OTHER -> TRUE
+Visible(j, e) == CASE j.query \in {"filteredNode", "optionalNode"} -> j.nodes[Neighbor(e)].label /\ j.nodes[Neighbor(e)].payload = 1
+                     [] j.query \in {"filteredEdge", "optionalEdge"} -> j.edges[e].weight = 1 [] OTHER -> TRUE
 Output(j) == IF j.query = "point" THEN {<<j.root, j.nodes[j.root].payload>>} ELSE
+    IF j.query \in {"optional", "optionalNode", "optionalEdge"} /\ {e \in Scope(j): Visible(j,e)} = {} THEN {<<0, j.nodes[j.root].payload, 0, 0>>} ELSE
     {<<e, j.nodes[j.root].payload, j.nodes[Neighbor(e)].payload, j.edges[e].weight>>: e \in {s \in Scope(j): Visible(j,s)}}
 ReferenceKeys(j) == {N(j.root)} \cup {A(j.root,d): d \in ReadDirs(j.query)}
     \cup UNION {{R(e), N(Neighbor(e))}: e \in Scope(j)}

@@ -4933,7 +4933,10 @@ pub fn projection_row_from_node_with_graph_metadata<S: SearchProjectionSource + 
     Ok(Some(row))
 }
 
-fn projection_row_from_node_with_business_labels(
+/// Shapes one canonical node with already collected business-label values.
+/// The caller must establish label completeness and source validity separately.
+#[doc(hidden)]
+pub fn projection_row_from_node_with_business_labels(
     catalog: &Catalog,
     node: &NodeRecord,
     labels: &[String],
@@ -4962,7 +4965,18 @@ fn projection_business_labels_for_node<S: SearchProjectionSource + ?Sized>(
 
 #[doc(hidden)]
 pub fn projection_business_label_value(label: &NodeRecord) -> Option<String> {
-    first_non_empty_string_property(label, &["canonical_name", "name", "id"])
+    projection_business_label_value_from_properties(&label.properties)
+}
+
+/// Applies the canonical business-label precedence to a decoded query node.
+#[doc(hidden)]
+pub fn projection_business_label_value_from_properties(
+    properties: &BTreeMap<String, Value>,
+) -> Option<String> {
+    ["canonical_name", "name", "id"]
+        .into_iter()
+        .filter_map(|key| properties.get(key).map(value_to_projection_string))
+        .find(|value| !value.is_empty())
 }
 
 fn search_projection_kind_from_label(label: &str) -> Option<SearchProjectionKind> {

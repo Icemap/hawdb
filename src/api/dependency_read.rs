@@ -26,6 +26,8 @@ use std::fmt;
 mod graph_match;
 #[path = "dependency_read/relational.rs"]
 mod relational;
+#[path = "dependency_read/search_projection.rs"]
+mod search_projection;
 
 /// Limits for one preparation. Output limits apply to each statement; callers
 /// must additionally bound cross-statement work and the artifact builder.

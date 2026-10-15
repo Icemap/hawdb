@@ -4227,3 +4227,95 @@ fn source_memory_cold_union_shares_one_retained_allowance() {
         }
     }
 }
+
+#[test]
+fn entity_functions_refuse_large_owned_outputs_before_payload_allocation() {
+    // Inputs and catalog are already owned before observing the transform;
+    // this tests expression ownership, not upstream scan admission or total RSS.
+    let size = 1024 * 1024 + 137;
+    for mode in ["node", "relationship", "labels"] {
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::default();
+        let label = if mode == "labels" {
+            "L".repeat(size)
+        } else {
+            "Memory".into()
+        };
+        let root = store
+            .create_node(
+                &mut catalog,
+                &label,
+                BTreeMap::from([("body".into(), Value::String("x".repeat(size)))]),
+            )
+            .unwrap();
+        let relationship = store
+            .create_relationship(
+                &mut catalog,
+                root,
+                root,
+                "HAS_LABEL",
+                BTreeMap::from([("body".into(), Value::String("y".repeat(size)))]),
+            )
+            .unwrap();
+        let mut binding = Binding::values(BTreeMap::new());
+        binding
+            .nodes
+            .insert("n".into(), store.node_owned(root).unwrap().unwrap());
+        binding.relationships.insert(
+            "r".into(),
+            store.relationship_owned(relationship).unwrap().unwrap(),
+        );
+        let mut source = DirectProjectionSource(Some(vec![binding]));
+        let memory = ExecutionMemoryConfig {
+            query_memory_bytes: nz(64 * 1024),
+            blocking_operator_bytes: nz(16 * 1024),
+            batch_payload_bytes: nz(16 * 1024),
+            ..Default::default()
+        };
+        let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+        let input = PhysicalPlan::EmptyExec;
+        let observer = QueryExecutionObserver::new(&input);
+        let items = [Projection {
+            name: "output".into(),
+            expression: match mode {
+                "labels" => ProjectionExpression::Labels {
+                    variable: "n".into(),
+                },
+                "relationship" => ProjectionExpression::Properties {
+                    variable: "r".into(),
+                },
+                _ => ProjectionExpression::Properties {
+                    variable: "n".into(),
+                },
+            },
+        }];
+        let callbacks = Cell::new(0);
+        let window = AllocationWindow::start(size);
+        let result = stream_projection_batches(
+            &items,
+            &input,
+            &mut source,
+            BatchExecutionContext {
+                catalog: &catalog,
+                memory: &memory,
+                memory_ledger: &ledger,
+                task_context: None,
+                observer: &observer,
+            },
+            ExecutionLimit::unlimited(),
+            &mut |_| {
+                callbacks.set(callbacks.get() + 1);
+                Ok(BatchControl::Continue)
+            },
+        );
+        let allocations = window.allocations();
+        drop(window);
+        assert!(
+            matches!(result, Err(HawDBError::Execution(_))),
+            "{mode}: {result:?}"
+        );
+        assert_eq!(allocations, 0, "{mode}: copied payload before admission");
+        assert_eq!(callbacks.get(), 0);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+}

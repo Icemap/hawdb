@@ -1477,6 +1477,10 @@ adjacency, both directions, false-to-true filters and canonical/live metadata.
 Its [conditional argument and eleven controls](ADJACENCY_PROJECTION_READ_VALIDATION_PROOF.md)
 map the bounded native collector while retaining the batch and Mem integration
 obligations. The
+[prepared graph hydration argument](PREPARED_SEARCH_GRAPH_HYDRATION_PROOF.md)
+adds local raw-property/label expressions and a bounded optional-query bridge to
+Search shaping, including first-edge dependencies when catalog types are absent.
+It does not certify complete changefeed coverage. The
 [`HawDBSearchPreparedPublication.tla`](HawDBSearchPreparedPublication.tla)
 checks two publishers preparing private candidates without retaining the root
 lease, exact valid/damaged selector revalidation, complete activation, consumer

@@ -139,7 +139,6 @@ pub(super) fn collect_expand(
         direction,
         min_hops: 1,
         max_hops: 1,
-        optional: false,
         input,
         ..
     } = plan

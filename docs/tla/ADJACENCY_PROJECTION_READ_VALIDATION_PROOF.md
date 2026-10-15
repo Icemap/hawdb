@@ -7,11 +7,14 @@ full-text selection. The collector records every bounded root, including absent
 nodes. Other admitted node access paths retain their existing conservative
 dependencies; unqualified traversal shapes fail closed.
 
-The traversal qualification covers one non-optional hop from those roots, with
+The traversal qualification covers one hop from those roots, with
 outgoing, incoming or undirected expansion and an optional relationship type.
 `GraphMatchExec` must have no input/imports and exactly a root plus at most one
 expand; optimized `AdjacencyExpandExec` must have a complete local root source.
-Variable-length traversal, multiple hops, optional/imported matches and hidden
+`AdjacencyExpandExec` may be required or optional when its input is a complete
+local internal-ID root; an empty optional expansion produces a null-extended row
+from the same captured inputs. Standalone `GraphMatchExec` remains non-optional.
+Variable-length traversal, multiple hops, unqualified optional/imported matches and hidden
 relationship-existence predicates are not qualified by this collector.
 
 ## Conditional completeness argument
@@ -35,11 +38,15 @@ intents, a single canonical commit order and retained newer stamps:
    snapshot. Live overrides/tombstones replace canonical entries; the canonical
    scan still charges skipped entries. Missing canonical adjacency qualification
    refuses rather than silently omitting cold edges. Unknown mutation paths keep
-   the existing Database barrier and schema changes keep the Schema barrier.
+   the existing Database barrier and explicit schema operations keep the Schema
+   barrier. Implicit catalog additions from data writes need not emit Schema;
+   those writes still need their complete graph identity/adjacency footprint.
 5. Every change to the qualified query's input therefore touches a recorded key
    or a conservative barrier. Validation rejecting any newer such stamp implies
    unchanged inputs. Local filtering, projection, sort, grouping and limits over
-   those inputs cannot introduce another graph source. This relies on the
+   those inputs cannot introduce another graph source. Optional null extension
+   is a pure function of the complete candidate set, including its emptiness.
+   This relies on the
    existing closed expression/plan qualification, not arbitrary host callbacks.
 
 Existing graph writers already produce these keys, including before a query is
@@ -74,7 +81,8 @@ directed edges, initially empty scopes, false node/edge predicates, canonical an
 live identity sources, delayed query choice, two commits, broad/schema barriers,
 pruning and failed reads. The oracle retains independent full write history and
 also compares captured/live query output. With `MaxEpoch = 2`, the main run checks
-**3,379,266 generated / 1,442,802 distinct states**, depth 11.
+**5,029,782 generated / 2,143,350 distinct states**, depth 11. Optional queries
+include unfiltered, node-filtered and edge-filtered empty/null-extended results.
 
 Ten fault controls omit the root, empty adjacency, incoming adjacency, filtered
 neighbors, filtered relationships, canonical identities, live identities,
@@ -103,11 +111,12 @@ proving all canonical descriptor implementations or allocator behavior.
 
 The finite model abstracts IDs, types, descriptor validation, physical I/O and
 writer classification. It is not a mechanized Rust refinement or power-loss
-proof. Multi-hop/optional/path predicates, graph range/composite and additional
+proof. Multi-hop/unqualified optional/path predicates, graph range/composite and additional
 relational dependency families still need their own qualification.
 
-The existing Search graph-delta builder has not yet been replaced by this query
-path. Bounded batch coverage receipts, exact hydration, host binding/incarnation,
+The existing Search graph-delta builder has not yet been replaced by the new
+[prepared graph hydration path](PREPARED_SEARCH_GRAPH_HYDRATION_PROOF.md).
+Bounded batch coverage receipts, exact relational hydration, host binding/incarnation,
 Mem outer-owner migration and source-validated catch-up remain required. Search
 activation I/O, fault composition, retained-source RSS and 1/4/8-writer latency
 also remain open under the full #231/#232 acceptance criteria.

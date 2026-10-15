@@ -1754,3 +1754,308 @@ fn adjacency_dependency_refusals_are_sticky_and_do_not_poison_source() {
         .unwrap();
     assert_eq!(result.rows[0]["value"], Value::Int(1));
 }
+
+#[test]
+fn prepared_entity_functions_preserve_user_properties_in_hot_and_cold_reads() {
+    for cold in [false, true] {
+        for related in [false, true] {
+            let (root, mut db, id) = adjacency_fixture();
+            db.query("MATCH (n:Memory) WHERE n.id = 'a' SET n._id = 'user-id', n.labels = ['user-label']").unwrap();
+            if cold {
+                db.checkpoint().unwrap();
+                drop(db);
+                db = Database::open_with_config(
+                    &root.0,
+                    hawdb::DatabaseConfig {
+                        storage_residency_mode: hawdb::StorageResidencyMode::OutOfCore,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            }
+            let mut read = db.begin_prepared_read(limits()).unwrap();
+            let output = read.query_with_params(
+                "MATCH (n) WHERE id(n) = $id RETURN properties(n) AS properties, labels(n) AS labels, id(n) AS id",
+                &BTreeMap::from([("id".into(), Value::Int(id))]),
+            ).unwrap();
+            let row = &output.output.rows[0];
+            let Value::Map(properties) = &row["properties"] else {
+                panic!("expected raw properties")
+            };
+            assert_eq!(properties["_id"], Value::String("user-id".into()));
+            assert_eq!(
+                properties["labels"],
+                Value::List(vec![Value::String("user-label".into())])
+            );
+            assert_eq!(
+                row["labels"],
+                Value::List(vec![Value::String("Memory".into())])
+            );
+            assert_eq!(row["id"], Value::Int(id));
+            let dependencies = read.finish().unwrap();
+            assert!(!dependencies.requires_unchanged_database_epoch());
+            db.query(if related {
+                "MATCH (n:Memory) WHERE n.id = 'a' SET n._id = 'changed'"
+            } else {
+                "MATCH (n:Other) SET n.value = 7"
+            })
+            .unwrap();
+            let staged = seal(
+                &db.projection_generation_store().unwrap(),
+                "raw_properties",
+                dependencies.source_epoch(),
+                None,
+            );
+            let result = db.publish_prepared_projection(&dependencies, &staged);
+            if related {
+                assert!(matches!(
+                    result,
+                    Err(ProjectionPublicationError::Dependency(_))
+                ));
+            } else {
+                result.unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn entity_functions_restore_native_bindings_and_handle_optional_nulls() {
+    let (_root, mut db, _) = adjacency_fixture();
+    let output = db.query("MATCH (n:Memory) WHERE n.id = 'a' WITH n AS entity RETURN properties(entity) AS properties, labels(entity) AS labels").unwrap();
+    let Value::Map(properties) = &output.rows[0]["properties"] else {
+        panic!("expected properties")
+    };
+    assert_eq!(properties["id"], Value::String("a".into()));
+    assert_eq!(
+        output.rows[0]["labels"],
+        Value::List(vec![Value::String("Memory".into())])
+    );
+    let output = db.query("MATCH (n:Other) OPTIONAL MATCH (n)-[r:HAS_LABEL]->(l:Label) RETURN properties(r) AS properties, labels(l) AS labels").unwrap();
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(output.rows[0]["properties"], Value::Null);
+    assert_eq!(output.rows[0]["labels"], Value::Null);
+    db.query(
+        "MATCH (n:Memory)-[r:HAS_LABEL]->(l:Label) SET r._id = 'user-edge', r.type = 'user-type'",
+    )
+    .unwrap();
+    let output = db.query("MATCH (n:Memory)-[r:HAS_LABEL]->(l:Label) RETURN properties(r) AS properties, type(r) AS kind").unwrap();
+    let Value::Map(properties) = &output.rows[0]["properties"] else {
+        panic!("expected raw relationship properties")
+    };
+    assert_eq!(properties["_id"], Value::String("user-edge".into()));
+    assert_eq!(properties["type"], Value::String("user-type".into()));
+    assert_eq!(output.rows[0]["kind"], Value::String("HAS_LABEL".into()));
+    assert!(db
+        .query("MATCH (n:Memory)-[r:HAS_LABEL]->(l:Label) RETURN labels(r) AS labels")
+        .is_err());
+}
+
+#[test]
+fn prepared_search_graph_hydration_query_preserves_unlabelled_roots() {
+    let (_root, mut db, id) = adjacency_fixture();
+    let query = "MATCH (n) WHERE id(n) IN $ids OPTIONAL MATCH (n)-[:HAS_LABEL]-(l:Label) RETURN id(n) AS node_id, properties(n) AS properties, labels(n) AS labels, COLLECT(DISTINCT l) AS business_labels";
+    let parameters = BTreeMap::from([(
+        "ids".into(),
+        Value::List(vec![Value::Int(id), Value::Int(2)]),
+    )]);
+    let mut read = db.begin_prepared_read(limits()).unwrap();
+    let output = read.query_with_params(query, &parameters).unwrap();
+    assert_eq!(output.output.rows.len(), 2);
+    for row in output.output.rows.iter() {
+        let Value::List(labels) = &row["business_labels"] else {
+            panic!("expected business label collection")
+        };
+        assert_eq!(labels.len(), usize::from(row["node_id"] == Value::Int(id)));
+    }
+    let dependencies = read.finish().unwrap();
+    assert!(!dependencies.requires_unchanged_database_epoch());
+    db.query("MATCH (n:Memory), (l:Label) WHERE n.id = 'other' CREATE (n)-[:HAS_LABEL]->(l)")
+        .unwrap();
+    let verification = db
+        .query("MATCH (n:Memory)-[r:HAS_LABEL]->(l:Label) WHERE n.id = 'other' RETURN id(r) AS id")
+        .unwrap();
+    assert_eq!(verification.rows.len(), 1);
+    let staged = seal(
+        &db.projection_generation_store().unwrap(),
+        "optional_graph",
+        dependencies.source_epoch(),
+        None,
+    );
+    assert!(matches!(
+        db.publish_prepared_projection(&dependencies, &staged),
+        Err(ProjectionPublicationError::Dependency(_))
+    ));
+}
+
+#[test]
+fn prepared_graph_hydration_matches_search_semantics_and_source_validates_activation() {
+    for cold in [false, true] {
+        for related in [false, true] {
+            let (root, mut db, id) = adjacency_fixture();
+            db.query("MATCH (n:Memory) WHERE n.id = 'a' SET n._id = 'user-id', n.labels = ['user-label']").unwrap();
+            db.query("CREATE (:Label {id: 'second', canonical_name: '', name: 'ABC'})")
+                .unwrap();
+            db.query("MATCH (n:Memory), (l:Label) WHERE n.id = 'a' CREATE (l)-[:HAS_LABEL]->(n)")
+                .unwrap();
+            if cold {
+                db.checkpoint().unwrap();
+                drop(db);
+                db = Database::open_with_config(
+                    &root.0,
+                    hawdb::DatabaseConfig {
+                        storage_residency_mode: hawdb::StorageResidencyMode::OutOfCore,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            }
+            let mut expected = db
+                .build_search_projection_graph_delta(&hawdb::SearchProjectionGraphDeltaRequest {
+                    upsert_node_ids: vec![id as u64, 2, 999],
+                    ..Default::default()
+                })
+                .unwrap()
+                .upserts;
+            let mut read = db.begin_prepared_read(limits()).unwrap();
+            let mut rows = read
+                .hydrate_search_projection_nodes(
+                    &[id as u64, 2, 999, id as u64],
+                    NonZeroUsize::new(65536).unwrap(),
+                )
+                .unwrap();
+            rows.sort_by(|left, right| left.external_id.cmp(&right.external_id));
+            expected.sort_by(|left, right| left.external_id.cmp(&right.external_id));
+            assert_eq!(rows, expected);
+            assert_eq!(rows.len(), 2);
+            let dependencies = read.finish().unwrap();
+            assert!(!dependencies.requires_unchanged_database_epoch());
+            let search = root.0.join("hydrated_search");
+            let mut writer = hawdb::SearchOutOfCoreGenerationWriter::create(
+                &search,
+                hawdb::SearchOutOfCoreGenerationBuildOptions {
+                    source_graph_commit_epoch: Some(dependencies.source_epoch()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            for row in rows {
+                writer.push(row.into_document()).unwrap();
+            }
+            let candidate = writer.prepare_publication().unwrap();
+            db.query(if related {
+                "MATCH (n:Label) SET n.name = 'changed'"
+            } else {
+                "MATCH (n:Other) SET n.value = 9"
+            })
+            .unwrap();
+            let result = db.publish_prepared_search(&dependencies, candidate);
+            if related {
+                assert!(matches!(
+                    result,
+                    Err(ProjectionPublicationError::Dependency(_))
+                ));
+                assert!(!search
+                    .join("search_projection.out_of_core.manifest.hawdb")
+                    .exists());
+            } else {
+                let report = result.unwrap();
+                assert_eq!(
+                    report.source_graph_commit_epoch,
+                    Some(dependencies.source_epoch())
+                );
+                let reader = hawdb::SearchOutOfCoreReader::open(&search).unwrap();
+                assert_eq!(reader.document_count(), 2);
+                let documents = reader
+                    .hydrate_documents(&["memory:a".into()])
+                    .unwrap()
+                    .documents;
+                assert_eq!(documents[0].metadata["_id"], "user-id");
+                assert_eq!(documents[0].metadata["labels"], "[\"ABC\",\"x-tag\"]");
+            }
+        }
+    }
+}
+
+#[test]
+fn prepared_graph_hydration_budgets_refuse_complete_output_and_remain_sticky() {
+    for mode in ["root_limit", "id", "row", "statement_bytes", "output_bytes"] {
+        let (_root, db, id) = adjacency_fixture();
+        let mut budget = limits();
+        if mode == "row" {
+            budget.statement_rows = NonZeroUsize::new(1).unwrap();
+        }
+        if mode == "statement_bytes" {
+            budget.statement_payload_bytes = NonZeroUsize::new(1).unwrap();
+        }
+        let mut read = db.begin_prepared_read(budget).unwrap();
+        let ids = match mode {
+            "root_limit" => vec![id as u64; 1025],
+            "id" => vec![u64::MAX],
+            _ => vec![id as u64, 2],
+        };
+        assert!(
+            read.hydrate_search_projection_nodes(
+                &ids,
+                NonZeroUsize::new(if mode == "output_bytes" { 1 } else { 65536 }).unwrap()
+            )
+            .is_err(),
+            "{mode}"
+        );
+        assert!(read
+            .hydrate_search_projection_nodes(&[], NonZeroUsize::new(1).unwrap())
+            .unwrap()
+            .is_empty());
+        assert!(read.finish().is_err(), "{mode}");
+    }
+}
+
+#[test]
+fn prepared_graph_hydration_tracks_first_label_edge_without_a_schema_intent() {
+    for related in [false, true] {
+        let (_root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
+        let mut read = db.begin_prepared_read(limits()).unwrap();
+        let rows = read
+            .hydrate_search_projection_nodes(&[0, 1, 999], NonZeroUsize::new(65536).unwrap())
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        let dependencies = read.finish().unwrap();
+        assert!(!dependencies.requires_unchanged_database_epoch());
+        db.query("CREATE (:Label {id: 'new-tag'})").unwrap();
+        if related {
+            db.query("MATCH (n:Memory), (l:Label) WHERE n.id = 'a' CREATE (n)-[:HAS_LABEL]->(l)")
+                .unwrap();
+        }
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "catalog_absence",
+            dependencies.source_epoch(),
+            None,
+        );
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        if related {
+            assert!(matches!(
+                result,
+                Err(ProjectionPublicationError::Dependency(_))
+            ));
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
+#[test]
+fn prepared_optional_hydration_refuses_unbounded_or_selected_roots() {
+    let (_root, db, id) = adjacency_fixture();
+    let parameters = BTreeMap::from([("id".into(), Value::Int(id))]);
+    for query in [
+        "MATCH (n) OPTIONAL MATCH (n)-[:HAS_LABEL]-(l:Label) RETURN id(n) AS id, COLLECT(l) AS labels",
+        "MATCH (n) WITH n LIMIT 1 OPTIONAL MATCH (n)-[:HAS_LABEL]-(l:Label) WHERE id(n) = $id RETURN id(n) AS id, COLLECT(l) AS labels",
+        "MATCH (n) WHERE id(n) = $id OR n.id = 'other' OPTIONAL MATCH (n)-[:HAS_LABEL]-(l:Label) RETURN id(n) AS id, COLLECT(l) AS labels",
+    ] {
+        db.explain_query_with_params(query, &parameters).unwrap();
+        let mut read = db.begin_prepared_read(limits()).unwrap();
+        assert!(read.query_with_params(query, &parameters).is_err(), "{query}");
+        assert!(read.finish().is_err());
+    }
+}

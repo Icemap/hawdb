@@ -266,6 +266,18 @@ selection boundary or full-text source. See the
 This does not yet replace the Search graph-delta builder or establish a bounded
 batch coverage receipt.
 
+`PreparedRead::hydrate_search_projection_nodes` now provides a query-based graph
+hydration path for that migration. Native `properties`/`labels` keep user property
+names separate from graph metadata. A qualified optional one-hop query preserves
+unlabelled roots and performs grouping in the query runtime; the existing Search
+shaper converts complete per-node rows. Missing catalog types still retain empty
+adjacency dependencies because implicit CREATE may not stamp Schema. Input,
+statement, dependency and retained logical-output limits fail the complete
+operation, including ignored shape errors. The method returns no watermark or
+batch authority. Its current internal-ID root may still use a sequential scan;
+an observable bounded ID access path and unrelated-large-payload qualification
+remain prerequisites for Mem migration and performance claims. See the [closure argument and evidence](../tla/PREPARED_SEARCH_GRAPH_HYDRATION_PROOF.md).
+
 `publish_prepared_projection` validates the source identity, captured watermark
 and dependencies and calls the existing generation catalog under one exclusive
 database borrow. Its expected-head CAS protects the catalog head. It resolves an
