@@ -32,3 +32,13 @@ no binary repair or unapproved target-flag override was applied.
 Component qualification remains separate: exact normalizer protocol/allocation
 parity and owned-result requested-allocation bounds do not prove ordinary
 latency, whole-process memory, foreign-heap behavior or the original #986 gate.
+
+Dispatch this evidence ref through the already registered
+`native-bindings.yml` workflow path:
+
+```console
+gh workflow run native-bindings.yml --repo nowledge-co/hawdb --ref qualify/1028-1029-1036-linux-20261015
+```
+
+This ref owns only the manual qualification jobs. Its workflow definition is
+separate from the workflows on the four source PRs.
