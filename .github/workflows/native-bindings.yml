@@ -2,12 +2,20 @@ name: Independent Query Qualification
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Qualification mode
+        type: choice
+        default: ordinary
+        options: [ordinary, go-bulk]
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   ordinary:
+    if: inputs.mode != 'go-bulk'
     name: Ordinary ${{ matrix.case }} (${{ matrix.backend }})
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -85,4 +93,44 @@ jobs:
         with:
           name: ordinary-${{ matrix.case }}-${{ matrix.backend }}-${{ github.sha }}
           path: ${{ runner.temp }}/qualification
+          if-no-files-found: error
+
+  go-bulk:
+    if: inputs.mode == 'go-bulk'
+    name: Frozen Go bulk A/B and A/A
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout qualification tools
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Record diagnostic host and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/diagnostic-host"
+          git log -1 --format='%H%n%T%n%P' > "$RUNNER_TEMP/diagnostic-host/source.txt"
+          uname -a > "$RUNNER_TEMP/diagnostic-host/platform.txt"
+          lscpu > "$RUNNER_TEMP/diagnostic-host/cpu.txt"
+          free -b > "$RUNNER_TEMP/diagnostic-host/memory.txt"
+
+      - name: Reuse exact frozen original producers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B qualification/independent-query-prs/diagnose-go-bulk.py \
+            2>&1 | tee "$RUNNER_TEMP/diagnostic-host/run.log"
+
+      - name: Preserve diagnostic raw evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frozen-go-bulk-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/go-bulk-diagnostic
+            ${{ runner.temp }}/diagnostic-host
           if-no-files-found: error

@@ -43,6 +43,18 @@ gh workflow run native-bindings.yml --repo nowledge-co/hawdb --ref qualify/1028-
 This ref owns only the manual qualification jobs. Its workflow definition is
 separate from the workflows on the four source PRs.
 
+The default `ordinary` mode retains the full ten-shard matrix. A separate
+`go-bulk` mode diagnoses adverse Go bulk-memory samples using the exact existing
+Linux binaries and FFI libraries from run `38695324983`, without rebuilding.
+It verifies the original artifact digest and producer bytes, then rotates two
+identical-binary aliases for each of baseline, #1028 and #1029 at 1k/10k rows.
+One discarded plus eleven measured rounds preserve all A/B and A/A outcomes.
+A/A variation does not establish that adverse A/B observations are noise.
+
+```console
+gh workflow run native-bindings.yml --repo nowledge-co/hawdb --ref qualify/1028-1029-1036-linux-20261015 -f mode=go-bulk
+```
+
 ## Component evidence
 
 [Source-bound allocation records](component-evidence.tar.gz) and their
