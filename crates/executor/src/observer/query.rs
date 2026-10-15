@@ -202,6 +202,12 @@ impl ExecutionObserver for QueryExecutionObserver {
         self.seed_graph_input.as_ref()
     }
 
+    fn record_borrowed_node_projection_rows(&self, rows: usize) {
+        let mut reports = self.reports.borrow_mut();
+        let count = &mut reports.pipeline_memory.borrowed_node_projection_rows;
+        *count = count.saturating_add(rows);
+    }
+
     fn record_scan_pruning_report(&self, report: ScanPruningReport) {
         self.reports.borrow_mut().scan_pruning.push(report);
     }

@@ -323,3 +323,11 @@ Source files carry the standard Apache-2.0 header. Check or repair them with [ha
 hawkeye check
 hawkeye format
 ```
+
+## In-process SQL sessions
+
+Use `Database::sql_session()` for parameterized SQL queries with native rows and
+mutation counts, and `session.transaction(|transaction| ...)` for atomic
+multi-statement writes. A statement failure aborts the entire callback even if
+its error is caught. See [the SQL session contract](docs/SQL_SESSION.md) for
+examples, result provenance and the supported PostgreSQL subset.

@@ -47,6 +47,8 @@ pub trait ExecutionObserver {
 
     fn record_scan_pruning_report(&self, _report: ScanPruningReport) {}
 
+    fn record_borrowed_node_projection_rows(&self, _rows: usize) {}
+
     fn record_blocking_memory_report(&self, _report: BlockingOperatorMemoryReport) {}
 }
 
