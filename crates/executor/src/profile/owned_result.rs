@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 impl QueryRowsBuilder {
     pub(crate) fn owner_memory_bytes() -> usize {
+        // Two Arc reference-count pairs cover the result storage and schema columns.
         std::mem::size_of::<QueryRowStorage>() + 4 * std::mem::size_of::<usize>()
     }
 
