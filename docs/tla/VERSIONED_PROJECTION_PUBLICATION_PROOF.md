@@ -80,7 +80,7 @@ refinement proof of the Rust implementation.
 | Private artifacts and selector | `projection_generation.rs` candidate, sealed-token GC lease and synchronized head publication; Search activation composition remains to implement |
 | Catalog head CAS | `ProjectionGenerationStore::publish` checks expected head and watermark; its lock does not exclude Graph writes or host target replacement |
 | Publication fence | `Database::publish_prepared_projection` retains its exclusive borrow through source validation and catalog publication; full embedded host-binding/cursor authority remains to integrate |
-| Source durability | New publication currently requires synchronous mode with no pending sync group; relaxed mode returns typed refusal until its source barrier is integrated |
+| Source durability | Known durable source epoch must cover capture; explicit typed synchronization covers an uncovered relaxed/recovered prefix, with no active group |
 | Crash and retry | Protocol abstraction; native torn-write, reordered-write, lost-unsynced-write and lost-response fault qualification remains required |
 
 The initial native refinement is deliberately bounded. In
@@ -117,11 +117,15 @@ predicate results, relevant data/schema changes, independent stale writers,
 budget refusal before WAL with reopen, and source-instance replacement. The
 external facade consumer pauses preparation in a worker thread while the main
 thread commits a disjoint write, then publishes the prepared generation. It also
-checks head CAS, statement failure, source watermark mismatch, relaxed-source
-refusal and recovery of an already selected committed receipt after reopen.
+checks head CAS, statement failure, source watermark mismatch, known-prefix refusal, explicit relaxed-source
+synchronization and recovery of an already selected committed receipt after reopen.
 Those reopen checks are not power-loss qualification. Receipt resolution after
 subsequent head replacement, host target ABA and multi-batch progress remain
 separate obligations.
+
+See the [source durability argument and controls](PROJECTION_SOURCE_DURABILITY_PROOF.md)
+for the separate refinement of durable-prefix knowledge across replay, file and
+namespace barriers.
 
 ## Local finite evidence
 

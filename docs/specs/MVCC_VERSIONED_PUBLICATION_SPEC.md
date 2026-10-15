@@ -246,10 +246,16 @@ When no prepared source exists, ordinary commits do not build those summaries.
 and dependencies and calls the existing generation catalog under one exclusive
 database borrow. Its expected-head CAS protects the catalog head. It resolves an
 already selected identical generation as an idempotent committed receipt before
-revalidating an old source token. The current new-publication path requires
-`SyncOnEveryWrite` and no unfinished WAL sync group; explicit relaxed mode returns
-typed `SourceNotDurable`. This refusal is an interim boundary, not completion of
-the relaxed-source barrier requirement.
+revalidating an old source token. New publication requires no unfinished WAL sync group and a known durable
+source prefix covering the capture. The default typed policy,
+`ProjectionSourceDurability::RequireKnownDurable`, refuses an uncovered prefix;
+`Synchronize` explicitly synchronizes it without changing subsequent host commits.
+Replaying a WAL or choosing synchronous future writes does not certify its prefix.
+Runtime durability knowledge starts at the selected checkpoint, advances only
+with successful file/namespace barriers, and is reset conservatively on reopen.
+Existing WAL names also require a namespace barrier when not already known
+persistent. The [source durability model and argument](../tla/PROJECTION_SOURCE_DURABILITY_PROOF.md)
+cover these distinctions; byte-level power-loss composition remains outstanding.
 
 Sealed generation tokens now retain candidate GC leases through their last clone.
 Sealing transfers writer protection to that lease under the catalog lock. The

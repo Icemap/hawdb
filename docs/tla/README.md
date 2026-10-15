@@ -1458,6 +1458,12 @@ closure, cancellation, GC and lost-response recovery. Its
 [argument and controls](VERSIONED_PROJECTION_PUBLICATION_PROOF.md) distinguish
 the finite protocol evidence from the native integration still required by
 #231/#232. The
+[`HawDBProjectionSourceDurability.tla`](HawDBProjectionSourceDurability.tla)
+model distinguishes OS-visible complete WAL records, file/namespace durability
+and runtime knowledge, including relaxed commits, process reopen, grouped sync
+and explicit source barriers. Its [argument and eight controls](PROJECTION_SOURCE_DURABILITY_PROOF.md)
+cover the source-prefix assumption without claiming byte-level power-loss proof.
+The
 [`HawDBOptimisticCommitAdmission.tla`](HawDBOptimisticCommitAdmission.tla)
 model separately checks concurrent optimistic admission, exclusion against
 ordinary locks, permit lifetime, within-group conflict validation, sync-failure

@@ -143,6 +143,11 @@ pub(super) struct DurableStore {
     max_batch_operations: Option<usize>,
     pub(super) telemetry: Option<Arc<dyn StorageTelemetrySink>>,
     wal_sync_group: Option<WalSyncGroupState>,
+    // Process-local knowledge, initialized only from the durable checkpoint.
+    // Reading/replaying a WAL or choosing a synchronous future write policy
+    // does not prove that the recovered WAL prefix has completed a barrier.
+    known_durable_commit_epoch: u64,
+    wal_namespace_known_durable: bool,
     generation_reclamation_debt: GenerationReclamationDebt,
     wal_free_space_probe: WalFreeSpaceProbeState,
 }
@@ -583,6 +588,8 @@ impl DurableStore {
             max_batch_operations,
             telemetry: None,
             wal_sync_group: None,
+            known_durable_commit_epoch: manifest.checkpoint_commit_epoch,
+            wal_namespace_known_durable: false,
             generation_reclamation_debt: GenerationReclamationDebt::default(),
             wal_free_space_probe: WalFreeSpaceProbeState::default(),
         })

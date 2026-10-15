@@ -21,15 +21,18 @@ use hawdb::{
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
 struct TestRoot(PathBuf);
 impl TestRoot {
     fn new() -> Self {
+        static NEXT_ROOT: AtomicUsize = AtomicUsize::new(0);
         Self(std::env::temp_dir().join(format!(
-                "hawdb_mvcc_publication_{}_{}",
+            "hawdb_mvcc_publication_{}_{}_{}",
                 std::process::id(),
+            NEXT_ROOT.fetch_add(1, Ordering::Relaxed),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
@@ -54,7 +57,8 @@ fn limits() -> PreparedReadLimits {
 
 fn fixture(policy: DurabilityPolicy) -> (TestRoot, Database) {
     let root = TestRoot::new();
-    let mut db = Database::open_with_durability(&root.0, policy).unwrap();
+    let mut db = Database::open_with_durability(&root.0, policy)
+        .unwrap_or_else(|error| panic!("opening fixture {}: {error}", root.0.display()));
     db.query("CREATE (:Memory {id: 'a', value: 1})").unwrap();
     db.query("CREATE (:Other {id: 'b', value: 1})").unwrap();
     (root, db)
@@ -308,4 +312,105 @@ fn ignored_budget_or_unsupported_statement_error_cannot_produce_source_proof() {
         )
         .is_err());
     assert!(predicate.finish().is_err());
+}
+
+#[test]
+fn explicit_source_barrier_allows_relaxed_publication_without_changing_future_commits() {
+    use hawdb::ProjectionSourceDurability;
+    let (_root, mut db) = fixture(DurabilityPolicy::SyncOnCheckpoint);
+    let dependencies = read(&db);
+    let store = db.projection_generation_store().unwrap();
+    let first = seal(&store, "g1", dependencies.source_epoch(), None);
+    assert!(matches!(
+        db.publish_prepared_projection(&dependencies, &first),
+        Err(ProjectionPublicationError::SourceNotDurable)
+    ));
+    db.publish_prepared_projection_with_source_durability(
+        &dependencies,
+        &first,
+        ProjectionSourceDurability::Synchronize,
+    )
+    .unwrap();
+    db.query("MATCH (n:Other) SET n.value = 2").unwrap();
+    let later = read(&db);
+    assert!(later.source_epoch() > dependencies.source_epoch());
+    let second = seal(&store, "g2", later.source_epoch(), Some("g1"));
+    assert!(matches!(
+        db.publish_prepared_projection(&later, &second),
+        Err(ProjectionPublicationError::SourceNotDurable)
+    ));
+    db.publish_prepared_projection_with_source_durability(
+        &later,
+        &second,
+        ProjectionSourceDurability::Synchronize,
+    )
+    .unwrap();
+    assert_eq!(
+        store
+            .open_active("test_mvcc", b"workspace")
+            .unwrap()
+            .manifest(),
+        second.manifest()
+    );
+}
+
+#[test]
+fn reopening_with_sync_policy_does_not_certify_a_relaxed_wal_prefix() {
+    use hawdb::ProjectionSourceDurability;
+    let (root, db) = fixture(DurabilityPolicy::SyncOnCheckpoint);
+    drop(db);
+    let mut reopened = Database::open(&root.0).unwrap();
+    let dependencies = read(&reopened);
+    let store = reopened.projection_generation_store().unwrap();
+    let staged = seal(&store, "g1", dependencies.source_epoch(), None);
+    assert!(matches!(
+        reopened.publish_prepared_projection(&dependencies, &staged),
+        Err(ProjectionPublicationError::SourceNotDurable)
+    ));
+    reopened
+        .publish_prepared_projection_with_source_durability(
+            &dependencies,
+            &staged,
+            ProjectionSourceDurability::Synchronize,
+        )
+        .unwrap();
+}
+
+#[test]
+fn completed_checkpoint_certifies_a_relaxed_source_prefix() {
+    let (_root, mut db) = fixture(DurabilityPolicy::SyncOnCheckpoint);
+    db.query("CHECKPOINT").unwrap();
+    let dependencies = read(&db);
+    let store = db.projection_generation_store().unwrap();
+    let staged = seal(&store, "g1", dependencies.source_epoch(), None);
+    db.publish_prepared_projection(&dependencies, &staged)
+        .unwrap();
+}
+
+#[test]
+fn dependency_conflict_is_rejected_before_synchronizing_source() {
+    use hawdb::ProjectionSourceDurability;
+    let (_root, mut db) = fixture(DurabilityPolicy::SyncOnCheckpoint);
+    let dependencies = read(&db);
+    let store = db.projection_generation_store().unwrap();
+    let staged = seal(&store, "stale", dependencies.source_epoch(), None);
+    db.query("MATCH (n:Memory) SET n.value = 2").unwrap();
+    assert!(matches!(
+        db.publish_prepared_projection_with_source_durability(
+            &dependencies,
+            &staged,
+            ProjectionSourceDurability::Synchronize
+        ),
+        Err(ProjectionPublicationError::Dependency(_))
+    ));
+    let fresh = read(&db);
+    let retry = seal(&store, "fresh", fresh.source_epoch(), None);
+    assert!(matches!(
+        db.publish_prepared_projection(&fresh, &retry),
+        Err(ProjectionPublicationError::SourceNotDurable)
+    ));
+    assert!(matches!(
+        store.open_active("test_mvcc", b"workspace"),
+        Err(ProjectionGenerationError::NotFound(_))
+    ));
 }

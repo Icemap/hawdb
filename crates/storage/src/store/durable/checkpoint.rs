@@ -375,6 +375,8 @@ impl DurableStore {
         self.wal_generation = manifest.wal_generation;
         self.checkpoint_epoch = manifest.checkpoint_epoch;
         self.checkpoint_commit_epoch = manifest.checkpoint_commit_epoch;
+        self.known_durable_commit_epoch = manifest.checkpoint_commit_epoch;
+        self.wal_namespace_known_durable = true;
         self.oldest_reader_commit_epoch = manifest.oldest_reader_commit_epoch;
         self.safe_reclaim_commit_epoch = manifest.safe_reclaim_commit_epoch;
         self.wal_replay_start_lsn = manifest.wal_replay_start_lsn;

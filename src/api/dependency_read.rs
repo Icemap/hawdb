@@ -32,6 +32,15 @@ pub struct PreparedReadLimits {
     pub statement_payload_bytes: NonZeroUsize,
 }
 
+/// Source durability required by one projection publication. Synchronization
+/// covers a complete WAL prefix and does not alter subsequent write policy.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ProjectionSourceDurability {
+    #[default]
+    RequireKnownDurable,
+    Synchronize,
+}
+
 /// A pinned query context with no untracked mutable read escape hatch.
 #[derive(Debug)]
 pub struct PreparedRead {
@@ -252,12 +261,25 @@ impl Database {
     /// Validates and durably publishes a full generation under one exclusive
     /// database borrow. The catalog's expected-head CAS remains authoritative.
     /// Host bindings/cursors need their additional owner fence before calling.
-    /// Relaxed source writes are refused until source-barrier integration is
-    /// qualified; this API never silently changes the host durability policy.
+    /// Requires an observed source durability barrier. Use the explicit policy
+    /// variant to synchronize an uncovered relaxed/recovered source prefix.
     pub fn publish_prepared_projection(
         &mut self,
         dependencies: &PreparedReadDependencies,
         sealed: &SealedProjectionGeneration,
+    ) -> std::result::Result<ProjectionGenerationPublishReport, ProjectionPublicationError> {
+        self.publish_prepared_projection_with_source_durability(
+            dependencies,
+            sealed,
+            ProjectionSourceDurability::RequireKnownDurable,
+        )
+    }
+
+    pub fn publish_prepared_projection_with_source_durability(
+        &mut self,
+        dependencies: &PreparedReadDependencies,
+        sealed: &SealedProjectionGeneration,
+        source_durability: ProjectionSourceDurability,
     ) -> std::result::Result<ProjectionGenerationPublishReport, ProjectionPublicationError> {
         use ProjectionPublicationError as E;
         self.ensure_writable().map_err(E::Storage)?;
@@ -275,15 +297,31 @@ impl Database {
         if captured != staged {
             return Err(E::SourceEpochMismatch { captured, staged });
         }
-        let runtime = self.runtime.get().map_err(E::Storage)?;
+        let runtime = self.runtime.get_mut().map_err(E::Storage)?;
         runtime
             .store
             .validate_read_dependencies(&dependencies.graph)
             .map_err(E::Dependency)?;
-        if self.durability != DurabilityPolicy::SyncOnEveryWrite
-            || runtime.store.wal_sync_group_active()
-        {
+        if runtime.store.wal_sync_group_active() {
             return Err(E::SourceNotDurable);
+        }
+        if runtime
+            .store
+            .known_source_durable_epoch()
+            .is_none_or(|epoch| epoch < captured)
+        {
+            match source_durability {
+                ProjectionSourceDurability::RequireKnownDurable => return Err(E::SourceNotDurable),
+                ProjectionSourceDurability::Synchronize => {
+                    let covered = runtime
+                        .store
+                        .synchronize_source_prefix()
+                        .map_err(E::Storage)?;
+                    if covered < captured {
+                        return Err(E::SourceNotDurable);
+                    }
+                }
+            }
         }
         catalog.publish(sealed).map_err(E::Generation)
     }

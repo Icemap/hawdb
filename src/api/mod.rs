@@ -90,6 +90,7 @@ mod concurrent;
 mod dependency_read;
 pub use dependency_read::{
     PreparedRead, PreparedReadDependencies, PreparedReadLimits, ProjectionPublicationError,
+    ProjectionSourceDurability,
 };
 mod explain;
 mod graph_analytics;
