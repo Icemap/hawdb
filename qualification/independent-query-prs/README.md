@@ -42,3 +42,17 @@ gh workflow run native-bindings.yml --repo nowledge-co/hawdb --ref qualify/1028-
 
 This ref owns only the manual qualification jobs. Its workflow definition is
 separate from the workflows on the four source PRs.
+
+## Component evidence
+
+[Source-bound allocation records](component-evidence.tar.gz) and their
+[archive/audit manifest](component-evidence.json) preserve 234 normalization and
+138 owned-result observations. The 104 KiB source/raw package contains exact
+normalizer modules, original capacity fixtures/counters, all raw outcomes,
+build/source manifests and the independent auditor. It excludes compiled
+binaries; their measured hashes remain recorded. Extract into a fresh directory
+and run `python3 -B verify-package.py` to verify bytes, source modules, protocol
+hashes, fixture checksums, capacity geometry, refusals and balanced release.
+
+These macOS ARM64/Rust 1.97.1 requested-allocation witnesses are separate from
+ordinary Linux latency/CPU/RSS and the comprehensive #986 performance gate.

@@ -1,0 +1,118 @@
+{
+  "protocol": "hawdb-independent-component-evidence-v1",
+  "archive": "component-evidence.tar.gz",
+  "sha256": "b3d8abd11d0417cea609bac5f959a8c16a051d0364c8752e176000428438af67",
+  "bytes": 104646,
+  "entries": 360,
+  "baseline": "051ec037c8bac3269aa8e91aa169e37b7c229045",
+  "normalizer_candidate": "d67ec1215b592c4c75ae66bfea40ec528c8d7736",
+  "owned_candidate": "079eb2dad26e0a20a1182470991194daf8a2d0a2",
+  "audit": {
+    "terminal": true,
+    "normalizer_records": 234,
+    "normalizer_groups_per_round": 39,
+    "protocol_records": 13,
+    "all_117_paired_component_groups_nonregressing": true,
+    "owned_records": 138,
+    "owned_shapes_per_producer": 23,
+    "baseline_map_undercharges": [
+      [
+        1,
+        0,
+        869,
+        253
+      ],
+      [
+        1,
+        1,
+        879,
+        463
+      ],
+      [
+        2,
+        2,
+        889,
+        673
+      ],
+      [
+        1000,
+        1,
+        879,
+        463
+      ],
+      [
+        1000,
+        0,
+        869,
+        253
+      ],
+      [
+        1,
+        0,
+        869,
+        253
+      ],
+      [
+        1,
+        1,
+        879,
+        463
+      ],
+      [
+        2,
+        2,
+        889,
+        673
+      ],
+      [
+        1000,
+        1,
+        879,
+        463
+      ],
+      [
+        1000,
+        0,
+        869,
+        253
+      ],
+      [
+        1,
+        0,
+        869,
+        253
+      ],
+      [
+        1,
+        1,
+        879,
+        463
+      ],
+      [
+        2,
+        2,
+        889,
+        673
+      ],
+      [
+        1000,
+        1,
+        879,
+        463
+      ],
+      [
+        1000,
+        0,
+        869,
+        253
+      ]
+    ],
+    "candidate_scalar_100k_retained_requested_bytes": 12021676,
+    "candidate_scalar_100k_ledger_peak_bytes": 12033984,
+    "candidate_wide_first_refused_row": 2881,
+    "baseline_wide_first_refused_row": 2406,
+    "report_sha256": "2afd5ba652ad04ed93b5713c6f0bc0fe9b6de8cbd1ce847074cd6aa12ab101fc",
+    "auditor_sha256": "88c8f09dc32da067a2e105f61c85bbe6029aa4d50447ed9513af964bb0e62351",
+    "scope": "Fresh exact-source component requested-allocation evidence. No CPU/RSS/latency or whole-query qualification."
+  }
+}
