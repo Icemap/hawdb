@@ -72,6 +72,7 @@ STORAGE_MODELS = [
     "HawDBRowPageMutation",
     "HawDBRowRecovery",
     "HawDBRuntimeAdmission",
+    "HawDBSearchBatchCoverage",
     "HawDBSearchMutationPublication",
     "HawDBSearchPreparedPublication",
     "HawDBSearchStageCleanup",

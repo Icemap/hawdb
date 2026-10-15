@@ -2111,3 +2111,8 @@ complete admitted results and callback unwind.
 Search cold preimage capture and full-prefix catch-up are described in
 [the change-capture argument](PROJECTION_CHANGE_CAPTURE_PROOF.md), including
 explicit gap/rebuild semantics and the source-durability binding prerequisite.
+
+The [Search batch coverage design model](SEARCH_BATCH_COVERAGE_PROOF.md) checks
+complete-interval private preparation and a stage-bound publication boundary.
+Its native session, bounded feed cursor and Mem integration remain unimplemented;
+the linked specification includes a verified legacy partial-prefix failure.

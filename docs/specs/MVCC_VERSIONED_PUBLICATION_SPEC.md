@@ -35,9 +35,11 @@ At this baseline, `NowledgeMemEmbeddedStore::catch_up_incremental_search_with_ba
 in `src/nowledge_mem/incremental_search.rs` captures a batch, opens a read
 transaction, hydrates it, builds its delta, drops the snapshot and applies the
 incremental delta within the mutable store operation. The embedded handle's
-store-wide writer ownership serializes that work. PR #1032 remains a separate,
-unmerged owner/fence prerequisite at this audit; do not stack this work on its
-feature branch or copy its unmerged API and claim main integration.
+store-wide writer ownership serializes that work. PR #1032 merged into main at
+`cfbea1b` (2026-10-15 17:41:56 UTC). Its owner/fence API is now available on
+main; this feature branch still needs synchronization and actual integration.
+Keep the PR based directly on main rather than stacking on its former feature
+branch. The merged coarse owner alone does not remove this bottleneck.
 
 ## Turso reference and selected lessons
 
@@ -326,7 +328,11 @@ borrow. No arbitrary callback can implement the sealed activation trait. This
 path requires an exact capture watermark, rejects active-watermark regression
 and refuses a damaged base whose prior floor cannot be established; changefeed
 batch coverage and host
-binding/receipt authority still need their own integration. Activation still
+binding/receipt authority still need their own integration. The current legacy
+bounded builder has a verified mixed-snapshot omission; the
+[pinned-source batch coverage design](MVCC_SEARCH_BATCH_COVERAGE_SPEC.md)
+specifies complete C..E preparation in bounded invisible steps and stage-bound
+coverage authority. That session/spool/receipt protocol is not implemented. Activation still
 checksums/installs artifacts and performs cleanup under the Search lease, so a
 size-independent publication section has not been delivered. See the
 [Search lifecycle argument and ten controls](../tla/SEARCH_PREPARED_PUBLICATION_PROOF.md).
@@ -393,7 +399,7 @@ path do not prove starvation freedom.
 | Search preparation/activation | Owned single/partitioned/update candidates, selector CAS, shared source-validation facade and lifecycle model | Mem catch-up/outer-owner migration, host bindings and bounded batch receipts, size-independent activation I/O and fault/performance composition |
 | Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain, internal-ID/single-hop and relational primary-tuple collectors, native cold/hot regressions | Graph composite/range/other traversal and relational multi-key/range/join/domain collectors, host dependencies and full completeness qualification |
 | Invisible staging and durable activation | Existing `ProjectionGenerationStore` candidate/seal/head protocol and Search mutation components | Compose source validation and Search activation with complete receipt/closure and failure states |
-| Embedded owner concurrency | Current catch-up path and unmerged #1032 audit | Integrate on main; prove a competing disjoint writer commits while preparation is paused |
+| Embedded owner concurrency | Current catch-up path; #1032 owner/fence merged on main at cfbea1b | Synchronize this branch and integrate on main; prove a competing disjoint writer commits while preparation is paused |
 | Recovery/power loss | Existing WAL/group/branch proofs, #820 fault harness | Compose new staging/selector/source barriers, cancellation, lost responses and replay |
 | Scaling/fairness/latency | Existing 1/4/8-writer harness and retained adverse samples | Small/large catch-up enabled/disabled runs, p50/p95/p99, lock wait/hold time, unchanged latency gates |
 
