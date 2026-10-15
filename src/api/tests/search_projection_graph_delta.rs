@@ -1039,6 +1039,87 @@ fn durable_search_projection_catch_up_converges_stale_update_delete_sequence() {
 }
 
 #[test]
+fn bounded_search_catch_up_does_not_publish_a_later_snapshot_as_an_earlier_prefix() {
+    let graph_path = unique_test_dir("bounded_search_catch_up_graph");
+    let mut db = Database::open(&graph_path).unwrap();
+    db.query("CREATE (:Memory {id: 'a', title: 'old'})")
+        .unwrap();
+    let search_path = unique_test_dir("bounded_search_catch_up_search");
+    let mut search_index = SearchIndex::open(&search_path).unwrap();
+    let baseline = db
+        .catch_up_search_projection(&mut search_index, 8, 1)
+        .unwrap();
+    assert!(baseline.complete);
+    let base_epoch = baseline.end_durable_epoch.unwrap();
+    assert_eq!(search_index.document("memory:a").unwrap().title, "old");
+
+    db.query("MATCH (m:Memory {id: 'a'}) SET m.title = 'new'")
+        .unwrap();
+    let update_epoch = db.commit_epoch().unwrap();
+    db.query("MATCH (m:Memory {id: 'a'}) DETACH DELETE m")
+        .unwrap();
+    let final_epoch = db.commit_epoch().unwrap();
+    assert_eq!(update_epoch, base_epoch + 1);
+    assert_eq!(final_epoch, update_epoch + 1);
+    let selected = db
+        .build_search_projection_change_batch_after(base_epoch, Some(1))
+        .unwrap()
+        .unwrap();
+    assert_eq!(selected.complete_through_commit_epoch(), Some(update_epoch));
+
+    let error = db
+        .catch_up_search_projection(&mut search_index, 1, 1)
+        .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("historical hydration requires a pinned source snapshot"));
+    assert_eq!(
+        search_index
+            .projection_freshness()
+            .durable_source_graph_commit_epoch,
+        Some(base_epoch)
+    );
+    assert_eq!(search_index.document("memory:a").unwrap().title, "old");
+    drop(search_index);
+    drop(db);
+    std::fs::remove_dir_all(search_path).unwrap();
+    std::fs::remove_dir_all(graph_path).unwrap();
+}
+
+#[test]
+fn relational_search_batch_rejects_a_partial_prefix_hydrated_at_a_later_epoch() {
+    let mut db = Database::new();
+    db.query_sql("CREATE TABLE public.thread_messages (id BIGINT PRIMARY KEY, body TEXT NOT NULL)")
+        .unwrap();
+    db.query_sql("INSERT INTO public.thread_messages (id, body) VALUES (1, 'old')")
+        .unwrap();
+    let base_epoch = db.commit_epoch().unwrap();
+    db.query_sql("UPDATE public.thread_messages SET body = 'new' WHERE id = 1")
+        .unwrap();
+    let update_epoch = db.commit_epoch().unwrap();
+    db.query_sql("DELETE FROM public.thread_messages WHERE id = 1")
+        .unwrap();
+
+    let batch = db
+        .build_search_projection_change_batch_after(base_epoch, Some(1))
+        .unwrap()
+        .unwrap();
+    assert_eq!(batch.complete_through_commit_epoch(), Some(update_epoch));
+    let error = db
+        .build_search_projection_change_delta(
+            batch,
+            SearchProjectionRelationalDelta {
+                delta: SearchProjectionDelta::default(),
+                processed_primary_key_count: 1,
+            },
+        )
+        .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("historical hydration requires a pinned source snapshot"));
+}
+
+#[test]
 fn search_projection_changefeed_does_not_split_one_commit_across_batches() {
     let mut db = Database::new();
     let mut transaction = db.begin_transaction().unwrap();

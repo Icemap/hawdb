@@ -19891,6 +19891,11 @@ fn search_projection_graph_delta_for(
                 "search projection graph delta complete-through epoch {epoch} is ahead of graph commit epoch {current_epoch}"
             )));
         }
+        if epoch < current_epoch {
+            return Err(HawDBError::Storage(format!(
+                "search projection graph delta complete-through epoch {epoch} is behind graph commit epoch {current_epoch}; historical hydration requires a pinned source snapshot"
+            )));
+        }
     }
 
     let mut upserts = Vec::new();
@@ -19901,6 +19906,13 @@ fn search_projection_graph_delta_for(
         if let Some(row) = projection_row_from_node_with_graph_metadata(catalog, store, &node)? {
             upserts.push(row);
         }
+    }
+    if let Some(epoch) = request.complete_through_graph_commit_epoch
+        && store.commit_epoch() != epoch
+    {
+        return Err(HawDBError::Storage(format!(
+            "search projection graph delta source advanced while hydrating epoch {epoch}"
+        )));
     }
 
     Ok(SearchProjectionDelta {
