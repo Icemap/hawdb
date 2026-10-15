@@ -21,6 +21,10 @@ if [[ $# -lt 2 ]]; then
 fi
 partition_binary="$1"
 partition="$2"
+# Identity admission shares the dense RSS fixture; keep the old selector usable.
+if [[ "${partition}" == analytics_identity ]]; then
+  partition=analytics_rss
+fi
 shift 2
 case "${partition}" in
   general|concurrent|analytics|analytics_core|analytics_core_general|analytics_identity|analytics_rss|recovery) ;;
@@ -40,8 +44,6 @@ while IFS= read -r entry; do
     *) continue ;;
   esac
   case "${case_name}" in
-    api::tests::projected_graph_execution::review_regressions::projected_identity_ignores_large_content_and_rejects_large_ids_without_a_prefix)
-      case_owner=analytics_identity ;;
     api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process|api::tests::graph_analytics::rss_child)
       case_owner=analytics_rss ;;
     api::tests::concurrent_transactions::*|api::concurrent::*|api::transaction_locks::*)
@@ -54,7 +56,7 @@ while IFS= read -r entry; do
   esac
   if [[ "${case_owner}" == "${partition}" ]] ||
     [[ "${partition}" == analytics && "${case_owner}" == analytics_* ]] ||
-    [[ "${partition}" == analytics_core && ( "${case_owner}" == analytics_core_general || "${case_owner}" == analytics_identity ) ]]; then
+    [[ "${partition}" == analytics_core && ( "${case_owner}" == analytics_core_general || "${case_owner}" == analytics_rss ) ]]; then
     owned_cases=$((owned_cases + 1))
     owned_names+=("${case_name}")
   else

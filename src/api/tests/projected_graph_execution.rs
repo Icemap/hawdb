@@ -17,6 +17,11 @@ use crate::StorageResidencyMode;
 
 mod differential;
 mod review_regressions;
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+pub(super) use review_regressions::{
+    assert_projected_identity_admission, prepare_dense_identity_fixture,
+};
 mod streaming_parity;
 
 #[test]
