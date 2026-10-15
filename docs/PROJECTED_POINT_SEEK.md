@@ -111,4 +111,3 @@ alone cannot mark PR #986 or issues #976/#987 complete. Historical measurements 
 [#986](https://github.com/nowledge-co/hawdb/pull/986). They do not qualify this
 main-based extraction. Canonical retained-source record reuse stays in #986
 because it depends on that feature foundation.
-
