@@ -254,6 +254,18 @@ writer key bounds and explicit metadata work/ownership bounds retain domain or
 read-barrier fallbacks. Precision counts are exposed on the prepared dependencies.
 See the [collector argument and controls](../tla/INDEXED_PROJECTION_READ_VALIDATION_PROOF.md).
 
+Necessary internal-ID EQ/IN root bounds now record existing GraphNode keys,
+including absent roots. Qualified non-optional single-hop matches additionally
+record directed root adjacency and every matching edge/neighbor identity before
+property/label filtering. A bounded metadata prepass composes live postings with
+canonical descriptors without materializing relationship property values; encoded
+canonical blocks still undergo full validation. Incomplete or
+over-budget collection refuses the token. Bounds cannot cross a candidate
+selection boundary or full-text source. See the
+[conditional argument and eleven controls](../tla/ADJACENCY_PROJECTION_READ_VALIDATION_PROOF.md).
+This does not yet replace the Search graph-delta builder or establish a bounded
+batch coverage receipt.
+
 `publish_prepared_projection` validates the source identity, captured watermark
 and dependencies and calls the existing generation catalog under one exclusive
 database borrow. Its expected-head CAS protects the catalog head. It resolves an
@@ -310,7 +322,7 @@ size-independent publication section has not been delivered. See the
 The catalog path publishes full generations; the native Search path activates
 owned backend candidates. It does not yet move actual
 incremental Search preparation out of `NowledgeMemEmbeddedStoreHandle`, collect
-complete graph composite/range/adjacency and additional relational dependencies, validate host binding
+complete graph composite/range and additional traversal/relational dependencies, validate host binding
 incarnations and batch receipts, integrate source-validated Search activation
 into Mem catch-up, or qualify power loss and 1/4/8-writer latency. Unsupported value/access shapes deliberately retain
 label domains or read barriers; those fallbacks are not advertised as exact keys.
@@ -359,7 +371,7 @@ path do not prove starvation freedom.
 | Version retention/admission | Existing history budget/pin models and tests | Churn/long-pin allocator/RSS and cleanup-latency qualification |
 | Publication protocol | [Finite safety model and 14 controls](../tla/VERSIONED_PROJECTION_PUBLICATION_PROOF.md), registered safety action and initial source-validation/catalog path | Complete source refinement and embedded integration |
 | Search preparation/activation | Owned single/partitioned/update candidates, selector CAS, shared source-validation facade and lifecycle model | Mem catch-up/outer-owner migration, host bindings and bounded batch receipts, size-independent activation I/O and fault/performance composition |
-| Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain and relational primary-tuple collectors, native cold/hot regressions | Graph composite/range/adjacency and relational multi-key/range/join/domain collectors, host dependencies and full completeness qualification |
+| Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain, internal-ID/single-hop and relational primary-tuple collectors, native cold/hot regressions | Graph composite/range/other traversal and relational multi-key/range/join/domain collectors, host dependencies and full completeness qualification |
 | Invisible staging and durable activation | Existing `ProjectionGenerationStore` candidate/seal/head protocol and Search mutation components | Compose source validation and Search activation with complete receipt/closure and failure states |
 | Embedded owner concurrency | Current catch-up path and unmerged #1032 audit | Integrate on main; prove a competing disjoint writer commits while preparation is paused |
 | Recovery/power loss | Existing WAL/group/branch proofs, #820 fault harness | Compose new staging/selector/source barriers, cancellation, lost responses and replay |

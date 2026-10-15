@@ -1421,3 +1421,336 @@ fn checkpointed_relational_points_preserve_disjoint_validation_with_unselected_l
         }
     }
 }
+
+fn adjacency_fixture() -> (TestRoot, Database, i64) {
+    let (root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
+    db.query("CREATE (:Memory {id: 'other', value: 2})")
+        .unwrap();
+    db.query("CREATE (:Label {id: 'tag', name: 'x-tag'})")
+        .unwrap();
+    db.query(
+        "MATCH (n:Memory), (l:Label) WHERE n.id = 'a' CREATE (n)-[:HAS_LABEL {weight: 1}]->(l)",
+    )
+    .unwrap();
+    let value = db
+        .query("MATCH (n:Memory) WHERE n.id = 'a' RETURN id(n) AS id")
+        .unwrap();
+    let Value::Int(id) = value.rows[0]["id"] else {
+        panic!("expected id")
+    };
+    (root, db, id)
+}
+
+#[test]
+fn prepared_internal_id_membership_tracks_absent_roots() {
+    let (_root, mut db, id) = adjacency_fixture();
+    let mut read = db.begin_prepared_read(limits()).unwrap();
+    let result = read
+        .query_with_params(
+            "MATCH (n) WHERE id(n) IN $ids RETURN id(n) AS id",
+            &BTreeMap::from([(
+                "ids".into(),
+                Value::List(vec![Value::Int(id), Value::Int(4)]),
+            )]),
+        )
+        .unwrap();
+    assert_eq!(result.output.rows.len(), 1);
+    let dependencies = read.finish().unwrap();
+    assert!(!dependencies.requires_unchanged_database_epoch());
+    db.query("CREATE (:Memory {id: 'new'})").unwrap();
+    let inserted = db
+        .query("MATCH (n:Memory) WHERE n.id = 'new' RETURN id(n) AS id")
+        .unwrap();
+    assert_eq!(inserted.rows[0]["id"], Value::Int(4));
+    let staged = seal(
+        &db.projection_generation_store().unwrap(),
+        "absent_node_id",
+        dependencies.source_epoch(),
+        None,
+    );
+    assert!(matches!(
+        db.publish_prepared_projection(&dependencies, &staged),
+        Err(ProjectionPublicationError::Dependency(_))
+    ));
+}
+
+#[test]
+fn prepared_internal_node_ids_allow_disjoint_writes_and_detect_payload_changes() {
+    for related in [false, true] {
+        let (_root, mut db, id) = adjacency_fixture();
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        let result = preparation
+            .query_with_params(
+                "MATCH (n) WHERE id(n) = $id RETURN n.value AS value",
+                &BTreeMap::from([("id".into(), Value::Int(id))]),
+            )
+            .unwrap();
+        assert_eq!(result.output.rows[0]["value"], Value::Int(1));
+        let dependencies = preparation.finish().unwrap();
+        assert!(!dependencies.requires_unchanged_database_epoch());
+        db.query(if related {
+            "MATCH (n:Memory) WHERE n.id = 'a' SET n.value = 3"
+        } else {
+            "MATCH (n:Memory) WHERE n.id = 'other' SET n.value = 3"
+        })
+        .unwrap();
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "node_id",
+            dependencies.source_epoch(),
+            None,
+        );
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        if related {
+            assert!(matches!(
+                result,
+                Err(ProjectionPublicationError::Dependency(_))
+            ));
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
+#[test]
+fn prepared_single_hop_reads_validate_neighbor_payloads_and_allow_unrelated_writes() {
+    for related in [false, true] {
+        let (_root, mut db, id) = adjacency_fixture();
+        let mut preparation = db.begin_prepared_read(limits()).unwrap();
+        let result = preparation
+            .query_with_params(
+                "MATCH (n)-[r:HAS_LABEL]-(l:Label) WHERE id(n) = $id RETURN l.name AS name",
+                &BTreeMap::from([("id".into(), Value::Int(id))]),
+            )
+            .unwrap();
+        assert_eq!(result.output.rows[0]["name"], Value::String("x-tag".into()));
+        let dependencies = preparation.finish().unwrap();
+        db.query(if related {
+            "MATCH (n:Label) SET n.name = 'changed'"
+        } else {
+            "MATCH (n:Other) SET n.value = 3"
+        })
+        .unwrap();
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "one_hop",
+            dependencies.source_epoch(),
+            None,
+        );
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        if related {
+            assert!(matches!(
+                result,
+                Err(ProjectionPublicationError::Dependency(_))
+            ));
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
+fn prepared_hop(db: &Database, query: &str, id: i64) -> (hawdb::PreparedReadDependencies, usize) {
+    let mut read = db.begin_prepared_read(limits()).unwrap();
+    let output = read
+        .query_with_params(query, &BTreeMap::from([("id".into(), Value::Int(id))]))
+        .unwrap();
+    (read.finish().unwrap(), output.output.rows.len())
+}
+
+#[test]
+fn empty_adjacency_reads_detect_new_edges_and_preserve_disjoint_roots() {
+    for related in [false, true] {
+        let (_root, mut db, _id) = adjacency_fixture();
+        let other = db
+            .query("MATCH (n:Memory) WHERE n.id = 'other' RETURN id(n) AS id")
+            .unwrap()
+            .rows[0]["id"]
+            .clone();
+        let Value::Int(other) = other else {
+            panic!("expected id")
+        };
+        let (dependencies, rows) = prepared_hop(
+            &db,
+            "MATCH (n)-[:HAS_LABEL]->(l) WHERE id(n) = $id RETURN id(l) AS id",
+            other,
+        );
+        assert_eq!(rows, 0);
+        db.query_with_params(
+            "MATCH (n:Memory), (l:Label) WHERE n.id = $id CREATE (n)-[:HAS_LABEL]->(l)",
+            &BTreeMap::from([(
+                "id".into(),
+                Value::String(if related { "other" } else { "a" }.into()),
+            )]),
+        )
+        .unwrap();
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "empty_hop",
+            dependencies.source_epoch(),
+            None,
+        );
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        if related {
+            assert!(matches!(
+                result,
+                Err(ProjectionPublicationError::Dependency(_))
+            ));
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
+#[test]
+fn filtered_neighbors_and_relationships_remain_dependencies_before_they_match() {
+    for edge in [false, true] {
+        let (_root, mut db, id) = adjacency_fixture();
+        let (dependencies, rows) = prepared_hop(
+            &db,
+            if edge {
+                "MATCH (n)-[r:HAS_LABEL]->(l) WHERE id(n) = $id AND r.weight = 2 RETURN l.name AS name"
+            } else {
+                "MATCH (n)-[:HAS_LABEL]->(l) WHERE id(n) = $id AND l.name = 'changed' RETURN l.name AS name"
+            },
+            id,
+        );
+        assert_eq!(rows, 0);
+        db.query(if edge {
+            "MATCH (n:Memory)-[r:HAS_LABEL]->(l:Label) SET r.weight = 2"
+        } else {
+            "MATCH (n:Label) SET n.name = 'changed'"
+        })
+        .unwrap();
+        if edge {
+            assert_eq!(
+                db.query("MATCH (n)-[r:HAS_LABEL]->(l) RETURN r.weight AS weight")
+                    .unwrap()
+                    .rows[0]["weight"],
+                Value::Int(2)
+            );
+        }
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "filtered_hop",
+            dependencies.source_epoch(),
+            None,
+        );
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        assert!(
+            matches!(result, Err(ProjectionPublicationError::Dependency(_))),
+            "edge={edge} result={result:?}"
+        );
+    }
+}
+
+#[test]
+fn adjacency_dependencies_keep_incoming_and_outgoing_roots_distinct() {
+    for incoming in [false, true] {
+        let (_root, mut db, id) = adjacency_fixture();
+        let (dependencies, rows) = prepared_hop(
+            &db,
+            if incoming {
+                "MATCH (n)<-[:HAS_LABEL]-(l) WHERE id(n) = $id RETURN id(l) AS id"
+            } else {
+                "MATCH (n)-[:HAS_LABEL]->(l) WHERE id(n) = $id RETURN id(l) AS id"
+            },
+            id,
+        );
+        assert_eq!(rows, usize::from(!incoming));
+        db.query("MATCH (n:Memory), (l:Label) WHERE n.id = 'a' CREATE (l)-[:HAS_LABEL]->(n)")
+            .unwrap();
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "directed_hop",
+            dependencies.source_epoch(),
+            None,
+        );
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        if incoming {
+            assert!(matches!(
+                result,
+                Err(ProjectionPublicationError::Dependency(_))
+            ));
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
+#[test]
+fn checkpointed_adjacency_reads_compose_live_and_canonical_identities() {
+    for related in [false, true] {
+        let (root, mut db, id) = adjacency_fixture();
+        db.query_with_params(
+            "MATCH (n:Memory)-[r:HAS_LABEL]->(l:Label) SET r.payload = $payload",
+            &BTreeMap::from([("payload".into(), Value::String("x".repeat(1024 * 1024)))]),
+        )
+        .unwrap();
+        let body = db
+            .query("MATCH (n)-[r:HAS_LABEL]->(l) RETURN r.payload AS payload")
+            .unwrap();
+        let Value::String(payload) = &body.rows[0]["payload"] else {
+            panic!("expected large payload")
+        };
+        assert_eq!(payload.len(), 1024 * 1024);
+        drop(body);
+        db.checkpoint().unwrap();
+        drop(db);
+        let mut db = Database::open_with_config(
+            &root.0,
+            hawdb::DatabaseConfig {
+                storage_residency_mode: hawdb::StorageResidencyMode::OutOfCore,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        db.query("MATCH (n:Memory), (l:Label) WHERE n.id = 'a' CREATE (n)-[:HAS_LABEL]->(l)")
+            .unwrap();
+        let (dependencies, rows) = prepared_hop(
+            &db,
+            "MATCH (n)-[:HAS_LABEL]-(l:Label) WHERE id(n) = $id RETURN l.name AS name",
+            id,
+        );
+        assert_eq!(rows, 2);
+        db.query(if related {
+            "MATCH (n:Label) SET n.name = 'changed'"
+        } else {
+            "MATCH (n:Other) SET n.value = 9"
+        })
+        .unwrap();
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "cold_hop",
+            dependencies.source_epoch(),
+            None,
+        );
+        let result = db.publish_prepared_projection(&dependencies, &staged);
+        if related {
+            assert!(matches!(
+                result,
+                Err(ProjectionPublicationError::Dependency(_))
+            ));
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
+#[test]
+fn adjacency_dependency_refusals_are_sticky_and_do_not_poison_source() {
+    let (_root, mut db, id) = adjacency_fixture();
+    let mut budget = limits();
+    budget.dependency_entries = NonZeroUsize::new(2).unwrap();
+    let mut read = db.begin_prepared_read(budget).unwrap();
+    assert!(read
+        .query_with_params(
+            "MATCH (n)-[:HAS_LABEL]->(l) WHERE id(n) = $id RETURN id(l) AS id",
+            &BTreeMap::from([("id".into(), Value::Int(id))])
+        )
+        .is_err());
+    assert!(read.finish().is_err());
+    let result = db
+        .query("MATCH (n:Memory) WHERE n.id = 'a' RETURN n.value AS value")
+        .unwrap();
+    assert_eq!(result.rows[0]["value"], Value::Int(1));
+}

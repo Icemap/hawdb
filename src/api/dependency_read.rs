@@ -22,6 +22,8 @@ use hawdb_storage::store::{GraphReadDependencies, GraphReadDependencyError};
 use hawdb_storage::version::VersionKey;
 use std::fmt;
 
+#[path = "dependency_read/graph_match.rs"]
+mod graph_match;
 #[path = "dependency_read/relational.rs"]
 mod relational;
 
@@ -90,7 +92,7 @@ impl PreparedRead {
     }
 
     /// Executes parameterized Cypher with complete dependencies for qualified
-    /// node-only plans. Unsupported operators fail closed before execution.
+    /// node and single-hop plans. Unsupported operators fail closed before execution.
     /// No returned row set is treated as a complete membership footprint.
     pub fn query_with_params(
         &mut self,
@@ -122,6 +124,7 @@ impl PreparedRead {
         collect_node_dependencies(
             &optimized.physical_plan,
             &self.read.catalog,
+            &self.read.store,
             &mut self.dependencies.graph,
         )?;
         prepared.optimized = Some(optimized);
@@ -151,6 +154,7 @@ impl PreparedRead {
 fn collect_node_dependencies(
     plan: &PhysicalPlan,
     catalog: &Catalog,
+    store: &GraphStore,
     dependencies: &mut GraphReadDependencies,
 ) -> Result<()> {
     use PhysicalPlan as P;
@@ -165,6 +169,20 @@ fn collect_node_dependencies(
         return Err(HawDBError::Execution(
             "prepared source read requires an adjacency predicate collector".into(),
         ));
+    }
+    if let P::FilterExec { predicate, input } = plan {
+        if let Some((variable, _)) = complete_node_source(input)
+            && let Some(values) = graph_match::ids(predicate, variable)
+        {
+            return graph_match::record_ids(values, dependencies);
+        }
+        if let P::GraphMatchExec {
+            program,
+            input: None,
+        } = input.as_ref()
+        {
+            return graph_match::collect(program, Some(predicate), catalog, store, dependencies);
+        }
     }
     if let P::FilterExec { predicate, input } = plan
         && let Some((variable, label)) = complete_node_source(input)
@@ -184,6 +202,10 @@ fn collect_node_dependencies(
         }
         P::NodeProjectionScanExec { variable, label, access, predicate, .. } => {
             if !matches!(access, hawdb_plan_cypher::NodeProjectionAccess::FullText { .. })
+                && let Some(values) = predicate.as_ref().and_then(|predicate| graph_match::ids(predicate, variable)) {
+                return graph_match::record_ids(values, dependencies);
+            }
+            if !matches!(access, hawdb_plan_cypher::NodeProjectionAccess::FullText { .. })
                 && let Some((property, values)) = predicate.as_ref().and_then(|predicate| necessary_scalar_bound(predicate, variable, label, catalog)) {
                 return collect_scalar_read_keys(catalog, label, property, values, dependencies);
             }
@@ -196,13 +218,15 @@ fn collect_node_dependencies(
         | P::IndexNodeCompositeSeek { label, .. }
         | P::IndexNodeCompositeRangeSeek { label, .. }
         | P::IndexNodeRangeSeek { label, .. } => VersionKey::ReadNodeDomain((!label.is_empty()).then(|| label.clone())),
+        P::GraphMatchExec { program, input: None } => return graph_match::collect(program, None, catalog, store, dependencies),
+        P::AdjacencyExpandExec { .. } => return graph_match::collect_expand(plan, catalog, store, dependencies),
         P::FilterExec { input, .. }
         | P::ProjectExec { input, .. }
         | P::AggregateExec { input, .. }
         | P::DistinctExec { input }
         | P::SortExec { input, .. }
         | P::TopNExec { input, .. }
-        | P::LimitExec { input, .. } => return collect_node_dependencies(input, catalog, dependencies),
+        | P::LimitExec { input, .. } => return collect_node_dependencies(input, catalog, store, dependencies),
         // An optimizer-folded empty result can depend on absent catalog/data.
         // Retain the conservative epoch dependency instead of losing it.
         P::EmptyExec => VersionKey::Database,

@@ -1471,6 +1471,12 @@ OR/partial fallback, broad/schema barriers, ABA, pin pruning and shared statemen
 refusal. Its [argument and ten controls](RELATIONAL_PROJECTION_READ_VALIDATION_PROOF.md)
 map the existing writer identities, bounded SQL hydration and remaining query/
 embedded-owner obligations. The
+[`HawDBAdjacencyProjectionReadValidation.tla`](HawDBAdjacencyProjectionReadValidation.tla)
+checks internal-ID roots and complete single-hop identities, including empty
+adjacency, both directions, false-to-true filters and canonical/live metadata.
+Its [conditional argument and eleven controls](ADJACENCY_PROJECTION_READ_VALIDATION_PROOF.md)
+map the bounded native collector while retaining the batch and Mem integration
+obligations. The
 [`HawDBSearchPreparedPublication.tla`](HawDBSearchPreparedPublication.tla)
 checks two publishers preparing private candidates without retaining the root
 lease, exact valid/damaged selector revalidation, complete activation, consumer

@@ -18,6 +18,9 @@
 //! not publication authorization: a facade must retain its source/target fence
 //! through durable activation and separately check source durability.
 
+#[path = "read_dependencies/adjacency.rs"]
+mod adjacency;
+
 use super::*;
 use crate::version::{
     VersionConflict, VersionKey, VersionSnapshotPin, VersionWriteSet, VersionWriteSetError,
