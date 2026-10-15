@@ -14,6 +14,7 @@ pub(super) struct Control {
     memory: BuildMemory,
     task: RuntimeTaskContext,
     max_id_bytes: usize,
+    step: Option<(SearchMutationSortStepLimits, SearchMutationSortStepUsage)>,
 }
 impl Control {
     pub(super) fn new(
@@ -28,6 +29,7 @@ impl Control {
             memory,
             task,
             max_id_bytes,
+            step: None,
         }
     }
     pub(super) fn check_input(&self, id: &str) -> Result<()> {
@@ -46,6 +48,13 @@ impl Control {
             .checked_add(bytes)
             .filter(|n| *n <= self.limits.max_read_bytes.get())
             .ok_or_else(|| invalid("read byte admission exhausted"))?;
+        if let Some((limits, used)) = &mut self.step {
+            used.read_bytes = used
+                .read_bytes
+                .checked_add(bytes)
+                .filter(|value| *value <= limits.read_bytes.get())
+                .ok_or_else(|| invalid("step read preflight was incomplete"))?;
+        }
         self.report.reserved_read_bytes = next;
         Ok(())
     }
@@ -57,9 +66,55 @@ impl Control {
             .checked_add(bytes)
             .filter(|n| *n <= self.limits.max_spill_bytes.get())
             .ok_or_else(|| invalid("spill byte admission exhausted"))?;
+        if let Some((limits, used)) = &mut self.step {
+            used.spill_bytes = used
+                .spill_bytes
+                .checked_add(bytes)
+                .filter(|value| *value <= limits.spill_bytes.get())
+                .ok_or_else(|| invalid("step spill preflight was incomplete"))?;
+        }
         writer.stage.reserve_additional_disk(bytes)?;
         self.report.reserved_spill_bytes = next;
         Ok(())
+    }
+    pub(super) fn begin_step(&mut self, limits: SearchMutationSortStepLimits) {
+        self.step = Some((limits, Default::default()));
+    }
+    pub(super) fn end_step(&mut self) -> SearchMutationSortStepUsage {
+        self.step
+            .take()
+            .map_or(Default::default(), |(_, usage)| usage)
+    }
+    /// Charge an atomic transition only after its complete conservative byte
+    /// preflight fits the remaining quantum. Yield never refunds total work.
+    pub(super) fn allow(&mut self, work: usize, read: u64, spill: u64) -> Result<bool> {
+        checkpoint(&self.task)?;
+        if let Some((limits, used)) = &self.step {
+            if work > limits.work.get()
+                || read > limits.read_bytes.get()
+                || spill > limits.spill_bytes.get()
+            {
+                return Err(invalid(
+                    "one ordering operation cannot fit the step admission",
+                ));
+            }
+            if work > limits.work.get() - used.work
+                || read > limits.read_bytes.get() - used.read_bytes
+                || spill > limits.spill_bytes.get() - used.spill_bytes
+            {
+                return Ok(false);
+            }
+        }
+        self.report.sort_work = self
+            .report
+            .sort_work
+            .checked_add(work)
+            .filter(|value| *value <= self.limits.max_sort_work.get())
+            .ok_or_else(|| invalid("cumulative sort work admission exhausted"))?;
+        if let Some((_, used)) = &mut self.step {
+            used.work += work;
+        }
+        Ok(true)
     }
     fn visit(&mut self) -> Result<()> {
         checkpoint(&self.task)?;
@@ -158,7 +213,7 @@ impl Output {
     ) -> Result<()> {
         match entry {
             Buffered::Delete(id) => self.delete(&id, control, writer),
-            Buffered::Upsert(document) => {
+            Buffered::Upsert(document, _) => {
                 let encoding = DocumentEncoding::new_with_context(&document, Some(&control.task))?;
                 let bytes = encoding.len() as u64;
                 if bytes > writer.options.max_record_bytes.get() {
@@ -212,7 +267,7 @@ impl Output {
         evidence(&mut self.digest, record.finish(), extent, 0);
         Ok(())
     }
-    fn copied(
+    pub(super) fn copied(
         &mut self,
         entry: &Entry,
         control: &mut Control,
@@ -259,6 +314,12 @@ pub(super) enum Entry {
     Upsert(Box<spool::SpoolRecord>, bool),
 }
 impl Entry {
+    pub(super) fn copy_cost(&self) -> (u64, u64) {
+        match self {
+            Self::Delete(id) => (0, id.len() as u64 + 17),
+            Self::Upsert(record, _) => (record.encoded_bytes, record.encoded_bytes + 18),
+        }
+    }
     pub(super) fn id(&self) -> &str {
         match self {
             Self::Delete(id) => id,
@@ -273,6 +334,7 @@ pub(super) struct Reader {
     records: usize,
     digest: DocumentsDigest,
     previous: Option<Term>,
+    inspected_read_bytes: Option<u64>,
     memory: BuildMemory,
     task: RuntimeTaskContext,
     _memory: QueryMemoryLease,
@@ -303,6 +365,7 @@ impl Reader {
             records: 0,
             digest: Default::default(),
             previous: None,
+            inspected_read_bytes: None,
             memory: control.memory.clone(),
             task: control.task.clone(),
             _memory: memory,
@@ -311,6 +374,59 @@ impl Reader {
     fn raw(&self, offset: u64, bytes: &mut [u8], control: &mut Control) -> Result<()> {
         control.read(bytes.len() as u64)?;
         self.cursor.read_exact_at(offset, bytes)
+    }
+    /// Read only the bounded frame prefix. Cache its conservative full-read
+    /// cost across quantum boundaries; the existing decoder revalidates it.
+    fn inspect(&mut self, control: &mut Control) -> Result<()> {
+        let mut tag = [0];
+        self.raw(self.position, &mut tag, control)?;
+        let cost = match tag[0] {
+            0 => {
+                let mut length = [0; 8];
+                self.raw(self.position + 1, &mut length, control)?;
+                let length = u64::from_le_bytes(length);
+                if length == 0 || length > control.max_id_bytes as u64 {
+                    return Err(invalid("ID exceeds admission"));
+                }
+                length.checked_add(17)
+            }
+            1 => {
+                let mut frame = [0; 17];
+                self.raw(self.position + 1, &mut frame, control)?;
+                if frame[0] > 1 {
+                    return Err(invalid("invalid analyzer marker"));
+                }
+                let length = u64::from_le_bytes(frame[1..9].try_into().unwrap());
+                length.checked_add(34)
+            }
+            _ => return Err(invalid("invalid operation tag")),
+        }
+        .ok_or_else(|| invalid("record read preflight overflow"))?;
+        self.inspected_read_bytes = Some(cost);
+        Ok(())
+    }
+    /// Returns false only when the current quantum must yield. A record that
+    /// cannot fit any quantum with these limits is a permanent refusal.
+    pub(super) fn next_in_step(&mut self, control: &mut Control) -> Result<Option<Option<Entry>>> {
+        if self.records == self.run.records {
+            return if control.allow(1, 0, 0)? {
+                self.next(control).map(Some)
+            } else {
+                Ok(None)
+            };
+        }
+        if self.inspected_read_bytes.is_none() {
+            if !control.allow(1, 18, 0)? {
+                return Ok(None);
+            }
+            self.inspect(control)?;
+        }
+        if !control.allow(1, self.inspected_read_bytes.unwrap(), 0)? {
+            return Ok(None);
+        }
+        let value = self.next(control)?;
+        self.inspected_read_bytes = None;
+        Ok(Some(value))
     }
     pub(super) fn next(&mut self, control: &mut Control) -> Result<Option<Entry>> {
         if self.records == self.run.records {
@@ -416,36 +532,189 @@ impl Reader {
     }
 }
 
-pub(super) fn merge(
-    left: Run,
-    right: Run,
-    control: &mut Control,
-    writer: &mut SearchOutOfCoreGenerationWriter,
-) -> Result<Run> {
-    let mut left = Reader::open(left, control, writer)?;
-    let mut right = Reader::open(right, control, writer)?;
-    let mut output = control.output(writer)?;
-    let (mut a, mut b) = (left.next(control)?, right.next(control)?);
-    while a.is_some() || b.is_some() {
-        checkpoint(&control.task)?;
-        let from_left = match (&a, &b) {
-            (Some(a), Some(b)) => a.id() <= b.id(),
-            (Some(_), None) => true,
-            _ => false,
-        };
-        if from_left {
-            output.copied(a.as_ref().unwrap(), control, writer)?;
-            a = left.next(control)?;
-        } else {
-            output.copied(b.as_ref().unwrap(), control, writer)?;
-            b = right.next(control)?;
+#[derive(Clone, Copy)]
+enum MergePhase {
+    OpenLeft,
+    OpenRight,
+    OpenOutput,
+    FillLeft,
+    FillRight,
+    Choose,
+    Copy,
+    Flush,
+    RemoveLeft,
+    RemoveRight,
+    Done,
+}
+
+/// Readers and pending entries survive yields; complete input drains and both
+/// removals precede handing the replacement run back to its owner.
+pub(super) struct Merge {
+    left_run: Option<Run>,
+    right_run: Option<Run>,
+    left: Option<Reader>,
+    right: Option<Reader>,
+    output: Option<Output>,
+    a: Option<Entry>,
+    b: Option<Entry>,
+    left_done: bool,
+    right_done: bool,
+    from_left: bool,
+    result: Option<Run>,
+    phase: MergePhase,
+    _memory: QueryMemoryLease,
+}
+impl Merge {
+    pub(super) fn new(left: Run, right: Run, control: &Control) -> Result<Box<Self>> {
+        let memory = control
+            .memory
+            .retained
+            .reserve(std::mem::size_of::<Self>())?;
+        Ok(Box::new(Self {
+            left_run: Some(left),
+            right_run: Some(right),
+            left: None,
+            right: None,
+            output: None,
+            a: None,
+            b: None,
+            left_done: false,
+            right_done: false,
+            from_left: false,
+            result: None,
+            phase: MergePhase::OpenLeft,
+            _memory: memory,
+        }))
+    }
+    pub(super) fn advance(
+        &mut self,
+        control: &mut Control,
+        writer: &mut SearchOutOfCoreGenerationWriter,
+    ) -> Result<bool> {
+        loop {
+            match self.phase {
+                MergePhase::OpenLeft => {
+                    if !control.allow(1, 8, 0)? {
+                        return Ok(false);
+                    }
+                    self.left = Some(Reader::open(
+                        self.left_run.take().unwrap(),
+                        control,
+                        writer,
+                    )?);
+                    self.phase = MergePhase::OpenRight;
+                }
+                MergePhase::OpenRight => {
+                    if !control.allow(1, 8, 0)? {
+                        return Ok(false);
+                    }
+                    self.right = Some(Reader::open(
+                        self.right_run.take().unwrap(),
+                        control,
+                        writer,
+                    )?);
+                    self.phase = MergePhase::OpenOutput;
+                }
+                MergePhase::OpenOutput => {
+                    if !control.allow(1, 0, 8)? {
+                        return Ok(false);
+                    }
+                    self.output = Some(control.output(writer)?);
+                    self.phase = MergePhase::FillLeft;
+                }
+                MergePhase::FillLeft => {
+                    if self.a.is_none() && !self.left_done {
+                        let Some(value) = self.left.as_mut().unwrap().next_in_step(control)? else {
+                            return Ok(false);
+                        };
+                        self.left_done = value.is_none();
+                        self.a = value;
+                    }
+                    self.phase = MergePhase::FillRight;
+                }
+                MergePhase::FillRight => {
+                    if self.b.is_none() && !self.right_done {
+                        let Some(value) = self.right.as_mut().unwrap().next_in_step(control)?
+                        else {
+                            return Ok(false);
+                        };
+                        self.right_done = value.is_none();
+                        self.b = value;
+                    }
+                    self.phase = MergePhase::Choose;
+                }
+                MergePhase::Choose => {
+                    let comparison = self
+                        .a
+                        .as_ref()
+                        .zip(self.b.as_ref())
+                        .map_or(0, |(a, b)| a.id().len().min(b.id().len()));
+                    if !control.allow(1 + comparison, 0, 0)? {
+                        return Ok(false);
+                    }
+                    self.from_left = match (&self.a, &self.b) {
+                        (Some(a), Some(b)) => a.id() <= b.id(),
+                        (Some(_), None) => true,
+                        (None, Some(_)) => false,
+                        (None, None) => {
+                            self.phase = MergePhase::Flush;
+                            continue;
+                        }
+                    };
+                    self.phase = MergePhase::Copy;
+                }
+                MergePhase::Copy => {
+                    let entry = if self.from_left {
+                        self.a.as_ref().unwrap()
+                    } else {
+                        self.b.as_ref().unwrap()
+                    };
+                    let (read, spill) = entry.copy_cost();
+                    if !control.allow(1, read, spill)? {
+                        return Ok(false);
+                    }
+                    self.output
+                        .as_mut()
+                        .unwrap()
+                        .copied(entry, control, writer)?;
+                    if self.from_left {
+                        self.a = None;
+                    } else {
+                        self.b = None;
+                    }
+                    self.phase = MergePhase::FillLeft;
+                }
+                MergePhase::Flush => {
+                    if !control.allow(1, 0, 0)? {
+                        return Ok(false);
+                    }
+                    self.result = Some(self.output.take().unwrap().finish()?);
+                    self.phase = MergePhase::RemoveLeft;
+                }
+                MergePhase::RemoveLeft => {
+                    if !control.allow(1, 0, 0)? {
+                        return Ok(false);
+                    }
+                    self.left.take().unwrap().remove(control)?;
+                    self.phase = MergePhase::RemoveRight;
+                }
+                MergePhase::RemoveRight => {
+                    if !control.allow(1, 0, 0)? {
+                        return Ok(false);
+                    }
+                    self.right.take().unwrap().remove(control)?;
+                    self.phase = MergePhase::Done;
+                }
+                MergePhase::Done => return Ok(true),
+            }
         }
     }
-    let run = output.finish()?;
-    left.remove(control)?;
-    right.remove(control)?;
-    Ok(run)
+    pub(super) fn finish(mut self: Box<Self>) -> Run {
+        assert!(matches!(self.phase, MergePhase::Done));
+        self.result.take().unwrap()
+    }
 }
+
 pub(super) fn reduce(left: Entry, right: Entry, control: &mut Control) -> Result<Entry> {
     match (left, right) {
         (Entry::Delete(_), upsert @ Entry::Upsert(..))

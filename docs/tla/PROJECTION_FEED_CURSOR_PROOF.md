@@ -7,8 +7,9 @@ authorization to publish arbitrary callback output. See the complete
 
 The [external mutation sorter](SEARCH_UNORDERED_MUTATIONS_PROOF.md) now supplies
 private output ordering and exact duplicate/conflict reduction. Its cumulative
-sort admission is separate from this primitive's per-step source budget;
-artifact-bound coverage and resumable per-step sort work remain outstanding.
+and per-quantum sort admission are separate from this primitive's source budget;
+artifact-bound coverage and incremental final artifact construction remain
+outstanding. See the [ordering quantum proof](SEARCH_SORT_QUANTUM_PROOF.md).
 
 ## Source mapping and conditional argument
 
@@ -94,5 +95,6 @@ peaks, parser/physical query work or RSS. Query row/payload caps apply per
 statement; dependency caps are cumulative. Cross-statement work and output
 staging still need session/governor admission. Cold ID-root access and encoded
 block validation retain their earlier limitations. Native coverage receipt,
-global reducer/spool, complete relevant schema/host effects, actual Mem owner
+session ownership of the external reducer/spool, incremental final artifact
+construction, complete relevant schema/host effects, actual Mem owner
 handoff, fault composition and original performance/retention gates remain open.

@@ -76,6 +76,7 @@ STORAGE_MODELS = [
     "HawDBSearchBatchCoverage",
     "HawDBSearchMutationPublication",
     "HawDBSearchPreparedPublication",
+    "HawDBSearchSortQuantum",
     "HawDBSearchStageCleanup",
     "HawDBSearchUnorderedMutations",
     "HawDBSourceSegmentPublication",

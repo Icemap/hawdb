@@ -1,8 +1,9 @@
 # Pinned-source Search batch coverage
 
-Status: pinned bounded feed enumeration and tracked callback context are
-implemented. The artifact-owning preparation session, coverage receipts, global
-spool and Mem integration below are **not implemented**. See the
+Status: pinned bounded feed enumeration, tracked callback context and resumable
+private external ordering/reduction are implemented. The artifact-owning
+preparation session, coverage receipts, incremental artifact construction and
+Mem integration below are **not implemented**. See the
 [primitive argument](../tla/PROJECTION_FEED_CURSOR_PROOF.md).
 This extends, rather than replaces, the full acceptance ledger in
 [the versioned-publication spec](MVCC_VERSIONED_PUBLICATION_SPEC.md).
@@ -136,8 +137,12 @@ The [external mutation ordering component](../tla/SEARCH_UNORDERED_MUTATIONS_PRO
 now builds a private expected-base Search update from unordered fixed-E intents
 under payload/record, shared task-memory and cumulative I/O/merge admission.
 It checks exact duplicate bodies, coalesces retracts and rejects conflicts.
-This supplies output ordering for the session; it does not yet own feed-to-stage
-coverage, provide per-step resumable sorting, or authorize a complete watermark.
+Its queue/advance/close protocol also admits each ordering quantum's work and
+logical read/spill bytes, retaining heap, run, prefix and reduction state across
+yields. A single record/comparison must fit a whole quantum or the attempt
+refuses. This supplies output ordering for the session; it does not yet own
+feed-to-stage coverage, make final artifact construction incremental, or
+authorize a complete watermark.
 The legacy partial-prefix catch-up path remains unchanged.
 
 The companion coverage model must reject legacy early-prefix publication,

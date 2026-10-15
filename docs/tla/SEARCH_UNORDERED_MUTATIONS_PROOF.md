@@ -63,12 +63,15 @@ encoded equality and complete membership hold. Native code checks both
 premises at the stated seams; the finite model checks selected interleavings
 and the deliberately colliding-body case rather than proving arbitrary Rust.
 
-These are cumulative sorting caps, **not** a resumable per-step sort budget.
-One input can trigger multiple whole-run merges, and `prepare_publication` can
-perform the full remaining merge, reduction and artifact build. A source feed
-step's item/work budget does not bound this sort work or elapsed time. Encoded
-record maxima, shared ledger estimates and run bounds do not prove total RSS,
-page-cache residency, syscall latency, or size-independent activation cost.
+Ordering now also has [resumable per-quantum admission](SEARCH_SORT_QUANTUM_PROOF.md)
+for heap comparisons/transitions and logical run reads/writes. Queueing retains
+one admitted pending input instead of driving a whole merge. A record or exact
+comparison that exceeds an entire quantum refuses instead of yielding forever.
+The blocking convenience methods drive the same states; final base retraction
+reads, indexing and artifact sealing remain blocking. A source feed quantum
+does not cover those separate phases. Encoded record maxima, shared ledger
+estimates and run bounds do not prove total RSS, page-cache residency, syscall
+latency, or size-independent activation cost.
 
 ## Finite refinement
 

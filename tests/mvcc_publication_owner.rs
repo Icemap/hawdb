@@ -15,14 +15,20 @@ use std::time::Duration;
 struct Directory(PathBuf);
 impl Directory {
     fn new() -> Self {
-        Self(std::env::temp_dir().join(format!(
-            "hawdb-mvcc-owner-{}-{}",
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-mvcc-owner-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
-        )))
+                .as_nanos(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        ));
+        // Timestamp resolution alone does not reserve a unique parallel-test
+        // namespace. Reserve it before returning any database/Search handle.
+        std::fs::create_dir(&path).unwrap();
+        Self(path)
     }
 }
 impl Drop for Directory {
@@ -591,7 +597,7 @@ fn pinned_feed_and_external_sort_preserve_the_complete_final_graph_and_sql_set()
                                     .is_empty());
                             }
                             ProjectionFeedItem::DeleteDocument { document_id, .. } => {
-                                sorting.delete(document_id)?
+                                sorting.queue_delete(document_id)?
                             }
                             ProjectionFeedItem::RelationalKey { table, key, .. } => {
                                 assert_eq!(table, "records");
@@ -603,7 +609,7 @@ fn pinned_feed_and_external_sort_preserve_the_complete_final_graph_and_sql_set()
                                     &[Value::Int(id)],
                                 )?;
                                 assert_eq!(result.rows[0]["body"], Value::String("at-E".into()));
-                                sorting.upsert(document(&format!("record:{id}"), "at-E"))?;
+                                sorting.queue_upsert(document(&format!("record:{id}"), "at-E"))?;
                             }
                             ProjectionFeedItem::End { source_epoch } => {
                                 assert_eq!(source_epoch, source);
@@ -614,6 +620,20 @@ fn pinned_feed_and_external_sort_preserve_the_complete_final_graph_and_sql_set()
                     })
                     .unwrap();
                 assert!(step.usage.items <= 1);
+                while !sorting.ready_for_input() {
+                    let step = sorting
+                        .advance_ordering(hawdb::SearchMutationSortStepLimits {
+                            work: NonZeroUsize::new(16).unwrap(),
+                            read_bytes: std::num::NonZeroU64::new(1024).unwrap(),
+                            spill_bytes: std::num::NonZeroU64::new(1024).unwrap(),
+                        })
+                        .unwrap();
+                    assert!(
+                        step.usage.work <= 16
+                            && step.usage.read_bytes <= 1024
+                            && step.usage.spill_bytes <= 1024
+                    );
+                }
                 assert_eq!(
                     SearchOutOfCoreReader::open(&search).unwrap().generation(),
                     reader.generation()
@@ -621,6 +641,25 @@ fn pinned_feed_and_external_sort_preserve_the_complete_final_graph_and_sql_set()
             }
             assert!(end && callbacks >= 4);
             let dependencies = feed.finish().unwrap();
+            sorting.finish_input().unwrap();
+            while !sorting.ordering_complete() {
+                let step = sorting
+                    .advance_ordering(hawdb::SearchMutationSortStepLimits {
+                        work: NonZeroUsize::new(16).unwrap(),
+                        read_bytes: std::num::NonZeroU64::new(1024).unwrap(),
+                        spill_bytes: std::num::NonZeroU64::new(1024).unwrap(),
+                    })
+                    .unwrap();
+                assert!(
+                    step.usage.work <= 16
+                        && step.usage.read_bytes <= 1024
+                        && step.usage.spill_bytes <= 1024
+                );
+                assert_eq!(
+                    SearchOutOfCoreReader::open(&search).unwrap().generation(),
+                    reader.generation()
+                );
+            }
             let (report, candidate) = sorting.prepare_publication().unwrap();
             assert_eq!(report.output_operations, 2);
             // This composes the primitives; callback correctness is a fixture

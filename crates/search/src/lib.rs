@@ -207,7 +207,8 @@ pub use lexical_term_policy::SearchLexicalTermPolicy;
 pub use out_of_core::{
     GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
     ScheduledSearchOutOfCoreSegmentCompactionReport, SearchBodyReadOptions,
-    SearchGenerationAdmission, SearchOutOfCoreCandidate, SearchOutOfCoreConfig,
+    SearchGenerationAdmission, SearchMutationSortStep, SearchMutationSortStepLimits,
+    SearchMutationSortStepUsage, SearchOutOfCoreCandidate, SearchOutOfCoreConfig,
     SearchOutOfCoreExecutionContext, SearchOutOfCoreGenerationBuildOptions,
     SearchOutOfCoreGenerationBuildReport, SearchOutOfCoreGenerationUpdate,
     SearchOutOfCoreGenerationWriter, SearchOutOfCoreHydrationOutput, SearchOutOfCoreMetrics,

@@ -65,6 +65,7 @@ mod vector_serving;
 pub use generation_writer::{
     GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
     ScheduledSearchOutOfCoreSegmentCompactionReport, SearchGenerationAdmission,
+    SearchMutationSortStep, SearchMutationSortStepLimits, SearchMutationSortStepUsage,
     SearchOutOfCoreGenerationBuildOptions, SearchOutOfCoreGenerationBuildReport,
     SearchOutOfCoreGenerationUpdate, SearchOutOfCoreGenerationWriter,
     SearchOutOfCoreMutationWriter, SearchOutOfCorePreparedGeneration,

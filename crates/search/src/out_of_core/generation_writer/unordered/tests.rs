@@ -3,7 +3,7 @@
 
 use super::*;
 use std::collections::BTreeMap;
-fn document(id: &str, content: &str) -> SearchDocument {
+pub(super) fn document(id: &str, content: &str) -> SearchDocument {
     SearchDocument {
         id: id.into(),
         title: id.into(),
@@ -12,7 +12,7 @@ fn document(id: &str, content: &str) -> SearchDocument {
         metadata: BTreeMap::new(),
     }
 }
-fn fixture(name: &str) -> (std::path::PathBuf, SearchOutOfCoreReader) {
+pub(super) fn fixture(name: &str) -> (std::path::PathBuf, SearchOutOfCoreReader) {
     let root = super::super::super::tests::test_dir(name);
     let mut writer = SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap();
     for (id, body) in [("a", "old"), ("b", "removed"), ("k", "keep")] {
@@ -22,7 +22,7 @@ fn fixture(name: &str) -> (std::path::PathBuf, SearchOutOfCoreReader) {
     let reader = SearchOutOfCoreReader::open(&root).unwrap();
     (root, reader)
 }
-fn limits(records: usize) -> SearchUnorderedMutationLimits {
+pub(super) fn limits(records: usize) -> SearchUnorderedMutationLimits {
     SearchUnorderedMutationLimits {
         max_buffer_records: NonZeroUsize::new(records).unwrap(),
         ..Default::default()

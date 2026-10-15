@@ -63,6 +63,7 @@ mod io;
 mod mutations;
 mod unordered;
 pub use unordered::{
+    SearchMutationSortStep, SearchMutationSortStepLimits, SearchMutationSortStepUsage,
     SearchOutOfCoreUnorderedMutationWriter, SearchUnorderedMutationLimits,
     SearchUnorderedMutationReport,
 };
