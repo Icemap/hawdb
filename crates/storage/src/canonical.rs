@@ -1778,7 +1778,7 @@ impl CanonicalSegmentReader {
         required_properties: Option<&BTreeSet<String>>,
         label_ids: Option<&[LabelId]>,
     ) -> Result<Option<usize>, CanonicalSegmentError> {
-        self.point_allocation_bytes(CanonicalSegmentKind::Nodes, id.0, |payload| {
+        self.with_point_payload(CanonicalSegmentKind::Nodes, id.0, |payload| {
             let input = CanonicalNodeInput {
                 id,
                 payload,
@@ -1809,7 +1809,7 @@ impl CanonicalSegmentReader {
         &self,
         id: RelId,
     ) -> Result<Option<usize>, CanonicalSegmentError> {
-        self.point_allocation_bytes(CanonicalSegmentKind::Relationships, id.0, |payload| {
+        self.with_point_payload(CanonicalSegmentKind::Relationships, id.0, |payload| {
             relationship_payload_layout(
                 payload,
                 Some(self.property_keys()),
@@ -1819,12 +1819,12 @@ impl CanonicalSegmentReader {
         })
     }
 
-    fn point_allocation_bytes(
+    fn with_point_payload<T>(
         &self,
         kind: CanonicalSegmentKind,
         id: u64,
-        mut measure: impl FnMut(&[u8]) -> Result<Option<usize>, CanonicalSegmentError>,
-    ) -> Result<Option<usize>, CanonicalSegmentError> {
+        mut measure: impl FnMut(&[u8]) -> Result<Option<T>, CanonicalSegmentError>,
+    ) -> Result<Option<T>, CanonicalSegmentError> {
         self.ensure_healthy()?;
         let result = (|| {
             let (segment, _) = self.find_descriptor_for_id(kind, id)?;
@@ -1851,6 +1851,22 @@ impl CanonicalSegmentReader {
         })();
         self.poison_on_physical_failure(&result);
         result
+    }
+
+    /// Validates encoded relationship metadata without constructing properties.
+    #[doc(hidden)]
+    pub fn relationship_identity(
+        &self,
+        id: RelId,
+    ) -> Result<Option<(NodeId, NodeId, RelTypeId)>, CanonicalSegmentError> {
+        self.with_point_payload(CanonicalSegmentKind::Relationships, id.0, |payload| {
+            let layout = relationship_payload_layout(
+                payload,
+                Some(self.property_keys()),
+                self.property_spills.as_ref(),
+            )?;
+            Ok(Some((layout.source, layout.target, layout.rel_type)))
+        })
     }
 
     pub fn get_relationship(&self, id: RelId) -> Result<Option<RelRecord>, CanonicalSegmentError> {

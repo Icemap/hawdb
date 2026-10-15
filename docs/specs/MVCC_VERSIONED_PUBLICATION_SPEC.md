@@ -331,6 +331,14 @@ checksums/installs artifacts and performs cleanup under the Search lease, so a
 size-independent publication section has not been delivered. See the
 [Search lifecycle argument and ten controls](../tla/SEARCH_PREPARED_PUBLICATION_PROOF.md).
 
+Cold Search graph change capture now reads admitted canonical preimages and
+both directed Label postings before WAL, then installs either complete events
+or a persisted resume gap after append. Metadata limits require a full rebuild;
+physical uncertainty fails before WAL. Full-prefix cold/hot and replay regressions
+compare delta results against full rebuild. This does not certify bounded B < E
+coverage when hydration reads E. See the
+[change-capture argument](../tla/PROJECTION_CHANGE_CAPTURE_PROOF.md).
+
 The catalog path publishes full generations; the native Search path activates
 owned backend candidates. It does not yet move actual
 incremental Search preparation out of `NowledgeMemEmbeddedStoreHandle`, collect

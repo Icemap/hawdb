@@ -128,14 +128,11 @@ ID-range refusal tests require an unusable token after ignored errors. Allocator
 observation verifies that denied property/label expression ownership does not
 copy the watched large payload, without claiming upstream/total memory bounds.
 
-A separate synthetic cold-start changefeed probe exposed an existing migration
-blocker: after checkpoint/reopen in OutOfCore mode, a first Memory payload/ID
-change or Label name change updated canonical data but the legacy batch builder
-returned no operations while advancing its complete-through epoch. Fresh hot
-controls captured the expected upserts/deletes. This exploratory probe is not a
-passing regression of the old changefeed. Cold preimage and label-neighbor
-capture/recovery need permanent regressions and repair before any batch coverage
-receipt can certify that path; valid hydration dependencies alone cannot fix it.
+The synthetic cold-start changefeed omission is now repaired by pre-WAL
+canonical metadata capture, with permanent delta-versus-full-rebuild and replay
+regressions. See [capture and recovery argument](PROJECTION_CHANGE_CAPTURE_PROOF.md).
+This does not certify bounded B < E batches hydrated from the current E source;
+valid hydration dependencies alone cannot establish batch coverage.
 
 The finite model abstracts maps, expression parsing/coercion, physical I/O and
 string formatting. Native equivalence and admission regressions support those

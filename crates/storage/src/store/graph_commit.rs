@@ -1939,6 +1939,12 @@ impl GraphStore {
                 self.reclaim_version_history();
                 self.stage_version_index(&version_writes, next_commit_epoch)
             })?;
+        let staged_projection_change = self.prepare_search_projection_changes_for_ops(
+            catalog,
+            next_commit_epoch,
+            &ops,
+            staged_relational_primary_key_changes,
+        )?;
         let wal_result =
             if preserve_single_create_wal && let [op @ WalOp::CreateNode { .. }] = ops.as_slice() {
                 self.append_durable_wal_single(op.clone())
@@ -1948,12 +1954,7 @@ impl GraphStore {
         self.poison_on_storage_error(&wal_result);
         wal_result?;
         *catalog = working_catalog;
-        self.record_search_projection_changes_for_ops(
-            catalog,
-            next_commit_epoch,
-            &ops,
-            staged_relational_primary_key_changes,
-        );
+        self.install_search_projection_change(staged_projection_change);
         for op in ops {
             if matches!(op, WalOp::Relational { .. }) {
                 self.relational_state = staged_relational_state

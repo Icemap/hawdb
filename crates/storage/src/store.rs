@@ -125,6 +125,8 @@ mod relational_index_shadow;
 #[path = "store/relational_row_pages.rs"]
 #[doc(hidden)]
 pub mod relational_row_pages;
+#[path = "store/search_projection_capture.rs"]
+mod search_projection_capture;
 #[path = "store/search_projection_change_log.rs"]
 mod search_projection_change_log;
 #[path = "store/statistics_refresh.rs"]

@@ -2059,3 +2059,175 @@ fn prepared_optional_hydration_refuses_unbounded_or_selected_roots() {
         assert!(read.finish().is_err());
     }
 }
+
+#[test]
+fn cold_changefeed_replays_complete_search_changes_against_full_rebuild() {
+    fn copy_closed_fixture(source: &std::path::Path, target: &std::path::Path) {
+        std::fs::create_dir_all(target).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let destination = target.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy_closed_fixture(&entry.path(), &destination);
+            } else {
+                assert!(entry.file_type().unwrap().is_file());
+                std::fs::copy(entry.path(), destination).unwrap();
+            }
+        }
+    }
+    // Each case has its own canonical files and WAL. Initialize and checkpoint
+    // the identical baseline once, then copy it only after all handles close.
+    let (baseline, mut db, _) = adjacency_fixture();
+    db.checkpoint().unwrap();
+    drop(db);
+    for cold in [false, true] {
+        for replay in [false, true] {
+            for query in [
+                "MATCH (n:Memory) WHERE n.id = 'a' SET n.title = 'changed-title'",
+                "MATCH (n:Memory) WHERE n.id = 'a' SET n.id = 'renamed'",
+                "MATCH (n:Memory) WHERE n.id = 'a' DETACH DELETE n",
+                "MATCH (n:Label) SET n.name = 'changed-label'",
+                "MATCH (n:Label) SET n.canonical_name = 'canonical-label'",
+                "MATCH (n:Label) DETACH DELETE n",
+                "MATCH (n:Memory), (l:Label) WHERE n.id = 'other' CREATE (n)-[:HAS_LABEL]->(l)",
+                "MATCH (n:Memory)-[r:HAS_LABEL]->(l:Label) DELETE r",
+            ] {
+                let root = TestRoot::new();
+                copy_closed_fixture(&baseline.0, &root.0);
+                let config = hawdb::DatabaseConfig {
+                    storage_residency_mode: if cold {
+                        hawdb::StorageResidencyMode::OutOfCore
+                    } else {
+                        hawdb::StorageResidencyMode::Materialized
+                    },
+                    ..Default::default()
+                };
+                let mut db = Database::open_with_config(&root.0, config.clone()).unwrap();
+                let mut incremental = hawdb::SearchIndex::default();
+                db.rebuild_search_projection(&mut incremental, Default::default())
+                    .unwrap();
+                let cursor = db.commit_epoch().unwrap();
+                db.query(query).unwrap();
+                let committed = db.commit_epoch().unwrap();
+                if replay {
+                    drop(db);
+                    db = Database::open_with_config(&root.0, config).unwrap();
+                }
+                let batch = db
+                    .build_search_projection_change_batch_after(cursor, Some(100))
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(batch.complete_through_commit_epoch(), Some(committed));
+                assert!(
+                    batch.operation_count() > 0,
+                    "cold={cold} replay={replay} {query}"
+                );
+                db.apply_search_projection_change_batch(
+                    &mut incremental,
+                    batch,
+                    Default::default(),
+                )
+                .unwrap();
+                let mut oracle = hawdb::SearchIndex::default();
+                db.rebuild_search_projection(&mut oracle, Default::default())
+                    .unwrap();
+                assert_eq!(
+                    incremental.document_count(),
+                    oracle.document_count(),
+                    "{query}"
+                );
+                for id in ["memory:a", "memory:renamed", "memory:other"] {
+                    assert_eq!(
+                        incremental.document(id),
+                        oracle.document(id),
+                        "cold={cold} replay={replay} {query} {id}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn changefeed_captures_new_label_edges_and_published_ids_inside_one_transaction() {
+    let (_root, mut db, _) = adjacency_fixture();
+    let mut incremental = hawdb::SearchIndex::default();
+    db.rebuild_search_projection(&mut incremental, Default::default())
+        .unwrap();
+    let cursor = db.commit_epoch().unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    transaction
+        .query("CREATE (:Label {id: 'new', name: 'new-label'})")
+        .unwrap();
+    transaction.query("MATCH (n:Memory), (l:Label) WHERE n.id = 'other' AND l.id = 'new' CREATE (n)-[:HAS_LABEL]->(l)").unwrap();
+    transaction
+        .query("MATCH (n:Memory) WHERE n.id = 'a' SET n.id = 'temporary'")
+        .unwrap();
+    transaction
+        .query("MATCH (n:Memory) WHERE n.id = 'temporary' SET n.id = 'renamed'")
+        .unwrap();
+    transaction.commit().unwrap();
+    let batch = db
+        .build_search_projection_change_batch_after(cursor, Some(100))
+        .unwrap()
+        .unwrap();
+    assert_eq!(batch.graph_delta().delete_document_ids, ["memory:a"]);
+    assert!(batch.graph_delta().upsert_node_ids.contains(&2));
+    db.apply_search_projection_change_batch(&mut incremental, batch, Default::default())
+        .unwrap();
+    let mut oracle = hawdb::SearchIndex::default();
+    db.rebuild_search_projection(&mut oracle, Default::default())
+        .unwrap();
+    for id in [
+        "memory:a",
+        "memory:temporary",
+        "memory:renamed",
+        "memory:other",
+    ] {
+        assert_eq!(incremental.document(id), oracle.document(id), "{id}");
+    }
+}
+
+#[test]
+fn oversized_projection_preimages_require_rebuild_without_losing_canonical_commits() {
+    let (root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
+    db.query_with_params(
+        "MATCH (n:Memory) WHERE n.id = 'a' SET n.id = $id",
+        &BTreeMap::from([("id".into(), Value::String("a".repeat(1024 * 1024)))]),
+    )
+    .unwrap();
+    db.checkpoint().unwrap();
+    drop(db);
+    let config = hawdb::DatabaseConfig {
+        storage_residency_mode: hawdb::StorageResidencyMode::OutOfCore,
+        ..Default::default()
+    };
+    db = Database::open_with_config(&root.0, config.clone()).unwrap();
+    let cursor = db.commit_epoch().unwrap();
+    db.query("MATCH (n:Memory) SET n.id = 'small'").unwrap();
+    let epoch = db.commit_epoch().unwrap();
+    assert!(epoch > cursor);
+    for checkpoint in [false, true] {
+        let error = db
+            .build_search_projection_change_batch_after(cursor, Some(100))
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("full search projection rebuild required"));
+        let output = db.query("MATCH (n:Memory) RETURN n.id AS id").unwrap();
+        assert_eq!(output.rows[0]["id"], Value::String("small".into()));
+        if checkpoint {
+            db.checkpoint().unwrap();
+        }
+        drop(db);
+        db = Database::open_with_config(&root.0, config.clone()).unwrap();
+        assert_eq!(db.commit_epoch().unwrap(), epoch);
+    }
+    assert!(db
+        .build_search_projection_change_batch_after(cursor, Some(100))
+        .is_err());
+    assert!(db
+        .build_search_projection_change_batch_after(epoch, Some(100))
+        .unwrap()
+        .is_none());
+}

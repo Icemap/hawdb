@@ -2107,3 +2107,7 @@ loses already accepted work. Both have explicit manual Bazel negative-control
 targets and entries in `mutants/mutants.txt`. Native row-runtime regressions
 cover owned/borrowed callbacks, page/byte/row/overlay admission, parent resume,
 complete admitted results and callback unwind.
+
+Search cold preimage capture and full-prefix catch-up are described in
+[the change-capture argument](PROJECTION_CHANGE_CAPTURE_PROOF.md), including
+explicit gap/rebuild semantics and the source-durability binding prerequisite.
