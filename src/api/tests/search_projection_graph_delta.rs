@@ -1097,6 +1097,8 @@ fn relational_search_batch_rejects_a_partial_prefix_hydrated_at_a_later_epoch() 
     db.query_sql("UPDATE public.thread_messages SET body = 'new' WHERE id = 1")
         .unwrap();
     let update_epoch = db.commit_epoch().unwrap();
+    db.query_sql("INSERT INTO public.thread_messages (id, body) VALUES (2, 'other')")
+        .unwrap();
     db.query_sql("DELETE FROM public.thread_messages WHERE id = 1")
         .unwrap();
 
@@ -1105,6 +1107,11 @@ fn relational_search_batch_rejects_a_partial_prefix_hydrated_at_a_later_epoch() 
         .unwrap()
         .unwrap();
     assert_eq!(batch.complete_through_commit_epoch(), Some(update_epoch));
+    assert_eq!(batch.relational_primary_key_changes().len(), 1);
+    assert_eq!(
+        batch.relational_primary_key_changes()[0].primary_keys.len(),
+        1
+    );
     let error = db
         .build_search_projection_change_delta(
             batch,
