@@ -1,0 +1,68 @@
+{
+  "source_heads": {
+    "baseline": "051ec037c8bac3269aa8e91aa169e37b7c229045",
+    "1028": "d67ec1215b592c4c75ae66bfea40ec528c8d7736",
+    "1029": "079eb2dad26e0a20a1182470991194daf8a2d0a2",
+    "1036": "dc73bed5e13c10351e83a3e3b495c9043b41a2a9"
+  },
+  "archive": {
+    "file": "ordinary-results.tar.gz",
+    "sha256": "47bbb6169d12d3061a798d2edd74d0ad35f7e4b3dd2cc60a0208c6f30d432fea",
+    "bytes": 6134107,
+    "files": 6728
+  },
+  "linux": {
+    "run": 38695324983,
+    "requested_records": 1920,
+    "audited_records": 1920,
+    "audit_errors": [],
+    "status_counts": {
+      "ok": 1728,
+      "error": 192
+    },
+    "qualified_groups_per_candidate": {
+      "1028": 54,
+      "1029": 54,
+      "1036": 54
+    },
+    "default_cap": 16777216,
+    "wide_10k_latency_qualified": false,
+    "auditor_sha256": "48b60d4f649b92e318798decb57999717f8319feaf69c8cf459386f9b1acb8a6",
+    "audit_sha256": "9633ebad4c9fef12a24540d85543e9db47a75aa23fb279272fb3eacfb1dd81c8",
+    "downloaded_native_artifacts_verified": 200
+  },
+  "mixed": {
+    "records": 128,
+    "small_aa_ab_records": 128,
+    "report_sha256": "c8af0412b18e2218428f92ad16e867c25df72fcf68cae3b3ee2f8236f762ff98",
+    "small_report_sha256": "24cfb24b0ec3dad2f818ad5c19328341e77c9a7fdfa46747c638cec36a71550d"
+  },
+  "go_bulk_diagnostic": {
+    "run": 38702906875,
+    "records": 144,
+    "scope": "Frozen original Go/FFI bytes, two aliases per source, 1k/10k memory, one discarded plus eleven measured pairs. Original adverse outcomes remain recorded; A/A does not establish noise."
+  },
+  "identity_diagnostic": {
+    "run": 38710025204,
+    "production_tree": "ec79975524707f7ee9b4b06cbd7ce92ce6e2a7f9",
+    "main_seconds": 402.53654362,
+    "candidate_seconds": 404.112931023,
+    "scope": "Original assertions and fixtures; logging only. Single-pair phase diagnostic, not latency qualification or root acceptance."
+  },
+  "1036_ci": {
+    "head": "dc73bed5e13c10351e83a3e3b495c9043b41a2a9",
+    "root_build": "2110664130166788096",
+    "root_passed": 58,
+    "root_total": 58,
+    "executed": 1,
+    "cached": 57,
+    "identity_seconds": 523.2,
+    "identity_deadline_seconds": 900,
+    "source_merge": "bb5d576040c01bd65d02380f19127ce18c0880a4",
+    "source_tree": "ec79975524707f7ee9b4b06cbd7ce92ce6e2a7f9",
+    "source_base": "f7c4eb48915b58f5c800491869f93bdb8c0c73da"
+  },
+  "accepted_tradeoff": "The owner accepted the replicated 1k raw rotating-parameter post-EXPLAIN refreshed hot-read overhead (about 8-10%, about 14% initially) for #1036, conditional on completing remaining checks. No other gate is waived.",
+  "original_986_gate": "Open: complete 100k/1M retained/Arrow and comprehensive performance/whole-operation resource acceptance is not qualified by this independent 1k/10k matrix.",
+  "package_verification": "Fresh extraction and verify-files.py passed. This checks file integrity; native/Git checks were performed by the included original independent auditors against actual artifacts and Git objects."
+}
