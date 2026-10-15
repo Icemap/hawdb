@@ -2114,10 +2114,12 @@ impl GraphStore {
     }
 
     pub(super) fn append_durable_wal_single(&mut self, op: WalOp) -> Result<()> {
-        if self.durable.is_none() {
-            return Ok(());
-        }
+        let rebuild =
+            search_projection_capture::projection_wal_requires_rebuild(std::slice::from_ref(&op));
         let result = (|| {
+            if self.durable.is_none() {
+                return Ok(());
+            }
             let pressure_signals = self.wal_admission_signals(std::slice::from_ref(&op))?;
             self.durable
                 .as_mut()
@@ -2125,14 +2127,23 @@ impl GraphStore {
                 .append_single(op, pressure_signals)
         })();
         self.poison_on_storage_error(&result);
-        result
+        result?;
+        if rebuild {
+            self.install_search_projection_change(
+                search_projection_capture::PreparedSearchProjectionChange::Gap(
+                    self.commit_epoch + 1,
+                ),
+            );
+        }
+        Ok(())
     }
 
     pub(super) fn append_durable_wal_batch(&mut self, ops: &[WalOp]) -> Result<()> {
-        if self.durable.is_none() {
-            return Ok(());
-        }
+        let rebuild = search_projection_capture::projection_wal_requires_rebuild(ops);
         let result = (|| {
+            if self.durable.is_none() {
+                return Ok(());
+            }
             let pressure_signals = self.wal_admission_signals(ops)?;
             self.durable
                 .as_mut()
@@ -2140,7 +2151,15 @@ impl GraphStore {
                 .append_batch(ops.to_vec(), pressure_signals)
         })();
         self.poison_on_storage_error(&result);
-        result
+        result?;
+        if rebuild {
+            self.install_search_projection_change(
+                search_projection_capture::PreparedSearchProjectionChange::Gap(
+                    self.commit_epoch + 1,
+                ),
+            );
+        }
+        Ok(())
     }
 
     fn wal_admission_signals(&self, ops: &[WalOp]) -> Result<StoragePressureSignals> {

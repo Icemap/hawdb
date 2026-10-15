@@ -22,6 +22,57 @@ const MAX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_PREIMAGE_BYTES: usize = 64 * 1024;
 const MAX_DEPTH: usize = 64;
 
+/// These effects cannot be reconstructed from the point graph/relational feed.
+/// Keep the match exhaustive: a new WAL family must choose its capture contract.
+/// The same decision is used before append, after successful direct append, and
+/// during replay. Over-budget classification conservatively requires rebuild.
+pub(super) fn projection_wal_requires_rebuild(ops: &[WalOp]) -> bool {
+    fn requires(op: &WalOp, depth: usize, remaining: &mut usize) -> bool {
+        if depth > MAX_DEPTH || *remaining == 0 {
+            return true;
+        }
+        *remaining -= 1;
+        match op {
+            WalOp::CreateNodeLabel { .. }
+            | WalOp::CreateRelationshipType { .. }
+            | WalOp::CreateNodeTable { .. }
+            | WalOp::CreateRelationshipTable { .. }
+            | WalOp::CreateProperty { .. }
+            | WalOp::AlterTableState { .. }
+            | WalOp::AlterPropertyState { .. }
+            | WalOp::GcTableDescriptor { .. }
+            | WalOp::GcPropertyDescriptor { .. }
+            | WalOp::CreateIndex { .. }
+            | WalOp::CreateCompositeIndex { .. }
+            | WalOp::CreateRangeIndex { .. }
+            | WalOp::CreateFullTextIndex { .. }
+            | WalOp::CreateUniqueConstraint { .. }
+            | WalOp::CreateNodePropertyExistsConstraint { .. }
+            | WalOp::CreateRelationshipUniqueConstraint { .. }
+            | WalOp::CreateRelationshipPropertyExistsConstraint { .. }
+            | WalOp::ProjectGraph { .. }
+            | WalOp::MarkInitialImportSource { .. }
+            | WalOp::Append { .. } => true,
+            // Relational records carry their existing typed key capture or a
+            // RequiresRebuild event, including snapshot replacement. Graph
+            // point effects use the collector below. Relationship properties
+            // do not affect the built-in graph Search document mapping; host
+            // mapping effects still require their additional complete contract.
+            WalOp::Relational { .. }
+            | WalOp::RelationalSnapshot { .. }
+            | WalOp::CreateNode { .. }
+            | WalOp::SetNodeProperty { .. }
+            | WalOp::DeleteNode { .. }
+            | WalOp::CreateRelationship { .. }
+            | WalOp::SetRelationshipProperty { .. }
+            | WalOp::DeleteRelationship { .. } => false,
+            WalOp::Batch(ops) => ops.iter().any(|op| requires(op, depth + 1, remaining)),
+        }
+    }
+    let mut remaining = MAX_WORK;
+    ops.iter().any(|op| requires(op, 0, &mut remaining))
+}
+
 pub(super) enum PreparedSearchProjectionChange {
     Complete(Option<SearchProjectionGraphChange>),
     Gap(u64),
@@ -330,6 +381,9 @@ impl GraphStore {
         ops: &[WalOp],
         relational: Option<hawdb_storage::relational::RelationalPrimaryKeyChangeCapture>,
     ) -> Result<PreparedSearchProjectionChange> {
+        if projection_wal_requires_rebuild(ops) {
+            return Ok(PreparedSearchProjectionChange::Gap(commit_epoch));
+        }
         let mut collector = Collector {
             store: self,
             catalog,
@@ -573,7 +627,7 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    fn directory() -> std::path::PathBuf {
+    pub(super) fn directory() -> std::path::PathBuf {
         static SEQUENCE: AtomicU64 = AtomicU64::new(0);
         std::env::temp_dir().join(format!(
             "hawdb-projection-capture-{}-{}",
@@ -697,3 +751,7 @@ mod tests {
         std::fs::remove_dir_all(path).unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "search_projection_capture/closure_tests.rs"]
+mod closure_tests;

@@ -5,6 +5,11 @@ and cold canonical metadata, installed atomically with a committed mutation.
 This is a finite refinement argument for full-prefix catch-up at the current
 source epoch E. It does **not** certify a bounded prefix B < E hydrated from E.
 
+The [native path-closure refinement](PROJECTION_CAPTURE_CLOSURE_PROOF.md) adds
+explicit schema/opaque rebuild boundaries and repairs direct edge/connected-node
+entry points. It complements this cold-preimage model rather than proving an
+artifact-owning session or arbitrary host mapping.
+
 ## Native boundary
 
 `store/search_projection_capture.rs` prepares a closed change or a resume gap
@@ -76,5 +81,6 @@ cover partial append/rollback/sync failures and shared poisoning before WAL.
 
 This closes the reproduced cold first-mutation omission. It does not provide
 bounded batch coverage receipts, historical B hydration, host incarnation or
-binding, actual Mem owner integration, complete DDL capture, composed power-loss
+binding, actual Mem owner integration, complete baseline/capture-contract and
+host-effect qualification, composed power-loss
 qualification, retained-source RSS or writer-scaling/fairness evidence.

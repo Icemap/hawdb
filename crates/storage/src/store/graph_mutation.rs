@@ -111,7 +111,7 @@ impl GraphStore {
             properties: properties.clone(),
         }];
         self.validate_constraints_for_ops(catalog, &ops)?;
-        self.append_durable_wal_single(ops[0].clone())?;
+        self.append_graph_wal_and_capture(catalog, &ops, true)?;
         self.apply_create_relationship(id, source, target, rel_type_id, properties);
         self.finish_non_relational_commit();
         Ok(id)
@@ -1177,7 +1177,7 @@ impl GraphStore {
             },
         ];
         self.validate_constraints_for_ops(catalog, &ops)?;
-        self.append_durable_wal_batch(&ops)?;
+        self.append_graph_wal_and_capture(catalog, &ops, false)?;
         self.apply_create_node(catalog, source, source_label_id, request.source_properties);
         self.apply_create_node(catalog, target, target_label_id, request.target_properties);
         self.apply_create_relationship(

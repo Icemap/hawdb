@@ -33,6 +33,8 @@ One preparation session binds the following immutable inputs under the current
 authoritative owner: canonical source instance, pinned source epoch E, verified
 Search base generation and complete base watermark C, host binding/incarnation,
 projection mapping identity, schema and a retained changefeed resume floor.
+The verified baseline must also identify its capture/mapping contract; older
+heads are not certified merely because their numeric cursor exceeds a floor.
 Require C <= E and C >= floor. A future cursor, unknown base, wrong source,
 unverified host binding or a gap requires an explicit refusal/rebuild decision.
 Reopen/replayed WAL is not evidence that E is durable; the existing typed source
@@ -132,6 +134,12 @@ not claimed. Qualify source sync, artifact sync, selector/watermark, directory
 barriers and GC with fault images, not only process-kill/reopen tests.
 
 ## Required delivery evidence
+
+The [native capture-closure refinement](../tla/PROJECTION_CAPTURE_CLOSURE_PROOF.md)
+now stages/persists explicit schema/opaque rebuild boundaries and captures direct
+edge/connected-node entry points. It does not certify historical baselines or
+arbitrary host mapping effects. Those contracts remain prerequisites before a
+native session can mint complete stage-bound coverage authority.
 
 The [external mutation ordering component](../tla/SEARCH_UNORDERED_MUTATIONS_PROOF.md)
 now builds a private expected-base Search update from unordered fixed-E intents
