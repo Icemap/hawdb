@@ -1,0 +1,37 @@
+{
+  "baseline": "051ec037c8bac3269aa8e91aa169e37b7c229045",
+  "1028": "d67ec1215b592c4c75ae66bfea40ec528c8d7736",
+  "1029": "079eb2dad26e0a20a1182470991194daf8a2d0a2",
+  "1036": "dc73bed5e13c10351e83a3e3b495c9043b41a2a9",
+  "authorization": "Necessary qualification for three independent PRs resumed; original full #986 acceptance is unchanged.",
+  "ordinary": {
+    "cases": [
+      "select",
+      "point",
+      "fill",
+      "fill_bulk",
+      "wide"
+    ],
+    "sizes": [
+      1000,
+      10000
+    ],
+    "layers": [
+      "rust",
+      "python",
+      "go"
+    ],
+    "backends": [
+      "memory",
+      "file"
+    ],
+    "measured_rounds": 7,
+    "discarded_rounds": 1
+  },
+  "components": [
+    "normalization protocol/allocation parity",
+    "owned scalar and nested-map requested-allocation bounds",
+    "point/cold/cache/mixed growth controls"
+  ],
+  "limits": "Default Bazel config, default budgets, SyncOnEveryWrite, full original fixture calls and checksums. Preserve every refusal, error, and adverse result."
+}
