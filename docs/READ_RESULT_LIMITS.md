@@ -15,6 +15,13 @@ configured constructors and an explicit typed runtime governor. Raising the
 database row limit alone does not raise payload, physical query-memory or
 runtime-governor capacity. Large-result qualification must record each of
 these settings and remain separate from the unchanged default controls.
+The facade also derives an admitted query-memory reservation from plan shape
+and the configured execution batch/operator byte allowances. Increasing
+`query_memory_bytes` alone does not enlarge that reservation. For example,
+a scan with a 64 MiB admitted ledger can still refuse materialization after
+raising the database and result-governor limits. Record the effective
+refusal or admission as well as the requested configuration. Retained source
+capacity is separately charged and may refuse before output reaches its cap.
 
 Ordinary owned reads validate their result before successful return.
 Over-limit delivery returns an error and does not publish a truncated
