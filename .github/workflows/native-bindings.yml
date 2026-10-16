@@ -1,4 +1,4 @@
-name: Frozen Ordinary Boundary Qualification
+name: Frozen Ordinary Lost-runner Replacement
 on:
   workflow_dispatch:
 permissions:
@@ -11,9 +11,9 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        case: [fill_bulk, select, point, fill, wide]
-        layer: [rust, python, go]
-        backend: [memory, file]
+        case: [select]
+        layer: [rust]
+        backend: [memory]
     env:
       USE_BAZEL_VERSION: "9.3.0"
       ENGINE_COMMIT: a68cda8e605de113e7e8837176145b807f3c12a5
@@ -40,7 +40,8 @@ jobs:
                      "sizes": [1000, 100000, 1000000], "measured_samples": 3, "discarded_samples": 1,
                      "defaults_changed": False, "timed_consumers_changed": False,
                      "matrix_groups": 90, "max_parallel_jobs": 4, "per_job_deadline_minutes": 360,
-                     "scope": "A shard alone does not establish full-matrix acceptance; preserve refusals and failures."}
+                     "replacement_of_run": 38837165398, "replacement_of_job": 116768766203, "shard_groups": 3,
+                     "scope": "Replacement of only the lost-runner select/rust/memory shard; the complete original union remains 90 groups. Preserve all refusals and failures."}
           pathlib.Path(os.environ["RUNNER_TEMP"], "source-qualification.json").write_text(json.dumps(receipt, indent=2) + "\n")
           print(json.dumps(receipt))
           PY
