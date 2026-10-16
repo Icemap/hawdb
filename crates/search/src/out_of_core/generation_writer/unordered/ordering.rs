@@ -66,6 +66,10 @@ impl Ordering {
     pub(super) fn finish_input(&mut self) {
         self.finishing = true;
     }
+    pub(super) fn restore_reduced(&mut self, run: Option<Run>) {
+        assert!(self.complete() && self.reduced.is_none());
+        self.reduced = run;
+    }
     pub(super) fn take_reduced(&mut self) -> Option<Run> {
         self.reduced.take()
     }

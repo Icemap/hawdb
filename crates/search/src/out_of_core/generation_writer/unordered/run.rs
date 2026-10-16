@@ -32,6 +32,24 @@ impl Control {
             step: None,
         }
     }
+    pub(super) fn require_document(
+        &mut self,
+        entry: &Entry,
+        expected: &SearchDocument,
+    ) -> Result<()> {
+        let Entry::Upsert(record, _) = entry else {
+            return Err(invalid("expected upsert during inspection"));
+        };
+        self.require_record_document(record, expected)
+    }
+    fn require_record_document(
+        &mut self,
+        record: &spool::SpoolRecord,
+        expected: &SearchDocument,
+    ) -> Result<()> {
+        self.read(record.encoded_bytes)?;
+        record.require_document(expected, &self.memory, &self.task)
+    }
     pub(super) fn check_input(&self, id: &str) -> Result<()> {
         checkpoint(&self.task)?;
         validate_id(id, self.max_id_bytes)?;
@@ -408,6 +426,21 @@ impl Reader {
     /// Returns false only when the current quantum must yield. A record that
     /// cannot fit any quantum with these limits is a permanent refusal.
     pub(super) fn next_in_step(&mut self, control: &mut Control) -> Result<Option<Option<Entry>>> {
+        self.next_admitted(control, false)
+    }
+    /// Admit the full decode plus a possible exact document comparison before
+    /// invoking host verification. Callback I/O must fit the same quantum.
+    pub(super) fn next_for_inspection(
+        &mut self,
+        control: &mut Control,
+    ) -> Result<Option<Option<Entry>>> {
+        self.next_admitted(control, true)
+    }
+    fn next_admitted(
+        &mut self,
+        control: &mut Control,
+        comparison: bool,
+    ) -> Result<Option<Option<Entry>>> {
         if self.records == self.run.records {
             return if control.allow(1, 0, 0)? {
                 self.next(control).map(Some)
@@ -421,7 +454,12 @@ impl Reader {
             }
             self.inspect(control)?;
         }
-        if !control.allow(1, self.inspected_read_bytes.unwrap(), 0)? {
+        let read = self
+            .inspected_read_bytes
+            .unwrap()
+            .checked_mul(if comparison { 2 } else { 1 })
+            .ok_or_else(|| invalid("inspection read preflight overflow"))?;
+        if !control.allow(1, read, 0)? {
             return Ok(None);
         }
         let value = self.next(control)?;
@@ -522,6 +560,9 @@ impl Reader {
         self.position = end;
         self.records += 1;
         Ok(Some(entry))
+    }
+    pub(super) fn into_run(self) -> Run {
+        self.run
     }
     pub(super) fn remove(self, control: &Control) -> Result<()> {
         let path = self.run.path;

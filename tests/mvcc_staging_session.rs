@@ -532,6 +532,26 @@ fn staging_session_empty_interval_still_requires_mapped_end() {
     assert_eq!(staged.mapping_usage().queries, 0);
     assert_eq!(staged.sorting_report().output_operations, 0);
     drop(staged);
+    let mut session = db
+        .begin_projection_staging_session(&reader, config(epoch), fanout, admission())
+        .unwrap();
+    complete(&mut session);
+    let mut verification = session.verify_outputs(verify_fanout).unwrap();
+    assert!(matches!(
+        verification.finish(),
+        Err(ProjectionFeedError::Incomplete)
+    ));
+    let mut session = db
+        .begin_projection_staging_session(&reader, config(epoch), fanout, admission())
+        .unwrap();
+    complete(&mut session);
+    verification = session.verify_outputs(verify_fanout).unwrap();
+    verify_complete(&mut verification);
+    let checked = verification.finish().unwrap();
+    assert_eq!(checked.inspected_operations(), Some(0));
+    assert_eq!(checked.mapping_usage().calls, 2);
+    assert_eq!(checked.mapping_usage().queries, 0);
+    drop(checked);
     assert_eq!(
         SearchOutOfCoreReader::open(root.0.join("search"))
             .unwrap()
@@ -586,5 +606,221 @@ fn staging_session_retains_governor_permit_through_stage_and_failure_cleanup() {
         .is_err());
     assert_eq!(governor.snapshot().active_background_tasks, 0);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    unchanged(&root, &reader);
+}
+
+fn verify_fanout(
+    context: &mut ProjectionOutputVerificationContext<'_, '_>,
+    input: &mut SearchMutationInspectionInput<'_>,
+) -> Result<()> {
+    let Some(id) = input.id().map(str::to_owned) else {
+        return Ok(());
+    };
+    assert!(!input.is_delete());
+    if id.starts_with("fan:") {
+        let result = context.query_with_params(
+            "MATCH (n:Memory) WHERE n.id=$id RETURN n.value AS value",
+            &BTreeMap::from([("id".into(), Value::String("a".into()))]),
+        )?;
+        assert_eq!(result.output.rows[0]["value"], Value::Int(2));
+        input.require_document(&doc(&id, "2"))?;
+    } else {
+        assert_eq!(id, "record:a");
+        let result = context.query_sql_with_params(
+            "SELECT body FROM records WHERE id=$1",
+            &[Value::String("a".into())],
+        )?;
+        assert_eq!(result.rows[0]["body"], Value::String("pinned".into()));
+        input.require_document(&doc(&id, "pinned"))?;
+    }
+    Ok(())
+}
+fn verify_complete(session: &mut ProjectionOutputVerificationSession<'_>) {
+    for _ in 0..1000 {
+        let step = session
+            .advance(SearchMutationSortStepLimits {
+                work: nz(1),
+                read_bytes: std::num::NonZeroU64::new(4096).unwrap(),
+                spill_bytes: std::num::NonZeroU64::new(1).unwrap(),
+            })
+            .unwrap();
+        if step.complete {
+            return;
+        }
+    }
+    panic!("verification did not complete")
+}
+#[test]
+fn staging_verification_owns_final_output_and_still_queries_pinned_e() {
+    for cold in [false, true] {
+        let (root, mut db, reader, c) = setup(cold);
+        let mut session = db
+            .begin_projection_staging_session(&reader, config(c), fanout, admission())
+            .unwrap();
+        let e = session.source_epoch();
+        complete(&mut session);
+        db.query("MATCH (n:Memory) SET n.value=99").unwrap();
+        db.query_sql("UPDATE records SET body='later' WHERE id='a'")
+            .unwrap();
+        db.checkpoint().unwrap();
+        let before = session.mapping_usage();
+        let mut verification = session.verify_outputs(verify_fanout).unwrap();
+        verify_complete(&mut verification);
+        assert_eq!(verification.source_epoch(), e);
+        assert_eq!(verification.inspected_operations(), 4);
+        let after = verification.mapping_usage();
+        assert_eq!(after.calls - before.calls, 5); // four reduced mutations + End
+        assert_eq!(after.queries - before.queries, 4);
+        assert_eq!(after.reserved_rows - before.reserved_rows, 16);
+        assert_eq!(
+            after.reserved_payload_bytes - before.reserved_payload_bytes,
+            16384
+        );
+        let no_replay = verification.advance(Default::default()).unwrap();
+        assert!(!no_replay.visited && no_replay.complete);
+        assert_eq!(verification.mapping_usage(), after);
+        let staged = verification.finish().unwrap();
+        assert_eq!(staged.inspected_operations(), Some(4));
+        unchanged(&root, &reader);
+        drop(staged);
+        unchanged(&root, &reader);
+    }
+}
+fn verify_deleted_owner(
+    context: &mut ProjectionOutputVerificationContext<'_, '_>,
+    input: &mut SearchMutationInspectionInput<'_>,
+) -> Result<()> {
+    match input.id() {
+        None => {}
+        Some("memory:a") => {
+            assert!(input.is_delete());
+            let result = context.query_with_params(
+                "MATCH (n:Memory) WHERE n.id=$id RETURN n.id AS id",
+                &BTreeMap::from([("id".into(), Value::String("a".into()))]),
+            )?;
+            assert!(result.output.rows.is_empty());
+        }
+        Some("record:a") => {
+            let result = context.query_sql_with_params(
+                "SELECT body FROM records WHERE id=$1",
+                &[Value::String("a".into())],
+            )?;
+            assert_eq!(result.rows[0]["body"], Value::String("at-E".into()));
+            input.require_document(&doc("record:a", "at-E"))?;
+        }
+        other => panic!("unexpected reduced mutation: {other:?}"),
+    }
+    Ok(())
+}
+#[test]
+fn staging_verification_visits_reduced_delete_and_checks_logical_absence_at_e() {
+    let (root, mut db, reader, c) = setup(true);
+    db.query("MATCH (n:Memory) DETACH DELETE n").unwrap();
+    db.query_sql("UPDATE records SET body='at-E' WHERE id='a'")
+        .unwrap();
+    let mut session = db
+        .begin_projection_staging_session(&reader, config(c), final_e, admission())
+        .unwrap();
+    complete(&mut session);
+    db.query("CREATE (:Memory {id:'a',value:99})").unwrap();
+    let mut verification = session.verify_outputs(verify_deleted_owner).unwrap();
+    verify_complete(&mut verification);
+    assert_eq!(verification.inspected_operations(), 2);
+    let staged = verification.finish().unwrap();
+    assert_eq!(staged.inspected_operations(), Some(2));
+    unchanged(&root, &reader);
+}
+fn verification_error(
+    context: &mut ProjectionOutputVerificationContext<'_, '_>,
+    _: &mut SearchMutationInspectionInput<'_>,
+) -> Result<()> {
+    let _ = context.query_with_params("MATCH (", &BTreeMap::new());
+    Ok(())
+}
+fn verification_panic(
+    _: &mut ProjectionOutputVerificationContext<'_, '_>,
+    _: &mut SearchMutationInspectionInput<'_>,
+) -> Result<()> {
+    panic!("verification panic")
+}
+fn verification_compare(
+    _: &mut ProjectionOutputVerificationContext<'_, '_>,
+    input: &mut SearchMutationInspectionInput<'_>,
+) -> Result<()> {
+    let _ = input.require_document(&doc("wrong", "wrong"));
+    Ok(())
+}
+#[test]
+fn staging_verification_failure_panic_and_cancellation_retain_permit_until_cleanup() {
+    let (root, db, reader, c) = setup(false);
+    let g = governor();
+    let request =
+        RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1);
+    for verifier in [
+        verification_error as ProjectionOutputVerificationFunction,
+        verification_panic,
+        verification_compare,
+    ] {
+        let mut session = db
+            .begin_projection_staging_session(
+                &reader,
+                config(c),
+                fanout,
+                SearchGenerationAdmission::acquire(&g, request).unwrap(),
+            )
+            .unwrap();
+        complete(&mut session);
+        let mut verification = session.verify_outputs(verifier).unwrap();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            verification.advance(Default::default())
+        }));
+        assert!(result.is_err() || result.unwrap().is_err());
+        assert_eq!(g.snapshot().active_background_tasks, 1);
+        assert!(verification.advance(Default::default()).is_err());
+        assert!(verification.finish().is_err());
+        assert_eq!(g.snapshot().active_background_tasks, 0);
+        assert_eq!(g.snapshot().admitted_memory_bytes, 0);
+        unchanged(&root, &reader);
+    }
+    for after in [false, true] {
+        let cfg = config(c);
+        let cancel = cfg.task.cancellation().clone();
+        let mut session = db
+            .begin_projection_staging_session(&reader, cfg, fanout, admission())
+            .unwrap();
+        complete(&mut session);
+        let mut verification = session.verify_outputs(verify_fanout).unwrap();
+        if after {
+            verify_complete(&mut verification);
+        }
+        cancel.cancel();
+        assert!(verification.finish().is_err());
+        unchanged(&root, &reader);
+    }
+}
+#[test]
+fn staging_verification_cannot_reset_mapping_budget_or_finish_a_prefix() {
+    let (root, db, reader, c) = setup(false);
+    let mut cfg = config(c);
+    cfg.mapping.queries = nz(4);
+    let mut session = db
+        .begin_projection_staging_session(&reader, cfg, fanout, admission())
+        .unwrap();
+    complete(&mut session);
+    assert_eq!(session.mapping_usage().queries, 4);
+    let mut verification = session.verify_outputs(verify_fanout).unwrap();
+    assert!(verification.advance(Default::default()).is_err());
+    assert!(verification.finish().is_err());
+    let session = db
+        .begin_projection_staging_session(&reader, config(c), fanout, admission())
+        .unwrap();
+    assert!(session.verify_outputs(verify_fanout).is_err());
+    let mut session = db
+        .begin_projection_staging_session(&reader, config(c), fanout, admission())
+        .unwrap();
+    complete(&mut session);
+    let mut verification = session.verify_outputs(verify_fanout).unwrap();
+    verification.advance(Default::default()).unwrap();
+    assert!(verification.finish().is_err());
     unchanged(&root, &reader);
 }

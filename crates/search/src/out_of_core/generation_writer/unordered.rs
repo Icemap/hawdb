@@ -11,6 +11,8 @@ use crate::SearchOutOfCoreReader;
 use std::num::{NonZeroU64, NonZeroUsize};
 
 mod heap;
+mod inspection;
+pub use inspection::{SearchMutationInspectionInput, SearchMutationInspectionStep};
 mod ordering;
 mod run;
 use run::{Control, Reader, Run};
@@ -113,6 +115,7 @@ pub struct SearchOutOfCoreUnorderedMutationWriter<'a> {
     levels: [Option<Run>; usize::BITS as usize],
     // Close pending files before the inner stage cleanup owner drops.
     ordering: ordering::Ordering,
+    inspection: inspection::Inspection,
     inner: SearchOutOfCoreMutationWriter<'a>,
     control: Control,
     payload: usize,
@@ -156,6 +159,7 @@ pub(super) fn from_inner<'a>(
         slots,
         levels: std::array::from_fn(|_| None),
         ordering: ordering::Ordering::new(),
+        inspection: inspection::Inspection::new(),
         inner,
         control,
         payload: 0,
@@ -337,6 +341,11 @@ impl SearchOutOfCoreUnorderedMutationWriter<'_> {
     ) -> Result<(SearchUnorderedMutationReport, SearchOutOfCorePreparedUpdate)> {
         if self.failed {
             return Err(unusable());
+        }
+        if self.inspection.started && !self.inspection.complete {
+            return Err(HawDBError::Storage(
+                "reduced mutation inspection is incomplete".into(),
+            ));
         }
         self.finish_input()?;
         while !self.ordering_complete() {

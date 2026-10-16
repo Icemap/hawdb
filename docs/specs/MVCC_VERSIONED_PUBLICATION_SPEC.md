@@ -340,7 +340,10 @@ bounded builder has a verified mixed-snapshot omission; the
 [pinned-source batch coverage design](MVCC_SEARCH_BATCH_COVERAGE_SPEC.md)
 specifies complete C..E preparation in bounded invisible steps and stage-bound
 coverage authority. The bounded pinned feed and private resumable external
-ordering primitives now have joint native intake/mapping/stage custody, returning
+ordering primitives now have joint native intake/mapping/stage custody and a
+closed-output verification phase retaining queryable E until every final
+mutation and End is checked by a fixed trusted verifier under shared logical
+admission, returning
 only an opaque nonpublishable artifact. The complete verified-baseline/coverage
 activation session, binding/external-version/receipt protocol and incremental
 final index build remain outstanding. Activation still

@@ -86,6 +86,15 @@ construction is still blocking. This supplies the intake/stage lifecycle below,
 not the complete verified coverage, binding, external-version or durable receipt
 protocol; the actual Mem callback still uses its legacy fanout loop.
 
+After closed ordering, `verify_outputs` consumes the session into a fixed
+read-only verifier over every native final upsert/delete and explicit End.
+Queries still read E and share cumulative mapping admission; an optional exact
+encoded-document comparison covers body/metadata/embedding. Only successful End
+returns the same immutable run for artifact construction, after which the E
+query context may close. Output checks cannot replace verified baseline/owner
+contracts or authorize publication. See
+[the source-linked proof](../tla/PROJECTION_OUTPUT_VERIFICATION_PROOF.md).
+
 The reusable facade session owns PreparedRead, the immutable feed cursor,
 budgets, binding/base identity and private staging. Raw mutable cursor fields,
 public operation vectors and callback-provided processed counts cannot produce

@@ -53,6 +53,7 @@ STORAGE_MODELS = [
     "HawDBRelationalIndexPrefixReads",
     "HawDBJoinedProjectionReads",
     "HawDBProjectionFullSource",
+    "HawDBProjectionOutputVerification",
     "HawDBProjectionStagingSession",
     "HawDBProjectionChangeCapture",
     "HawDBProjectionChangefeed",

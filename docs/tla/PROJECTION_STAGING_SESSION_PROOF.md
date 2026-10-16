@@ -109,7 +109,7 @@ mutation stream under native custody, record/prove each logical owner scope
 (including delete/absence cases), and bind that verification to the same stage.
 Only then may finalization reduce the source to dependency metadata. Later
 activation revalidates sealed results and versions; it must not hydrate a newer
-live database and treat it as E. This verification phase is not implemented here.
+live database and treat it as E. The [native output-check phase](PROJECTION_OUTPUT_VERIFICATION_PROOF.md) now supplies this traversal with a fixed trusted verifier and shared logical admission; it still does not certify the complete host contracts or authorize publication.
 A baseline certificate for C is also a prerequisite, rather than an assumption
 that an ordinary Search watermark certifies its complete contents.
 

@@ -29,8 +29,9 @@ mod staging_session;
 pub use staging_session::{
     ProjectionMappingContext, ProjectionMappingFunction, ProjectionMappingInput,
     ProjectionMappingLimits, ProjectionMappingStatus, ProjectionMappingUsage,
-    ProjectionStagedInputs, ProjectionStagingSession, ProjectionStagingSessionConfig,
-    ProjectionStagingSessionStep,
+    ProjectionOutputVerificationContext, ProjectionOutputVerificationFunction,
+    ProjectionOutputVerificationSession, ProjectionStagedInputs, ProjectionStagingSession,
+    ProjectionStagingSessionConfig, ProjectionStagingSessionStep,
 };
 #[path = "dependency_read/graph_match.rs"]
 mod graph_match;

@@ -8,9 +8,15 @@ use crate::search::{
     SearchOutOfCorePreparedUpdate, SearchOutOfCoreReader, SearchOutOfCoreUnorderedMutationWriter,
     SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
 };
+#[path = "staging_session/verification.rs"]
+mod verification;
 use hawdb_core::RuntimeTaskContext;
 use hawdb_executor::QueryMemoryLease;
 use hawdb_storage::relational::RelationalKey;
+pub use verification::{
+    ProjectionOutputVerificationContext, ProjectionOutputVerificationFunction,
+    ProjectionOutputVerificationSession,
+};
 
 /// Invocation/output reservations, not a bound on physical query work or RSS.
 #[derive(Debug, Clone, Copy)]
@@ -112,27 +118,33 @@ fn increment(value: &mut usize, amount: usize, cap: usize) -> Result<()> {
         .ok_or_else(|| refusal("cumulative mapping admission exhausted"))?;
     Ok(())
 }
+fn reserve_query(
+    limits: ProjectionMappingLimits,
+    reads: PreparedReadLimits,
+    usage: &mut ProjectionMappingUsage,
+    queries: &mut usize,
+) -> Result<()> {
+    if *queries == limits.queries_per_call.get() {
+        return Err(refusal("query quantum exhausted"));
+    }
+    increment(&mut usage.queries, 1, limits.queries.get())?;
+    increment(
+        &mut usage.reserved_rows,
+        reads.statement_rows.get(),
+        limits.reserved_rows.get(),
+    )?;
+    increment(
+        &mut usage.reserved_payload_bytes,
+        reads.statement_payload_bytes.get(),
+        limits.reserved_payload_bytes.get(),
+    )?;
+    *queries += 1;
+    Ok(())
+}
 impl ProjectionMappingContext<'_, '_, '_> {
     fn query(&mut self) -> Result<()> {
         self.failed = true;
-        if self.queries == self.limits.queries_per_call.get() {
-            return Err(refusal(
-                "mapper query quantum exhausted; resume with continuation",
-            ));
-        }
-        increment(&mut self.usage.queries, 1, self.limits.queries.get())?;
-        increment(
-            &mut self.usage.reserved_rows,
-            self.reads.statement_rows.get(),
-            self.limits.reserved_rows.get(),
-        )?;
-        increment(
-            &mut self.usage.reserved_payload_bytes,
-            self.reads.statement_payload_bytes.get(),
-            self.limits.reserved_payload_bytes.get(),
-        )?;
-        self.queries += 1;
-        Ok(())
+        reserve_query(self.limits, self.reads, self.usage, &mut self.queries)
     }
     pub fn source_epoch(&self) -> u64 {
         self.read.source_epoch()
@@ -330,11 +342,16 @@ pub struct ProjectionStagedInputs {
     candidate: SearchOutOfCorePreparedUpdate,
     usage: ProjectionMappingUsage,
     sorting: SearchUnorderedMutationReport,
+    inspected_operations: Option<usize>,
     _memory: QueryMemoryLease,
 }
 impl ProjectionStagedInputs {
     pub fn source_epoch(&self) -> u64 {
         self.dependencies.source_epoch()
+    }
+    /// Native final-output traversal, not baseline/coverage activation authority.
+    pub fn inspected_operations(&self) -> Option<usize> {
+        self.inspected_operations
     }
     pub fn mapping_usage(&self) -> ProjectionMappingUsage {
         self.usage
@@ -537,6 +554,7 @@ impl ProjectionStagingSession<'_> {
             candidate,
             usage: self.usage,
             sorting,
+            inspected_operations: None,
             _memory: self._memory,
         })
     }
