@@ -119,6 +119,26 @@ impl SearchGenerationAdmission {
         super::mutations::SearchOutOfCoreMutationWriter::create(reader, options, task, memory)
     }
 
+    /// Owns unordered intake, sorting and its prepared artifact under one permit.
+    pub fn prepare_unordered_update<'reader>(
+        self,
+        reader: &'reader SearchOutOfCoreReader,
+        options: SearchOutOfCoreGenerationBuildOptions,
+        limits: super::SearchUnorderedMutationLimits,
+        task: RuntimeTaskContext,
+    ) -> Result<super::SearchOutOfCoreUnorderedMutationWriter<'reader>> {
+        let task = self.permit.bind_task_context(task);
+        let mut memory = crate::build_memory::BuildMemory::new(&task)?;
+        memory.host_admission = Some(self.permit.clone());
+        let inner =
+            super::mutations::SearchOutOfCoreMutationWriter::create(reader, options, task, memory)?;
+        super::unordered::from_inner(
+            inner,
+            limits,
+            reader.config().max_document_header_bytes.get(),
+        )
+    }
+
     /// Prepares a governed update with a default task context.
     pub fn prepare_update(
         self,

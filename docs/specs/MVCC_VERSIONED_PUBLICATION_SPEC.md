@@ -340,8 +340,10 @@ bounded builder has a verified mixed-snapshot omission; the
 [pinned-source batch coverage design](MVCC_SEARCH_BATCH_COVERAGE_SPEC.md)
 specifies complete C..E preparation in bounded invisible steps and stage-bound
 coverage authority. The bounded pinned feed and private resumable external
-ordering primitives are implemented; their artifact-owning session integration,
-coverage/receipt protocol and incremental final index build remain outstanding. Activation still
+ordering primitives now have joint native intake/mapping/stage custody, returning
+only an opaque nonpublishable artifact. The complete verified-baseline/coverage
+activation session, binding/external-version/receipt protocol and incremental
+final index build remain outstanding. Activation still
 checksums/installs artifacts and performs cleanup under the Search lease, so a
 size-independent publication section has not been delivered. See the
 [Search lifecycle argument and ten controls](../tla/SEARCH_PREPARED_PUBLICATION_PROOF.md).
@@ -409,6 +411,7 @@ path do not prove starvation freedom.
 | Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain, internal-ID/single-hop and relational primary-tuple/index-prefix and qualified parent-PK JOIN collectors, native cold/hot regressions | Graph composite/range/other traversal and additional relational multi-key/range/multiway-join/domain collectors, host dependencies and full completeness qualification |
 | Invisible staging and durable activation | Existing `ProjectionGenerationStore` candidate/seal/head protocol and Search mutation components | Compose source validation and Search activation with complete receipt/closure and failure states |
 | Complete baseline input | Pinned graph candidate frontier, all canonical relational tables/PKs, tracked callback reads and explicit End; [conditional model/source argument](../tla/PROJECTION_FULL_SOURCE_PROOF.md) | Verified full mapped document comparison, ownership/capture/mapping contract, artifact-bound session authority and cumulative physical-work/RSS qualification |
+| Joint source/mapping/stage custody | Native C..E session owns pending input, bounded continuation, cumulative invocation/output reservations and private unordered stage; [conditional model/source argument](../tla/PROJECTION_STAGING_SESSION_PROOF.md) | Complete baseline/coverage/binding/external-version/receipt verification and activation, physical-work/RSS governance and actual Mem adoption |
 | Embedded owner concurrency | Current catch-up path; #1032 owner/fence merged on main at cfbea1b | Merged main owner available; integrate prepared sessions into the actual path; prove a competing disjoint writer commits while preparation is paused |
 | Recovery/power loss | Existing WAL/group/branch proofs, #820 fault harness | Compose new staging/selector/source barriers, cancellation, lost responses and replay |
 | Scaling/fairness/latency | Existing 1/4/8-writer harness and retained adverse samples | Small/large catch-up enabled/disabled runs, p50/p95/p99, lock wait/hold time, unchanged latency gates |
@@ -465,7 +468,8 @@ The [source argument, six native tests and finite model](../tla/PROJECTION_FULL_
 cover pinned enumeration and failure custody. Cold range seeks still have
 per-seek rather than cumulative physical-I/O limits. Complete source/host effect
 mapping, verified baseline document comparison, unique source ownership,
-source/capture/mapping/binding/incarnation/operation receipts, an artifact-owning
-C..E session, actual Mem owner migration, power-loss composition and the original
+source/capture/mapping/binding/incarnation/operation receipts, the complete
+verified C..E activation session, actual Mem owner migration, power-loss
+composition and the original
 1/4/8-writer latency/fairness/resource qualification remain required. Enumeration
 completion must not mint any of those authorities.

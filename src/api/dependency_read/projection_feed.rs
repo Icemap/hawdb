@@ -108,6 +108,22 @@ impl Database {
     }
 }
 impl PreparedProjectionFeed {
+    pub(super) fn set_task_context(&mut self, task: hawdb_core::RuntimeTaskContext) {
+        self.prepared.read.task_context = Some(task);
+    }
+
+    pub(super) fn with_tracked_read(
+        &mut self,
+        visitor: impl FnOnce(&ProjectionFeedRead<'_>) -> Result<()>,
+    ) -> Result<()> {
+        if self.failed {
+            return Err(HawDBError::Execution("projection feed is unusable".into()));
+        }
+        self.failed = true;
+        with_projection_read(&mut self.prepared, visitor)?;
+        self.failed = false;
+        Ok(())
+    }
     pub fn source_epoch(&self) -> u64 {
         self.cursor.source_epoch()
     }

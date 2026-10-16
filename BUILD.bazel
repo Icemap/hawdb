@@ -739,6 +739,21 @@ rust_test(
     ]
 ]
 
+# Joint graph/relational intake and stage custody, separate from publication.
+[
+    rust_test(
+        name = "hawdb_mvcc_staging_session" + suffix + "_tests",
+        crate_root = "tests/mvcc_staging_session.rs",
+        srcs = ["tests/mvcc_staging_session.rs"],
+        edition = "2024",
+        deps = [library],
+    )
+    for suffix, library in [
+        ("", ":hawdb"),
+        ("_minimal", ":hawdb_minimal"),
+    ]
+]
+
 # Compose the public main owner with pinned reads and sealed Search activation.
 [
     rust_test(

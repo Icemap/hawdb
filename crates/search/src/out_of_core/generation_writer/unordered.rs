@@ -127,31 +127,54 @@ impl SearchOutOfCoreGenerationWriter {
         task: RuntimeTaskContext,
     ) -> Result<SearchOutOfCoreUnorderedMutationWriter<'a>> {
         let inner = Self::prepare_streamed_delta_with_context(reader, options, task)?;
-        let memory = inner.writer.memory.clone();
-        let owner = memory.retained.reserve(std::mem::size_of::<
-            SearchOutOfCoreUnorderedMutationWriter<'a>,
-        >())?;
-        let slots = memory.retained.reserve(0)?;
-        let control = Control::new(
-            limits,
-            memory,
-            inner.writer.task_context.clone(),
-            reader.config().max_document_header_bytes.get(),
-        );
-        Ok(SearchOutOfCoreUnorderedMutationWriter {
-            buffer: Vec::new(),
-            slots,
-            levels: std::array::from_fn(|_| None),
-            ordering: ordering::Ordering::new(),
+        from_inner(
             inner,
-            control,
-            payload: 0,
-            failed: false,
-            _memory: owner,
-        })
+            limits,
+            reader.config().max_document_header_bytes.get(),
+        )
     }
 }
+
+pub(super) fn from_inner<'a>(
+    inner: SearchOutOfCoreMutationWriter<'a>,
+    limits: SearchUnorderedMutationLimits,
+    max_id_bytes: usize,
+) -> Result<SearchOutOfCoreUnorderedMutationWriter<'a>> {
+    let memory = inner.writer.memory.clone();
+    let owner = memory.retained.reserve(std::mem::size_of::<
+        SearchOutOfCoreUnorderedMutationWriter<'a>,
+    >())?;
+    let slots = memory.retained.reserve(0)?;
+    let control = Control::new(
+        limits,
+        memory,
+        inner.writer.task_context.clone(),
+        max_id_bytes,
+    );
+    Ok(SearchOutOfCoreUnorderedMutationWriter {
+        buffer: Vec::new(),
+        slots,
+        levels: std::array::from_fn(|_| None),
+        ordering: ordering::Ordering::new(),
+        inner,
+        control,
+        payload: 0,
+        failed: false,
+        _memory: owner,
+    })
+}
 impl SearchOutOfCoreUnorderedMutationWriter<'_> {
+    /// Carries this operation's admitted CPU, memory and I/O ceilings to source reads.
+    #[doc(hidden)]
+    pub fn task_context(&self) -> &RuntimeTaskContext {
+        &self.inner.writer.task_context
+    }
+    /// Shares the stage's retained-memory ledger with its owning facade session.
+    /// This does not reserve source snapshots or arbitrary host allocations.
+    #[doc(hidden)]
+    pub fn reserve_session_metadata(&self, bytes: usize) -> Result<QueryMemoryLease> {
+        self.inner.writer.memory.retained.reserve(bytes)
+    }
     pub fn report(&self) -> SearchUnorderedMutationReport {
         self.control.report
     }

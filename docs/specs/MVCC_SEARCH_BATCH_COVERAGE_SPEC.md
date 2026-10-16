@@ -1,9 +1,12 @@
 # Pinned-source Search batch coverage
 
-Status: pinned bounded feed enumeration, tracked callback context and resumable
-private external ordering/reduction are implemented. The artifact-owning
-preparation session, coverage receipts, incremental artifact construction and
-Mem integration below are **not implemented**. See the
+Status: pinned bounded feed enumeration, tracked callback context, resumable
+private external ordering/reduction and joint input/mapper/stage custody are
+implemented. The complete verified-baseline/coverage activation session,
+coverage receipts, incremental artifact construction and Mem integration below
+are **not implemented**. Joint custody returns only an opaque, nonpublishable
+artifact; see the [session source argument](../tla/PROJECTION_STAGING_SESSION_PROOF.md).
+See also the
 [primitive argument](../tla/PROJECTION_FEED_CURSOR_PROOF.md).
 This extends, rather than replaces, the full acceptance ledger in
 [the versioned-publication spec](MVCC_VERSIONED_PUBLICATION_SPEC.md).
@@ -68,6 +71,20 @@ explicit end-of-interval witness. Retention gaps and relational RequiresRebuild
 records cannot be skipped while advancing that witness.
 
 ## Preparation ownership and native API contract
+
+`begin_projection_staging_session` now owns the C..E cursor, fixed mapper,
+one admitted pending graph/relational input, bounded opaque continuation and
+unordered stage. It consumes a `SearchGenerationAdmission` and retains its
+permit through the opaque artifact and cleanup; bound CPU/memory/I/O context
+also governs source reads. Mapping has per-call query/output caps and cumulative
+call/statement-row/payload reservations. Stage backpressure pauses mapping;
+only mapper Done retires the pending input, and End must also be acknowledged.
+Errors and cancellation are sticky. Numeric Search-base/C matching is required
+but does not certify a baseline. `ProjectionStagedInputs` owns the exact
+candidate privately and cannot enter the Search publication API. Final artifact
+construction is still blocking. This supplies the intake/stage lifecycle below,
+not the complete verified coverage, binding, external-version or durable receipt
+protocol; the actual Mem callback still uses its legacy fanout loop.
 
 The reusable facade session owns PreparedRead, the immutable feed cursor,
 budgets, binding/base identity and private staging. Raw mutable cursor fields,

@@ -24,6 +24,14 @@ use std::fmt;
 
 #[path = "dependency_read/full_source.rs"]
 mod full_source;
+#[path = "dependency_read/staging_session.rs"]
+mod staging_session;
+pub use staging_session::{
+    ProjectionMappingContext, ProjectionMappingFunction, ProjectionMappingInput,
+    ProjectionMappingLimits, ProjectionMappingStatus, ProjectionMappingUsage,
+    ProjectionStagedInputs, ProjectionStagingSession, ProjectionStagingSessionConfig,
+    ProjectionStagingSessionStep,
+};
 #[path = "dependency_read/graph_match.rs"]
 mod graph_match;
 #[path = "dependency_read/projection_feed.rs"]

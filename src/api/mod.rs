@@ -92,8 +92,11 @@ pub use dependency_read::{
     PreparedProjectionFeed, PreparedProjectionFullSource, PreparedRead, PreparedReadDependencies,
     PreparedReadLimits, ProjectionFeedError, ProjectionFeedItem, ProjectionFeedLimits,
     ProjectionFeedRead, ProjectionFeedResource, ProjectionFeedStep, ProjectionFeedUsage,
-    ProjectionFullSourceItem, ProjectionFullSourceLimits, ProjectionPublicationError,
-    ProjectionSourceDurability,
+    ProjectionFullSourceItem, ProjectionFullSourceLimits, ProjectionMappingContext,
+    ProjectionMappingFunction, ProjectionMappingInput, ProjectionMappingLimits,
+    ProjectionMappingStatus, ProjectionMappingUsage, ProjectionPublicationError,
+    ProjectionSourceDurability, ProjectionStagedInputs, ProjectionStagingSession,
+    ProjectionStagingSessionConfig, ProjectionStagingSessionStep,
 };
 mod explain;
 mod graph_analytics;
