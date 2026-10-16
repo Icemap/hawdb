@@ -16,14 +16,18 @@
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-  echo "usage: $0 <unit-test-binary> <general|concurrent|analytics|recovery> [libtest arguments]" >&2
+  echo "usage: $0 <unit-test-binary> <general|concurrent|analytics|analytics_core|analytics_core_general|analytics_identity|analytics_rss|recovery> [libtest arguments]" >&2
   exit 64
 fi
 partition_binary="$1"
 partition="$2"
+# Identity admission shares the dense RSS fixture; keep the old selector usable.
+if [[ "${partition}" == analytics_identity ]]; then
+  partition=analytics_rss
+fi
 shift 2
 case "${partition}" in
-  general|concurrent|analytics|recovery) ;;
+  general|concurrent|analytics|analytics_core|analytics_core_general|analytics_identity|analytics_rss|recovery) ;;
   *) echo "unknown root unit partition: ${partition}" >&2; exit 64 ;;
 esac
 
@@ -40,15 +44,19 @@ while IFS= read -r entry; do
     *) continue ;;
   esac
   case "${case_name}" in
+    api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process|api::tests::graph_analytics::rss_child)
+      case_owner=analytics_rss ;;
     api::tests::concurrent_transactions::*|api::concurrent::*|api::transaction_locks::*)
       case_owner=concurrent ;;
     analytics::*|api::graph_analytics::*|api::tests::graph_analytics::*|api::tests::pagerank::*|api::tests::projected_graph_artifacts::*|api::tests::projected_graph_execution::*|api::tests::projection_generations::*)
-      case_owner=analytics ;;
+      case_owner=analytics_core_general ;;
     api::branch_lifecycle::*|api::search_projection_consumer::*|api::tests::storage_recovery::*|api::tests::mutation_persistence::*|api::tests::transaction_compaction::*|store_facade_tests::*)
       case_owner=recovery ;;
     *) case_owner=general ;;
   esac
-  if [[ "${case_owner}" == "${partition}" ]]; then
+  if [[ "${case_owner}" == "${partition}" ]] ||
+    [[ "${partition}" == analytics && "${case_owner}" == analytics_* ]] ||
+    [[ "${partition}" == analytics_core && ( "${case_owner}" == analytics_core_general || "${case_owner}" == analytics_rss ) ]]; then
     owned_cases=$((owned_cases + 1))
     owned_names+=("${case_name}")
   else

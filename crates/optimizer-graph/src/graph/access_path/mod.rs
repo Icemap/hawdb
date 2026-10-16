@@ -14,8 +14,9 @@
 
 use super::cardinality::estimate_full_text_rows;
 use super::costing::{
-    estimate_node_full_scan_cost, estimate_node_index_seek_cost, node_index_seek_is_cheaper,
-    NODE_INDEX_EQ_STARTUP_COST, NODE_INDEX_RANGE_STARTUP_COST, NODE_INDEX_TEXT_STARTUP_COST,
+    estimate_node_full_scan_cost, estimate_node_index_seek_cost,
+    node_equality_index_seek_is_cheaper, node_index_seek_is_cheaper, NODE_INDEX_EQ_STARTUP_COST,
+    NODE_INDEX_RANGE_STARTUP_COST, NODE_INDEX_TEXT_STARTUP_COST,
 };
 use super::stages::ACCESS_PATH_SELECTION_STAGE;
 use super::value_range::{
@@ -532,8 +533,7 @@ impl OptimizerRule<GraphRuleExpr> for NodeEqualitySeekRule<'_> {
         let estimated_rows = self
             .catalog
             .estimate_property_index_eq_rows(label, property);
-        let seek_cost = estimate_node_index_seek_cost(estimated_rows, NODE_INDEX_EQ_STARTUP_COST);
-        if node_index_seek_is_cheaper(label_count, seek_cost) {
+        if node_equality_index_seek_is_cheaper(label_count, estimated_rows) {
             RulePromise::new(100)
         } else {
             RulePromise::NEVER
@@ -569,7 +569,7 @@ impl OptimizerRule<GraphRuleExpr> for NodeEqualitySeekRule<'_> {
             .estimate_property_index_eq_rows(label, property);
         let scan_cost = estimate_node_full_scan_cost(label_count);
         let seek_cost = estimate_node_index_seek_cost(estimated_rows, NODE_INDEX_EQ_STARTUP_COST);
-        if !node_index_seek_is_cheaper(label_count, seek_cost) {
+        if !node_equality_index_seek_is_cheaper(label_count, estimated_rows) {
             return None;
         }
         Some(RuleApplication::new(

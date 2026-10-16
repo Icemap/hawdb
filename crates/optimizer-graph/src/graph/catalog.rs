@@ -64,6 +64,7 @@ pub struct OptimizerCatalog {
     pub(super) bounded_path_source_distinct_counts: BTreeMap<(String, String, String, usize), u64>,
     pub(super) bounded_path_target_distinct_counts: BTreeMap<(String, String, String, usize), u64>,
     pub(super) property_index_statistics: BTreeMap<(String, String), OptimizerIndexStatistics>,
+    property_equality_row_count: Option<((String, String), u64)>,
     pub(super) composite_index_statistics:
         BTreeMap<(String, Vec<String>), OptimizerIndexStatistics>,
     pub(super) property_distinct_counts: BTreeMap<(String, String), u64>,
@@ -393,6 +394,7 @@ impl OptimizerCatalog {
             bounded_path_source_distinct_counts: statistics.bounded_path_source_distinct_counts,
             bounded_path_target_distinct_counts: statistics.bounded_path_target_distinct_counts,
             property_index_statistics: statistics.property_index_statistics,
+            property_equality_row_count: None,
             composite_index_statistics: statistics.composite_index_statistics,
             property_distinct_counts: statistics.property_distinct_counts,
             rel_property_distinct_counts: statistics.rel_property_distinct_counts,
@@ -401,6 +403,29 @@ impl OptimizerCatalog {
             sampled_property_histograms: statistics.sampled_property_histograms,
             sampled_rel_property_histograms: statistics.sampled_rel_property_histograms,
         }
+    }
+
+    /// Supplies snapshot-local counts for a single bound equality query.
+    /// These counts are query cost inputs, not whole-index statistics. A caller
+    /// must not reuse this catalog for another predicate on the same property.
+    #[doc(hidden)]
+    pub fn with_property_equality_row_count(
+        mut self,
+        label: String,
+        property: String,
+        rows: u64,
+    ) -> Self {
+        self.property_equality_row_count = Some(((label, property), rows));
+        self
+    }
+
+    fn query_local_property_eq_rows(&self, label: &str, property: &str) -> Option<u64> {
+        self.property_equality_row_count
+            .as_ref()
+            .filter(|((local_label, local_property), _)| {
+                local_label == label && local_property == property
+            })
+            .map(|(_, rows)| *rows)
     }
 
     /// Opts declared range indexes into ascending `Value::cmp` delivery.
@@ -584,6 +609,9 @@ impl OptimizerCatalog {
     }
 
     pub(super) fn estimate_property_index_eq_rows(&self, label: &str, property: &str) -> u64 {
+        if let Some(rows) = self.query_local_property_eq_rows(label, property) {
+            return rows.min(self.label_count(label)).max(1);
+        }
         self.property_index_statistics
             .get(&(label.to_string(), property.to_string()))
             .map(|statistics| {
@@ -863,6 +891,9 @@ impl OptimizerCatalog {
         property: &str,
         input_rows: u64,
     ) -> u64 {
+        if let Some(rows) = self.query_local_property_eq_rows(label, property) {
+            return rows.min(input_rows).max(1);
+        }
         input_rows
             .div_ceil(self.distinct_count(label, property).max(1))
             .max(1)
@@ -1415,5 +1446,41 @@ mod tests {
             ),
             2
         );
+    }
+
+    #[test]
+    fn query_local_equality_counts_do_not_replace_whole_index_statistics() {
+        let catalog = OptimizerCatalog::new(
+            OptimizerCatalogIndexes::default(),
+            OptimizerCatalogStatistics {
+                label_counts: BTreeMap::from([("Item".into(), 100)]),
+                property_index_statistics: BTreeMap::from([(
+                    ("Item".into(), "id".into()),
+                    OptimizerIndexStatistics {
+                        index_size: 90,
+                        distinct_count: 10,
+                    },
+                )]),
+                ..OptimizerCatalogStatistics::default()
+            },
+        );
+        let local = catalog
+            .clone()
+            .with_property_equality_row_count("Item".into(), "id".into(), 2);
+        assert_eq!(catalog.estimate_property_index_eq_rows("Item", "id"), 9);
+        assert_eq!(local.estimate_property_index_eq_rows("Item", "id"), 2);
+        assert_eq!(local.estimate_property_eq_rows("Item", "id", 100), 2);
+        assert_eq!(
+            local.property_index_statistics,
+            catalog.property_index_statistics
+        );
+        assert_eq!(
+            local.estimate_property_index_eq_rows("Item", "other"),
+            catalog.estimate_property_index_eq_rows("Item", "other")
+        );
+        let empty = catalog
+            .clone()
+            .with_property_equality_row_count("Item".into(), "id".into(), 0);
+        assert_eq!(empty.estimate_property_index_eq_rows("Item", "id"), 1);
     }
 }

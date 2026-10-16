@@ -433,8 +433,12 @@ impl HawDBEmbedded {
         );
         let admission = {
             let _planning_permit = self.try_admit_query(planning_request)?;
-            self.database
-                .runtime_admission_plan(cypher_text, parameters)?
+            // Share templates and their generation owner with execution. Drop
+            // the bound plan before releasing its planning reservation.
+            let prepared = self
+                .database
+                .prepare_runtime_query(cypher_text.to_string(), parameters)?;
+            prepared.admission().clone()
         };
         self.check_admitted_query_context(task_context)?;
         let result_budget_bytes = self.admitted_result_budget_bytes();
@@ -458,10 +462,9 @@ impl HawDBEmbedded {
         } else {
             let max_rows = self.database.config().max_read_result_rows;
             let max_payload_bytes = usize::try_from(request.result_bytes).unwrap_or(usize::MAX);
-            let mut rows = Vec::new();
             self.database
-                .begin_read_transaction()?
-                .query_with_params_streaming_context(
+                .begin_read_transaction_with_shared_plan_cache()?
+                .query_with_params_owned_context(
                     cypher_text,
                     parameters,
                     QueryStreamOptions {
@@ -469,12 +472,7 @@ impl HawDBEmbedded {
                         max_payload_bytes: Some(max_payload_bytes),
                     },
                     &execution_task_context,
-                    |row| {
-                        rows.push(row);
-                        Ok(())
-                    },
                 )
-                .map(|_| QueryOutput { rows: rows.into() })
         };
         if !is_mutation {
             self.check_admitted_query_context(task_context)?;
@@ -969,6 +967,315 @@ mod tests {
         assert_eq!(snapshot.completions, 4);
         assert_eq!(snapshot.admitted_memory_bytes, 0);
         assert!(engine.admitted_query_path_readiness().admission_safe);
+    }
+
+    #[test]
+    fn admitted_owned_reads_preserve_output_limits_and_release_permits() {
+        // The admitted payload cap also bounds physical result capacity.
+        // Repeated names reach logical refusal before the last row is retained;
+        // successful collection needs room for physical ownership overhead too.
+        let payload_column = "c".repeat(2048);
+        let payload_boundary = 4 * (payload_column.len() + 8);
+        for (row_limit, payload_limit, should_succeed, resource) in [
+            (Some(1), None, false, hawdb_core::ReadBudgetResource::Rows),
+            (Some(2), None, true, hawdb_core::ReadBudgetResource::Rows),
+            (
+                None,
+                Some(payload_boundary - 1),
+                false,
+                hawdb_core::ReadBudgetResource::PayloadBytes,
+            ),
+            (
+                None,
+                Some(payload_boundary * 4),
+                true,
+                hawdb_core::ReadBudgetResource::PayloadBytes,
+            ),
+        ] {
+            let mut engine = HawDBEmbedded::open_in_memory_with_config(DatabaseConfig {
+                max_read_result_rows: row_limit,
+                max_read_result_payload_bytes: payload_limit,
+                ..DatabaseConfig::default()
+            });
+            let row_count = if payload_limit.is_some() { 4 } else { 2 };
+            let column = if payload_limit.is_some() {
+                payload_column.as_str()
+            } else {
+                "id"
+            };
+            for id in 1..=row_count {
+                engine
+                    .database_mut()
+                    .query_with_params(
+                        "CREATE (:Item {id: $id})",
+                        &BTreeMap::from([("id".into(), Value::Int(id))]),
+                    )
+                    .unwrap();
+            }
+            let result = engine.query_admitted(&format!(
+                "MATCH (n:Item) RETURN n.id AS {column} ORDER BY {column}"
+            ));
+            if should_succeed {
+                let output = result.unwrap();
+                assert_eq!(output.rows.len(), row_count as usize);
+                for (index, row) in output.rows.iter().enumerate() {
+                    assert_eq!(row.get(column), Some(&Value::Int(index as i64 + 1)));
+                }
+            } else {
+                let error = match result {
+                    Err(EmbeddedQueryError::Database(HawDBError::ReadBudgetExceeded(error))) => {
+                        error
+                    }
+                    actual => panic!("expected a typed output budget refusal, got {actual:?}"),
+                };
+                assert_eq!(error.resource, resource);
+                assert_eq!(error.limit, row_limit.or(payload_limit).unwrap());
+            }
+            let retry = engine
+                .query_with_params_admitted(
+                    "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id",
+                    &BTreeMap::from([("id".into(), Value::Int(2))]),
+                )
+                .unwrap();
+            assert_eq!(retry.rows.len(), 1);
+            assert_eq!(retry.rows[0].get("id"), Some(&Value::Int(2)));
+            let governor = engine.runtime_governor().snapshot();
+            assert_eq!(governor.admissions, governor.completions);
+            assert_eq!(governor.admitted_memory_bytes, 0);
+            assert_eq!(governor.active_cpu_slots, 0);
+        }
+        for payload_limit in [19, 20] {
+            let mut engine = HawDBEmbedded::open_in_memory_with_config(DatabaseConfig {
+                max_read_result_payload_bytes: Some(payload_limit),
+                ..DatabaseConfig::default()
+            });
+            engine
+                .database_mut()
+                .query("CREATE (:Item {id: 1})")
+                .unwrap();
+            let error = engine
+                .query_admitted("MATCH (n:Item) RETURN n.id AS id")
+                .unwrap_err();
+            assert!(matches!(
+                &error,
+                EmbeddedQueryError::Database(HawDBError::Execution(_))
+            ));
+            assert!(error.to_string().contains("result_materialization"));
+            let governor = engine.runtime_governor().snapshot();
+            assert_eq!(governor.admissions, governor.completions);
+            assert_eq!(governor.admitted_memory_bytes, 0);
+            assert_eq!(governor.active_cpu_slots, 0);
+        }
+    }
+
+    #[test]
+    fn simple_scan_projection_borrows_input_and_preserves_owned_values() {
+        let mut engine = HawDBEmbedded::open_in_memory();
+        let nested = Value::Map(BTreeMap::from([(
+            "entries".into(),
+            Value::List(vec![Value::Int(7), Value::Null, Value::Bool(true)]),
+        )]));
+        for id in [1, 2] {
+            engine
+                .database_mut()
+                .query_with_params(
+                    "CREATE (:Item {id: $id, title: $title, nested: $nested})",
+                    &BTreeMap::from([
+                        ("id".into(), Value::Int(id)),
+                        ("title".into(), Value::String(format!("item-{id}\0"))),
+                        ("nested".into(), nested.clone()),
+                    ]),
+                )
+                .unwrap();
+        }
+        let mut read = engine.database().begin_read_transaction().unwrap();
+        let output = read.query_with_params_bounded_profile(
+            "MATCH (n:Item) RETURN n.id AS id, n.title AS title, n.nested AS nested, n.optional AS optional, id(n) AS node_id, 1 AS constant ORDER BY id",
+            &BTreeMap::new(),
+            None,
+        ).unwrap();
+        assert_eq!(
+            output
+                .execution_profile
+                .pipeline_memory_report
+                .borrowed_node_projection_rows,
+            2
+        );
+        assert_eq!(output.output.rows.len(), 2);
+        for (ordinal, id) in [1, 2].into_iter().enumerate() {
+            let row = &output.output.rows[ordinal];
+            assert_eq!(row.get("id"), Some(&Value::Int(id)));
+            assert_eq!(
+                row.get("title"),
+                Some(&Value::String(format!("item-{id}\0")))
+            );
+            assert_eq!(row.get("nested"), Some(&nested));
+            assert_eq!(row.get("optional"), Some(&Value::Null));
+            assert_eq!(row.get("node_id"), Some(&Value::Int(ordinal as i64)));
+            assert_eq!(row.get("constant"), Some(&Value::Int(1)));
+        }
+        let fallback = read
+            .query_with_params_bounded_profile(
+                "MATCH (n:Item) RETURN n.title AS title, n.id + 1 AS next_id ORDER BY next_id",
+                &BTreeMap::new(),
+                None,
+            )
+            .unwrap();
+        assert_eq!(
+            fallback
+                .execution_profile
+                .pipeline_memory_report
+                .borrowed_node_projection_rows,
+            0
+        );
+        assert_eq!(fallback.output.rows[0].get("next_id"), Some(&Value::Int(2)));
+        assert_eq!(fallback.output.rows[1].get("next_id"), Some(&Value::Int(3)));
+    }
+
+    #[test]
+    fn admitted_sync_point_reads_share_cache_and_rebind_parameters() {
+        let mut engine = HawDBEmbedded::open_in_memory();
+        engine.query_admitted("CREATE INDEX ON :Item(id)").unwrap();
+        for id in 0..20 {
+            engine
+                .query_with_params_admitted(
+                    "CREATE (:Item {id: $id, score: $score})",
+                    &BTreeMap::from([
+                        ("id".into(), Value::Int(id)),
+                        ("score".into(), Value::Int(id * 3)),
+                    ]),
+                )
+                .unwrap();
+        }
+        let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id, n.score AS score";
+        let before = engine.database().plan_cache_stats().unwrap();
+        for (iteration, id) in [5, 17, 3].into_iter().enumerate() {
+            let output = engine
+                .query_with_params_admitted(query, &BTreeMap::from([("id".into(), Value::Int(id))]))
+                .unwrap();
+            assert_eq!(output.rows.len(), 1);
+            assert_eq!(output.rows[0].get("id"), Some(&Value::Int(id)));
+            assert_eq!(output.rows[0].get("score"), Some(&Value::Int(id * 3)));
+            let cache = engine.database().plan_cache_stats().unwrap();
+            assert_eq!(cache.misses, before.misses + 1);
+            assert_eq!(cache.hits, before.hits + 1 + 2 * iteration as u64);
+        }
+
+        let mut old = engine
+            .database()
+            .begin_read_transaction_with_shared_plan_cache()
+            .unwrap();
+        engine
+            .query_admitted("CREATE (:Item {id: 31, score: 93})")
+            .unwrap();
+        let parameters = BTreeMap::from([("id".into(), Value::Int(31))]);
+        let output = engine
+            .query_with_params_admitted(query, &parameters)
+            .unwrap();
+        assert_eq!(output.rows.len(), 1);
+        assert_eq!(output.rows[0].get("score"), Some(&Value::Int(93)));
+        assert!(old
+            .query_with_params(query, &parameters)
+            .unwrap()
+            .rows
+            .is_empty());
+
+        engine
+            .query_admitted("CREATE INDEX ON :Item(score)")
+            .unwrap();
+        let before_schema_read = engine.database().plan_cache_stats().unwrap();
+        let output = engine
+            .query_with_params_admitted(query, &parameters)
+            .unwrap();
+        assert_eq!(output.rows[0].get("score"), Some(&Value::Int(93)));
+        let after_schema_read = engine.database().plan_cache_stats().unwrap();
+        assert_eq!(after_schema_read.misses, before_schema_read.misses + 1);
+        assert_eq!(after_schema_read.hits, before_schema_read.hits + 1);
+        let old_output = old
+            .query_with_params(query, &BTreeMap::from([("id".into(), Value::Int(5))]))
+            .unwrap();
+        assert_eq!(old_output.rows[0].get("score"), Some(&Value::Int(15)));
+
+        let governor = engine.runtime_governor().snapshot();
+        assert_eq!(governor.admissions, governor.completions);
+        assert_eq!(governor.admitted_memory_bytes, 0);
+        assert_eq!(governor.active_cpu_slots, 0);
+    }
+
+    #[test]
+    fn admitted_sync_point_reads_honor_disabled_cache_and_parameter_errors() {
+        let mut engine = HawDBEmbedded::open_in_memory_with_config(DatabaseConfig {
+            max_plan_cache_entries: Some(0),
+            ..DatabaseConfig::default()
+        });
+        engine.query_admitted("CREATE (:Item {id: 1})").unwrap();
+        let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id";
+        let before = engine.database().plan_cache_stats().unwrap();
+        let output = engine
+            .query_with_params_admitted(query, &BTreeMap::from([("id".into(), Value::Int(1))]))
+            .unwrap();
+        assert_eq!(output.rows[0].get("id"), Some(&Value::Int(1)));
+        let cache = engine.database().plan_cache_stats().unwrap();
+        assert_eq!(cache.entries, 0);
+        assert_eq!(cache.disabled_misses, before.disabled_misses + 2);
+        assert!(matches!(
+            engine.query_with_params_admitted(query, &BTreeMap::new()),
+            Err(EmbeddedQueryError::Database(_))
+        ));
+        let governor = engine.runtime_governor().snapshot();
+        assert_eq!(governor.admissions, governor.completions);
+        assert_eq!(governor.admitted_memory_bytes, 0);
+        assert_eq!(governor.active_cpu_slots, 0);
+    }
+
+    #[test]
+    fn admitted_sync_cache_observes_index_cost_class_changes() {
+        let mut engine = HawDBEmbedded::open_in_memory();
+        engine.query_admitted("CREATE INDEX ON :Item(id)").unwrap();
+        for id in 0..8 {
+            engine
+                .query_with_params_admitted(
+                    "CREATE (:Item {id: $id})",
+                    &BTreeMap::from([("id".into(), Value::Int(id))]),
+                )
+                .unwrap();
+        }
+        let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id";
+        let parameters = BTreeMap::from([("id".into(), Value::Int(3))]);
+        engine
+            .query_with_params_admitted(query, &parameters)
+            .unwrap();
+        let before_growth = engine.database().plan_cache_stats().unwrap();
+        engine.query_admitted("CREATE (:Item {id: 8})").unwrap();
+        let output = engine
+            .query_with_params_admitted(query, &parameters)
+            .unwrap();
+        assert_eq!(output.rows[0].get("id"), Some(&Value::Int(3)));
+        let after_growth = engine.database().plan_cache_stats().unwrap();
+        assert_eq!(after_growth.misses, before_growth.misses + 1);
+        assert_eq!(after_growth.hits, before_growth.hits + 1);
+        let governor = engine.runtime_governor().snapshot();
+        assert_eq!(governor.admissions, governor.completions);
+        assert_eq!(governor.admitted_memory_bytes, 0);
+    }
+
+    #[test]
+    fn admitted_sync_queries_do_not_cache_current_timestamps() {
+        let mut engine = HawDBEmbedded::open_in_memory();
+        engine.query_admitted("CREATE (:Item {id: 1})").unwrap();
+        let before = engine.database().plan_cache_stats().unwrap();
+        for _ in 0..3 {
+            let output = engine
+                .query_admitted("MATCH (n:Item) RETURN CASE WHEN true THEN CURRENT_TIMESTAMP() ELSE 0 END AS now")
+                .unwrap();
+            assert!(matches!(output.rows[0].get("now"), Some(Value::Int(value)) if *value > 0));
+        }
+        let after = engine.database().plan_cache_stats().unwrap();
+        assert_eq!(after.entries, before.entries);
+        assert_eq!(after.bypasses, before.bypasses + 6);
+        let governor = engine.runtime_governor().snapshot();
+        assert_eq!(governor.admissions, governor.completions);
+        assert_eq!(governor.admitted_memory_bytes, 0);
     }
 
     #[test]

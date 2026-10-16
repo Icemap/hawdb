@@ -30,7 +30,9 @@ pub(super) const NODE_INDEX_RANGE_STARTUP_COST: u64 = 2;
 pub(super) const NODE_INDEX_TEXT_STARTUP_COST: u64 = 3;
 
 const NODE_FULL_SCAN_STARTUP_COST: u64 = 4;
-const NODE_INDEX_SMALL_LABEL_SCAN_THRESHOLD: u64 = 8;
+/// Labels at or below this size deliberately prefer scans over scalar indexes.
+/// Plan caches can track this cost class using maintained counts alone.
+pub const NODE_INDEX_SMALL_LABEL_SCAN_THRESHOLD: u64 = 8;
 const VECTOR_SEED_TOTAL_COST_PER_ROW: u64 = 10;
 
 #[cfg(test)]
@@ -185,6 +187,15 @@ fn exact_property_union_cost(
 pub(super) fn node_index_seek_is_cheaper(label_count: u64, seek_cost: u64) -> bool {
     label_count > NODE_INDEX_SMALL_LABEL_SCAN_THRESHOLD
         && seek_cost <= estimate_node_full_scan_cost(label_count)
+}
+
+/// Shares the equality access-cost boundary with query-local plan cache keys.
+#[doc(hidden)]
+pub fn node_equality_index_seek_is_cheaper(label_count: u64, matched_rows: u64) -> bool {
+    node_index_seek_is_cheaper(
+        label_count,
+        estimate_node_index_seek_cost(matched_rows.max(1), NODE_INDEX_EQ_STARTUP_COST),
+    )
 }
 
 pub(super) fn estimate_physical_plan_cost(

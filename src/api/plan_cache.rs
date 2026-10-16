@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod determinism;
+
 use super::query_request::{BoundScoringRequest, ScoringPlanCacheKey};
 use super::{
     optimizer_config_from_database_config, statement_body, DatabaseConfig,
@@ -24,15 +26,19 @@ use crate::optimizer::{
     PhysicalPlan,
 };
 use crate::planner::{self, LogicalPlan, Predicate};
-use crate::schema::{Catalog, GraphStatistics, IndexKind, PropertyType, TableKind};
+use crate::schema::{Catalog, GraphStatistics, IndexKind, LabelId, PropertyType, TableKind};
 use crate::store::GraphStore;
 use crate::value::Value;
-use hawdb_optimizer::graph::optimizer_catalog_from_graph_statistics;
+use hawdb_optimizer::graph::{
+    node_equality_index_seek_is_cheaper, optimizer_catalog_from_graph_statistics,
+    NODE_INDEX_SMALL_LABEL_SCAN_THRESHOLD,
+};
 use hawdb_plan_cache::{
-    bind_physical_plan_parameters, parameterize_logical_plan, parameterize_value_list, LfuCache,
-    PlanParameterCacheKey,
+    bind_physical_plan_parameters, parameterize_logical_plan, parameterize_value_list,
+    resolve_plan_template_value, LfuCache, PlanParameterCacheKey,
 };
 pub use hawdb_plan_cache::{PlanCacheBypassReason, PlanCacheLookup, PlanCacheStats};
+use hawdb_plan_cypher::{BatchMutationOperation, ProjectionExpression};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -80,7 +86,7 @@ pub(super) struct CachedPlan {
     has_parameter_slots: bool,
 }
 
-pub(super) type PlanCache = LfuCache<PlanCacheKey, CachedPlan>;
+pub(super) type PlanCache = LfuCache<PlanCacheKey, Arc<CachedPlan>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(super) struct PlanCacheKey {
@@ -90,6 +96,125 @@ pub(super) struct PlanCacheKey {
     max_optimizer_groups: Option<usize>,
     access_control: Option<AccessControlPlanCacheKey>,
     scoring: Option<ScoringPlanCacheKey>,
+    point_statistics: Option<PointStatisticsKey>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct PointStatisticsKey {
+    label: String,
+    property: String,
+    matched_rows: u64,
+    // Counts may grow within the large-label class across the access-cost
+    // boundary for a duplicate key. Share that decision with the optimizer.
+    index_seek_is_cheaper: bool,
+}
+
+struct PointStatistics<'plan> {
+    label: &'plan str,
+    property: &'plan str,
+    matched_rows: u64,
+    index_seek_is_cheaper: bool,
+}
+
+impl From<&PointStatistics<'_>> for PointStatisticsKey {
+    fn from(point: &PointStatistics<'_>) -> Self {
+        Self {
+            label: point.label.to_owned(),
+            property: point.property.to_owned(),
+            matched_rows: point.matched_rows,
+            index_seek_is_cheaper: point.index_seek_is_cheaper,
+        }
+    }
+}
+
+fn point_statistics<'plan, S: crate::executor::ExecutionStore>(
+    context: &PlanCacheContext<'_, S>,
+    logical: &'plan LogicalPlan,
+    parameters: &BTreeMap<String, Value>,
+    has_parameter_slots: bool,
+) -> Result<Option<PointStatistics<'plan>>> {
+    if context.access_control.is_some()
+        || context.scoring.is_some()
+        || context.store.is_out_of_core()
+    {
+        return Ok(None);
+    }
+    let LogicalPlan::Project { items, input } = logical else {
+        return Ok(None);
+    };
+    let LogicalPlan::Filter { predicate, input } = input.as_ref() else {
+        return Ok(None);
+    };
+    let (
+        Predicate::PropertyEq {
+            variable,
+            property,
+            value,
+        },
+        LogicalPlan::NodeScan {
+            variable: scan_variable,
+            label,
+        },
+    ) = (predicate, input.as_ref())
+    else {
+        return Ok(None);
+    };
+    if variable != scan_variable
+        || !items.iter().all(|item| match &item.expression {
+            ProjectionExpression::Variable {
+                variable: projected,
+            }
+            | ProjectionExpression::Property {
+                variable: projected,
+                ..
+            }
+            | ProjectionExpression::Id {
+                variable: projected,
+            } => projected == variable,
+            ProjectionExpression::Literal(_) => true,
+            _ => false,
+        })
+    {
+        return Ok(None);
+    }
+    let Some(label_id) = context.catalog.label_id(label) else {
+        return Ok(None);
+    };
+    if !context
+        .catalog
+        .has_scalar_property_index(label_id, property)
+    {
+        return Ok(None);
+    }
+    let value = resolve_plan_template_value(value, parameters, has_parameter_slots)?;
+    if !matches!(
+        value,
+        Value::Bool(_) | Value::Int(_) | Value::String(_) | Value::Binary(_) | Value::Uuid(_)
+    ) && !matches!(value, Value::Float(value) if value.is_finite())
+    {
+        return Ok(None);
+    }
+    let Some(nodes) = context
+        .store
+        .scan_indexed_nodes_borrowed(label_id, property, value)
+    else {
+        return Ok(None);
+    };
+    // This is a bounded candidate probe, without materializing graph payloads.
+    // A dense value falls back before requesting full optimizer statistics.
+    let matched_rows = nodes
+        .take(NODE_INDEX_SMALL_LABEL_SCAN_THRESHOLD as usize + 1)
+        .count() as u64;
+    if matched_rows > NODE_INDEX_SMALL_LABEL_SCAN_THRESHOLD {
+        return Ok(None);
+    }
+    let label_count = context.store.node_count_for_label(Some(label_id)) as u64;
+    Ok(Some(PointStatistics {
+        label,
+        property,
+        matched_rows,
+        index_seek_is_cheaper: node_equality_index_seek_is_cheaper(label_count, matched_rows),
+    }))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -114,6 +239,36 @@ pub(super) struct OptimizerEnvironmentKey {
     schema: OptimizerSchemaKey,
     statistics_generation: u64,
     ordered_range_indexes: Vec<(String, String)>,
+    node_index_size_classes: Vec<(LabelId, bool)>,
+}
+
+fn node_index_size_classes<R: hawdb_storage::graph_engine::GraphReadEngine>(
+    catalog: &Catalog,
+    store: &R,
+) -> Vec<(LabelId, bool)> {
+    let mut labels = catalog
+        .property_indexes()
+        .filter(|index| matches!(index.kind, IndexKind::Equality | IndexKind::Range))
+        .map(|index| index.label_id)
+        .chain(
+            catalog
+                .composite_property_indexes()
+                .map(|index| index.label_id),
+        )
+        .collect::<Vec<_>>();
+    labels.sort_unstable();
+    labels.dedup();
+    if labels.is_empty() {
+        return Vec::new();
+    }
+    let statistics = store.basic_statistics();
+    labels
+        .into_iter()
+        .map(|label| {
+            let count = statistics.label_counts.get(&label).copied().unwrap_or(0);
+            (label, count > NODE_INDEX_SMALL_LABEL_SCAN_THRESHOLD)
+        })
+        .collect()
 }
 
 fn ordered_range_indexes<R: hawdb_storage::graph_engine::GraphReadEngine>(
@@ -295,15 +450,21 @@ impl OptimizerPlanningCache {
         &mut self,
         catalog: &Catalog,
         store: &R,
+        query_local_statistics: bool,
     ) -> OptimizerEnvironmentKey {
         // A cache lookup must retain the last published statistics generation:
         // ordinary data commits do not make a physical plan illegal. A cache
         // miss refreshes the snapshot before choosing a new plan instead.
-        self.ensure_statistics(catalog, store, false, None);
+        // Maintained index-size classes prevent a tiny-label scan from staying
+        // cached across the existing scan/index cost boundary.
+        if !query_local_statistics {
+            self.ensure_statistics(catalog, store, false, None);
+        }
         OptimizerEnvironmentKey {
             schema: OptimizerSchemaKey::from_catalog(catalog),
             statistics_generation: self.statistics_generation,
             ordered_range_indexes: ordered_range_indexes(catalog, store),
+            node_index_size_classes: node_index_size_classes(catalog, store),
         }
     }
 
@@ -400,6 +561,7 @@ impl OptimizerPlanningCache {
             schema: OptimizerSchemaKey::from_catalog(catalog),
             statistics_generation: self.statistics_generation,
             ordered_range_indexes: ordered_range_indexes(catalog, store),
+            node_index_size_classes: node_index_size_classes(catalog, store),
         };
         // The catalog depends on runtime capabilities as well as schema and
         // published statistics, all captured by `environment` (statistics_generation
@@ -474,15 +636,27 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
         hawdb_query::normalize_query_for_plan_cache("cypher", cypher_text);
     let access_control_cache_key = context.access_control.map(AccessControlPlanCacheKey::from);
     let execution_parameters = parameters_with_access_control(parameters, context.access_control);
-    let environment_hint = (cache_mode == PlanCacheMode::Use).then(|| {
-        context
-            .planning_cache
-            .borrow_mut()
-            .environment_hint(context.catalog, context.store)
-    });
     let parameterized = (cache_mode == PlanCacheMode::Use)
         .then(|| parameterize_logical_plan(statement_body(statement), parameters))
         .transpose()?;
+    let point_statistics = if trace_mode == PlanTraceMode::Template {
+        parameterized
+            .as_ref()
+            .map(|plan| {
+                point_statistics(&context, plan.logical(), parameters, plan.slot_count() > 0)
+            })
+            .transpose()?
+            .flatten()
+    } else {
+        None
+    };
+    let environment_hint = (cache_mode == PlanCacheMode::Use).then(|| {
+        context.planning_cache.borrow_mut().environment_hint(
+            context.catalog,
+            context.store,
+            point_statistics.is_some(),
+        )
+    });
     let mut key = parameterized.as_ref().map(|parameterized| PlanCacheKey {
         normalized_query: normalized_plan_cache_query,
         parameters: parameterized.cache_key().clone(),
@@ -492,6 +666,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
         max_optimizer_groups: context.config.max_optimizer_groups,
         access_control: access_control_cache_key,
         scoring: context.scoring.map(BoundScoringRequest::cache_key),
+        point_statistics: point_statistics.as_ref().map(PointStatisticsKey::from),
     });
     if cache_mode == PlanCacheMode::Use {
         let key = key.as_ref().expect("cache key exists in use mode");
@@ -505,7 +680,7 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             if let Some(scoring) = context.scoring {
                 scoring.rebind(&mut physical_plan)?;
             }
-            let mut trace = cached.trace;
+            let mut trace = cached.trace.clone();
             trace.query_digest = Some(query_identity.query_digest().to_string());
             refresh_plan_trace(
                 &query_optimizer,
@@ -540,7 +715,12 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
             cache_mode == PlanCacheMode::Use,
         );
     }
-    let catalog_access = optimizer_catalog_access(&context);
+    let catalog_access = optimizer_catalog_access_for_logical(
+        &context,
+        &logical,
+        point_statistics.as_ref(),
+        environment_hint.as_ref(),
+    );
     let logical_root = LogicalPlanRoot::new(logical);
     let physical_root = query_optimizer
         .optimize_root_with_catalog_and_directive(
@@ -601,11 +781,11 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
         key.environment = catalog_access.environment.clone();
         context.cache.borrow_mut().insert(
             key,
-            CachedPlan {
+            Arc::new(CachedPlan {
                 physical_template,
                 trace: cached_trace,
                 has_parameter_slots,
-            },
+            }),
         );
         trace
             .decisions
@@ -638,6 +818,71 @@ pub(super) fn optimized_query_plan_for<S: crate::executor::ExecutionStore>(
 fn refresh_materialized_plan_trace(trace: &mut OptimizerTrace, physical_plan: &PhysicalPlan) {
     trace.selected_plan = physical_plan.explain(0);
     trace.selected_plan_fingerprint = physical_plan.fingerprint();
+}
+
+fn optimizer_catalog_access_for_logical<S: crate::executor::ExecutionStore>(
+    context: &PlanCacheContext<'_, S>,
+    logical: &LogicalPlan,
+    point_statistics: Option<&PointStatistics<'_>>,
+    environment_hint: Option<&OptimizerEnvironmentKey>,
+) -> OptimizerCatalogAccess {
+    if let Some(point) = point_statistics {
+        let environment = environment_hint
+            .expect("point statistics require a cache environment")
+            .clone();
+        let statistics = hawdb_storage::statistics::graph_statistics_from_basic(
+            context.store.basic_statistics(),
+            false,
+        );
+        let catalog = Arc::new(
+            optimizer_catalog_from_graph_statistics(context.catalog, &statistics)
+                .with_ordered_range_indexes(environment.ordered_range_indexes.clone())
+                .with_property_equality_row_count(
+                    point.label.to_owned(),
+                    point.property.to_owned(),
+                    point.matched_rows,
+                ),
+        );
+        return OptimizerCatalogAccess {
+            environment,
+            catalog,
+            decisions: vec![format!("optimizer statistics: bounded indexed equality on {}.{} has {} snapshot-local candidates; advanced statistics not requested", point.label, point.property, point.matched_rows)],
+        };
+    }
+    let shape = match logical {
+        LogicalPlan::CreateNode { .. } => "CreateNode",
+        LogicalPlan::UnwindMutation {
+            operation: BatchMutationOperation::CreateNode { .. },
+            ..
+        } => "UnwindCreateNode",
+        _ => return optimizer_catalog_access(context),
+    };
+    // These bound leaves have no graph input or competing access path. Keep
+    // schema and maintained counts current without scanning data or publishing
+    // a statistics generation that a subsequent graph read could reuse.
+    let statistics = hawdb_storage::statistics::graph_statistics_from_basic(
+        context.store.basic_statistics(),
+        false,
+    );
+    let environment = OptimizerEnvironmentKey {
+        schema: OptimizerSchemaKey::from_catalog(context.catalog),
+        statistics_generation: context.planning_cache.borrow().statistics_generation,
+        ordered_range_indexes: ordered_range_indexes(context.catalog, context.store),
+        // Mutation plans bypass the physical cache and have no graph input.
+        // Do not add a second basic-count clone to their planning path.
+        node_index_size_classes: Vec::new(),
+    };
+    let catalog = Arc::new(
+        optimizer_catalog_from_graph_statistics(context.catalog, &statistics)
+            .with_ordered_range_indexes(environment.ordered_range_indexes.clone()),
+    );
+    OptimizerCatalogAccess {
+        environment,
+        catalog,
+        decisions: vec![format!(
+            "optimizer statistics: graph-independent {shape} uses live schema and maintained basic counts; advanced statistics not requested"
+        )],
+    }
 }
 
 fn optimizer_catalog_access<S: crate::executor::ExecutionStore>(
@@ -778,11 +1023,19 @@ pub(super) fn statement_uses_plan_cache(statement: &cypher::Statement) -> bool {
             // Eligibility is not a substitute for semantic binding validation.
             !query.clauses.is_empty()
                 && query.clauses.iter().all(|clause| match &clause.kind {
-                    cypher::ClauseKind::Match { .. }
-                    | cypher::ClauseKind::With(_)
-                    | cypher::ClauseKind::Return(_) => true,
+                    cypher::ClauseKind::Match {
+                        patterns,
+                        predicate,
+                        ..
+                    } => determinism::match_is_deterministic(patterns, predicate.as_ref()),
+                    cypher::ClauseKind::With(projection)
+                    | cypher::ClauseKind::Return(projection) => {
+                        determinism::projection_is_deterministic(projection)
+                    }
                     cypher::ClauseKind::Call { procedure, .. } => match &procedure.kind {
-                        cypher::ProcedureCallKind::GraphAlgorithm { .. } => true,
+                        cypher::ProcedureCallKind::GraphAlgorithm { options, .. } => {
+                            determinism::graph_options_are_deterministic(options)
+                        }
                         cypher::ProcedureCallKind::VectorSearch(_)
                         | cypher::ProcedureCallKind::TextSearch(_)
                         | cypher::ProcedureCallKind::GraphSeedSearch(_)
@@ -796,7 +1049,9 @@ pub(super) fn statement_uses_plan_cache(statement: &cypher::Statement) -> bool {
                 })
         }
 
-        cypher::Statement::GraphAlgorithm(_) => true,
+        cypher::Statement::GraphAlgorithm(query) => {
+            determinism::graph_options_are_deterministic(&query.options)
+        }
         _ => false,
     }
 }
@@ -806,6 +1061,709 @@ mod tests {
     use super::*;
     use crate::schema::SchemaObjectState;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn plan_cache_rejects_volatile_values_in_read_expressions() {
+        for query in [
+            "MATCH (n:Item) RETURN [CURRENT_TIMESTAMP()] AS values",
+            "MATCH (n:Item) RETURN CASE WHEN true THEN timestamp(CURRENT_TIMESTAMP()) ELSE 0 END AS now",
+            "MATCH (n:Item) RETURN coalesce(NULL, CASE WHEN true THEN CURRENT_TIMESTAMP() ELSE 0 END) AS now",
+            "MATCH (n:Item {id: CURRENT_TIMESTAMP()}) RETURN n.id",
+            "MATCH (n:Item) WHERE n.id = CURRENT_TIMESTAMP() RETURN n.id",
+            "MATCH (n:Item) WHERE n.id IN [CURRENT_TIMESTAMP()] RETURN n.id",
+            "MATCH (n:Item)-[:LINK {at: CURRENT_TIMESTAMP()}]->(m:Item) RETURN n.id",
+            "MATCH (n:Item) RETURN n.id AS id ORDER BY CASE WHEN true THEN CURRENT_TIMESTAMP() ELSE 0 END",
+            "MATCH (n:Item) WITH CASE WHEN true THEN CURRENT_TIMESTAMP() ELSE 0 END AS now RETURN now",
+            "MATCH (n:Item) RETURN n.id LIMIT CURRENT_TIMESTAMP()",
+            "CALL page_rank('g', maxIterations := CURRENT_TIMESTAMP()) RETURN node, rank",
+        ] {
+            let statement = cypher::parse(query).unwrap_or_else(|error| panic!("{query}: {error}"));
+            assert!(!statement_uses_plan_cache(&statement), "{query}");
+        }
+        for query in [
+            "MATCH (n:Item) RETURN CASE WHEN true THEN timestamp($now) ELSE 0 END AS now",
+            "MATCH (n:Item) RETURN 'CURRENT_TIMESTAMP()' AS value",
+            "MATCH (n:Item) WHERE n.id = timestamp($now) RETURN n.id",
+        ] {
+            let statement = cypher::parse(query).unwrap_or_else(|error| panic!("{query}: {error}"));
+            assert!(statement_uses_plan_cache(&statement), "{query}");
+        }
+    }
+
+    #[test]
+    fn point_statistics_borrow_plan_names_and_keep_owned_cache_identity() {
+        let mut db = crate::Database::new();
+        for statement in [
+            "CREATE INDEX ON :Item(id)",
+            "CREATE INDEX ON :Item(other_id)",
+            "CREATE INDEX ON :Other(id)",
+            "CREATE (:Item {id: 1, other_id: 1})",
+            "CREATE (:Other {id: 1})",
+        ] {
+            db.query(statement).unwrap();
+        }
+        let runtime = db.runtime.get().unwrap();
+        let context = PlanCacheContext {
+            catalog: &runtime.catalog,
+            store: &runtime.store,
+            optimizer: &runtime.optimizer,
+            config: &db.config,
+            cache: &runtime.plan_cache,
+            planning_cache: &runtime.optimizer_planning_cache,
+            access_control: None,
+            optimizer_search: OptimizerSearchDirective::Auto,
+            scoring: None,
+        };
+        let parameters = BTreeMap::from([("id".into(), Value::Int(1))]);
+        let keys = [
+            "MATCH (n:Item) WHERE n.id = $id RETURN n.id",
+            "MATCH (n:Item) WHERE n.other_id = $id RETURN n.id",
+            "MATCH (n:Other) WHERE n.id = $id RETURN n.id",
+        ]
+        .map(|query| {
+            let statement = cypher::parse(query).unwrap();
+            let plan = parameterize_logical_plan(statement_body(&statement), &parameters).unwrap();
+            let point =
+                point_statistics(&context, plan.logical(), &parameters, plan.slot_count() > 0)
+                    .unwrap()
+                    .unwrap();
+            let LogicalPlan::Project { input, .. } = plan.logical() else {
+                panic!("expected projection");
+            };
+            let LogicalPlan::Filter {
+                predicate: Predicate::PropertyEq { property, .. },
+                input,
+            } = input.as_ref()
+            else {
+                panic!("expected property equality");
+            };
+            let LogicalPlan::NodeScan { label, .. } = input.as_ref() else {
+                panic!("expected node scan");
+            };
+            assert_eq!(point.label.as_ptr(), label.as_ptr());
+            assert_eq!(point.property.as_ptr(), property.as_ptr());
+            PointStatisticsKey::from(&point)
+        });
+        // Each plan has been dropped, while its independently owned identity
+        // still distinguishes names with identical cardinality and cost class.
+        assert_eq!(keys[0].label, "Item");
+        assert_eq!(keys[0].property, "id");
+        assert_eq!(keys[1].property, "other_id");
+        assert_eq!(keys[2].label, "Other");
+        for key in &keys {
+            assert_eq!(key.matched_rows, 1);
+            assert_eq!(key.index_seek_is_cheaper, keys[0].index_seek_is_cheaper);
+        }
+        assert_ne!(keys[0], keys[1]);
+        assert_ne!(keys[0], keys[2]);
+    }
+
+    #[test]
+    fn point_statistics_avoid_full_publication_for_a_cold_indexed_read() {
+        let mut db = crate::Database::new();
+        for statement in [
+            "CREATE NODE TABLE Item",
+            "CREATE PROPERTY ON NODE TABLE Item(id) TYPE INT",
+            "CREATE PROPERTY ON NODE TABLE Item(score) TYPE INT",
+            "CREATE INDEX ON :Item(id)",
+        ] {
+            db.query(statement).unwrap();
+        }
+        for id in 0..32 {
+            db.query_with_params(
+                "CREATE (:Item {id: $id, score: $score})",
+                &BTreeMap::from([
+                    ("id".into(), Value::Int(id)),
+                    ("score".into(), Value::Int(id * 3)),
+                ]),
+            )
+            .unwrap();
+        }
+        // DDL may have left an earlier statistics publication. Model a cold
+        // planning cache independently of those schema statements.
+        db.runtime
+            .get()
+            .unwrap()
+            .optimizer_planning_cache
+            .borrow_mut()
+            .invalidate();
+        let generation = db
+            .runtime
+            .get()
+            .unwrap()
+            .optimizer_planning_cache
+            .borrow()
+            .statistics_generation;
+        let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id, n.score AS score";
+        let statement = cypher::parse(query).unwrap();
+        let planned = db
+            .optimized_query_plan_with_access_control_and_trace_mode(
+                query,
+                &statement,
+                &BTreeMap::from([("id".into(), Value::Int(5))]),
+                None,
+                PlanTraceMode::Template,
+            )
+            .unwrap();
+        assert!(
+            planned
+                .trace
+                .decisions
+                .iter()
+                .any(|decision| decision.contains("bounded indexed equality")),
+            "{:?}",
+            planned.trace.decisions
+        );
+        let output = db
+            .query_with_params(query, &BTreeMap::from([("id".into(), Value::Int(5))]))
+            .unwrap();
+        assert_eq!(output.rows.len(), 1);
+        assert_eq!(output.rows[0].get("id"), Some(&Value::Int(5)));
+        assert_eq!(output.rows[0].get("score"), Some(&Value::Int(15)));
+        let runtime = db.runtime.get().unwrap();
+        let planning = runtime.optimizer_planning_cache.borrow();
+        assert!(planning.statistics.is_none());
+        assert_eq!(planning.statistics_generation, generation);
+    }
+
+    #[test]
+    fn point_statistics_rebind_cardinality_without_publishing_and_preserve_snapshots() {
+        let mut db = crate::Database::new();
+        db.query("CREATE (:Item {id: 0, score: 0})").unwrap();
+        db.query("CREATE INDEX ON :Item(id)").unwrap();
+        for id in 1..32 {
+            db.query(&format!("CREATE (:Item {{id: {id}, score: {id}}})"))
+                .unwrap();
+        }
+        let before = db
+            .runtime
+            .get()
+            .unwrap()
+            .optimizer_planning_cache
+            .borrow()
+            .statistics
+            .clone();
+        let generation = db
+            .runtime
+            .get()
+            .unwrap()
+            .optimizer_planning_cache
+            .borrow()
+            .statistics_generation;
+        let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.score AS score";
+        let parameters = |id| BTreeMap::from([("id".into(), Value::Int(id))]);
+        assert_eq!(
+            db.query_with_params(query, &parameters(0)).unwrap().rows[0]["score"],
+            Value::Int(0)
+        );
+        let cache = db.plan_cache_stats().unwrap();
+        assert_eq!(
+            db.query_with_params(query, &parameters(1)).unwrap().rows[0]["score"],
+            Value::Int(1)
+        );
+        assert_eq!(db.plan_cache_stats().unwrap().hits, cache.hits + 1);
+        assert!(db
+            .query_with_params(query, &parameters(99))
+            .unwrap()
+            .rows
+            .is_empty());
+        let mut snapshot = db.begin_read_transaction().unwrap();
+        db.query("CREATE (:Item {id: 0, score: 100})").unwrap();
+        let cache = db.plan_cache_stats().unwrap();
+        assert_eq!(
+            db.query_with_params(query, &parameters(0))
+                .unwrap()
+                .rows
+                .len(),
+            2
+        );
+        assert_eq!(db.plan_cache_stats().unwrap().misses, cache.misses + 1);
+        assert_eq!(
+            snapshot
+                .query_with_params(query, &parameters(0))
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+        db.query("CREATE (:Item {id: 99, score: 99})").unwrap();
+        let cache = db.plan_cache_stats().unwrap();
+        assert_eq!(
+            db.query_with_params(query, &parameters(99))
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+        assert_eq!(db.plan_cache_stats().unwrap().hits, cache.hits + 1);
+        let runtime = db.runtime.get().unwrap();
+        let planning = runtime.optimizer_planning_cache.borrow();
+        match (&before, &planning.statistics) {
+            (Some(before), Some(after)) => assert!(Arc::ptr_eq(before, after)),
+            (None, None) => {}
+            _ => panic!("point reads changed the full statistics publication"),
+        }
+        assert_eq!(planning.statistics_generation, generation);
+    }
+
+    #[test]
+    fn point_statistics_replan_at_the_duplicate_equality_cost_boundary() {
+        let mut db = crate::Database::new();
+        db.query("CREATE (:Item {id: 1})").unwrap();
+        db.query("CREATE INDEX ON :Item(id)").unwrap();
+        for _ in 0..8 {
+            db.query("CREATE (:Item {id: 0})").unwrap();
+        }
+        let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id";
+        let statement = cypher::parse(query).unwrap();
+        let parameters = BTreeMap::from([("id".into(), Value::Int(0))]);
+        let plan = |db: &crate::Database| {
+            db.optimized_query_plan_with_access_control_and_trace_mode(
+                query,
+                &statement,
+                &parameters,
+                None,
+                PlanTraceMode::Template,
+            )
+            .unwrap()
+        };
+        let initial = plan(&db);
+        assert!(initial
+            .physical_plan
+            .explain(0)
+            .contains("access=SeqNodeScan"));
+        for id in 2..32 {
+            db.query(&format!("CREATE (:Item {{id: {id}}})")).unwrap();
+        }
+        let grown = plan(&db);
+        assert_eq!(grown.plan_cache_lookup, PlanCacheLookup::Miss);
+        assert!(grown
+            .physical_plan
+            .explain(0)
+            .contains("access=IndexNodeSeek"));
+        assert_eq!(
+            db.query_with_params(query, &parameters).unwrap().rows.len(),
+            8
+        );
+    }
+
+    #[test]
+    fn point_statistics_dense_complex_and_bound_reads_keep_full_statistics() {
+        for (query, parameters) in [
+            (
+                "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id",
+                BTreeMap::from([("id".into(), Value::Int(0))]),
+            ),
+            (
+                "MATCH (n:Item) WHERE n.id = $id RETURN count(n) AS count",
+                BTreeMap::from([("id".into(), Value::Int(1))]),
+            ),
+            (
+                "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id",
+                BTreeMap::from([("id".into(), Value::Null)]),
+            ),
+        ] {
+            let mut db = crate::Database::new();
+            db.query("CREATE (:Item {id: 1})").unwrap();
+            db.query("CREATE INDEX ON :Item(id)").unwrap();
+            for _ in 0..9 {
+                db.query("CREATE (:Item {id: 0})").unwrap();
+            }
+            db.runtime
+                .get()
+                .unwrap()
+                .optimizer_planning_cache
+                .borrow_mut()
+                .invalidate();
+            let output = db.query_with_params(query, &parameters).unwrap();
+            if parameters.get("id") == Some(&Value::Int(0)) {
+                assert_eq!(output.rows.len(), 9);
+            }
+            assert!(db
+                .runtime
+                .get()
+                .unwrap()
+                .optimizer_planning_cache
+                .borrow()
+                .statistics
+                .is_some());
+        }
+        let mut db = crate::Database::new();
+        db.query("CREATE (:Item {id: 1})").unwrap();
+        db.query("CREATE INDEX ON :Item(id)").unwrap();
+        db.runtime
+            .get()
+            .unwrap()
+            .optimizer_planning_cache
+            .borrow_mut()
+            .invalidate();
+        let query = "MATCH (n:Item) WHERE n.id = $id RETURN n AS node";
+        assert!(db.query_with_params(query, &BTreeMap::new()).is_err());
+        assert!(db
+            .runtime
+            .get()
+            .unwrap()
+            .optimizer_planning_cache
+            .borrow()
+            .statistics
+            .is_none());
+        let parameters = BTreeMap::from([("id".into(), Value::Int(1))]);
+        assert_eq!(
+            db.query_with_params(query, &parameters).unwrap().rows.len(),
+            1
+        );
+        assert!(db
+            .runtime
+            .get()
+            .unwrap()
+            .optimizer_planning_cache
+            .borrow()
+            .statistics
+            .is_none());
+        db.explain_query_with_params(query, &parameters).unwrap();
+        assert!(db
+            .runtime
+            .get()
+            .unwrap()
+            .optimizer_planning_cache
+            .borrow()
+            .statistics
+            .is_some());
+    }
+
+    #[test]
+    fn point_plan_cache_replans_only_when_crossing_the_small_label_index_boundary() {
+        let mut db = crate::Database::new();
+        for statement in [
+            "CREATE NODE TABLE Item",
+            "CREATE PROPERTY ON NODE TABLE Item(id) TYPE INT",
+            "CREATE PROPERTY ON NODE TABLE Item(score) TYPE INT",
+            "CREATE INDEX ON :Item(id)",
+        ] {
+            db.query(statement).unwrap();
+        }
+        let insert = |db: &mut crate::Database, id: i64| {
+            db.query_with_params(
+                "CREATE (:Item {id: $id, score: $score})",
+                &BTreeMap::from([
+                    ("id".into(), Value::Int(id)),
+                    ("score".into(), Value::Int(id * 3)),
+                ]),
+            )
+            .unwrap();
+        };
+        for id in 0..4 {
+            insert(&mut db, id);
+        }
+        let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id, n.score AS score";
+        let statement = cypher::parse(query).unwrap();
+        let parameters = BTreeMap::from([("id".into(), Value::Int(0))]);
+        let plan = |db: &crate::Database| {
+            db.optimized_query_plan_with_access_control_and_trace_mode(
+                query,
+                &statement,
+                &parameters,
+                None,
+                PlanTraceMode::Template,
+            )
+            .unwrap()
+        };
+        let initial = plan(&db);
+        assert_eq!(initial.plan_cache_lookup, PlanCacheLookup::Miss);
+        assert!(initial
+            .physical_plan
+            .explain(0)
+            .contains("access=SeqNodeScan"));
+        let generation = db
+            .runtime
+            .get()
+            .unwrap()
+            .optimizer_planning_cache
+            .borrow()
+            .statistics_generation;
+        let (snapshot_catalog, snapshot_store) = {
+            let runtime = db.runtime.get().unwrap();
+            (runtime.catalog.clone(), runtime.store.snapshot())
+        };
+        for id in 4..8 {
+            insert(&mut db, id);
+        }
+        assert_eq!(plan(&db).plan_cache_lookup, PlanCacheLookup::Hit);
+        insert(&mut db, 8);
+        assert_eq!(
+            db.runtime
+                .get()
+                .unwrap()
+                .optimizer_planning_cache
+                .borrow()
+                .statistics_generation,
+            generation,
+            "CREATE must not publish statistics even at the access-cost boundary"
+        );
+        let grown = plan(&db);
+        assert_eq!(grown.plan_cache_lookup, PlanCacheLookup::Miss);
+        assert!(grown
+            .physical_plan
+            .explain(0)
+            .contains("access=IndexNodeSeek"));
+        assert_eq!(
+            node_index_size_classes(&snapshot_catalog, &snapshot_store),
+            vec![(snapshot_catalog.label_id("Item").unwrap(), false)],
+            "the old read view must not use live-head counts"
+        );
+        let grown_generation = db
+            .runtime
+            .get()
+            .unwrap()
+            .optimizer_planning_cache
+            .borrow()
+            .statistics_generation;
+        insert(&mut db, 9);
+        assert_eq!(plan(&db).plan_cache_lookup, PlanCacheLookup::Hit);
+        assert_eq!(
+            db.runtime
+                .get()
+                .unwrap()
+                .optimizer_planning_cache
+                .borrow()
+                .statistics_generation,
+            grown_generation
+        );
+        let output = db.query_with_params(query, &parameters).unwrap();
+        assert_eq!(output.rows.len(), 1);
+        assert_eq!(output.rows[0].get("id"), Some(&Value::Int(0)));
+        assert_eq!(output.rows[0].get("score"), Some(&Value::Int(0)));
+        db.query("MATCH (n:Item) WHERE n.id >= 8 DELETE n").unwrap();
+        let shrunk = plan(&db);
+        assert_eq!(shrunk.plan_cache_lookup, PlanCacheLookup::Miss);
+        assert!(shrunk
+            .physical_plan
+            .explain(0)
+            .contains("access=SeqNodeScan"));
+    }
+
+    #[test]
+    fn point_plan_cache_keeps_unindexed_label_growth_reusable() {
+        let mut db = crate::Database::new();
+        db.query("CREATE NODE TABLE Item").unwrap();
+        db.query("CREATE PROPERTY ON NODE TABLE Item(id) TYPE INT")
+            .unwrap();
+        for id in 0..4 {
+            db.query(&format!("CREATE (:Item {{id: {id}}})")).unwrap();
+        }
+        let query = "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id";
+        let parameters = BTreeMap::from([("id".into(), Value::Int(0))]);
+        db.query_with_params(query, &parameters).unwrap();
+        for id in 4..10 {
+            db.query(&format!("CREATE (:Item {{id: {id}}})")).unwrap();
+        }
+        let before = db.plan_cache_stats().unwrap();
+        let output = db.query_with_params(query, &parameters).unwrap();
+        let after = db.plan_cache_stats().unwrap();
+        assert_eq!(after.hits - before.hits, 1);
+        assert_eq!(after.misses, before.misses);
+        assert_eq!(output.rows.len(), 1);
+        assert_eq!(output.rows[0].get("id"), Some(&Value::Int(0)));
+    }
+
+    #[test]
+    fn creation_planning_does_not_publish_advanced_statistics() {
+        let mut db = crate::Database::new();
+        db.query_with_params(
+            "CREATE (:Item {score: $score})",
+            &BTreeMap::from([("score".into(), Value::Int(1))]),
+        )
+        .unwrap();
+        db.query_with_params(
+            "UNWIND $rows AS row CREATE (:Item {score: row.score})",
+            &BTreeMap::from([(
+                "rows".into(),
+                Value::List(vec![
+                    Value::Map(BTreeMap::from([("score".into(), Value::Int(2))])),
+                    Value::Map(BTreeMap::from([("score".into(), Value::Int(3))])),
+                ]),
+            )]),
+        )
+        .unwrap();
+        db.query_with_params(
+            "UNWIND $rows AS row CREATE (:Item {score: row.score})",
+            &BTreeMap::from([("rows".into(), Value::List(Vec::new()))]),
+        )
+        .unwrap();
+        {
+            let runtime = db.runtime.get().unwrap();
+            let cache = runtime.optimizer_planning_cache.borrow();
+            assert!(cache.statistics.is_none());
+            assert!(cache.statistics_source_graph_commit_epoch.is_none());
+            assert_eq!(cache.statistics_generation, 0);
+        }
+        let output = db.query("MATCH (n:Item) RETURN n.score AS score").unwrap();
+        assert_eq!(output.rows.len(), 3);
+        let (published_epoch, generation) = {
+            let runtime = db.runtime.get().unwrap();
+            let cache = runtime.optimizer_planning_cache.borrow();
+            assert!(cache.statistics.is_some());
+            assert_eq!(
+                cache.statistics_source_graph_commit_epoch,
+                Some(runtime.store.commit_epoch())
+            );
+            (
+                cache.statistics_source_graph_commit_epoch,
+                cache.statistics_generation,
+            )
+        };
+        db.query("CREATE (:Item {score: 4})").unwrap();
+        {
+            let runtime = db.runtime.get().unwrap();
+            let cache = runtime.optimizer_planning_cache.borrow();
+            assert_eq!(cache.statistics_source_graph_commit_epoch, published_epoch);
+            assert_eq!(cache.statistics_generation, generation);
+        }
+        let before_merge = db.commit_epoch().unwrap();
+        db.query("MERGE (:Item {score: 4})").unwrap();
+        assert_eq!(
+            db.runtime
+                .get()
+                .unwrap()
+                .optimizer_planning_cache
+                .borrow()
+                .statistics_source_graph_commit_epoch,
+            Some(before_merge)
+        );
+    }
+
+    #[test]
+    fn creation_planning_preserves_live_schema_and_failed_write_atomicity() {
+        let mut db = crate::Database::new();
+        db.query("CREATE NODE TABLE Item").unwrap();
+        db.query("CREATE PROPERTY ON NODE TABLE Item(score) TYPE INT")
+            .unwrap();
+        let mut old = db.begin_read_transaction().unwrap();
+        let before = db.commit_epoch().unwrap();
+        assert!(db
+            .query_with_params("CREATE (:Item {score: $score})", &BTreeMap::new())
+            .is_err());
+        assert!(db
+            .query_with_params(
+                "CREATE (:Item {score: $score})",
+                &BTreeMap::from([("score".into(), Value::String("invalid".into()))]),
+            )
+            .is_err());
+        assert_eq!(db.commit_epoch().unwrap(), before);
+        db.query_with_params(
+            "CREATE (:Item {score: $score})",
+            &BTreeMap::from([("score".into(), Value::Int(9))]),
+        )
+        .unwrap();
+        assert_eq!(
+            old.query("MATCH (n:Item) RETURN n.score AS score")
+                .unwrap()
+                .rows
+                .len(),
+            0
+        );
+        assert_eq!(
+            db.query("MATCH (n:Item) RETURN n.score AS score")
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn creation_planning_preserves_constraints_cancellation_and_wal_replay() {
+        let path = unique_test_dir("creation_planning_wal");
+        let parameters = |scores: &[i64]| {
+            BTreeMap::from([(
+                "rows".into(),
+                Value::List(
+                    scores
+                        .iter()
+                        .map(|score| {
+                            Value::Map(BTreeMap::from([("score".into(), Value::Int(*score))]))
+                        })
+                        .collect(),
+                ),
+            )])
+        };
+        let bulk = "UNWIND $rows AS row CREATE (:Item {score: row.score})";
+        {
+            let mut db = crate::Database::open(&path).unwrap();
+            db.query("CREATE (:Item {score: 1})").unwrap();
+            db.query("CREATE CONSTRAINT ON :Item(score) ASSERT UNIQUE")
+                .unwrap();
+            let before = db.commit_epoch().unwrap();
+            let error = db
+                .query_with_params(bulk, &parameters(&[2, 1]))
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("unique constraint violation"),
+                "{error}"
+            );
+            assert_eq!(db.commit_epoch().unwrap(), before);
+            let context = hawdb_core::RuntimeTaskContext::default();
+            context.cancellation().cancel();
+            let error = db
+                .query_with_params_context(bulk, &parameters(&[4]), &context)
+                .unwrap_err();
+            assert!(error.to_string().contains("cancelled"), "{error}");
+            assert_eq!(db.commit_epoch().unwrap(), before);
+            db.query_with_params(bulk, &parameters(&[2, 3])).unwrap();
+        }
+        {
+            let mut db = crate::Database::open(&path).unwrap();
+            let output = db
+                .query("MATCH (n:Item) RETURN n.score AS score ORDER BY score")
+                .unwrap();
+            assert_eq!(
+                output.rows,
+                vec![
+                    BTreeMap::from([("score".into(), Value::Int(1))]),
+                    BTreeMap::from([("score".into(), Value::Int(2))]),
+                    BTreeMap::from([("score".into(), Value::Int(3))]),
+                ]
+            );
+        }
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn creation_planning_reports_shape_and_preserves_optimizer_directives() {
+        let db = crate::Database::new();
+        let query = "CREATE (:Item {score: $score})";
+        let parameters = BTreeMap::from([("score".into(), Value::Int(7))]);
+        let automatic = db.explain_query_with_params(query, &parameters).unwrap();
+        assert!(automatic
+            .trace
+            .decisions
+            .iter()
+            .any(|decision| decision.contains("graph-independent CreateNode")));
+        for mode in ["memo", "direct_fallback"] {
+            let hinted = format!("CYPHER system.optimizer_search = '{mode}' {query}");
+            let explained = db.explain_query_with_params(&hinted, &parameters).unwrap();
+            assert_eq!(explained.trace.search_mode.as_str(), mode);
+            assert_eq!(
+                explained.physical_plan.fingerprint(),
+                automatic.physical_plan.fingerprint()
+            );
+            assert_eq!(
+                explained.plan_cache_lookup,
+                PlanCacheLookup::Bypass(PlanCacheBypassReason::OptimizerDirective)
+            );
+        }
+        let constrained = crate::Database::new_with_config(crate::DatabaseConfig {
+            max_optimizer_groups: Some(0),
+            ..crate::DatabaseConfig::default()
+        });
+        let error = constrained
+            .explain_query_with_params(
+                "CYPHER system.optimizer_search = 'memo' CREATE (:Item {score: $score})",
+                &parameters,
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("max_groups is 0"), "{error}");
+    }
 
     #[test]
     fn pipeline_plan_cache_preserves_legacy_eligibility() {

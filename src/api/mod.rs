@@ -101,6 +101,8 @@ pub use graph_analytics::{
 mod explain_format_tests;
 mod observability;
 mod plan_cache;
+pub(crate) mod publication;
+pub use publication::{DatabasePublicationOwner, DatabasePublicationState};
 mod query_request;
 mod query_runtime;
 mod resource_profile;
@@ -862,12 +864,29 @@ pub struct DatabaseSession<'a> {
 }
 
 #[derive(Debug)]
+enum ReadPlanCache {
+    Private(SharedState<PlanCache>),
+    Shared(Arc<SharedState<PlanCache>>),
+}
+
+impl std::ops::Deref for ReadPlanCache {
+    type Target = SharedState<PlanCache>;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Private(cache) => cache,
+            Self::Shared(cache) => cache,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct DatabaseReadTransaction<S: crate::executor::ExecutionStore = GraphStore> {
     catalog: Catalog,
     store: S,
     published_read_view: PublishedReadView,
     optimizer: CascadesOptimizer,
-    plan_cache: SharedState<PlanCache>,
+    plan_cache: ReadPlanCache,
     relational_plan_template_cache: Arc<crate::relational_sql::RelationalPlanTemplateCache>,
     optimizer_planning_cache: Arc<SharedState<OptimizerPlanningCache>>,
     slow_query_snapshot: Vec<system_sql::SlowQueryRecord>,
@@ -912,7 +931,9 @@ impl DatabaseReadSnapshot {
             store: source.store.snapshot_for_read(),
             published_read_view: source.published_read_view,
             optimizer: source.optimizer.clone(),
-            plan_cache: SharedState::new(PlanCache::new(source.config.max_plan_cache_entries)),
+            plan_cache: ReadPlanCache::Private(SharedState::new(PlanCache::new(
+                source.config.max_plan_cache_entries,
+            ))),
             relational_plan_template_cache: Arc::clone(&source.relational_plan_template_cache),
             optimizer_planning_cache: Arc::clone(&source.optimizer_planning_cache),
             slow_query_snapshot: source.slow_query_snapshot.clone(),
@@ -1622,20 +1643,30 @@ impl Database {
 
     fn read_snapshot_without_observations(&self) -> Result<DatabaseReadSnapshot> {
         Ok(DatabaseReadSnapshot(
-            self.read_transaction_state(None, None)?,
+            self.read_transaction_state(None, None, None)?,
         ))
     }
 
     /// Pins the selected branch's schema and data after successful admission.
     pub fn begin_read_transaction(&self) -> Result<DatabaseReadTransaction> {
-        self.begin_read_transaction_inner(None, None)
+        self.begin_read_transaction_inner(None, None, None)
+    }
+
+    pub(crate) fn begin_read_transaction_with_shared_plan_cache(
+        &self,
+    ) -> Result<DatabaseReadTransaction> {
+        self.begin_read_transaction_inner(
+            None,
+            None,
+            Some(Arc::clone(&self.runtime.get()?.plan_cache)),
+        )
     }
 
     pub fn begin_read_transaction_with_context(
         &self,
         task_context: &hawdb_core::RuntimeTaskContext,
     ) -> Result<DatabaseReadTransaction> {
-        self.begin_read_transaction_inner(None, Some(task_context.clone()))
+        self.begin_read_transaction_inner(None, Some(task_context.clone()), None)
     }
 
     /// Pins both the database read view and one active projection generation.
@@ -1686,6 +1717,7 @@ impl Database {
         self.begin_read_transaction_inner(
             Some(ProjectionRelationalReadSnapshot { binding, reader }),
             None,
+            None,
         )
     }
 
@@ -1693,8 +1725,10 @@ impl Database {
         &self,
         projection_relational: Option<ProjectionRelationalReadSnapshot>,
         task_context: Option<hawdb_core::RuntimeTaskContext>,
+        plan_cache: Option<Arc<SharedState<PlanCache>>>,
     ) -> Result<DatabaseReadTransaction> {
-        let mut snapshot = self.read_transaction_state(projection_relational, task_context)?;
+        let mut snapshot =
+            self.read_transaction_state(projection_relational, task_context, plan_cache)?;
         snapshot.slow_query_snapshot = self.slow_query_log.borrow().snapshot();
         snapshot.statement_summary_snapshot = self.statement_summary.borrow().snapshot();
         Ok(snapshot)
@@ -1704,6 +1738,7 @@ impl Database {
         &self,
         projection_relational: Option<ProjectionRelationalReadSnapshot>,
         task_context: Option<hawdb_core::RuntimeTaskContext>,
+        plan_cache: Option<Arc<SharedState<PlanCache>>>,
     ) -> Result<DatabaseReadTransaction> {
         let runtime = self.runtime.get()?;
         Ok({
@@ -1713,7 +1748,14 @@ impl Database {
                 store: runtime.store.snapshot_for_read(),
                 published_read_view,
                 optimizer: runtime.optimizer.clone(),
-                plan_cache: SharedState::new(PlanCache::new(self.config.max_plan_cache_entries)),
+                plan_cache: plan_cache.map_or_else(
+                    || {
+                        ReadPlanCache::Private(SharedState::new(PlanCache::new(
+                            self.config.max_plan_cache_entries,
+                        )))
+                    },
+                    ReadPlanCache::Shared,
+                ),
                 relational_plan_template_cache: Arc::clone(&runtime.relational_plan_template_cache),
                 optimizer_planning_cache: Arc::clone(&runtime.optimizer_planning_cache),
                 slow_query_snapshot: Vec::new(),
@@ -21873,6 +21915,26 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             .output)
     }
 
+    pub(crate) fn query_with_params_owned_context(
+        &mut self,
+        cypher_text: &str,
+        parameters: &BTreeMap<String, Value>,
+        options: QueryStreamOptions,
+        task_context: &hawdb_core::RuntimeTaskContext,
+    ) -> Result<QueryOutput> {
+        self.store.ensure_usable()?;
+        Ok(self
+            .query_with_params_bounded_profile_prepared_output_internal(
+                cypher_text,
+                query_runtime::parse_runtime_execution(cypher_text)?,
+                parameters,
+                options,
+                None,
+                Some(task_context),
+            )?
+            .output)
+    }
+
     #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
     pub(crate) fn query_prepared_with_params_context(
         &mut self,
@@ -22194,10 +22256,35 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         access_control: Option<QueryAccessControlContext>,
         task_context: Option<&hawdb_core::RuntimeTaskContext>,
     ) -> Result<BoundedReadQueryOutput> {
+        self.query_with_params_bounded_profile_prepared_output_internal(
+            cypher_text,
+            prepared,
+            parameters,
+            QueryStreamOptions {
+                max_rows,
+                max_payload_bytes: None,
+            },
+            access_control,
+            task_context,
+        )
+    }
+
+    fn query_with_params_bounded_profile_prepared_output_internal(
+        &mut self,
+        cypher_text: &str,
+        prepared: query_runtime::PreparedRuntimeExecution,
+        parameters: &BTreeMap<String, Value>,
+        options: QueryStreamOptions,
+        access_control: Option<QueryAccessControlContext>,
+        task_context: Option<&hawdb_core::RuntimeTaskContext>,
+    ) -> Result<BoundedReadQueryOutput> {
         self.store.ensure_usable()?;
         query_runtime::query_runtime_checkpoint(task_context)?;
-        let max_rows = restrictive_query_limit(self.config.max_read_result_rows, max_rows);
-        let max_payload_bytes = self.config.max_read_result_payload_bytes;
+        let max_rows = restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+        let max_payload_bytes = restrictive_query_limit(
+            self.config.max_read_result_payload_bytes,
+            options.max_payload_bytes,
+        );
         let query_runtime::PreparedRuntimeExecution {
             statement,
             optimized: prepared_optimized,
@@ -22209,7 +22296,10 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 cypher_text,
                 explain,
                 parameters,
-                max_rows,
+                QueryStreamOptions {
+                    max_rows,
+                    max_payload_bytes,
+                },
                 access_control,
                 task_context,
             );
@@ -22268,20 +22358,17 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         cypher_text: &str,
         explain: &cypher::Explain,
         parameters: &BTreeMap<String, Value>,
-        max_rows: Option<usize>,
+        options: QueryStreamOptions,
         access_control: Option<QueryAccessControlContext>,
         task_context: Option<&hawdb_core::RuntimeTaskContext>,
     ) -> Result<BoundedReadQueryOutput> {
-        self.execute_explain_request(
-            cypher_text,
-            explain,
-            parameters,
-            query_runtime::QueryExecutionOptions::for_bounded_read(
-                max_rows,
-                access_control.as_ref(),
-                task_context,
-            ),
-        )
+        let mut execution_options = query_runtime::QueryExecutionOptions::for_bounded_read(
+            options.max_rows,
+            access_control.as_ref(),
+            task_context,
+        );
+        execution_options.output_limits = options;
+        self.execute_explain_request(cypher_text, explain, parameters, execution_options)
     }
 
     fn execute_explain_request(

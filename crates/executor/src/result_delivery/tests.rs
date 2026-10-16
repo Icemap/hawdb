@@ -252,3 +252,232 @@ fn payload_limit_failure_releases_transient_result_memory() {
     drop(output);
     assert_eq!(rows, 0);
 }
+
+#[test]
+fn compact_owned_results_admit_scalar_string_fixture_under_16_mib() {
+    let memory = ExecutionMemoryConfig::default();
+    let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+    let mut output = QueryOutputAccumulator::new_owned(
+        OutputLimits::default(),
+        memory.batch_payload_bytes,
+        &ledger,
+    )
+    .unwrap();
+    for id in 0..100_000 {
+        output
+            .emit(Binding::values(Row::from([
+                ("id".into(), Value::Int(id)),
+                ("score".into(), Value::Float(id as f64)),
+                ("title".into(), Value::String("x".repeat(24))),
+            ])))
+            .unwrap();
+    }
+    assert_eq!(output.metrics().rows, 100_000);
+    assert!(ledger.snapshot().used_bytes < 13 * 1024 * 1024);
+    assert!(ledger.snapshot().peak_bytes <= memory.batch_payload_bytes.get());
+    let rows = output.take_owned_rows().unwrap();
+    assert_eq!(rows.len(), 100_000);
+    assert_eq!(
+        rows.get(99_999, "id"),
+        Some(hawdb_core::ValueRef::Int(99_999))
+    );
+    assert_eq!(
+        rows.get(99_999, "title").unwrap().as_str(),
+        Some("xxxxxxxxxxxxxxxxxxxxxxxx")
+    );
+    drop(output);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn compact_owned_results_admit_small_map_nodes_before_publication() {
+    let mut emptied = Row::from([("entry".into(), Value::Null)]);
+    emptied.remove("entry");
+    let cases = [
+        Value::Map(emptied),
+        Value::Map(Row::from([("entry".into(), Value::Null)])),
+        Value::List(vec![Value::Map(Row::from([("entry".into(), Value::Null)]))]),
+    ];
+    for value in cases {
+        let ledger = QueryMemoryLedger::new(NonZeroUsize::new(8192).unwrap());
+        let mut output = QueryOutputAccumulator::new_owned(
+            OutputLimits::default(),
+            NonZeroUsize::new(1024).unwrap(),
+            &ledger,
+        )
+        .unwrap();
+        let error = output
+            .emit(Binding::values(Row::from([("value".into(), value)])))
+            .unwrap_err();
+        assert!(error.to_string().contains("result_materialization"));
+        assert_eq!(output.metrics().rows, 0);
+        drop(output);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+}
+
+#[test]
+fn compact_owned_results_preserve_sparse_multi_level_maps() {
+    let mut values = Row::new();
+    for index in 0..1000 {
+        values.insert(format!("key-{index:04}"), Value::Int(index));
+    }
+    for index in 0..990 {
+        values.remove(&format!("key-{index:04}"));
+    }
+    let ledger = QueryMemoryLedger::new(NonZeroUsize::new(1024 * 1024).unwrap());
+    let mut output = QueryOutputAccumulator::new_owned(
+        OutputLimits::default(),
+        NonZeroUsize::new(64 * 1024).unwrap(),
+        &ledger,
+    )
+    .unwrap();
+    output
+        .emit(Binding::values(Row::from([(
+            "value".into(),
+            Value::Map(values),
+        )])))
+        .unwrap();
+    let rows = output.take_owned_rows().unwrap();
+    let Some(hawdb_core::ValueRef::Map(values)) = rows.get(0, "value") else {
+        panic!("expected a retained map");
+    };
+    assert_eq!(values.len(), 10);
+    assert_eq!(values.get("key-0990"), Some(&Value::Int(990)));
+    assert_eq!(values.get("key-0999"), Some(&Value::Int(999)));
+    assert!(!values.contains_key("key-0000"));
+    drop(output);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn compact_owned_results_charge_spare_nested_payload_capacity() {
+    let memory = ExecutionMemoryConfig::default();
+    let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+    let budget = NonZeroUsize::new(4096).unwrap();
+    let mut output =
+        QueryOutputAccumulator::new_owned(OutputLimits::default(), budget, &ledger).unwrap();
+    let mut payload = String::with_capacity(16 * 1024);
+    payload.push('x');
+    let error = output
+        .emit(Binding::values(Row::from([(
+            "value".into(),
+            Value::List(vec![Value::Map(Row::from([(
+                "nested".into(),
+                Value::String(payload),
+            )]))]),
+        )])))
+        .unwrap_err();
+    assert!(error.to_string().contains("result_materialization"));
+    assert_eq!(output.metrics().rows, 0);
+    assert!(ledger.snapshot().peak_bytes <= budget.get());
+    drop(output);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn compact_owned_results_roll_back_failed_segment_boundary_payload() {
+    let scalar = |id| Binding::values(Row::from([("value".into(), Value::Int(id))]));
+    let control_ledger =
+        QueryMemoryLedger::new(ExecutionMemoryConfig::default().query_memory_bytes);
+    let mut control = QueryOutputAccumulator::new_owned(
+        OutputLimits::default(),
+        ExecutionMemoryConfig::default().batch_payload_bytes,
+        &control_ledger,
+    )
+    .unwrap();
+    for id in 0..257 {
+        control.emit(scalar(id)).unwrap();
+    }
+    // Admit the same scalar path's growth overlap on every supported ABI.
+    let budget = NonZeroUsize::new(control_ledger.snapshot().peak_bytes).unwrap();
+    drop(control);
+    assert_eq!(control_ledger.snapshot().used_bytes, 0);
+    let ledger = QueryMemoryLedger::new(budget);
+    let mut output =
+        QueryOutputAccumulator::new_owned(OutputLimits::default(), budget, &ledger).unwrap();
+    for id in 0..256 {
+        output.emit(scalar(id)).unwrap();
+    }
+    let headroom = budget.get() - ledger.snapshot().used_bytes;
+    // Incoming and retained payload overlap, in addition to segment metadata.
+    let payload_capacity = headroom / 2;
+    assert!(payload_capacity > 0);
+    let mut failed_used_bytes = None;
+    for _ in 0..2 {
+        let error = output
+            .emit(Binding::values(Row::from([(
+                "value".into(),
+                Value::Binary(Vec::with_capacity(payload_capacity)),
+            )])))
+            .unwrap_err();
+        assert!(error.to_string().contains("result_materialization"));
+        assert_eq!(output.metrics().rows, 256);
+        let used_bytes = ledger.snapshot().used_bytes;
+        if let Some(previous) = failed_used_bytes {
+            assert_eq!(used_bytes, previous);
+        }
+        failed_used_bytes = Some(used_bytes);
+        assert!(ledger.snapshot().peak_bytes <= budget.get());
+    }
+    output.emit(scalar(256)).unwrap();
+    let rows = output.take_owned_rows().unwrap();
+    assert_eq!(rows.len(), 257);
+    for ordinal in 0..257 {
+        assert_eq!(
+            rows.get(ordinal, "value"),
+            Some(hawdb_core::ValueRef::Int(ordinal as i64))
+        );
+    }
+    drop(output);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn compact_owned_results_move_payload_without_cloning_it() {
+    let memory = ExecutionMemoryConfig::default();
+    let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+    let mut output = QueryOutputAccumulator::new_owned(
+        OutputLimits {
+            max_rows: Some(1),
+            max_payload_bytes: None,
+        },
+        memory.batch_payload_bytes,
+        &ledger,
+    )
+    .unwrap();
+    let value = String::from("retained payload");
+    let pointer = value.as_ptr();
+    output
+        .emit(Binding::values(Row::from([(
+            "value".into(),
+            Value::String(value),
+        )])))
+        .unwrap();
+    assert!(output.emit(binding("excess row")).is_err());
+    assert_eq!(output.metrics().rows, 1);
+    let rows = output.take_owned_rows().unwrap();
+    assert_eq!(
+        rows.get(0, "value").unwrap().as_str().unwrap().as_ptr(),
+        pointer
+    );
+}
+
+#[test]
+fn compact_owned_results_charge_incoming_column_key_capacity() {
+    let ledger = QueryMemoryLedger::new(NonZeroUsize::new(4096).unwrap());
+    let mut output = QueryOutputAccumulator::new_owned(
+        OutputLimits::default(),
+        NonZeroUsize::new(4096).unwrap(),
+        &ledger,
+    )
+    .unwrap();
+    let mut key = String::with_capacity(16 * 1024);
+    key.push('x');
+    assert!(output
+        .emit(Binding::values(Row::from([(key, Value::Int(1))])))
+        .is_err());
+    assert_eq!(output.metrics().rows, 0);
+    drop(output);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}

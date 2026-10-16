@@ -333,9 +333,14 @@ rust_test(
     sh_test(
         name = "hawdb_unit_%s_tests" % partition,
         size = "large",
-        # Finite headroom after two 900s deadline expirations; other partitions
-        # retain their limit. Measured decomposition: https://github.com/nowledge-co/hawdb/issues/972.
-        timeout = "eternal" if partition == "concurrent" else "long",
+        # Concurrent and isolated analytics RSS qualification have exceeded the
+        # 900s deadline. Keep the other partitions at their finite limit.
+        # Evidence: https://github.com/nowledge-co/hawdb/issues/972 and
+        # https://github.com/nowledge-co/hawdb/issues/1027.
+        timeout = "eternal" if partition in ["concurrent", "analytics_rss"] else "long",
+        # Dense identity and RSS fixtures must not compete with other test
+        # executables in this invocation. External contention remains possible.
+        tags = ["exclusive"] if partition == "analytics_rss" else [],
         srcs = ["scripts/run-root-unit-partition.sh"],
         args = [
             "$(rootpath :hawdb_unit_test_binary)",
@@ -345,8 +350,31 @@ rust_test(
         ],
         data = [":hawdb_unit_test_binary"],
     )
-    for partition in ["general", "concurrent", "analytics", "recovery"]
+    for partition in ["general", "concurrent", "analytics_core_general", "analytics_rss", "recovery"]
 ]
+
+# Identity admission now shares the RSS fixture and its isolated measured child.
+# Keep the previous public label as an alias so aggregate expansion runs it once.
+test_suite(
+    name = "hawdb_unit_analytics_identity_tests",
+    tests = [":hawdb_unit_analytics_rss_tests"],
+)
+
+test_suite(
+    name = "hawdb_unit_analytics_core_tests",
+    tests = [
+        ":hawdb_unit_analytics_core_general_tests",
+        ":hawdb_unit_analytics_identity_tests",
+    ],
+)
+
+test_suite(
+    name = "hawdb_unit_analytics_tests",
+    tests = [
+        ":hawdb_unit_analytics_core_tests",
+        ":hawdb_unit_analytics_rss_tests",
+    ],
+)
 
 sh_test(
     name = "root_unit_partition_script_test",

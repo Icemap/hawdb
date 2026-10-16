@@ -424,27 +424,51 @@ pub fn ensure_mutation_commit_limits(
     rows: &[BTreeMap<String, Value>],
     limits: MutationLimits,
 ) -> Result<()> {
-    ensure_additional_mutation_limits(ops.len(), rows.len(), 0, 0, limits)?;
-    if rows.len() > limits.max_result_rows.get() {
-        return Err(HawDBError::Execution(format!(
-            "mutation would exceed max_mutation_result_rows {}",
-            limits.max_result_rows
-        )));
+    MutationCommitLimitTracker::default().check_appended(ops, rows, limits)
+}
+
+/// Tracks an append-only result prefix within one mutation preparation.
+/// Previously checked rows must remain immutable until preparation ends.
+#[derive(Default)]
+pub(crate) struct MutationCommitLimitTracker {
+    checked_rows: usize,
+    payload_bytes: u64,
+}
+
+impl MutationCommitLimitTracker {
+    pub(crate) fn check_appended(
+        &mut self,
+        ops: &[WalOp],
+        rows: &[BTreeMap<String, Value>],
+        limits: MutationLimits,
+    ) -> Result<()> {
+        ensure_additional_mutation_limits(ops.len(), rows.len(), 0, 0, limits)?;
+        if rows.len() > limits.max_result_rows.get() {
+            return Err(HawDBError::Execution(format!(
+                "mutation would exceed max_mutation_result_rows {}",
+                limits.max_result_rows
+            )));
+        }
+        let payload_bytes =
+            rows[self.checked_rows..]
+                .iter()
+                .fold(self.payload_bytes, |total, row| {
+                    total.saturating_add(row.iter().fold(0u64, |row_total, (name, value)| {
+                        row_total
+                            .saturating_add(name.len() as u64)
+                            .saturating_add(estimated_value_bytes(value))
+                    }))
+                });
+        if payload_bytes > limits.max_result_payload_bytes.get() as u64 {
+            return Err(HawDBError::Execution(format!(
+                "mutation result payload would exceed max_mutation_result_payload_bytes {}",
+                limits.max_result_payload_bytes
+            )));
+        }
+        self.checked_rows = rows.len();
+        self.payload_bytes = payload_bytes;
+        Ok(())
     }
-    let payload_bytes = rows.iter().fold(0u64, |total, row| {
-        total.saturating_add(row.iter().fold(0u64, |row_total, (name, value)| {
-            row_total
-                .saturating_add(name.len() as u64)
-                .saturating_add(estimated_value_bytes(value))
-        }))
-    });
-    if payload_bytes > limits.max_result_payload_bytes.get() as u64 {
-        return Err(HawDBError::Execution(format!(
-            "mutation result payload would exceed max_mutation_result_payload_bytes {}",
-            limits.max_result_payload_bytes
-        )));
-    }
-    Ok(())
 }
 
 pub fn ensure_additional_mutation_limits(
@@ -550,6 +574,66 @@ pub fn estimated_value_bytes_with_visit<E>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn incremental_commit_limits_match_full_prefix_checks() {
+        let row = BTreeMap::from([
+            ("null".to_string(), Value::Null),
+            ("number".to_string(), Value::Int(7)),
+            (
+                "nested".to_string(),
+                Value::List(vec![
+                    Value::String("payload".to_string()),
+                    Value::Map(BTreeMap::from([(
+                        "bytes".to_string(),
+                        Value::Binary(vec![1, 2, 3]),
+                    )])),
+                ]),
+            ),
+        ]);
+        let row_bytes = row.iter().fold(0u64, |total, (name, value)| {
+            total
+                .saturating_add(name.len() as u64)
+                .saturating_add(estimated_value_bytes(value))
+        });
+        for boundary in 1..=12 {
+            for kind in 0..5 {
+                let mut limits = MutationLimits::default();
+                let limit = NonZeroUsize::new(boundary).unwrap();
+                match kind {
+                    0 => limits.max_operations = limit,
+                    1 => limits.max_affected_rows = limit,
+                    2 => limits.max_result_rows = limit,
+                    3 => {
+                        limits.max_result_payload_bytes =
+                            NonZeroUsize::new(boundary * row_bytes as usize).unwrap();
+                    }
+                    _ => {
+                        limits.max_result_payload_bytes =
+                            NonZeroUsize::new(boundary * row_bytes as usize - 1).unwrap();
+                    }
+                }
+                let mut tracker = MutationCommitLimitTracker::default();
+                let mut ops = Vec::new();
+                let mut rows = Vec::new();
+                for index in 0..16 {
+                    // Some preparation branches append several rows or no op.
+                    rows.extend(std::iter::repeat_n(row.clone(), index % 3));
+                    if index % 2 == 0 {
+                        ops.push(WalOp::CreateNodeLabel {
+                            label: format!("Label{index}"),
+                        });
+                    }
+                    let expected = ensure_mutation_commit_limits(&ops, &rows, limits)
+                        .map_err(|error| error.to_string());
+                    let actual = tracker
+                        .check_appended(&ops, &rows, limits)
+                        .map_err(|error| error.to_string());
+                    assert_eq!(actual, expected);
+                }
+            }
+        }
+    }
 
     #[test]
     fn mutation_contract_keeps_property_filters_structured() {

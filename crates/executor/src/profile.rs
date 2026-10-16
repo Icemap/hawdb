@@ -71,11 +71,28 @@ impl QuerySchema {
 #[derive(Debug)]
 struct QueryRowStorage {
     schema: QuerySchema,
-    values: Vec<Value>,
+    values: QueryStoredValues,
     row_count: usize,
 }
 
-/// One owned handle into a query's immutable flat value buffer.
+#[derive(Debug)]
+enum QueryStoredValues {
+    Flat(Vec<Value>),
+    Segmented(Vec<Vec<Value>>),
+}
+
+impl QueryStoredValues {
+    fn len(&self) -> usize {
+        match self {
+            Self::Flat(values) => values.len(),
+            Self::Segmented(segments) => segments.iter().map(Vec::len).sum(),
+        }
+    }
+}
+
+mod owned_result;
+
+/// One owned handle into a query's immutable row storage.
 #[derive(Clone)]
 pub struct QueryRow {
     storage: Arc<QueryRowStorage>,
@@ -176,7 +193,7 @@ impl Index<&str> for QueryRow {
     }
 }
 
-/// A borrowed row view over a query's immutable flat value buffer.
+/// A borrowed row view over a query's immutable contiguous row buffer.
 #[derive(Debug, Clone, Copy)]
 pub struct QueryRowRef<'a> {
     schema: &'a QuerySchema,
@@ -252,7 +269,7 @@ impl Index<&str> for QueryRowRef<'_> {
     }
 }
 
-/// Schema-bearing result rows backed by one flat, immutable value buffer.
+/// Schema-bearing result rows backed by immutable contiguous row buffers.
 pub struct QueryRows {
     storage: Arc<QueryRowStorage>,
     indexed_rows: OnceLock<Vec<QueryRow>>,
@@ -271,7 +288,7 @@ impl QueryRows {
         Self {
             storage: Arc::new(QueryRowStorage {
                 schema,
-                values,
+                values: QueryStoredValues::Flat(values),
                 row_count,
             }),
             indexed_rows: OnceLock::new(),
@@ -355,7 +372,7 @@ impl QueryRows {
         let retained_row_count = values.len().checked_div(width).unwrap_or(row_count);
         self.storage = Arc::new(QueryRowStorage {
             schema: self.schema().clone(),
-            values,
+            values: QueryStoredValues::Flat(values),
             row_count: retained_row_count,
         });
         self.indexed_rows = OnceLock::new();
@@ -373,7 +390,7 @@ impl QueryRows {
             .columns()
             .iter()
             .fold(0usize, |total, name| total.saturating_add(name.len()));
-        self.storage.values.iter().fold(names, |total, value| {
+        stored_values(&self.storage).fold(names, |total, value| {
             total.saturating_add(value_payload_bytes(value))
         })
     }
@@ -430,17 +447,21 @@ impl FromIterator<Row> for QueryRows {
 ///
 /// The first named row binds column names to stable ordinals. Later rows are
 /// consumed in the same deterministic `BTreeMap` order and their values move
-/// directly into one flat buffer.
+/// directly into bounded row segments when cardinality is unknown. Explicit
+/// capacity constructors retain the flat-buffer path.
 pub struct QueryRowsBuilder {
     schema: Option<QuerySchema>,
     values: Vec<Value>,
     row_count: usize,
     row_capacity_hint: usize,
+    segments: Option<Vec<Vec<Value>>>,
 }
 
 impl QueryRowsBuilder {
     pub fn new() -> Self {
-        Self::with_row_capacity(0)
+        let mut builder = Self::with_row_capacity(0);
+        builder.segments = Some(Vec::new());
+        builder
     }
 
     pub fn with_row_capacity(row_capacity: usize) -> Self {
@@ -449,6 +470,7 @@ impl QueryRowsBuilder {
             values: Vec::new(),
             row_count: 0,
             row_capacity_hint: row_capacity,
+            segments: None,
         }
     }
 
@@ -458,6 +480,7 @@ impl QueryRowsBuilder {
             schema: Some(schema),
             row_count: 0,
             row_capacity_hint: row_capacity,
+            segments: None,
         }
     }
 
@@ -465,7 +488,7 @@ impl QueryRowsBuilder {
         self.try_push_values(values.into_iter().map(Ok))
     }
 
-    /// Appends one fallible row directly into the flat value buffer.
+    /// Appends one fallible row into immutable-result storage.
     ///
     /// A conversion error or width mismatch rolls the partial row back.
     pub fn try_push_values(
@@ -477,6 +500,18 @@ impl QueryRowsBuilder {
                 "query result values require a schema before ordinal insertion".to_string(),
             )
         })?;
+        if self.segments.is_some() {
+            let values = values.into_iter().collect::<Result<Vec<_>>>()?;
+            if values.len() != schema.len() {
+                return Err(HawDBError::Execution(format!(
+                    "query result row {} has width {}, expected {}",
+                    self.row_count,
+                    values.len(),
+                    schema.len()
+                )));
+            }
+            return self.append_named_values(values.into_iter());
+        }
         let start = self.values.len();
         for value in values {
             match value {
@@ -528,12 +563,57 @@ impl QueryRowsBuilder {
                 self.row_count
             )));
         }
-        self.values.extend(row.into_values());
+        self.append_named_values(row.into_values())
+    }
+
+    fn append_named_values(&mut self, values: impl Iterator<Item = Value>) -> Result<()> {
+        if let Some(segments) = &mut self.segments {
+            let width = self
+                .schema
+                .as_ref()
+                .expect("query result schema is bound")
+                .len();
+            let rows_in_segment = self.row_count % OWNED_RESULT_SEGMENT_ROWS;
+            if rows_in_segment == 0 && self.row_count != 0 && width != 0 {
+                segments.push(std::mem::take(&mut self.values));
+            }
+            let needed = (rows_in_segment + 1).checked_mul(width).ok_or_else(|| {
+                HawDBError::Execution("query result segment capacity overflow".into())
+            })?;
+            if needed > self.values.capacity() {
+                let target_rows = (rows_in_segment + 1).next_power_of_two();
+                let target = target_rows.checked_mul(width).ok_or_else(|| {
+                    HawDBError::Execution("query result segment capacity overflow".into())
+                })?;
+                self.values.reserve_exact(target - self.values.len());
+            }
+        }
+        self.values.extend(values);
         self.row_count = self.row_count.saturating_add(1);
         Ok(())
     }
 
-    pub fn finish(self) -> QueryRows {
+    pub fn finish(mut self) -> QueryRows {
+        if let Some(mut segments) = self.segments.take() {
+            if segments.is_empty() {
+                return QueryRows::from_flat_values_unchecked(
+                    self.schema.unwrap_or_else(QuerySchema::empty),
+                    self.values,
+                    self.row_count,
+                );
+            }
+            if !self.values.is_empty() {
+                segments.push(self.values);
+            }
+            return QueryRows {
+                storage: Arc::new(QueryRowStorage {
+                    schema: self.schema.unwrap_or_else(QuerySchema::empty),
+                    values: QueryStoredValues::Segmented(segments),
+                    row_count: self.row_count,
+                }),
+                indexed_rows: OnceLock::new(),
+            };
+        }
         QueryRows::from_flat_values_unchecked(
             self.schema.unwrap_or_else(QuerySchema::empty),
             self.values,
@@ -570,7 +650,7 @@ impl PartialEq for QueryRows {
     fn eq(&self, other: &Self) -> bool {
         self.schema() == other.schema()
             && self.len() == other.len()
-            && self.storage.values == other.storage.values
+            && stored_values(&self.storage).eq(stored_values(&other.storage))
     }
 }
 
@@ -695,14 +775,39 @@ impl Iterator for QueryRowsIntoIter {
 
 impl ExactSizeIterator for QueryRowsIntoIter {}
 
+const OWNED_RESULT_SEGMENT_ROWS: usize = 256;
+
+fn stored_values(storage: &QueryRowStorage) -> impl Iterator<Item = &Value> {
+    let (flat, segments) = match &storage.values {
+        QueryStoredValues::Flat(values) => (Some(values), None),
+        QueryStoredValues::Segmented(segments) => (None, Some(segments)),
+    };
+    flat.into_iter().flatten().chain(
+        segments
+            .into_iter()
+            .flatten()
+            .flat_map(|segment| segment.iter()),
+    )
+}
+
 fn row_values(storage: &QueryRowStorage, row: usize) -> Option<&[Value]> {
     if row >= storage.row_count {
         return None;
     }
     let width = storage.schema.len();
-    let start = row.checked_mul(width)?;
+    if width == 0 {
+        return Some(&[]);
+    }
+    let (values, ordinal) = match &storage.values {
+        QueryStoredValues::Segmented(segments) => (
+            segments.get(row / OWNED_RESULT_SEGMENT_ROWS)?,
+            row % OWNED_RESULT_SEGMENT_ROWS,
+        ),
+        QueryStoredValues::Flat(values) => (values, row),
+    };
+    let start = ordinal.checked_mul(width)?;
     let end = start.checked_add(width)?;
-    storage.values.get(start..end)
+    values.get(start..end)
 }
 
 fn row_equals_map(row: QueryRowRef<'_>, other: &Row) -> bool {
@@ -843,6 +948,9 @@ pub struct PipelineMemoryReport {
     pub intermediate_payload_bytes: usize,
     pub peak_batch_rows: usize,
     pub peak_batch_payload_bytes: usize,
+    /// Rows projected from source property references before owned output admission.
+    /// This counter does not claim source-to-host zero-copy delivery.
+    pub borrowed_node_projection_rows: usize,
     /// Number of typed columnar batches evaluated by eligible pipeline fragments.
     pub columnar_batches: usize,
     /// Rows loaded into typed columns before selection.
@@ -937,6 +1045,97 @@ mod tests {
     };
     use hawdb_core::LogicalType;
     use std::sync::Arc;
+
+    #[test]
+    fn segmented_results_preserve_access_ownership_and_flat_equality() {
+        let expected = (0..1000)
+            .map(|id| {
+                Row::from([
+                    ("id".into(), Value::Int(id)),
+                    ("payload".into(), Value::String(format!("value-{id}\0"))),
+                ])
+            })
+            .collect::<Vec<_>>();
+        let mut builder = QueryRowsBuilder::new();
+        for row in &expected {
+            builder.push_named_row(row.clone()).unwrap();
+        }
+        let rows = builder.finish();
+        assert_eq!(rows, QueryRows::from(expected.clone()));
+        assert_eq!(
+            rows.payload_bytes(),
+            QueryRows::from(expected.clone()).payload_bytes()
+        );
+        for ordinal in [0, 255, 256, 511, 512, 999] {
+            assert_eq!(rows.row(ordinal).unwrap(), expected[ordinal]);
+            assert_eq!(rows[ordinal], expected[ordinal]);
+        }
+        let handle = rows[256].clone();
+        let mut retained = rows.clone();
+        retained.retain(|row| row["id"] == Value::Int(256));
+        assert_eq!(retained.len(), 1);
+        assert_eq!(retained.first().unwrap(), expected[256]);
+        assert_eq!(rows.clone().into_rows(), expected);
+        drop(rows);
+        assert_eq!(handle["id"], Value::Int(256));
+    }
+
+    #[test]
+    fn segmented_results_bound_unknown_cardinality_capacity() {
+        let mut builder = QueryRowsBuilder::new();
+        for id in 0..100_000 {
+            builder
+                .push_named_row(Row::from([
+                    ("id".into(), Value::Int(id)),
+                    ("score".into(), Value::Float(id as f64)),
+                    ("title".into(), Value::String("x".repeat(24))),
+                ]))
+                .unwrap();
+        }
+        let rows = builder.finish();
+        let QueryStoredValues::Segmented(segments) = &rows.storage.values else {
+            panic!("large results require segmented storage");
+        };
+        assert_eq!(
+            segments.len(),
+            100_000_usize.div_ceil(OWNED_RESULT_SEGMENT_ROWS)
+        );
+        let capacity = segments.iter().map(Vec::capacity).sum::<usize>();
+        assert!(capacity >= 300_000);
+        assert!(capacity <= 300_000 + 3 * OWNED_RESULT_SEGMENT_ROWS);
+        assert!(segments
+            .iter()
+            .all(|segment| segment.capacity() <= 3 * OWNED_RESULT_SEGMENT_ROWS));
+        assert_eq!(rows.get(99_999, "id"), Some(ValueRef::Int(99_999)));
+    }
+
+    #[test]
+    fn segmented_results_handle_empty_rows_and_boundary_rollback() {
+        let mut empty = QueryRowsBuilder::new();
+        for _ in 0..513 {
+            empty.push_named_row(Row::new()).unwrap();
+        }
+        let empty = empty.finish();
+        assert_eq!(empty.len(), 513);
+        assert!(empty.row(512).unwrap().is_empty());
+        let mut builder = QueryRowsBuilder::new();
+        for id in 0..256 {
+            builder
+                .push_named_row(Row::from([("id".into(), Value::Int(id))]))
+                .unwrap();
+        }
+        assert!(builder
+            .push_named_row(Row::from([("wrong".into(), Value::Int(256))]))
+            .is_err());
+        assert!(builder
+            .try_push_values([Err(HawDBError::Execution("failed".into()))])
+            .is_err());
+        assert!(builder.push_values([]).is_err());
+        builder.push_values([Value::Int(256)]).unwrap();
+        let rows = builder.finish();
+        assert_eq!(rows.len(), 257);
+        assert_eq!(rows.get(256, "id"), Some(ValueRef::Int(256)));
+    }
 
     #[test]
     fn counts_blocking_operator_kinds() {

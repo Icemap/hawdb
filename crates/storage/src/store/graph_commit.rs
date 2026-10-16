@@ -218,6 +218,7 @@ impl GraphStore {
         let mut working_catalog = catalog.clone();
         let mut ops = Vec::new();
         let mut rows = Vec::new();
+        let mut limit_tracker = crate::mutation::MutationCommitLimitTracker::default();
         let mut pending_nodes = Vec::new();
         let mut pending_relationships = Vec::new();
 
@@ -1748,7 +1749,7 @@ impl GraphStore {
                     ]));
                 }
             }
-            ensure_mutation_commit_limits(&ops, &rows, limits)?;
+            limit_tracker.check_appended(&ops, &rows, limits)?;
         }
 
         self.commit_prepared_mutation_ops(catalog, working_catalog, ops, rows, limits, options)
@@ -2909,6 +2910,46 @@ fn map_append_staging_error(error: hawdb_storage::append_table::AppendTableError
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn incremental_result_payload_refusal_preserves_state_and_allows_retry() {
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::default();
+        let mutations = || {
+            (0..2)
+                .map(|_| GraphMutation::CreateNode {
+                    label: "Budgeted".to_string(),
+                    properties: BTreeMap::new(),
+                })
+                .collect()
+        };
+        let before = (store.commit_epoch(), store.next_node_id, store.next_rel_id);
+        let mut limits = MutationLimits {
+            max_result_payload_bytes: std::num::NonZeroUsize::new(29).unwrap(),
+            ..MutationLimits::default()
+        };
+        let error = store
+            .commit_mutations_with_limits(&mut catalog, mutations(), limits)
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("max_mutation_result_payload_bytes 29"));
+        assert_eq!(catalog.label_id("Budgeted"), None);
+        assert_eq!(store.node_count_for_label(None), 0);
+        assert_eq!(
+            (store.commit_epoch(), store.next_node_id, store.next_rel_id,),
+            before
+        );
+        // Each node result contains a seven-byte key and an eight-byte value.
+        limits.max_result_payload_bytes = std::num::NonZeroUsize::new(30).unwrap();
+        let result = store
+            .commit_mutations_with_limits(&mut catalog, mutations(), limits)
+            .unwrap();
+        assert_eq!(result.rows.len(), 2);
+        assert_eq!(result.rows[0]["node_id"], Value::Int(0));
+        assert_eq!(result.rows[1]["node_id"], Value::Int(1));
+        assert_eq!(store.node_count_for_label(None), 2);
+    }
 
     fn relational_mvcc_fixture() -> (Catalog, GraphStore) {
         use hawdb_storage::relational::{
