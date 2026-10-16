@@ -574,6 +574,8 @@ test_suite(
         ":hawdb_mvcc_publication_owner_minimal_tests",
         ":hawdb_mvcc_owner_feed_tests",
         ":hawdb_mvcc_owner_feed_minimal_tests",
+        ":hawdb_mvcc_relational_table_scope_tests",
+        ":hawdb_mvcc_relational_table_scope_minimal_tests",
         ":hawdb_branch_project_open_tests",
         ":hawdb_branch_project_open_minimal_tests",
         ":hawdb_default_consumer_tests",
@@ -1159,6 +1161,20 @@ rust_test(
         name = "hawdb_mvcc_owner_feed" + suffix + "_tests",
         crate_root = "tests/mvcc_owner_feed.rs",
         srcs = ["tests/mvcc_owner_feed.rs"],
+        edition = "2024",
+        deps = [library],
+    )
+    for suffix, library in [
+        ("", ":hawdb"),
+        ("_minimal", ":hawdb_minimal"),
+    ]
+]
+
+[
+    rust_test(
+        name = "hawdb_mvcc_relational_table_scope" + suffix + "_tests",
+        crate_root = "tests/mvcc_relational_table_scope.rs",
+        srcs = ["tests/mvcc_relational_table_scope.rs"],
         edition = "2024",
         deps = [library],
     )

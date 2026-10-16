@@ -109,6 +109,13 @@ impl GraphReadDependencies {
             .count()
     }
 
+    pub fn relational_table_domain_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::ReadRelationalTableDomain(_)))
+            .count()
+    }
+
     /// Used by trusted query collectors, including absence/domain dependencies.
     /// An ignored budget error permanently invalidates this capture.
     pub fn record(&mut self, key: VersionKey) -> std::result::Result<(), VersionWriteSetError> {
@@ -260,6 +267,7 @@ impl GraphStore {
             matches!(
                 key,
                 VersionKey::ReadNodeDomain(_)
+                    | VersionKey::ReadRelationalTableDomain(_)
                     | VersionKey::ReadNodeProperty { .. }
                     | VersionKey::ReadRelationalIndexPrefix { .. }
             )

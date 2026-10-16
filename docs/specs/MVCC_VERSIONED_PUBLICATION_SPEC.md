@@ -312,7 +312,8 @@ qualified one-parent-primary-key INNER JOIN family described below.
 A complete necessary primary-key tuple under AND records the existing relational
 row intent, including absent keys and UUID coercion shared with query/writer
 keys. Declared leading index tuples cover complete domains. Other admitted
-reads expose a Database-epoch fallback; other joins, functions,
+single-table reads retain the complete SQL table domain described below.
+Unqualified admitted JOIN scopes retain a Database-epoch fallback; other joins, functions,
 system/projection-bound sources and locking/mutation statements fail closed.
 SQL and Cypher share one sticky dependency budget. Pre-parse admission uses the
 execution frontend's PostgreSQL tokenizer to bound recursive parser/lowering/drop
@@ -414,7 +415,7 @@ path do not prove starvation freedom.
 | Version retention/admission | Existing history budget/pin models and tests | Churn/long-pin allocator/RSS and cleanup-latency qualification |
 | Publication protocol | [Finite safety model and 14 controls](../tla/VERSIONED_PROJECTION_PUBLICATION_PROOF.md), registered safety action and initial source-validation/catalog path | Complete source refinement and embedded integration |
 | Search preparation/activation | Owned single/partitioned/update candidates, selector CAS, shared source-validation facade and lifecycle model | Mem catch-up/outer-owner migration, host bindings and bounded batch receipts, size-independent activation I/O and fault/performance composition |
-| Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain, internal-ID/single-hop and relational primary-tuple/index-prefix and qualified parent-PK JOIN collectors, native cold/hot regressions | Graph composite/range/other traversal and additional relational multi-key/range/multiway-join/domain collectors, host dependencies and full completeness qualification |
+| Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain, internal-ID/single-hop and relational primary-tuple/index-prefix, canonical table domains and qualified parent-PK JOIN collectors, native cold/hot regressions | Graph composite/range/other traversal and additional relational multi-key/range/multiway-join collectors, complete host/source-scope contracts and full completeness qualification |
 | Invisible staging and durable activation | Existing `ProjectionGenerationStore` candidate/seal/head protocol and Search mutation components | Compose source validation and Search activation with complete receipt/closure and failure states |
 | Complete baseline input | Pinned graph candidate frontier, all canonical relational tables/PKs, tracked callback reads and explicit End; [conditional model/source argument](../tla/PROJECTION_FULL_SOURCE_PROOF.md) | Versioned ownership/capture/mapping contract, artifact-bound session authority and cumulative physical-work/RSS qualification |
 | Complete baseline comparison/rebuild | Native historical C set/content comparison and full single/empty/partitioned replacement from complete C input; [source argument/model](../tla/PROJECTION_FULL_REBUILD_PROOF.md) | Host binding/mapping/capture/external-vector authority, C..E overlay to avoid whole-C retries, durable receipts, incremental artifacts and short activation |
@@ -437,7 +438,8 @@ indexes, including complete group membership, payload-only changes, empty
 results and off-page updates. The new read-only summary family is added only
 after writer validation. Bounded complete index/row captures supply old/new
 membership and payload stamps; incomplete/admission cases use ReadBarrier.
-Unsupported scalar domains retain whole-epoch fallback. Nullable unique
+Unsupported scalar identities now retain the complete single-table domain
+described below; qualified JOIN fallbacks are unchanged. Nullable unique
 prefixes require nonnullable unbound suffixes; the ordinary base/JOIN selectors
 share that correctness condition. See
 [the conditional argument and model](../tla/RELATIONAL_INDEX_PREFIX_READS_PROOF.md).
@@ -525,3 +527,22 @@ must independently bind catalog/schema and mapping versions. Child fanout,
 independent vectors, first-C identity or a qualified owner baseline, post-E
 new-owner invalidation, final activation/receipts and actual Mem migration
 remain original requirements.
+
+
+## Canonical SQL table read scopes (native E-validation primitive)
+
+Qualified single-table SELECTs without a complete point/index-prefix identity
+now retain `ReadRelationalTableDomain` rather than Database epoch equality.
+Complete staged row captures stamp changed tables, including tombstones and
+payload-only updates, after writer validation and before WAL. Incomplete or
+unadmitted summaries retain ReadBarrier; schema/opaque barriers still apply.
+This preserves disjoint same-table writer validation and protects empty/off-page
+SQL scope observations against later inserts, updates and deletes. Append-store
+AppendTable is a different contract. Point/index-prefix and JOIN qualification
+remain separately observable. See [the source argument, finite model and native
+qualification](../tla/RELATIONAL_TABLE_SCOPE_PROOF.md).
+
+This is an E-validation primitive, not complete C..E stage/coverage or host
+mapping authority. The complete native session, source/target contracts,
+independent vectors, actual Mem migration, durable recovery and original
+resource/concurrency gates remain required.

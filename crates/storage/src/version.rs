@@ -114,6 +114,9 @@ pub enum VersionKey {
     /// predicate-value changes as well as membership changes and empty scans.
     /// These summaries do not participate in write-write conflict validation.
     ReadNodeDomain(Option<String>),
+    /// Read invalidation only. All row changes in one canonical SQL table,
+    /// including inserts outside the currently selected rows and payload changes.
+    ReadRelationalTableDomain(String),
     /// All result changes for nodes currently or formerly matching this exact
     /// declared scalar-index key, including updates to other properties.
     ReadNodeProperty {
@@ -158,6 +161,7 @@ impl CowPageWeight for VersionKey {
             Self::ReadNodeDomain(label) => {
                 base.saturating_add(label.as_ref().map_or(0, String::len))
             }
+            Self::ReadRelationalTableDomain(table) => base.saturating_add(table.len()),
             Self::ReadNodeProperty {
                 label,
                 property,

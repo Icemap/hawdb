@@ -62,6 +62,7 @@ STORAGE_MODELS = [
     "HawDBProjectionOwnerCapture",
     "HawDBProjectionOwnerFeedCursor",
     "HawDBProjectionLabelLookup",
+    "HawDBRelationalTableReadScope",
     "HawDBProjectionOutputVerification",
     "HawDBProjectionStagingSession",
     "HawDBProjectionChangeCapture",

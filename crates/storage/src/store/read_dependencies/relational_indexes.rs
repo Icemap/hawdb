@@ -110,9 +110,27 @@ impl GraphStore {
                 }
             }
         }
+        let mut previous_table = None;
         for change in rows {
             if !budget.visit() {
                 return record_stamp(stamps, VersionKey::ReadBarrier);
+            }
+            // Row capture includes tombstones. Stamp before skipping their
+            // absent payload; index membership alone misses payload-only writes.
+            // Only the last borrowed name is retained. Sorted/repeated rows
+            // avoid another clone, but correctness does not require sorting.
+            if previous_table != Some(change.table.as_str()) {
+                budget.bytes = budget.bytes.saturating_add(
+                    std::mem::size_of::<VersionKey>().saturating_add(change.table.len()),
+                );
+                if budget.bytes > MAX_METADATA_BYTES {
+                    return record_stamp(stamps, VersionKey::ReadBarrier);
+                }
+                record_stamp(
+                    stamps,
+                    VersionKey::ReadRelationalTableDomain(change.table.clone()),
+                )?;
+                previous_table = Some(change.table.as_str());
             }
             let Some(row) = &change.row else {
                 continue;
@@ -248,6 +266,10 @@ mod tests {
         let mut store = GraphStore::default();
         let mut catalog = Catalog::default();
         setup(&mut store, &mut catalog);
+        let mut table = store.capture_read_dependencies(32, 8192).unwrap();
+        table
+            .record(VersionKey::ReadRelationalTableDomain("rows".into()))
+            .unwrap();
         let matching = capture(&store, "g");
         let absent = capture(&store, "elsewhere");
         let first = store.begin_mutation_transaction(&catalog);
@@ -270,6 +292,13 @@ mod tests {
                 ..
             }))
         ));
+        assert!(matches!(
+            store.validate_read_dependencies(&table),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::ReadRelationalTableDomain(_),
+                ..
+            }))
+        ));
         store.validate_read_dependencies(&absent).unwrap();
     }
     #[test]
@@ -277,6 +306,10 @@ mod tests {
         let mut store = GraphStore::default();
         let mut catalog = Catalog::default();
         setup(&mut store, &mut catalog);
+        let mut table = store.capture_read_dependencies(32, 8192).unwrap();
+        table
+            .record(VersionKey::ReadRelationalTableDomain("rows".into()))
+            .unwrap();
         let domain = capture(&store, "g");
         let mut point = store.capture_read_dependencies(32, 8192).unwrap();
         point
@@ -291,6 +324,13 @@ mod tests {
         assert_eq!(store.relational_state.row_count("rows"), 1000);
         assert!(matches!(
             store.validate_read_dependencies(&domain),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::ReadBarrier,
+                ..
+            }))
+        ));
+        assert!(matches!(
+            store.validate_read_dependencies(&table),
             Err(GraphReadDependencyError::Conflict(VersionConflict {
                 key: VersionKey::ReadBarrier,
                 ..
@@ -324,6 +364,8 @@ mod tests {
                 [RelationalValue::Text("g".into())].iter(),
             )
             .unwrap();
+            let table_key = VersionKey::ReadRelationalTableDomain("rows".into());
+            let table_stamp = store.version_index.stamp(&table_key);
             let stamp = store.version_index.stamp(&key);
             set_wal_append_failpoint(failure);
             assert!(store
@@ -331,6 +373,7 @@ mod tests {
                 .is_err());
             assert_eq!(store.commit_epoch(), epoch);
             assert_eq!(store.version_index.stamp(&key), stamp);
+            assert_eq!(store.version_index.stamp(&table_key), table_stamp);
             assert_eq!(store.relational_state.row_count("rows"), 0);
             drop(read);
             drop(store);

@@ -1041,7 +1041,7 @@ fn relational_payload_deletion_aba_and_schema_changes_invalidate_point_reads() {
 }
 
 #[test]
-fn relational_or_and_partial_composite_keys_keep_the_epoch_fallback() {
+fn relational_or_and_partial_composite_keys_retain_complete_table_domains() {
     for query in [
         "SELECT body FROM records WHERE tenant = 'w' OR id = 1",
         "SELECT body FROM records WHERE tenant = 'w'",
@@ -1052,7 +1052,8 @@ fn relational_or_and_partial_composite_keys_keep_the_epoch_fallback() {
         preparation.query_sql_with_params(query, &[]).unwrap();
         let dependencies = preparation.finish().unwrap();
         assert_eq!(dependencies.exact_relational_row_count(), 0);
-        assert!(dependencies.requires_unchanged_database_epoch());
+        assert!(!dependencies.requires_unchanged_database_epoch());
+        assert_eq!(dependencies.relational_table_domain_count(), 1);
         db.query("MATCH (n:Other) SET n.value = 3").unwrap();
         let staged = seal(
             &db.projection_generation_store().unwrap(),
@@ -1060,10 +1061,8 @@ fn relational_or_and_partial_composite_keys_keep_the_epoch_fallback() {
             dependencies.source_epoch(),
             None,
         );
-        assert!(matches!(
-            db.publish_prepared_projection(&dependencies, &staged),
-            Err(ProjectionPublicationError::Dependency(_))
-        ));
+        db.publish_prepared_projection(&dependencies, &staged)
+            .unwrap();
     }
 }
 
@@ -1218,7 +1217,8 @@ fn large_relational_primary_keys_use_an_observable_bounded_fallback() {
         1
     );
     let dependencies = preparation.finish().unwrap();
-    assert!(dependencies.requires_unchanged_database_epoch());
+    assert!(!dependencies.requires_unchanged_database_epoch());
+    assert_eq!(dependencies.relational_table_domain_count(), 1);
     assert_eq!(dependencies.exact_relational_row_count(), 0);
 }
 
@@ -2336,7 +2336,7 @@ fn relational_prefix_pages_cover_membership_deletes_aba_off_page_and_absence() {
     }
 }
 #[test]
-fn relational_prefix_selection_preserves_nonnecessary_and_unsupported_fallbacks() {
+fn relational_prefix_selection_uses_table_domains_for_nonnecessary_bounds() {
     for query in [
         "SELECT body FROM thread_messages WHERE thread_storage_id = 'g' OR body = 'other'",
         "SELECT body FROM thread_messages WHERE NOT (thread_storage_id = 'g')",
@@ -2348,7 +2348,8 @@ fn relational_prefix_selection_preserves_nonnecessary_and_unsupported_fallbacks(
         let mut read = db.begin_prepared_read(limits()).unwrap();
         read.query_sql_with_params(query, &[]).unwrap();
         let dependencies = read.finish().unwrap();
-        assert!(dependencies.requires_unchanged_database_epoch(), "{query}");
+        assert!(!dependencies.requires_unchanged_database_epoch(), "{query}");
+        assert_eq!(dependencies.relational_table_domain_count(), 1);
         assert_eq!(dependencies.relational_index_prefix_count(), 0);
         db.query("CREATE (:Unrelated {id:'new'})").unwrap();
         let staged = seal(
@@ -2357,10 +2358,8 @@ fn relational_prefix_selection_preserves_nonnecessary_and_unsupported_fallbacks(
             dependencies.source_epoch(),
             None,
         );
-        assert!(matches!(
-            db.publish_prepared_projection(&dependencies, &staged),
-            Err(ProjectionPublicationError::Dependency(_))
-        ));
+        db.publish_prepared_projection(&dependencies, &staged)
+            .unwrap();
     }
 }
 
@@ -2399,7 +2398,7 @@ fn relational_prefix_can_bind_a_complete_composite_leading_tuple() {
     }
 }
 #[test]
-fn relational_prefix_float_and_oversized_equality_values_keep_epoch_barriers() {
+fn relational_prefix_float_and_oversized_equalities_use_complete_table_domains() {
     for large in [false, true] {
         let (_root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
         db.query_sql(if large {
@@ -2433,7 +2432,8 @@ fn relational_prefix_float_and_oversized_equality_values_keep_epoch_barriers() {
         );
         let dependencies = read.finish().unwrap();
         assert_eq!(dependencies.relational_index_prefix_count(), 0);
-        assert!(dependencies.requires_unchanged_database_epoch());
+        assert!(!dependencies.requires_unchanged_database_epoch());
+        assert_eq!(dependencies.relational_table_domain_count(), 1);
     }
 }
 
@@ -2481,7 +2481,11 @@ fn relational_prefix_nullable_unique_suffix_requires_complete_nonnull_binding() 
                 let dependencies = read.finish().unwrap();
                 // Only declared indexes participate in prepared prefix reads.
                 let precise = complete && !constraint;
-                assert_eq!(dependencies.requires_unchanged_database_epoch(), !precise);
+                assert!(!dependencies.requires_unchanged_database_epoch());
+                assert_eq!(
+                    dependencies.relational_table_domain_count(),
+                    usize::from(!precise)
+                );
                 assert_eq!(
                     dependencies.relational_index_prefix_count(),
                     usize::from(precise)

@@ -43,7 +43,9 @@ impl PreparedRead {
     /// One aliased INNER JOIN to a complete parent primary key collects the
     /// child scope and parent point, including absent/filtered parents. A pinned
     /// child point query may read its join fields (at most one row / 4 KiB).
-    /// Other qualified reads expose a whole-epoch fallback.
+    /// Other qualified single-table reads retain a complete table domain,
+    /// including empty scans and rows outside a selected page. Unsupported
+    /// qualified JOIN scopes retain their existing whole-epoch fallback.
     /// Other joins, functions, catalogs, projection bindings and locking reads fail
     /// closed. Metadata admission bounds SQL plus scalar parameters to 64 KiB,
     /// 1024 parameters/expression nodes and 64 nested expression levels. A lexical
@@ -107,7 +109,8 @@ impl PreparedRead {
             .ok_or_else(|| refusal("noncanonical or unknown relational table"))?;
         let key = primary_key(select, schema, parameters)?;
         let key = if matches!(key, VersionKey::Database) {
-            indexed::prefix_key(select, schema, parameters)?.unwrap_or(key)
+            indexed::prefix_key(select, schema, parameters)?
+                .unwrap_or_else(|| VersionKey::ReadRelationalTableDomain(schema.name.clone()))
         } else {
             key
         };

@@ -95,12 +95,17 @@ pub struct PreparedReadDependencies {
 }
 
 impl PreparedReadDependencies {
+    /// Complete SQL table scopes, including rows outside a query's output page.
+    pub fn relational_table_domain_count(&self) -> usize {
+        self.graph.relational_table_domain_count()
+    }
+
     pub fn source_epoch(&self) -> u64 {
         self.graph.source_epoch()
     }
 
-    /// Reports the conservative fallback used for optimizer-folded empty plans.
-    /// Qualified label domains instead admit commits outside those domains.
+    /// Reports a conservative whole-source fallback. Qualified graph/table
+    /// domains and point/index dependencies admit commits outside their scope.
     pub fn requires_unchanged_database_epoch(&self) -> bool {
         self.graph.requires_unchanged_database_epoch()
     }
