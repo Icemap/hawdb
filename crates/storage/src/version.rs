@@ -114,6 +114,9 @@ pub enum VersionKey {
     /// predicate-value changes as well as membership changes and empty scans.
     /// These summaries do not participate in write-write conflict validation.
     ReadNodeDomain(Option<String>),
+    /// Read invalidation only: every relationship change, optionally scoped to
+    /// one type name, including relationships outside visited endpoint roots.
+    ReadRelationshipDomain(Option<String>),
     /// Read invalidation only. All row changes in one canonical SQL table,
     /// including inserts outside the currently selected rows and payload changes.
     ReadRelationalTableDomain(String),
@@ -158,7 +161,7 @@ impl CowPageWeight for VersionKey {
         let base = std::mem::size_of::<Self>();
         match self {
             Self::Database | Self::Schema | Self::ReadBarrier => base,
-            Self::ReadNodeDomain(label) => {
+            Self::ReadNodeDomain(label) | Self::ReadRelationshipDomain(label) => {
                 base.saturating_add(label.as_ref().map_or(0, String::len))
             }
             Self::ReadRelationalTableDomain(table) => base.saturating_add(table.len()),

@@ -32,6 +32,8 @@ use std::fmt;
 mod indexed_nodes;
 #[path = "read_dependencies/relational_indexes.rs"]
 mod relational_indexes;
+#[path = "read_dependencies/relationship_domains.rs"]
+mod relationship_domains;
 use indexed_nodes::{record_stamp, IndexedNodeReadInvalidations};
 
 #[cfg(test)]
@@ -116,6 +118,13 @@ impl GraphReadDependencies {
             .count()
     }
 
+    pub fn relationship_domain_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::ReadRelationshipDomain(_)))
+            .count()
+    }
+
     /// Used by trusted query collectors, including absence/domain dependencies.
     /// An ignored budget error permanently invalidates this capture.
     pub fn record(&mut self, key: VersionKey) -> std::result::Result<(), VersionWriteSetError> {
@@ -125,6 +134,24 @@ impl GraphReadDependencies {
         // capture stays refused; it cannot regain validity through this path.
         if !self.refused && self.keys.contains_key(&VersionKey::Database) {
             return Ok(());
+        }
+        // Eager table/label scopes already protect their row/prefix/property
+        // keys. Preserve sticky refusal and the shared barriers; this does not
+        // subsume arbitrary physical node or adjacency reads.
+        if !self.refused {
+            let covering_scope = match &key {
+                VersionKey::RelationalRow { table, .. }
+                | VersionKey::ReadRelationalIndexPrefix { table, .. } => {
+                    Some(VersionKey::ReadRelationalTableDomain(table.clone()))
+                }
+                VersionKey::ReadNodeProperty { label, .. } => {
+                    Some(VersionKey::ReadNodeDomain(Some(label.clone())))
+                }
+                _ => None,
+            };
+            if covering_scope.is_some_and(|scope| self.keys.contains_key(&scope)) {
+                return Ok(());
+            }
         }
         let result = self.keys.record_live(key);
         self.refused |= result.is_err();
@@ -267,6 +294,7 @@ impl GraphStore {
             matches!(
                 key,
                 VersionKey::ReadNodeDomain(_)
+                    | VersionKey::ReadRelationshipDomain(_)
                     | VersionKey::ReadRelationalTableDomain(_)
                     | VersionKey::ReadNodeProperty { .. }
                     | VersionKey::ReadRelationalIndexPrefix { .. }
@@ -310,7 +338,8 @@ impl GraphStore {
         }
         let mut created = BTreeMap::new();
         let indexes = IndexedNodeReadInvalidations::new(catalog);
-        self.collect_node_read_invalidations(&indexes, ops, stamps, &mut created)
+        self.collect_node_read_invalidations(&indexes, ops, stamps, &mut created)?;
+        self.extend_relationship_read_invalidations(catalog, ops, stamps)
     }
 
     fn collect_node_read_invalidations(

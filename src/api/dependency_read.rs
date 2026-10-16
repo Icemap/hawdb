@@ -42,9 +42,12 @@ pub use staging_session::{
 mod graph_match;
 #[path = "dependency_read/owner_feed.rs"]
 mod owner_feed;
+#[path = "dependency_read/read_scopes.rs"]
+mod read_scopes;
 pub use owner_feed::{
     PreparedProjectionOwnerFeed, ProjectionOwnerBefore, ProjectionOwnerFeedItem, ProjectionOwnerId,
 };
+pub use read_scopes::ProjectionReadScopes;
 #[path = "dependency_read/projection_feed.rs"]
 mod projection_feed;
 pub use full_source::{
@@ -95,6 +98,9 @@ pub struct PreparedReadDependencies {
 }
 
 impl PreparedReadDependencies {
+    pub fn relationship_domain_count(&self) -> usize {
+        self.graph.relationship_domain_count()
+    }
     /// Complete SQL table scopes, including rows outside a query's output page.
     pub fn relational_table_domain_count(&self) -> usize {
         self.graph.relational_table_domain_count()

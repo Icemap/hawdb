@@ -226,3 +226,30 @@ tla_check(
         "BothWritersWitness",
     ]
 ]
+
+[
+    tla_check(
+        name = "HawDBRelationshipReadScope" + control + "_check",
+        module = "HawDBRelationshipReadScope.tla",
+        config = "mutants/HawDBRelationshipReadScope" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "MissingDomain",
+        "IgnoreDeletes",
+        "IgnoreProperties",
+        "IgnoreOffRoot",
+        "WrongType",
+        "IgnoreBarrier",
+        "GlobalEpochFallback",
+        "SharedWriterIntent",
+        "EarlyStamp",
+        "ReadLive",
+        "IgnoreSchema",
+        "SuccessWitness",
+        "BothWritersWitness",
+    ]
+]

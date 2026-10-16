@@ -546,3 +546,20 @@ This is an E-validation primitive, not complete C..E stage/coverage or host
 mapping authority. The complete native session, source/target contracts,
 independent vectors, actual Mem migration, durable recovery and original
 resource/concurrency gates remain required.
+
+
+## Relationship domains and pre-registered E scopes
+
+`begin_prepared_projection_owner_feed_with_scopes` admits complete named node,
+relationship-type and canonical SQL table guards on the feed's same pinned E.
+ReadRelationshipDomain covers create, payload update and delete, including
+relationships outside callback-selected endpoints. Metadata-only identity
+resolution uses the published header or borrowed same-transaction create;
+unknown identities and exhausted admission retain ReadBarrier. Installation
+follows writer validation and successful WAL/canonical publication. Existing
+scope keys subsume only their corresponding SQL row/prefix or label-property
+keys, without clearing sticky refusal or arbitrary physical dependencies.
+
+See [the source correspondence, conditional proof and finite model](../tla/RELATIONSHIP_READ_SCOPE_PROOF.md).
+This additive guard API does not authorize closed mapping, stage coverage,
+C..E source continuity or Mem activation. Full integration gates remain open.

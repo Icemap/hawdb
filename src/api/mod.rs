@@ -104,8 +104,8 @@ pub use dependency_read::{
     ProjectionOutputVerificationContext, ProjectionOutputVerificationFunction,
     ProjectionOutputVerificationSession, ProjectionOwnerBefore, ProjectionOwnerFeedItem,
     ProjectionOwnerId, ProjectionPreparedFullRebuild, ProjectionPublicationError,
-    ProjectionSourceDurability, ProjectionStagedInputs, ProjectionStagingSession,
-    ProjectionStagingSessionConfig, ProjectionStagingSessionStep,
+    ProjectionReadScopes, ProjectionSourceDurability, ProjectionStagedInputs,
+    ProjectionStagingSession, ProjectionStagingSessionConfig, ProjectionStagingSessionStep,
 };
 mod explain;
 mod graph_analytics;

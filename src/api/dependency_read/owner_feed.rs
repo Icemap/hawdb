@@ -15,6 +15,23 @@ pub struct PreparedProjectionOwnerFeed {
     failed: bool,
 }
 impl Database {
+    /// Adds admitted node/type/table guards at this feed's same immutable E.
+    /// Query dependencies outside these domains still accumulate normally.
+    /// This returns enumeration/read evidence, never a coverage receipt.
+    pub fn begin_prepared_projection_owner_feed_with_scopes(
+        &self,
+        start_epoch: u64,
+        reads: PreparedReadLimits,
+        total_feed: ProjectionFeedLimits,
+        scopes: ProjectionReadScopes<'_>,
+    ) -> std::result::Result<PreparedProjectionOwnerFeed, ProjectionFeedError> {
+        scopes.admit(reads).map_err(ProjectionFeedError::Source)?;
+        let mut feed = self.begin_prepared_projection_owner_feed(start_epoch, reads, total_feed)?;
+        scopes
+            .register(&mut feed.prepared)
+            .map_err(ProjectionFeedError::Source)?;
+        Ok(feed)
+    }
     /// Pins one immutable E and enumerates V1 owner facts after the requested C.
     /// Old capture contracts or trimmed intervals require a full baseline. This
     /// method does not pin future appends or certify a host mapping or stage.
