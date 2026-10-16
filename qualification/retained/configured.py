@@ -23,7 +23,7 @@ def configured_open(path=None):
     return db
 hawdb.open = configured_open
 @atexit.register
-def record():
-    (Path(__file__).parent.parent / "observed-limits.json").write_text(json.dumps(observations) + "\n")
+def record(output=Path(__file__).parent.parent / "observed-limits.json", dumps=json.dumps, observed=observations):
+    output.write_text(dumps(observed) + "\n")
 sys.argv = sys.argv[1:]
 runpy.run_path(sys.argv[0], run_name="__main__")
