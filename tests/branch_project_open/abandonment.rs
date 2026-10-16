@@ -3,6 +3,7 @@ use hawdb::{BranchAbandonmentLimits, BranchReclamationLimits};
 use hawdb_storage::branch_catalog::{self, BranchState, CreateOutcome};
 use hawdb_storage::branch_head::read_branch_head;
 use hawdb_storage::immutable_object::{ImmutableObjectStore, ObjectKind, ObjectReference};
+use std::path::Path;
 
 fn damaged_pending(project: &Project, durability: DurabilityPolicy) -> (Database, hawdb::Uuid) {
     let mut writer = Database::open_with_durability(&project.0, durability).unwrap();
@@ -41,6 +42,63 @@ fn archived_file(report: &hawdb::BranchAbandonmentReport, relative: &str) -> Pat
         .position(|file| file["path"] == relative)
         .unwrap();
     report.quarantine_directory.join(format!("file-{index}"))
+}
+
+#[test]
+fn quarantine_evidence_uses_an_independent_retryable_budget() {
+    let project = Project::new();
+    let (writer, child) = damaged_pending(&project, DurabilityPolicy::default());
+    std::fs::write(child_head(&project, child), b"damaged pending head").unwrap();
+    let orphan_path = orphan(&project);
+    drop(writer);
+    let mut database = Database::open(&project.0).unwrap();
+    let plan = database
+        .inspect_pending_branch_abandonment(child, Default::default())
+        .unwrap();
+    database
+        .abandon_pending_branch(plan.acknowledge_potential_data_loss())
+        .unwrap();
+    fn bytes(directory: &Path) -> u64 {
+        std::fs::read_dir(directory)
+            .unwrap()
+            .map(|entry| {
+                let entry = entry.unwrap();
+                let metadata = entry.metadata().unwrap();
+                if metadata.is_dir() {
+                    bytes(&entry.path())
+                } else {
+                    metadata.len()
+                }
+            })
+            .sum()
+    }
+    let object_bytes = bytes(&project.0.join("branches/objects/objects"));
+    assert!(plan.evidence_bytes() > object_bytes);
+    let mut limits = BranchReclamationLimits {
+        max_bytes: object_bytes,
+        evidence_limits: BranchAbandonmentLimits {
+            max_bytes: 1,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let error = database.reclaim_branch_storage(limits).unwrap_err();
+    assert!(matches!(
+        error,
+        HawDBError::BranchEvidenceBudgetExceeded {
+            resource: "bytes",
+            limit: 1,
+            ..
+        }
+    ));
+    assert!(orphan_path.exists());
+    assert!(child_head(&project, child).exists());
+    limits.evidence_limits = Default::default();
+    let report = database.reclaim_branch_storage(limits).unwrap();
+    assert!(!report.deferred_for_active_leases);
+    assert!(!orphan_path.exists());
+    assert!(!child_head(&project, child).exists());
+    assert_eq!(values(&mut database).len(), 2);
 }
 
 #[test]

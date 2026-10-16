@@ -858,6 +858,7 @@ pub struct GraphStore {
     /// work can request admission. The store never constructs its own.
     runtime_governor: Option<Arc<dyn hawdb_storage::background::BackgroundWorkAdmission>>,
     branch_lease: Option<Arc<hawdb_storage::ownership::DatabaseDirectoryLease>>,
+    branch_root_pin: Option<Arc<crate::branch_root_pins::RootPin>>,
     branch_runtime_owner: Option<Arc<crate::file_descriptors::AdmittedRuntimeOwner>>,
     snapshot_file_context: Option<crate::file_descriptors::FileOpenContext>,
     durable: Option<DurableStore>,
@@ -1788,6 +1789,7 @@ impl GraphStore {
             projection_generations,
             runtime_governor: None,
             branch_lease: None,
+            branch_root_pin: None,
             branch_runtime_owner: None,
             snapshot_file_context: None,
             durable: Some(durable),
@@ -2257,6 +2259,7 @@ impl GraphStore {
             projection_generations: None,
             runtime_governor: self.runtime_governor.clone(),
             branch_lease: self.branch_lease.clone(),
+            branch_root_pin: self.branch_root_pin.clone(),
             branch_runtime_owner: self.branch_runtime_owner.clone(),
             snapshot_file_context: self.file_descriptor_context(),
             durable: None,

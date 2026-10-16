@@ -1,6 +1,6 @@
 //! Bounded maintenance for a live branch project's immutable storage.
 
-use crate::branch_catalog::{self, BranchReclamationPath, CatalogMetadataLease};
+use crate::branch_catalog::{self, BranchReclamationPath};
 use crate::branch_head::BranchHead;
 use crate::error::{HawDBError, Result};
 use crate::file_io as fs;
@@ -16,6 +16,9 @@ use std::time::Instant;
 pub struct BranchReclamationLimits {
     pub max_objects: usize,
     pub max_bytes: u64,
+    /// Historical quarantine verification has a separate budget from the
+    /// current object namespace and runs outside publication serialization.
+    pub evidence_limits: crate::branch_abandonment::BranchAbandonmentLimits,
 }
 
 impl Default for BranchReclamationLimits {
@@ -23,13 +26,18 @@ impl Default for BranchReclamationLimits {
         Self {
             max_objects: 100_000,
             max_bytes: 1024 * 1024 * 1024,
+            evidence_limits: Default::default(),
         }
     }
 }
 
 impl BranchReclamationLimits {
     pub(crate) fn validate(self) -> Result<()> {
-        if self.max_objects == 0 || self.max_bytes == 0 {
+        if self.max_objects == 0
+            || self.max_bytes == 0
+            || self.evidence_limits.max_files == 0
+            || self.evidence_limits.max_bytes == 0
+        {
             return Err(HawDBError::Semantic(
                 "branch reclamation limits must be positive".into(),
             ));
@@ -70,13 +78,15 @@ pub(crate) fn reclaim_owned_project(
     let directory = catalog_path.parent().ok_or_else(|| {
         HawDBError::StorageIntegrity("branch catalog has no project directory".into())
     })?;
-    // An exclusive borrow of the sole runtime lease proves the owner has no
-    // readers or candidates. Metadata serialization excludes new admissions
-    // and catalog changes throughout inventory, mark and sweep. An unrelated
-    // live owner still defers the entire operation, including other processes.
-    let _metadata = CatalogMetadataLease::acquire_blocking(directory)?;
+    // Registered owners declare historical and prepared roots. Metadata
+    // serialization excludes new root registrations and publication throughout
+    // the complete mark/sweep; unregistered owners still defer collection.
+    let crate::branch_abandonment::ReclamationSnapshot {
+        catalog,
+        proofs,
+        metadata: _metadata,
+    } = crate::branch_abandonment::prepare_reclamation(catalog_path, limits.evidence_limits)?;
     let started = Instant::now();
-    let catalog = branch_catalog::read_catalog(catalog_path)?;
     if !catalog.branches.iter().any(|record| {
         *record.id.as_uuid().as_bytes() == head.branch_id
             && record.state == branch_catalog::BranchState::Ready
@@ -85,7 +95,6 @@ pub(crate) fn reclaim_owned_project(
             "reclamation owner is no longer a ready catalog branch".into(),
         ));
     }
-    let proofs = crate::branch_abandonment::reclamation_evidence(directory, &catalog, limits)?;
     let paths: Vec<_> = catalog
         .branches
         .iter()
@@ -98,8 +107,15 @@ pub(crate) fn reclaim_owned_project(
             }
         })
         .collect();
-    let branches = branch_catalog::reclamation_entries(&catalog, &paths, Some((owner, head)))
-        .map_err(HawDBError::from)?;
+    let registered = branch_catalog::reclamation_entries_with_pins(
+        &catalog,
+        &paths,
+        (owner, head),
+        limits.max_objects,
+        &_metadata,
+    )
+    .map_err(HawDBError::from)?;
+    let branches = registered.branches;
     let mut report = if branches.iter().any(|branch| branch.active_lease) {
         BranchReclamationReport::deferred()
     } else {
@@ -112,7 +128,7 @@ pub(crate) fn reclaim_owned_project(
             .filter(|reference| reference.kind == ObjectKind::SealedRoot)
             .map(|reference| (*reference.sha256.as_bytes(), *reference))
             .collect();
-        let retained_roots = catalog
+        let mut retained_roots = catalog
             .branches
             .iter()
             .filter(|record| record.state != branch_catalog::BranchState::Deleted)
@@ -137,6 +153,7 @@ pub(crate) fn reclaim_owned_project(
                 })
             })
             .collect::<Result<Vec<_>>>()?;
+        retained_roots.extend(registered.roots);
         let inventory_branches = BranchReclamationInventory {
             objects: inventory.objects,
             branches,

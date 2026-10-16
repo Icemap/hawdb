@@ -42,6 +42,8 @@ pub mod branch_head;
 pub mod branch_project;
 #[doc(hidden)]
 pub mod branch_reclamation;
+#[doc(hidden)]
+pub mod branch_root_pins;
 pub mod cache;
 pub mod canonical;
 pub mod canonical_adjacency;

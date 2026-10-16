@@ -1,6 +1,7 @@
 //! GraphStore integration for immutable-root publication and WAL handoff.
 
 use super::{GraphStore, MANIFEST_FILE};
+use crate::branch_root_pins::{RootPin, RootRegistry};
 use crate::checkpoint_closure::CheckpointArtifactInput;
 use crate::config::{DurabilityPolicy, RecoveryMode, WalReplayConfig};
 use crate::durable_manifest::DurableManifest;
@@ -21,18 +22,18 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-// Three retained target handles (UUID/runtime locks and mutable WAL), the
+// Four retained target handles (UUID/registry/runtime locks and mutable WAL), the
 // bounded segment-read wave, and four catalog/publication temporary handles.
 // Additional retained recovery artifacts still obey the same project cap.
 const MIN_BRANCH_ADMISSION_DESCRIPTORS: usize =
-    3 + crate::scan::SHARED_SEGMENT_READ_WORKER_LIMIT + 4;
+    4 + crate::scan::SHARED_SEGMENT_READ_WORKER_LIMIT + 4;
 
 /// A sealed source with ownership retained until child publication completes.
 /// No graph/schema runtime or checkpoint data is materialized by this path.
 #[derive(Debug)]
 #[doc(hidden)]
 pub struct SealedBranchSource {
-    _lease: DatabaseDirectoryLease,
+    _root_pin: Arc<RootPin>,
     catalog_path: PathBuf,
     head_path: PathBuf,
     head: branch_head::BranchHead,
@@ -104,6 +105,7 @@ pub struct PreparedImmutableRootHandoff {
     // A prepared candidate can outlive the exclusive borrow of its writer.
     // Keep maintenance from treating that writer as the only reachability pin.
     _source_lease: Option<Arc<DatabaseDirectoryLease>>,
+    _root_pin: Option<Arc<RootPin>>,
 }
 
 /// Immutable checkpoint closure prepared while the authoritative writer keeps
@@ -337,7 +339,8 @@ impl GraphStore {
     }
 
     /// Reclaims unreachable project objects while retaining this writable
-    /// runtime. Shared snapshots and prepared handoffs defer the sweep.
+    /// runtime. Registered snapshots and prepared handoffs contribute exact
+    /// roots; an unregistered active owner still defers the sweep.
     #[doc(hidden)]
     pub fn reclaim_branch_storage(
         &mut self,
@@ -356,21 +359,21 @@ impl GraphStore {
         let branch = durable.branch_runtime.as_ref().ok_or_else(|| {
             HawDBError::Storage("branch reclamation requires an admitted project".into())
         })?;
-        let lease = self.branch_lease.as_mut().ok_or_else(|| {
+        let lease = self.branch_lease.as_ref().ok_or_else(|| {
             HawDBError::StorageIntegrity("admitted branch has no ownership lease".into())
         })?;
-        // get_mut also excludes Weak owners that could acquire another pin.
-        // No snapshot can be created concurrently through this &mut receiver.
-        let Some(owner) = Arc::get_mut(lease) else {
-            return Ok(crate::branch_reclamation::BranchReclamationReport::deferred());
-        };
         crate::branch_reclamation::reclaim_owned_project(
             &branch.catalog_path,
             &branch.immutable_store_root,
-            owner,
+            lease,
             &branch.head,
             limits,
         )
+    }
+
+    #[doc(hidden)]
+    pub fn branch_reclamation_pin(&self) -> Option<Arc<RootPin>> {
+        self.branch_root_pin.clone()
     }
 
     #[doc(hidden)]
@@ -564,6 +567,14 @@ impl GraphStore {
         request: BranchAdmissionRequest<'_>,
         expected_commit_epoch: u64,
     ) -> std::result::Result<SealedBranchSource, BranchAdmissionError> {
+        Self::seal_branch_from_head_with_revalidation(request, expected_commit_epoch, || {})
+    }
+
+    fn seal_branch_from_head_with_revalidation(
+        request: BranchAdmissionRequest<'_>,
+        expected_commit_epoch: u64,
+        before_publication: impl FnOnce(),
+    ) -> std::result::Result<SealedBranchSource, BranchAdmissionError> {
         let project_path =
             request
                 .catalog_path
@@ -604,6 +615,11 @@ impl GraphStore {
                 ))?;
         let lease =
             DatabaseDirectoryLease::acquire(directory).map_err(BranchAdmissionError::Lease)?;
+        // GC drops its per-branch lease probes before inventory and sweep.
+        // Keep the shared metadata barrier from before reading the selector
+        // through publication and registration of its replacement root.
+        let metadata = branch_catalog::CatalogMetadataLease::acquire_blocking(project_path)
+            .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
         let (head, mut root, mut objects) = (|| -> Result<_> {
             let head = branch_head::read_branch_head(request.head_path)
                 .map_err(HawDBError::from_storage_error)?;
@@ -638,11 +654,13 @@ impl GraphStore {
                 "branch source revision is stale: expected {expected_commit_epoch}, found {commit_epoch}"
             ))));
         }
-        ready_branch_record(
+        ready_branch_record_with_metadata(
             request.catalog_path,
             request.branch_id,
             request.expected_metadata_revision,
+            &metadata,
         )?;
+        before_publication();
         let head = if end_lsn == head.active_wal.replay_start_lsn {
             head
         } else {
@@ -695,8 +713,23 @@ impl GraphStore {
             })()
             .map_err(BranchAdmissionError::Recovery)?
         };
+        let root_pin = RootRegistry::open_with_metadata(
+            request
+                .catalog_path
+                .parent()
+                .ok_or(BranchAdmissionError::IdentityMismatch(
+                    "catalog has no directory",
+                ))?,
+            directory,
+            head.project_id,
+            head.branch_id,
+            Arc::new(lease),
+            head.sealed_root,
+            &metadata,
+        )
+        .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
         Ok(SealedBranchSource {
-            _lease: lease,
+            _root_pin: root_pin,
             catalog_path: request.catalog_path.to_path_buf(),
             head_path: request.head_path.to_path_buf(),
             head,
@@ -853,8 +886,10 @@ impl GraphStore {
                 .ok_or(BranchAdmissionError::IdentityMismatch(
                     "branch head has no branch directory",
                 ))?;
-        let branch_lease = DatabaseDirectoryLease::acquire(branch_directory)
-            .map_err(BranchAdmissionError::Lease)?;
+        let branch_lease = Arc::new(
+            DatabaseDirectoryLease::acquire(branch_directory)
+                .map_err(BranchAdmissionError::Lease)?,
+        );
         if !derived_repair {
             super::derived_repair::reject_pending_derived_artifact_repair(branch_directory)
                 .map_err(BranchAdmissionError::Recovery)?;
@@ -977,6 +1012,20 @@ impl GraphStore {
                 request.expected_metadata_revision,
             )?;
             validate_admission_binding(&after, &head, &root, root_reference)?;
+            store.branch_root_pin =
+                Some(
+                    RootRegistry::open(
+                        request.catalog_path.parent().ok_or(
+                            BranchAdmissionError::IdentityMismatch("catalog has no directory"),
+                        )?,
+                        branch_directory,
+                        head.project_id,
+                        head.branch_id,
+                        Arc::clone(&branch_lease),
+                        head.sealed_root,
+                    )
+                    .map_err(|error| BranchAdmissionError::Recovery(error.into()))?,
+                );
             store.storage_recovery_report.open_timings.total_open_micros =
                 super::elapsed_micros(total_open_started);
             Ok((store, catalog))
@@ -985,7 +1034,7 @@ impl GraphStore {
         // cleanup before another opener can acquire ownership of this UUID.
         match result {
             Ok((mut store, catalog)) => {
-                store.branch_lease = Some(Arc::new(branch_lease));
+                store.branch_lease = Some(branch_lease);
                 let durable = store
                     .durable
                     .as_mut()
@@ -1105,6 +1154,14 @@ impl GraphStore {
         immutable_store_root: impl AsRef<Path>,
     ) -> Result<PreparedImmutableRootHandoff> {
         self.ensure_usable()?;
+        let registry = self
+            .branch_root_pin
+            .as_ref()
+            .map(|pin| Arc::clone(pin.registry()));
+        let publication = registry
+            .as_ref()
+            .map(|registry| registry.publication())
+            .transpose()?;
         let durable = self.durable.as_ref().ok_or_else(|| {
             HawDBError::Storage("immutable root handoff requires durable storage".to_string())
         })?;
@@ -1125,6 +1182,17 @@ impl GraphStore {
         }
         let max_active_wal_bytes = durable.max_wal_bytes.unwrap_or(u64::MAX);
         let immutable_store_root = immutable_store_root.as_ref().to_path_buf();
+        if let Some(branch) = &durable.branch_runtime
+            && fs::canonicalize(&immutable_store_root)?
+                != fs::canonicalize(&branch.immutable_store_root)?
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "admitted publication must use its project object store".into(),
+            ));
+        }
+        if let Some(publication) = &publication {
+            publication.check_capacity()?;
+        }
         let mut objects = ImmutableObjectStore::open(&immutable_store_root)
             .map_err(HawDBError::from_storage_error)?;
         let rotation = match &durable.branch_runtime {
@@ -1163,11 +1231,23 @@ impl GraphStore {
         };
 
         let root = publish_sealed_root(durable, self.commit_epoch, rotation.sealed, &mut objects)?;
+        let root_pin = publication
+            .as_ref()
+            .map(|publication| {
+                publication
+                    .pin(
+                        root.object_reference()
+                            .map_err(HawDBError::from_storage_error)?,
+                    )
+                    .map_err(HawDBError::from)
+            })
+            .transpose()?;
         Ok(PreparedImmutableRootHandoff {
             root,
             rotation,
             immutable_store_root,
             _source_lease: self.branch_lease.clone(),
+            _root_pin: root_pin,
         })
     }
 
@@ -1201,6 +1281,14 @@ impl GraphStore {
         expected_head_generation: u64,
     ) -> Result<branch_head::BranchHead> {
         self.ensure_usable()?;
+        let registry = self
+            .branch_root_pin
+            .as_ref()
+            .map(|pin| Arc::clone(pin.registry()));
+        let _publication = registry
+            .as_ref()
+            .map(|registry| registry.publication())
+            .transpose()?;
         let durable = self.durable.as_mut().ok_or_else(|| {
             HawDBError::Storage("immutable root handoff requires durable storage".to_string())
         })?;
@@ -1209,6 +1297,15 @@ impl GraphStore {
             .root
             .object_reference()
             .map_err(HawDBError::from_storage_error)?;
+        if let Some(current_pin) = &self.branch_root_pin
+            && !prepared._root_pin.as_ref().is_some_and(|pin| {
+                pin.root() == root_reference && Arc::ptr_eq(pin.registry(), current_pin.registry())
+            })
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "prepared root does not match its registered pin".into(),
+            ));
+        }
         if let Some(publication) = durable
             .branch_runtime
             .as_ref()
@@ -1266,6 +1363,7 @@ impl GraphStore {
         durable.wal_bytes = head.active_wal.byte_length;
         durable.wal_commit_epoch = self.commit_epoch;
         durable.wal_tail_repair = None;
+        self.branch_root_pin = prepared._root_pin;
         if let Some(branch) = &mut durable.branch_runtime {
             branch.head = head;
             branch.root = Arc::new(prepared.root);
@@ -2013,6 +2111,20 @@ pub(super) fn ready_branch_record(
         }
         Err(error) => return Err(BranchAdmissionError::Catalog(error)),
     };
+    ready_branch_record_with_metadata(
+        catalog_path,
+        branch_id,
+        expected_metadata_revision,
+        &_metadata_lease,
+    )
+}
+
+fn ready_branch_record_with_metadata(
+    catalog_path: &Path,
+    branch_id: branch_catalog::BranchId,
+    expected_metadata_revision: u64,
+    _metadata: &branch_catalog::CatalogMetadataLease,
+) -> std::result::Result<ReadyBranchRecord, BranchAdmissionError> {
     let catalog =
         branch_catalog::read_catalog(catalog_path).map_err(BranchAdmissionError::Catalog)?;
     let branch = catalog
@@ -2879,6 +2991,88 @@ mod tests {
             assert_eq!(child.store().commit_epoch(), epoch);
             assert_eq!(child.store().relational_state().row_count("messages"), 2);
             assert_eq!(child.store().node_count_for_label(None), 3);
+        }
+    }
+
+    #[test]
+    fn closed_source_seal_excludes_gc_before_publishing_its_wal_and_root() {
+        for durability in [
+            DurabilityPolicy::SyncOnEveryWrite,
+            DurabilityPolicy::SyncOnCheckpoint,
+        ] {
+            let fixture = BranchFixture::new();
+            let mut main = fixture.admit(fixture.main, durability);
+            write_schema_and_graph(&mut main);
+            let (store, catalog) = main.store_and_catalog_mut();
+            store.checkpoint(catalog).unwrap();
+            let old_head = *main.head();
+            write_row(&mut main, "closed-source-wal");
+            let epoch = main.store().commit_epoch();
+            drop(main);
+            let catalog = branch_catalog::read_catalog(&fixture.catalog_path).unwrap();
+            let record = catalog
+                .branches
+                .iter()
+                .find(|record| record.id == fixture.main)
+                .unwrap();
+            let mut checked = false;
+            let source = GraphStore::seal_branch_from_head_with_revalidation(
+                BranchAdmissionRequest {
+                    catalog_path: &fixture.catalog_path,
+                    branch_id: fixture.main,
+                    expected_metadata_revision: record.metadata_revision,
+                    head_path: &fixture.head_path(fixture.main),
+                    immutable_store_root: &fixture.objects,
+                    durability,
+                    replay_config: WalReplayConfig::default(),
+                },
+                epoch,
+                || {
+                    // Pause the real seal before publishing immutable objects.
+                    // A GC on another thread must fail to enter mark/sweep.
+                    // No timeout or scheduling assumption establishes exclusion.
+                    let project = fixture.project.clone();
+                    let error = std::thread::spawn(move || {
+                        branch_catalog::CatalogMetadataLease::acquire(&project)
+                            .unwrap_err()
+                            .kind()
+                    })
+                    .join()
+                    .unwrap();
+                    assert_eq!(error, std::io::ErrorKind::WouldBlock);
+                    assert_eq!(
+                        branch_head::read_branch_head(&fixture.head_path(fixture.main)).unwrap(),
+                        old_head
+                    );
+                    checked = true;
+                },
+            )
+            .unwrap();
+            assert!(checked);
+            let head = *source.head();
+            assert_ne!(head.sealed_root, old_head.sealed_root);
+            let _metadata =
+                branch_catalog::CatalogMetadataLease::acquire_blocking(&fixture.project).unwrap();
+            let mut objects = ImmutableObjectStore::open(&fixture.objects).unwrap();
+            let inventory = objects.inventory(100_000, 1024 * 1024 * 1024).unwrap();
+            objects
+                .reclaim_unreachable(
+                    &inventory.objects,
+                    &[old_head.sealed_root, head.sealed_root],
+                )
+                .unwrap();
+            let root = SealedRoot::decode(&objects.read(head.sealed_root).unwrap()).unwrap();
+            assert_eq!(root.commit_epoch, epoch);
+            assert!(!root.sealed_wals.is_empty());
+            for wal in &root.sealed_wals {
+                objects.read(wal.object).unwrap();
+            }
+            drop(_metadata);
+            drop(source);
+            let reopened = fixture.admit(fixture.main, durability);
+            assert_eq!(reopened.store().commit_epoch(), epoch);
+            assert_eq!(reopened.store().relational_state().row_count("messages"), 2);
+            assert_eq!(reopened.store().node_count_for_label(None), 3);
         }
     }
 
