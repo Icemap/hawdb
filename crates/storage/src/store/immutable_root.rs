@@ -3066,7 +3066,7 @@ mod tests {
                     // Pause the real seal before publishing immutable objects.
                     // A GC on another thread must fail to enter mark/sweep.
                     // No timeout or scheduling assumption establishes exclusion.
-                    let project = fixture.project.clone();
+                    let project = fixture.catalog_path.parent().unwrap().to_owned();
                     let error = std::thread::spawn(move || {
                         branch_catalog::CatalogMetadataLease::acquire(&project)
                             .unwrap_err()
@@ -3086,8 +3086,10 @@ mod tests {
             assert!(checked);
             let head = *source.head();
             assert_ne!(head.sealed_root, old_head.sealed_root);
-            let _metadata =
-                branch_catalog::CatalogMetadataLease::acquire_blocking(&fixture.project).unwrap();
+            let _metadata = branch_catalog::CatalogMetadataLease::acquire_blocking(
+                fixture.catalog_path.parent().unwrap(),
+            )
+            .unwrap();
             let mut objects = ImmutableObjectStore::open(&fixture.objects).unwrap();
             let inventory = objects.inventory(100_000, 1024 * 1024 * 1024).unwrap();
             objects
