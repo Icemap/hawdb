@@ -33,6 +33,22 @@ impl ProjectionFeedRead<'_> {
     pub fn source_epoch(&self) -> u64 {
         self.source_epoch
     }
+    /// Resolves a known mapping label against this same source catalog, including
+    /// when an owner's node has been deleted. Returns a scalar without copying
+    /// catalog metadata. Finished dependencies validate explicit schema changes;
+    /// absent names also retain a node-domain guard for implicit label creation.
+    pub fn graph_label_id(&self, name: &str) -> Result<Option<u32>> {
+        self.with_read(|read| {
+            read.read.store.ensure_usable()?;
+            let label = read.read.catalog.label_id(name).map(|label| label.0);
+            if label.is_none() {
+                // CREATE can introduce a label implicitly without a Schema WAL
+                // op. Protect the observed absence with its exact node domain.
+                super::record_node_domain(name, &mut read.dependencies.graph)?;
+            }
+            Ok(label)
+        })
+    }
     fn with_read<T>(&self, operation: impl FnOnce(&mut PreparedRead) -> Result<T>) -> Result<T> {
         let result = self
             .read

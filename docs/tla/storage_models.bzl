@@ -60,6 +60,8 @@ STORAGE_MODELS = [
     "HawDBProjectionFullRebuild",
     "HawDBProjectionOwnerOverlay",
     "HawDBProjectionOwnerCapture",
+    "HawDBProjectionOwnerFeedCursor",
+    "HawDBProjectionLabelLookup",
     "HawDBProjectionOutputVerification",
     "HawDBProjectionStagingSession",
     "HawDBProjectionChangeCapture",

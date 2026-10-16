@@ -174,3 +174,29 @@ tla_check(
     )
     for control in ["TrustLegacyFloor", "DropOwnerOnly", "ForgetTrimFloor", "PublishBeforeWal", "IgnoreMissingRows", "UpgradeWitness"]
 ]
+
+[
+    tla_check(
+        name = "HawDBProjectionOwnerFeedCursor" + control + "_check",
+        module = "HawDBProjectionOwnerFeedCursor.tla",
+        config = "mutants/HawDBProjectionOwnerFeedCursor" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["ResetTotals", "RefundDeferral", "IgnoreMetadataWork", "SkipItem", "IgnoreError", "DropEnd", "ReadLive", "LateAdmission", "TrustLegacyFloor", "IgnorePreimageWork", "IgnorePreimageBytes", "DropRepeatedOwner", "CompleteWitness", "DeferredWitness"]
+]
+
+[
+    tla_check(
+        name = "HawDBProjectionLabelLookup" + control + "_check",
+        module = "HawDBProjectionLabelLookup.tla",
+        config = "mutants/HawDBProjectionLabelLookup" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["IgnoreAbsentGuard", "IgnoreSchemaBarrier", "WrongDomain", "GlobalEpochFallback", "SuccessWitness"]
+]

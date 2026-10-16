@@ -40,6 +40,11 @@ pub use staging_session::{
 };
 #[path = "dependency_read/graph_match.rs"]
 mod graph_match;
+#[path = "dependency_read/owner_feed.rs"]
+mod owner_feed;
+pub use owner_feed::{
+    PreparedProjectionOwnerFeed, ProjectionOwnerBefore, ProjectionOwnerFeedItem, ProjectionOwnerId,
+};
 #[path = "dependency_read/projection_feed.rs"]
 mod projection_feed;
 pub use full_source::{

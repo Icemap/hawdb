@@ -380,7 +380,8 @@ use search_projection_change_log::SearchProjectionChangeLog;
 #[doc(hidden)]
 pub use search_projection_change_log::{
     ProjectionFeedCursor, ProjectionFeedError, ProjectionFeedItem, ProjectionFeedLimits,
-    ProjectionFeedResource, ProjectionFeedStep, ProjectionFeedUsage,
+    ProjectionFeedResource, ProjectionFeedStep, ProjectionFeedUsage, ProjectionOwnerBefore,
+    ProjectionOwnerFeedCursor, ProjectionOwnerFeedItem, ProjectionOwnerId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU64, NonZeroUsize};
@@ -2029,6 +2030,24 @@ impl GraphStore {
     ) -> std::result::Result<ProjectionFeedCursor, ProjectionFeedError> {
         self.ensure_usable().map_err(ProjectionFeedError::Source)?;
         ProjectionFeedCursor::capture(
+            &self.search_projection_graph_changes,
+            self.search_projection_change_log_start_epoch,
+            self.commit_epoch,
+            start_epoch,
+            limits,
+        )
+    }
+
+    /// Captures versioned borrowed owner input at one immutable source boundary.
+    /// This does not certify host mapping, staged coverage or a visible cursor.
+    #[doc(hidden)]
+    pub fn capture_projection_owner_feed(
+        &self,
+        start_epoch: u64,
+        limits: ProjectionFeedLimits,
+    ) -> std::result::Result<ProjectionOwnerFeedCursor, ProjectionFeedError> {
+        self.ensure_usable().map_err(ProjectionFeedError::Source)?;
+        ProjectionOwnerFeedCursor::capture(
             &self.search_projection_graph_changes,
             self.search_projection_change_log_start_epoch,
             self.commit_epoch,

@@ -501,3 +501,27 @@ oracle and does not confer V1 completeness.
 See [the contract, source correspondence, tests and finite recovery model](../tla/PROJECTION_OWNER_CAPTURE_PROOF.md).
 These internal facts are prerequisites for the original complete bounded C..E
 session and actual Mem integration, not coverage or publication authority.
+
+
+## Bounded V1 owner feed (native enumeration)
+
+`begin_prepared_projection_owner_feed` returns an owned immutable E context and
+bounded source cursor. It enumerates physical graph owner changes with borrowed
+preimages, existing relational keys and an explicit End; it does not expose
+legacy document deletion IDs as owner identity. The cursor applies both resume
+floors, shares the legacy feed's private admission/state machine and preserves
+repeated transaction inputs. Pinned catalog label-ID lookup supports deleted
+owners without a mutable source escape. Missing label names retain precise
+node-domain dependencies for implicit creation; explicit DDL retains the schema
+barrier. Unrelated property writes do not require whole-epoch validation.
+Query failure, callback failure/panic,
+source poison, missing V1 facts and exhausted admission prevent completion.
+
+See [the conditional prefix/admission argument, finite owner-input model and
+native evidence](../tla/PROJECTION_OWNER_FEED_PROOF.md). End and finish return
+enumeration/dependency evidence only. They are not a baseline/mapping/stage or
+watermark receipt. Empty SQL DDL can produce no owner input, so a C..E session
+must independently bind catalog/schema and mapping versions. Child fanout,
+independent vectors, first-C identity or a qualified owner baseline, post-E
+new-owner invalidation, final activation/receipts and actual Mem migration
+remain original requirements.

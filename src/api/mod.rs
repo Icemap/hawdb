@@ -91,20 +91,21 @@ mod canonical_snapshot;
 mod concurrent;
 mod dependency_read;
 pub use dependency_read::{
-    PreparedProjectionFeed, PreparedProjectionFullSource, PreparedRead, PreparedReadDependencies,
-    PreparedReadLimits, ProjectionBaselineComparisonConfig, ProjectionBaselineComparisonSession,
-    ProjectionBaselineComparisonStep, ProjectionBaselineMappingContext,
-    ProjectionBaselineMappingFunction, ProjectionBaselineMappingLimits, ProjectionFeedError,
-    ProjectionFeedItem, ProjectionFeedLimits, ProjectionFeedRead, ProjectionFeedResource,
-    ProjectionFeedStep, ProjectionFeedUsage, ProjectionFullRebuildConfig,
-    ProjectionFullRebuildSession, ProjectionFullRebuildStep, ProjectionFullSourceItem,
-    ProjectionFullSourceLimits, ProjectionMappingContext, ProjectionMappingFunction,
-    ProjectionMappingInput, ProjectionMappingLimits, ProjectionMappingStatus,
-    ProjectionMappingUsage, ProjectionMatchedBaseline, ProjectionOutputVerificationContext,
-    ProjectionOutputVerificationFunction, ProjectionOutputVerificationSession,
-    ProjectionPreparedFullRebuild, ProjectionPublicationError, ProjectionSourceDurability,
-    ProjectionStagedInputs, ProjectionStagingSession, ProjectionStagingSessionConfig,
-    ProjectionStagingSessionStep,
+    PreparedProjectionFeed, PreparedProjectionFullSource, PreparedProjectionOwnerFeed,
+    PreparedRead, PreparedReadDependencies, PreparedReadLimits, ProjectionBaselineComparisonConfig,
+    ProjectionBaselineComparisonSession, ProjectionBaselineComparisonStep,
+    ProjectionBaselineMappingContext, ProjectionBaselineMappingFunction,
+    ProjectionBaselineMappingLimits, ProjectionFeedError, ProjectionFeedItem, ProjectionFeedLimits,
+    ProjectionFeedRead, ProjectionFeedResource, ProjectionFeedStep, ProjectionFeedUsage,
+    ProjectionFullRebuildConfig, ProjectionFullRebuildSession, ProjectionFullRebuildStep,
+    ProjectionFullSourceItem, ProjectionFullSourceLimits, ProjectionMappingContext,
+    ProjectionMappingFunction, ProjectionMappingInput, ProjectionMappingLimits,
+    ProjectionMappingStatus, ProjectionMappingUsage, ProjectionMatchedBaseline,
+    ProjectionOutputVerificationContext, ProjectionOutputVerificationFunction,
+    ProjectionOutputVerificationSession, ProjectionOwnerBefore, ProjectionOwnerFeedItem,
+    ProjectionOwnerId, ProjectionPreparedFullRebuild, ProjectionPublicationError,
+    ProjectionSourceDurability, ProjectionStagedInputs, ProjectionStagingSession,
+    ProjectionStagingSessionConfig, ProjectionStagingSessionStep,
 };
 mod explain;
 mod graph_analytics;

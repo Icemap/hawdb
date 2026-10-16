@@ -8,6 +8,25 @@ use crate::relational::{RelationalKey, RelationalPrimaryKeyChangeCapture, Relati
 use crate::{HawDBError, Result};
 use std::num::NonZeroUsize;
 
+#[path = "cursor/owner.rs"]
+mod owner;
+pub use owner::{
+    ProjectionOwnerBefore, ProjectionOwnerFeedCursor, ProjectionOwnerFeedItem, ProjectionOwnerId,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FeedKind {
+    Legacy,
+    OwnerV1,
+}
+enum FeedInput<'a> {
+    Legacy(ProjectionFeedItem<'a>),
+    Owner {
+        epoch: u64,
+        effect: &'a crate::projection::owner_capture::OwnerEffectV1,
+    },
+}
+
 /// Independent per-step or cumulative feed admission. Bytes measure borrowed
 /// key input, not total allocator usage or retained snapshot memory.
 #[derive(Debug, Clone, Copy)]
@@ -105,6 +124,7 @@ pub struct ProjectionFeedCursor {
     limits: ProjectionFeedLimits,
     usage: ProjectionFeedUsage,
     failed: bool,
+    kind: FeedKind,
 }
 impl ProjectionFeedCursor {
     pub(in crate::store) fn capture(
@@ -151,6 +171,7 @@ impl ProjectionFeedCursor {
             limits,
             usage,
             failed: false,
+            kind: FeedKind::Legacy,
         })
     }
     pub fn source_epoch(&self) -> u64 {
@@ -173,6 +194,16 @@ impl ProjectionFeedCursor {
         &mut self,
         step: ProjectionFeedLimits,
         mut visitor: impl FnMut(ProjectionFeedItem<'_>) -> Result<()>,
+    ) -> std::result::Result<ProjectionFeedStep, ProjectionFeedError> {
+        self.visit_input(step, |input| match input {
+            FeedInput::Legacy(item) => visitor(item),
+            FeedInput::Owner { .. } => unreachable!("legacy cursor cannot emit owner input"),
+        })
+    }
+    fn visit_input(
+        &mut self,
+        step: ProjectionFeedLimits,
+        mut visitor: impl FnMut(FeedInput<'_>) -> Result<()>,
     ) -> std::result::Result<ProjectionFeedStep, ProjectionFeedError> {
         if self.failed {
             return Err(ProjectionFeedError::Failed);
@@ -233,7 +264,7 @@ impl ProjectionFeedCursor {
     fn visit_inner(
         &mut self,
         step: ProjectionFeedLimits,
-        visitor: &mut impl FnMut(ProjectionFeedItem<'_>) -> Result<()>,
+        visitor: &mut impl FnMut(FeedInput<'_>) -> Result<()>,
     ) -> std::result::Result<ProjectionFeedStep, ProjectionFeedError> {
         let mut used = ProjectionFeedUsage::default();
         loop {
@@ -262,9 +293,9 @@ impl ProjectionFeedCursor {
                 }
                 self.usage.items += 1;
                 used.items += 1;
-                visitor(ProjectionFeedItem::End {
+                visitor(FeedInput::Legacy(ProjectionFeedItem::End {
                     source_epoch: self.source_epoch,
-                })
+                }))
                 .map_err(ProjectionFeedError::Callback)?;
                 self.part = Part::Done;
                 continue;
@@ -274,14 +305,31 @@ impl ProjectionFeedCursor {
                 RelationalPrimaryKeyChangeCapture::Captured { tables, .. } => Some(tables),
                 RelationalPrimaryKeyChangeCapture::RequiresRebuild { .. } => None,
             };
-            let requires_rebuild = tables.is_none();
+            let requires_rebuild =
+                tables.is_none() || (self.kind == FeedKind::OwnerV1 && record.owners_v1.is_none());
             let (work, bytes, emit, next) = match self.part {
                 Part::Begin => (1, 0, false, Part::Nodes(0)),
-                Part::Nodes(index) if index < record.upsert_node_ids.len() => {
+                Part::Nodes(index)
+                    if self.kind == FeedKind::OwnerV1
+                        && record
+                            .owners_v1
+                            .as_ref()
+                            .is_some_and(|owners| index < owners.len()) =>
+                {
+                    let (work, bytes) = owner::measure(&record.owners_v1.as_ref().unwrap()[index]);
+                    (work, bytes, true, Part::Nodes(index + 1))
+                }
+                Part::Nodes(index)
+                    if self.kind == FeedKind::Legacy && index < record.upsert_node_ids.len() =>
+                {
                     (1, 8, true, Part::Nodes(index + 1))
                 }
                 Part::Nodes(_) => {
-                    self.part = Part::Deletes(0);
+                    self.part = if self.kind == FeedKind::OwnerV1 {
+                        Part::Table(0)
+                    } else {
+                        Part::Deletes(0)
+                    };
                     continue;
                 }
                 Part::Deletes(index) if index < record.delete_document_ids.len() => (
@@ -366,25 +414,29 @@ impl ProjectionFeedCursor {
                     .get(self.event)
                     .expect("current record remains pinned");
                 let item = match self.part {
-                    Part::Nodes(index) => ProjectionFeedItem::GraphNode {
+                    Part::Nodes(index) if self.kind == FeedKind::OwnerV1 => FeedInput::Owner {
+                        epoch,
+                        effect: &record.owners_v1.as_ref().expect("qualified owner record")[index],
+                    },
+                    Part::Nodes(index) => FeedInput::Legacy(ProjectionFeedItem::GraphNode {
                         epoch,
                         node_id: record.upsert_node_ids[index],
-                    },
-                    Part::Deletes(index) => ProjectionFeedItem::DeleteDocument {
+                    }),
+                    Part::Deletes(index) => FeedInput::Legacy(ProjectionFeedItem::DeleteDocument {
                         epoch,
                         document_id: &record.delete_document_ids[index],
-                    },
+                    }),
                     Part::Key { table, key } => {
                         let RelationalPrimaryKeyChangeCapture::Captured { tables, .. } =
                             &record.relational_primary_key_changes
                         else {
                             unreachable!()
                         };
-                        ProjectionFeedItem::RelationalKey {
+                        FeedInput::Legacy(ProjectionFeedItem::RelationalKey {
                             epoch,
                             table: &tables[table].table,
                             key: &tables[table].primary_keys[key],
-                        }
+                        })
                     }
                     _ => unreachable!(),
                 };
