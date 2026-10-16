@@ -1,216 +1,78 @@
-name: Native Bindings
-
+name: Frozen Ordinary Boundary Qualification
 on:
   workflow_dispatch:
-    inputs:
-      boundary_comparison:
-        description: "Run the manual Linux ordinary-boundary comparison instead of binding tests"
-        type: boolean
-        default: false
-      benchmark_sizes:
-        description: "Comma-separated row counts; default is the complete three-size matrix"
-        type: string
-        default: "1000,100000,1000000"
-      benchmark_cases:
-        description: "Comma-separated workload cases"
-        type: string
-        default: "select,point,fill,fill_bulk,wide"
-      benchmark_samples:
-        description: "Measured iterations, in addition to one discarded iteration"
-        type: string
-        default: "3"
-      benchmark_layers:
-        description: "Comma-separated language layers; select a shard without changing its workload"
-        type: string
-        default: "rust,python,go"
-      benchmark_backends:
-        description: "Comma-separated storage backends"
-        type: string
-        default: "memory,file"
-  pull_request:
-    paths:
-      - "src/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "scripts/cargo-test-required.sh"
-      - "bindings/ffi/**"
-      - "bindings/go/**"
-      - "MODULE.bazel"
-      - "BUILD.bazel"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/native-bindings.yml"
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "scripts/cargo-test-required.sh"
-      - "bindings/ffi/**"
-      - "bindings/go/**"
-      - "MODULE.bazel"
-      - "BUILD.bazel"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/native-bindings.yml"
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.boundary_comparison }}-${{ inputs.benchmark_sizes }}-${{ inputs.benchmark_cases }}-${{ inputs.benchmark_layers }}-${{ inputs.benchmark_backends }}-${{ inputs.benchmark_samples }}
-  cancel-in-progress: true
-
+permissions:
+  contents: read
 jobs:
-  bazel:
-    if: github.event_name != 'workflow_dispatch' || !inputs.boundary_comparison
-    name: Bazel native bindings (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-latest]
-        include:
-          - os: ubuntu-24.04
-            library: libhawdb_ffi.so
-          - os: macos-latest
-            library: libhawdb_ffi.dylib
-    env:
-      USE_BAZEL_VERSION: "9.3.0"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
-        with:
-          bazelisk-cache: true
-          repository-cache: true
-
-      - name: Build the C ABI libraries and Go package
-        run: bazel build //bindings/ffi:hawdb_ffi //bindings/ffi:hawdb_ffi_static //bindings/go:hawdb
-
-      - name: Test Go against the Bazel-built C ABI
-        run: bazel test --test_output=errors --test_arg=-test.v //bindings/go:hawdb_go_tests
-
-      - name: Test the retained C ABI contract
-        run: bazel test --test_output=errors //bindings/ffi:hawdb_ffi_tests
-
-      - name: Install Go for the race detector
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: bindings/go/go.mod
-          cache-dependency-path: bindings/go/go.sum
-
-      - name: Check retained read and close concurrency with the race detector
-        working-directory: bindings/go
-        env:
-          HAWDB_LIBRARY: ${{ github.workspace }}/bazel-bin/bindings/ffi/${{ matrix.library }}
-          # The race runtime needs cgo; the production package stays purego.
-          CGO_ENABLED: "1"
-        # The Go test cache does not qualify the newly built dynamic library.
-        run: go test -race -count=1 -run '^TestRetained' ./...
-
-  windows-native-contracts:
-    if: github.event_name != 'workflow_dispatch' || !inputs.boundary_comparison
-    name: Windows native contracts
-    runs-on: windows-2025
-    timeout-minutes: 120
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 2
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-        with:
-          components: clippy
-
-      - name: Record tested source and toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p windows-native-results
-          git log -1 --format='%H%n%T%n%P' > windows-native-results/source.txt
-          rustc --version --verbose > windows-native-results/toolchain.txt
-
-      - name: Run strict native Windows Clippy
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
-            2>&1 | tee windows-native-results/clippy.txt
-
-      - name: Test retained indexed node ownership and task controls
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --features tokio-runtime \
-            --lib api::retained_query::node::tests -- --nocapture \
-            2>&1 | tee windows-native-results/retained-node.txt
-
-      - name: Test abandonment GC power-loss cuts
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::tests::power_loss::branch_abandonment::abandonment_gc_cuts_preserve_quarantine_and_live_branches \
-            -- --exact --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/abandonment.txt
-
-      - name: Preserve Windows validation evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: windows-native-contracts-${{ github.sha }}
-          path: windows-native-results
-          if-no-files-found: error
-
-  boundary-comparison:
-    if: github.event_name == 'workflow_dispatch' && inputs.boundary_comparison
-    name: Manual ordinary-boundary comparison (Linux)
+  ordinary:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        case: [fill_bulk, select, point, fill, wide]
+        layer: [rust, python, go]
+        backend: [memory, file]
     env:
       USE_BAZEL_VERSION: "9.3.0"
-      BENCHMARK_SIZES: ${{ inputs.benchmark_sizes }}
-      BENCHMARK_CASES: ${{ inputs.benchmark_cases }}
-      BENCHMARK_SAMPLES: ${{ inputs.benchmark_samples }}
-      BENCHMARK_LAYERS: ${{ inputs.benchmark_layers }}
-      BENCHMARK_BACKENDS: ${{ inputs.benchmark_backends }}
+      ENGINE_COMMIT: a68cda8e605de113e7e8837176145b807f3c12a5
+      BENCH_CASE: ${{ matrix.case }}
+      BENCH_LAYER: ${{ matrix.layer }}
+      BENCH_BACKEND: ${{ matrix.backend }}
     steps:
-      - name: Checkout the candidate
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
-      - name: Install Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
+      - name: Verify frozen engine and unchanged workload
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          engine = os.environ["ENGINE_COMMIT"]
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          assert git("diff", "--name-only", engine, "HEAD").splitlines() == [".github/workflows/native-bindings.yml"]
+          assert not git("status", "--porcelain")
+          receipt = {"engine": engine, "engine_tree": git("rev-parse", engine + "^{tree}"),
+                     "checkout": git("rev-parse", "HEAD"), "checkout_tree": git("rev-parse", "HEAD^{tree}"),
+                     "overlay": [".github/workflows/native-bindings.yml"],
+                     "case": os.environ["BENCH_CASE"], "layer": os.environ["BENCH_LAYER"], "backend": os.environ["BENCH_BACKEND"],
+                     "sizes": [1000, 100000, 1000000], "measured_samples": 3, "discarded_samples": 1,
+                     "defaults_changed": False, "timed_consumers_changed": False,
+                     "matrix_groups": 90, "max_parallel_jobs": 4, "per_job_deadline_minutes": 360,
+                     "scope": "A shard alone does not establish full-matrix acceptance; preserve refusals and failures."}
+          pathlib.Path(os.environ["RUNNER_TEMP"], "source-qualification.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          print(json.dumps(receipt))
+          PY
+      - name: Preserve source receipt before long measurements
+        uses: actions/upload-artifact@v7
+        with:
+          name: source-${{ matrix.case }}-${{ matrix.layer }}-${{ matrix.backend }}-${{ github.sha }}
+          path: ${{ runner.temp }}/source-qualification.json
+          if-no-files-found: error
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
           bazelisk-cache: true
           repository-cache: true
-
-      - name: Install Go for provenance
-        uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: bindings/go/go.mod
           cache-dependency-path: bindings/go/go.sum
-
-      - name: Compare frozen ordinary producers with unchanged defaults
+      - name: Compare frozen ordinary producers
         run: |
           python3 -B bindings/benchmarks/compare.py \
             --output "$RUNNER_TEMP/hawdb-boundary-comparison" \
-            --sizes "$BENCHMARK_SIZES" --cases "$BENCHMARK_CASES" \
-            --layers "$BENCHMARK_LAYERS" --backends "$BENCHMARK_BACKENDS" \
-            --samples "$BENCHMARK_SAMPLES"
-
-      - name: Preserve complete or partial evidence, including failed outcomes
+            --sizes 1000,100000,1000000 --samples 3 \
+            --cases "$BENCH_CASE" --layers "$BENCH_LAYER" --backends "$BENCH_BACKEND"
+      - name: Preserve source receipt alongside complete or partial outcomes
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/hawdb-boundary-comparison/evidence"
+          cp "$RUNNER_TEMP/source-qualification.json" "$RUNNER_TEMP/hawdb-boundary-comparison/evidence/"
+      - name: Preserve all outcomes including refusals
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ordinary-boundary-comparison-${{ github.sha }}
+          name: ordinary-${{ matrix.case }}-${{ matrix.layer }}-${{ matrix.backend }}-${{ github.sha }}
           path: ${{ runner.temp }}/hawdb-boundary-comparison/evidence
           if-no-files-found: error
