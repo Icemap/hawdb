@@ -595,6 +595,13 @@ impl CheckpointCandidate {
             .generation
     }
 
+    #[cfg(test)]
+    pub(super) fn prepared_branch_root_for_test(
+        &self,
+    ) -> Option<crate::immutable_object::ObjectReference> {
+        self.branch_root.as_ref().map(|root| root.head.sealed_root)
+    }
+
     pub(super) fn bootstrap_with_work_context(
         &mut self,
         work: &crate::background::CheckpointWorkContext,

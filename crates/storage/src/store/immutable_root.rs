@@ -114,7 +114,8 @@ pub struct PreparedImmutableRootHandoff {
 #[derive(Debug)]
 pub(super) struct PreparedCheckpointBranchRoot {
     root: Arc<SealedRoot>,
-    head: branch_head::BranchHead,
+    pub(super) head: branch_head::BranchHead,
+    root_pin: Arc<RootPin>,
 }
 
 /// Inputs to storage-owned branch admission or closed-source sealing.
@@ -240,6 +241,18 @@ impl GraphStore {
         let Some(branch) = &durable.branch_runtime else {
             return Ok(None);
         };
+        let registry = Arc::clone(
+            self.branch_root_pin
+                .as_ref()
+                .ok_or_else(|| {
+                    HawDBError::StorageIntegrity(
+                        "checkpoint branch has no root registration".into(),
+                    )
+                })?
+                .registry(),
+        );
+        let publication = registry.publication()?;
+        publication.check_capacity()?;
         let mut objects = ImmutableObjectStore::open(&branch.immutable_store_root)
             .map_err(HawDBError::from_storage_error)?;
         manifest.validate()?;
@@ -273,6 +286,7 @@ impl GraphStore {
         objects
             .publish(reference, &bytes)
             .map_err(HawDBError::from_storage_error)?;
+        let root_pin = publication.pin(reference)?;
         let header = crate::wal::frame::encode_binary_wal_header(
             manifest.wal_generation,
             manifest.wal_replay_start_lsn,
@@ -296,6 +310,7 @@ impl GraphStore {
         Ok(Some(PreparedCheckpointBranchRoot {
             root: Arc::new(root),
             head,
+            root_pin,
         }))
     }
 
@@ -303,17 +318,36 @@ impl GraphStore {
         &mut self,
         prepared: PreparedCheckpointBranchRoot,
     ) -> Result<()> {
+        let registry = Arc::clone(
+            self.branch_root_pin
+                .as_ref()
+                .ok_or_else(|| {
+                    HawDBError::StorageIntegrity(
+                        "checkpoint branch has no root registration".into(),
+                    )
+                })?
+                .registry(),
+        );
+        let publication = registry.publication()?;
+        if prepared.root_pin.root() != prepared.head.sealed_root
+            || !Arc::ptr_eq(prepared.root_pin.registry(), &registry)
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "checkpoint root does not match its registered pin".into(),
+            ));
+        }
         let durable = self.durable.as_mut().ok_or_else(|| {
             HawDBError::StorageIntegrity("checkpoint publication has no durable store".into())
         })?;
         let branch = durable.branch_runtime.as_mut().ok_or_else(|| {
             HawDBError::StorageIntegrity("checkpoint publication has no branch identity".into())
         })?;
-        ready_branch_record(
+        ready_branch_record_with_metadata(
             &branch.catalog_path,
             branch_catalog::BranchId::new(hawdb_core::Uuid::from_bytes(branch.head.branch_id))
                 .map_err(HawDBError::from_storage_error)?,
             branch.metadata_revision,
+            publication.metadata(),
         )
         .map_err(|error| HawDBError::Storage(format!("checkpoint branch validation: {error}")))?;
         branch_head::validate_active_wal_prefix_from_file(
@@ -335,6 +369,7 @@ impl GraphStore {
         branch.head = prepared.head;
         branch.root = prepared.root;
         branch.checkpoint_generation = durable.checkpoint_epoch;
+        self.branch_root_pin = Some(prepared.root_pin);
         Ok(())
     }
 
@@ -3310,6 +3345,72 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn checkpoint_candidate_root_survives_foreign_reclamation_before_head_publication() {
+        for durability in [
+            DurabilityPolicy::SyncOnEveryWrite,
+            DurabilityPolicy::SyncOnCheckpoint,
+        ] {
+            let fixture = BranchFixture::new();
+            let mut source = fixture.admit(fixture.main, durability);
+            write_schema_and_graph(&mut source);
+            let (store, catalog) = source.store_and_catalog_mut();
+            store.checkpoint(catalog).unwrap();
+            let child = branch_id(2);
+            fixture.fork(&source, child, "collector");
+            let mut collector = fixture.admit(child, durability);
+
+            write_row(&mut source, "checkpoint-candidate");
+            let source_epoch = source.store().commit_epoch();
+            let old_head = *source.head();
+            let pinned_generation = source.store().durable.as_ref().unwrap().checkpoint_epoch;
+            let captured = source.store().checkpoint_source();
+            let mut candidate = captured
+                .prepare_checkpoint_candidate(source.catalog())
+                .unwrap()
+                .unwrap();
+            drop(captured);
+            let candidate_root = candidate.prepared_branch_root_for_test().unwrap();
+            assert_ne!(candidate_root, old_head.sealed_root);
+            assert_eq!(
+                branch_head::read_branch_head(&fixture.head_path(fixture.main)).unwrap(),
+                old_head
+            );
+
+            let report = collector
+                .store_mut()
+                .reclaim_branch_storage(Default::default())
+                .unwrap();
+            assert!(!report.deferred_for_active_leases);
+            assert_eq!(
+                branch_head::read_branch_head(&fixture.head_path(fixture.main)).unwrap(),
+                old_head
+            );
+            let objects = ImmutableObjectStore::open(&fixture.objects).unwrap();
+            let root = SealedRoot::decode(&objects.read(candidate_root).unwrap()).unwrap();
+            objects.read(root.durable_manifest).unwrap();
+            for reference in root.checkpoint_references {
+                objects.read(reference).unwrap();
+            }
+
+            let (store, catalog) = source.store_and_catalog_mut();
+            *catalog = store
+                .publish_checkpoint_candidate(
+                    &mut candidate,
+                    Some(source_epoch),
+                    &BTreeSet::from([pinned_generation]),
+                )
+                .unwrap();
+            assert_eq!(source.head().sealed_root, candidate_root);
+            drop(candidate);
+            drop(collector);
+            drop(source);
+            let reopened = fixture.admit(fixture.main, durability);
+            assert_eq!(reopened.store().relational_state().row_count("messages"), 2);
+            assert_eq!(reopened.head().sealed_root, candidate_root);
+        }
     }
 
     #[test]

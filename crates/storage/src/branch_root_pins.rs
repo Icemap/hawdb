@@ -164,6 +164,10 @@ impl RootRegistry {
 }
 
 impl RootPublication<'_> {
+    pub(crate) fn metadata(&self) -> &CatalogMetadataLease {
+        &self._metadata
+    }
+
     pub(crate) fn check_capacity(&self) -> io::Result<()> {
         let state = self
             .registry
