@@ -332,6 +332,33 @@ impl HawDBEmbedded {
         }
     }
 
+    #[doc(hidden)]
+    pub fn open_in_memory_for_result_qualification(
+        config: DatabaseConfig,
+        governor: RuntimeGovernorConfig,
+    ) -> Self {
+        let deployment_profile = EmbeddedDeploymentProfile::SharedHost;
+        let storage_device = StorageDeviceProfile::host_provided(StorageMediaKind::Memory, None);
+        let setup = embedded_runtime_setup(
+            deployment_profile,
+            storage_device,
+            None,
+            None,
+            Some(governor),
+            None,
+        );
+        let mut database = Database::new_with_config(config);
+        database.set_runtime_governor(setup.runtime_governor.clone());
+        Self {
+            path: PathBuf::new(),
+            database,
+            deployment_profile,
+            runtime_resources: setup.runtime_resources,
+            runtime_governor: setup.runtime_governor,
+            transaction: None,
+        }
+    }
+
     pub fn open_nowledge_mem(
         options: NowledgeMemOpenOptions,
     ) -> Result<(NowledgeMemEmbeddedStore, NowledgeMemOpenReport)> {
