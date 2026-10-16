@@ -74,11 +74,30 @@ impl Encoder {
 pub(super) struct Decoder<'a> {
     bytes: &'a [u8],
     position: usize,
+    pub(super) allocations: Option<&'a crate::background::CheckpointDecodeContext>,
 }
 
 impl<'a> Decoder<'a> {
     pub(super) fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, position: 0 }
+        Self::with_allocations(bytes, None)
+    }
+
+    pub(super) fn with_allocations(
+        bytes: &'a [u8],
+        allocations: Option<&'a crate::background::CheckpointDecodeContext>,
+    ) -> Self {
+        Self {
+            bytes,
+            position: 0,
+            allocations,
+        }
+    }
+
+    pub(super) fn vector<T>(&self, capacity: usize) -> Result<Vec<T>, AppendTableError> {
+        self.allocations.map_or_else(
+            || Ok(Vec::with_capacity(capacity)),
+            |owned| owned.vector_capacity(capacity).map_err(allocation_error),
+        )
     }
 
     pub(super) fn finish(self, context: &str) -> Result<(), AppendTableError> {
@@ -123,7 +142,14 @@ impl<'a> Decoder<'a> {
         limit: usize,
         context: &str,
     ) -> Result<String, AppendTableError> {
-        String::from_utf8(self.bytes(limit, context)?.to_vec()).map_err(|error| {
+        let bytes = self.bytes(limit, context)?;
+        if let Some(owned) = self.allocations {
+            let value = std::str::from_utf8(bytes).map_err(|error| {
+                AppendTableError::Corruption(format!("{context} is not valid UTF-8: {error}"))
+            })?;
+            return owned.string(value).map_err(allocation_error);
+        }
+        String::from_utf8(bytes.to_vec()).map_err(|error| {
             AppendTableError::Corruption(format!("{context} is not valid UTF-8: {error}"))
         })
     }
@@ -143,6 +169,11 @@ impl<'a> Decoder<'a> {
     }
 
     pub(super) fn take(&mut self, len: usize, context: &str) -> Result<&'a [u8], AppendTableError> {
+        let unit = self
+            .allocations
+            .map(|owned| owned.start_unit())
+            .transpose()
+            .map_err(super::checkpoint::work_error)?;
         let end = self
             .position
             .checked_add(len)
@@ -152,8 +183,15 @@ impl<'a> Decoder<'a> {
             .get(self.position..end)
             .ok_or_else(|| AppendTableError::Corruption(format!("{context} is truncated")))?;
         self.position = end;
+        if let Some(unit) = unit {
+            unit.finish();
+        }
         Ok(bytes)
     }
+}
+
+pub(super) fn allocation_error(error: hawdb_core::HawDBError) -> AppendTableError {
+    AppendTableError::Admission(error.to_string())
 }
 
 pub(super) fn read_u16_at(bytes: &[u8], offset: usize) -> u16 {

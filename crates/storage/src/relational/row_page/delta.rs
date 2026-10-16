@@ -24,6 +24,8 @@ use std::fmt;
 use std::num::{NonZeroU32, NonZeroU64, NonZeroUsize};
 use std::path::Path;
 
+mod dirty;
+use dirty::DirtyEntries;
 mod builder;
 mod codec;
 mod reader;
@@ -57,6 +59,14 @@ pub fn relational_row_delta_manifest_generation_file(
     delta_generation: u64,
 ) -> String {
     format!("relational-row-delta-{base_generation}-{delta_generation}.manifest.hawdb")
+}
+
+pub(crate) fn relational_row_delta_prefix_file(
+    base_generation: u64,
+    delta_generation: u64,
+    visible_commit_epoch: u64,
+) -> String {
+    format!("relational-row-delta-{base_generation}-{delta_generation}-{visible_commit_epoch}.prefix.hawdb")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -213,6 +223,7 @@ pub enum RelationalRowDeltaPublicationPhase {
     CandidateRunsDurable,
     CandidateManifestDurable,
     BaseRevalidated,
+    PrivateManifestPrepared,
     LatestManifestPublished,
 }
 
@@ -319,19 +330,97 @@ impl From<super::RelationalRowPageError> for RelationalRowDeltaError {
     }
 }
 
+#[derive(Debug, Clone)]
+enum RowDeltaBytes {
+    Plain(Vec<u8>),
+    Admitted(std::sync::Arc<AdmittedRowDeltaBytes>),
+}
+
+#[derive(Debug)]
+struct AdmittedRowDeltaBytes {
+    bytes: Vec<u8>,
+    _memory: crate::background::CheckpointAllocationOwner,
+}
+
+impl RowDeltaBytes {
+    fn from_encoded(
+        bytes: Vec<u8>,
+        context: &crate::background::CheckpointDecodeContext,
+    ) -> Result<Self, RelationalRowDeltaError> {
+        if context.memory.borrow().is_empty() {
+            return Ok(Self::Plain(bytes));
+        }
+        context
+            .reserve(
+                std::mem::size_of::<AdmittedRowDeltaBytes>() + 2 * std::mem::size_of::<usize>(),
+            )
+            .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+        Ok(Self::Admitted(std::sync::Arc::new(AdmittedRowDeltaBytes {
+            bytes,
+            _memory: context.memory.borrow().clone(),
+        })))
+    }
+    fn as_slice(&self) -> &[u8] {
+        self
+    }
+}
+
+impl From<Vec<u8>> for RowDeltaBytes {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self::Plain(bytes)
+    }
+}
+impl std::ops::Deref for RowDeltaBytes {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        match self {
+            Self::Plain(bytes) => bytes,
+            Self::Admitted(bytes) => &bytes.bytes,
+        }
+    }
+}
+impl PartialEq for RowDeltaBytes {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+impl Eq for RowDeltaBytes {}
+impl PartialOrd for RowDeltaBytes {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for RowDeltaBytes {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_slice().cmp(other.as_slice())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct RowDeltaKey {
     table_ordinal: u32,
-    encoded_primary_key: Vec<u8>,
+    encoded_primary_key: std::sync::Arc<Vec<u8>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 struct RowDeltaValue {
     is_present: bool,
-    encoded_row: Vec<u8>,
+    encoded_row: RowDeltaBytes,
     last_modified_epoch: u64,
     charged_bytes: usize,
+    // Paired with the immutable map key, including across payload replacement.
+    _key_memory: crate::background::CheckpointAllocationOwner,
 }
+
+impl PartialEq for RowDeltaValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.is_present == other.is_present
+            && self.encoded_row == other.encoded_row
+            && self.last_modified_epoch == other.last_modified_epoch
+            && self.charged_bytes == other.charged_bytes
+    }
+}
+impl Eq for RowDeltaValue {}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct RowDeltaBound {

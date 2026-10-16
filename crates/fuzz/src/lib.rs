@@ -2191,6 +2191,7 @@ fn error_class(error: &HawDBError) -> &'static str {
         | HawDBError::AppendSequenceExhausted { .. }
         | HawDBError::BranchBusy { .. }
         | HawDBError::BranchReclamationBlocked { .. } => "storage",
+        HawDBError::BranchEvidenceBudgetExceeded { .. } => "execution",
         HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",
     }
 }

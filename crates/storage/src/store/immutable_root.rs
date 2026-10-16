@@ -1,6 +1,7 @@
 //! GraphStore integration for immutable-root publication and WAL handoff.
 
 use super::{GraphStore, MANIFEST_FILE};
+use crate::branch_root_pins::{RootPin, RootRegistry};
 use crate::checkpoint_closure::CheckpointArtifactInput;
 use crate::config::{DurabilityPolicy, RecoveryMode, WalReplayConfig};
 use crate::durable_manifest::DurableManifest;
@@ -21,18 +22,18 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-// Three retained target handles (UUID/runtime locks and mutable WAL), the
+// Four retained target handles (UUID/registry/runtime locks and mutable WAL), the
 // bounded segment-read wave, and four catalog/publication temporary handles.
 // Additional retained recovery artifacts still obey the same project cap.
 const MIN_BRANCH_ADMISSION_DESCRIPTORS: usize =
-    3 + crate::scan::SHARED_SEGMENT_READ_WORKER_LIMIT + 4;
+    4 + crate::scan::SHARED_SEGMENT_READ_WORKER_LIMIT + 4;
 
 /// A sealed source with ownership retained until child publication completes.
 /// No graph/schema runtime or checkpoint data is materialized by this path.
 #[derive(Debug)]
 #[doc(hidden)]
 pub struct SealedBranchSource {
-    _lease: DatabaseDirectoryLease,
+    _root_pin: Arc<RootPin>,
     catalog_path: PathBuf,
     head_path: PathBuf,
     head: branch_head::BranchHead,
@@ -104,6 +105,17 @@ pub struct PreparedImmutableRootHandoff {
     // A prepared candidate can outlive the exclusive borrow of its writer.
     // Keep maintenance from treating that writer as the only reachability pin.
     _source_lease: Option<Arc<DatabaseDirectoryLease>>,
+    _root_pin: Option<Arc<RootPin>>,
+}
+
+/// Immutable checkpoint closure prepared while the authoritative writer keeps
+/// appending to its old WAL. The new head anchors only the checkpoint epoch;
+/// complete later commits live in the new private append-only WAL suffix.
+#[derive(Debug)]
+pub(super) struct PreparedCheckpointBranchRoot {
+    root: Arc<SealedRoot>,
+    pub(super) head: branch_head::BranchHead,
+    root_pin: Arc<RootPin>,
 }
 
 /// Inputs to storage-owned branch admission or closed-source sealing.
@@ -219,8 +231,151 @@ impl std::error::Error for BranchAdmissionError {
 }
 
 impl GraphStore {
+    pub(super) fn prepare_checkpoint_branch_root(
+        &self,
+        manifest: DurableManifest,
+    ) -> Result<Option<PreparedCheckpointBranchRoot>> {
+        let durable = self.durable.as_ref().ok_or_else(|| {
+            HawDBError::StorageIntegrity("checkpoint root has no durable store".into())
+        })?;
+        let Some(branch) = &durable.branch_runtime else {
+            return Ok(None);
+        };
+        let registry = Arc::clone(
+            self.branch_root_pin
+                .as_ref()
+                .ok_or_else(|| {
+                    HawDBError::StorageIntegrity(
+                        "checkpoint branch has no root registration".into(),
+                    )
+                })?
+                .registry(),
+        );
+        let publication = registry.publication()?;
+        publication.check_capacity()?;
+        let mut objects = ImmutableObjectStore::open(&branch.immutable_store_root)
+            .map_err(HawDBError::from_storage_error)?;
+        manifest.validate()?;
+        let manifest_bytes = manifest.encode().into_bytes();
+        let durable_manifest = ObjectReference::for_bytes(
+            ObjectKind::DurableManifest,
+            ObjectKind::DurableManifest.current_format_version(),
+            &manifest_bytes,
+        );
+        objects
+            .publish(durable_manifest, &manifest_bytes)
+            .map_err(HawDBError::from_storage_error)?;
+        let plan = durable.checkpoint_closure_plan(manifest)?;
+        let checkpoint_bindings = checkpoint_artifact_bindings(&durable.root_path, plan.inputs())?;
+        let closure = plan
+            .publish(&mut objects)
+            .map_err(HawDBError::from_storage_error)?;
+        let root = SealedRoot {
+            checkpoint_epoch: manifest.checkpoint_commit_epoch,
+            commit_epoch: manifest.checkpoint_commit_epoch,
+            wal_replay_start_lsn: manifest.wal_replay_start_lsn,
+            durable_manifest,
+            checkpoint_references: closure.references,
+            checkpoint_bindings,
+            sealed_wals: Vec::new(),
+        };
+        let reference = root
+            .object_reference()
+            .map_err(HawDBError::from_storage_error)?;
+        let bytes = root.encode().map_err(HawDBError::from_storage_error)?;
+        objects
+            .publish(reference, &bytes)
+            .map_err(HawDBError::from_storage_error)?;
+        let root_pin = publication.pin(reference)?;
+        let header = crate::wal::frame::encode_binary_wal_header(
+            manifest.wal_generation,
+            manifest.wal_replay_start_lsn,
+        );
+        let head =
+            branch_head::BranchHead {
+                project_id: branch.head.project_id,
+                branch_id: branch.head.branch_id,
+                physical_generation: branch.head.physical_generation.checked_add(1).ok_or_else(
+                    || HawDBError::Storage("checkpoint head generation overflow".into()),
+                )?,
+                sealed_root: reference,
+                logical_commit_epoch: manifest.checkpoint_commit_epoch,
+                active_wal: branch_head::ActiveWalIdentity {
+                    generation: manifest.wal_generation,
+                    replay_start_lsn: manifest.wal_replay_start_lsn,
+                    byte_length: header.len() as u64,
+                    sha256: hawdb_integrity::integrity_digest(&header).sha256,
+                },
+            };
+        Ok(Some(PreparedCheckpointBranchRoot {
+            root: Arc::new(root),
+            head,
+            root_pin,
+        }))
+    }
+
+    pub(super) fn publish_checkpoint_branch_root(
+        &mut self,
+        prepared: PreparedCheckpointBranchRoot,
+    ) -> Result<()> {
+        let registry = Arc::clone(
+            self.branch_root_pin
+                .as_ref()
+                .ok_or_else(|| {
+                    HawDBError::StorageIntegrity(
+                        "checkpoint branch has no root registration".into(),
+                    )
+                })?
+                .registry(),
+        );
+        let publication = registry.publication()?;
+        if prepared.root_pin.root() != prepared.head.sealed_root
+            || !Arc::ptr_eq(prepared.root_pin.registry(), &registry)
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "checkpoint root does not match its registered pin".into(),
+            ));
+        }
+        let durable = self.durable.as_mut().ok_or_else(|| {
+            HawDBError::StorageIntegrity("checkpoint publication has no durable store".into())
+        })?;
+        let branch = durable.branch_runtime.as_mut().ok_or_else(|| {
+            HawDBError::StorageIntegrity("checkpoint publication has no branch identity".into())
+        })?;
+        ready_branch_record_with_metadata(
+            &branch.catalog_path,
+            branch_catalog::BranchId::new(hawdb_core::Uuid::from_bytes(branch.head.branch_id))
+                .map_err(HawDBError::from_storage_error)?,
+            branch.metadata_revision,
+            publication.metadata(),
+        )
+        .map_err(|error| HawDBError::Storage(format!("checkpoint branch validation: {error}")))?;
+        branch_head::validate_active_wal_prefix_from_file(
+            &durable.wal_path,
+            prepared.head.active_wal,
+            durable.max_wal_bytes.unwrap_or(u64::MAX),
+        )
+        .map_err(HawDBError::from_storage_error)?;
+        branch_head::publish_branch_head(
+            &branch.head_path,
+            branch.head.physical_generation,
+            prepared.head,
+        )
+        .map_err(|error| {
+            HawDBError::StorageIntegrity(format!(
+                "checkpoint branch head publication is uncertain; reopen the branch: {error}"
+            ))
+        })?;
+        branch.head = prepared.head;
+        branch.root = prepared.root;
+        branch.checkpoint_generation = durable.checkpoint_epoch;
+        self.branch_root_pin = Some(prepared.root_pin);
+        Ok(())
+    }
+
     /// Reclaims unreachable project objects while retaining this writable
-    /// runtime. Shared snapshots and prepared handoffs defer the sweep.
+    /// runtime. Registered snapshots and prepared handoffs contribute exact
+    /// roots; an unregistered active owner still defers the sweep.
     #[doc(hidden)]
     pub fn reclaim_branch_storage(
         &mut self,
@@ -239,21 +394,21 @@ impl GraphStore {
         let branch = durable.branch_runtime.as_ref().ok_or_else(|| {
             HawDBError::Storage("branch reclamation requires an admitted project".into())
         })?;
-        let lease = self.branch_lease.as_mut().ok_or_else(|| {
+        let lease = self.branch_lease.as_ref().ok_or_else(|| {
             HawDBError::StorageIntegrity("admitted branch has no ownership lease".into())
         })?;
-        // get_mut also excludes Weak owners that could acquire another pin.
-        // No snapshot can be created concurrently through this &mut receiver.
-        let Some(owner) = Arc::get_mut(lease) else {
-            return Ok(crate::branch_reclamation::BranchReclamationReport::deferred());
-        };
         crate::branch_reclamation::reclaim_owned_project(
             &branch.catalog_path,
             &branch.immutable_store_root,
-            owner,
+            lease,
             &branch.head,
             limits,
         )
+    }
+
+    #[doc(hidden)]
+    pub fn branch_reclamation_pin(&self) -> Option<Arc<RootPin>> {
+        self.branch_root_pin.clone()
     }
 
     #[doc(hidden)]
@@ -447,6 +602,14 @@ impl GraphStore {
         request: BranchAdmissionRequest<'_>,
         expected_commit_epoch: u64,
     ) -> std::result::Result<SealedBranchSource, BranchAdmissionError> {
+        Self::seal_branch_from_head_with_revalidation(request, expected_commit_epoch, || {})
+    }
+
+    fn seal_branch_from_head_with_revalidation(
+        request: BranchAdmissionRequest<'_>,
+        expected_commit_epoch: u64,
+        before_publication: impl FnOnce(),
+    ) -> std::result::Result<SealedBranchSource, BranchAdmissionError> {
         let project_path =
             request
                 .catalog_path
@@ -487,6 +650,11 @@ impl GraphStore {
                 ))?;
         let lease =
             DatabaseDirectoryLease::acquire(directory).map_err(BranchAdmissionError::Lease)?;
+        // GC drops its per-branch lease probes before inventory and sweep.
+        // Keep the shared metadata barrier from before reading the selector
+        // through publication and registration of its replacement root.
+        let metadata = branch_catalog::CatalogMetadataLease::acquire_blocking(project_path)
+            .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
         let (head, mut root, mut objects) = (|| -> Result<_> {
             let head = branch_head::read_branch_head(request.head_path)
                 .map_err(HawDBError::from_storage_error)?;
@@ -521,11 +689,13 @@ impl GraphStore {
                 "branch source revision is stale: expected {expected_commit_epoch}, found {commit_epoch}"
             ))));
         }
-        ready_branch_record(
+        ready_branch_record_with_metadata(
             request.catalog_path,
             request.branch_id,
             request.expected_metadata_revision,
+            &metadata,
         )?;
+        before_publication();
         let head = if end_lsn == head.active_wal.replay_start_lsn {
             head
         } else {
@@ -578,8 +748,23 @@ impl GraphStore {
             })()
             .map_err(BranchAdmissionError::Recovery)?
         };
+        let root_pin = RootRegistry::open_with_metadata(
+            request
+                .catalog_path
+                .parent()
+                .ok_or(BranchAdmissionError::IdentityMismatch(
+                    "catalog has no directory",
+                ))?,
+            directory,
+            head.project_id,
+            head.branch_id,
+            Arc::new(lease),
+            head.sealed_root,
+            &metadata,
+        )
+        .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
         Ok(SealedBranchSource {
-            _lease: lease,
+            _root_pin: root_pin,
             catalog_path: request.catalog_path.to_path_buf(),
             head_path: request.head_path.to_path_buf(),
             head,
@@ -736,8 +921,10 @@ impl GraphStore {
                 .ok_or(BranchAdmissionError::IdentityMismatch(
                     "branch head has no branch directory",
                 ))?;
-        let branch_lease = DatabaseDirectoryLease::acquire(branch_directory)
-            .map_err(BranchAdmissionError::Lease)?;
+        let branch_lease = Arc::new(
+            DatabaseDirectoryLease::acquire(branch_directory)
+                .map_err(BranchAdmissionError::Lease)?,
+        );
         if !derived_repair {
             super::derived_repair::reject_pending_derived_artifact_repair(branch_directory)
                 .map_err(BranchAdmissionError::Recovery)?;
@@ -860,6 +1047,20 @@ impl GraphStore {
                 request.expected_metadata_revision,
             )?;
             validate_admission_binding(&after, &head, &root, root_reference)?;
+            store.branch_root_pin =
+                Some(
+                    RootRegistry::open(
+                        request.catalog_path.parent().ok_or(
+                            BranchAdmissionError::IdentityMismatch("catalog has no directory"),
+                        )?,
+                        branch_directory,
+                        head.project_id,
+                        head.branch_id,
+                        Arc::clone(&branch_lease),
+                        head.sealed_root,
+                    )
+                    .map_err(|error| BranchAdmissionError::Recovery(error.into()))?,
+                );
             store.storage_recovery_report.open_timings.total_open_micros =
                 super::elapsed_micros(total_open_started);
             Ok((store, catalog))
@@ -868,7 +1069,7 @@ impl GraphStore {
         // cleanup before another opener can acquire ownership of this UUID.
         match result {
             Ok((mut store, catalog)) => {
-                store.branch_lease = Some(Arc::new(branch_lease));
+                store.branch_lease = Some(branch_lease);
                 let durable = store
                     .durable
                     .as_mut()
@@ -988,6 +1189,14 @@ impl GraphStore {
         immutable_store_root: impl AsRef<Path>,
     ) -> Result<PreparedImmutableRootHandoff> {
         self.ensure_usable()?;
+        let registry = self
+            .branch_root_pin
+            .as_ref()
+            .map(|pin| Arc::clone(pin.registry()));
+        let publication = registry
+            .as_ref()
+            .map(|registry| registry.publication())
+            .transpose()?;
         let durable = self.durable.as_ref().ok_or_else(|| {
             HawDBError::Storage("immutable root handoff requires durable storage".to_string())
         })?;
@@ -1008,6 +1217,17 @@ impl GraphStore {
         }
         let max_active_wal_bytes = durable.max_wal_bytes.unwrap_or(u64::MAX);
         let immutable_store_root = immutable_store_root.as_ref().to_path_buf();
+        if let Some(branch) = &durable.branch_runtime
+            && fs::canonicalize(&immutable_store_root)?
+                != fs::canonicalize(&branch.immutable_store_root)?
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "admitted publication must use its project object store".into(),
+            ));
+        }
+        if let Some(publication) = &publication {
+            publication.check_capacity()?;
+        }
         let mut objects = ImmutableObjectStore::open(&immutable_store_root)
             .map_err(HawDBError::from_storage_error)?;
         let rotation = match &durable.branch_runtime {
@@ -1046,11 +1266,23 @@ impl GraphStore {
         };
 
         let root = publish_sealed_root(durable, self.commit_epoch, rotation.sealed, &mut objects)?;
+        let root_pin = publication
+            .as_ref()
+            .map(|publication| {
+                publication
+                    .pin(
+                        root.object_reference()
+                            .map_err(HawDBError::from_storage_error)?,
+                    )
+                    .map_err(HawDBError::from)
+            })
+            .transpose()?;
         Ok(PreparedImmutableRootHandoff {
             root,
             rotation,
             immutable_store_root,
             _source_lease: self.branch_lease.clone(),
+            _root_pin: root_pin,
         })
     }
 
@@ -1084,6 +1316,14 @@ impl GraphStore {
         expected_head_generation: u64,
     ) -> Result<branch_head::BranchHead> {
         self.ensure_usable()?;
+        let registry = self
+            .branch_root_pin
+            .as_ref()
+            .map(|pin| Arc::clone(pin.registry()));
+        let _publication = registry
+            .as_ref()
+            .map(|registry| registry.publication())
+            .transpose()?;
         let durable = self.durable.as_mut().ok_or_else(|| {
             HawDBError::Storage("immutable root handoff requires durable storage".to_string())
         })?;
@@ -1092,6 +1332,15 @@ impl GraphStore {
             .root
             .object_reference()
             .map_err(HawDBError::from_storage_error)?;
+        if let Some(current_pin) = &self.branch_root_pin
+            && !prepared._root_pin.as_ref().is_some_and(|pin| {
+                pin.root() == root_reference && Arc::ptr_eq(pin.registry(), current_pin.registry())
+            })
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "prepared root does not match its registered pin".into(),
+            ));
+        }
         if let Some(publication) = durable
             .branch_runtime
             .as_ref()
@@ -1149,6 +1398,7 @@ impl GraphStore {
         durable.wal_bytes = head.active_wal.byte_length;
         durable.wal_commit_epoch = self.commit_epoch;
         durable.wal_tail_repair = None;
+        self.branch_root_pin = prepared._root_pin;
         if let Some(branch) = &mut durable.branch_runtime {
             branch.head = head;
             branch.root = Arc::new(prepared.root);
@@ -1896,6 +2146,20 @@ pub(super) fn ready_branch_record(
         }
         Err(error) => return Err(BranchAdmissionError::Catalog(error)),
     };
+    ready_branch_record_with_metadata(
+        catalog_path,
+        branch_id,
+        expected_metadata_revision,
+        &_metadata_lease,
+    )
+}
+
+fn ready_branch_record_with_metadata(
+    catalog_path: &Path,
+    branch_id: branch_catalog::BranchId,
+    expected_metadata_revision: u64,
+    _metadata: &branch_catalog::CatalogMetadataLease,
+) -> std::result::Result<ReadyBranchRecord, BranchAdmissionError> {
     let catalog =
         branch_catalog::read_catalog(catalog_path).map_err(BranchAdmissionError::Catalog)?;
     let branch = catalog
@@ -2177,7 +2441,7 @@ mod tests {
     use crate::schema::Catalog;
     use crate::store::{GraphMutation, MutationLimits};
     use crate::value::Value;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::io::Write;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -2277,16 +2541,35 @@ mod tests {
 
     impl BranchFixture {
         fn new() -> Self {
+            Self::new_with_index_mode(crate::config::RelationalIndexMode::Materialized)
+        }
+
+        fn new_with_index_mode(mode: crate::config::RelationalIndexMode) -> Self {
             let project = temp_dir("branch-runtime");
             let fixture = Self {
                 objects: project.join("immutable"),
-                catalog_path: project.join("catalog.hawdb"),
+                catalog_path: project.join("branches").join("catalog.hawdb"),
                 main: branch_id(1),
                 project,
             };
             let source_directory = fixture.project.join("former-parent");
             let mut catalog = Catalog::default();
-            let mut source = GraphStore::open(&source_directory, &mut catalog).unwrap();
+            let mut source = GraphStore::open_with_durability_and_replay_config(
+                &source_directory,
+                &mut catalog,
+                DurabilityPolicy::default(),
+                WalReplayConfig {
+                    relational_index_mode: if mode
+                        == crate::config::RelationalIndexMode::Authoritative
+                    {
+                        crate::config::RelationalIndexMode::Shadow
+                    } else {
+                        mode
+                    },
+                    ..Default::default()
+                },
+            )
+            .unwrap();
             source
                 .create_node(&mut catalog, "Seed", BTreeMap::new())
                 .unwrap();
@@ -2747,6 +3030,90 @@ mod tests {
     }
 
     #[test]
+    fn closed_source_seal_excludes_gc_before_publishing_its_wal_and_root() {
+        for durability in [
+            DurabilityPolicy::SyncOnEveryWrite,
+            DurabilityPolicy::SyncOnCheckpoint,
+        ] {
+            let fixture = BranchFixture::new();
+            let mut main = fixture.admit(fixture.main, durability);
+            write_schema_and_graph(&mut main);
+            let (store, catalog) = main.store_and_catalog_mut();
+            store.checkpoint(catalog).unwrap();
+            let old_head = *main.head();
+            write_row(&mut main, "closed-source-wal");
+            let epoch = main.store().commit_epoch();
+            drop(main);
+            let catalog = branch_catalog::read_catalog(&fixture.catalog_path).unwrap();
+            let record = catalog
+                .branches
+                .iter()
+                .find(|record| record.id == fixture.main)
+                .unwrap();
+            let mut checked = false;
+            let source = GraphStore::seal_branch_from_head_with_revalidation(
+                BranchAdmissionRequest {
+                    catalog_path: &fixture.catalog_path,
+                    branch_id: fixture.main,
+                    expected_metadata_revision: record.metadata_revision,
+                    head_path: &fixture.head_path(fixture.main),
+                    immutable_store_root: &fixture.objects,
+                    durability,
+                    replay_config: WalReplayConfig::default(),
+                },
+                epoch,
+                || {
+                    // Pause the real seal before publishing immutable objects.
+                    // A GC on another thread must fail to enter mark/sweep.
+                    // No timeout or scheduling assumption establishes exclusion.
+                    let project = fixture.catalog_path.parent().unwrap().to_owned();
+                    let error = std::thread::spawn(move || {
+                        branch_catalog::CatalogMetadataLease::acquire(&project)
+                            .unwrap_err()
+                            .kind()
+                    })
+                    .join()
+                    .unwrap();
+                    assert_eq!(error, std::io::ErrorKind::WouldBlock);
+                    assert_eq!(
+                        branch_head::read_branch_head(&fixture.head_path(fixture.main)).unwrap(),
+                        old_head
+                    );
+                    checked = true;
+                },
+            )
+            .unwrap();
+            assert!(checked);
+            let head = *source.head();
+            assert_ne!(head.sealed_root, old_head.sealed_root);
+            let _metadata = branch_catalog::CatalogMetadataLease::acquire_blocking(
+                fixture.catalog_path.parent().unwrap(),
+            )
+            .unwrap();
+            let mut objects = ImmutableObjectStore::open(&fixture.objects).unwrap();
+            let inventory = objects.inventory(100_000, 1024 * 1024 * 1024).unwrap();
+            objects
+                .reclaim_unreachable(
+                    &inventory.objects,
+                    &[old_head.sealed_root, head.sealed_root],
+                )
+                .unwrap();
+            let root = SealedRoot::decode(&objects.read(head.sealed_root).unwrap()).unwrap();
+            assert_eq!(root.commit_epoch, epoch);
+            assert!(!root.sealed_wals.is_empty());
+            for wal in &root.sealed_wals {
+                objects.read(wal.object).unwrap();
+            }
+            drop(_metadata);
+            drop(source);
+            let reopened = fixture.admit(fixture.main, durability);
+            assert_eq!(reopened.store().commit_epoch(), epoch);
+            assert_eq!(reopened.store().relational_state().row_count("messages"), 2);
+            assert_eq!(reopened.store().node_count_for_label(None), 3);
+        }
+    }
+
+    #[test]
     fn closed_source_seal_rejections_preserve_head_catalog_and_wal_evidence() {
         for durability in [
             DurabilityPolicy::SyncOnEveryWrite,
@@ -2899,6 +3266,349 @@ mod tests {
                 .relational_state()
                 .table_schema("messages")
                 .is_none());
+        }
+    }
+
+    fn write_checkpoint_candidate_schema(branch: &mut AdmittedBranchStore) {
+        let table = RelationalTableSchema {
+            name: "messages".into(),
+            columns: ["id", "body"]
+                .into_iter()
+                .map(|name| RelationalColumnSchema {
+                    name: name.into(),
+                    scalar_type: RelationalScalarType::Text,
+                    nullable: false,
+                    default: None,
+                })
+                .collect(),
+            primary_key: vec!["id".into()],
+            unique_constraints: vec![],
+            foreign_keys: vec![],
+            indexes: vec![],
+        };
+        let (store, catalog) = branch.store_and_catalog_mut();
+        store
+            .commit_mutations_and_relational(
+                catalog,
+                vec![GraphMutation::CreateNode {
+                    label: "Marker".into(),
+                    properties: BTreeMap::new(),
+                }],
+                RelationalTransaction {
+                    writes: vec![
+                        RelationalWrite::CreateTable(table),
+                        RelationalWrite::Insert {
+                            table: "messages".into(),
+                            rows: vec![RelationalRow::new(vec![
+                                RelationalValue::Text("base".into()),
+                                RelationalValue::Text("payload".repeat(1024)),
+                            ])],
+                            mode: RelationalInsertMode::Error,
+                        },
+                    ],
+                },
+                MutationLimits::default(),
+            )
+            .unwrap();
+    }
+
+    fn write_checkpoint_candidate_row(branch: &mut AdmittedBranchStore, id: &str, body: &str) {
+        let (store, catalog) = branch.store_and_catalog_mut();
+        let epoch = store.commit_epoch();
+        store
+            .commit_mutations_and_relational(
+                catalog,
+                vec![GraphMutation::CreateNode {
+                    label: "Marker".into(),
+                    properties: BTreeMap::from([("row_id".into(), Value::String(id.into()))]),
+                }],
+                RelationalTransaction {
+                    writes: vec![RelationalWrite::Insert {
+                        table: "messages".into(),
+                        rows: vec![RelationalRow::new(vec![
+                            RelationalValue::Text(id.into()),
+                            RelationalValue::Text(body.into()),
+                        ])],
+                        mode: RelationalInsertMode::Error,
+                    }],
+                },
+                MutationLimits::default(),
+            )
+            .unwrap();
+        assert_eq!(store.commit_epoch(), epoch + 1);
+    }
+
+    fn checkpoint_candidate_row_markers(store: &GraphStore) -> BTreeSet<String> {
+        store
+            .node_records_owned()
+            .map(|node| node.unwrap())
+            .filter_map(|node| match node.properties.get("row_id") {
+                Some(Value::String(id)) => Some(id.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn checkpoint_candidate_root_survives_foreign_reclamation_before_head_publication() {
+        for durability in [
+            DurabilityPolicy::SyncOnEveryWrite,
+            DurabilityPolicy::SyncOnCheckpoint,
+        ] {
+            let fixture = BranchFixture::new();
+            let mut source = fixture.admit(fixture.main, durability);
+            write_schema_and_graph(&mut source);
+            let (store, catalog) = source.store_and_catalog_mut();
+            store.checkpoint(catalog).unwrap();
+            let child = branch_id(2);
+            fixture.fork(&source, child, "collector");
+            let mut collector = fixture.admit(child, durability);
+
+            write_row(&mut source, "checkpoint-candidate");
+            let source_epoch = source.store().commit_epoch();
+            let old_head = *source.head();
+            let pinned_generation = source.store().durable.as_ref().unwrap().checkpoint_epoch;
+            let captured = source.store().checkpoint_source();
+            let mut candidate = captured
+                .prepare_checkpoint_candidate(source.catalog())
+                .unwrap()
+                .unwrap();
+            drop(captured);
+            let candidate_root = candidate.prepared_branch_root_for_test().unwrap();
+            assert_ne!(candidate_root, old_head.sealed_root);
+            assert_eq!(
+                branch_head::read_branch_head(&fixture.head_path(fixture.main)).unwrap(),
+                old_head
+            );
+
+            let report = collector
+                .store_mut()
+                .reclaim_branch_storage(Default::default())
+                .unwrap();
+            assert!(!report.deferred_for_active_leases);
+            assert_eq!(
+                branch_head::read_branch_head(&fixture.head_path(fixture.main)).unwrap(),
+                old_head
+            );
+            let objects = ImmutableObjectStore::open(&fixture.objects).unwrap();
+            let root = SealedRoot::decode(&objects.read(candidate_root).unwrap()).unwrap();
+            objects.read(root.durable_manifest).unwrap();
+            for reference in root.checkpoint_references {
+                objects.read(reference).unwrap();
+            }
+
+            let (store, catalog) = source.store_and_catalog_mut();
+            *catalog = store
+                .publish_checkpoint_candidate(
+                    &mut candidate,
+                    Some(source_epoch),
+                    &BTreeSet::from([pinned_generation]),
+                )
+                .unwrap();
+            assert_eq!(source.head().sealed_root, candidate_root);
+            drop(candidate);
+            drop(collector);
+            drop(source);
+            let reopened = fixture.admit(fixture.main, durability);
+            assert_eq!(reopened.store().relational_state().row_count("messages"), 2);
+            assert_eq!(reopened.head().sealed_root, candidate_root);
+        }
+    }
+
+    #[test]
+    fn checkpoint_candidate_branch_tail_survives_reopen_and_later_seal() {
+        for durability in [
+            DurabilityPolicy::SyncOnEveryWrite,
+            DurabilityPolicy::SyncOnCheckpoint,
+        ] {
+            for relational_index_mode in [
+                crate::config::RelationalIndexMode::Materialized,
+                crate::config::RelationalIndexMode::Shadow,
+                crate::config::RelationalIndexMode::DemandPaged,
+                crate::config::RelationalIndexMode::Authoritative,
+            ] {
+                let fixture = BranchFixture::new_with_index_mode(relational_index_mode);
+                let replay = WalReplayConfig {
+                    relational_index_mode,
+                    ..Default::default()
+                };
+                // Install canonical schema bindings before opening the mode
+                // that explicitly rejects schema-changing transactions.
+                let setup_replay = WalReplayConfig {
+                    relational_index_mode: if relational_index_mode
+                        == crate::config::RelationalIndexMode::Authoritative
+                    {
+                        crate::config::RelationalIndexMode::Shadow
+                    } else {
+                        relational_index_mode
+                    },
+                    ..replay
+                };
+                let mut branch = fixture
+                    .try_admit(fixture.main, durability, setup_replay)
+                    .unwrap();
+                write_checkpoint_candidate_schema(&mut branch);
+                {
+                    let (store, catalog) = branch.store_and_catalog_mut();
+                    store.checkpoint(catalog).unwrap();
+                }
+                if relational_index_mode == crate::config::RelationalIndexMode::Authoritative {
+                    drop(branch);
+                    branch = fixture.try_admit(fixture.main, durability, replay).unwrap();
+                }
+                write_checkpoint_candidate_row(&mut branch, "before", "before-snapshot");
+                let source_epoch = branch.store().commit_epoch();
+                let original_head = *branch.head();
+                let original_catalog = fs::read(&fixture.catalog_path).unwrap();
+                let original_wal =
+                    fs::read(&branch.store().durable.as_ref().unwrap().wal_path).unwrap();
+                let pinned_generation = branch.store().durable.as_ref().unwrap().checkpoint_epoch;
+                let orphan_generation =
+                    pinned_generation.max(branch.head().active_wal.generation) + 1;
+                let orphan_path = fixture.head_path(fixture.main).parent().unwrap().join(
+                    crate::artifact_files::wal_generation_file(orphan_generation),
+                );
+                fs::write(&orphan_path, b"uncertain prior checkpoint publication").unwrap();
+                let reader = branch.store().snapshot();
+                let source = branch.store().checkpoint_source();
+                let mut candidate = source
+                    .prepare_checkpoint_candidate(branch.catalog())
+                    .unwrap()
+                    .unwrap();
+                drop(source);
+                assert_eq!(*branch.head(), original_head);
+                assert_eq!(
+                    fs::read(&branch.store().durable.as_ref().unwrap().wal_path).unwrap(),
+                    original_wal
+                );
+                for id in 0..3 {
+                    write_checkpoint_candidate_row(
+                        &mut branch,
+                        &format!("tail-{id}"),
+                        &"payload".repeat(8192),
+                    );
+                    let captured = branch.store().checkpoint_source();
+                    candidate.catch_up(&captured).unwrap();
+                    assert_eq!(candidate.commit_epoch(), branch.store().commit_epoch());
+                }
+                let epoch = branch.store().commit_epoch();
+                let expected_rows = branch
+                    .store()
+                    .relational_state()
+                    .rows("messages")
+                    .map(|(_, row)| row.clone())
+                    .collect::<Vec<_>>();
+                let expected_markers = BTreeSet::from([
+                    "before".to_string(),
+                    "tail-0".to_string(),
+                    "tail-1".to_string(),
+                    "tail-2".to_string(),
+                ]);
+                assert_eq!(
+                    checkpoint_candidate_row_markers(branch.store()),
+                    expected_markers
+                );
+                {
+                    let (store, catalog) = branch.store_and_catalog_mut();
+                    *catalog = store
+                        .publish_checkpoint_candidate(
+                            &mut candidate,
+                            Some(source_epoch),
+                            &std::collections::BTreeSet::from([pinned_generation]),
+                        )
+                        .unwrap();
+                }
+                assert_eq!(branch.store().commit_epoch(), epoch);
+                assert_eq!(branch.store().relational_state().row_count("messages"), 5);
+                assert_eq!(branch.store().node_count_for_label(None), 7);
+                assert_eq!(
+                    checkpoint_candidate_row_markers(branch.store()),
+                    expected_markers
+                );
+                assert_eq!(
+                    branch
+                        .store()
+                        .relational_state()
+                        .rows("messages")
+                        .map(|(_, row)| row.clone())
+                        .collect::<Vec<_>>(),
+                    expected_rows
+                );
+                assert_eq!(reader.relational_state().row_count("messages"), 2);
+                assert_eq!(reader.node_count_for_label(None), 4);
+                assert_eq!(
+                    checkpoint_candidate_row_markers(&reader),
+                    BTreeSet::from(["before".to_string()])
+                );
+                reader.ensure_usable().unwrap();
+                assert_eq!(branch.head().logical_commit_epoch, source_epoch);
+                assert!(branch.head().active_wal.generation > orphan_generation);
+                assert_eq!(
+                    fs::read(&orphan_path).unwrap(),
+                    b"uncertain prior checkpoint publication"
+                );
+                assert!(branch.head().physical_generation > original_head.physical_generation);
+                assert_eq!(fs::read(&fixture.catalog_path).unwrap(), original_catalog);
+                let durable = branch.store().durable.as_ref().unwrap();
+                assert_eq!(
+                    durable.wal_path.parent(),
+                    fixture.head_path(fixture.main).parent()
+                );
+                assert_eq!(
+                    branch.head().active_wal.byte_length,
+                    crate::wal::frame::WAL_BINARY_FILE_HEADER_BYTES as u64
+                );
+                assert!(durable.wal_bytes > branch.head().active_wal.byte_length);
+                let closure = durable.branch_runtime.as_ref().unwrap().root.clone();
+                assert!(closure.sealed_wals.is_empty());
+                drop(candidate);
+                drop(reader);
+                drop(branch);
+                let mut branch = fixture.try_admit(fixture.main, durability, replay).unwrap();
+                assert_eq!(branch.store().commit_epoch(), epoch);
+                assert_eq!(branch.store().relational_state().row_count("messages"), 5);
+                assert_eq!(
+                    branch
+                        .store()
+                        .relational_state()
+                        .rows("messages")
+                        .map(|(_, row)| row.clone())
+                        .collect::<Vec<_>>(),
+                    expected_rows
+                );
+                assert_eq!(branch.store().node_count_for_label(None), 7);
+                assert_eq!(
+                    checkpoint_candidate_row_markers(branch.store()),
+                    expected_markers
+                );
+                write_checkpoint_candidate_row(&mut branch, "after", "after-candidate-reopen");
+                let fork_epoch = branch.store().commit_epoch();
+                branch.store_mut().seal_admitted_branch(fork_epoch).unwrap();
+                let sealed = &branch
+                    .store()
+                    .durable
+                    .as_ref()
+                    .unwrap()
+                    .branch_runtime
+                    .as_ref()
+                    .unwrap()
+                    .root;
+                assert_eq!(sealed.checkpoint_references, closure.checkpoint_references);
+                assert_eq!(sealed.checkpoint_bindings, closure.checkpoint_bindings);
+                assert_eq!(sealed.durable_manifest, closure.durable_manifest);
+                fixture.fork(&branch, branch_id(2), "candidate-child");
+                drop(branch);
+                let child = fixture.admit(branch_id(2), durability);
+                assert_eq!(child.store().commit_epoch(), fork_epoch);
+                assert_eq!(child.store().relational_state().row_count("messages"), 6);
+                assert_eq!(child.store().node_count_for_label(None), 8);
+                let mut child_markers = expected_markers;
+                child_markers.insert("after".into());
+                assert_eq!(
+                    checkpoint_candidate_row_markers(child.store()),
+                    child_markers
+                );
+            }
         }
     }
 

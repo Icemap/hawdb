@@ -835,3 +835,549 @@ fn unique_test_dir(label: &str) -> PathBuf {
         TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     ))
 }
+
+#[test]
+fn controlled_point_read_admits_page_and_selected_payload_then_retries_without_poison() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("controlled-demand-point");
+    let overflow_config = RelationalOverflowPublicationConfig::default();
+    RelationalOverflowPublisher::new(overflow_config)
+        .publish(&directory, 1, 10, None, Vec::new())
+        .unwrap();
+    let overflow = Arc::new(
+        RelationalOverflowRootReader::open_latest(&directory, overflow_config)
+            .unwrap()
+            .unwrap(),
+    );
+    let mut config = RelationalRowPagePublicationConfig::default();
+    config.page_limits.max_inline_value_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    let page = ImmutableRelationalRowPage {
+        generation: 1,
+        source_commit_epoch: 10,
+        page_id: RelationalRowPageId::new(NonZeroU64::MIN),
+        schema_digest: schema_digest(),
+        column_count: 4,
+        rows: vec![RelationalRowPageEntry {
+            primary_key: key(1),
+            row: RelationalRow::new(vec![
+                RelationalValue::BigInt(1),
+                RelationalValue::Text("v".repeat(128 * 1024)),
+                RelationalValue::Bytea(vec![7; 128 * 1024]),
+                RelationalValue::Text("small".into()),
+            ]),
+        }],
+    };
+    RelationalRowPagePublisher::new(config)
+        .publish(&directory, 1, 10, None, vec![table_delta(vec![page])])
+        .unwrap();
+    let root = Arc::new(
+        RelationalRowPageRootReader::open_latest(&directory, config)
+            .unwrap()
+            .unwrap(),
+    );
+    let cache = Arc::new(SegmentCache::new(8 * 1024 * 1024));
+    let reader = RelationalRowPageDemandReader::new(root, overflow, cache, StoreId(1)).unwrap();
+    let target = key(1);
+    let ordinary = reader
+        .point_projected_unhydrated(
+            "documents",
+            &target,
+            &[1],
+            RelationalRowPageDemandReadLimits::default(),
+            &RuntimeTaskContext::default(),
+        )
+        .unwrap();
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let mut budget = RelationalHydrationBudget::default();
+        let before = budget;
+        let result = work.classify(|scoped| {
+            let allocations = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let row = reader.point_projected_with_hydration_mode(ProjectedPointReadRequest {
+                table: "documents",
+                primary_key: &target,
+                requested_fields: &[1],
+                limits: RelationalRowPageDemandReadLimits::default(),
+                hydration: &mut budget,
+                task: scoped.task_context(),
+                hydration_fields: None,
+                allocations: Some(&allocations),
+            })?;
+            Ok::<_, RelationalRowPageDemandReadError>((row, allocations.memory.into_inner()))
+        });
+        if succeeds {
+            let ((row, report), memory) = result.unwrap();
+            assert_eq!(row, ordinary.0);
+            assert_eq!(report.rows_decoded, 1);
+            assert_eq!(report.pages_read, 1);
+            assert_eq!(report.file_pages_read, 1);
+            assert_eq!(report.cache_hits, 0);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes <= ceiling - 128 * 1024
+                        && available_bytes > ceiling - config.page_limits.max_page_bytes.get() as u64)
+            );
+            drop(row);
+            drop(memory);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+        }
+        assert!(!reader.is_poisoned());
+        assert_eq!(budget, before);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+    drop(reader);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn controlled_point_hydration_matches_bound_overflow_values_and_budget() {
+    use crate::background::{CheckpointDecodeContext, CheckpointWorkContext};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let fixture = DemandFixture::new("controlled-bound-overflow");
+    let target = key(1);
+    let mut expected_budget = RelationalHydrationBudget::default();
+    let expected = fixture
+        .reader
+        .point_projected(
+            "documents",
+            &target,
+            &[1],
+            RelationalRowPageDemandReadLimits::default(),
+            &mut expected_budget,
+            &RuntimeTaskContext::default(),
+        )
+        .unwrap();
+    let ceiling = 16 * 1024 * 1024;
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(ceiling),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let context = CheckpointDecodeContext {
+        work: CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default())),
+        memory: Default::default(),
+    };
+    let mut budget = RelationalHydrationBudget::default();
+    let (row, report) = fixture
+        .reader
+        .point_projected_with_hydration_mode(ProjectedPointReadRequest {
+            table: "documents",
+            primary_key: &target,
+            requested_fields: &[1],
+            limits: RelationalRowPageDemandReadLimits::default(),
+            hydration: &mut budget,
+            task: context.task_context(),
+            hydration_fields: Some(&[1]),
+            allocations: Some(&context),
+        })
+        .unwrap();
+    assert_eq!(row, expected.0);
+    assert_eq!(budget, expected_budget);
+    assert_eq!(report.hydrated_values, 1);
+    assert!(!fixture.reader.is_poisoned());
+    drop(row);
+    drop(context);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn controlled_overlay_output_copy_denies_before_wide_copy_and_retries() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let fixture = DemandFixture::new("controlled-overlay-copy");
+    let make_point = || RelationalRowPageOverlayPoint {
+        table: "documents",
+        primary_key: key(1),
+        overflow_root: None,
+        value: RelationalRowPageProjectedOverlayValue::Present {
+            fields: vec![RelationalProjectedField {
+                ordinal: 1,
+                value: RelationalValue::Text("v".repeat(128 * 1024)),
+            }]
+            .into_boxed_slice(),
+            binds_overlay_overflow: false,
+        },
+    };
+    let mut ordinary_budget = RelationalHydrationBudget::default();
+    let ordinary = fixture
+        .reader
+        .point_projected_overlay(
+            make_point(),
+            RelationalRowPageDemandReadLimits::default(),
+            &mut ordinary_budget,
+            &RuntimeTaskContext::default(),
+            None,
+        )
+        .unwrap();
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let mut budget = RelationalHydrationBudget::default();
+        let initial = budget;
+        let point = make_point();
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let output = fixture.reader.point_projected_overlay_with_allocations(
+                point,
+                RelationalRowPageDemandReadLimits::default(),
+                &mut budget,
+                scoped.task_context(),
+                None,
+                Some(&context),
+            )?;
+            Ok::<_, RelationalRowPageDemandReadError>((output, context.memory.into_inner()))
+        });
+        let wide_allocations = observation.finish();
+        if succeeds {
+            let ((row, report), memory) = result.unwrap();
+            assert_eq!(row, ordinary.0);
+            assert_eq!(report.rows_decoded, ordinary.1.rows_decoded);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes <= ceiling - 128 * 1024)
+            );
+            drop(row);
+            drop(memory);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(wide_allocations, 0);
+        }
+        assert_eq!(budget, initial);
+        assert!(!fixture.reader.is_poisoned());
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
+
+#[test]
+fn failed_overlay_return_copy_restores_budget_after_successful_hydration() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_core::{RuntimeMemoryController, RuntimeMemoryError, RuntimeMemoryPermit};
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    use std::sync::atomic::{AtomicBool, AtomicUsize};
+    #[derive(Debug)]
+    struct Controller {
+        base: RuntimeTaskContext,
+        payload_bytes: u64,
+        calls: AtomicUsize,
+        deny: AtomicBool,
+    }
+    impl RuntimeMemoryController for Controller {
+        fn reserve(
+            &self,
+            bytes: u64,
+            _: u64,
+        ) -> Result<Box<dyn RuntimeMemoryPermit>, RuntimeMemoryError> {
+            if bytes == self.payload_bytes
+                && self.calls.fetch_add(1, Ordering::SeqCst) == 1
+                && self.deny.load(Ordering::SeqCst)
+            {
+                return Err(RuntimeMemoryError::ReservationExceeded {
+                    requested_bytes: bytes,
+                    available_bytes: 0,
+                });
+            }
+            self.base
+                .reserve_working_memory(bytes)?
+                .ok_or(RuntimeMemoryError::Closed)
+        }
+    }
+    let fixture = DemandFixture::new("overlay-return-copy-failure");
+    let ceiling = 16 * 1024 * 1024;
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(ceiling),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+        .unwrap();
+    let controller = Arc::new(Controller {
+        base: permit.bind_task_context(RuntimeTaskContext::default()),
+        payload_bytes: fixture.alpha.uncompressed_bytes,
+        calls: AtomicUsize::new(0),
+        deny: AtomicBool::new(true),
+    });
+    let work = CheckpointWorkContext::new(
+        controller
+            .base
+            .clone()
+            .with_memory_controller(controller.clone()),
+    );
+    let initial = RelationalHydrationBudget::default();
+    let mut budget = initial;
+    for succeeds in [false, true] {
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let point = RelationalRowPageOverlayPoint {
+                table: "documents",
+                primary_key: key(1),
+                overflow_root: Some(&fixture.overflow_root),
+                value: RelationalRowPageProjectedOverlayValue::Present {
+                    fields: vec![RelationalProjectedField {
+                        ordinal: 1,
+                        value: RelationalValue::Overflow(fixture.alpha),
+                    }]
+                    .into_boxed_slice(),
+                    binds_overlay_overflow: true,
+                },
+            };
+            let output = fixture.reader.point_projected_overlay_with_allocations(
+                point,
+                RelationalRowPageDemandReadLimits::default(),
+                &mut budget,
+                scoped.task_context(),
+                Some(&[1]),
+                Some(&context),
+            )?;
+            Ok::<_, RelationalRowPageDemandReadError>((output, context.memory.into_inner()))
+        });
+        if succeeds {
+            let ((row, _), memory) = result.unwrap();
+            assert!(row.is_some());
+            assert_eq!(budget.hydrated_rows, 1);
+            drop(row);
+            drop(memory);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(controller.calls.load(Ordering::SeqCst), 2);
+            assert_eq!(budget, initial);
+            controller.deny.store(false, Ordering::SeqCst);
+        }
+        assert!(!fixture.reader.is_poisoned());
+        assert!(matches!(controller.base.reserve_working_memory(ceiling),
+            Err(RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling));
+    }
+    drop(work);
+    drop(controller);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn controlled_point_with_wide_table_bounds_denies_without_cloning_root_metadata() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let directory = unique_test_dir("borrowed-wide-table");
+    let overflow_config = RelationalOverflowPublicationConfig::default();
+    RelationalOverflowPublisher::new(overflow_config)
+        .publish(&directory, 1, 10, None, Vec::new())
+        .unwrap();
+    let overflow = Arc::new(
+        RelationalOverflowRootReader::open_latest(&directory, overflow_config)
+            .unwrap()
+            .unwrap(),
+    );
+    let mut config = RelationalRowPagePublicationConfig::default();
+    config.page_limits.max_key_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    config.page_limits.max_inline_value_bytes = NonZeroUsize::new(256 * 1024).unwrap();
+    let mut schema = crate::relational::row_page::test_row_page_schema("documents", 1);
+    schema.columns[0].scalar_type = RelationalScalarType::Text;
+    let digest = crate::relational::index_shadow::relational_schema_digest(&schema).unwrap();
+    let value = "k".repeat(128 * 1024);
+    let page = ImmutableRelationalRowPage {
+        generation: 1,
+        source_commit_epoch: 10,
+        page_id: RelationalRowPageId::new(NonZeroU64::MIN),
+        schema_digest: digest,
+        column_count: 1,
+        rows: vec![RelationalRowPageEntry {
+            primary_key: RelationalKey(vec![RelationalValue::Text(value.clone())]),
+            row: RelationalRow::new(vec![RelationalValue::Text(value)]),
+        }],
+    };
+    RelationalRowPagePublisher::new(config)
+        .publish_with_overflow_root(
+            &directory,
+            1,
+            10,
+            None,
+            vec![RelationalRowPageTableDelta {
+                table: "documents".into(),
+                schema: Some(schema),
+                schema_digest: digest,
+                column_count: NonZeroU32::MIN,
+                next_page_id: NonZeroU64::new(2).unwrap(),
+                dirty_pages: vec![page],
+                deleted_page_ids: Vec::new(),
+            }],
+            &overflow,
+        )
+        .unwrap();
+    let root = Arc::new(
+        RelationalRowPageRootReader::open_latest(&directory, config)
+            .unwrap()
+            .unwrap(),
+    );
+    let reader = RelationalRowPageDemandReader::new(
+        root,
+        overflow,
+        Arc::new(SegmentCache::new(64 * 1024)),
+        StoreId(923),
+    )
+    .unwrap();
+    let target = RelationalKey(vec![RelationalValue::Text("!".into())]);
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let mut budget = RelationalHydrationBudget::default();
+        let initial = budget;
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            reader.point_projected_with_hydration_mode(ProjectedPointReadRequest {
+                table: "documents",
+                primary_key: &target,
+                requested_fields: &[0],
+                limits: RelationalRowPageDemandReadLimits::default(),
+                hydration: &mut budget,
+                task: scoped.task_context(),
+                hydration_fields: None,
+                allocations: Some(&context),
+            })
+        });
+        let wide_allocations = observation.finish();
+        if succeeds {
+            assert!(result.unwrap().0.is_none());
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(
+                wide_allocations, 0,
+                "root metadata must be borrowed before descriptor admission"
+            );
+        }
+        assert_eq!(budget, initial);
+        assert!(!reader.is_poisoned());
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+    drop(reader);
+    fs::remove_dir_all(directory).unwrap();
+}

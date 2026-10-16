@@ -356,3 +356,62 @@ fn memory_only_and_direct_single_schema_commits_obey_the_same_gap_boundary() {
     store.finish_non_relational_commit();
     assert_gap(&store, before, store.commit_epoch());
 }
+
+#[test]
+fn checkpoint_replay_preserves_cold_preimages_and_schema_gaps() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(16 * 1024 * 1024),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    governor.pin_resources();
+    let permit = governor
+        .try_admit(
+            RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1),
+        )
+        .unwrap();
+    let work = crate::background::CheckpointWorkContext::new(
+        permit.bind_task_context(RuntimeTaskContext::default()),
+    );
+    let path = super::tests::directory();
+    let (mut store, catalog, id) = seed(&path, StorageResidencyMode::OutOfCore);
+    store.checkpoint(&catalog).unwrap();
+    drop(store);
+    let (mut store, mut catalog) = reopen(&path, StorageResidencyMode::OutOfCore);
+    assert!(!store.nodes.contains_key(&id));
+    let before = store.commit_epoch();
+    store
+        .apply_replayed_checkpoint_wal_transaction(
+            &mut catalog,
+            WalOp::SetNodeProperty {
+                id,
+                property: "id".into(),
+                value: Value::String("renamed".into()),
+            },
+            &work,
+        )
+        .unwrap();
+    let changes = store.search_projection_changes_after(before);
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].upsert_node_ids, [id.0]);
+    assert_eq!(changes[0].delete_document_ids, ["memory:a"]);
+    let before_schema = store.commit_epoch();
+    store
+        .apply_replayed_checkpoint_wal_transaction(
+            &mut catalog,
+            WalOp::CreateNodeLabel {
+                label: "NewLabel".into(),
+            },
+            &work,
+        )
+        .unwrap();
+    assert_gap(&store, before_schema, store.commit_epoch());
+    drop(store);
+    std::fs::remove_dir_all(path).unwrap();
+}

@@ -24,13 +24,13 @@ use super::super::{
     RELATIONAL_RECOVERY_SOURCE_BYTES,
 };
 use super::{
-    decode_bytes, decode_utf8, encode_bytes, encode_relational_key, read_bounded_file, read_u16,
-    read_u32, read_u64, take, RelationalIndexGenerationArtifacts,
-    RelationalIndexGenerationIdentity, RelationalIndexReadLimits, RelationalIndexReadReport,
-    RelationalIndexShadowConfig, RelationalIndexShadowError, RelationalIndexShadowReader,
+    decode_bytes, decode_utf8, encode_bytes, encode_relational_key, read_u16, read_u32, read_u64,
+    take, RelationalIndexGenerationArtifacts, RelationalIndexGenerationIdentity,
+    RelationalIndexReadLimits, RelationalIndexReadReport, RelationalIndexShadowConfig,
+    RelationalIndexShadowError, RelationalIndexShadowReader,
 };
 use super::{IndexReadAdmission, IndexReadCharge};
-use crate::file_io::{self as fs, File};
+use crate::file_io::{self as fs, File, OpenOptions};
 use crate::{
     cache::{
         ContentDigest, ManifestGeneration, RepresentationKind, SegmentCache, SegmentCacheError,
@@ -58,6 +58,21 @@ const DELTA_DESCRIPTOR_LENGTH_BYTES: usize = 4;
 const DELTA_SELECTOR_FIXED_BYTES: usize = 16;
 const DELTA_ENTRY_FIXED_BYTES: usize = 17;
 static NEXT_DELTA_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+pub(crate) fn relational_index_recovery_manifest_generation_file(
+    base_generation: u64,
+    delta_generation: u64,
+) -> String {
+    format!("relational-index-recovery-{base_generation}-{delta_generation}.manifest.hawdb")
+}
+
+pub(crate) fn relational_index_recovery_prefix_file(
+    base_generation: u64,
+    delta_generation: u64,
+    recovered_commit_epoch: u64,
+) -> String {
+    format!("relational-index-recovery-{base_generation}-{delta_generation}-{recovered_commit_epoch}.prefix.hawdb")
+}
 
 pub const RELATIONAL_INDEX_RECOVERY_MANIFEST_FILE: &str =
     "relational-index-recovery.manifest.hawdb";
@@ -291,9 +306,25 @@ impl RelationalIndexRecoveryManifest {
         Ok(encoded)
     }
 
+    #[cfg(test)]
     fn decode(
         encoded: &[u8],
         config: RelationalIndexRecoveryConfig,
+    ) -> Result<Self, RelationalIndexShadowError> {
+        let mut memory = crate::background::CheckpointAllocationOwner::default();
+        Self::decode_with_work_context(
+            encoded,
+            config,
+            &crate::background::CheckpointWorkContext::default(),
+            &mut memory,
+        )
+    }
+
+    fn decode_with_work_context(
+        encoded: &[u8],
+        config: RelationalIndexRecoveryConfig,
+        work: &crate::background::CheckpointWorkContext,
+        memory: &mut crate::background::CheckpointAllocationOwner,
     ) -> Result<Self, RelationalIndexShadowError> {
         if encoded.len() < DELTA_MANIFEST_HEADER_BYTES || &encoded[..8] != DELTA_MANIFEST_MAGIC {
             return Err(RelationalIndexShadowError::Corrupt(
@@ -356,6 +387,12 @@ impl RelationalIndexRecoveryManifest {
                 "relational index recovery manifest checksum mismatch".to_string(),
             ));
         }
+        let page_bytes = page_count
+            .checked_mul(std::mem::size_of::<DeltaPageDescriptor>())
+            .ok_or_else(|| admission("decoded recovery page metadata size overflow"))?;
+        memory
+            .reserve(page_bytes, work)
+            .map_err(|error| admission(error.to_string()))?;
         let mut pages = Vec::with_capacity(page_count);
         let mut offset = 0usize;
         for _ in 0..page_count {
@@ -366,7 +403,9 @@ impl RelationalIndexRecoveryManifest {
                 "delta descriptor length",
             )?) as usize;
             let descriptor = take(payload, &mut offset, descriptor_len, "delta descriptor")?;
-            pages.push(decode_delta_page_descriptor(descriptor, config)?);
+            pages.push(decode_delta_page_descriptor_with_work(
+                descriptor, config, work, memory,
+            )?);
         }
         if offset != payload.len() {
             return Err(corrupt(
@@ -414,9 +453,25 @@ fn encode_delta_page_descriptor(
     Ok(encoded)
 }
 
+#[cfg(test)]
 fn decode_delta_page_descriptor(
     encoded: &[u8],
     config: RelationalIndexRecoveryConfig,
+) -> Result<DeltaPageDescriptor, RelationalIndexShadowError> {
+    let mut memory = crate::background::CheckpointAllocationOwner::default();
+    decode_delta_page_descriptor_with_work(
+        encoded,
+        config,
+        &crate::background::CheckpointWorkContext::default(),
+        &mut memory,
+    )
+}
+
+fn decode_delta_page_descriptor_with_work(
+    encoded: &[u8],
+    config: RelationalIndexRecoveryConfig,
+    work: &crate::background::CheckpointWorkContext,
+    memory: &mut crate::background::CheckpointAllocationOwner,
 ) -> Result<DeltaPageDescriptor, RelationalIndexShadowError> {
     if encoded.len() < DELTA_DESCRIPTOR_FIXED_BYTES {
         return Err(corrupt("truncated recovery delta descriptor"));
@@ -439,6 +494,12 @@ fn decode_delta_page_descriptor(
             "recovery delta descriptor selector count is impossible",
         ));
     }
+    let selector_bytes = selector_count
+        .checked_mul(std::mem::size_of::<DeltaPageSelector>())
+        .ok_or_else(|| admission("decoded recovery selector metadata size overflow"))?;
+    memory
+        .reserve(selector_bytes, work)
+        .map_err(|error| admission(error.to_string()))?;
     let mut selectors = Vec::with_capacity(selector_count);
     for _ in 0..selector_count {
         let (table, next) = decode_bytes(
@@ -469,6 +530,16 @@ fn decode_delta_page_descriptor(
             "recovery delta selector upper key",
         )?;
         offset = next;
+        for bytes in [
+            table.len(),
+            index.len(),
+            lower_index_key.len(),
+            upper_index_key.len(),
+        ] {
+            memory
+                .reserve(bytes, work)
+                .map_err(|error| admission(error.to_string()))?;
+        }
         selectors.push(DeltaPageSelector {
             table: decode_utf8(table, "recovery delta selector table")?,
             index: decode_utf8(index, "recovery delta selector index")?,
@@ -543,6 +614,12 @@ pub struct RelationalIndexRecoveryBuilder {
     artifact_bytes: u64,
     peak_dirty_entries: usize,
     peak_dirty_bytes: usize,
+    private_prefix: Option<(
+        RelationalRecoverySourceIdentity,
+        RelationalIndexRecoveryReport,
+    )>,
+    _pages_memory: crate::background::CheckpointAllocationOwner,
+    _selectors_memory: crate::background::CheckpointAllocationOwner,
 }
 
 impl RelationalIndexRecoveryBuilder {
@@ -574,6 +651,9 @@ impl RelationalIndexRecoveryBuilder {
             artifact_bytes: 0,
             peak_dirty_entries: 0,
             peak_dirty_bytes: 0,
+            private_prefix: None,
+            _pages_memory: crate::background::CheckpointAllocationOwner::default(),
+            _selectors_memory: crate::background::CheckpointAllocationOwner::default(),
         })
     }
 
@@ -590,6 +670,17 @@ impl RelationalIndexRecoveryBuilder {
         epoch: u64,
         capture: RelationalIndexChangeCapture,
     ) -> Result<(), RelationalIndexShadowError> {
+        self.record_with_work_context(epoch, capture, &Default::default())
+    }
+
+    pub(crate) fn record_with_work_context(
+        &mut self,
+        epoch: u64,
+        capture: RelationalIndexChangeCapture,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), RelationalIndexShadowError> {
+        work.checkpoint()
+            .map_err(|error| RelationalIndexShadowError::Admission(error.to_string()))?;
         if epoch <= self.base_commit_epoch {
             return Err(RelationalIndexShadowError::Corrupt(format!(
                 "recovery delta epoch {epoch} is not after base epoch {}",
@@ -603,6 +694,8 @@ impl RelationalIndexRecoveryBuilder {
             return Err(RelationalIndexShadowError::Admission(reason));
         };
         for change in changes {
+            work.checkpoint()
+                .map_err(|error| RelationalIndexShadowError::Admission(error.to_string()))?;
             let (key, value, entry_bytes) = encode_change(change, epoch)?;
             let key_exists = self.dirty.contains_key(&key);
             let existing_bytes = if key_exists { entry_bytes } else { 0 };
@@ -620,7 +713,7 @@ impl RelationalIndexRecoveryBuilder {
                 && (next_entries > self.config.max_dirty_entries.get()
                     || next_bytes > self.config.max_dirty_bytes.get())
             {
-                self.flush()?;
+                self.flush_with_work_context(work)?;
             }
             if entry_bytes > self.config.max_dirty_bytes.get() {
                 return Err(RelationalIndexShadowError::Admission(format!(
@@ -628,6 +721,7 @@ impl RelationalIndexRecoveryBuilder {
                     self.config.max_dirty_bytes
                 )));
             }
+            self.private_prefix = None;
             if let Some(previous) = self.dirty.insert(key, value) {
                 debug_assert!(previous.epoch <= epoch);
             } else {
@@ -662,9 +756,111 @@ impl RelationalIndexRecoveryBuilder {
     }
 
     pub fn finish_with_recovery_source(
+        self,
+        recovered_commit_epoch: u64,
+        recovery_source: RelationalRecoverySourceIdentity,
+    ) -> Result<RelationalIndexRecoveryReport, RelationalIndexShadowError> {
+        self.finish_inner(recovered_commit_epoch, recovery_source, true, false)
+    }
+
+    pub(crate) fn seal_private_with_recovery_source(
+        &mut self,
+        recovered_commit_epoch: u64,
+        recovery_source: RelationalRecoverySourceIdentity,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<RelationalIndexRecoveryReport, RelationalIndexShadowError> {
+        if let Some((identity, report)) = &self.private_prefix
+            && *identity == recovery_source
+            && report.recovered_commit_epoch == recovered_commit_epoch
+        {
+            return Ok(report.clone());
+        }
+        self.flush_with_work_context(work)?;
+        let mut memory = crate::background::CheckpointAllocationOwner::default();
+        let mut reserve = |bytes: usize| {
+            memory
+                .reserve(bytes, work)
+                .map(|_| ())
+                .map_err(|error| admission(error.to_string()))
+        };
+        let bytes_for = |count: usize, size: usize| {
+            count
+                .checked_mul(size)
+                .ok_or_else(|| admission("private index clone size overflow"))
+        };
+        reserve(self.directory.as_os_str().len())?;
+        reserve(bytes_for(
+            self.pages.len(),
+            std::mem::size_of::<DeltaPageDescriptor>(),
+        )?)?;
+        for page in &self.pages {
+            reserve(bytes_for(
+                page.selectors.len(),
+                std::mem::size_of::<DeltaPageSelector>(),
+            )?)?;
+            for selector in &page.selectors {
+                reserve(selector.table.len())?;
+                reserve(selector.index.len())?;
+                reserve(selector.lower_index_key.len())?;
+                reserve(selector.upper_index_key.len())?;
+            }
+        }
+        // Simulate the existing selector budget without mutating live pages.
+        // Encoding simultaneously owns payload, final bytes and one descriptor.
+        let static_payload = bytes_for(
+            self.pages.len(),
+            DELTA_DESCRIPTOR_LENGTH_BYTES + DELTA_DESCRIPTOR_FIXED_BYTES,
+        )?;
+        let static_total = DELTA_MANIFEST_HEADER_BYTES
+            .checked_add(static_payload)
+            .ok_or_else(|| admission("private index manifest size overflow"))?;
+        let mut remaining = self
+            .config
+            .max_manifest_bytes
+            .get()
+            .checked_sub(static_total)
+            .ok_or_else(|| admission("private index static manifest exceeds its limit"))?;
+        let mut payload = static_payload;
+        let mut descriptor = 0;
+        for page in &self.pages {
+            let selectors = page.selector_bytes()?;
+            let selected = if selectors <= remaining {
+                remaining -= selectors;
+                selectors
+            } else {
+                0
+            };
+            payload = payload
+                .checked_add(selected)
+                .ok_or_else(|| admission("private index payload size overflow"))?;
+            descriptor = descriptor.max(
+                DELTA_DESCRIPTOR_FIXED_BYTES
+                    .checked_add(selected)
+                    .ok_or_else(|| admission("private index descriptor size overflow"))?,
+            );
+        }
+        let workspace = payload
+            .checked_mul(2)
+            .and_then(|bytes| bytes.checked_add(DELTA_MANIFEST_HEADER_BYTES))
+            .and_then(|bytes| bytes.checked_add(descriptor))
+            .ok_or_else(|| admission("private index encoding workspace overflow"))?;
+        reserve(workspace)?;
+        let result =
+            self.clone()
+                .finish_inner(recovered_commit_epoch, recovery_source, false, true);
+        drop(memory);
+        if let Ok(report) = &result {
+            self.private_prefix = Some((recovery_source, report.clone()));
+        }
+        result
+    }
+
+    fn finish_inner(
         mut self,
         recovered_commit_epoch: u64,
         recovery_source: RelationalRecoverySourceIdentity,
+        select_latest: bool,
+        private_prefix: bool,
     ) -> Result<RelationalIndexRecoveryReport, RelationalIndexShadowError> {
         if recovered_commit_epoch < self.base_commit_epoch {
             return Err(RelationalIndexShadowError::Corrupt(format!(
@@ -684,12 +880,50 @@ impl RelationalIndexRecoveryBuilder {
             pages,
         };
         let encoded_manifest = manifest.encode(self.config)?;
-        let manifest_path = self.directory.join(RELATIONAL_INDEX_RECOVERY_MANIFEST_FILE);
-        let manifest_tmp = manifest_path.with_extension("hawdb.tmp");
-        write_synced(&manifest_tmp, &encoded_manifest, "write recovery manifest")?;
-        durable_replace_file(&manifest_tmp, &manifest_path).map_err(|error| {
-            RelationalIndexShadowError::from_io("publish relational index recovery manifest", error)
-        })?;
+        if select_latest {
+            let manifest_path = self.directory.join(RELATIONAL_INDEX_RECOVERY_MANIFEST_FILE);
+            let manifest_tmp = manifest_path.with_extension("hawdb.tmp");
+            write_synced(&manifest_tmp, &encoded_manifest, "write recovery manifest")?;
+            durable_replace_file(&manifest_tmp, &manifest_path).map_err(|error| {
+                RelationalIndexShadowError::from_io(
+                    "publish relational index recovery manifest",
+                    error,
+                )
+            })?;
+        } else {
+            let filename = if private_prefix {
+                relational_index_recovery_prefix_file(
+                    manifest.base_generation,
+                    manifest.delta_generation,
+                    recovered_commit_epoch,
+                )
+            } else {
+                relational_index_recovery_manifest_generation_file(
+                    manifest.base_generation,
+                    manifest.delta_generation,
+                )
+            };
+            let manifest_path = self.directory.join(filename);
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&manifest_path)
+                .map_err(|error| {
+                    RelationalIndexShadowError::from_io(
+                        "create private index recovery manifest",
+                        error,
+                    )
+                })?;
+            file.write_all(&encoded_manifest).map_err(|error| {
+                RelationalIndexShadowError::from_io("write private index recovery manifest", error)
+            })?;
+            file.sync_all().map_err(|error| {
+                RelationalIndexShadowError::from_io("sync private index recovery manifest", error)
+            })?;
+            crate::durability::sync_directory(&self.directory).map_err(|error| {
+                RelationalIndexShadowError::from_io("sync private index recovery directory", error)
+            })?;
+        }
         Ok(RelationalIndexRecoveryReport {
             base_generation: manifest.base_generation,
             delta_generation: manifest.delta_generation,
@@ -706,6 +940,13 @@ impl RelationalIndexRecoveryBuilder {
     }
 
     fn flush(&mut self) -> Result<(), RelationalIndexShadowError> {
+        self.flush_with_work_context(&crate::background::CheckpointWorkContext::default())
+    }
+
+    fn flush_with_work_context(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), RelationalIndexShadowError> {
         if self.dirty.is_empty() {
             return Ok(());
         }
@@ -737,6 +978,44 @@ impl RelationalIndexRecoveryBuilder {
             ordinal,
         ));
         let tmp_path = final_path.with_extension("hawdb.tmp");
+        if self.pages.len() == self.pages.capacity() {
+            let capacity = self
+                .pages
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| admission("recovery page capacity overflow"))?
+                .max(self.pages.capacity().saturating_mul(2))
+                .min(self.config.max_delta_pages.get());
+            let bytes = capacity
+                .checked_mul(std::mem::size_of::<DeltaPageDescriptor>())
+                .ok_or_else(|| admission("recovery page allocation size overflow"))?;
+            let mut next_memory = crate::background::CheckpointAllocationOwner::default();
+            next_memory
+                .reserve(bytes, work)
+                .map_err(|error| admission(error.to_string()))?;
+            let mut replacement = Vec::new();
+            replacement.try_reserve_exact(capacity).map_err(|error| {
+                let failure =
+                    work.record_failure(crate::background::CheckpointWorkError::Allocation {
+                        bytes: bytes as u64,
+                        reason: error.to_string(),
+                    });
+                admission(failure.to_string())
+            })?;
+            if replacement.capacity() != capacity {
+                return Err(admission(
+                    "recovery page allocation exceeded admitted capacity",
+                ));
+            }
+            replacement.append(&mut self.pages);
+            let old = std::mem::replace(&mut self.pages, replacement);
+            drop(old);
+            self._pages_memory = next_memory;
+        }
+        let mut selectors = delta_page_selectors_with_work(&self.dirty, work)?;
+        self._selectors_memory
+            .append(&mut selectors.memory, work)
+            .map_err(|error| admission(error.to_string()))?;
         let (encoded_len, digest) = write_delta_page(
             &tmp_path,
             DeltaPageWrite {
@@ -765,7 +1044,7 @@ impl RelationalIndexRecoveryBuilder {
             entry_count,
             encoded_len,
             digest,
-            selectors: delta_page_selectors(&self.dirty),
+            selectors: selectors.values,
         });
         self.artifact_bytes = self.artifact_bytes.saturating_add(encoded_len);
         self.dirty.clear();
@@ -776,24 +1055,60 @@ impl RelationalIndexRecoveryBuilder {
     }
 }
 
-fn delta_page_selectors(entries: &BTreeMap<DeltaKey, DeltaValue>) -> Vec<DeltaPageSelector> {
-    let mut selectors = Vec::<DeltaPageSelector>::new();
+struct PreparedDeltaSelectors {
+    values: Vec<DeltaPageSelector>,
+    memory: crate::background::CheckpointAllocationOwner,
+}
+
+fn delta_page_selectors_with_work(
+    entries: &BTreeMap<DeltaKey, DeltaValue>,
+    work: &crate::background::CheckpointWorkContext,
+) -> Result<PreparedDeltaSelectors, RelationalIndexShadowError> {
+    let mut count = 0usize;
+    let mut previous: Option<&DeltaKey> = None;
     for key in entries.keys() {
-        if let Some(selector) = selectors.last_mut()
-            && selector.table == key.table
-            && selector.index == key.index
+        if previous
+            .is_none_or(|previous| previous.table != key.table || previous.index != key.index)
         {
-            selector.upper_index_key.clone_from(&key.index_key);
-            continue;
+            count += 1;
         }
-        selectors.push(DeltaPageSelector {
-            table: key.table.clone(),
-            index: key.index.clone(),
-            lower_index_key: key.index_key.clone(),
-            upper_index_key: key.index_key.clone(),
+        previous = Some(key);
+    }
+    let bytes = count
+        .checked_mul(std::mem::size_of::<DeltaPageSelector>())
+        .ok_or_else(|| admission("recovery selector capacity overflow"))?;
+    let mut memory = crate::background::CheckpointAllocationOwner::default();
+    memory
+        .reserve(bytes, work)
+        .map_err(|error| admission(error.to_string()))?;
+    let mut values = Vec::with_capacity(count);
+    let mut keys = entries.keys().peekable();
+    while let Some(first) = keys.next() {
+        let mut last = first;
+        while keys
+            .peek()
+            .is_some_and(|next| next.table == first.table && next.index == first.index)
+        {
+            last = keys.next().expect("peeked selector key exists");
+        }
+        for bytes in [
+            first.table.len(),
+            first.index.len(),
+            first.index_key.len(),
+            last.index_key.len(),
+        ] {
+            memory
+                .reserve(bytes, work)
+                .map_err(|error| admission(error.to_string()))?;
+        }
+        values.push(DeltaPageSelector {
+            table: first.table.clone(),
+            index: first.index.clone(),
+            lower_index_key: first.index_key.clone(),
+            upper_index_key: last.index_key.clone(),
         });
     }
-    selectors
+    Ok(PreparedDeltaSelectors { values, memory })
 }
 
 /// Keeps recovery-delta page pruning best-effort. If selectors would exceed
@@ -930,12 +1245,13 @@ where
 }
 
 pub struct RelationalIndexRecoveryReader {
-    base: RelationalIndexShadowReader,
+    base: Arc<RelationalIndexShadowReader>,
     manifest: RelationalIndexRecoveryManifest,
     config: RelationalIndexRecoveryConfig,
     page_cache: Option<Arc<SegmentCache>>,
     store_id: StoreId,
     poisoned: AtomicBool,
+    _memory: crate::background::CheckpointAllocationOwner,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1032,6 +1348,26 @@ impl RelationalIndexRecoveryReader {
         )
     }
 
+    pub(crate) fn open_private_prefix_with_pinned_base(
+        manifest_path: &Path,
+        base: Arc<RelationalIndexShadowReader>,
+        expected_recovery: RelationalRecoveryFence,
+        recovery_config: RelationalIndexRecoveryConfig,
+        page_cache: Arc<SegmentCache>,
+        store_id: StoreId,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Self, RelationalIndexShadowError> {
+        Self::open_manifest_with_base_and_work(
+            manifest_path,
+            base,
+            expected_recovery,
+            recovery_config,
+            Some(page_cache),
+            store_id,
+            work,
+        )
+    }
+
     fn open_latest_inner(
         directory: &Path,
         expected_recovery: RelationalRecoveryFence,
@@ -1069,12 +1405,92 @@ impl RelationalIndexRecoveryReader {
         store_id: StoreId,
     ) -> Result<Self, RelationalIndexShadowError> {
         let manifest_path = directory.join(RELATIONAL_INDEX_RECOVERY_MANIFEST_FILE);
-        let encoded = read_bounded_file(
+        Self::open_manifest_with_base(
             &manifest_path,
-            recovery_config.max_manifest_bytes.get(),
-            "relational index recovery manifest",
+            base,
+            expected_recovery,
+            recovery_config,
+            page_cache,
+            store_id,
+        )
+    }
+
+    fn open_manifest_with_base(
+        manifest_path: &Path,
+        base: impl Into<Arc<RelationalIndexShadowReader>>,
+        expected_recovery: RelationalRecoveryFence,
+        recovery_config: RelationalIndexRecoveryConfig,
+        page_cache: Option<Arc<SegmentCache>>,
+        store_id: StoreId,
+    ) -> Result<Self, RelationalIndexShadowError> {
+        Self::open_manifest_with_base_and_work(
+            manifest_path,
+            base,
+            expected_recovery,
+            recovery_config,
+            page_cache,
+            store_id,
+            &crate::background::CheckpointWorkContext::default(),
+        )
+    }
+
+    fn open_manifest_with_base_and_work(
+        manifest_path: &Path,
+        base: impl Into<Arc<RelationalIndexShadowReader>>,
+        expected_recovery: RelationalRecoveryFence,
+        recovery_config: RelationalIndexRecoveryConfig,
+        page_cache: Option<Arc<SegmentCache>>,
+        store_id: StoreId,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Self, RelationalIndexShadowError> {
+        let base = base.into();
+        let mut memory = crate::background::CheckpointAllocationOwner::default();
+        let mut encoded_memory = crate::background::CheckpointAllocationOwner::default();
+        let _wave = work
+            .io_wave()
+            .map_err(|error| admission(error.to_string()))?;
+        let bytes = fs::metadata(manifest_path)
+            .map_err(|error| {
+                RelationalIndexShadowError::from_io("read recovery manifest metadata", error)
+            })?
+            .len();
+        let capacity = usize::try_from(bytes)
+            .map_err(|_| admission("recovery manifest size overflows this target"))?;
+        if capacity > recovery_config.max_manifest_bytes.get() {
+            return Err(admission("recovery manifest exceeds its byte limit"));
+        }
+        encoded_memory
+            .reserve(capacity, work)
+            .map_err(|error| admission(error.to_string()))?;
+        let mut encoded = vec![0; capacity];
+        let mut file = File::open(manifest_path).map_err(|error| {
+            RelationalIndexShadowError::from_io("open recovery manifest", error)
+        })?;
+        file.read_exact(&mut encoded).map_err(|error| {
+            RelationalIndexShadowError::from_io("read recovery manifest", error)
+        })?;
+        let mut extra = [0];
+        if file.read(&mut extra).map_err(|error| {
+            RelationalIndexShadowError::from_io("read recovery manifest tail", error)
+        })? != 0
+        {
+            return Err(corrupt("recovery manifest changed length during read"));
+        }
+        drop(_wave);
+        let manifest = RelationalIndexRecoveryManifest::decode_with_work_context(
+            &encoded,
+            recovery_config,
+            work,
+            &mut memory,
         )?;
-        let manifest = RelationalIndexRecoveryManifest::decode(&encoded, recovery_config)?;
+        drop(encoded);
+        drop(encoded_memory);
+        memory
+            .reserve(
+                std::mem::size_of::<Self>() + 2 * std::mem::size_of::<usize>(),
+                work,
+            )
+            .map_err(|error| admission(error.to_string()))?;
         if manifest.base_generation != base.manifest().generation
             || manifest.base_commit_epoch != base.manifest().source_commit_epoch
             || manifest.recovered_commit_epoch != expected_recovery.commit_epoch
@@ -1097,11 +1513,16 @@ impl RelationalIndexRecoveryReader {
             page_cache,
             store_id,
             poisoned: AtomicBool::new(false),
+            _memory: memory,
         })
     }
 
     pub fn manifest(&self) -> &RelationalIndexRecoveryManifest {
         &self.manifest
+    }
+
+    pub(crate) fn pinned_base(&self) -> Arc<RelationalIndexShadowReader> {
+        Arc::clone(&self.base)
     }
 
     pub fn base_manifest(&self) -> &super::RelationalIndexShadowManifest {
@@ -2023,26 +2444,33 @@ fn write_delta_page(
             "recovery delta payload length does not fit u64".to_string(),
         )
     })?;
-    let mut prefix = Vec::with_capacity(68);
-    prefix.extend_from_slice(DELTA_PAGE_MAGIC);
-    prefix.extend_from_slice(&DELTA_PAGE_FORMAT_VERSION.to_le_bytes());
-    prefix.extend_from_slice(&0_u16.to_le_bytes());
-    prefix.extend_from_slice(&page.base_generation.to_le_bytes());
-    prefix.extend_from_slice(&page.delta_generation.to_le_bytes());
-    prefix.extend_from_slice(&page.base_commit_epoch.to_le_bytes());
-    prefix.extend_from_slice(&page.ordinal.to_le_bytes());
-    prefix.extend_from_slice(&page.start_epoch.to_le_bytes());
-    prefix.extend_from_slice(&page.end_epoch.to_le_bytes());
-    prefix.extend_from_slice(&page.entry_count.to_le_bytes());
-    prefix.extend_from_slice(&payload_len.to_le_bytes());
-    debug_assert_eq!(prefix.len(), 68);
+    let mut prefix = [0; 68];
+    let mut offset = 0;
+    let mut append = |bytes: &[u8]| {
+        let end = offset + bytes.len();
+        prefix[offset..end].copy_from_slice(bytes);
+        offset = end;
+    };
+    append(DELTA_PAGE_MAGIC);
+    append(&DELTA_PAGE_FORMAT_VERSION.to_le_bytes());
+    append(&0_u16.to_le_bytes());
+    append(&page.base_generation.to_le_bytes());
+    append(&page.delta_generation.to_le_bytes());
+    append(&page.base_commit_epoch.to_le_bytes());
+    append(&page.ordinal.to_le_bytes());
+    append(&page.start_epoch.to_le_bytes());
+    append(&page.end_epoch.to_le_bytes());
+    append(&page.entry_count.to_le_bytes());
+    append(&payload_len.to_le_bytes());
+    debug_assert_eq!(offset, 68);
     let mut hasher = IntegrityHasher::new();
     hasher.update(&prefix);
     update_delta_entries_digest(&mut hasher, page.entries)?;
     let digest = hasher.finish();
-    let mut header = prefix;
-    header.extend_from_slice(&digest.crc32c.get().to_le_bytes());
-    header.extend_from_slice(digest.sha256.as_bytes());
+    let mut header = [0; DELTA_PAGE_HEADER_BYTES];
+    header[..68].copy_from_slice(&prefix);
+    header[68..72].copy_from_slice(&digest.crc32c.get().to_le_bytes());
+    header[72..].copy_from_slice(digest.sha256.as_bytes());
     debug_assert_eq!(header.len(), DELTA_PAGE_HEADER_BYTES);
 
     let mut file = File::create(path).map_err(|error| {

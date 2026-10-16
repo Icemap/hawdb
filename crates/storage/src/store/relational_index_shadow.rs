@@ -62,14 +62,31 @@ use hawdb_storage::{
         RelationalIndexShadowBuildReport, RelationalIndexShadowConfig, RelationalIndexShadowError,
         RelationalIndexShadowReader, RelationalIndexShadowWriter, RelationalKey,
         RelationalOverflowPublicationConfig, RelationalOverflowRootReader, RelationalRecoveryFence,
-        RelationalRecoverySourceIdentity, RelationalReplayAccessSet,
+        RelationalRecoverySourceIdentity, RelationalReplayAccessSet, RelationalRowChangeCapture,
         RelationalRowPagePublicationConfig, RelationalRowPageReadView, RelationalRowPageRootReader,
         RelationalRowPageSnapshotReader, RelationalScalarType, RelationalSparseRecoveryStage,
-        RelationalTableSchema, RelationalTransaction, RelationalValue,
+        RelationalState, RelationalTableSchema, RelationalTransaction, RelationalValue,
         RELATIONAL_PRIMARY_INDEX_NAME,
     },
 };
 use std::{collections::BTreeSet, sync::Arc};
+
+/// A recovered transaction whose schema, rows, and delta captures have been
+/// validated without changing the store. Dropping it leaves recovery unchanged.
+pub(super) struct PreparedRelationalRecoveryTransaction {
+    next: RelationalState,
+    index_capture: Option<RelationalIndexChangeCapture>,
+    row_capture: Option<RelationalRowChangeCapture>,
+    memory: crate::background::CheckpointAllocationOwner,
+}
+
+// Sparse hydration is scratch for the captures, not resident canonical data.
+// Drop any unconsumed capture before releasing its hydration inventory.
+struct RecoveredRelationalCaptures {
+    index: Option<RelationalIndexChangeCapture>,
+    row: Option<RelationalRowChangeCapture>,
+    _hydration: crate::background::CheckpointAllocationOwner,
+}
 
 pub use hawdb_storage::relational_index_view::{
     RelationalIndexQualificationProbe, RelationalIndexQualificationProbeKind,
@@ -395,6 +412,21 @@ impl GraphStore {
         expected_recovery_source: RelationalRecoverySourceIdentity,
     ) -> Result<Arc<RelationalIndexReadView>, hawdb_storage::relational::RelationalIndexShadowError>
     {
+        self.open_recovered_relational_index_view_inner(
+            recovered_commit_epoch,
+            expected_recovery_source,
+            None,
+            None,
+        )
+    }
+
+    fn open_recovered_relational_index_view_inner(
+        &self,
+        recovered_commit_epoch: u64,
+        expected_recovery_source: RelationalRecoverySourceIdentity,
+        private_manifest: Option<&std::path::Path>,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<Arc<RelationalIndexReadView>, RelationalIndexShadowError> {
         let durable = self.durable.as_ref().ok_or_else(|| {
             hawdb_storage::relational::RelationalIndexShadowError::Admission(
                 "relational index read view requires a durable store".to_string(),
@@ -408,17 +440,112 @@ impl GraphStore {
                     "canonical manifest does not bind a relational index generation".to_string(),
                 )
             })?;
-        let reader = RelationalIndexRecoveryReader::open_bound_generation_with_cache(
-            durable.root_path(),
-            generation_artifacts,
-            RelationalRecoveryFence::new(recovered_commit_epoch, expected_recovery_source),
-            RelationalIndexShadowConfig::default(),
-            RelationalIndexRecoveryConfig::default(),
-            Arc::clone(&durable.segment_cache),
-            durable.store_id(),
-        )?;
+        let fence = RelationalRecoveryFence::new(recovered_commit_epoch, expected_recovery_source);
+        let reader = if let Some(path) = private_manifest {
+            let pinned = self
+                .relational_index_shadow
+                .read_view
+                .as_ref()
+                .map(|view| view.pinned_base())
+                .filter(|base| base.matches_generation_binding(generation_artifacts));
+            let base = match pinned {
+                Some(base) => base,
+                None => Arc::new(
+                    RelationalIndexShadowReader::open_bound_generation_with_work_context(
+                        durable.root_path(),
+                        generation_artifacts,
+                        RelationalIndexShadowConfig::default(),
+                        Some(Arc::clone(&durable.segment_cache)),
+                        durable.store_id(),
+                        work.unwrap_or(&crate::background::CheckpointWorkContext::default()),
+                    )?,
+                ),
+            };
+            RelationalIndexRecoveryReader::open_private_prefix_with_pinned_base(
+                path,
+                base,
+                fence,
+                RelationalIndexRecoveryConfig::default(),
+                Arc::clone(&durable.segment_cache),
+                durable.store_id(),
+                work.unwrap_or(&crate::background::CheckpointWorkContext::default()),
+            )?
+        } else {
+            RelationalIndexRecoveryReader::open_bound_generation_with_cache(
+                durable.root_path(),
+                generation_artifacts,
+                fence,
+                RelationalIndexShadowConfig::default(),
+                RelationalIndexRecoveryConfig::default(),
+                Arc::clone(&durable.segment_cache),
+                durable.store_id(),
+            )?
+        };
         reader.validate_required_roots(&self.relational_state)?;
         Ok(Arc::new(RelationalIndexReadView::from_recovered(reader)))
+    }
+
+    pub(super) fn finish_private_relational_index_recovery(
+        &mut self,
+        recovery_source: Option<RelationalRecoverySourceIdentity>,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> super::Result<Option<crate::relational::PreparedRelationalRecoverySelector>> {
+        let Some(builder) = self.relational_index_shadow.recovery_builder.as_mut() else {
+            return Ok(None);
+        };
+        if self.commit_epoch == builder.base_commit_epoch() {
+            return Ok(None);
+        }
+        let recovery_source = recovery_source.ok_or_else(|| {
+            HawDBError::StorageIntegrity("private index recovery source is missing".into())
+        })?;
+        let report = builder
+            .seal_private_with_recovery_source(self.commit_epoch, recovery_source, work)
+            .map_err(|error| HawDBError::Storage(format!("private index recovery: {error}")))?;
+        let root = self
+            .durable
+            .as_ref()
+            .expect("index recovery requires durability")
+            .root_path();
+        let immutable = root.join(crate::relational::relational_index_recovery_prefix_file(
+            report.base_generation,
+            report.delta_generation,
+            report.recovered_commit_epoch,
+        ));
+        let view = self
+            .open_recovered_relational_index_view_inner(
+                report.recovered_commit_epoch,
+                recovery_source,
+                Some(&immutable),
+                Some(work),
+            )
+            .map_err(|error| HawDBError::Storage(format!("pin private index recovery: {error}")))?;
+        let selector = crate::relational::PreparedRelationalRecoverySelector::prepare(
+            &immutable,
+            root.join(crate::relational::RELATIONAL_INDEX_RECOVERY_MANIFEST_FILE),
+        )
+        .map_err(|error| HawDBError::Storage(format!("prepare private index selector: {error}")))?
+        .with_generation_alias(
+            immutable.clone(),
+            root.join(
+                crate::relational::relational_index_recovery_manifest_generation_file(
+                    report.base_generation,
+                    report.delta_generation,
+                ),
+            ),
+        );
+        self.relational_index_shadow.read_view = Some(view);
+        self.relational_index_shadow.recovery_status =
+            RelationalIndexShadowRecoveryStatus::WalRecovered {
+                base_generation: report.base_generation,
+                base_commit_epoch: report.base_commit_epoch,
+                recovered_commit_epoch: report.recovered_commit_epoch,
+                delta_pages: report.delta_pages,
+                delta_entries: report.delta_entries,
+                peak_dirty_bytes: report.peak_dirty_bytes,
+            };
+        self.relational_index_shadow.recovery_report = Some(report);
+        Ok(Some(selector))
     }
 
     pub(super) fn relational_index_live_capture_limits(
@@ -1091,7 +1218,43 @@ impl GraphStore {
         transaction: RelationalTransaction,
         replay_access: Option<RelationalReplayAccessSet>,
         expected_epoch: u64,
+        work: Option<&crate::background::CheckpointWorkContext>,
     ) -> Result<(), hawdb_storage::relational::RelationalError> {
+        let prepared = match work {
+            Some(work) => self.prepare_recovered_relational_transaction_with_work_context(
+                transaction,
+                replay_access,
+                Some(work),
+            )?,
+            None => self.prepare_recovered_relational_transaction(transaction, replay_access)?,
+        };
+        self.install_recovered_relational_transaction(prepared, expected_epoch, work)
+    }
+
+    pub(super) fn prepare_recovered_relational_transaction(
+        &self,
+        transaction: RelationalTransaction,
+        replay_access: Option<RelationalReplayAccessSet>,
+    ) -> Result<PreparedRelationalRecoveryTransaction, hawdb_storage::relational::RelationalError>
+    {
+        self.prepare_recovered_relational_transaction_with_work_context(
+            transaction,
+            replay_access,
+            None,
+        )
+    }
+
+    fn prepare_recovered_relational_transaction_with_work_context(
+        &self,
+        transaction: RelationalTransaction,
+        replay_access: Option<RelationalReplayAccessSet>,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<PreparedRelationalRecoveryTransaction, hawdb_storage::relational::RelationalError>
+    {
+        let allocations = work.map(|work| crate::background::CheckpointDecodeContext {
+            work: work.clone(),
+            memory: Default::default(),
+        });
         let authoritative = self
             .relational_index_shadow
             .mode
@@ -1108,106 +1271,191 @@ impl GraphStore {
             ));
         }
         let row_limits = self.relational_row_recovery_capture_limits();
-        let (next, index_capture, row_capture) = match (index_limits, row_limits) {
-            (Some(index_limits), Some(row_limits)) if authoritative => {
-                let replay_access = replay_access.as_ref().ok_or_else(|| {
-                    hawdb_storage::relational::RelationalError::Corruption(
+        let (next, index_capture, row_capture) =
+            if let Some(context) = allocations.as_ref()
+                && !authoritative
+            {
+                self.relational_state
+                    .stage_materialized_recovery_with_allocations(
+                        crate::relational::RelationalMaterializedRecoveryStage {
+                            transaction,
+                            mutation_limits: self.relational_mutation_limits,
+                            overflow_config: self.relational_overflow_config,
+                            index_capture_limits: index_limits,
+                            row_capture_limits: row_limits,
+                        },
+                        context,
+                    )?
+            } else {
+                match (index_limits, row_limits) {
+                    (Some(index_limits), Some(row_limits)) if authoritative => {
+                        let replay_access = replay_access.as_ref().ok_or_else(|| {
+                            hawdb_storage::relational::RelationalError::Corruption(
                         "authoritative relational WAL is missing its exact replay access set"
                             .to_string(),
                     )
-                })?;
-                let (next, index_capture, row_capture) =
-                    if self.relational_state.canonical_row_metadata_only() {
-                        let hydrated_access = self
-                            .hydrate_sparse_relational_recovery_access(replay_access, row_limits)?;
-                        self.relational_state
-                            .stage_sparse_transaction_for_authoritative_recovery_with_replay_access(
-                                RelationalSparseRecoveryStage {
-                                    transaction,
-                                    hydrated_access,
-                                    mutation_limits: self.relational_mutation_limits,
-                                    overflow_config: self.relational_overflow_config,
-                                    index_capture_limits: index_limits,
-                                    row_capture_limits: row_limits,
-                                    expected_replay_access: replay_access,
-                                },
-                            )?
-                    } else {
-                        self.relational_state
-                            .stage_transaction_for_authoritative_recovery_with_replay_access(
+                        })?;
+                        let (next, index_capture, row_capture) =
+                            if self.relational_state.canonical_row_metadata_only() {
+                                let hydrated_access = match allocations.as_ref() {
+                        Some(context) => self
+                            .hydrate_sparse_relational_recovery_access_with_work_context(
+                                replay_access,
+                                row_limits,
+                                Some(context),
+                            )?,
+                        None => self
+                            .hydrate_sparse_relational_recovery_access(replay_access, row_limits)?,
+                    };
+                                self.relational_state
+                        .stage_sparse_transaction_for_authoritative_recovery_with_allocations(
+                            RelationalSparseRecoveryStage {
+                                transaction,
+                                hydrated_access,
+                                mutation_limits: self.relational_mutation_limits,
+                                overflow_config: self.relational_overflow_config,
+                                index_capture_limits: index_limits,
+                                row_capture_limits: row_limits,
+                                expected_replay_access: replay_access,
+                            },
+                            allocations.as_ref(),
+                        )?
+                            } else {
+                                self.relational_state
+                        .stage_resident_transaction_for_authoritative_recovery_with_allocations(
+                            crate::relational::RelationalResidentRecoveryStage {
+                                transaction,
+                                mutation_limits: self.relational_mutation_limits,
+                                overflow_config: self.relational_overflow_config,
+                                index_capture_limits: index_limits,
+                                row_capture_limits: row_limits,
+                                expected_replay_access: replay_access,
+                            },
+                            allocations.as_ref(),
+                        )?
+                            };
+                        (next, Some(index_capture), Some(row_capture))
+                    }
+                    (Some(index_limits), Some(row_limits)) => {
+                        let (next, index_capture, row_capture) = self
+                            .relational_state
+                            .stage_transaction_with_index_and_row_changes(
                                 transaction,
                                 self.relational_mutation_limits,
                                 self.relational_overflow_config,
                                 index_limits,
                                 row_limits,
-                                replay_access,
-                            )?
-                    };
-                (next, Some(index_capture), Some(row_capture))
-            }
-            (Some(index_limits), Some(row_limits)) => {
-                let (next, index_capture, row_capture) = self
-                    .relational_state
-                    .stage_transaction_with_index_and_row_changes(
-                        transaction,
-                        self.relational_mutation_limits,
-                        self.relational_overflow_config,
-                        index_limits,
-                        row_limits,
-                    )?;
-                (next, Some(index_capture), Some(row_capture))
-            }
-            (Some(index_limits), None) if authoritative => {
-                let (next, capture) = self
-                    .relational_state
-                    .stage_transaction_for_authoritative_recovery(
-                        transaction,
-                        self.relational_mutation_limits,
-                        self.relational_overflow_config,
-                        index_limits,
-                    )?;
-                (next, Some(capture), None)
-            }
-            (Some(index_limits), None) => {
-                let (next, capture) = self.relational_state.stage_transaction_with_index_changes(
-                    transaction,
-                    self.relational_mutation_limits,
-                    self.relational_overflow_config,
-                    index_limits,
-                )?;
-                (next, Some(capture), None)
-            }
-            (None, Some(row_limits)) => {
-                let (next, capture) = self.relational_state.stage_transaction_with_row_changes(
-                    transaction,
-                    self.relational_mutation_limits,
-                    self.relational_overflow_config,
-                    row_limits,
-                )?;
-                (next, None, Some(capture))
-            }
-            (None, None) => (
-                self.relational_state.stage_transaction(
-                    transaction,
-                    self.relational_mutation_limits,
-                    self.relational_overflow_config,
-                )?,
-                None,
-                None,
-            ),
+                            )?;
+                        (next, Some(index_capture), Some(row_capture))
+                    }
+                    (Some(index_limits), None) if authoritative => {
+                        let (next, capture) = self
+                            .relational_state
+                            .stage_legacy_transaction_for_authoritative_recovery_with_allocations(
+                                transaction,
+                                self.relational_mutation_limits,
+                                self.relational_overflow_config,
+                                index_limits,
+                                allocations.as_ref(),
+                            )?;
+                        (next, Some(capture), None)
+                    }
+                    (Some(index_limits), None) => {
+                        let (next, capture) =
+                            self.relational_state.stage_transaction_with_index_changes(
+                                transaction,
+                                self.relational_mutation_limits,
+                                self.relational_overflow_config,
+                                index_limits,
+                            )?;
+                        (next, Some(capture), None)
+                    }
+                    (None, Some(row_limits)) => {
+                        let (next, capture) =
+                            self.relational_state.stage_transaction_with_row_changes(
+                                transaction,
+                                self.relational_mutation_limits,
+                                self.relational_overflow_config,
+                                row_limits,
+                            )?;
+                        (next, None, Some(capture))
+                    }
+                    (None, None) => (
+                        self.relational_state.stage_transaction(
+                            transaction,
+                            self.relational_mutation_limits,
+                            self.relational_overflow_config,
+                        )?,
+                        None,
+                        None,
+                    ),
+                }
+            };
+        Ok(PreparedRelationalRecoveryTransaction {
+            next,
+            index_capture,
+            row_capture,
+            memory: allocations
+                .map_or_else(Default::default, |context| context.memory.into_inner()),
+        })
+    }
+
+    pub(super) fn install_recovered_relational_transaction(
+        &mut self,
+        prepared: PreparedRelationalRecoveryTransaction,
+        expected_epoch: u64,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<(), hawdb_storage::relational::RelationalError> {
+        // Staged schemas, row/index pages and overflow buffers carry their own
+        // shared inventory. This owner covers temporary change sets and capture
+        // payloads only; retain it until both captures have been encoded.
+        let PreparedRelationalRecoveryTransaction {
+            next,
+            index_capture,
+            row_capture,
+            memory,
+        } = prepared;
+        let mut captures = RecoveredRelationalCaptures {
+            index: index_capture,
+            row: row_capture,
+            _hydration: memory,
         };
         self.relational_state = next;
-        if let Some(capture) = index_capture
+        if let Some(capture) = captures.index.take()
             && let Some(mut builder) = self.relational_index_shadow.recovery_builder.take()
         {
-            if let Err(error) = builder.record(expected_epoch, capture) {
-                self.mark_relational_index_recovery_unavailable(expected_epoch, error.to_string());
-            } else {
-                self.relational_index_shadow.recovery_builder = Some(builder);
+            let result = match work {
+                Some(work) => work.classify(|scoped| {
+                    builder.record_with_work_context(expected_epoch, capture, scoped)
+                }),
+                None => builder
+                    .record(expected_epoch, capture)
+                    .map_err(crate::background::CheckpointOperationError::Operation),
+            };
+            match result {
+                Ok(()) => self.relational_index_shadow.recovery_builder = Some(builder),
+                Err(crate::background::CheckpointOperationError::Operation(error)) => {
+                    self.mark_relational_index_recovery_unavailable(
+                        expected_epoch,
+                        error.to_string(),
+                    );
+                }
+                Err(crate::background::CheckpointOperationError::Work(error)) => {
+                    self.mark_relational_index_recovery_unavailable(
+                        expected_epoch,
+                        error.to_string(),
+                    );
+                    return Err(hawdb_storage::relational::RelationalError::Admission(
+                        error.to_string(),
+                    ));
+                }
             }
         }
-        self.record_relational_row_recovery_capture(expected_epoch, row_capture);
-        Ok(())
+        self.record_relational_row_recovery_capture_with_work_context(
+            expected_epoch,
+            captures.row.take(),
+            work,
+        )
     }
 
     pub(super) fn invalidate_relational_index_recovery(
@@ -3280,6 +3528,319 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn controlled_shadow_schema_recovery_admits_before_wide_copy_and_preserves_source() {
+        use crate::background::CheckpointWorkContext;
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+            RuntimeWorkRequest,
+        };
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-controlled-shadow-schema-{}",
+            hawdb_core::generate_uuidv7().unwrap()
+        ));
+        let mut catalog = Catalog::default();
+        let store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                relational_index_mode: RelationalIndexMode::Shadow,
+                ..WalReplayConfig::default()
+            },
+        )
+        .unwrap();
+        let mut transaction = create_recovery_documents_table("doc-1");
+        let RelationalWrite::CreateTable(schema) = &mut transaction.writes[0] else {
+            panic!("fixture schema");
+        };
+        schema.indexes[0].name = "i".repeat(128 * 1024);
+        for (ceiling, succeeds) in [(16 * 1024, false), (16 * 1024 * 1024, true)] {
+            let governor = RuntimeGovernor::detect(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(ceiling),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                IoConcurrencyBudget::new(2, 1),
+            );
+            governor.pin_resources();
+            let permit = governor
+                .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+                .unwrap();
+            let work =
+                CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+            let input = transaction.clone();
+            let observation = crate::test_allocator::AllocationObservation::start();
+            let prepared = store.prepare_recovered_relational_transaction_with_work_context(
+                input,
+                None,
+                Some(&work),
+            );
+            let copies = observation.finish();
+            if succeeds {
+                let prepared = prepared.unwrap();
+                assert_eq!(prepared.next.row_count("documents"), 1);
+                assert!(prepared.next.table_schema("documents").is_some());
+                drop(prepared);
+            } else {
+                assert!(matches!(
+                    prepared,
+                    Err(hawdb_storage::relational::RelationalError::Admission(_))
+                ));
+                assert_eq!(copies, 0);
+            }
+            assert!(store.relational_state.table_schema("documents").is_none());
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+        drop(store);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn resident_recovery_releases_capture_inventory_and_snapshot_retains_row_pages() {
+        use crate::background::CheckpointWorkContext;
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+            RuntimeWorkRequest,
+        };
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-resident-capture-release-{}",
+            hawdb_core::generate_uuidv7().unwrap()
+        ));
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                relational_index_mode: RelationalIndexMode::Shadow,
+                ..WalReplayConfig::default()
+            },
+        )
+        .unwrap();
+        let id = "k".repeat(128 * 1024);
+        let ceiling = 16 * 1024 * 1024;
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let prepared = store
+            .prepare_recovered_relational_transaction_with_work_context(
+                create_recovery_documents_table(&id),
+                None,
+                Some(&work),
+            )
+            .unwrap();
+        let available = |work: &CheckpointWorkContext| match work
+            .task_context()
+            .reserve_working_memory(ceiling)
+        {
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded {
+                available_bytes, ..
+            }) => available_bytes,
+            result => panic!("expected retained inventory: {result:?}"),
+        };
+        let before = available(&work);
+        let snapshot = prepared.next.clone();
+        store
+            .install_recovered_relational_transaction(prepared, store.commit_epoch + 1, Some(&work))
+            .unwrap();
+        assert!(store.checkpoint_allocations.is_empty());
+        let after = available(&work);
+        assert!(after >= before + 128 * 1024);
+        assert!(after <= ceiling - 128 * 1024);
+        drop(store);
+        drop(work);
+        assert!(governor.snapshot().admitted_memory_bytes >= 128 * 1024);
+        let key = RelationalKey(vec![RelationalValue::Text(id)]);
+        assert!(snapshot.row("documents", &key).is_some());
+        drop(snapshot);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn sparse_recovery_releases_hydration_after_delta_encoding() {
+        use crate::background::CheckpointWorkContext;
+        use hawdb_qos::{
+            IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+            RuntimeWorkRequest,
+        };
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-sparse-hydration-release-{}",
+            hawdb_core::generate_uuidv7().unwrap()
+        ));
+        let mut catalog = Catalog::default();
+        let mut bootstrap = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                relational_index_mode: RelationalIndexMode::Shadow,
+                ..WalReplayConfig::default()
+            },
+        )
+        .unwrap();
+        let mut transaction = create_recovery_documents_table("doc-1");
+        if let RelationalWrite::CreateTable(schema) = &mut transaction.writes[0] {
+            schema
+                .columns
+                .push(hawdb_storage::relational::RelationalColumnSchema {
+                    name: "body".into(),
+                    scalar_type: RelationalScalarType::Text,
+                    nullable: false,
+                    default: None,
+                });
+        } else {
+            panic!("fixture schema");
+        }
+        if let RelationalWrite::Insert { rows, .. } = &mut transaction.writes[1] {
+            let mut values = rows[0].values().to_vec();
+            values.push(RelationalValue::Text("v".repeat(128 * 1024)));
+            rows[0] = hawdb_storage::relational::RelationalRow::new(values);
+        } else {
+            panic!("fixture insert");
+        }
+        bootstrap
+            .commit_relational_transaction(&mut catalog, transaction)
+            .unwrap();
+        bootstrap.checkpoint(&catalog).unwrap();
+        drop(bootstrap);
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                residency_mode: StorageResidencyMode::OutOfCore,
+                relational_index_mode: RelationalIndexMode::Authoritative,
+                ..WalReplayConfig::default()
+            },
+        )
+        .unwrap();
+        assert!(store.relational_state.canonical_row_metadata_only());
+        store.mount_relational_row_pages_for_recovery().unwrap();
+        store.mount_relational_index_shadow_for_recovery();
+        let key = RelationalKey(vec![RelationalValue::Text("doc-1".into())]);
+        let access =
+            hawdb_storage::relational::RelationalReplayAccessSet::from_decoded_entries(vec![
+                hawdb_storage::relational::RelationalReplayAccess {
+                    table: "documents".into(),
+                    primary_key: key.clone(),
+                },
+            ])
+            .unwrap();
+        let ceiling = 16 * 1024 * 1024;
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling).with_io_wave_slots(1))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let prepared = store
+            .prepare_recovered_relational_transaction_with_work_context(
+                RelationalTransaction {
+                    writes: vec![RelationalWrite::DeleteByPrimaryKey {
+                        table: "documents".into(),
+                        keys: vec![key],
+                    }],
+                },
+                Some(access),
+                Some(&work),
+            )
+            .unwrap();
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+            if available_bytes <= ceiling - 128 * 1024)
+        );
+        store
+            .install_recovered_relational_transaction(prepared, store.commit_epoch + 1, Some(&work))
+            .unwrap();
+        assert!(store.relational_state.canonical_row_metadata_only());
+        assert_eq!(store.relational_state.row_count("documents"), 0);
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+            if available_bytes > ceiling - 32 * 1024)
+        );
+        drop(store);
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn recovered_relational_preparation_can_be_discarded_without_installation() {
+        let path = std::env::temp_dir().join(format!(
+            "hawdb-relational-replay-preparation-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig::default(),
+        )
+        .expect("open recovery store");
+        let epoch = store.commit_epoch;
+        let prepared = store
+            .prepare_recovered_relational_transaction(
+                create_recovery_documents_table("doc-1"),
+                None,
+            )
+            .expect("prepare schema and row together");
+        assert!(store.relational_state.table_schema("documents").is_none());
+        assert_eq!(store.commit_epoch, epoch);
+        drop(prepared);
+        assert!(store.relational_state.table_schema("documents").is_none());
+        let prepared = store
+            .prepare_recovered_relational_transaction(
+                create_recovery_documents_table("doc-1"),
+                None,
+            )
+            .expect("retry discarded preparation");
+        store
+            .install_recovered_relational_transaction(prepared, epoch + 1, None)
+            .unwrap();
+        assert_eq!(store.relational_state.row_count("documents"), 1);
+        assert!(store
+            .prepare_recovered_relational_transaction(
+                create_recovery_documents_table("duplicate-schema"),
+                None,
+            )
+            .is_err());
+        assert_eq!(store.relational_state.row_count("documents"), 1);
+        assert_eq!(store.commit_epoch, epoch);
+        drop(store);
+        std::fs::remove_dir_all(path).expect("remove preparation fixture");
     }
 
     #[test]

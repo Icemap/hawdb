@@ -48,6 +48,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
 mod build;
+mod checkpoint;
+pub(super) use checkpoint::relational_schema_digest_with_work_context;
 mod demand_read;
 pub(crate) use demand_read::{
     IndexReadAdmission, IndexReadCharge, IndexReadObserver, IndexReadPreflightError,
@@ -67,6 +69,9 @@ pub use recovery::{
     DEFAULT_RELATIONAL_INDEX_RECOVERY_DIRTY_ENTRIES,
     DEFAULT_RELATIONAL_INDEX_RECOVERY_MANIFEST_BYTES, DEFAULT_RELATIONAL_INDEX_RECOVERY_PAGES,
     RELATIONAL_INDEX_RECOVERY_MANIFEST_FILE,
+};
+pub(crate) use recovery::{
+    relational_index_recovery_manifest_generation_file, relational_index_recovery_prefix_file,
 };
 
 const MANIFEST_MAGIC: &[u8; 8] = b"SKRIDXM1";
@@ -215,14 +220,17 @@ impl RelationalIndexShadowManifest {
         page_count: u64,
         roots: Vec<RelationalIndexRootDescriptor>,
     ) -> Result<Self, RelationalIndexShadowError> {
-        let logical_roots = logical_roots(&roots);
+        let logical_roots = borrowed_logical_roots(&roots);
         Ok(Self {
             generation,
             source_commit_epoch,
             page_bytes,
             page_count,
-            catalog_schema_digest: catalog_schema_digest(&logical_roots, ErrorClass::Admission)?,
-            root_set_digest: root_set_digest(&logical_roots),
+            catalog_schema_digest: catalog_schema_digest_entries(
+                logical_roots.clone(),
+                ErrorClass::Admission,
+            )?,
+            root_set_digest: root_set_digest_entries(logical_roots),
             roots,
         })
     }
@@ -308,6 +316,21 @@ impl RelationalIndexShadowManifest {
         encoded: &[u8],
         config: RelationalIndexShadowConfig,
     ) -> Result<Self, RelationalIndexShadowError> {
+        let mut memory = crate::background::CheckpointAllocationOwner::default();
+        Self::decode_with_work_context(
+            encoded,
+            config,
+            &crate::background::CheckpointWorkContext::default(),
+            &mut memory,
+        )
+    }
+
+    fn decode_with_work_context(
+        encoded: &[u8],
+        config: RelationalIndexShadowConfig,
+        work: &crate::background::CheckpointWorkContext,
+        memory: &mut crate::background::CheckpointAllocationOwner,
+    ) -> Result<Self, RelationalIndexShadowError> {
         if encoded.len() > config.max_manifest_bytes.get() {
             return Err(RelationalIndexShadowError::Admission(format!(
                 "relational index manifest contains {} bytes, exceeding limit {}",
@@ -380,6 +403,14 @@ impl RelationalIndexShadowManifest {
             ));
         }
         let mut offset = 0usize;
+        let root_bytes = root_count
+            .checked_mul(std::mem::size_of::<RelationalIndexRootDescriptor>())
+            .ok_or_else(|| {
+                RelationalIndexShadowError::Admission("decoded root metadata size overflow".into())
+            })?;
+        memory
+            .reserve(root_bytes, work)
+            .map_err(|error| RelationalIndexShadowError::Admission(error.to_string()))?;
         let mut roots = Vec::with_capacity(root_count);
         for _ in 0..root_count {
             let (namespace, next) = decode_bytes(
@@ -418,6 +449,21 @@ impl RelationalIndexShadowManifest {
                 statistics_bytes,
                 "leading-prefix statistics",
             )?;
+            for bytes in [
+                namespace.len(),
+                name.len(),
+                prefix_count
+                    .checked_mul(std::mem::size_of::<RelationalIndexPrefixStatistics>())
+                    .ok_or_else(|| {
+                        RelationalIndexShadowError::Admission(
+                            "decoded prefix statistics size overflow".into(),
+                        )
+                    })?,
+            ] {
+                memory
+                    .reserve(bytes, work)
+                    .map_err(|error| RelationalIndexShadowError::Admission(error.to_string()))?;
+            }
             let leading_prefixes = statistics_bytes
                 .chunks_exact(3 * 8)
                 .map(|encoded| RelationalIndexPrefixStatistics {
@@ -1187,6 +1233,7 @@ impl ShadowPublicationPaths {
 }
 
 pub struct RelationalIndexShadowReader {
+    verified_binding: Option<RelationalIndexGenerationArtifacts>,
     directory: PathBuf,
     manifest: RelationalIndexShadowManifest,
     config: RelationalIndexShadowConfig,
@@ -1194,6 +1241,7 @@ pub struct RelationalIndexShadowReader {
     store_id: StoreId,
     artifact: OnceLock<File>,
     poisoned: AtomicBool,
+    _memory: crate::background::CheckpointAllocationOwner,
 }
 
 pub(super) struct RelationalIndexPageRead {
@@ -1264,15 +1312,70 @@ impl RelationalIndexShadowReader {
         page_cache: Option<Arc<SegmentCache>>,
         store_id: StoreId,
     ) -> Result<Self, RelationalIndexShadowError> {
+        Self::open_bound_generation_with_work_context(
+            directory,
+            binding,
+            config,
+            page_cache,
+            store_id,
+            &crate::background::CheckpointWorkContext::default(),
+        )
+    }
+
+    pub(crate) fn open_bound_generation_with_work_context(
+        directory: &Path,
+        binding: RelationalIndexGenerationArtifacts,
+        config: RelationalIndexShadowConfig,
+        page_cache: Option<Arc<SegmentCache>>,
+        store_id: StoreId,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Self, RelationalIndexShadowError> {
         let manifest_path = directory.join(relational_index_shadow_manifest_generation_file(
             binding.generation,
         ));
-        let encoded = read_bounded_file(
-            &manifest_path,
-            config.max_manifest_bytes.get(),
-            "bound relational index manifest",
-        )?;
-        let digest = integrity_digest(&encoded);
+        let mut memory = crate::background::CheckpointAllocationOwner::default();
+        let mut encoded_memory = crate::background::CheckpointAllocationOwner::default();
+        let wave = work
+            .io_wave()
+            .map_err(|error| RelationalIndexShadowError::Admission(error.to_string()))?;
+        let length = fs::metadata(&manifest_path)
+            .map_err(|error| {
+                RelationalIndexShadowError::from_io("read bound index manifest metadata", error)
+            })?
+            .len();
+        let capacity = usize::try_from(length).map_err(|_| {
+            RelationalIndexShadowError::Admission(
+                "bound index manifest size overflows target".into(),
+            )
+        })?;
+        if capacity > config.max_manifest_bytes.get() {
+            return Err(RelationalIndexShadowError::Admission(
+                "bound index manifest exceeds its byte limit".into(),
+            ));
+        }
+        encoded_memory
+            .reserve(capacity, work)
+            .map_err(|error| RelationalIndexShadowError::Admission(error.to_string()))?;
+        let mut encoded = vec![0; capacity];
+        let mut file = File::open(&manifest_path).map_err(|error| {
+            RelationalIndexShadowError::from_io("open bound index manifest", error)
+        })?;
+        file.read_exact(&mut encoded).map_err(|error| {
+            RelationalIndexShadowError::from_io("read bound index manifest", error)
+        })?;
+        let mut extra = [0];
+        if file.read(&mut extra).map_err(|error| {
+            RelationalIndexShadowError::from_io("read bound index manifest tail", error)
+        })? != 0
+        {
+            return Err(RelationalIndexShadowError::Corrupt(
+                "bound index manifest changed length during read".into(),
+            ));
+        }
+        drop(wave);
+        let digest = work
+            .integrity(&encoded)
+            .map_err(|error| RelationalIndexShadowError::Admission(error.to_string()))?;
         if encoded.len() as u64 != binding.manifest_artifact.encoded_len
             || digest.crc32c.as_u64() != binding.manifest_artifact.encoded_crc32c
             || digest.sha256 != binding.manifest_artifact.encoded_sha256
@@ -1282,7 +1385,14 @@ impl RelationalIndexShadowReader {
                     .to_string(),
             ));
         }
-        let manifest = RelationalIndexShadowManifest::decode(&encoded, config)?;
+        let manifest = RelationalIndexShadowManifest::decode_with_work_context(
+            &encoded,
+            config,
+            work,
+            &mut memory,
+        )?;
+        drop(encoded);
+        drop(encoded_memory);
         let expected_page_bytes = manifest
             .page_count
             .checked_mul(manifest.page_bytes)
@@ -1302,7 +1412,18 @@ impl RelationalIndexShadowReader {
                     .to_string(),
             ));
         }
-        Self::from_manifest(directory, manifest, config, page_cache, store_id)
+        for bytes in [
+            directory.as_os_str().len(),
+            std::mem::size_of::<Self>() + 2 * std::mem::size_of::<usize>(),
+        ] {
+            memory
+                .reserve(bytes, work)
+                .map_err(|error| RelationalIndexShadowError::Admission(error.to_string()))?;
+        }
+        let mut reader = Self::from_manifest(directory, manifest, config, page_cache, store_id)?;
+        reader._memory = memory;
+        reader.verified_binding = Some(binding);
+        Ok(reader)
     }
 
     fn open_generation_inner(
@@ -1408,7 +1529,16 @@ impl RelationalIndexShadowReader {
             store_id,
             artifact: OnceLock::new(),
             poisoned: AtomicBool::new(false),
+            verified_binding: None,
+            _memory: crate::background::CheckpointAllocationOwner::default(),
         })
+    }
+
+    pub(crate) fn matches_generation_binding(
+        &self,
+        binding: RelationalIndexGenerationArtifacts,
+    ) -> bool {
+        self.verified_binding == Some(binding)
     }
 
     pub fn manifest(&self) -> &RelationalIndexShadowManifest {
@@ -1421,19 +1551,20 @@ impl RelationalIndexShadowReader {
     ) -> Result<(), RelationalIndexShadowError> {
         let expected =
             required_logical_roots(state, self.config.max_roots.get(), ErrorClass::Admission)?;
-        let actual = logical_roots(&self.manifest.roots);
+        let matches = borrowed_logical_roots(&self.manifest.roots)
+            .eq(expected.iter().map(RootDigestEntry::from_logical));
         let expected_catalog = catalog_schema_digest(&expected, ErrorClass::Corrupt)?;
         let expected_root_set = root_set_digest(&expected);
         if self.manifest.catalog_schema_digest != expected_catalog
             || self.manifest.root_set_digest != expected_root_set
-            || actual != expected
+            || !matches
         {
             return Err(RelationalIndexShadowError::Corrupt(format!(
                 "required relational index roots do not match the pinned schema: expected {} roots with catalog/root-set {}/{}, found {} roots with {}/{}",
                 expected.len(),
                 expected_catalog,
                 expected_root_set,
-                actual.len(),
+                self.manifest.roots.len(),
                 self.manifest.catalog_schema_digest,
                 self.manifest.root_set_digest,
             )));
@@ -2388,16 +2519,34 @@ struct RelationalIndexLogicalRoot {
     column_count: usize,
 }
 
-fn logical_roots(roots: &[RelationalIndexRootDescriptor]) -> Vec<RelationalIndexLogicalRoot> {
-    roots
-        .iter()
-        .map(|root| RelationalIndexLogicalRoot {
-            identity: root.identity.clone(),
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct RootDigestEntry<'a> {
+    identity: &'a IndexIdentity,
+    role: RelationalIndexRole,
+    schema_digest: Sha256Digest,
+    column_count: usize,
+}
+
+impl<'a> RootDigestEntry<'a> {
+    fn from_logical(root: &'a RelationalIndexLogicalRoot) -> Self {
+        Self {
+            identity: &root.identity,
             role: root.role,
             schema_digest: root.schema_digest,
-            column_count: root.statistics.leading_prefixes.len(),
-        })
-        .collect()
+            column_count: root.column_count,
+        }
+    }
+}
+
+fn borrowed_logical_roots(
+    roots: &[RelationalIndexRootDescriptor],
+) -> impl Iterator<Item = RootDigestEntry<'_>> + Clone {
+    roots.iter().map(|root| RootDigestEntry {
+        identity: &root.identity,
+        role: root.role,
+        schema_digest: root.schema_digest,
+        column_count: root.statistics.leading_prefixes.len(),
+    })
 }
 
 fn required_logical_roots(
@@ -2460,11 +2609,21 @@ fn catalog_schema_digest(
     roots: &[RelationalIndexLogicalRoot],
     error_class: ErrorClass,
 ) -> Result<Sha256Digest, RelationalIndexShadowError> {
+    catalog_schema_digest_entries(roots.iter().map(RootDigestEntry::from_logical), error_class)
+}
+
+fn catalog_schema_digest_entries<'a>(
+    roots: impl Iterator<Item = RootDigestEntry<'a>> + Clone,
+    error_class: ErrorClass,
+) -> Result<Sha256Digest, RelationalIndexShadowError> {
+    let mut previous_table: Option<&str> = None;
     let table_count = roots
-        .iter()
-        .enumerate()
-        .filter(|(position, root)| {
-            *position == 0 || roots[*position - 1].identity.namespace != root.identity.namespace
+        .clone()
+        .filter(|root| {
+            let table = root.identity.namespace.as_str();
+            let changed = previous_table != Some(table);
+            previous_table = Some(table);
+            changed
         })
         .count();
     let mut hasher = IntegrityHasher::new();
@@ -2495,9 +2654,15 @@ fn catalog_schema_digest(
 }
 
 fn root_set_digest(roots: &[RelationalIndexLogicalRoot]) -> Sha256Digest {
+    root_set_digest_entries(roots.iter().map(RootDigestEntry::from_logical))
+}
+
+fn root_set_digest_entries<'a>(
+    roots: impl Iterator<Item = RootDigestEntry<'a>> + Clone,
+) -> Sha256Digest {
     let mut hasher = IntegrityHasher::new();
     hasher.update(b"hawdb-relational-index-required-roots-v2\0");
-    hasher.update(&(roots.len() as u64).to_le_bytes());
+    hasher.update(&(roots.clone().count() as u64).to_le_bytes());
     for root in roots {
         hash_manifest_bytes(&mut hasher, root.identity.namespace.as_bytes());
         hash_manifest_bytes(&mut hasher, root.identity.name.as_bytes());
@@ -2654,9 +2819,10 @@ fn validate_manifest(
         }
         previous = Some(identity);
     }
-    let logical_roots = logical_roots(&manifest.roots);
-    if manifest.catalog_schema_digest != catalog_schema_digest(&logical_roots, error_class)?
-        || manifest.root_set_digest != root_set_digest(&logical_roots)
+    let logical_roots = borrowed_logical_roots(&manifest.roots);
+    if manifest.catalog_schema_digest
+        != catalog_schema_digest_entries(logical_roots.clone(), error_class)?
+        || manifest.root_set_digest != root_set_digest_entries(logical_roots)
     {
         return Err(invalid(
             error_class,
@@ -3094,6 +3260,57 @@ mod lock_tests {
         crate::file_lock_tests::assert_state_machine(
             RELATIONAL_INDEX_SHADOW_LOCK_FILE,
             acquire_publication_lock,
+        );
+    }
+    #[test]
+    fn borrowed_root_digests_preserve_versioned_golden_bytes() {
+        // Fixed digests encode the published v1 catalog / v2 root-set domains,
+        // little-endian lengths, adjacent table grouping and each root's role.
+        let roots = [
+            ("alpha", "__primary", RelationalIndexRole::Primary, 17, 1),
+            ("alpha", "secondary", RelationalIndexRole::Secondary, 17, 2),
+            ("zeta", "__primary", RelationalIndexRole::Primary, 34, 1),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(
+            |(ordinal, (table, index, role, byte, columns))| RelationalIndexRootDescriptor {
+                identity: IndexIdentity {
+                    namespace: table.into(),
+                    name: index.into(),
+                },
+                role,
+                schema_digest: Sha256Digest::from_bytes([byte; 32]),
+                root_page_id: page_id(ordinal as u64 + 1, "golden root").unwrap(),
+                height: 1,
+                statistics: RelationalIndexStatistics {
+                    leading_prefixes: (0..columns)
+                        .map(|_| RelationalIndexPrefixStatistics {
+                            distinct_non_null_values: 1,
+                            non_null_rows: 1,
+                            fanout: 1,
+                        })
+                        .collect(),
+                },
+            },
+        )
+        .collect::<Vec<_>>();
+        let borrowed = borrowed_logical_roots(&roots);
+        assert_eq!(
+            catalog_schema_digest_entries(borrowed.clone(), ErrorClass::Corrupt)
+                .unwrap()
+                .as_bytes(),
+            &[
+                64, 167, 8, 74, 92, 80, 123, 26, 246, 35, 133, 25, 65, 122, 213, 3, 66, 202, 231,
+                81, 210, 156, 14, 78, 67, 217, 143, 211, 194, 78, 6, 114,
+            ]
+        );
+        assert_eq!(
+            root_set_digest_entries(borrowed).as_bytes(),
+            &[
+                85, 5, 188, 249, 53, 71, 19, 148, 122, 186, 140, 147, 30, 242, 207, 13, 231, 218,
+                51, 12, 150, 204, 212, 161, 190, 17, 109, 5, 54, 154, 150, 61,
+            ]
         );
     }
 }

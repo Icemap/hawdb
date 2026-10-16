@@ -16,6 +16,9 @@
 
 use super::*;
 
+#[path = "graph_mutation/checkpoint_capture.rs"]
+mod checkpoint_capture;
+
 impl GraphStore {
     pub fn create_node(
         &mut self,

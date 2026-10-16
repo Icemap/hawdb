@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod schema_encoding;
+pub(super) use schema_encoding::{schema_record, schema_record_len};
+
 use super::binary::{map_relational, Decoder, Encoder};
 use super::{
     validate_table_schema, AppendOrderMode, AppendTableError, AppendTableSchema, AppendTransaction,
@@ -134,10 +137,22 @@ pub fn decode_append_wal_batch(
     encoded: &[u8],
     limits: AppendDecodeLimits,
 ) -> Result<AppendWalBatch, AppendTableError> {
-    let (epoch, payload) = decode_envelope(encoded, limits.max_record_bytes)?;
-    let mut decoder = Decoder::new(payload);
+    decode_batch(encoded, limits, None)
+}
+
+pub(super) fn decode_batch(
+    encoded: &[u8],
+    limits: AppendDecodeLimits,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<AppendWalBatch, AppendTableError> {
+    let (epoch, payload) = decode_envelope_with_work(
+        encoded,
+        limits.max_record_bytes,
+        allocations.map(|owned| &owned.work),
+    )?;
+    let mut decoder = Decoder::with_allocations(payload, allocations);
     let write_count = decoder.count(limits.max_writes, "append WAL writes")?;
-    let mut writes = Vec::with_capacity(write_count);
+    let mut writes = decoder.vector(write_count)?;
     let mut row_count = 0usize;
     let mut value_count = 0usize;
     for _ in 0..write_count {
@@ -154,15 +169,25 @@ pub fn decode_append_wal_batch(
                 row_count = row_count.checked_add(count).ok_or_else(|| {
                     AppendTableError::Corruption("append WAL row count overflow".to_string())
                 })?;
-                let mut rows = Vec::with_capacity(count);
+                let mut rows = decoder.vector(count)?;
                 for _ in 0..count {
                     let row_payload =
                         decoder.bytes(limits.max_record_bytes, "append WAL row payload")?;
-                    let row = decode_relational_row_payload(
-                        row_payload,
-                        limits.max_values.saturating_sub(value_count),
-                        limits.max_value_bytes,
-                    )
+                    let remaining = limits.max_values.saturating_sub(value_count);
+                    let row = if let Some(owned) = allocations {
+                        crate::relational::decode_row_owned(
+                            row_payload,
+                            remaining,
+                            limits.max_value_bytes,
+                            owned,
+                        )
+                    } else {
+                        decode_relational_row_payload(
+                            row_payload,
+                            remaining,
+                            limits.max_value_bytes,
+                        )
+                    }
                     .map_err(map_relational)?;
                     value_count = value_count.checked_add(row.values().len()).ok_or_else(|| {
                         AppendTableError::Corruption("append WAL value count overflow".to_string())
@@ -237,9 +262,17 @@ fn decode_schema(
         }
     };
     let encoded = decoder.bytes(limits.max_schema_bytes, "append table schema")?;
-    let relational =
+    let relational = if let Some(owned) = decoder.allocations {
+        crate::relational::decode_schema_owned(
+            encoded,
+            limits.max_schema_bytes,
+            limits.max_values,
+            owned,
+        )
+    } else {
         decode_relational_table_schema(encoded, limits.max_schema_bytes, limits.max_values)
-            .map_err(map_relational)?;
+    }
+    .map_err(map_relational)?;
     if partition_count > relational.primary_key.len()
         || partition_count == relational.primary_key.len()
         || !relational.unique_constraints.is_empty()
@@ -250,14 +283,64 @@ fn decode_schema(
             "append schema has an invalid key split or unsupported relational metadata".to_string(),
         ));
     }
+    let (partition_key, order_key) = if let Some(owned) = decoder.allocations {
+        let original = owned
+            .find(relational.primary_key.as_ptr() as usize)
+            .map_err(super::binary::allocation_error)?;
+        let mut partition = decoder.vector(partition_count)?;
+        let mut order = decoder.vector(relational.primary_key.len() - partition_count)?;
+        // Move strings rather than cloning their variable-width allocations.
+        for (index, key) in relational.primary_key.into_iter().enumerate() {
+            let unit = owned.start_unit().map_err(super::checkpoint::work_error)?;
+            if index < partition_count {
+                partition.push(key);
+            } else {
+                order.push(key);
+            }
+            unit.finish();
+        }
+        original.release_buffer();
+        (partition, order)
+    } else {
+        (
+            relational.primary_key[..partition_count].to_vec(),
+            relational.primary_key[partition_count..].to_vec(),
+        )
+    };
     let schema = AppendTableSchema {
         name: relational.name,
         columns: relational.columns,
-        partition_key: relational.primary_key[..partition_count].to_vec(),
-        order_key: relational.primary_key[partition_count..].to_vec(),
+        partition_key,
+        order_key,
         order_mode,
     };
-    validate_table_schema(&schema)?;
+    if let Some(owned) = decoder.allocations {
+        let scratch = crate::background::CheckpointDecodeContext {
+            work: owned.work.clone(),
+            memory: std::cell::RefCell::default(),
+        };
+        use crate::projection::predicate_checkpoint::decode::MapMemory;
+        if !schema.columns.is_empty() {
+            MapMemory::<()>::default()
+                .before_insert(schema.columns.len() - 1, &scratch)
+                .map_err(super::binary::allocation_error)?;
+        }
+        let keys = schema.partition_key.len() + schema.order_key.len();
+        if keys > 0 {
+            MapMemory::<()>::default()
+                .before_insert(keys - 1, &scratch)
+                .map_err(super::binary::allocation_error)?;
+        }
+        super::validate_table_schema_visiting(&schema, || {
+            owned
+                .start_unit()
+                .map_err(super::checkpoint::work_error)?
+                .finish();
+            Ok(())
+        })?;
+    } else {
+        validate_table_schema(&schema)?;
+    }
     Ok(schema)
 }
 
@@ -279,10 +362,11 @@ fn encode_envelope(epoch: u64, payload: Vec<u8>) -> Result<Vec<u8>, AppendTableE
     Ok(encoded)
 }
 
-fn decode_envelope(
-    encoded: &[u8],
+fn decode_envelope_with_work<'a>(
+    encoded: &'a [u8],
     max_record_bytes: usize,
-) -> Result<(u64, &[u8]), AppendTableError> {
+    work: Option<&crate::background::CheckpointWorkContext>,
+) -> Result<(u64, &'a [u8]), AppendTableError> {
     if encoded.len() > max_record_bytes || encoded.len() < APPEND_HEADER_BYTES {
         return Err(AppendTableError::Admission(format!(
             "append WAL contains {} bytes, outside limit {max_record_bytes}",
@@ -315,7 +399,12 @@ fn decode_envelope(
         )));
     }
     let payload = &encoded[APPEND_HEADER_BYTES..];
-    let digest = integrity_digest(payload);
+    let digest = if let Some(work) = work {
+        work.integrity(payload)
+            .map_err(super::checkpoint::work_error)?
+    } else {
+        integrity_digest(payload)
+    };
     let expected_crc = u32::from_le_bytes(encoded[28..32].try_into().expect("fixed header"));
     let expected_sha: &[u8; SHA256_BYTES] = encoded[32..64].try_into().expect("fixed header");
     if digest.crc32c.get() != expected_crc || digest.sha256.as_bytes() != expected_sha {
@@ -328,6 +417,8 @@ fn decode_envelope(
 
 #[cfg(test)]
 mod tests {
+    mod owned;
+
     use super::*;
     use crate::relational::{
         RelationalColumnSchema, RelationalRow, RelationalScalarType, RelationalValue,

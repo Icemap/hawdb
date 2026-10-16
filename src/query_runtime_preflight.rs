@@ -105,6 +105,7 @@ fn error_class(error: &HawDBError) -> &'static str {
         | HawDBError::BranchBusy { .. }
         | HawDBError::BranchReclamationBlocked { .. } => "storage",
         HawDBError::Execution(_)
+        | HawDBError::BranchEvidenceBudgetExceeded { .. }
         | HawDBError::ReadBudgetExceeded(_)
         | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. }

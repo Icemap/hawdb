@@ -16,6 +16,9 @@ use super::*;
 use std::cell::Cell;
 use std::ptr;
 
+#[cfg(not(target_arch = "wasm32"))]
+mod checkpoint_memory;
+
 #[derive(Clone, Copy, Default, Debug)]
 struct Activity {
     allocations: usize,
@@ -259,4 +262,37 @@ fn partially_used_context_can_move_to_another_host_thread() {
             .unwrap();
     });
     assert_eq!(first, [b'c']);
+}
+
+#[test]
+fn known_slice_frames_bound_decoder_workspace_and_keep_payloads_identical() {
+    let input = "界🙂".repeat(800).into_bytes();
+    let unknown_size = encode_all(input.as_slice(), 3).unwrap();
+    let known_size = encode_slice(&input, 3).unwrap();
+    assert_eq!(
+        zstd::zstd_safe::get_frame_content_size(&known_size).unwrap(),
+        Some(input.len() as u64)
+    );
+    let decode = |encoded: &[u8]| {
+        observe(None, || {
+            let mut decoder = Decoder::with_buffer(encoded).unwrap();
+            let mut decoded = Vec::new();
+            decoder.read_to_end(&mut decoded).unwrap();
+            decoded
+        })
+    };
+    let (old_value, old_memory) = decode(&unknown_size);
+    let (new_value, new_memory) = decode(&known_size);
+    assert_eq!(old_value, input);
+    assert_eq!(new_value, input);
+    assert!(new_memory.allocated_bytes < old_memory.allocated_bytes);
+    assert!(new_memory.allocated_bytes < 2 * 1024 * 1024);
+}
+
+#[test]
+fn pledged_frame_size_mismatch_is_rejected_at_completion() {
+    let mut encoder = Encoder::new(Vec::new(), 3).unwrap();
+    encoder.set_pledged_src_size(20).unwrap();
+    encoder.write_all(b"short").unwrap();
+    assert!(encoder.finish().is_err());
 }

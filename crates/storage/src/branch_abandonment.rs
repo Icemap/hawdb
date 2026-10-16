@@ -181,12 +181,23 @@ impl Manifest {
                 sum.checked_add(file.bytes)
             })
             .ok_or_else(|| invalid("quarantine byte count overflow"))?;
-        if limits.max_files == 0
-            || limits.max_bytes == 0
-            || self.inventory_entries >= limits.max_files
-            || bytes > limits.max_bytes
-        {
-            return Err(invalid("branch abandonment evidence limit exceeded"));
+        let files = self
+            .inventory_entries
+            .checked_add(1)
+            .ok_or_else(|| invalid("quarantine file count overflow"))?;
+        if files > limits.max_files {
+            return Err(HawDBError::BranchEvidenceBudgetExceeded {
+                resource: "files",
+                requested: files as u64,
+                limit: limits.max_files as u64,
+            });
+        }
+        if bytes > limits.max_bytes {
+            return Err(HawDBError::BranchEvidenceBudgetExceeded {
+                resource: "bytes",
+                requested: bytes,
+                limit: limits.max_bytes,
+            });
         }
         Ok(())
     }
@@ -352,6 +363,7 @@ fn archive_directory(directory: &Path, branch: BranchId) -> PathBuf {
 pub(crate) fn has_abandonment(catalog_path: &Path, branch: BranchId) -> io::Result<bool> {
     let directory = catalog_path
         .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
         .ok_or_else(|| io::Error::other("catalog has no parent"))?;
     // Even an interrupted intent publication reserves the operation. Letting
     // recovery finish a healthy child here would strand its incomplete archive
@@ -681,16 +693,56 @@ impl QuarantinedObjects {
     }
 }
 
+pub(crate) struct ReclamationSnapshot {
+    pub catalog: Catalog,
+    pub proofs: QuarantinedObjects,
+    pub metadata: CatalogMetadataLease,
+}
+
+pub(crate) fn prepare_reclamation(
+    catalog_path: &Path,
+    limits: BranchAbandonmentLimits,
+) -> Result<ReclamationSnapshot> {
+    prepare_reclamation_with_verifier(catalog_path, |directory, catalog| {
+        reclamation_evidence(directory, catalog, limits)
+    })
+}
+
+fn prepare_reclamation_with_verifier(
+    catalog_path: &Path,
+    verify: impl FnOnce(&Path, &Catalog) -> Result<QuarantinedObjects>,
+) -> Result<ReclamationSnapshot> {
+    let directory = catalog_path
+        .parent()
+        .ok_or_else(|| invalid("branch catalog has no project directory"))?;
+    let catalog = {
+        let _metadata = CatalogMetadataLease::acquire_blocking(directory)?;
+        branch_catalog::read_catalog(catalog_path)?
+    };
+    // Committed quarantine archives are immutable and never swept. Retain
+    // full byte verification on every call, without holding up publishers.
+    // A concurrent abandonment or catalog transition invalidates this view.
+    let proofs = verify(directory, &catalog);
+    let metadata = CatalogMetadataLease::acquire_blocking(directory)?;
+    if branch_catalog::read_catalog(catalog_path)? != catalog {
+        return Err(HawDBError::BranchBusy {
+            resource: "catalog changed during quarantine verification; retry reclamation",
+        });
+    }
+    Ok(ReclamationSnapshot {
+        catalog,
+        proofs: proofs?,
+        metadata,
+    })
+}
+
 pub(crate) fn reclamation_evidence(
     directory: &Path,
     catalog: &Catalog,
-    limits: crate::branch_reclamation::BranchReclamationLimits,
+    limits: BranchAbandonmentLimits,
 ) -> Result<QuarantinedObjects> {
     let mut proofs = QuarantinedObjects::default();
-    let mut remaining = BranchAbandonmentLimits {
-        max_files: limits.max_objects,
-        max_bytes: limits.max_bytes,
-    };
+    let mut remaining = limits;
     for record in &catalog.branches {
         let archive = archive_directory(directory, record.id);
         let Some(manifest) = load_intent(&archive)? else {

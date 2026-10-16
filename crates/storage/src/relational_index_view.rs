@@ -1532,6 +1532,13 @@ impl RelationalIndexReadView {
         }
     }
 
+    pub(crate) fn pinned_base(&self) -> Arc<RelationalIndexShadowReader> {
+        match &self.backend {
+            RelationalIndexReadBackend::Base(reader) => Arc::clone(reader),
+            RelationalIndexReadBackend::Recovered(reader) => reader.pinned_base(),
+        }
+    }
+
     pub fn base_manifest(&self) -> &RelationalIndexShadowManifest {
         match &self.backend {
             RelationalIndexReadBackend::Base(reader) => reader.manifest(),

@@ -87,7 +87,8 @@ fn relationship_set_persists_and_replays_from_wal() {
             .store
             .scan_relationships(None)
             .next()
-            .unwrap();
+            .unwrap()
+            .clone();
         assert_eq!(relationship.properties.get("weight"), Some(&Value::Int(2)));
     }
     std::fs::remove_dir_all(path).unwrap();
@@ -202,7 +203,8 @@ fn transaction_relationship_set_commits_and_rolls_back() {
         .store
         .scan_relationships(None)
         .next()
-        .unwrap();
+        .unwrap()
+        .clone();
     assert_eq!(relationship.properties.get("weight"), Some(&Value::Int(1)));
 
     {
@@ -219,6 +221,7 @@ fn transaction_relationship_set_commits_and_rolls_back() {
         .store
         .scan_relationships(None)
         .next()
-        .unwrap();
+        .unwrap()
+        .clone();
     assert_eq!(relationship.properties.get("weight"), Some(&Value::Int(3)));
 }

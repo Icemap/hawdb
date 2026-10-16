@@ -20,6 +20,7 @@
 //! candidate enters the cell. Readers keep the original runtime's snapshot pins.
 
 use super::{
+    automatic_checkpoint::{Control, Owner, State, Suspension},
     branch_lifecycle::{BranchLifecycleError, BranchSelection},
     configure_relational_fast_paths, configure_search_projection_changefeed,
     search_projection_consumer, CascadesOptimizer, Catalog, Database, DatabaseConfig,
@@ -31,7 +32,12 @@ use hawdb_storage::branch_project::{ProjectMetadata, ProjectSelector};
 use hawdb_storage::file_descriptors::{
     FileDescriptorMetrics, FileOpenContext, ProjectFileDescriptors,
 };
-use std::sync::{Arc, Mutex, OnceLock};
+use std::ops::{Deref, DerefMut};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+
+mod guards;
+pub(super) use guards::SharedBranchRuntime;
+use guards::{RuntimeRead, RuntimeWrite};
 
 #[derive(Debug)]
 pub(super) struct AdmittedBranchRuntime {
@@ -60,27 +66,115 @@ pub(super) struct DeferredBranchAdmission {
 
 #[derive(Debug)]
 pub(super) struct BranchRuntimeCell {
-    admitted: OnceLock<Box<AdmittedBranchRuntime>>,
+    admitted: Arc<SharedBranchRuntime>,
     pending: Option<DeferredBranchAdmission>,
     admission: Mutex<()>,
     instance_identity: DatabaseInstanceIdentity,
+    // Mutations and background selector publication share this barrier.
+    // Reads borrow the stable frontend and only try to adopt a ready handoff.
+    publication: Arc<Control>,
+    automatic: OnceLock<Option<Owner>>,
+    automatic_start: Mutex<()>,
+}
+
+#[derive(Debug)]
+pub(super) struct AdmittedBranchRuntimeMut<'a> {
+    runtime: RuntimeWrite<'a>,
+    publication: Option<MutexGuard<'a, State>>,
+    control: &'a Control,
+}
+
+impl Drop for AdmittedBranchRuntimeMut<'_> {
+    fn drop(&mut self) {
+        let retired = self.publication.take().and_then(|mut state| {
+            self.control
+                .submit(&mut state, &self.runtime.store, &self.runtime.catalog)
+        });
+        // The closure released its mutex guard. Captured-source destruction
+        // must not extend the foreground publication critical section.
+        drop(retired);
+    }
+}
+
+impl Deref for AdmittedBranchRuntimeMut<'_> {
+    type Target = AdmittedBranchRuntime;
+
+    fn deref(&self) -> &Self::Target {
+        &self.runtime
+    }
+}
+
+impl DerefMut for AdmittedBranchRuntimeMut<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.runtime
+    }
+}
+
+/// Read execution may update local caches, but callers cannot access mutable
+/// live storage or the catalog without the mutation/publication guard.
+#[derive(Debug)]
+pub(super) struct AdmittedBranchRuntimeRead<'a> {
+    runtime: RuntimeWrite<'a>,
+}
+
+impl AdmittedBranchRuntimeRead<'_> {
+    pub(super) fn catalog(&self) -> &Catalog {
+        &self.runtime.catalog
+    }
+
+    pub(super) fn store(&self) -> &GraphStore {
+        &self.runtime.store
+    }
+
+    pub(super) fn execute(
+        &mut self,
+        request: crate::executor::ExecutionRequest<'_>,
+        external: &mut dyn crate::executor::ExternalReadOperator,
+    ) -> Result<crate::executor::ProfiledQueryRows> {
+        if crate::executor::requires_write_access(request.plan()) {
+            return Err(HawDBError::Execution(
+                "read runtime access does not permit storage writes".into(),
+            ));
+        }
+        let runtime = &mut *self.runtime;
+        crate::executor::execute_with_request(
+            request,
+            crate::executor::ExecutionResources::new(
+                &mut runtime.catalog,
+                &mut runtime.store,
+                external,
+            ),
+        )
+    }
 }
 
 impl BranchRuntimeCell {
     pub(super) fn admitted(runtime: AdmittedBranchRuntime) -> Self {
+        let admitted = Arc::new(SharedBranchRuntime::new(Some(runtime)));
+        let publication = Arc::new(Control::default());
+        publication.attach_frontend(&admitted);
         Self {
-            admitted: OnceLock::from(Box::new(runtime)),
+            admitted,
             pending: None,
             admission: Mutex::new(()),
+            publication,
+            automatic: OnceLock::new(),
+            automatic_start: Mutex::new(()),
             instance_identity: DatabaseInstanceIdentity::new(),
         }
     }
 
     pub(super) fn deferred(pending: DeferredBranchAdmission) -> Self {
+        let admitted = Arc::new(SharedBranchRuntime::default());
+        let publication = Arc::new(Control::default());
+        publication.attach_frontend(&admitted);
         Self {
-            admitted: OnceLock::new(),
+            admitted,
             pending: Some(pending),
             admission: Mutex::new(()),
+            publication,
+            automatic: OnceLock::new(),
+            automatic_start: Mutex::new(()),
             instance_identity: DatabaseInstanceIdentity::new(),
         }
     }
@@ -89,48 +183,183 @@ impl BranchRuntimeCell {
         self.instance_identity.clone()
     }
 
-    pub(super) fn get(&self) -> Result<&AdmittedBranchRuntime> {
-        if let Some(runtime) = self.admitted.get() {
-            return Ok(runtime);
+    pub(super) fn get(&self) -> Result<RuntimeRead<'_>> {
+        self.publication.ensure_healthy()?;
+        if self.admitted.read(&self.publication)?.is_some() {
+            if let Some(pending) = &self.pending {
+                self.arm_automatic(
+                    &pending.config,
+                    pending.scheduler.clone(),
+                    pending.governor.clone(),
+                )?;
+            }
+            return self.admitted.read(&self.publication)?.ok_or_else(|| {
+                HawDBError::StorageIntegrity("completed branch admission has no runtime".into())
+            });
         }
         let admission = self.admission.lock().map_err(|_| {
             HawDBError::StorageIntegrity("deferred branch admission lock is poisoned".into())
         })?;
-        if let Some(runtime) = self.admitted.get() {
+        if let Some(runtime) = self.admitted.read(&self.publication)? {
             return Ok(runtime);
         }
         let pending = self.pending.as_ref().ok_or_else(|| {
             HawDBError::StorageIntegrity("database has no branch admission identity".into())
         })?;
         let candidate = recover_default_branch(pending)?;
-        self.admitted.set(Box::new(candidate)).map_err(|_| {
-            HawDBError::StorageIntegrity("branch runtime was concurrently published twice".into())
-        })?;
-        let runtime = self.admitted.get().map(Box::as_ref).ok_or_else(|| {
+        self.admitted.initialize(candidate)?;
+        drop(admission);
+        self.arm_automatic(
+            &pending.config,
+            pending.scheduler.clone(),
+            pending.governor.clone(),
+        )?;
+        let runtime = self.admitted.read(&self.publication)?.ok_or_else(|| {
             HawDBError::StorageIntegrity("completed branch admission has no runtime".into())
         })?;
-        // Host callbacks may read this database. Publish the complete bundle
-        // and release admission before notifying them, including on a panic.
-        drop(admission);
         if let Some(telemetry) = &pending.telemetry {
             record_recovery_telemetry(&runtime.store, telemetry.as_ref());
         }
         Ok(runtime)
     }
 
-    pub(super) fn get_mut(&mut self) -> Result<&mut AdmittedBranchRuntime> {
+    pub(super) fn get_mut(&mut self) -> Result<AdmittedBranchRuntimeMut<'_>> {
         self.get()?;
-        self.admitted.get_mut().map(Box::as_mut).ok_or_else(|| {
-            HawDBError::StorageIntegrity("completed branch admission has no mutable runtime".into())
+        let mut publication =
+            Self::publication_barrier(&self.publication, self.needs_publication_barrier())?;
+        let mut runtime = self.admitted.write(&self.publication)?;
+        if let Some(state) = &mut publication {
+            self.publication.adopt(state, &mut runtime.store)?;
+        }
+        Ok(AdmittedBranchRuntimeMut {
+            runtime,
+            publication,
+            control: &self.publication,
         })
     }
 
-    pub(super) fn peek(&self) -> Option<&AdmittedBranchRuntime> {
-        self.admitted.get().map(Box::as_ref)
+    pub(super) fn get_read(&mut self) -> Result<AdmittedBranchRuntimeRead<'_>> {
+        self.get()?;
+        let mut runtime = self.admitted.write(&self.publication)?;
+        self.publication.adopt_for_read(&mut runtime.store)?;
+        // &mut self exclusively owns the frontend. Read execution may update
+        // its local caches without holding the owner's publication mutex.
+        Ok(AdmittedBranchRuntimeRead { runtime })
     }
 
-    pub(super) fn peek_mut(&mut self) -> Option<&mut AdmittedBranchRuntime> {
-        self.admitted.get_mut().map(Box::as_mut)
+    pub(super) fn peek(&self) -> Option<RuntimeRead<'_>> {
+        self.admitted.read(&self.publication).ok().flatten()
+    }
+
+    pub(super) fn peek_mut(&mut self) -> Option<AdmittedBranchRuntimeMut<'_>> {
+        let mut publication =
+            Self::publication_barrier(&self.publication, self.needs_publication_barrier()).ok()?;
+        let mut runtime = self.admitted.write(&self.publication).ok()?;
+        if let Some(state) = &mut publication {
+            self.publication.adopt(state, &mut runtime.store).ok()?;
+        }
+        Some(AdmittedBranchRuntimeMut {
+            runtime,
+            publication,
+            control: &self.publication,
+        })
+    }
+
+    fn needs_publication_barrier(&self) -> bool {
+        cfg!(all(
+            feature = "background-maintenance",
+            not(target_arch = "wasm32")
+        )) && self
+            .peek()
+            .is_some_and(|runtime| runtime.store.storage_recovery_report().durable)
+    }
+
+    fn publication_barrier(
+        publication: &Control,
+        needed: bool,
+    ) -> Result<Option<MutexGuard<'_, State>>> {
+        if !needed {
+            return Ok(None);
+        }
+        publication.lock_frontend().map(Some)
+    }
+
+    pub(super) fn arm_automatic(
+        &self,
+        config: &DatabaseConfig,
+        scheduler: LocalQosScheduler,
+        governor: Option<hawdb_qos::RuntimeGovernor>,
+    ) -> Result<()> {
+        if self.automatic.get().is_some() {
+            return Ok(());
+        }
+        let _start = self.automatic_start.lock().map_err(|_| {
+            HawDBError::StorageIntegrity("checkpoint startup lock is poisoned".into())
+        })?;
+        if self.automatic.get().is_some() {
+            return Ok(());
+        }
+        let runtime = self.peek().ok_or_else(|| {
+            HawDBError::StorageIntegrity(
+                "checkpoint owner requires completed branch admission".into(),
+            )
+        })?;
+        let owner = Owner::start(
+            Arc::clone(&self.publication),
+            &runtime.store,
+            &runtime.catalog,
+            Arc::clone(&runtime.reader_pins),
+            config,
+            scheduler,
+            governor,
+        )?;
+        self.automatic
+            .set(owner)
+            .map_err(|_| HawDBError::StorageIntegrity("checkpoint owner started twice".into()))
+    }
+
+    pub(super) fn checkpoint_control(&self) -> Arc<Control> {
+        Arc::clone(&self.publication)
+    }
+
+    #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+    pub(super) fn checkpoint_control_for_test(&self) -> Arc<Control> {
+        self.checkpoint_control()
+    }
+
+    #[cfg(all(test, feature = "background-maintenance", not(target_arch = "wasm32")))]
+    pub(super) fn shared_runtime_for_test(&self) -> Arc<SharedBranchRuntime> {
+        Arc::clone(&self.admitted)
+    }
+
+    pub(super) fn automatic_checkpoint_report(
+        &self,
+    ) -> Result<Option<super::AutomaticCheckpointReport>> {
+        self.publication.report()
+    }
+
+    pub(super) fn suspend_automatic_checkpoint(&mut self) -> Result<Option<Suspension>> {
+        self.get()?;
+        if self.automatic.get().is_none_or(Option::is_none) {
+            return Ok(None);
+        }
+        let suspension = self.publication.suspend()?;
+        // Selection can have completed while suspension was requested. Adopt
+        // it before waiting for the worker's off-gate retirement to finish.
+        drop(self.get_mut()?);
+        suspension.wait_idle()?;
+        Ok(Some(suspension))
+    }
+
+    pub(super) fn set_automatic_governor(
+        &self,
+        governor: hawdb_qos::RuntimeGovernor,
+    ) -> Result<()> {
+        self.publication.set_governor(governor)
+    }
+
+    pub(super) fn release_suspended_checkpoint_source(&self) -> Result<()> {
+        self.publication.release_suspended_source()
     }
 
     pub(super) fn pending_mut(&mut self) -> Option<&mut DeferredBranchAdmission> {
@@ -165,13 +394,27 @@ impl BranchRuntimeCell {
         GraphStore::reserve_project_branch_admission_resources(&pending.files)
     }
 
-    pub(super) fn into_admitted(self) -> Result<AdmittedBranchRuntime> {
+    pub(super) fn into_admitted(mut self) -> Result<AdmittedBranchRuntime> {
+        if let Some(Some(owner)) = self.automatic.get_mut() {
+            owner.stop();
+        }
+        if self.peek().is_some() {
+            drop(self.get_mut()?);
+        }
         self.admitted
-            .into_inner()
+            .take()?
             .map(|runtime| *runtime)
             .ok_or_else(|| {
                 HawDBError::StorageIntegrity("candidate branch runtime was not admitted".into())
             })
+    }
+}
+
+impl Drop for BranchRuntimeCell {
+    fn drop(&mut self) {
+        if let Some(Some(owner)) = self.automatic.get_mut() {
+            owner.stop();
+        }
     }
 }
 
@@ -225,7 +468,8 @@ fn recover_default_branch(pending: &DeferredBranchAdmission) -> Result<AdmittedB
     configure_relational_fast_paths(&mut store, &pending.config);
     let mut candidate = Database::new_with_config(pending.config.clone());
     {
-        let runtime = candidate.runtime.get_mut()?;
+        let mut runtime_access = candidate.runtime.get_mut()?;
+        let runtime = &mut *runtime_access;
         runtime.store = store;
         runtime.catalog = schema;
         runtime.branch_selection = Some(BranchSelection { record });
@@ -241,7 +485,8 @@ fn recover_default_branch(pending: &DeferredBranchAdmission) -> Result<AdmittedB
     }
     candidate.apply_engine_system_schema()?;
     {
-        let runtime = candidate.runtime.get_mut()?;
+        let mut runtime_access = candidate.runtime.get_mut()?;
+        let runtime = &mut *runtime_access;
         runtime.projection_consumers = search_projection_consumer::ConsumerRegistry::load(
             runtime.store.search_projection_registry_root(),
             runtime.store.search_projection_database_identity(),

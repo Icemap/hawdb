@@ -642,9 +642,9 @@ impl ImmutableObjectStore {
             // A head cannot describe unpublished candidates or old reader
             // pins, so retain them while any owner is active. Unleased
             // records above still require complete root metadata.
-            // Tracking precise publication and historical-reader roots across
-            // owners is follow-up #778. A publication-only flag cannot protect
-            // snapshots of an older head after publication has completed.
+            // Registered Ready owners supply their exact publication and
+            // historical-reader roots separately. An unregistered owner still
+            // requires conservative deferral; its head alone is insufficient.
             return Ok(ReclamationReport {
                 retained_objects: inventory.objects.len() as u64,
                 reclaimed_objects: 0,

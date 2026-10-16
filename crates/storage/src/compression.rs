@@ -18,28 +18,84 @@
 //! reserve query memory or charge a second time for an admitted workspace.
 
 mod context;
+mod output;
+use crate::background::{CheckpointWorkContext, CheckpointWorkError};
 use context::CompressionContext;
 pub use context::DecompressionContext;
+use hawdb_core::RuntimeMemoryPermit;
+pub(crate) use output::AdmittedCompressionOutput;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use zstd::stream::raw::{InBuffer, Operation, OutBuffer, WriteBuf};
 use zstd::stream::zio;
 
 pub struct Encoder<W: Write> {
     writer: zio::Writer<W, CompressionContext>,
+    _buffer_memory: Option<Box<dyn RuntimeMemoryPermit>>,
 }
 
 impl<W: Write> Encoder<W> {
     pub fn new(writer: W, level: i32) -> io::Result<Self> {
         Ok(Self {
             writer: zio::Writer::new(writer, CompressionContext::new(level)?),
+            _buffer_memory: None,
         })
+    }
+
+    pub(crate) fn new_with_work_context(
+        writer: W,
+        level: i32,
+        work: &CheckpointWorkContext,
+    ) -> io::Result<Self> {
+        Self::with_staging_capacity(writer, level, 32 * 1024, work)
+    }
+
+    pub(crate) fn with_staging_capacity(
+        writer: W,
+        level: i32,
+        capacity: usize,
+        work: &CheckpointWorkContext,
+    ) -> io::Result<Self> {
+        if capacity == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "empty Zstd staging buffer",
+            ));
+        }
+        let memory = work.reserve_memory(capacity).map_err(io::Error::other)?;
+        let mut buffer = Vec::new();
+        buffer.try_reserve_exact(capacity).map_err(|error| {
+            io::Error::other(work.record_failure(CheckpointWorkError::Allocation {
+                bytes: capacity as u64,
+                reason: error.to_string(),
+            }))
+        })?;
+        if buffer.capacity() != capacity {
+            return Err(io::Error::other(work.record_failure(
+                CheckpointWorkError::Allocation {
+                    bytes: capacity as u64,
+                    reason: "Zstd output buffer exceeds admitted capacity".into(),
+                },
+            )));
+        }
+        Ok(Self {
+            writer: zio::Writer::with_output_buffer(
+                buffer,
+                writer,
+                CompressionContext::new_with_work_context(level, work)?,
+            ),
+            _buffer_memory: memory,
+        })
+    }
+
+    pub(crate) fn set_pledged_src_size(&mut self, bytes: u64) -> io::Result<()> {
+        self.writer.operation_mut().set_pledged_src_size(bytes)
     }
 
     pub fn finish(mut self) -> io::Result<W> {
         self.writer.finish()?;
         let (writer, context) = self.writer.into_inner();
         // Release native workspace before the caller releases its admission.
-        drop(context);
+        context.close()?;
         Ok(writer)
     }
 }
@@ -68,6 +124,15 @@ impl<R: Read> Decoder<BufReader<R>> {
 }
 
 impl<R: BufRead> Decoder<R> {
+    pub(crate) fn with_buffer_and_work_context(
+        reader: R,
+        work: &CheckpointWorkContext,
+    ) -> io::Result<Self> {
+        Ok(Self {
+            reader: zio::Reader::new(reader, DecompressionContext::new_with_work_context(work)?),
+        })
+    }
+
     pub fn with_buffer(reader: R) -> io::Result<Self> {
         Ok(Self {
             reader: zio::Reader::new(reader, DecompressionContext::new()?),
@@ -118,6 +183,15 @@ impl Operation for DecompressionContext {
 pub fn encode_all(mut source: impl Read, level: i32) -> io::Result<Vec<u8>> {
     let mut encoder = Encoder::new(Vec::new(), level)?;
     io::copy(&mut source, &mut encoder)?;
+    encoder.finish()
+}
+
+/// Compress a known complete slice without advertising an unnecessarily large
+/// unknown-size frame window to streaming readers.
+pub(crate) fn encode_slice(source: &[u8], level: i32) -> io::Result<Vec<u8>> {
+    let mut encoder = Encoder::new(Vec::new(), level)?;
+    encoder.set_pledged_src_size(source.len() as u64)?;
+    encoder.write_all(source)?;
     encoder.finish()
 }
 

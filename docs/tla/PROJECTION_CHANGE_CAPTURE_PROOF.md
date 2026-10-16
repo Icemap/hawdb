@@ -28,6 +28,15 @@ replays a complete transaction or fails closed with evidence. Strict torn-tail
 reopen fails; dropping an incomplete tail in the model is an explicit repair,
 not an automatic recovery claim.
 
+Checkpoint candidate replay uses the same preimage collector as ordinary replay,
+with the checkpoint work context attached to each operation/metadata visit.
+Both paths retain cold canonical reads, created-endpoint handling and schema
+resume gaps. The checkpoint adapter prepares privately, checks cancellation,
+then installs the complete event or gap before applying the transaction.
+Its work permits do not claim to bound encoded block validation or physical I/O.
+The checkpoint regression compares a cold ID rename and a schema gap; existing
+cancellation probes cover every observed capture/replay unit and retry.
+
 Capture has cumulative limits of 65,536 operation/metadata visits and 64 MiB of
 estimated metadata/event bytes, plus a 64 KiB projected preimage and nesting 64.
 A limit refusal commits canonical data but clears retained capture and advances

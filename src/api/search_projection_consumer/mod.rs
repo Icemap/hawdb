@@ -52,13 +52,13 @@ impl Database {
     {
         let root = self.consumer_writable_root()?;
         if self.runtime.get_mut()?.projection_consumers.unavailable {
-            self.runtime.get_mut()?.projection_consumers = ConsumerRegistry::load(
-                Some(&root),
-                self.runtime
-                    .get()?
-                    .store
-                    .search_projection_database_identity(),
-            );
+            let identity = self
+                .runtime
+                .get()?
+                .store
+                .search_projection_database_identity();
+            self.runtime.get_mut()?.projection_consumers =
+                ConsumerRegistry::load(Some(&root), identity);
         }
         let destination = projection_directory.as_ref();
         if destination.try_exists().map_err(HawDBError::from)? {
@@ -107,12 +107,12 @@ impl Database {
             .commit_epoch()
             .checked_add(options.max_idle_commits().get())
             .ok_or_else(|| HawDBError::Semantic("consumer expiry epoch overflow".into()))?;
-        let database_uuid = match self
+        let identity = self
             .runtime
             .get()?
             .store
-            .search_projection_database_identity()
-        {
+            .search_projection_database_identity();
+        let database_uuid = match identity {
             Some(identity) => identity,
             None => {
                 let identity = generate_uuidv7()?;
@@ -342,16 +342,17 @@ impl Database {
             .verified
             .insert(consumer.id().as_str().into(), State::Active);
         let epoch = self.runtime.get()?.store.commit_epoch();
-        let record = self
-            .runtime
-            .get_mut()?
-            .projection_consumers
-            .records
-            .get_mut(consumer.id().as_str())
-            .ok_or(Error::InvalidHandle)?;
-        record.expires_at_commit_epoch = epoch
-            .checked_add(record.max_idle_commits)
-            .ok_or_else(|| HawDBError::Semantic("consumer expiry epoch overflow".into()))?;
+        {
+            let mut runtime = self.runtime.get_mut()?;
+            let record = runtime
+                .projection_consumers
+                .records
+                .get_mut(consumer.id().as_str())
+                .ok_or(Error::InvalidHandle)?;
+            record.expires_at_commit_epoch = epoch
+                .checked_add(record.max_idle_commits)
+                .ok_or_else(|| HawDBError::Semantic("consumer expiry epoch overflow".into()))?;
+        }
         self.publish_consumer_registry(&root)?;
         self.search_projection_consumer_status(consumer.id())
     }
@@ -396,9 +397,8 @@ impl Database {
         if self.runtime.get()?.projection_consumers.unavailable {
             return Err(Error::RebuildRequired(Reason::RegistryUnavailable));
         }
-        let record = self
-            .runtime
-            .get()?
+        let runtime = self.runtime.get()?;
+        let record = runtime
             .projection_consumers
             .records
             .get(id.as_str())
@@ -488,9 +488,8 @@ impl Database {
         consumer: &SearchProjectionConsumer,
     ) -> SearchProjectionConsumerResult<()> {
         let status = self.search_projection_consumer_status(consumer.id())?;
-        let record = self
-            .runtime
-            .get()?
+        let runtime = self.runtime.get()?;
+        let record = runtime
             .projection_consumers
             .records
             .get(consumer.id().as_str())
@@ -547,9 +546,8 @@ impl Database {
             .store
             .search_projection_database_identity();
         let epoch = self.runtime.get()?.store.commit_epoch();
-        let record = self
-            .runtime
-            .get_mut()?
+        let mut runtime = self.runtime.get_mut()?;
+        let record = runtime
             .projection_consumers
             .records
             .get_mut(id.as_str())
@@ -575,12 +573,13 @@ impl Database {
     }
 
     fn publish_consumer_registry(&mut self, root: &Path) -> SearchProjectionConsumerResult<()> {
-        if let Err(error) = self.runtime.get_mut()?.projection_consumers.publish(
+        let mut runtime = self.runtime.get_mut()?;
+        if let Err(error) = runtime.projection_consumers.publish(
             root,
             || publication_failpoint(PublicationStage::BeforeRegistry),
             || publication_failpoint(PublicationStage::AfterRegistry),
         ) {
-            self.runtime.get_mut()?.projection_consumers.unavailable = true;
+            runtime.projection_consumers.unavailable = true;
             return Err(error.into());
         }
         Ok(())

@@ -580,7 +580,7 @@ impl Database {
         if captured != staged {
             return Err(E::SourceEpochMismatch { captured, staged });
         }
-        let runtime = self.runtime.get_mut().map_err(E::Storage)?;
+        let mut runtime = self.runtime.get_mut().map_err(E::Storage)?;
         runtime
             .store
             .validate_read_dependencies(&dependencies.graph)

@@ -609,6 +609,7 @@ fn projected_graph_registration_and_admission_include_canonical_edges() {
             assert!(resident_error.to_string().contains(&format!(
                 "requires an estimated {bytes} bytes for 4 nodes and 4 relationships"
             )));
+            drop(runtime);
             drop(fixture.db.take());
             let mut config = DatabaseConfig {
                 storage_residency_mode: mode,

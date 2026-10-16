@@ -17,12 +17,13 @@
 //! The graph checkpoint remains authoritative. This sidecar is eligible only
 //! when the checkpoint manifest publishes the same graph epoch.
 
+use crate::background::{CheckpointBytes, CheckpointText, CheckpointValues, CheckpointWorkContext};
+use crate::cow::CowSegmentedMap;
 use crate::file_io::{self as fs, File};
-use crate::text::envelope::{encode_durable_text, read_durable_text_bytes};
-use crate::text::{
-    decode_properties, decode_string, decode_value, encode_properties, encode_string, encode_value,
-    parse_i64, parse_u64,
-};
+use crate::text::envelope::{encode_owned_durable_text_with_work_context, read_durable_text_bytes};
+use crate::text::{decode_properties, decode_string, decode_value, parse_i64, parse_u64};
+use crate::NodeId;
+
 use crate::{
     config::DurableCompression,
     durability::durable_replace_file,
@@ -39,7 +40,7 @@ use hawdb_integrity::checksum_u64 as checksum_bytes;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::num::NonZeroU64;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub const SOURCE_SCAN_DESCRIPTOR_FILE: &str = "source_scan_segments.hawdb";
 pub const SOURCE_SCAN_PAYLOAD_FILE: &str = "source_scan_segment_payloads.hawdb";
@@ -50,10 +51,17 @@ const SOURCE_SCAN_DESCRIPTOR_HEADER: &str = "HAWDB_SOURCE_SCAN_SEGMENTS_V1";
 const SOURCE_SCAN_SEGMENT_HEADER: &str = "HAWDB_SOURCE_SCAN_SEGMENT_V1";
 const UNIQUE_KEY_FIELDS: &[&str] = &["id"];
 
+mod owned;
+mod summary;
+mod write_progress;
+
 #[derive(Debug, Clone)]
 pub struct SourceScanProjection {
     graph_epoch: u64,
-    segments: Vec<SourceScanSegment>,
+    segments: owned::SharedSegments,
+    // One outer COW root preserves the original records without copying their
+    // property maps. Segment intervals identify at most 128 matching rows.
+    source_nodes: Option<CowSegmentedMap<NodeId, NodeRecord>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -74,8 +82,9 @@ impl SourceScanPublication {
 
 #[derive(Debug, Clone)]
 struct SourceScanSegment {
-    summary: SegmentSummary,
-    rows: Vec<SourceScanRow>,
+    summary: summary::SharedSummary,
+    rows: owned::SharedRows,
+    pinned_bounds: Option<(NodeId, NodeId, LabelId)>,
     payload_range: Option<SegmentPayloadRange>,
 }
 
@@ -317,72 +326,283 @@ pub fn build<'a>(
     source_label_id: Option<LabelId>,
     nodes: impl Iterator<Item = &'a NodeRecord>,
 ) -> SourceScanProjection {
-    let rows = source_label_id.map_or_else(Vec::new, |source_label_id| {
-        nodes
-            .filter(|node| node.labels.contains(&source_label_id))
-            .map(|node| SourceScanRow {
-                node_id: node.id.0,
-                properties: node.properties.clone(),
-            })
-            .collect()
-    });
-    let segments = rows
-        .chunks(SOURCE_SCAN_TARGET_ROWS)
-        .enumerate()
-        .map(|(segment_id, rows)| SourceScanSegment::from_rows(segment_id as u64, rows))
-        .collect();
-    SourceScanProjection {
+    build_with_work_context(
         graph_epoch,
-        segments,
+        source_label_id,
+        nodes,
+        &CheckpointWorkContext::default(),
+    )
+    .expect("default source scan build context cannot stop")
+}
+
+#[doc(hidden)]
+pub fn build_with_work_context<'a>(
+    graph_epoch: u64,
+    source_label_id: Option<LabelId>,
+    mut nodes: impl Iterator<Item = &'a NodeRecord>,
+    work: &CheckpointWorkContext,
+) -> Result<SourceScanProjection> {
+    work.checkpoint().map_err(HawDBError::from_storage_error)?;
+    let directory = owned::context(work);
+    let mut segments = Vec::new();
+    if let Some(source_label_id) = source_label_id {
+        let mut row_memory = owned::context(work);
+        let mut rows = Vec::new();
+        loop {
+            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+            let Some(node) = nodes.next() else {
+                unit.finish();
+                break;
+            };
+            if node.labels.contains(&source_label_id) {
+                row_memory.reserve(hawdb_core::ids::node_allocation_bytes(node))?;
+                let row = SourceScanRow {
+                    node_id: node.id.0,
+                    properties: node.properties.clone(),
+                };
+                unit.finish();
+                row_memory.push(&mut rows, row)?;
+            } else {
+                unit.finish();
+            }
+            if rows.len() == SOURCE_SCAN_TARGET_ROWS {
+                let chunk = owned::SharedRows::new(std::mem::take(&mut rows), row_memory)?;
+                row_memory = owned::context(work);
+                let segment = SourceScanSegment::from_rows(segments.len() as u64, chunk, work)?;
+                directory.push(&mut segments, segment)?;
+            }
+        }
+        if !rows.is_empty() {
+            let rows = owned::SharedRows::new(rows, row_memory)?;
+            let segment = SourceScanSegment::from_rows(segments.len() as u64, rows, work)?;
+            directory.push(&mut segments, segment)?;
+        }
+    }
+    work.checkpoint().map_err(HawDBError::from_storage_error)?;
+    Ok(SourceScanProjection {
+        graph_epoch,
+        segments: owned::SharedSegments::new(segments, directory)?,
+        source_nodes: None,
+    })
+}
+
+/// Production preparation pins the captured COW root rather than cloning
+/// every Source property map. The temporary record-reference array is admitted
+/// before allocation. Summary/descriptor ownership has separate resource gaps.
+pub(crate) fn build_with_pinned_nodes(
+    graph_epoch: u64,
+    source_label_id: Option<LabelId>,
+    nodes: &CowSegmentedMap<NodeId, NodeRecord>,
+    work: &CheckpointWorkContext,
+) -> Result<SourceScanProjection> {
+    work.checkpoint().map_err(HawDBError::from_storage_error)?;
+    let directory = owned::context(work);
+    let mut segments = Vec::new();
+    if let Some(label) = source_label_id {
+        let mut rows = CheckpointValues::new(SOURCE_SCAN_TARGET_ROWS, work)
+            .map_err(HawDBError::from_storage_error)?;
+        for node in nodes.values() {
+            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+            let matches = node.labels.contains(&label);
+            unit.finish();
+            if !matches {
+                continue;
+            }
+            rows.push(node, work)
+                .map_err(HawDBError::from_storage_error)?;
+            if rows.as_slice().len() == SOURCE_SCAN_TARGET_ROWS {
+                let segment = SourceScanSegment::from_pinned_rows(
+                    segments.len() as u64,
+                    rows.as_slice(),
+                    label,
+                    work,
+                )?;
+                directory.push(&mut segments, segment)?;
+                drop(rows);
+                rows = CheckpointValues::new(SOURCE_SCAN_TARGET_ROWS, work)
+                    .map_err(HawDBError::from_storage_error)?;
+            }
+        }
+        if !rows.as_slice().is_empty() {
+            let segment = SourceScanSegment::from_pinned_rows(
+                segments.len() as u64,
+                rows.as_slice(),
+                label,
+                work,
+            )?;
+            directory.push(&mut segments, segment)?;
+        }
+    }
+    work.checkpoint().map_err(HawDBError::from_storage_error)?;
+    Ok(SourceScanProjection {
+        graph_epoch,
+        segments: owned::SharedSegments::new(segments, directory)?,
+        source_nodes: Some(nodes.clone()),
+    })
+}
+
+struct TemporarySourceScanPath(Option<PathBuf>);
+
+impl Drop for TemporarySourceScanPath {
+    fn drop(&mut self) {
+        if let Some(path) = &self.0 {
+            let _ = fs::remove_file(path);
+        }
     }
 }
 
 pub fn write(path: &Path, projection: &mut SourceScanProjection) -> Result<SourceScanPublication> {
-    let payload_path = path.join(SOURCE_SCAN_PAYLOAD_FILE);
-    let payload_tmp_path = payload_path.with_extension("hawdb.tmp");
-    let mut offset = 0u64;
-    {
-        let mut file = File::create(&payload_tmp_path)?;
-        for segment in &mut projection.segments {
-            let payload = encode_segment_payload(&segment.rows)?;
-            let length = u64::try_from(payload.len()).map_err(|_| {
-                HawDBError::Storage(format!(
-                    "source scan segment {} payload exceeds supported range length",
-                    segment.summary.segment_id
-                ))
-            })?;
-            segment.payload_range = Some(SegmentPayloadRange {
-                artifact_id: SOURCE_SCAN_ARTIFACT_ID,
-                offset,
-                length: NonZeroU64::new(length).ok_or_else(|| {
-                    HawDBError::Storage("source scan segment payload is empty".to_string())
-                })?,
-                checksum: checksum_bytes(&payload),
-            });
-            file.write_all(&payload)?;
-            offset = offset.checked_add(length).ok_or_else(|| {
-                HawDBError::Storage("source scan payload artifact length overflow".to_string())
-            })?;
-        }
-        file.sync_all()?;
-    }
-    durable_replace_file(&payload_tmp_path, &payload_path)?;
+    write_with_work_context(path, projection, &CheckpointWorkContext::default())
+}
 
-    let descriptor_path = path.join(SOURCE_SCAN_DESCRIPTOR_FILE);
-    let descriptor_tmp_path = descriptor_path.with_extension("hawdb.tmp");
-    let body = encode_descriptor(projection)?;
-    let descriptor_checksum = checksum_bytes(body.as_bytes());
-    let data = format!("{body}checksum\t{descriptor_checksum}\n");
-    {
-        let mut file = File::create(&descriptor_tmp_path)?;
-        file.write_all(data.as_bytes())?;
-        file.sync_all()?;
+#[doc(hidden)]
+pub fn write_with_work_context(
+    path: &Path,
+    projection: &mut SourceScanProjection,
+    work: &CheckpointWorkContext,
+) -> Result<SourceScanPublication> {
+    write_with_preparation(
+        path,
+        projection,
+        &mut SourceScanWritePreparation::new(work),
+        work,
+    )
+}
+
+#[derive(Default, Debug)]
+struct SegmentEncoding {
+    text: Option<CheckpointText>,
+    last_node: Option<NodeId>,
+    row_index: usize,
+    complete_text: bool,
+    payload: Option<CheckpointBytes>,
+}
+
+pub(crate) struct SourceScanWritePreparation {
+    segments: Vec<SegmentEncoding>,
+    memory: crate::background::CheckpointDecodeContext,
+    publication: Option<write_progress::Progress>,
+}
+
+impl std::fmt::Debug for SourceScanWritePreparation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SourceScanWritePreparation")
+            .field("segments", &self.segments)
+            .finish_non_exhaustive()
     }
-    durable_replace_file(&descriptor_tmp_path, &descriptor_path)?;
-    Ok(SourceScanPublication {
-        graph_epoch: projection.graph_epoch,
-        descriptor_checksum,
-    })
+}
+
+impl SourceScanWritePreparation {
+    pub(crate) fn new(work: &CheckpointWorkContext) -> Self {
+        Self {
+            segments: Vec::new(),
+            memory: owned::context(work),
+            publication: None,
+        }
+    }
+
+    fn encode_row(
+        state: &mut SegmentEncoding,
+        node_id: u64,
+        properties: &BTreeMap<String, Value>,
+        work: &CheckpointWorkContext,
+    ) -> Result<()> {
+        let mut row = CheckpointText::new();
+        row.fields(format_args!("row\t{node_id}\t"), work)?;
+        row.properties(properties, work)?;
+        row.append("\n", work)?;
+        let text = state.text.as_mut().expect("segment header exists");
+        let previous = text.len();
+        if let Err(error) = text.append(&row, work) {
+            text.truncate(previous);
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn prepare(
+        &mut self,
+        projection: &SourceScanProjection,
+        work: &CheckpointWorkContext,
+    ) -> Result<()> {
+        for index in 0..projection.segments.len() {
+            self.prepare_segment(projection, index, work)?;
+        }
+        Ok(())
+    }
+
+    fn prepare_segment(
+        &mut self,
+        projection: &SourceScanProjection,
+        index: usize,
+        work: &CheckpointWorkContext,
+    ) -> Result<()> {
+        self.memory.work = work.clone();
+        let segment = &projection.segments[index];
+        if self.segments.len() == index {
+            self.memory
+                .push(&mut self.segments, SegmentEncoding::default())?;
+        }
+        let state = &mut self.segments[index];
+        if state.payload.is_some() {
+            return Ok(());
+        }
+        if state.text.is_none() {
+            let mut text = CheckpointText::new();
+            text.append(SOURCE_SCAN_SEGMENT_HEADER, work)?;
+            text.append("\n", work)?;
+            state.text = Some(text);
+        }
+        if !state.complete_text {
+            if let Some((first, last, label)) = segment.pinned_bounds {
+                let nodes = projection.source_nodes.as_ref().ok_or_else(|| {
+                    HawDBError::StorageIntegrity(
+                        "source scan segment lost its pinned records".into(),
+                    )
+                })?;
+                let start = state
+                    .last_node
+                    .map_or(Some(first), |id| id.0.checked_add(1).map(NodeId));
+                if let Some(start) = start.filter(|start| *start <= last) {
+                    for (_, node) in nodes.range(&start, &last) {
+                        let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                        let selected = node.labels.contains(&label);
+                        unit.finish();
+                        if selected {
+                            Self::encode_row(state, node.id.0, &node.properties, work)?;
+                        }
+                        state.last_node = Some(node.id);
+                    }
+                }
+            } else {
+                for row in segment.rows.iter().skip(state.row_index) {
+                    let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                    unit.finish();
+                    Self::encode_row(state, row.node_id, &row.properties, work)?;
+                    state.row_index += 1;
+                }
+            }
+            state.complete_text = true;
+        }
+        let text = state.text.as_ref().expect("segment text exists");
+        state.payload = Some(encode_owned_durable_text_with_work_context(
+            text,
+            DurableCompression::default(),
+            work,
+        )?);
+        state.text = None;
+        Ok(())
+    }
+}
+
+pub(crate) fn write_with_preparation(
+    path: &Path,
+    projection: &mut SourceScanProjection,
+    preparation: &mut SourceScanWritePreparation,
+    work: &CheckpointWorkContext,
+) -> Result<SourceScanPublication> {
+    write_progress::advance(path, projection, preparation, work)
 }
 
 pub fn load(
@@ -395,7 +615,7 @@ pub fn load(
         return Ok(None);
     }
     let text = fs::read_to_string(&descriptor_path)?;
-    let mut projection = decode_descriptor(&text, expected_descriptor_checksum)?;
+    let projection = decode_descriptor(&text, expected_descriptor_checksum)?;
     if projection.graph_epoch != expected_graph_epoch {
         return Ok(None);
     }
@@ -404,10 +624,11 @@ pub fn load(
     validate_payload_ranges(&payload_path, &projection.segments)?;
     let segments = projection
         .segments
-        .drain(..)
+        .into_unadmitted()
+        .into_iter()
         .map(|segment| {
             Ok(PersistedScanSegment {
-                summary: segment.summary,
+                summary: segment.summary.into_unadmitted(),
                 payload_range: segment.payload_range.ok_or_else(|| {
                     HawDBError::Storage("source scan descriptor missing payload range".to_string())
                 })?,
@@ -452,105 +673,51 @@ pub fn decode_payload(payload: &[u8]) -> Result<Vec<SourceScanRow>> {
 }
 
 impl SourceScanSegment {
-    fn from_rows(segment_id: u64, rows: &[SourceScanRow]) -> Self {
-        let mut summary = SegmentSummary::new(segment_id, rows.len() as u64);
-        let fields = rows
-            .iter()
-            .flat_map(|row| row.properties.keys().cloned())
-            .collect::<BTreeSet<_>>();
-        for field in fields {
-            let (field_summary, exact_values) = build_field_summary(rows, &field);
-            summary.insert_field(field.clone(), field_summary);
-            if !exact_values.is_empty() {
-                // Exact row cursors are bounded by one immutable segment.
-                for (value, row_ids) in &exact_values {
-                    let field_summary = summary
-                        .fields
-                        .get_mut(&field)
-                        .expect("source scan field summary was inserted");
-                    *field_summary =
-                        std::mem::replace(field_summary, FieldSummary::new(rows.len() as u64))
-                            .with_exact_row_ids(value.clone(), row_ids.iter().copied());
-                }
-            }
-        }
-        Self {
+    fn from_rows(
+        segment_id: u64,
+        rows: owned::SharedRows,
+        work: &CheckpointWorkContext,
+    ) -> Result<Self> {
+        let summary = summary::build(segment_id, &rows, work)?;
+        Ok(Self {
             summary,
-            rows: rows.to_vec(),
+            rows,
+            pinned_bounds: None,
             payload_range: None,
-        }
+        })
+    }
+
+    fn from_pinned_rows(
+        segment_id: u64,
+        rows: &[&NodeRecord],
+        label: LabelId,
+        work: &CheckpointWorkContext,
+    ) -> Result<Self> {
+        let summary = summary::build(segment_id, rows, work)?;
+        let first = rows.first().expect("nonempty pinned segment").id;
+        let last = rows.last().expect("nonempty pinned segment").id;
+        Ok(Self {
+            summary,
+            rows: owned::SharedRows::default(),
+            pinned_bounds: Some((first, last, label)),
+            payload_range: None,
+        })
     }
 }
 
-fn build_field_summary(
-    rows: &[SourceScanRow],
-    field: &str,
-) -> (FieldSummary, Vec<(Value, Vec<u64>)>) {
-    let mut present_count = 0u64;
-    let mut null_count = 0u64;
-    let mut scalar_values = Vec::new();
-    let mut exact_values = BTreeMap::<String, (Value, Vec<u64>)>::new();
-    let mut numeric_min = None::<f64>;
-    let mut numeric_max = None::<f64>;
-    let mut datetime_min = None::<i64>;
-    let mut datetime_max = None::<i64>;
-
-    for (row_id, row) in rows.iter().enumerate() {
-        let Some(value) = row.properties.get(field) else {
-            continue;
-        };
-        present_count += 1;
-        if matches!(value, Value::Null) {
-            null_count += 1;
-            continue;
-        }
-        if is_scalar(value) {
-            scalar_values.push(value.clone());
-            if UNIQUE_KEY_FIELDS.contains(&field) {
-                exact_values
-                    .entry(encode_value(value))
-                    .or_insert_with(|| (value.clone(), Vec::new()))
-                    .1
-                    .push(row_id as u64);
-            }
-        }
-        if let Some(value) = precise_numeric_value(value) {
-            numeric_min = Some(numeric_min.map_or(value, |min| min.min(value)));
-            numeric_max = Some(numeric_max.map_or(value, |max| max.max(value)));
-        }
-        if let Value::String(value) = value
-            && let Some(value) = DateTimeMinMax::parse_rfc3339(value)
-        {
-            datetime_min = Some(datetime_min.map_or(value, |min| min.min(value)));
-            datetime_max = Some(datetime_max.map_or(value, |max| max.max(value)));
-        }
-    }
-
-    let row_count = rows.len() as u64;
-    let mut summary = FieldSummary::new(row_count)
-        .with_presence_counts(present_count, null_count, row_count - present_count)
-        .expect("source scan field counts must match rows");
-    if let (Some(min), Some(max)) = (numeric_min, numeric_max) {
-        summary = summary
-            .with_numeric_min_max(min, max)
-            .expect("source scan numeric range is valid");
-    }
-    if let (Some(min), Some(max)) = (datetime_min, datetime_max) {
-        summary = summary
-            .with_datetime_min_max(min, max)
-            .expect("source scan timestamp range is valid");
-    }
-    if !scalar_values.is_empty() {
-        summary = summary.with_enum_dictionary(EnumDictionaryStats::complete(scalar_values));
-    }
-    (summary, exact_values.into_values().collect())
+trait SourceScanProperties {
+    fn properties(&self) -> &BTreeMap<String, Value>;
 }
 
-fn is_scalar(value: &Value) -> bool {
-    match value {
-        Value::Bool(_) | Value::Int(_) | Value::String(_) | Value::Uuid(_) => true,
-        Value::Float(value) => value.is_finite(),
-        Value::Null | Value::Binary(_) | Value::List(_) | Value::Map(_) => false,
+impl SourceScanProperties for SourceScanRow {
+    fn properties(&self) -> &BTreeMap<String, Value> {
+        &self.properties
+    }
+}
+
+impl SourceScanProperties for &NodeRecord {
+    fn properties(&self) -> &BTreeMap<String, Value> {
+        &self.properties
     }
 }
 
@@ -562,79 +729,163 @@ fn precise_numeric_value(value: &Value) -> Option<f64> {
     }
 }
 
+#[cfg(test)]
 fn encode_segment_payload(rows: &[SourceScanRow]) -> Result<Vec<u8>> {
-    let mut body = String::from(SOURCE_SCAN_SEGMENT_HEADER);
-    body.push('\n');
-    for row in rows {
-        body.push_str(&format!(
-            "row\t{}\t{}\n",
-            row.node_id,
-            encode_properties(&row.properties)
-        ));
-    }
-    encode_durable_text(&body, DurableCompression::default())
+    encode_segment_payload_with_work_context(rows, &CheckpointWorkContext::default())
+        .map(CheckpointBytes::into_unadmitted)
 }
 
+#[cfg(test)]
+fn encode_segment_payload_with_work_context(
+    rows: &[SourceScanRow],
+    work: &CheckpointWorkContext,
+) -> Result<CheckpointBytes> {
+    encode_segment_records_with_work_context(
+        rows.iter().map(|row| (true, row.node_id, &row.properties)),
+        work,
+    )
+}
+
+#[cfg(test)]
+fn encode_segment_records_with_work_context<'a>(
+    rows: impl Iterator<Item = (bool, u64, &'a BTreeMap<String, Value>)>,
+    work: &CheckpointWorkContext,
+) -> Result<CheckpointBytes> {
+    let body = encode_segment_text_with_work_context(rows, work)?;
+    encode_owned_durable_text_with_work_context(&body, DurableCompression::default(), work)
+}
+
+#[cfg(test)]
+fn encode_segment_text_with_work_context<'a>(
+    rows: impl Iterator<Item = (bool, u64, &'a BTreeMap<String, Value>)>,
+    work: &CheckpointWorkContext,
+) -> Result<CheckpointText> {
+    let mut body = CheckpointText::new();
+    body.append(SOURCE_SCAN_SEGMENT_HEADER, work)?;
+    body.append("\n", work)?;
+    for (selected, node_id, properties) in rows {
+        let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+        unit.finish();
+        if !selected {
+            continue;
+        }
+        body.fields(format_args!("row\t{node_id}\t"), work)?;
+        body.properties(properties, work)?;
+        body.append("\n", work)?;
+    }
+    work.checkpoint().map_err(HawDBError::from_storage_error)?;
+    Ok(body)
+}
+
+#[cfg(test)]
 fn encode_descriptor(projection: &SourceScanProjection) -> Result<String> {
-    let mut body = format!(
-        "{SOURCE_SCAN_DESCRIPTOR_HEADER}\ngraph_epoch\t{}\n",
-        projection.graph_epoch
-    );
-    for segment in &projection.segments {
-        let range = segment.payload_range.ok_or_else(|| {
-            HawDBError::Storage("source scan segment has no payload range".to_string())
-        })?;
-        body.push_str(&format!(
-            "segment\t{}\t{}\t{}\t{}\t{}\t{}\n",
-            segment.summary.segment_id,
-            range.artifact_id,
-            range.offset,
-            range.length,
-            range.checksum,
-            segment.summary.row_count,
-        ));
-        for (field, summary) in &segment.summary.fields {
-            body.push_str(&format!(
-                "field\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
-                encode_string(field),
-                summary.present_count,
-                summary.null_count,
-                summary.missing_count,
-                encode_optional_f64(summary.numeric_min_max.map(|range| range.min)),
-                encode_optional_f64(summary.numeric_min_max.map(|range| range.max)),
-                encode_optional_i64(summary.datetime_min_max.map(|range| range.min_epoch_millis)),
-                encode_optional_i64(summary.datetime_min_max.map(|range| range.max_epoch_millis)),
-                encode_enum_dictionary(summary.enum_dictionary.as_ref()),
-            ));
-            for (value, row_ids) in &summary.exact_values {
-                let encoded_value = match value {
-                    crate::scan::ScanScalar::Bool(value) => encode_value(&Value::Bool(*value)),
-                    crate::scan::ScanScalar::Int(value) => encode_value(&Value::Int(*value)),
-                    crate::scan::ScanScalar::Float(value) => {
-                        encode_value(&Value::Float(f64::from_bits(*value)))
-                    }
-                    crate::scan::ScanScalar::String(value) => {
-                        encode_value(&Value::String(value.clone()))
-                    }
-                    crate::scan::ScanScalar::Binary(value) => {
-                        encode_value(&Value::Binary(value.clone()))
-                    }
-                    crate::scan::ScanScalar::Uuid(value) => encode_value(&Value::Uuid(*value)),
-                };
-                body.push_str(&format!(
-                    "exact\t{}\t{}\t{}\n",
-                    encode_string(field),
-                    encode_string(&encoded_value),
-                    row_ids
-                        .iter()
-                        .map(|row_id| row_id.to_string())
-                        .collect::<Vec<_>>()
-                        .join(","),
-                ));
+    encode_descriptor_with_work_context(projection, &CheckpointWorkContext::default())
+        .map(CheckpointText::into_unadmitted)
+}
+
+#[cfg(test)]
+fn encode_descriptor_with_work_context(
+    projection: &SourceScanProjection,
+    work: &CheckpointWorkContext,
+) -> Result<CheckpointText> {
+    let mut body = CheckpointText::new();
+    encode_descriptor_header(projection.graph_epoch, &mut body, work)?;
+    for segment in projection.segments.iter() {
+        encode_descriptor_segment(segment, &mut body, work)?;
+    }
+    work.checkpoint().map_err(HawDBError::from_storage_error)?;
+    Ok(body)
+}
+
+fn encode_descriptor_header(
+    graph_epoch: u64,
+    body: &mut CheckpointText,
+    work: &CheckpointWorkContext,
+) -> Result<()> {
+    body.append(SOURCE_SCAN_DESCRIPTOR_HEADER, work)?;
+    body.fields(format_args!("\ngraph_epoch\t{}\n", graph_epoch), work)?;
+    Ok(())
+}
+
+fn encode_descriptor_segment(
+    segment: &SourceScanSegment,
+    body: &mut CheckpointText,
+    work: &CheckpointWorkContext,
+) -> Result<()> {
+    let range = segment.payload_range.ok_or_else(|| {
+        HawDBError::Storage("source scan segment has no payload range".to_string())
+    })?;
+    body.fields(
+        format_args!("segment\t{}", segment.summary.segment_id),
+        work,
+    )?;
+    for value in [
+        range.artifact_id,
+        range.offset,
+        range.length.get(),
+        range.checksum,
+        segment.summary.row_count,
+    ] {
+        body.fields(format_args!("\t{value}"), work)?;
+    }
+    body.append("\n", work)?;
+    for (field, summary) in &segment.summary.fields {
+        body.append("field\t", work)?;
+        body.hex(field, work)?;
+        for count in [
+            summary.present_count,
+            summary.null_count,
+            summary.missing_count,
+        ] {
+            body.fields(format_args!("\t{count}"), work)?;
+        }
+        for value in [
+            summary.numeric_min_max.map(|value| value.min.to_bits()),
+            summary.numeric_min_max.map(|value| value.max.to_bits()),
+        ] {
+            if let Some(value) = value {
+                body.fields(format_args!("\t{value}"), work)?;
+            } else {
+                body.append("\t", work)?;
             }
         }
+        for value in [
+            summary.datetime_min_max.map(|value| value.min_epoch_millis),
+            summary.datetime_min_max.map(|value| value.max_epoch_millis),
+        ] {
+            if let Some(value) = value {
+                body.fields(format_args!("\t{value}"), work)?;
+            } else {
+                body.append("\t", work)?;
+            }
+        }
+        body.append("\t", work)?;
+        if let Some(dictionary) = &summary.enum_dictionary {
+            for (index, value) in dictionary.values.iter().enumerate() {
+                if index != 0 {
+                    body.append(":", work)?;
+                }
+                body.scan_scalar(value, 1, work)?;
+            }
+        }
+        body.append("\n", work)?;
+        for (value, row_ids) in &summary.exact_values {
+            body.append("exact\t", work)?;
+            body.hex(field, work)?;
+            body.append("\t", work)?;
+            body.scan_scalar(value, 1, work)?;
+            body.append("\t", work)?;
+            for (index, row_id) in row_ids.iter().enumerate() {
+                if index != 0 {
+                    body.append(",", work)?;
+                }
+                body.fields(format_args!("{row_id}"), work)?;
+            }
+            body.append("\n", work)?;
+        }
     }
-    Ok(body)
+    work.checkpoint().map_err(HawDBError::from_storage_error)?;
+    Ok(())
 }
 
 fn decode_descriptor(text: &str, expected_checksum: u64) -> Result<SourceScanProjection> {
@@ -668,11 +919,12 @@ fn decode_descriptor(text: &str, expected_checksum: u64) -> Result<SourceScanPro
                         HawDBError::Storage("source scan payload length is zero".to_string())
                     })?;
                 current = Some(SourceScanSegment {
-                    summary: SegmentSummary::new(
+                    summary: summary::SharedSummary::unadmitted(SegmentSummary::new(
                         parse_u64(raw_id, "source scan segment id")?,
                         parse_u64(raw_rows, "source scan row count")?,
-                    ),
-                    rows: Vec::new(),
+                    )),
+                    rows: owned::SharedRows::default(),
+                    pinned_bounds: None,
                     payload_range: Some(SegmentPayloadRange {
                         artifact_id: parse_u64(raw_artifact, "source scan artifact id")?,
                         offset: parse_u64(raw_offset, "source scan payload offset")?,
@@ -718,6 +970,7 @@ fn decode_descriptor(text: &str, expected_checksum: u64) -> Result<SourceScanPro
                 }
                 segment
                     .summary
+                    .unique_mut()
                     .insert_field(decode_string(raw_field)?, summary);
             }
             ["exact", raw_field, raw_value, raw_row_ids] => {
@@ -729,13 +982,19 @@ fn decode_descriptor(text: &str, expected_checksum: u64) -> Result<SourceScanPro
                 let field = decode_string(raw_field)?;
                 let value = decode_value(&decode_string(raw_value)?)?;
                 let row_ids = decode_row_ids(raw_row_ids)?;
-                let summary = segment.summary.fields.remove(&field).ok_or_else(|| {
-                    HawDBError::Storage(
-                        "source scan exact cursor references unknown field".to_string(),
-                    )
-                })?;
+                let summary = segment
+                    .summary
+                    .unique_mut()
+                    .fields
+                    .remove(&field)
+                    .ok_or_else(|| {
+                        HawDBError::Storage(
+                            "source scan exact cursor references unknown field".to_string(),
+                        )
+                    })?;
                 segment
                     .summary
+                    .unique_mut()
                     .insert_field(field, summary.with_exact_row_ids(value, row_ids));
             }
             [""] => {}
@@ -753,7 +1012,11 @@ fn decode_descriptor(text: &str, expected_checksum: u64) -> Result<SourceScanPro
         graph_epoch: graph_epoch.ok_or_else(|| {
             HawDBError::Storage("source scan descriptor missing graph epoch".to_string())
         })?,
-        segments,
+        segments: owned::SharedSegments::new(
+            segments,
+            owned::context(&CheckpointWorkContext::default()),
+        )?,
+        source_nodes: None,
     })
 }
 
@@ -801,12 +1064,6 @@ fn validate_payload_ranges(path: &Path, segments: &[SourceScanSegment]) -> Resul
     Ok(())
 }
 
-fn encode_optional_f64(value: Option<f64>) -> String {
-    value
-        .map(|value| value.to_bits().to_string())
-        .unwrap_or_default()
-}
-
 fn decode_optional_f64(value: &str) -> Result<Option<f64>> {
     if value.is_empty() {
         return Ok(None);
@@ -814,36 +1071,11 @@ fn decode_optional_f64(value: &str) -> Result<Option<f64>> {
     Ok(Some(f64::from_bits(parse_u64(value, "source scan float")?)))
 }
 
-fn encode_optional_i64(value: Option<i64>) -> String {
-    value.map(|value| value.to_string()).unwrap_or_default()
-}
-
 fn decode_optional_i64(value: &str) -> Result<Option<i64>> {
     if value.is_empty() {
         return Ok(None);
     }
     parse_i64(value, "source scan timestamp").map(Some)
-}
-
-fn encode_enum_dictionary(dictionary: Option<&EnumDictionaryStats>) -> String {
-    dictionary.map_or_else(String::new, |dictionary| {
-        dictionary
-            .values
-            .iter()
-            .map(|value| {
-                let value = match value {
-                    crate::scan::ScanScalar::Bool(value) => Value::Bool(*value),
-                    crate::scan::ScanScalar::Int(value) => Value::Int(*value),
-                    crate::scan::ScanScalar::Float(value) => Value::Float(f64::from_bits(*value)),
-                    crate::scan::ScanScalar::String(value) => Value::String(value.clone()),
-                    crate::scan::ScanScalar::Binary(value) => Value::Binary(value.clone()),
-                    crate::scan::ScanScalar::Uuid(value) => Value::Uuid(*value),
-                };
-                encode_string(&encode_value(&value))
-            })
-            .collect::<Vec<_>>()
-            .join(":")
-    })
 }
 
 fn decode_enum_dictionary(value: &str) -> Result<Vec<Value>> {

@@ -90,11 +90,16 @@ impl From<HawDBError> for CaptureError {
 }
 
 struct Budget {
+    checkpoint: Option<crate::background::CheckpointWorkContext>,
     work: usize,
     bytes: usize,
 }
 impl Budget {
     fn work(&mut self) -> CaptureResult<()> {
+        if let Some(work) = &self.checkpoint {
+            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+            unit.finish();
+        }
         self.work = self.work.checked_sub(1).ok_or(CaptureError::Limit)?;
         Ok(())
     }
@@ -381,6 +386,26 @@ impl GraphStore {
         ops: &[WalOp],
         relational: Option<hawdb_storage::relational::RelationalPrimaryKeyChangeCapture>,
     ) -> Result<PreparedSearchProjectionChange> {
+        self.prepare_search_projection_changes_for_ops_with_work_context(
+            catalog,
+            commit_epoch,
+            ops,
+            relational,
+            None,
+        )
+    }
+
+    pub(in crate::store) fn prepare_search_projection_changes_for_ops_with_work_context(
+        &self,
+        catalog: &Catalog,
+        commit_epoch: u64,
+        ops: &[WalOp],
+        relational: Option<hawdb_storage::relational::RelationalPrimaryKeyChangeCapture>,
+        work: Option<&crate::background::CheckpointWorkContext>,
+    ) -> Result<PreparedSearchProjectionChange> {
+        if let Some(work) = work {
+            work.checkpoint().map_err(HawDBError::from_storage_error)?;
+        }
         if projection_wal_requires_rebuild(ops) {
             return Ok(PreparedSearchProjectionChange::Gap(commit_epoch));
         }
@@ -388,6 +413,7 @@ impl GraphStore {
             store: self,
             catalog,
             budget: Budget {
+                checkpoint: work.cloned(),
                 work: MAX_WORK,
                 bytes: MAX_BYTES,
             },
@@ -600,7 +626,7 @@ fn collect_relational_primary_key_changes_from_wal_ops(
         match op {
             WalOp::Relational { record } => {
                 let batch = decode_relational_wal_batch(record, RelationalDecodeLimits::wal())
-                    .map_err(HawDBError::from_storage_error)?;
+                    .map_err(crate::relational::RelationalError::into_wal_recovery_error)?;
                 captures.push(batch.primary_key_changes.unwrap_or(
                     hawdb_storage::relational::RelationalPrimaryKeyChangeCapture::RequiresRebuild {
                         reason: hawdb_storage::relational::RelationalPrimaryKeyChangeRebuildReason::MissingWalCapture,

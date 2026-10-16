@@ -23,6 +23,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 mod binary;
+mod checkpoint;
 mod codec;
 mod publication;
 mod segment;
@@ -30,6 +31,7 @@ mod segment;
 pub use codec::{
     decode_append_wal_batch, encode_append_wal_batch, AppendDecodeLimits, AppendWalBatch,
 };
+pub(crate) use publication::AppendCheckpointPublicationRequest;
 pub use publication::{
     append_generation_manifest_file, append_segment_file, AppendGenerationArtifacts,
     AppendGenerationManifest, AppendGenerationReader, AppendPublicationConfig,
@@ -259,15 +261,53 @@ impl AppendLiveBatch {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+type AppendPartitionWatermarks = BTreeMap<String, BTreeMap<RelationalKey, RelationalKey>>;
+
+#[derive(Debug, Clone, Default)]
 pub struct AppendState {
-    schemas: Arc<BTreeMap<String, AppendTableSchema>>,
-    base_watermarks: Arc<BTreeMap<String, BTreeMap<RelationalKey, RelationalKey>>>,
-    generated_order_watermarks: Arc<BTreeMap<String, i64>>,
+    schemas: Option<Arc<BTreeMap<String, AppendTableSchema>>>,
+    base_watermarks: Option<Arc<AppendPartitionWatermarks>>,
+    generated_order_watermarks: Option<Arc<BTreeMap<String, i64>>>,
     live_head: Option<Arc<AppendLiveBatch>>,
     live_rows: usize,
     live_payload_bytes: usize,
+    // Schema/watermark data dies before its inventory. Standalone state
+    // clones can outlive the GraphStore that exposed this read snapshot.
+    checkpoint_allocations: crate::background::CheckpointAllocationOwner,
 }
+
+// Empty append state needs no shared allocation. Graph-only databases should
+// release their checkpoint admission after handoff rather than retain a
+// maintenance reservation for three empty maps.
+static EMPTY_APPEND_SCHEMAS: BTreeMap<String, AppendTableSchema> = BTreeMap::new();
+static EMPTY_APPEND_WATERMARKS: AppendPartitionWatermarks = BTreeMap::new();
+static EMPTY_APPEND_GENERATED_WATERMARKS: BTreeMap<String, i64> = BTreeMap::new();
+
+fn share_append_map<K, V>(map: BTreeMap<K, V>) -> Option<Arc<BTreeMap<K, V>>> {
+    (!map.is_empty()).then(|| Arc::new(map))
+}
+
+impl PartialEq for AppendState {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            schemas,
+            base_watermarks,
+            generated_order_watermarks,
+            live_head,
+            live_rows,
+            live_payload_bytes,
+            checkpoint_allocations: _,
+        } = self;
+        schemas == &other.schemas
+            && base_watermarks == &other.base_watermarks
+            && generated_order_watermarks == &other.generated_order_watermarks
+            && live_head == &other.live_head
+            && live_rows == &other.live_rows
+            && live_payload_bytes == &other.live_payload_bytes
+    }
+}
+
+impl Eq for AppendState {}
 
 impl AppendState {
     pub fn from_checkpoint(
@@ -315,29 +355,32 @@ impl AppendState {
             &generated_order_watermarks,
         )?;
         Ok(Self {
-            schemas: Arc::new(schemas),
-            base_watermarks: Arc::new(base_watermarks),
-            generated_order_watermarks: Arc::new(generated_order_watermarks),
+            schemas: share_append_map(schemas),
+            base_watermarks: share_append_map(base_watermarks),
+            generated_order_watermarks: share_append_map(generated_order_watermarks),
             live_head: None,
             live_rows: 0,
             live_payload_bytes: 0,
+            checkpoint_allocations: Default::default(),
         })
     }
 
     pub fn schema(&self, table: &str) -> Option<&AppendTableSchema> {
-        self.schemas.get(table)
+        self.schemas().get(table)
     }
 
     pub fn schemas(&self) -> &BTreeMap<String, AppendTableSchema> {
-        &self.schemas
+        self.schemas.as_deref().unwrap_or(&EMPTY_APPEND_SCHEMAS)
     }
 
     pub fn generated_order_watermarks(&self) -> &BTreeMap<String, i64> {
-        &self.generated_order_watermarks
+        self.generated_order_watermarks
+            .as_deref()
+            .unwrap_or(&EMPTY_APPEND_GENERATED_WATERMARKS)
     }
 
     pub fn generated_order_watermark(&self, table: &str) -> Option<i64> {
-        self.generated_order_watermarks.get(table).copied()
+        self.generated_order_watermarks().get(table).copied()
     }
 
     pub fn live_head(&self) -> Option<&Arc<AppendLiveBatch>> {
@@ -397,6 +440,8 @@ impl AppendState {
             batch = current.previous.as_deref();
         }
         self.base_watermarks
+            .as_deref()
+            .unwrap_or(&EMPTY_APPEND_WATERMARKS)
             .get(table)
             .and_then(|partitions| partitions.get(partition))
     }
@@ -432,8 +477,8 @@ impl AppendState {
     ) -> Result<AppendCommitPreparation, AppendTableError> {
         admit_transaction(transaction, limits)?;
 
-        let mut schemas = self.schemas.as_ref().clone();
-        let mut generated_order_watermarks = self.generated_order_watermarks.as_ref().clone();
+        let mut schemas = self.schemas().clone();
+        let mut generated_order_watermarks = self.generated_order_watermarks().clone();
         let mut writes = Vec::with_capacity(transaction.writes.len());
         let mut mutation_outcomes = Vec::new();
 
@@ -540,7 +585,7 @@ impl AppendState {
         let materialized_transaction = AppendTransaction { writes };
         let state = self.apply_recovered_transaction(&materialized_transaction, limits)?;
         debug_assert_eq!(
-            state.generated_order_watermarks.as_ref(),
+            state.generated_order_watermarks(),
             &generated_order_watermarks
         );
         Ok(AppendCommitPreparation {
@@ -569,8 +614,7 @@ impl AppendState {
             match write {
                 AppendWrite::CreateTable { schema } => {
                     validate_table_schema(schema)?;
-                    let mutable_schemas =
-                        schemas.get_or_insert_with(|| self.schemas.as_ref().clone());
+                    let mutable_schemas = schemas.get_or_insert_with(|| self.schemas().clone());
                     if mutable_schemas.contains_key(&schema.name) {
                         return Err(AppendTableError::Schema(format!(
                             "table {} already exists",
@@ -580,14 +624,14 @@ impl AppendState {
                     mutable_schemas.insert(schema.name.clone(), schema.clone());
                     if schema.order_mode == AppendOrderMode::CommitSequence {
                         generated_order_watermarks
-                            .get_or_insert_with(|| self.generated_order_watermarks.as_ref().clone())
+                            .get_or_insert_with(|| self.generated_order_watermarks().clone())
                             .insert(schema.name.clone(), 0);
                     }
                 }
                 AppendWrite::Append { table, rows } => {
                     let schema = schemas
                         .as_ref()
-                        .unwrap_or(self.schemas.as_ref())
+                        .unwrap_or(self.schemas())
                         .get(table)
                         .ok_or_else(|| {
                             AppendTableError::Schema(format!("unknown table {table}"))
@@ -607,9 +651,8 @@ impl AppendState {
                         let partition_key = key_from_row(row, &positions.partition)?;
                         let order_key = key_from_row(row, &positions.order)?;
                         if schema.order_mode == AppendOrderMode::CommitSequence {
-                            let watermarks = generated_order_watermarks.get_or_insert_with(|| {
-                                self.generated_order_watermarks.as_ref().clone()
-                            });
+                            let watermarks = generated_order_watermarks
+                                .get_or_insert_with(|| self.generated_order_watermarks().clone());
                             let watermark = watermarks.get(table).copied().ok_or_else(|| {
                                 AppendTableError::Corruption(format!(
                                     "generated-order table {table} has no durable watermark"
@@ -658,7 +701,7 @@ impl AppendState {
                 AppendWrite::AppendGenerated { table, rows } => {
                     let schema = schemas
                         .as_ref()
-                        .unwrap_or(self.schemas.as_ref())
+                        .unwrap_or(self.schemas())
                         .get(table)
                         .ok_or_else(|| {
                             AppendTableError::Schema(format!("unknown table {table}"))
@@ -712,13 +755,14 @@ impl AppendState {
         };
 
         Ok(Self {
-            schemas: schemas.map_or_else(|| self.schemas.clone(), Arc::new),
+            schemas: schemas.map_or_else(|| self.schemas.clone(), share_append_map),
             base_watermarks: self.base_watermarks.clone(),
             generated_order_watermarks: generated_order_watermarks
-                .map_or_else(|| self.generated_order_watermarks.clone(), Arc::new),
+                .map_or_else(|| self.generated_order_watermarks.clone(), share_append_map),
             live_head,
             live_rows,
             live_payload_bytes,
+            checkpoint_allocations: self.checkpoint_allocations.clone(),
         })
     }
 
@@ -889,6 +933,14 @@ fn admit_transaction(
 }
 
 fn validate_table_schema(schema: &AppendTableSchema) -> Result<(), AppendTableError> {
+    validate_table_schema_visiting(schema, || Ok(()))
+}
+
+fn validate_table_schema_visiting(
+    schema: &AppendTableSchema,
+    mut visit: impl FnMut() -> Result<(), AppendTableError>,
+) -> Result<(), AppendTableError> {
+    visit()?;
     if schema.name.is_empty() || schema.columns.is_empty() || schema.order_key.is_empty() {
         return Err(AppendTableError::Schema(
             "table name, columns, and order key must be non-empty".to_string(),
@@ -896,6 +948,7 @@ fn validate_table_schema(schema: &AppendTableSchema) -> Result<(), AppendTableEr
     }
     let mut names = BTreeSet::new();
     for column in &schema.columns {
+        visit()?;
         if column.name.is_empty() || !names.insert(column.name.as_str()) {
             return Err(AppendTableError::Schema(format!(
                 "duplicate or empty column {}",
@@ -920,6 +973,7 @@ fn validate_table_schema(schema: &AppendTableSchema) -> Result<(), AppendTableEr
         ("order key", schema.order_key.as_slice()),
     ] {
         for column in columns {
+            visit()?;
             let position = schema.column_position(column).ok_or_else(|| {
                 AppendTableError::Schema(format!("{kind} references unknown column {column}"))
             })?;

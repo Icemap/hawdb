@@ -1220,7 +1220,8 @@ mod tests {
         assert_eq!(output.rows.len(), 1);
         assert_eq!(output.rows[0].get("id"), Some(&Value::Int(5)));
         assert_eq!(output.rows[0].get("score"), Some(&Value::Int(15)));
-        let planning = db.runtime.get().unwrap().optimizer_planning_cache.borrow();
+        let runtime = db.runtime.get().unwrap();
+        let planning = runtime.optimizer_planning_cache.borrow();
         assert!(planning.statistics.is_none());
         assert_eq!(planning.statistics_generation, generation);
     }
@@ -1295,7 +1296,8 @@ mod tests {
             1
         );
         assert_eq!(db.plan_cache_stats().unwrap().hits, cache.hits + 1);
-        let planning = db.runtime.get().unwrap().optimizer_planning_cache.borrow();
+        let runtime = db.runtime.get().unwrap();
+        let planning = runtime.optimizer_planning_cache.borrow();
         match (&before, &planning.statistics) {
             (Some(before), Some(after)) => assert!(Arc::ptr_eq(before, after)),
             (None, None) => {}

@@ -15,104 +15,144 @@
 use super::*;
 use hawdb_core::Uuid;
 
-pub(super) fn encode_row(
+pub(super) fn encode_row_with_allocations(
     row: &RelationalRow,
     column_count: usize,
     limits: RelationalRowPageLimits,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
 ) -> Result<Vec<u8>, RelationalRowPageError> {
-    if row.values().len() != column_count {
-        return Err(RelationalRowPageError::Admission(format!(
-            "row contains {} values, expected {column_count}",
-            row.values().len()
-        )));
-    }
-    let directory_len = column_count.checked_mul(VALUE_SLOT_BYTES).ok_or_else(|| {
-        RelationalRowPageError::Admission("value slot directory length overflow".to_string())
-    })?;
-    let header_len = 4usize.checked_add(directory_len).ok_or_else(|| {
-        RelationalRowPageError::Admission("encoded row header length overflow".to_string())
-    })?;
-    if header_len > limits.max_row_bytes.get() {
-        return Err(RelationalRowPageError::Admission(format!(
-            "row directory contains {header_len} bytes, exceeding row limit {}",
-            limits.max_row_bytes
-        )));
-    }
-    let mut slots = Vec::with_capacity(column_count);
-    let mut payload = Vec::new();
-    for value in row.values() {
-        let offset = u32_len(payload.len(), "value offset")?;
-        let before = payload.len();
-        encode_value(&mut payload, value, limits)?;
-        let length = payload.len().checked_sub(before).ok_or_else(|| {
-            RelationalRowPageError::Admission("value length underflow".to_string())
-        })?;
-        slots.push((offset, u32_len(length, "value length")?));
-        let projected_len = header_len.checked_add(payload.len()).ok_or_else(|| {
-            RelationalRowPageError::Admission("encoded row length overflow".to_string())
-        })?;
-        if projected_len > limits.max_row_bytes.get() {
-            return Err(RelationalRowPageError::Admission(format!(
-                "encoded row would contain {projected_len} bytes, exceeding limit {}",
-                limits.max_row_bytes
-            )));
+    match allocations {
+        Some(output) => {
+            let scratch = crate::background::CheckpointDecodeContext {
+                work: output.work.clone(),
+                memory: Default::default(),
+            };
+            super::encoding::encode_row(
+                row,
+                column_count,
+                limits,
+                &super::encoding::AllocatedRowWork {
+                    output,
+                    scratch: &scratch,
+                },
+            )
         }
+        None => super::encoding::encode_row(row, column_count, limits, &super::encoding::NoWork),
     }
-    let mut encoded = Vec::with_capacity(header_len + payload.len());
-    encoded.extend_from_slice(&u32_len(column_count, "row value count")?.to_le_bytes());
-    for (offset, length) in slots {
-        encoded.extend_from_slice(&offset.to_le_bytes());
-        encoded.extend_from_slice(&length.to_le_bytes());
-    }
-    encoded.extend_from_slice(&payload);
-    Ok(encoded)
 }
 
-fn encode_value(
-    encoded: &mut Vec<u8>,
+pub(super) trait ValueOutput {
+    fn push(&mut self, byte: u8) -> Result<(), RelationalRowPageError>;
+    fn extend_from_slice(&mut self, bytes: &[u8]) -> Result<(), RelationalRowPageError>;
+    fn append<W: super::encoding::EncodeWork>(
+        &mut self,
+        bytes: &[u8],
+        work: &W,
+    ) -> Result<(), RelationalRowPageError>;
+}
+
+impl ValueOutput for Vec<u8> {
+    fn push(&mut self, byte: u8) -> Result<(), RelationalRowPageError> {
+        Vec::push(self, byte);
+        Ok(())
+    }
+    fn extend_from_slice(&mut self, bytes: &[u8]) -> Result<(), RelationalRowPageError> {
+        Vec::extend_from_slice(self, bytes);
+        Ok(())
+    }
+    fn append<W: super::encoding::EncodeWork>(
+        &mut self,
+        bytes: &[u8],
+        work: &W,
+    ) -> Result<(), RelationalRowPageError> {
+        work.append(self, bytes)
+    }
+}
+
+#[derive(Default)]
+pub(super) struct CountingValueOutput {
+    pub(super) length: usize,
+}
+
+impl CountingValueOutput {
+    fn add(&mut self, bytes: usize) -> Result<(), RelationalRowPageError> {
+        self.length = self.length.checked_add(bytes).ok_or_else(|| {
+            RelationalRowPageError::Admission("encoded value length overflow".into())
+        })?;
+        Ok(())
+    }
+}
+
+impl ValueOutput for CountingValueOutput {
+    fn push(&mut self, _: u8) -> Result<(), RelationalRowPageError> {
+        self.add(1)
+    }
+    fn extend_from_slice(&mut self, bytes: &[u8]) -> Result<(), RelationalRowPageError> {
+        self.add(bytes.len())
+    }
+    fn append<W: super::encoding::EncodeWork>(
+        &mut self,
+        bytes: &[u8],
+        work: &W,
+    ) -> Result<(), RelationalRowPageError> {
+        self.add(bytes.len())?;
+        work.checkpoint()
+    }
+}
+
+pub(super) fn encode_value_with_work<W: super::encoding::EncodeWork, O: ValueOutput>(
+    encoded: &mut O,
     value: &RelationalValue,
     limits: RelationalRowPageLimits,
+    work: &W,
 ) -> Result<(), RelationalRowPageError> {
+    use super::encoding::EncodeUnit;
+    let unit = work.start_unit()?;
     match value {
-        RelationalValue::Null => encoded.push(0),
+        RelationalValue::Null => encoded.push(0)?,
         RelationalValue::Boolean(value) => {
-            encoded.push(1);
-            encoded.push(u8::from(*value));
+            encoded.push(1)?;
+            encoded.push(u8::from(*value))?;
         }
         RelationalValue::BigInt(value) => {
-            encoded.push(2);
-            encoded.extend_from_slice(&value.to_le_bytes());
+            encoded.push(2)?;
+            encoded.extend_from_slice(&value.to_le_bytes())?;
         }
         RelationalValue::DoublePrecision(value) => {
-            encoded.push(3);
-            encoded.extend_from_slice(&value.to_bits().to_le_bytes());
+            encoded.push(3)?;
+            encoded.extend_from_slice(&value.to_bits().to_le_bytes())?;
         }
         RelationalValue::Text(value) => {
             validate_inline_value_len(value.len(), limits)?;
-            encoded.push(4);
-            encoded.extend_from_slice(&u32_len(value.len(), "TEXT length")?.to_le_bytes());
-            encoded.extend_from_slice(value.as_bytes());
+            encoded.push(4)?;
+            encoded.extend_from_slice(&u32_len(value.len(), "TEXT length")?.to_le_bytes())?;
+            unit.finish();
+            encoded.append(value.as_bytes(), work)?;
+            return work.checkpoint();
         }
         RelationalValue::Bytea(value) => {
             validate_inline_value_len(value.len(), limits)?;
-            encoded.push(5);
-            encoded.extend_from_slice(&u32_len(value.len(), "BYTEA length")?.to_le_bytes());
-            encoded.extend_from_slice(value);
+            encoded.push(5)?;
+            encoded.extend_from_slice(&u32_len(value.len(), "BYTEA length")?.to_le_bytes())?;
+            unit.finish();
+            encoded.append(value, work)?;
+            return work.checkpoint();
         }
         RelationalValue::Uuid(value) => {
-            encoded.push(7);
-            encoded.extend_from_slice(value.as_bytes());
+            encoded.push(7)?;
+            encoded.extend_from_slice(value.as_bytes())?;
         }
         RelationalValue::Overflow(reference) => {
             validate_overflow_shape(reference, limits, ErrorClass::Admission)?;
-            encoded.push(6);
-            encoded.push(scalar_type_tag(reference.scalar_type));
-            encoded.extend_from_slice(&reference.compressed_bytes.to_le_bytes());
-            encoded.extend_from_slice(&reference.uncompressed_bytes.to_le_bytes());
-            encoded.extend_from_slice(reference.digest.as_bytes());
+            encoded.push(6)?;
+            encoded.push(scalar_type_tag(reference.scalar_type))?;
+            encoded.extend_from_slice(&reference.compressed_bytes.to_le_bytes())?;
+            encoded.extend_from_slice(&reference.uncompressed_bytes.to_le_bytes())?;
+            encoded.extend_from_slice(reference.digest.as_bytes())?;
         }
     }
-    Ok(())
+    unit.finish();
+    work.checkpoint()
 }
 
 pub(super) fn decode_row_fields(
@@ -120,6 +160,16 @@ pub(super) fn decode_row_fields(
     column_count: usize,
     requested_fields: Option<&[usize]>,
     limits: RelationalRowPageLimits,
+) -> Result<Vec<RelationalProjectedField>, RelationalRowPageError> {
+    decode_row_fields_with_allocations(encoded, column_count, requested_fields, limits, None)
+}
+
+pub(super) fn decode_row_fields_with_allocations(
+    encoded: &[u8],
+    column_count: usize,
+    requested_fields: Option<&[usize]>,
+    limits: RelationalRowPageLimits,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
 ) -> Result<Vec<RelationalProjectedField>, RelationalRowPageError> {
     if encoded.len() < 4 {
         return Err(RelationalRowPageError::Corrupt(
@@ -145,10 +195,21 @@ pub(super) fn decode_row_fields(
     }
     let directory = &encoded[4..payload_start];
     let payload = &encoded[payload_start..];
-    let mut fields = Vec::with_capacity(requested_fields.map_or(column_count, <[usize]>::len));
+    let capacity = requested_fields.map_or(column_count, <[usize]>::len);
+    let mut fields = match allocations {
+        Some(context) => context
+            .vector_capacity(capacity)
+            .map_err(|error| RelationalRowPageError::Admission(error.to_string()))?,
+        None => Vec::with_capacity(capacity),
+    };
     let mut requested_index = 0usize;
     let mut next_offset = 0usize;
     for ordinal in 0..column_count {
+        if let Some(context) = allocations {
+            context
+                .checkpoint()
+                .map_err(super::checkpoint::work_error)?;
+        }
         let slot_offset = ordinal * VALUE_SLOT_BYTES;
         let value_offset = read_u32(&directory[slot_offset..slot_offset + 4]);
         let value_len = read_u32(&directory[slot_offset + 4..slot_offset + 8]);
@@ -167,7 +228,10 @@ pub(super) fn decode_row_fields(
         {
             fields.push(RelationalProjectedField {
                 ordinal,
-                value: decode_validated_value(value)?,
+                value: match allocations {
+                    Some(context) => decode_validated_value_with_allocations(value, context)?,
+                    None => decode_validated_value(value)?,
+                },
             });
             if requested_fields.is_some() {
                 requested_index += 1;
@@ -358,6 +422,37 @@ fn decode_validated_value(encoded: &[u8]) -> Result<RelationalValue, RelationalR
     }
 }
 
+fn decode_validated_value_with_allocations(
+    encoded: &[u8],
+    context: &crate::background::CheckpointDecodeContext,
+) -> Result<RelationalValue, RelationalRowPageError> {
+    let admission =
+        |error: hawdb_core::HawDBError| RelationalRowPageError::Admission(error.to_string());
+    match encoded[0] {
+        4 => context
+            .string(std::str::from_utf8(&encoded[5..]).expect("validated TEXT value is UTF-8"))
+            .map(RelationalValue::Text)
+            .map_err(admission),
+        5 => {
+            let mut bytes = context
+                .vector_capacity(encoded.len() - 5)
+                .map_err(admission)?;
+            for chunk in encoded[5..].chunks(64 * 1024) {
+                let unit = context
+                    .start_unit()
+                    .map_err(super::checkpoint::work_error)?;
+                bytes.extend_from_slice(chunk);
+                unit.finish();
+            }
+            context
+                .checkpoint()
+                .map_err(super::checkpoint::work_error)?;
+            Ok(RelationalValue::Bytea(bytes))
+        }
+        _ => decode_validated_value(encoded),
+    }
+}
+
 fn decode_validated_value_ref(
     encoded: &[u8],
 ) -> Result<RelationalValueRef<'_>, RelationalRowPageError> {
@@ -468,7 +563,7 @@ fn validate_overflow_shape(
     Ok(())
 }
 
-fn validate_inline_value_len(
+pub(super) fn validate_inline_value_len(
     length: usize,
     limits: RelationalRowPageLimits,
 ) -> Result<(), RelationalRowPageError> {

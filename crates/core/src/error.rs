@@ -116,6 +116,11 @@ pub enum HawDBError {
     BranchBusy {
         resource: &'static str,
     },
+    BranchEvidenceBudgetExceeded {
+        resource: &'static str,
+        requested: u64,
+        limit: u64,
+    },
     /// An unleased pending create prevents a complete reclamation mark.
     /// This identifies retained evidence, not authorization to discard it.
     BranchReclamationBlocked {
@@ -169,6 +174,10 @@ impl Display for HawDBError {
                 write!(f, "{command} is unavailable in {context}")
             }
             HawDBError::BranchBusy { resource } => write!(f, "branch is busy: {resource}"),
+            HawDBError::BranchEvidenceBudgetExceeded { resource, requested, limit } => write!(
+                f,
+                "branch quarantine evidence {resource} budget exceeded: requested {requested}, limit {limit}"
+            ),
             HawDBError::BranchReclamationBlocked {
                 branch_id,
                 catalog_revision,

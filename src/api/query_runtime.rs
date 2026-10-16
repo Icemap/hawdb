@@ -168,8 +168,13 @@ impl PreparedRuntimeQuery {
         self.parse_metrics.elapsed_nanos
     }
 
-    pub(super) fn uses_read_snapshot(&self) -> bool {
-        if self.admission.is_mutation {
+    pub(crate) fn uses_read_snapshot(&self) -> bool {
+        if self.admission.is_mutation
+            || self
+                .optimized
+                .as_ref()
+                .is_some_and(|optimized| executor::requires_write_access(&optimized.physical_plan))
+        {
             return false;
         }
         // A plain EXPLAIN may contain a mutation plan without executing it. Snapshot
@@ -214,33 +219,41 @@ impl Database {
 
     #[cfg_attr(not(feature = "tokio-runtime"), allow(dead_code))]
     pub(crate) fn runtime_planning_snapshot(&self) -> Result<RuntimePlanningSnapshot> {
+        let runtime = self.runtime.get()?;
         Ok({
-            let (published_read_view, pin) = self.pin_read_view()?;
+            let (published_read_view, pin) = Self::pin_runtime_read_view(&runtime);
             RuntimePlanningSnapshot {
-                branch_id: self.current_branch()?.map(|current| current.info.id),
-                catalog: self.runtime.get()?.catalog.clone(),
-                store: self.runtime.get()?.store.snapshot_for_read(),
+                branch_id: self
+                    .current_branch_from_runtime(&runtime)
+                    .map(|current| current.info.id),
+                catalog: runtime.catalog.clone(),
+                store: runtime.store.snapshot_for_read(),
                 // Store snapshots omit the writable durable handle and its checkpoint
                 // metadata. Freshness must compare the original pinned publication.
                 published_read_view,
-                optimizer: self.runtime.get()?.optimizer.clone(),
+                optimizer: runtime.optimizer.clone(),
                 config: self.config.clone(),
                 system_variables: self.system_variables.clone(),
                 // Templates and their generation counter must have the same ownership.
-                plan_cache: Arc::clone(&self.runtime.get()?.plan_cache),
-                planning_cache: Arc::clone(&self.runtime.get()?.optimizer_planning_cache),
+                plan_cache: Arc::clone(&runtime.plan_cache),
+                planning_cache: Arc::clone(&runtime.optimizer_planning_cache),
                 _pin: pin,
             }
         })
     }
 
-    fn runtime_planning_context(&self) -> Result<RuntimePlanningContext<'_>> {
+    fn runtime_planning_context<'a>(
+        &'a self,
+        runtime: &'a super::runtime_cell::AdmittedBranchRuntime,
+    ) -> Result<RuntimePlanningContext<'a>> {
         Ok({
             RuntimePlanningContext {
-                branch_id: self.current_branch()?.map(|current| current.info.id),
-                catalog: &self.runtime.get()?.catalog,
-                store: &self.runtime.get()?.store,
-                optimizer: &self.runtime.get()?.optimizer,
+                branch_id: self
+                    .current_branch_from_runtime(runtime)
+                    .map(|current| current.info.id),
+                catalog: &runtime.catalog,
+                store: &runtime.store,
+                optimizer: &runtime.optimizer,
                 config: &self.config,
                 system_variables: &self.system_variables,
             }
@@ -270,7 +283,8 @@ impl Database {
                 .borrow()
                 .clone(),
         );
-        self.runtime_planning_context()?
+        let runtime = self.runtime.get()?;
+        self.runtime_planning_context(&runtime)?
             .prepare(
                 cypher_text.to_string(),
                 parameters,
@@ -285,7 +299,8 @@ impl Database {
         cypher_text: String,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<PreparedRuntimeQuery> {
-        self.runtime_planning_context()?.prepare(
+        let runtime = self.runtime.get()?;
+        self.runtime_planning_context(&runtime)?.prepare(
             cypher_text,
             parameters,
             &self.runtime.get()?.plan_cache,
@@ -337,7 +352,7 @@ impl RuntimePlanningContext<'_> {
         let statement = parsed.result?;
         let work_request = query_work_request_for_statement(self.system_variables, &statement)?;
         let body = statement_body(&statement);
-        let streaming_eligible = !matches!(body, cypher::Statement::Explain(_));
+        let mut streaming_eligible = !matches!(body, cypher::Statement::Explain(_));
         let mut prepared_optimized = None;
         let mut optimizer_environment = None;
         let (
@@ -368,6 +383,7 @@ impl RuntimePlanningContext<'_> {
                     planning_cache,
                 )?;
                 let is_mutation = executor::is_mutation_plan(&optimized.physical_plan)?;
+                streaming_eligible &= !executor::requires_write_access(&optimized.physical_plan);
                 let estimated_memory_bytes = if is_mutation {
                     executor::estimated_mutation_memory_bytes(
                         self.config.mutation_limits,
@@ -515,6 +531,7 @@ impl Database {
         self.validate_prepared_branch(&prepared)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
+        drop(runtime);
         let mut external = executor::NoExternalReadOperator;
         self.query_with_params_trace_and_external_prepared(
             &cypher_text,
@@ -566,6 +583,7 @@ impl Database {
         self.validate_prepared_branch(&prepared)?;
         let runtime = self.runtime.get()?;
         let (cypher_text, prepared) = prepared.into_execution(&runtime.catalog, &runtime.store);
+        drop(runtime);
         let mut external = executor::NoExternalReadOperator;
         self.query_with_params_trace_and_external_prepared(
             &cypher_text,
@@ -745,7 +763,8 @@ impl Database {
                 query_runtime_checkpoint(task_context)?;
                 (
                     {
-                        let branch_runtime = self.runtime.get_mut()?;
+                        let mut branch_runtime_access = self.runtime.get_mut()?;
+                        let branch_runtime = &mut *branch_runtime_access;
                         executor::execute_mutation_with_limits(
                             &optimized.physical_plan,
                             &mut branch_runtime.catalog,
@@ -758,33 +777,39 @@ impl Database {
                     None,
                 )
             } else {
-                let profiled = executor::execute_with_request(
-                    executor::ExecutionRequest::new(
-                        &optimized.physical_plan,
-                        parameters,
-                        &self.config.execution_memory,
-                    )
-                    .with_output_limits(
-                        restrictive_query_limit(
-                            self.config.max_read_result_rows,
-                            output_limits.max_rows,
-                        ),
-                        restrictive_query_limit(
-                            self.config.max_read_result_payload_bytes,
-                            output_limits.max_payload_bytes,
-                        ),
-                    )
-                    .with_optional_task_context(task_context)
-                    .with_optional_host_scorer(scoring.and_then(BoundScoringRequest::host_scorer)),
-                    {
-                        let branch_runtime = self.runtime.get_mut()?;
+                let request = executor::ExecutionRequest::new(
+                    &optimized.physical_plan,
+                    parameters,
+                    &self.config.execution_memory,
+                )
+                .with_output_limits(
+                    restrictive_query_limit(
+                        self.config.max_read_result_rows,
+                        output_limits.max_rows,
+                    ),
+                    restrictive_query_limit(
+                        self.config.max_read_result_payload_bytes,
+                        output_limits.max_payload_bytes,
+                    ),
+                )
+                .with_optional_task_context(task_context)
+                .with_optional_host_scorer(scoring.and_then(BoundScoringRequest::host_scorer));
+                let profiled = if executor::requires_write_access(&optimized.physical_plan) {
+                    // Projection registration is a procedure result, but its
+                    // WAL append must use the same guard as other writes.
+                    let mut access = self.runtime.get_mut()?;
+                    let branch_runtime = &mut *access;
+                    executor::execute_with_request(
+                        request,
                         executor::ExecutionResources::new(
                             &mut branch_runtime.catalog,
                             &mut branch_runtime.store,
                             external,
-                        )
-                    },
-                )?;
+                        ),
+                    )?
+                } else {
+                    self.runtime.get_read()?.execute(request, external)?
+                };
                 (profiled.rows, Some(profiled.profile))
             };
             if !is_mutation {
@@ -849,12 +874,12 @@ impl Database {
         )?;
         let inner_statement_kind = statement_kind(statement_body(&explain.statement));
         if explain.analyze {
-            if executor::is_mutation_plan(&optimized.physical_plan)? {
+            if executor::requires_write_access(&optimized.physical_plan) {
                 return Err(HawDBError::Execution(
                     "EXPLAIN ANALYZE only supports read queries".to_string(),
                 ));
             }
-            let profiled = executor::execute_with_request(
+            let profiled = self.runtime.get_read()?.execute(
                 executor::ExecutionRequest::new(
                     &optimized.physical_plan,
                     parameters,
@@ -874,14 +899,7 @@ impl Database {
                 .with_optional_host_scorer(
                     options.scoring.and_then(BoundScoringRequest::host_scorer),
                 ),
-                {
-                    let branch_runtime = self.runtime.get_mut()?;
-                    executor::ExecutionResources::new(
-                        &mut branch_runtime.catalog,
-                        &mut branch_runtime.store,
-                        external,
-                    )
-                },
+                external,
             )?;
             let row = explain_analyze_output_row(
                 &optimized,
