@@ -11,8 +11,8 @@ observations = []
 def configured_open(path=None):
     db = native._open_large_result_qualification(path)
     values = tuple(db._qualification_limits())
-    assert values == (1000000, 1073741824, 1073741824, 1073741824, 4294967296, 268435456, 67108864), values
     observations.append(values)
+    assert values == (1000000, 1073741824, 1073741824, 1073741824, 2147483648, 268435456, 67108864), values
     return db
 hawdb.open = configured_open
 @atexit.register

@@ -51,7 +51,7 @@ def main():
     manifest = {
         "source": source, "engine_source": ENGINE, "overlay_files": changed,
         "producer_hashes": before, "rows": rows, "backend": backend,
-        "configured_limits": {"rows":1000000,"logical_payload_bytes":1073741824,"query_memory_bytes":1073741824,"result_budget_bytes":1073741824,"runtime_memory_bytes":4294967296,"batch_payload_bytes":268435456,"blocking_operator_bytes":67108864},
+        "configured_limits": {"rows":1000000,"logical_payload_bytes":1073741824,"query_memory_bytes":1073741824,"result_budget_bytes":1073741824,"runtime_memory_bytes":2147483648,"batch_payload_bytes":268435456,"blocking_operator_bytes":67108864},
         "defaults_changed": True, "timed_consumers_changed": False,
         "python": sys.version, "build": "default Bazel configuration, -c opt",
         "scope": [
@@ -60,6 +60,7 @@ def main():
             "No configured Go measurement is claimed.",
             "Batch rows stay at 256. The typed batch byte allowance also raises plan-derived admission; actual batches remain row-limited.",
             "The earlier d56bb8cf campaign retains its 64 MiB owned-admission refusal and missing teardown receipt.",
+            "The 6c1779a1 attempt records Linux clamping a requested 4 GiB governor to available memory; no measurements from that failed assertion qualify.",
             "Refused owned references prevent numeric speedup claims.",
             "Process RSS includes setup/runtime; no foreign-heap bound.",
             "The complete ordinary matrix is separate.",

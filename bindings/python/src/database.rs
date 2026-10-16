@@ -749,7 +749,7 @@ pub fn _open_large_result_qualification(path: Option<PathBuf>) -> PyResult<Datab
         ..Default::default()
     };
     let governor = hawdb::RuntimeGovernorConfig {
-        memory_budget_bytes: Some(4 * 1024 * 1024 * 1024),
+        memory_budget_bytes: Some(2 * 1024 * 1024 * 1024),
         result_budget_bytes: 1024 * 1024 * 1024,
         ..hawdb::RuntimeGovernorConfig::shared_host()
     };
