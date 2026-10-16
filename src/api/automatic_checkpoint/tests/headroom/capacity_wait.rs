@@ -109,3 +109,56 @@ fn parked_preparation_rejects_no_data_and_a_busy_writer_can_retry_after_checkpoi
         expected
     );
 }
+
+fn releasing_control(delta_bytes: u64) -> Arc<Control> {
+    let control = Arc::new(Control::default());
+    {
+        let mut state = control.lock().unwrap();
+        state.phase = Phase::Releasing;
+        state.debt = Some(CheckpointDebtSnapshot {
+            commit_epoch: 1,
+            checkpoint_commit_epoch: 0,
+            wal_generation: 1,
+            wal_bytes: 0,
+            wal_age_millis: 0,
+            max_wal_bytes: None,
+            max_wal_record_bytes: None,
+            delta_bytes,
+            max_delta_bytes: Some(16 * 1024),
+            read_only: false,
+            wal_sync_group_active: false,
+        });
+    }
+    control
+}
+
+#[test]
+fn releasing_old_owners_preserves_available_write_capacity() {
+    let control = releasing_control(16 * 1024 * 70 / 100);
+    let state = control.lock_frontend().unwrap();
+    assert_eq!(state.phase, Phase::Releasing);
+}
+
+#[test]
+fn releasing_old_owners_fences_capacity_growth_until_cleanup_finishes() {
+    let control = releasing_control(16 * 1024 * 85 / 100);
+    let (waiting, observed) = mpsc::channel();
+    control.lock().unwrap().frontend_wait_probe = Some(waiting);
+    let (finished, completion) = mpsc::channel();
+    let writer_control = control.clone();
+    let writer = std::thread::spawn(move || {
+        let phase = writer_control.lock_frontend().unwrap().phase;
+        finished.send(phase).unwrap();
+    });
+    let phase = observed.recv_timeout(Duration::from_secs(1));
+    let early = completion.try_recv();
+    {
+        let mut state = control.lock().unwrap();
+        state.phase = Phase::Idle;
+        control.notify_all();
+    }
+    writer.join().unwrap();
+    assert_eq!(phase.unwrap(), Phase::Releasing);
+    assert!(matches!(early, Err(mpsc::TryRecvError::Empty)));
+    assert_eq!(completion.recv().unwrap(), Phase::Idle);
+}
