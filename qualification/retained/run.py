@@ -51,11 +51,11 @@ def main():
     manifest = {
         "source": source, "engine_source": ENGINE, "overlay_files": changed,
         "producer_hashes": before, "rows": rows, "backend": backend,
-        "configured_limits": {"rows":1000000,"logical_payload_bytes":268435456,"query_memory_bytes":1073741824,"result_budget_bytes":268435456,"runtime_memory_bytes":2147483648},
-        "defaults_changed": True, "timed_consumers_changed": False,
+        "configured_limits": {"rows":100000,"logical_payload_bytes":67108864,"query_memory_bytes":268435456,"result_budget_bytes":16777216},
+        "defaults_changed": False, "timed_consumers_changed": False,
         "python": sys.version, "build": "default Bazel configuration, -c opt",
         "scope": [
-            "Explicit configured group; defaults are preserved in separate default-source runs.",
+            "Default constructors/settings; qualification-only private opening adapter remains unused.",
             "Python: seven rotating rounds plus original warmup/reference.",
             "No configured Go measurement is claimed.",
             "Refused owned references prevent numeric speedup claims.",

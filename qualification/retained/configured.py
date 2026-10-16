@@ -2,16 +2,23 @@
 import atexit
 import importlib
 import json
+import os
 from pathlib import Path
 import runpy
 import sys
 import hawdb
 native = importlib.import_module("hawdb._hawdb")
 observations = []
+original_open = hawdb.open
+profile = os.environ.get("QUAL_CONFIGURATION", "large")
+assert profile in ("default", "large"), profile
 def configured_open(path=None):
-    db = native._open_large_result_qualification(path)
+    db = native._open_large_result_qualification(path) if profile == "large" else original_open(path)
     values = tuple(db._qualification_limits())
-    assert values == (1000000, 268435456, 1073741824, 268435456, 2147483648), values
+    if profile == "large":
+        assert values == (1000000, 268435456, 1073741824, 268435456, 2147483648), values
+    else:
+        assert values[:4] == (100000, 67108864, 268435456, 16777216), values
     observations.append(values)
     return db
 hawdb.open = configured_open
