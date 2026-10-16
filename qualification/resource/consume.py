@@ -47,7 +47,7 @@ def main(argv=None):
     hawdb.open = configured_open
     sys.argv = [str(args.consumer), *args.arguments]
     try:
-        module.main()
+        return module.main()
     finally:
         hawdb.open = original_open
         sys.argv = original_arguments
@@ -72,4 +72,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

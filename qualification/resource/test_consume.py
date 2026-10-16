@@ -1,7 +1,9 @@
 """Check explicit-limit wrapper failure receipts without a database workload."""
 
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import types
@@ -12,6 +14,54 @@ import consume
 
 
 class ConsumeReceiptTests(unittest.TestCase):
+    def check_returning_entrypoint(self, status):
+        with tempfile.TemporaryDirectory(prefix="hawdb-consume-cli-") as temporary:
+            directory = Path(temporary)
+            package = directory / "hawdb"
+            package.mkdir()
+            (package / "__init__.py").write_text("open = None\n")
+            (package / "_hawdb.py").write_text(
+                "from types import SimpleNamespace\n"
+                "def _open_large_result_qualification(path):\n"
+                "    return SimpleNamespace(\n"
+                f"        _qualification_limits=lambda: {consume.LIMITS!r},\n"
+                "        close=lambda: None)\n"
+            )
+            script = directory / "consumer.py"
+            script.write_text(
+                "import hawdb\n"
+                "def main():\n"
+                "    database = hawdb.open()\n"
+                "    database.close()\n"
+                f"    return {status}\n"
+            )
+            receipt = directory / "limits.json"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-B",
+                    str(Path(consume.__file__).resolve()),
+                    "--receipt",
+                    str(receipt),
+                    str(script),
+                ],
+                env=dict(os.environ, PYTHONPATH=str(directory)),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, status, result.stderr)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.stderr, "")
+            self.assertEqual(
+                json.loads(receipt.read_text())["limits"], [list(consume.LIMITS)]
+            )
+
+    def test_cli_preserves_success_return_value(self):
+        self.check_returning_entrypoint(0)
+
+    def test_cli_preserves_failure_return_value(self):
+        self.check_returning_entrypoint(7)
+
     def run_fixture(self, status, limits=consume.LIMITS, instrumented=False):
         temporary = tempfile.TemporaryDirectory(prefix="hawdb-consume-receipt-")
         self.addCleanup(temporary.cleanup)
