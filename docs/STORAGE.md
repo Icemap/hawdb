@@ -1020,6 +1020,16 @@ The metadata-only repair path follows the same boundary:
 `LocalQosScheduler` for in-flight background budget tracking without rewriting
 document content or embeddings.
 
+## File I/O policy
+
+Persistent files currently use OS-buffered I/O. HawDB does not enable Linux
+`O_DIRECT`, macOS `F_NOCACHE`, or Windows `FILE_FLAG_NO_BUFFERING`, and it has no
+host setting that enables them. Cache bypass does not replace commit or
+publication synchronization. The proposed typed configuration, full-file scope
+and safety gates are recorded in the
+[persistent file I/O specification](specs/PERSISTENT_FILE_IO_CONFIGURATION_SPEC.md).
+That specification is a design proposal; no Direct backend is implemented yet.
+
 ## Durability Policy
 
 The default durability policy is `SyncOnEveryWrite`.
