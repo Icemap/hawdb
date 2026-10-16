@@ -7,7 +7,6 @@
 //! before allocating and keep the reservation until its payload is destroyed.
 
 use super::*;
-use retained_memory::reserve_retained_memory;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeRetainedResultResource {
@@ -283,9 +282,9 @@ fn reserve_charges(
     // calls run, so recheck it under the final lock. All failed paths drop their
     // temporary memory charges outside the lock, including policy notifications.
     let owner_memory = owner_bytes
-        .map(|bytes| reserve_retained_memory(governor, priority, bytes))
+        .map(|bytes| governor.reserve_retained_memory(priority, bytes))
         .transpose()?;
-    let handle_memory = reserve_retained_memory(governor, priority, handle_bytes)?;
+    let handle_memory = governor.reserve_retained_memory(priority, handle_bytes)?;
     {
         let mut state = mutex_lock(&governor.state);
         check_capacity(governor, &mut state, bytes)?;

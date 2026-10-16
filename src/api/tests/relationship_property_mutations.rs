@@ -101,7 +101,8 @@ fn set_relationship_property_updates_edge_and_keeps_endpoint_nodes() {
         .store
         .scan_relationships(None)
         .next()
-        .unwrap();
+        .unwrap()
+        .clone();
     assert_eq!(relationship.properties.get("weight"), Some(&Value::Int(2)));
     let source = db
         .query("MATCH (m:Memory) WHERE m.id = 1 RETURN m.title AS title")

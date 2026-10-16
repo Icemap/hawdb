@@ -119,14 +119,15 @@ struct ProjectedRangeVisitContext<'a> {
     owned_callback: bool,
 }
 
-struct ProjectedPointReadRequest<'a> {
-    table: &'a str,
-    primary_key: &'a RelationalKey,
-    requested_fields: &'a [usize],
-    limits: RelationalRowPageSnapshotReadLimits,
-    hydration: &'a mut RelationalHydrationBudget,
-    task: &'a RuntimeTaskContext,
-    hydration_fields: Option<&'a [usize]>,
+pub(crate) struct ProjectedPointReadRequest<'a> {
+    pub(crate) table: &'a str,
+    pub(crate) primary_key: &'a RelationalKey,
+    pub(crate) requested_fields: &'a [usize],
+    pub(crate) limits: RelationalRowPageSnapshotReadLimits,
+    pub(crate) hydration: &'a mut RelationalHydrationBudget,
+    pub(crate) task: &'a RuntimeTaskContext,
+    pub(crate) hydration_fields: Option<&'a [usize]>,
+    pub(crate) allocations: Option<&'a crate::background::CheckpointDecodeContext>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -393,6 +394,7 @@ impl RelationalRowPageSnapshotReader {
             hydration,
             task,
             hydration_fields: Some(requested_fields),
+            allocations: None,
         })
     }
 
@@ -426,6 +428,7 @@ impl RelationalRowPageSnapshotReader {
             hydration,
             task,
             hydration_fields: Some(hydration_fields),
+            allocations: None,
         })
     }
 
@@ -542,7 +545,8 @@ impl RelationalRowPageSnapshotReader {
                 &value,
                 requested_fields,
                 !selected_live && self.overlay_overflow.is_some(),
-            );
+                None,
+            )?;
             let remaining_demand = remaining_demand_limits(limits.demand, &demand)?;
             let (row, point_demand) = self
                 .demand
@@ -624,10 +628,11 @@ impl RelationalRowPageSnapshotReader {
             hydration: &mut hydration,
             task,
             hydration_fields: None,
+            allocations: None,
         })
     }
 
-    fn point_projected_with_hydration_mode(
+    pub(crate) fn point_projected_with_hydration_mode(
         &self,
         request: ProjectedPointReadRequest<'_>,
     ) -> Result<
@@ -645,11 +650,16 @@ impl RelationalRowPageSnapshotReader {
             hydration,
             task,
             hydration_fields,
+            allocations,
         } = request;
+        let scratch = allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
         self.checkpoint(task)?;
         let (overlay, recovery, live_batches_examined, selected_live) = self
             .view
-            .overlay_value_accounted(table, primary_key)
+            .overlay_value_accounted_with_allocations(table, primary_key, scratch.as_ref())
             .map_err(|error| self.map_delta_error(error))?;
         self.checkpoint(task)?;
         let (row, demand, source, overlay_resident_bytes) = match overlay {
@@ -686,13 +696,14 @@ impl RelationalRowPageSnapshotReader {
                     &value,
                     requested_fields,
                     !selected_live && self.overlay_overflow.is_some(),
-                );
+                    scratch.as_ref(),
+                )?;
                 let (row, demand) = self
                     .demand
-                    .point_projected_overlay(
+                    .point_projected_overlay_with_allocations(
                         RelationalRowPageOverlayPoint {
                             table,
-                            primary_key: primary_key.clone(),
+                            primary_key: clone_projection_key(primary_key, scratch.as_ref())?,
                             value,
                             overflow_root: self.overlay_overflow.as_deref(),
                         },
@@ -700,6 +711,7 @@ impl RelationalRowPageSnapshotReader {
                         hydration,
                         task,
                         hydration_fields,
+                        allocations,
                     )
                     .map_err(|error| self.map_demand_error(error))?;
                 let source = if deleted {
@@ -712,7 +724,20 @@ impl RelationalRowPageSnapshotReader {
                 (row, demand, source, overlay_resident_bytes)
             }
             None => {
-                let (row, demand) = if let Some(hydration_fields) = hydration_fields {
+                let (row, demand) = if allocations.is_some() {
+                    self.demand.point_projected_with_hydration_mode(
+                        super::demand::ProjectedPointReadRequest {
+                            table,
+                            primary_key,
+                            requested_fields,
+                            limits: limits.demand,
+                            hydration,
+                            task,
+                            hydration_fields,
+                            allocations,
+                        },
+                    )
+                } else if let Some(hydration_fields) = hydration_fields {
                     self.demand.point_projected_fields(
                         table,
                         primary_key,
@@ -1291,7 +1316,7 @@ impl<'a> StreamingOverlayCursor<'a> {
         let value = match value {
             RelationalRowPageOverlayRangeValue::Projected(value) => value,
             RelationalRowPageOverlayRangeValue::Recovered(value) => {
-                project_overlay_value(&value, self.requested_fields, false)
+                project_overlay_value(&value, self.requested_fields, false, None)?
             }
         };
         self.heap.push(StreamingOverlayHead {
@@ -1582,25 +1607,63 @@ fn projected_value_resident_bytes(
     )
 }
 
+fn clone_projection_key(
+    key: &RelationalKey,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalKey, RelationalRowPageSnapshotReadError> {
+    let Some(context) = allocations else {
+        return Ok(key.clone());
+    };
+    let mut values = context
+        .vector_capacity(key.0.len())
+        .map_err(|error| RelationalRowPageSnapshotReadError::Admission(error.to_string()))?;
+    for value in &key.0 {
+        values.push(
+            value
+                .as_ref()
+                .to_owned_value_with_allocations(context)
+                .map_err(|error| {
+                    RelationalRowPageSnapshotReadError::Admission(error.to_string())
+                })?,
+        );
+    }
+    Ok(RelationalKey(values))
+}
+
 fn project_overlay_value(
     value: &RelationalRowPageRecoveredValue,
     requested_fields: &[usize],
     binds_overlay_overflow: bool,
-) -> RelationalRowPageProjectedOverlayValue {
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalRowPageProjectedOverlayValue, RelationalRowPageSnapshotReadError> {
     let RelationalRowPageRecoveredValue::Present(row) = value else {
-        return RelationalRowPageProjectedOverlayValue::Deleted;
+        return Ok(RelationalRowPageProjectedOverlayValue::Deleted);
     };
-    RelationalRowPageProjectedOverlayValue::Present {
-        fields: requested_fields
-            .iter()
-            .map(|ordinal| RelationalProjectedField {
-                ordinal: *ordinal,
-                value: row.values()[*ordinal].clone(),
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice(),
-        binds_overlay_overflow,
+    let mut fields = match allocations {
+        Some(context) => context
+            .vector_capacity(requested_fields.len())
+            .map_err(|error| RelationalRowPageSnapshotReadError::Admission(error.to_string()))?,
+        None => Vec::with_capacity(requested_fields.len()),
+    };
+    for ordinal in requested_fields {
+        let value = match allocations {
+            Some(context) => row.values()[*ordinal]
+                .as_ref()
+                .to_owned_value_with_allocations(context)
+                .map_err(|error| {
+                    RelationalRowPageSnapshotReadError::Admission(error.to_string())
+                })?,
+            None => row.values()[*ordinal].clone(),
+        };
+        fields.push(RelationalProjectedField {
+            ordinal: *ordinal,
+            value,
+        });
     }
+    Ok(RelationalRowPageProjectedOverlayValue::Present {
+        fields: fields.into_boxed_slice(),
+        binds_overlay_overflow,
+    })
 }
 
 fn overlay_point_resident_bytes(

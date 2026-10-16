@@ -93,11 +93,15 @@ pub(super) fn authoritative_conflict_primary_key(
     conflict_columns: &[String],
     conflict_key: &RelationalKey,
     changed_keys: &BTreeSet<RelationalKey>,
-    constraint_index: &dyn RelationalConstraintIndex,
+    context: RelationalConflictProbeContext<'_>,
 ) -> Result<Option<RelationalKey>, RelationalError> {
-    let positions = column_positions(
+    let constraint_index = context
+        .constraint_index
+        .expect("authoritative conflict probe");
+    let positions = column_positions_with_allocations(
         state.table_schema(table).expect("validated table"),
         conflict_columns,
+        context.allocations,
     )?;
     let mut candidates = BTreeSet::new();
     let mut previous = None;
@@ -117,10 +121,23 @@ pub(super) fn authoritative_conflict_primary_key(
                 )));
                 return false;
             }
-            previous = Some(primary_key.clone());
+            previous = match clone_key_with_allocations(primary_key, context.allocations) {
+                Ok(key) => Some(key),
+                Err(error) => {
+                    traversal_error = Some(error);
+                    return false;
+                }
+            };
             match state.row(table, primary_key) {
-                Some(row) if row_key(row, &positions) == *conflict_key => {
-                    candidates.insert(primary_key.clone());
+                Some(row) if row_matches_key(row, &positions, conflict_key) => {
+                    if let Err(error) = insert_changed_key_with_allocations(
+                        &mut candidates,
+                        primary_key,
+                        context.allocations,
+                    ) {
+                        traversal_error = Some(error);
+                        return false;
+                    }
                 }
                 Some(_) | None if !changed_keys.contains(primary_key) => {
                     traversal_error = Some(RelationalError::Corruption(format!(

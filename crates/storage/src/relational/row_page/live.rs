@@ -683,6 +683,23 @@ impl RelationalRowPageReadView {
         ),
         RelationalRowDeltaError,
     > {
+        self.overlay_value_accounted_with_allocations(table, primary_key, None)
+    }
+
+    pub(super) fn overlay_value_accounted_with_allocations(
+        &self,
+        table: &str,
+        primary_key: &RelationalKey,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<
+        (
+            Option<RelationalRowPageRecoveredValue>,
+            super::RelationalRowDeltaReadReport,
+            usize,
+            bool,
+        ),
+        RelationalRowDeltaError,
+    > {
         let (live, batches_examined) = self.live.overlay_value_accounted(table, primary_key);
         if live.is_some() {
             return Ok((
@@ -703,7 +720,7 @@ impl RelationalRowPageReadView {
             },
             |delta| {
                 delta
-                    .lookup(table, primary_key)
+                    .lookup_with_allocations(table, primary_key, allocations)
                     .map(|(value, report)| (value, report, batches_examined, false))
             },
         )

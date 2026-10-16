@@ -53,7 +53,7 @@ fn node_page_capacity(
 ) -> Option<usize> {
     let bytes = bytes
         .checked_add(2usize.checked_mul(std::mem::size_of::<usize>())?)?
-        .checked_add(std::mem::size_of::<BTreeMap<NodeId, NodeRecord>>())?
+        .checked_add(std::mem::size_of::<CowData<BTreeMap<NodeId, NodeRecord>>>())?
         .checked_add(tree_capacity::<NodeId, NodeRecord>(page.len())?)?;
     page.values().try_fold(bytes, |bytes, node| {
         *inspected = inspected.saturating_add(1);
@@ -154,8 +154,12 @@ mod tests {
         let id = NodeId(1);
         let index = map.segment_index(&id).unwrap();
         assert!(map.segment_count() > 1);
-        let page_refs = map.segments.iter().map(Arc::downgrade).collect::<Vec<_>>();
-        let directory_ref = Arc::downgrade(&map.segments);
+        let page_refs = map
+            .segments
+            .iter()
+            .map(CowSegment::downgrade)
+            .collect::<Vec<_>>();
+        let directory_ref = map.segments.downgrade();
         let original = map.get(&id).unwrap();
         let original_address = std::ptr::from_ref(original);
         let Value::String(original_text) = &original.properties["text"] else {
@@ -166,10 +170,14 @@ mod tests {
 
         // A separate one-page owner exercises the existing COW implementation,
         // without exposing a production lease or changing admission semantics.
-        let page = Arc::clone(&map.segments[index]);
+        let page = map.segments[index].clone();
         let page_rows = page.len();
         let source = CowSegmentedMap {
-            segments: Arc::new(CowPageDirectory::new(vec![page])),
+            delta_pressure_bytes: page
+                .values()
+                .map(|node| u128::from(node.delta_pressure_bytes()))
+                .sum(),
+            segments: CowSegment::from(CowPageDirectory::new(vec![page])),
             len: page_rows,
         };
         let page_capacity = source.retained_capacity_bytes().unwrap();

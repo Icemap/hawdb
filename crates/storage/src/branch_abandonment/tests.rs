@@ -81,6 +81,93 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn reclamation_verifies_archives_without_holding_the_publication_barrier() {
+    let fixture = Fixture::new();
+    let metadata = fixture.initialize();
+    let plan = metadata
+        .inspect_pending_branch_abandonment(fixture.child.as_uuid(), Default::default())
+        .unwrap();
+    metadata
+        .abandon_pending_branch(plan.acknowledge_potential_data_loss())
+        .unwrap();
+    let catalog_path = fixture.directory().join("catalog.hawdb");
+    let snapshot = prepare_reclamation_with_verifier(&catalog_path, |directory, catalog| {
+        let project = directory.to_path_buf();
+        std::thread::spawn(move || {
+            let _publisher = CatalogMetadataLease::acquire(&project).unwrap();
+        })
+        .join()
+        .unwrap();
+        reclamation_evidence(directory, catalog, Default::default())
+    })
+    .unwrap();
+    let directory = fixture.directory();
+    assert_eq!(
+        std::thread::spawn(move || CatalogMetadataLease::acquire(&directory)
+            .unwrap_err()
+            .kind())
+        .join()
+        .unwrap(),
+        io::ErrorKind::WouldBlock,
+    );
+    drop(snapshot);
+}
+
+#[test]
+fn catalog_changes_during_quarantine_verification_refuse_the_sweep() {
+    let fixture = Fixture::new();
+    fixture.initialize();
+    let catalog_path = fixture.directory().join("catalog.hawdb");
+    let result = prepare_reclamation_with_verifier(&catalog_path, |directory, catalog| {
+        let proofs = reclamation_evidence(directory, catalog, Default::default())?;
+        let mut changed = catalog.clone();
+        changed.revision += 1;
+        branch_catalog::write_catalog(&catalog_path, &changed).unwrap();
+        Ok(proofs)
+    });
+    assert!(matches!(result, Err(HawDBError::BranchBusy { .. })));
+}
+
+#[test]
+fn quarantine_budget_refusal_is_a_resource_error_and_preserves_the_archive() {
+    let fixture = Fixture::new();
+    let metadata = fixture.initialize();
+    let plan = metadata
+        .inspect_pending_branch_abandonment(fixture.child.as_uuid(), Default::default())
+        .unwrap();
+    let report = metadata
+        .abandon_pending_branch(plan.acknowledge_potential_data_loss())
+        .unwrap();
+    let before = fs::read(report.quarantine_directory.join("intent.json")).unwrap();
+    let error = prepare_reclamation(
+        &fixture.directory().join("catalog.hawdb"),
+        BranchAbandonmentLimits {
+            max_bytes: 1,
+            ..Default::default()
+        },
+    )
+    .err()
+    .unwrap();
+    assert!(matches!(
+        error,
+        HawDBError::BranchEvidenceBudgetExceeded {
+            resource: "bytes",
+            limit: 1,
+            ..
+        }
+    ));
+    assert_eq!(
+        fs::read(report.quarantine_directory.join("intent.json")).unwrap(),
+        before
+    );
+    prepare_reclamation(
+        &fixture.directory().join("catalog.hawdb"),
+        Default::default(),
+    )
+    .unwrap();
+}
+
+#[test]
 fn abandonment_retries_each_publication_boundary_and_freezes_recovery() {
     for destination in ["intent.json", "file-0", "catalog.hawdb", "committed"] {
         let fixture = Fixture::new();

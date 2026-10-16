@@ -372,7 +372,7 @@ fn point_source_rejects_short_permits_before_pin_and_missing_skips_admission() {
         .create_node(&mut catalog, "Item", BTreeMap::new())
         .unwrap();
     let (page, _) = store.nodes.retained_point_row_preflight(id).unwrap();
-    let owners = Arc::strong_count(page);
+    let owners = page.owner_count();
     let mut short =
         |_| -> Result<Box<dyn GraphReadAllocation>> { Ok(Box::new(UnaccountedReadAllocation(0))) };
     let admission = GraphReadAdmission::new(&mut short);
@@ -380,7 +380,7 @@ fn point_source_rejects_short_permits_before_pin_and_missing_skips_admission() {
         store.materialized_node_point_read(id, &admission),
         Err(HawDBError::Execution(reason)) if reason.contains("insufficient allocation permit")
     ));
-    assert_eq!(Arc::strong_count(page), owners);
+    assert_eq!(page.owner_count(), owners);
     let mut refuse = |_| -> Result<Box<dyn GraphReadAllocation>> {
         Err(HawDBError::Execution("point admission sentinel".into()))
     };
@@ -389,7 +389,7 @@ fn point_source_rejects_short_permits_before_pin_and_missing_skips_admission() {
         store.materialized_node_point_read(id, &admission),
         Err(HawDBError::Execution(reason)) if reason == "point admission sentinel"
     ));
-    assert_eq!(Arc::strong_count(page), owners);
+    assert_eq!(page.owner_count(), owners);
     assert!(matches!(
         store
             .materialized_node_point_read(NodeId(u64::MAX), &admission)
@@ -427,7 +427,7 @@ struct ThreadPointAllocation {
     retained: Arc<AtomicBool>,
     fail_retention: bool,
     retained_bytes: Option<usize>,
-    row_on_release: Option<std::sync::Weak<NodeRecord>>,
+    row_on_release: Option<std::sync::Weak<crate::cow::CowData<NodeRecord>>>,
 }
 
 impl GraphReadAllocation for ThreadPointAllocation {
@@ -479,13 +479,13 @@ fn point_source_preserves_host_refusal_before_pin() {
         .create_node(&mut catalog, "Item", BTreeMap::new())
         .unwrap();
     let (row, _) = store.nodes.retained_point_row_preflight(id).unwrap();
-    let owners = Arc::strong_count(row);
+    let owners = row.owner_count();
     for retryable in [true, false] {
         let identity = Arc::new(());
         let result = store.materialized_node_point_read_with_admission(
             id,
             |_| -> std::result::Result<ThreadPointAllocation, AdmissionError> {
-                assert_eq!(Arc::strong_count(row), owners);
+                assert_eq!(row.owner_count(), owners);
                 Err(AdmissionError::Refused {
                     retryable,
                     identity: Arc::clone(&identity),
@@ -503,7 +503,7 @@ fn point_source_preserves_host_refusal_before_pin() {
             Err(AdmissionError::Storage(error)) => panic!("host error was converted: {error}"),
             Ok(_) => panic!("host refusal was ignored"),
         }
-        assert_eq!(Arc::strong_count(row), owners);
+        assert_eq!(row.owner_count(), owners);
         store.ensure_usable().unwrap();
     }
     assert!(matches!(
@@ -533,7 +533,12 @@ fn typed_point_source_preserves_auto_traits_and_cross_thread_release() {
         )
         .unwrap();
     let address = std::ptr::from_ref(store.nodes.get(&id).unwrap()) as usize;
-    let page = Arc::downgrade(store.nodes.retained_point_row_preflight(id).unwrap().0);
+    let page = store
+        .nodes
+        .retained_point_row_preflight(id)
+        .unwrap()
+        .0
+        .downgrade();
     let released = Arc::new(AtomicBool::new(false));
     let retained = Arc::new(AtomicBool::new(false));
     let MaterializedNodePointRead::Node(source) = store
@@ -576,7 +581,7 @@ fn typed_point_admission_validates_before_and_after_retained_transfer() {
         .create_node(&mut catalog, "Item", BTreeMap::new())
         .unwrap();
     let (page, _) = store.nodes.retained_point_row_preflight(id).unwrap();
-    let owners = Arc::strong_count(page);
+    let owners = page.owner_count();
     for (short, fail, shrink, expected) in [
         (true, false, false, "insufficient allocation permit"),
         (false, true, false, "typed retention sentinel"),
@@ -585,7 +590,7 @@ fn typed_point_admission_validates_before_and_after_retained_transfer() {
         let released = Arc::new(AtomicBool::new(false));
         let retained = Arc::new(AtomicBool::new(false));
         let result = store.materialized_node_point_read_typed(id, |bytes| {
-            assert_eq!(Arc::strong_count(page), owners);
+            assert_eq!(page.owner_count(), owners);
             Ok(ThreadPointAllocation {
                 bytes: if short { 0 } else { bytes },
                 released: Arc::clone(&released),
@@ -598,7 +603,7 @@ fn typed_point_admission_validates_before_and_after_retained_transfer() {
         assert!(matches!(result, Err(HawDBError::Execution(reason)) if reason.contains(expected)));
         assert!(released.load(AtomicOrdering::Acquire));
         assert_eq!(retained.load(AtomicOrdering::Acquire), !short);
-        assert_eq!(Arc::strong_count(page), owners);
+        assert_eq!(page.owner_count(), owners);
         store.ensure_usable().unwrap();
     }
 }

@@ -345,6 +345,58 @@ impl ProcessMemoryPolicyState {
 }
 
 impl ProcessMemoryReservation {
+    pub(crate) fn merge(&mut self, incoming: &mut Self) -> bool {
+        if self.released
+            || incoming.released
+            || self.id == incoming.id
+            || !Arc::ptr_eq(&self.policy.inner, &incoming.policy.inner)
+        {
+            return false;
+        }
+        let mut state = policy_lock(&self.policy.inner);
+        let Some(source) = state.unobserved_reservations.get(&incoming.id).copied() else {
+            return false;
+        };
+        let Some(target) = state.unobserved_reservations.get(&self.id).copied() else {
+            return false;
+        };
+        let Some(combined) = target.checked_add(source) else {
+            return false;
+        };
+        *state
+            .unobserved_reservations
+            .get_mut(&self.id)
+            .expect("checked reservation") = combined;
+        state.unobserved_reservations.remove(&incoming.id);
+        // Total unobserved backing remains charged, including partially
+        // observed reservations. The incoming destructor must not release it.
+        incoming.released = true;
+        true
+    }
+
+    pub(crate) fn shrink_to(&mut self, bytes: u64) {
+        let (changed, notifiers) = {
+            let mut state = policy_lock(&self.policy.inner);
+            let Some(remaining) = state.unobserved_reservations.get_mut(&self.id) else {
+                return;
+            };
+            // Observed RSS can still contain already-freed memory. Keep all
+            // remaining unobserved live bytes, bounded by the new allocation.
+            let released = remaining.saturating_sub(bytes);
+            *remaining -= released;
+            state.unobserved_reserved_bytes -= released;
+            let notifiers = if released > 0 {
+                collect_notifiers(&mut state)
+            } else {
+                Vec::new()
+            };
+            (released > 0, notifiers)
+        };
+        if changed {
+            notify_policy_change(notifiers);
+        }
+    }
+
     pub(crate) fn release(mut self) {
         self.release_inner();
     }
@@ -762,6 +814,42 @@ mod tests {
 
         drop(second);
         assert_eq!(policy.snapshot().available_bytes, Some(40));
+    }
+
+    #[test]
+    fn merging_partially_observed_reservations_keeps_live_headroom_charged() {
+        let policy = policy(100);
+        policy.update(policy_snapshot(Some(40)));
+        let mut first = policy.try_reserve(30).unwrap();
+        policy.update(policy_snapshot(Some(60)));
+        let mut second = policy.try_reserve(10).unwrap();
+        assert_eq!(policy.snapshot().unobserved_reserved_bytes, 20);
+        assert!(first.merge(&mut second));
+        assert_eq!(policy.snapshot().unobserved_reserved_bytes, 20);
+        assert_eq!(policy.snapshot().available_bytes, Some(20));
+        first.shrink_to(15);
+        assert_eq!(policy.snapshot().unobserved_reserved_bytes, 15);
+        assert_eq!(policy.snapshot().available_bytes, Some(25));
+        drop(second);
+        assert_eq!(policy.snapshot().unobserved_reserved_bytes, 15);
+        drop(first);
+        assert_eq!(policy.snapshot().available_bytes, Some(40));
+    }
+
+    #[test]
+    fn merging_reservations_from_distinct_process_policies_preserves_both() {
+        let left = policy(100);
+        let right = policy(100);
+        left.update(policy_snapshot(Some(40)));
+        right.update(policy_snapshot(Some(40)));
+        let mut first = left.try_reserve(30).unwrap();
+        let mut second = right.try_reserve(10).unwrap();
+        assert!(!first.merge(&mut second));
+        assert_eq!(left.snapshot().unobserved_reserved_bytes, 30);
+        assert_eq!(right.snapshot().unobserved_reserved_bytes, 10);
+        drop((first, second));
+        assert_eq!(left.snapshot().unobserved_reserved_bytes, 0);
+        assert_eq!(right.snapshot().unobserved_reserved_bytes, 0);
     }
 
     #[test]

@@ -163,14 +163,15 @@ pub(super) struct RelationalRowPageOverlayRead<'a, Cursor> {
     pub owned_callback: bool,
 }
 
-struct ProjectedPointReadRequest<'a> {
-    table: &'a str,
-    primary_key: &'a RelationalKey,
-    requested_fields: &'a [usize],
-    limits: RelationalRowPageDemandReadLimits,
-    hydration: &'a mut RelationalHydrationBudget,
-    task: &'a RuntimeTaskContext,
-    hydration_fields: Option<&'a [usize]>,
+pub(super) struct ProjectedPointReadRequest<'a> {
+    pub(super) table: &'a str,
+    pub(super) primary_key: &'a RelationalKey,
+    pub(super) requested_fields: &'a [usize],
+    pub(super) limits: RelationalRowPageDemandReadLimits,
+    pub(super) hydration: &'a mut RelationalHydrationBudget,
+    pub(super) task: &'a RuntimeTaskContext,
+    pub(super) hydration_fields: Option<&'a [usize]>,
+    pub(super) allocations: Option<&'a crate::background::CheckpointDecodeContext>,
 }
 
 type ProjectedRowResolver<'a> = dyn FnMut(
@@ -367,6 +368,7 @@ impl RelationalRowPageDemandReader {
             hydration,
             task,
             hydration_fields: Some(requested_fields),
+            allocations: None,
         })
     }
 
@@ -401,6 +403,7 @@ impl RelationalRowPageDemandReader {
             hydration,
             task,
             hydration_fields: Some(hydration_fields),
+            allocations: None,
         })
     }
 
@@ -485,7 +488,7 @@ impl RelationalRowPageDemandReader {
             context.checkpoint()?;
             let page = context.read_page(&descriptor)?;
             let view = page.view();
-            context.validate_column_count(&table_root, &view)?;
+            context.validate_column_count(table_root, &view)?;
             for (encoded, primary_key) in keys {
                 context.checkpoint()?;
                 let Some(ordinal) = view
@@ -528,10 +531,11 @@ impl RelationalRowPageDemandReader {
             hydration: &mut hydration,
             task,
             hydration_fields: None,
+            allocations: None,
         })
     }
 
-    fn point_projected_with_hydration_mode(
+    pub(super) fn point_projected_with_hydration_mode(
         &self,
         request: ProjectedPointReadRequest<'_>,
     ) -> Result<
@@ -549,40 +553,76 @@ impl RelationalRowPageDemandReader {
             hydration,
             task,
             hydration_fields,
+            allocations,
         } = request;
         let mut context = DemandReadContext::new(self, limits, hydration, task)?;
+        context.allocations = allocations;
         let table_root = context.table_root(table)?;
         context
             .validate_requested_fields(requested_fields, table_root.column_count.get() as usize)?;
         context.admit_descriptor_search(table_root.page_count)?;
-        let encoded_key = encode_ordered_relational_key(primary_key)
-            .map_err(|error| RelationalRowPageDemandReadError::Admission(error.to_string()))?;
+        let (admitted_key, ordinary_key) = match allocations {
+            Some(context) => {
+                use crate::relational::ordered_key::{
+                    CheckpointKeyEncodeError, CheckpointKeyEncoding,
+                };
+                let map_error = |error| match error {
+                    CheckpointKeyEncodeError::Key(
+                        crate::relational::RelationalError::Corruption(message),
+                    ) => RelationalRowPageDemandReadError::Admission(message),
+                    CheckpointKeyEncodeError::Key(error) => {
+                        RelationalRowPageDemandReadError::Admission(error.to_string())
+                    }
+                    CheckpointKeyEncodeError::Work(error) => {
+                        RelationalRowPageDemandReadError::Admission(error.to_string())
+                    }
+                };
+                let encoding =
+                    CheckpointKeyEncoding::new(primary_key, &[], context).map_err(map_error)?;
+                (
+                    Some(encoding.encode(context).map_err(map_error)?),
+                    Vec::new(),
+                )
+            }
+            None => (
+                None,
+                encode_ordered_relational_key(primary_key).map_err(|error| {
+                    RelationalRowPageDemandReadError::Admission(error.to_string())
+                })?,
+            ),
+        };
+        let encoded_key: &[u8] = admitted_key.as_deref().unwrap_or(&ordinary_key);
         let (descriptor, descriptor_reads) = self
             .root
-            .find_table_page_descriptor_accounted_encoded(table, &encoded_key)
+            .find_table_page_descriptor_accounted_encoded_with_work_context(
+                table,
+                encoded_key,
+                allocations.map(|context| &context.work),
+            )
             .map_err(|error| context.map_row_publication_error(error))?;
         context.add_descriptor_reads(descriptor_reads)?;
         let Some((_ordinal, descriptor)) = descriptor else {
             return Ok((None, context.finish()));
         };
-        if encoded_key.as_slice() < descriptor.lower_bound.as_slice()
-            || encoded_key.as_slice() > descriptor.upper_bound.as_slice()
+        if encoded_key < descriptor.lower_bound.as_slice()
+            || encoded_key > descriptor.upper_bound.as_slice()
         {
             return Ok((None, context.finish()));
         }
         let page = context.read_page(&descriptor)?;
         let view = page.view();
-        context.validate_column_count(&table_root, &view)?;
+        context.validate_column_count(table_root, &view)?;
         let Some(ordinal) = view
-            .find_row_encoded(&encoded_key)
+            .find_row_encoded(encoded_key)
             .map_err(|error| context.map_page_error(error))?
         else {
             context.checkpoint()?;
             return Ok((None, context.finish()));
         };
         context.checkpoint()?;
-        let mut row =
-            context.decode_row(|| view.decode_projected_row(ordinal, requested_fields))?;
+        let mut row = context.decode_row(|| {
+            view.decode_projected_row_with_allocations(ordinal, requested_fields, allocations)
+        })?;
         if let Some(hydration_fields) = hydration_fields {
             context.resolve_projected_row(&mut row, hydration_fields)?;
         }
@@ -604,13 +644,44 @@ impl RelationalRowPageDemandReader {
         ),
         RelationalRowPageDemandReadError,
     > {
+        self.point_projected_overlay_with_allocations(
+            point,
+            limits,
+            hydration,
+            task,
+            hydration_fields,
+            None,
+        )
+    }
+
+    pub(super) fn point_projected_overlay_with_allocations(
+        &self,
+        point: RelationalRowPageOverlayPoint<'_>,
+        limits: RelationalRowPageDemandReadLimits,
+        hydration: &mut RelationalHydrationBudget,
+        task: &RuntimeTaskContext,
+        hydration_fields: Option<&[usize]>,
+        allocations: Option<&crate::background::CheckpointDecodeContext>,
+    ) -> Result<
+        (
+            Option<RelationalProjectedRow>,
+            RelationalRowPageDemandReadReport,
+        ),
+        RelationalRowPageDemandReadError,
+    > {
         let RelationalRowPageOverlayPoint {
             table,
             primary_key,
             value,
             overflow_root,
         } = point;
+        let initial_budget = *hydration;
+        let scratch = allocations.map(|context| crate::background::CheckpointDecodeContext {
+            work: context.work.clone(),
+            memory: Default::default(),
+        });
         let mut context = DemandReadContext::new(self, limits, hydration, task)?;
+        context.allocations = scratch.as_ref();
         context.table_root(table)?;
         let mut output = None;
         let mut resolve = |_: &mut RelationalProjectedRow,
@@ -624,10 +695,24 @@ impl RelationalRowPageDemandReader {
             hydration_fields,
             &mut resolve,
             &mut |row, _| {
-                output = Some(row.to_owned_row());
-                true
+                let owned = match allocations {
+                    Some(context) => row.to_owned_row_with_allocations(context),
+                    None => Ok(row.to_owned_row()),
+                };
+                let succeeded = owned.is_ok();
+                output = Some(owned);
+                succeeded
             },
         )?;
+        let output = match output.transpose() {
+            Ok(output) => output,
+            Err(error) => {
+                *context.hydration = initial_budget;
+                return Err(RelationalRowPageDemandReadError::Admission(
+                    error.to_string(),
+                ));
+            }
+        };
         Ok((output, context.finish()))
     }
 
@@ -792,7 +877,7 @@ impl RelationalRowPageDemandReader {
             }
             let page = context.read_page(&descriptor)?;
             let view = page.view();
-            context.validate_column_count(&table_root, &view)?;
+            context.validate_column_count(table_root, &view)?;
             let row_start = if apply_lower_bound {
                 apply_lower_bound = false;
                 match lower {
@@ -919,6 +1004,7 @@ struct DemandReadContext<'a> {
     task: &'a RuntimeTaskContext,
     report: RelationalRowPageDemandReadReport,
     owned_callback: bool,
+    allocations: Option<&'a crate::background::CheckpointDecodeContext>,
 }
 
 impl<'a> DemandReadContext<'a> {
@@ -943,6 +1029,7 @@ impl<'a> DemandReadContext<'a> {
             hydration,
             task,
             owned_callback: false,
+            allocations: None,
             report: RelationalRowPageDemandReadReport {
                 generation: reader.generation(),
                 source_commit_epoch: reader.source_commit_epoch(),
@@ -954,11 +1041,10 @@ impl<'a> DemandReadContext<'a> {
     fn table_root(
         &self,
         table: &str,
-    ) -> Result<super::RelationalRowPageTableRoot, RelationalRowPageDemandReadError> {
+    ) -> Result<&'a super::RelationalRowPageTableRoot, RelationalRowPageDemandReadError> {
         self.reader
             .root
             .table_root(table)
-            .cloned()
             .map_err(|error| self.map_row_publication_error(error))
     }
 
@@ -1064,11 +1150,20 @@ impl<'a> DemandReadContext<'a> {
             )));
         }
         self.reader.cumulative.admit_page(page_bytes)?;
-        let read = self
-            .reader
-            .root
-            .read_page_slot_accounted(descriptor, &self.reader.cache, self.reader.store_id)
-            .map_err(|error| self.map_row_publication_error(error))?;
+        let read = match self.allocations {
+            Some(context) => self.reader.root.read_page_slot_accounted_with_work_context(
+                descriptor,
+                &self.reader.cache,
+                self.reader.store_id,
+                Some(context),
+            ),
+            None => self.reader.root.read_page_slot_accounted(
+                descriptor,
+                &self.reader.cache,
+                self.reader.store_id,
+            ),
+        }
+        .map_err(|error| self.map_row_publication_error(error))?;
         self.report.pages_read += 1;
         self.report.bytes_read = next_bytes;
         self.report.cache_hits += usize::from(read.cache_hit);
@@ -1204,7 +1299,12 @@ impl<'a> DemandReadContext<'a> {
                     })?;
                 continue;
             }
-            let hydrated = match overflow.hydrate(reference, &mut staged_budget, Some(self.task)) {
+            let hydrated = match match self.allocations {
+                Some(context) => {
+                    overflow.hydrate_with_allocations(reference, &mut staged_budget, context)
+                }
+                None => overflow.hydrate(reference, &mut staged_budget, Some(self.task)),
+            } {
                 Ok(value) => value,
                 Err(error) => {
                     self.checkpoint()?;

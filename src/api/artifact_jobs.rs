@@ -191,7 +191,7 @@ impl Database {
         };
         let job = claim.job().clone();
         let result = self.execute_derived_artifact_job(&job.artifact_type, &job.name, &job.action);
-        Ok(Some(self.derived_artifact_jobs.complete(claim, result)))
+        Ok(Some(self.complete_derived_artifact_job(claim, result)))
     }
 
     pub fn run_next_background_derived_artifact_job(
@@ -727,9 +727,20 @@ impl Database {
         claim: DerivedArtifactJobClaim,
         runtime: &mut impl FnMut(&DerivedArtifactJob) -> Result<QueryOutput>,
     ) -> Result<Option<DerivedArtifactJobReport>> {
-        Ok(Some(
-            self.derived_artifact_jobs.run_external_with(claim, runtime),
-        ))
+        let result = runtime(claim.job());
+        Ok(Some(self.complete_derived_artifact_job(claim, result)))
+    }
+
+    fn complete_derived_artifact_job(
+        &mut self,
+        claim: DerivedArtifactJobClaim,
+        result: Result<QueryOutput>,
+    ) -> DerivedArtifactJobReport {
+        let report = self.derived_artifact_jobs.complete(claim, result);
+        if report.job.status == DerivedArtifactJobStatus::Succeeded {
+            self.derived_artifact_root_pins.remove(&report.job.id);
+        }
+        report
     }
 
     pub fn rebuild_derived_artifacts(&mut self) -> Result<QueryOutput> {
@@ -742,12 +753,7 @@ impl Database {
             .into_iter()
             .map(|status| (status.name.clone(), status))
             .collect::<BTreeMap<_, _>>();
-        {
-            let branch_runtime = self.runtime.get_mut()?;
-            branch_runtime
-                .store
-                .rebuild_projected_graph_artifacts(&branch_runtime.catalog)
-        }?;
+        self.rebuild_projected_graph_artifacts()?;
         let rows = self
             .runtime
             .get()?
@@ -806,8 +812,19 @@ impl Database {
         action: impl Into<String>,
         payload: BTreeMap<String, Value>,
     ) -> DerivedArtifactJob {
-        self.derived_artifact_jobs
-            .enqueue(artifact_type, name, action, payload)
+        // Queueing itself reads no persistent data. An admitted source retains
+        // its exact immutable root; an in-memory or deferred source has no
+        // immutable dependency yet. Running/failed jobs keep this guard until
+        // successful completion, including retries after cancellation.
+        let pin = self
+            .runtime
+            .peek()
+            .and_then(|runtime| runtime.store.branch_reclamation_pin());
+        let job = self
+            .derived_artifact_jobs
+            .enqueue(artifact_type, name, action, payload);
+        self.derived_artifact_root_pins.insert(job.id, pin);
+        job
     }
 
     fn execute_derived_artifact_job(

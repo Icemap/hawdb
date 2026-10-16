@@ -366,3 +366,379 @@ fn overflow_descriptor_validation_is_symmetric() {
             if message.contains("non-payload")
     ));
 }
+
+#[test]
+fn controlled_projected_decode_admits_selected_values_and_primary_keys_before_copy() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    for (primary_key, payload, retained_bytes) in [
+        (
+            RelationalKey(vec![RelationalValue::BigInt(1)]),
+            "v".repeat(128 * 1024),
+            128 * 1024,
+        ),
+        (
+            RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]),
+            "small".into(),
+            128 * 1024,
+        ),
+        (
+            RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]),
+            "v".repeat(128 * 1024),
+            256 * 1024,
+        ),
+    ] {
+        let limits = RelationalRowPageLimits {
+            max_key_bytes: NonZeroUsize::new(256 * 1024).unwrap(),
+            max_inline_value_bytes: NonZeroUsize::new(256 * 1024).unwrap(),
+            ..Default::default()
+        };
+        let page = ImmutableRelationalRowPage {
+            generation: 2,
+            source_commit_epoch: 900,
+            page_id: page_id(1),
+            schema_digest: integrity_digest(b"controlled projected row").sha256,
+            column_count: 2,
+            rows: vec![RelationalRowPageEntry {
+                primary_key,
+                row: RelationalRow::new(vec![
+                    RelationalValue::Text(payload),
+                    RelationalValue::Bytea(vec![7; 128 * 1024]),
+                ]),
+            }],
+        };
+        let encoded = page.encode(limits).unwrap();
+        let view = RelationalRowPageView::open(&encoded, limits).unwrap();
+        let ordinary = view.decode_projected_row(0, &[0]).unwrap();
+        for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+            let governor = RuntimeGovernor::detect(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(ceiling),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                IoConcurrencyBudget::new(2, 1),
+            );
+            governor.pin_resources();
+            let permit = governor
+                .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+                .unwrap();
+            let work =
+                CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+            let observation = crate::test_allocator::AllocationObservation::start();
+            let result = work.classify(|scoped| {
+                let context = CheckpointDecodeContext {
+                    work: scoped.clone(),
+                    memory: Default::default(),
+                };
+                let row = view.decode_projected_row_with_allocations(0, &[0], Some(&context))?;
+                Ok::<_, RelationalRowPageError>((row, context.memory.into_inner()))
+            });
+            let wide_allocations = observation.finish();
+            if succeeds {
+                let (row, memory) = result.unwrap();
+                assert_eq!(row, ordinary);
+                assert_eq!(
+                    wide_allocations,
+                    retained_bytes / (128 * 1024),
+                    "unrequested BYTEA must not be copied"
+                );
+                assert!(
+                    matches!(work.task_context().reserve_working_memory(ceiling),
+                    Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                        if available_bytes <= ceiling - retained_bytes as u64)
+                );
+                drop(row);
+                drop(memory);
+            } else {
+                assert!(
+                    matches!(
+                        result,
+                        Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                            _
+                        )))
+                    ),
+                    "{result:?}"
+                );
+                assert_eq!(wide_allocations, 0);
+            }
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+            );
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+    }
+}
+
+#[test]
+fn admitted_owned_and_borrowed_row_copies_preserve_all_scalar_variants_and_leases() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let row = RelationalProjectedRow {
+        primary_key: RelationalKey(vec![RelationalValue::Text("k".repeat(128 * 1024))]),
+        fields: vec![
+            RelationalValue::Null,
+            RelationalValue::Boolean(true),
+            RelationalValue::BigInt(-7),
+            RelationalValue::DoublePrecision(1.5),
+            RelationalValue::Text("中".repeat(64 * 1024)),
+            RelationalValue::Bytea(vec![7; 128 * 1024]),
+            RelationalValue::Uuid(hawdb_core::Uuid::from_bytes([3; 16])),
+            RelationalValue::Overflow(overflow_reference()),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(ordinal, value)| RelationalProjectedField { ordinal, value })
+        .collect(),
+    };
+    let fields = row
+        .fields
+        .iter()
+        .map(|field| RelationalProjectedFieldRef {
+            ordinal: field.ordinal,
+            value: field.value.as_ref(),
+        })
+        .collect::<Vec<_>>();
+    for view in [
+        RelationalProjectedRowView::Owned(&row),
+        RelationalProjectedRowView::Borrowed(RelationalProjectedRowRef {
+            primary_key: &row.primary_key,
+            fields: &fields,
+        }),
+    ] {
+        for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+            let governor = RuntimeGovernor::detect(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(ceiling),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                IoConcurrencyBudget::new(2, 1),
+            );
+            governor.pin_resources();
+            let permit = governor
+                .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+                .unwrap();
+            let work =
+                CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+            let observation = crate::test_allocator::AllocationObservation::start();
+            let result = work.classify(|scoped| {
+                let context = CheckpointDecodeContext {
+                    work: scoped.clone(),
+                    memory: Default::default(),
+                };
+                let copied = view.to_owned_row_with_allocations(&context)?;
+                Ok::<_, super::super::RelationalError>((copied, context.memory.into_inner()))
+            });
+            let wide_allocations = observation.finish();
+            if succeeds {
+                let (copied, memory) = result.unwrap();
+                assert_eq!(copied, row);
+                assert!(
+                    matches!(work.task_context().reserve_working_memory(ceiling),
+                    Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                        if available_bytes <= ceiling - 448 * 1024)
+                );
+                drop(copied);
+                drop(memory);
+            } else {
+                assert!(
+                    matches!(
+                        result,
+                        Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                            _
+                        )))
+                    ),
+                    "{result:?}"
+                );
+                assert_eq!(wide_allocations, 0);
+            }
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+            );
+            drop(work);
+            drop(permit);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+    }
+}
+
+#[test]
+fn projected_row_conversion_admits_value_vector_and_shared_owner_before_allocation() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let make_row = || RelationalProjectedRow {
+        primary_key: RelationalKey(vec![RelationalValue::BigInt(1)]),
+        fields: (0..4096)
+            .map(|ordinal| RelationalProjectedField {
+                ordinal,
+                value: RelationalValue::BigInt(ordinal as i64),
+            })
+            .collect(),
+    };
+    let expected = make_row()
+        .into_relational_row_with_allocations(None)
+        .unwrap();
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let projected = make_row();
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let row = projected.into_relational_row_with_allocations(Some(&context))?;
+            Ok::<_, super::super::RelationalError>((row, context.memory.into_inner()))
+        });
+        let wide_allocations = observation.finish();
+        if succeeds {
+            let (row, memory) = result.unwrap();
+            assert_eq!(row, expected);
+            let backing_bytes = (4096 * std::mem::size_of::<RelationalValue>()) as u64;
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes <= ceiling - backing_bytes)
+            );
+            drop(row);
+            drop(memory);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(wide_allocations, 0);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}
+
+#[test]
+fn admitted_row_encoding_matches_wire_and_releases_slots_and_payload_scratch() {
+    use crate::background::{
+        CheckpointDecodeContext, CheckpointOperationError, CheckpointWorkContext,
+        CheckpointWorkError,
+    };
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeTaskContext,
+        RuntimeWorkRequest,
+    };
+    let row = RelationalRow::new(vec![
+        RelationalValue::Null,
+        RelationalValue::Boolean(true),
+        RelationalValue::BigInt(-9),
+        RelationalValue::DoublePrecision(1.25),
+        RelationalValue::Text("中".repeat(64 * 1024)),
+        RelationalValue::Bytea(vec![7; 128 * 1024]),
+        RelationalValue::Uuid(hawdb_core::Uuid::from_bytes([4; 16])),
+        RelationalValue::Overflow(overflow_reference()),
+    ]);
+    let limits = RelationalRowPageLimits {
+        max_inline_value_bytes: NonZeroUsize::new(256 * 1024).unwrap(),
+        ..Default::default()
+    };
+    let expected =
+        value::encode_row_with_allocations(&row, row.values().len(), limits, None).unwrap();
+    for (ceiling, succeeds) in [(4096, false), (16 * 1024 * 1024, true)] {
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(ceiling),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        governor.pin_resources();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(ceiling))
+            .unwrap();
+        let work =
+            CheckpointWorkContext::new(permit.bind_task_context(RuntimeTaskContext::default()));
+        let observation = crate::test_allocator::AllocationObservation::start();
+        let result = work.classify(|scoped| {
+            let context = CheckpointDecodeContext {
+                work: scoped.clone(),
+                memory: Default::default(),
+            };
+            let bytes = value::encode_row_with_allocations(
+                &row,
+                row.values().len(),
+                limits,
+                Some(&context),
+            )?;
+            Ok::<_, RelationalRowPageError>((bytes, context.memory.into_inner()))
+        });
+        let wide_allocations = observation.finish();
+        if succeeds {
+            let (bytes, memory) = result.unwrap();
+            assert_eq!(bytes, expected);
+            assert!(
+                matches!(work.task_context().reserve_working_memory(ceiling),
+                Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. })
+                    if available_bytes <= ceiling - bytes.len() as u64 && available_bytes > ceiling - bytes.len() as u64 - 16 * 1024)
+            );
+            drop(bytes);
+            drop(memory);
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(CheckpointOperationError::Work(CheckpointWorkError::Memory(
+                        _
+                    )))
+                ),
+                "{result:?}"
+            );
+            assert_eq!(wide_allocations, 0);
+        }
+        assert!(
+            matches!(work.task_context().reserve_working_memory(ceiling),
+            Err(hawdb_core::RuntimeMemoryError::ReservationExceeded { available_bytes, .. }) if available_bytes == ceiling)
+        );
+        drop(work);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+}

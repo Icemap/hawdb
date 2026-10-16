@@ -84,6 +84,8 @@ use system_variables::{
 
 mod access_control;
 mod artifact_jobs;
+mod automatic_checkpoint;
+pub use automatic_checkpoint::AutomaticCheckpointReport;
 mod branch_lifecycle;
 mod canonical_snapshot;
 mod concurrent;
@@ -294,6 +296,8 @@ pub struct Database {
     local_qos_scheduler: LocalQosScheduler,
     system_variables: QuerySystemVariables,
     derived_artifact_jobs: hawdb_artifact::DerivedArtifactJobQueue,
+    derived_artifact_root_pins:
+        BTreeMap<u64, Option<Arc<hawdb_storage::branch_root_pins::RootPin>>>,
     telemetry: Option<Arc<dyn TelemetrySink>>,
     runtime_governor: Option<hawdb_qos::RuntimeGovernor>,
     retained_runtime: Arc<retained_query::RetainedRuntime>,
@@ -302,11 +306,23 @@ pub struct Database {
 pub(crate) struct DatabaseCheckpointSource {
     catalog: Catalog,
     store: GraphStore,
+    suspension: Option<automatic_checkpoint::Suspension>,
+}
+
+pub(crate) struct PreparedDatabaseCheckpoint {
+    checkpoint: PreparedCheckpoint,
+    _suspension: Option<automatic_checkpoint::Suspension>,
 }
 
 impl DatabaseCheckpointSource {
-    pub(crate) fn prepare(self) -> Result<Option<PreparedCheckpoint>> {
-        self.store.prepare_checkpoint(&self.catalog)
+    pub(crate) fn prepare(self) -> Result<Option<PreparedDatabaseCheckpoint>> {
+        Ok(self
+            .store
+            .prepare_checkpoint(&self.catalog)?
+            .map(|checkpoint| PreparedDatabaseCheckpoint {
+                checkpoint,
+                _suspension: self.suspension,
+            }))
     }
 }
 
@@ -332,6 +348,9 @@ impl<T> SharedState<T> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DatabaseConfig {
     pub read_only: bool,
+    /// Maximum monotonic age of uncheckpointed data in an admitted persistent
+    /// writer. The background-maintenance capability controls worker creation.
+    pub automatic_checkpoint_max_age: std::time::Duration,
     /// Bounded pending-child recovery during a writable project open.
     pub branch_create_recovery_limits: BranchCreateRecoveryLimits,
     /// Optional host-wide read row ceiling. `Some(0)` (the default) and `None` mean unlimited.
@@ -598,6 +617,7 @@ impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
             read_only: false,
+            automatic_checkpoint_max_age: std::time::Duration::from_secs(60),
             branch_create_recovery_limits: BranchCreateRecoveryLimits::default(),
             max_read_result_rows: Some(DEFAULT_MAX_READ_RESULT_ROWS),
             max_read_result_payload_bytes: Some(DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES),
@@ -1063,6 +1083,7 @@ impl Default for Database {
             system_variables: QuerySystemVariables::default(),
 
             derived_artifact_jobs: hawdb_artifact::DerivedArtifactJobQueue::default(),
+            derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
             retained_runtime: Arc::new(retained_query::RetainedRuntime::default()),
@@ -1089,9 +1110,8 @@ impl Database {
         table: &str,
         row: hawdb_storage::relational::RelationalRow,
     ) -> Result<hawdb_storage::projection_generation::ProjectionGenerationMember> {
-        let schema = self
-            .runtime
-            .get()?
+        let runtime = self.runtime.get()?;
+        let schema = runtime
             .store
             .relational_state()
             .table_schema(table)
@@ -1167,6 +1187,7 @@ impl Database {
             system_variables: QuerySystemVariables::default(),
 
             derived_artifact_jobs: hawdb_artifact::DerivedArtifactJobQueue::default(),
+            derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
             retained_runtime: Arc::new(retained_query::RetainedRuntime::default()),
@@ -1345,6 +1366,7 @@ impl Database {
             system_variables: QuerySystemVariables::default(),
 
             derived_artifact_jobs: hawdb_artifact::DerivedArtifactJobQueue::default(),
+            derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
             retained_runtime: Arc::new(retained_query::RetainedRuntime::default()),
@@ -1459,6 +1481,7 @@ impl Database {
             local_qos_scheduler,
             system_variables: QuerySystemVariables::default(),
             derived_artifact_jobs: hawdb_artifact::DerivedArtifactJobQueue::default(),
+            derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
             retained_runtime: Arc::new(retained_query::RetainedRuntime::default()),
@@ -1468,6 +1491,10 @@ impl Database {
 
     pub fn config(&self) -> &DatabaseConfig {
         &self.config
+    }
+
+    pub fn automatic_checkpoint_report(&self) -> Result<Option<AutomaticCheckpointReport>> {
+        self.runtime.automatic_checkpoint_report()
     }
 
     /// Engine-owned descriptors and reservations shared by this canonical project.
@@ -1507,7 +1534,7 @@ impl Database {
         {
             runtime_cell::record_recovery_telemetry(&runtime.store, telemetry.as_ref());
         }
-        if let Some(runtime) = self.runtime.peek_mut() {
+        if let Some(mut runtime) = self.runtime.peek_mut() {
             crate::store::StoreTelemetry::set_telemetry_sink(&mut runtime.store, telemetry.clone());
         }
         if let Some(pending) = self.runtime.pending_mut() {
@@ -1766,14 +1793,15 @@ impl Database {
         task_context: Option<hawdb_core::RuntimeTaskContext>,
         plan_cache: Option<Arc<SharedState<PlanCache>>>,
     ) -> Result<DatabaseReadTransaction> {
+        let runtime = self.runtime.get()?;
         Ok({
-            let (published_read_view, pin) = self.pin_read_view()?;
+            let (published_read_view, pin) = Self::pin_runtime_read_view(&runtime);
             DatabaseReadTransaction {
                 session_config: SessionConfig::default(),
-                catalog: self.runtime.get()?.catalog.clone(),
-                store: self.runtime.get()?.store.snapshot_for_read(),
+                catalog: runtime.catalog.clone(),
+                store: runtime.store.snapshot_for_read(),
                 published_read_view,
-                optimizer: self.runtime.get()?.optimizer.clone(),
+                optimizer: runtime.optimizer.clone(),
                 plan_cache: plan_cache.map_or_else(
                     || {
                         ReadPlanCache::Private(SharedState::new(PlanCache::new(
@@ -1782,15 +1810,13 @@ impl Database {
                     },
                     ReadPlanCache::Shared,
                 ),
-                relational_plan_template_cache: Arc::clone(
-                    &self.runtime.get()?.relational_plan_template_cache,
-                ),
-                optimizer_planning_cache: Arc::clone(&self.runtime.get()?.optimizer_planning_cache),
+                relational_plan_template_cache: Arc::clone(&runtime.relational_plan_template_cache),
+                optimizer_planning_cache: Arc::clone(&runtime.optimizer_planning_cache),
                 slow_query_snapshot: Vec::new(),
                 statement_summary_snapshot: Vec::new(),
                 config: self.config.clone(),
-                branch_catalog_path: self.branch_catalog_path().ok(),
-                current_branch: self.current_branch()?,
+                branch_catalog_path: self.branch_catalog_path_from_runtime(&runtime).ok(),
+                current_branch: self.current_branch_from_runtime(&runtime),
                 projection_relational,
                 task_context,
                 _pin: Arc::new(pin),
@@ -1799,23 +1825,21 @@ impl Database {
         })
     }
 
-    fn pin_read_view(&self) -> Result<(PublishedReadView, ReaderPin)> {
-        Ok({
-            let published_read_view = self.runtime.get()?.store.published_read_view();
-            let mut pins = self
-                .runtime
-                .get()?
-                .reader_pins
-                .lock()
-                .expect("database reader pins lock should not be poisoned");
-            let id = pins.next_reader_id;
-            pins.next_reader_id += 1;
-            pins.active_views.insert(id, published_read_view);
-            (
-                published_read_view,
-                ReaderPin::new(id, Arc::clone(&self.runtime.get()?.reader_pins)),
-            )
-        })
+    fn pin_runtime_read_view(
+        runtime: &runtime_cell::AdmittedBranchRuntime,
+    ) -> (PublishedReadView, ReaderPin) {
+        let published_read_view = runtime.store.published_read_view();
+        let mut pins = runtime
+            .reader_pins
+            .lock()
+            .expect("database reader pins lock should not be poisoned");
+        let id = pins.next_reader_id;
+        pins.next_reader_id += 1;
+        pins.active_views.insert(id, published_read_view);
+        (
+            published_read_view,
+            ReaderPin::new(id, Arc::clone(&runtime.reader_pins)),
+        )
     }
 
     pub fn explain_query(&self, cypher_text: &str) -> Result<ExplainOutput> {
@@ -1911,31 +1935,26 @@ impl Database {
             parameters,
             access_control.as_ref(),
         )?;
-        if executor::is_mutation_plan(&optimized.physical_plan)? {
+        if executor::requires_write_access(&optimized.physical_plan) {
             return Err(HawDBError::Execution(
                 "EXPLAIN ANALYZE only supports read queries".to_string(),
             ));
         }
         let mut external = executor::NoExternalReadOperator;
-        let profiled = executor::execute_with_request(
-            executor::ExecutionRequest::new(
-                &optimized.physical_plan,
-                parameters,
-                &self.config.execution_memory,
-            )
-            .with_output_limits(
-                self.config.read_result_row_limit(),
-                self.config.max_read_result_payload_bytes,
-            ),
-            {
-                let branch_runtime = self.runtime.get_mut()?;
-                executor::ExecutionResources::new(
-                    &mut branch_runtime.catalog,
-                    &mut branch_runtime.store,
-                    &mut external,
+        let profiled = {
+            self.runtime.get_read()?.execute(
+                executor::ExecutionRequest::new(
+                    &optimized.physical_plan,
+                    parameters,
+                    &self.config.execution_memory,
                 )
-            },
-        );
+                .with_output_limits(
+                    self.config.read_result_row_limit(),
+                    self.config.max_read_result_payload_bytes,
+                ),
+                &mut external,
+            )
+        };
         self.runtime.get()?.store.poison_on_storage_error(&profiled);
         let profiled = profiled?;
         Ok(ExplainAnalyzeOutput {
@@ -2046,6 +2065,18 @@ impl Database {
         )
     }
 
+    /// Completes a caller-triggered checkpoint of a writable persistent database.
+    ///
+    /// This synchronous call does not require automatic checkpoint pressure or
+    /// background-maintenance admission. It remains available when background
+    /// maintenance is disabled, including with `default-features = false`.
+    /// Success follows checkpoint publication and its durability barrier; merely
+    /// scheduling background work is not success. Read-only handles return an
+    /// error. An in-memory database has no persistent checkpoint to publish.
+    ///
+    /// The call coordinates with the automatic owner and preserves active read
+    /// snapshots. Hosts should run this blocking operation on a suitable thread
+    /// and provide their own admission boundary for caller-triggered work.
     pub fn checkpoint(&mut self) -> Result<()> {
         self.checkpoint_internal(None)
     }
@@ -2061,7 +2092,8 @@ impl Database {
     ) -> Result<AppendCommitResult> {
         self.ensure_writable()?;
         let summary = {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime.store.commit_kernel_write_batch(
                 &mut branch_runtime.catalog,
                 KernelWriteBatch {
@@ -2083,7 +2115,8 @@ impl Database {
     ) -> Result<MutationSummary> {
         self.ensure_writable()?;
         {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime.store.commit_kernel_write_batch(
                 &mut branch_runtime.catalog,
                 batch,
@@ -2137,8 +2170,15 @@ impl Database {
         )
     }
 
-    pub fn append_table_schema(&self, table: &str) -> Result<Option<&AppendTableSchema>> {
-        Ok(self.runtime.get()?.store.append_table_schema(table))
+    /// Returns an owned schema snapshot, valid across background checkpoint
+    /// adoption and after this database handle is closed.
+    pub fn append_table_schema(&self, table: &str) -> Result<Option<AppendTableSchema>> {
+        Ok(self
+            .runtime
+            .get()?
+            .store
+            .append_table_schema(table)
+            .cloned())
     }
 
     pub fn append_storage_residency_report(&self) -> Result<crate::AppendStorageResidencyReport> {
@@ -2163,6 +2203,7 @@ impl Database {
         task: &hawdb_core::RuntimeTaskContext,
     ) -> Result<crate::store::RelationalRowPageCompactionReport> {
         self.ensure_writable()?;
+        let _suspension = self.runtime.suspend_automatic_checkpoint()?;
         let oldest_reader_epoch = self
             .runtime
             .get()?
@@ -2171,7 +2212,8 @@ impl Database {
             .expect("database reader pins lock should not be poisoned")
             .oldest_epoch();
         {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime.store.compact_relational_row_pages(
                 &branch_runtime.catalog,
                 oldest_reader_epoch,
@@ -2197,6 +2239,7 @@ impl Database {
         task: &hawdb_core::RuntimeTaskContext,
     ) -> Result<crate::store::RelationalOverflowCompactionReport> {
         self.ensure_writable()?;
+        let _suspension = self.runtime.suspend_automatic_checkpoint()?;
         let oldest_reader_epoch = self
             .runtime
             .get()?
@@ -2205,7 +2248,8 @@ impl Database {
             .expect("database reader pins lock should not be poisoned")
             .oldest_epoch();
         {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime.store.compact_relational_overflow(
                 &branch_runtime.catalog,
                 oldest_reader_epoch,
@@ -2245,9 +2289,8 @@ impl Database {
         let result = match prepared {
             Some(prepared) => {
                 let (oldest_reader_epoch, pinned_reader_generations) = {
-                    let pins = self
-                        .runtime
-                        .get()?
+                    let runtime = self.runtime.get()?;
+                    let pins = runtime
                         .reader_pins
                         .lock()
                         .expect("database reader pins lock should not be poisoned");
@@ -2257,7 +2300,7 @@ impl Database {
                     .get_mut()?
                     .store
                     .publish_prepared_checkpoint_with_reader_generations(
-                        prepared,
+                        prepared.checkpoint,
                         oldest_reader_epoch,
                         &pinned_reader_generations,
                         shadow_admission,
@@ -2312,22 +2355,23 @@ impl Database {
         })
     }
 
-    pub(crate) fn checkpoint_source(&self) -> Result<DatabaseCheckpointSource> {
+    pub(crate) fn checkpoint_source(&mut self) -> Result<DatabaseCheckpointSource> {
         self.ensure_writable()?;
+        let suspension = self.runtime.suspend_automatic_checkpoint()?;
         Ok(DatabaseCheckpointSource {
             catalog: self.runtime.get()?.catalog.clone(),
             store: self.runtime.get()?.store.checkpoint_source(),
+            suspension,
         })
     }
 
     pub(crate) fn publish_prepared_checkpoint(
         &mut self,
-        prepared: PreparedCheckpoint,
+        prepared: PreparedDatabaseCheckpoint,
     ) -> Result<()> {
         let (oldest_reader_epoch, pinned_reader_generations) = {
-            let pins = self
-                .runtime
-                .get()?
+            let runtime = self.runtime.get()?;
+            let pins = runtime
                 .reader_pins
                 .lock()
                 .expect("database reader pins lock should not be poisoned");
@@ -2337,7 +2381,7 @@ impl Database {
             .get_mut()?
             .store
             .publish_prepared_checkpoint_with_reader_generations(
-                prepared,
+                prepared.checkpoint,
                 oldest_reader_epoch,
                 &pinned_reader_generations,
                 None,
@@ -2346,8 +2390,10 @@ impl Database {
 
     pub fn backup_to(&mut self, destination: impl AsRef<Path>) -> Result<StorageBackupReport> {
         self.ensure_writable()?;
+        let _suspension = self.runtime.suspend_automatic_checkpoint()?;
         {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime
                 .store
                 .backup_to(&branch_runtime.catalog, destination)
@@ -2428,10 +2474,15 @@ impl Database {
     /// `NowledgeMemGraph`); a second governor is never constructed here.
     pub fn set_runtime_governor(&mut self, governor: hawdb_qos::RuntimeGovernor) {
         self.retained_runtime.configure(governor.clone());
+        if let Err(error) = self.runtime.set_automatic_governor(governor.clone())
+            && let Some(runtime) = self.runtime.peek()
+        {
+            runtime.store.poison_on_storage_error(&Err::<(), _>(error));
+        }
         if let Some(telemetry) = &self.telemetry {
             governor.set_telemetry_sink(Some(runtime_telemetry_sink(telemetry.clone())));
         }
-        if let Some(runtime) = self.runtime.peek_mut() {
+        if let Some(mut runtime) = self.runtime.peek_mut() {
             runtime.store.set_runtime_governor(governor.clone());
         }
         if let Some(pending) = self.runtime.pending_mut() {
@@ -2463,37 +2514,45 @@ impl Database {
 
     /// Publication evidence for the derived relational index-page store.
     /// `None` while publication is disabled or before its first checkpoint
-    /// attempt.
+    /// attempt. The returned report is an owned snapshot; later background
+    /// publication does not change a previously returned report.
     pub fn relational_index_shadow_checkpoint_report(
         &self,
-    ) -> Result<Option<&crate::store::RelationalIndexShadowCheckpointReport>> {
+    ) -> Result<Option<crate::store::RelationalIndexShadowCheckpointReport>> {
         Ok({
             self.runtime
                 .get()?
                 .store
                 .relational_index_shadow_checkpoint_report()
+                .cloned()
         })
     }
 
     /// Recovery's bounded manifest-only assessment of the relational index
-    /// store. Selected pages remain lazily validated on first SQL access.
+    /// store, as an owned snapshot. Selected pages remain lazily validated on first SQL access.
     pub fn relational_index_shadow_recovery_status(
         &self,
-    ) -> Result<&crate::store::RelationalIndexShadowRecoveryStatus> {
+    ) -> Result<crate::store::RelationalIndexShadowRecoveryStatus> {
         Ok({
             self.runtime
                 .get()?
                 .store
                 .relational_index_shadow_recovery_status()
+                .clone()
         })
     }
 
     /// Resource and publication evidence for WAL index deltas derived during
-    /// the most recent open.
+    /// the most recent open. The owned report can outlive this handle.
     pub fn relational_index_recovery_report(
         &self,
-    ) -> Result<Option<&hawdb_storage::relational::RelationalIndexRecoveryReport>> {
-        Ok(self.runtime.get()?.store.relational_index_recovery_report())
+    ) -> Result<Option<hawdb_storage::relational::RelationalIndexRecoveryReport>> {
+        Ok(self
+            .runtime
+            .get()?
+            .store
+            .relational_index_recovery_report()
+            .cloned())
     }
 
     pub fn storage_pressure_snapshot(&self) -> Result<StoragePressureSnapshot> {
@@ -2915,7 +2974,8 @@ impl Database {
             })
             .collect::<Result<Vec<GraphSnapshotRelationshipImport>>>()?;
         {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime
                 .store
                 .import_hawdb_snapshot_rows_with_source_fingerprint(
@@ -3080,7 +3140,8 @@ impl Database {
             .store
             .advanced_statistics_dirty_snapshot();
         let mut report = {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime
                 .store
                 .refresh_optimizer_statistics_external(&branch_runtime.catalog, options)
@@ -3242,6 +3303,8 @@ impl Database {
         })
     }
 
+    /// Attempts pressure-triggered checkpoint work under the supplied background
+    /// policy. For an explicit App-triggered checkpoint, use [`Self::checkpoint`].
     pub fn checkpoint_background(
         &mut self,
         policy: &LocalQosPolicy,
@@ -3263,6 +3326,8 @@ impl Database {
         }
     }
 
+    /// Attempts pressure-triggered checkpoint work under the local background
+    /// scheduler. For an explicit App-triggered checkpoint, use [`Self::checkpoint`].
     pub fn checkpoint_scheduled_background(&mut self, hint: BackgroundWorkHint) -> Result<()> {
         self.ensure_runtime_capability(hawdb_core::RuntimeCapability::BackgroundMaintenance)?;
         let Some(plan) = self.storage_checkpoint_background_work_plan(hint)? else {
@@ -3446,7 +3511,8 @@ impl Database {
     ) -> Result<QueryOutput> {
         Ok({
             property_index_projection_rebuild_output({
-                let branch_runtime = self.runtime.get_mut()?;
+                let mut branch_runtime_access = self.runtime.get_mut()?;
+                let branch_runtime = &mut *branch_runtime_access;
                 branch_runtime
                     .store
                     .rebuild_bounded_property_index_projections(
@@ -3486,7 +3552,8 @@ impl Database {
     ) -> Result<QueryOutput> {
         self.ensure_runtime_capability(hawdb_core::RuntimeCapability::BackgroundMaintenance)?;
         let estimated_operations = {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime
                 .store
                 .bounded_property_index_projection_estimated_operations(
@@ -3517,7 +3584,8 @@ impl Database {
     ) -> Result<QueryOutput> {
         self.ensure_runtime_capability(hawdb_core::RuntimeCapability::BackgroundMaintenance)?;
         let estimated_operations = {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime
                 .store
                 .bounded_property_index_projection_estimated_operations(
@@ -3680,7 +3748,8 @@ impl Database {
     pub fn run_schema_maintenance(&mut self) -> Result<QueryOutput> {
         self.ensure_writable()?;
         let actions = {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime
                 .store
                 .run_schema_maintenance(&mut branch_runtime.catalog)
@@ -3694,7 +3763,8 @@ impl Database {
     ) -> Result<QueryOutput> {
         self.ensure_writable()?;
         let actions = {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime.store.run_bounded_schema_maintenance(
                 &mut branch_runtime.catalog,
                 max_estimated_operations,
@@ -3872,8 +3942,13 @@ impl Database {
 
     pub fn rebuild_projected_graph_artifacts(&mut self) -> Result<()> {
         self.ensure_writable()?;
+        let _suspension = self.runtime.suspend_automatic_checkpoint()?;
+        // This derived write has no WAL record, so the next candidate must
+        // capture the rebuilt runtime rather than reuse the prior source.
+        self.runtime.release_suspended_checkpoint_source()?;
         {
-            let branch_runtime = self.runtime.get_mut()?;
+            let mut branch_runtime_access = self.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             branch_runtime
                 .store
                 .rebuild_projected_graph_artifacts(&branch_runtime.catalog)
@@ -8847,12 +8922,16 @@ pub(super) fn upsert_knowledge_entity_for(
 
     let graph_commit_epoch_before = db.runtime.get().unwrap().store.commit_epoch();
     let update_properties = knowledge_entity_upsert_update_properties(request);
-    if let Some(existing) = try_seed_node_by_label_and_external_id(
-        &db.runtime.get().unwrap().catalog,
-        &db.runtime.get().unwrap().store,
+    let existing = {
+        let runtime = db.runtime.get()?;
+        try_seed_node_by_label_and_external_id(
+        &runtime.catalog,
+        &runtime.store,
         request.label.as_str(),
         request.external_id.as_str(),
-    )? {
+    )?
+    };
+    if let Some(existing) = existing {
         let node_id = existing.id.0;
         if !node_has_external_id_property(&existing, request.external_id.as_str()) {
             return Ok(KnowledgeEntityUpsertOutput {
@@ -20398,8 +20477,8 @@ impl DatabaseTransactionRuntime {
             ),
             config: db.config.clone(),
             system_variables,
-            branch_catalog_path: db.branch_catalog_path().ok(),
-            current_branch: db.current_branch()?,
+            branch_catalog_path: db.branch_catalog_path_from_runtime(&runtime).ok(),
+            current_branch: db.current_branch_from_runtime(&runtime),
         })
     }
 
@@ -20437,7 +20516,7 @@ impl DatabaseTransactionRuntime {
 impl DatabaseTransactionState {
     fn from_database(db: &Database) -> Result<Self> {
         let runtime = db.runtime.get()?;
-        let (_, pin) = db.pin_read_view()?;
+        let (_, pin) = Database::pin_runtime_read_view(&runtime);
         Ok(Self {
             snapshot_pin: Some(pin),
             graph_transaction: Some(runtime.store.begin_mutation_transaction(&runtime.catalog)),
@@ -21376,7 +21455,8 @@ fn commit_database_transaction_state_inner(
         .expect("database transaction must own a graph workspace");
     let relational_transaction = std::mem::take(&mut state.relational_transaction);
     let append_transaction = std::mem::take(&mut state.append_transaction);
-    let branch_runtime = db.runtime.get_mut()?;
+    let mut branch_runtime_access = db.runtime.get_mut()?;
+    let branch_runtime = &mut *branch_runtime_access;
     let summary = if allow_stale_rebase {
         branch_runtime
             .store
@@ -21398,6 +21478,7 @@ fn commit_database_transaction_state_inner(
                 db.config.mutation_limits,
             )?
     };
+    drop(branch_runtime_access);
     db.complete_required_relational_row_checkpoint("transaction commit")?;
     if returning.len() != summary.relational_mutation_outcomes.len() {
         return Err(HawDBError::StorageIntegrity(format!(
@@ -21714,7 +21795,8 @@ impl DatabaseSession<'_> {
                     mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
                 }
                 self.db.ensure_writable()?;
-                let branch_runtime = self.db.runtime.get_mut()?;
+                let mut branch_runtime_access = self.db.runtime.get_mut()?;
+                let branch_runtime = &mut *branch_runtime_access;
                 let summary = branch_runtime
                     .store
                     .commit_mutation_transaction_and_relational(
@@ -21816,25 +21898,23 @@ impl DatabaseSession<'_> {
                 ));
             }
             let mut external = executor::NoExternalReadOperator;
+            let row_limit = self.row_limit();
+            let mut branch_runtime_access = self.db.runtime.get_mut()?;
+            let branch_runtime = &mut *branch_runtime_access;
             let profiled = executor::execute_with_request(
                 executor::ExecutionRequest::new(
                     &optimized.physical_plan,
                     parameters,
                     &self.db.config.execution_memory,
                 )
-                .with_output_limits(
-                    self.row_limit(),
-                    self.db.config.max_read_result_payload_bytes,
+                .with_output_limits(row_limit, self.db.config.max_read_result_payload_bytes),
+                executor::ExecutionResources::new(
+                    &mut branch_runtime.catalog,
+                    &mut branch_runtime.store,
+                    &mut external,
                 ),
-                {
-                    let branch_runtime = self.db.runtime.get_mut()?;
-                    executor::ExecutionResources::new(
-                        &mut branch_runtime.catalog,
-                        &mut branch_runtime.store,
-                        &mut external,
-                    )
-                },
             );
+            drop(branch_runtime_access);
             self.db.poison_on_storage_error(&profiled);
             let profiled = profiled?;
             let row = explain_analyze_output_row(

@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod checkpoint_read;
+
+#[cfg(test)]
+mod checkpoint_pending_memory_tests;
+
 use crate::file_io::{self as fs, File};
 use crate::graph_descriptor_tree::demand::{
     GraphDescriptorTreeDemandReader, GraphDescriptorTreeReadLimits, GraphDescriptorTreeReadReport,
@@ -110,6 +115,7 @@ pub enum PropertySpillError {
     Io(std::io::Error),
     Read(SegmentReadError),
     DescriptorTree(GraphDescriptorTreeError),
+    Work(crate::background::CheckpointWorkError),
     Corrupt(String),
     ValueTooLarge { value_bytes: u64, max_bytes: u64 },
     BlockTooLarge { block_bytes: u64, max_bytes: u64 },
@@ -121,6 +127,7 @@ impl Display for PropertySpillError {
             Self::Io(error) => Display::fmt(error, formatter),
             Self::Read(error) => Display::fmt(error, formatter),
             Self::DescriptorTree(error) => Display::fmt(error, formatter),
+            Self::Work(error) => Display::fmt(error, formatter),
             Self::Corrupt(message) => formatter.write_str(message),
             Self::ValueTooLarge {
                 value_bytes,
@@ -146,6 +153,7 @@ impl Error for PropertySpillError {
             Self::Io(error) => Some(error),
             Self::Read(error) => Some(error),
             Self::DescriptorTree(error) => Some(error),
+            Self::Work(error) => Some(error),
             _ => None,
         }
     }
@@ -166,6 +174,12 @@ impl From<SegmentReadError> for PropertySpillError {
 impl From<GraphDescriptorTreeError> for PropertySpillError {
     fn from(error: GraphDescriptorTreeError) -> Self {
         Self::DescriptorTree(error)
+    }
+}
+
+impl From<crate::background::CheckpointWorkError> for PropertySpillError {
+    fn from(error: crate::background::CheckpointWorkError) -> Self {
+        Self::Work(error)
     }
 }
 
@@ -452,7 +466,23 @@ impl PropertySpillManifest {
     }
 }
 
+enum PropertySpillValue {
+    Ordinary(Vec<u8>),
+    Checkpoint(crate::background::CheckpointBytes),
+}
+
+impl std::ops::Deref for PropertySpillValue {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Ordinary(bytes) => bytes,
+            Self::Checkpoint(bytes) => bytes,
+        }
+    }
+}
+
 pub struct PropertySpillWriter {
+    work: crate::background::CheckpointWorkContext,
     path: PathBuf,
     file: File,
     generation: ManifestGeneration,
@@ -462,13 +492,31 @@ pub struct PropertySpillWriter {
     next_spill_id: u64,
     next_block_id: u64,
     value_bytes: u64,
-    pending: Vec<(u64, Vec<u8>)>,
+    pending: Vec<(u64, PropertySpillValue)>,
     pending_bytes: u64,
+    pending_push: Option<crate::background::CheckpointVectorPush<(u64, PropertySpillValue)>>,
+    pending_input: Option<(u64, u64, u64)>,
+    pending_descriptor: Option<PropertySpillBlockDescriptor>,
+    finish_phase: u8,
+    finished: bool,
+    prepared_tree: Option<PreparedGraphDescriptorTree>,
     block_count: u64,
     descriptor_tree: GraphDescriptorTreeBuilder,
+    // Retained pending capacity and values are destroyed before this inventory.
+    pending_memory: crate::background::CheckpointAllocationOwner,
 }
 
 impl PropertySpillWriter {
+    // The enclosing preparation retains the original memory admission and calls
+    // this only between attempts, with no work unit or I/O wave held.
+    pub(crate) fn bind_checkpoint_attempt(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) {
+        self.work = work.clone();
+        self.descriptor_tree.bind_checkpoint_attempt(work);
+    }
+
     pub fn create(
         path: impl Into<PathBuf>,
         generation: ManifestGeneration,
@@ -476,13 +524,90 @@ impl PropertySpillWriter {
         config: PropertySpillConfig,
         descriptor_tree: PersistentPropertySpillDescriptorTree,
     ) -> Result<Self, PropertySpillError> {
+        Self::create_with_work_context(
+            path,
+            generation,
+            source_commit_epoch,
+            config,
+            descriptor_tree,
+            crate::background::CheckpointWorkContext::default(),
+        )
+    }
+
+    #[doc(hidden)]
+    pub fn create_with_work_context(
+        path: impl Into<PathBuf>,
+        generation: ManifestGeneration,
+        source_commit_epoch: u64,
+        config: PropertySpillConfig,
+        descriptor_tree: PersistentPropertySpillDescriptorTree,
+        work: crate::background::CheckpointWorkContext,
+    ) -> Result<Self, PropertySpillError> {
+        Self::create_inner(
+            path,
+            generation,
+            source_commit_epoch,
+            config,
+            descriptor_tree,
+            work,
+            false,
+        )
+    }
+
+    pub(crate) fn create_checkpoint(
+        path: impl Into<PathBuf>,
+        generation: ManifestGeneration,
+        source_commit_epoch: u64,
+        config: PropertySpillConfig,
+        descriptor_tree: PersistentPropertySpillDescriptorTree,
+        work: crate::background::CheckpointWorkContext,
+    ) -> Result<Self, PropertySpillError> {
+        Self::create_inner(
+            path,
+            generation,
+            source_commit_epoch,
+            config,
+            descriptor_tree,
+            work,
+            true,
+        )
+    }
+
+    fn create_inner(
+        path: impl Into<PathBuf>,
+        generation: ManifestGeneration,
+        source_commit_epoch: u64,
+        config: PropertySpillConfig,
+        descriptor_tree: PersistentPropertySpillDescriptorTree,
+        work: crate::background::CheckpointWorkContext,
+        checkpoint_buffers: bool,
+    ) -> Result<Self, PropertySpillError> {
+        let unit = work.start_unit()?;
         let path = path.into();
         let (descriptor_paths, descriptor_config) = descriptor_tree.into_parts();
+        let _wave = work.io_wave()?;
         let mut file = File::create(&path)?;
         let mut artifact_digest = IntegrityHasher::new();
         write_hashed(&mut file, &mut artifact_digest, ARTIFACT_HEADER)?;
         write_hashed(&mut file, &mut artifact_digest, &generation.0.to_le_bytes())?;
+        drop(_wave);
+        unit.finish();
+        let create = if checkpoint_buffers {
+            GraphDescriptorTreeBuilder::create_checkpoint
+        } else {
+            GraphDescriptorTreeBuilder::create_with_work_context
+        };
+        let descriptor_tree = create(
+            descriptor_paths,
+            GraphDescriptorKind::PropertySpill,
+            generation.0,
+            source_commit_epoch,
+            DESCRIPTOR_ARTIFACT_ID,
+            descriptor_config,
+            work.clone(),
+        )?;
         Ok(Self {
+            work,
             path,
             file,
             generation,
@@ -494,15 +619,15 @@ impl PropertySpillWriter {
             value_bytes: 0,
             pending: Vec::new(),
             pending_bytes: 0,
+            pending_push: None,
+            pending_input: None,
+            pending_descriptor: None,
+            finish_phase: 0,
+            finished: false,
+            prepared_tree: None,
             block_count: 0,
-            descriptor_tree: GraphDescriptorTreeBuilder::create(
-                descriptor_paths,
-                GraphDescriptorKind::PropertySpill,
-                generation.0,
-                source_commit_epoch,
-                DESCRIPTOR_ARTIFACT_ID,
-                descriptor_config,
-            )?,
+            descriptor_tree,
+            pending_memory: crate::background::CheckpointAllocationOwner::default(),
         })
     }
 
@@ -511,6 +636,28 @@ impl PropertySpillWriter {
     }
 
     pub fn push(&mut self, encoded_value: Vec<u8>) -> Result<u64, PropertySpillError> {
+        self.push_value(PropertySpillValue::Ordinary(encoded_value))
+    }
+
+    pub(crate) fn push_checkpoint(
+        &mut self,
+        encoded_value: crate::background::CheckpointBytes,
+    ) -> Result<u64, PropertySpillError> {
+        self.push_value(PropertySpillValue::Checkpoint(encoded_value))
+    }
+
+    fn push_value(&mut self, encoded_value: PropertySpillValue) -> Result<u64, PropertySpillError> {
+        self.work.checkpoint()?;
+        if self.finished || self.finish_phase != 0 {
+            return Err(PropertySpillError::Corrupt(
+                "cannot append to a finishing property spill writer".into(),
+            ));
+        }
+        if self.pending_input.is_some() {
+            return Err(PropertySpillError::Corrupt(
+                "property spill input has an unfinished append".into(),
+            ));
+        }
         let value_bytes = encoded_value.len() as u64;
         if value_bytes > self.config.max_value_bytes.get() {
             return Err(PropertySpillError::ValueTooLarge {
@@ -528,23 +675,117 @@ impl PropertySpillWriter {
             self.flush_block()?;
         }
         let spill_id = self.next_spill_id;
-        self.next_spill_id = self
+        let next_spill_id = self
             .next_spill_id
             .checked_add(1)
             .ok_or_else(|| PropertySpillError::Corrupt("property spill id overflow".to_string()))?;
+        if matches!(encoded_value, PropertySpillValue::Checkpoint(_))
+            || !self.pending_memory.is_empty()
+        {
+            self.pending_input = Some((spill_id, value_bytes, record_bytes));
+            self.pending_push = Some(crate::background::CheckpointVectorPush::new((
+                spill_id,
+                encoded_value,
+            )));
+            let work = self.work.clone();
+            return self.resume_checkpoint_push(&work);
+        } else {
+            self.pending.push((spill_id, encoded_value));
+        }
+        self.next_spill_id = next_spill_id;
         self.value_bytes = self.value_bytes.saturating_add(value_bytes);
         self.pending_bytes = self.pending_bytes.saturating_add(record_bytes);
-        self.pending.push((spill_id, encoded_value));
         Ok(spill_id)
     }
 
+    pub(crate) fn next_checkpoint_spill_id(&self) -> u64 {
+        self.next_spill_id
+    }
+
+    pub(crate) fn has_pending_checkpoint_push(&self) -> bool {
+        self.pending_input.is_some()
+    }
+
+    pub(crate) fn resume_checkpoint_push(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<u64, PropertySpillError> {
+        self.bind_checkpoint_attempt(work);
+        let (id, value_bytes, record_bytes) = self.pending_input.ok_or_else(|| {
+            PropertySpillError::Corrupt("property spill append is not pending".into())
+        })?;
+        let result = work
+            .classify(|scoped| {
+                let context = crate::background::CheckpointDecodeContext {
+                    work: scoped.clone(),
+                    memory: std::cell::RefCell::new(std::mem::take(&mut self.pending_memory)),
+                };
+                let result = context
+                    .resume_push(&mut self.pending, &mut self.pending_push)
+                    .map_err(|error| PropertySpillError::Corrupt(error.to_string()));
+                self.pending_memory = context.memory.into_inner();
+                if self.pending_push.is_none() {
+                    self.next_spill_id = id.checked_add(1).ok_or_else(|| {
+                        PropertySpillError::Corrupt("property spill id overflow".into())
+                    })?;
+                    self.value_bytes = self.value_bytes.saturating_add(value_bytes);
+                    self.pending_bytes = self.pending_bytes.saturating_add(record_bytes);
+                    self.pending_input = None;
+                }
+                result
+            })
+            .map_err(|error| match error {
+                crate::background::CheckpointOperationError::Work(error) => {
+                    PropertySpillError::Work(error)
+                }
+                crate::background::CheckpointOperationError::Operation(error) => error,
+            });
+        result?;
+        Ok(id)
+    }
+
+    #[cfg(test)]
     pub(crate) fn finish(mut self) -> Result<PreparedPropertySpillArtifact, PropertySpillError> {
-        self.flush_block()?;
-        self.file.sync_all()?;
-        let artifact_integrity = self.artifact_digest.finish();
-        let descriptor_tree = self.descriptor_tree.finish()?;
+        let work = self.work.clone();
+        self.finish_with_work_context(&work)
+    }
+
+    pub(crate) fn finish_with_work_context(
+        &mut self,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<PreparedPropertySpillArtifact, PropertySpillError> {
+        if self.finished || self.pending_input.is_some() {
+            return Err(PropertySpillError::Corrupt(
+                "property spill writer already finished".into(),
+            ));
+        }
+        self.bind_checkpoint_attempt(work);
+        work.checkpoint()?;
+        if self.finish_phase == 0 {
+            self.flush_block()?;
+            self.finish_phase = 1;
+        }
+        if self.finish_phase == 1 {
+            work.checkpoint()?;
+            let _wave = work.io_wave()?;
+            self.file.sync_all()?;
+            self.finish_phase = 2;
+        }
+        if self.finish_phase == 2 {
+            self.prepared_tree = Some(self.descriptor_tree.finish_with_work_context(work)?);
+            self.finish_phase = 3;
+        }
+        work.checkpoint()?;
+        let mut descriptor_tree = self
+            .prepared_tree
+            .take()
+            .expect("completed spill descriptor tree");
+        descriptor_tree.bind_checkpoint_attempt(work);
+        let artifact_integrity = self.artifact_digest.clone().finish();
+        self.finished = true;
         Ok(PreparedPropertySpillArtifact {
-            temporary_artifact_path: self.path,
+            work: work.clone(),
+            temporary_artifact_path: self.path.clone(),
             generation: self.generation,
             artifact_len: self.artifact_len,
             artifact_digest: ContentDigest(artifact_integrity.crc32c.as_u64()),
@@ -553,6 +794,8 @@ impl PropertySpillWriter {
             value_bytes: self.value_bytes,
             block_count: self.block_count,
             descriptor_tree,
+            data_published: false,
+            published_path: None,
         })
     }
 
@@ -564,80 +807,92 @@ impl PropertySpillWriter {
         if self.pending.is_empty() {
             return Ok(());
         }
-        let block_bytes = BLOCK_FIXED_BYTES.saturating_add(self.pending_bytes);
-        let hard_max = self.config.target_block_bytes.get().max(
-            self.config
-                .max_value_bytes
-                .get()
-                .saturating_add(BLOCK_FIXED_BYTES)
-                .saturating_add(RECORD_FIXED_BYTES),
-        );
-        if block_bytes > hard_max {
-            return Err(PropertySpillError::BlockTooLarge {
-                block_bytes,
-                max_bytes: hard_max,
-            });
+        if self.pending_descriptor.is_none() {
+            let unit = self.work.start_unit()?;
+            let _wave = self.work.io_wave()?;
+            let block_bytes = BLOCK_FIXED_BYTES.saturating_add(self.pending_bytes);
+            let hard_max = self.config.target_block_bytes.get().max(
+                self.config
+                    .max_value_bytes
+                    .get()
+                    .saturating_add(BLOCK_FIXED_BYTES)
+                    .saturating_add(RECORD_FIXED_BYTES),
+            );
+            if block_bytes > hard_max {
+                return Err(PropertySpillError::BlockTooLarge {
+                    block_bytes,
+                    max_bytes: hard_max,
+                });
+            }
+            let min_spill_id = self.pending.first().expect("pending block is non-empty").0;
+            let max_spill_id = self.pending.last().expect("pending block is non-empty").0;
+            let value_count = u32::try_from(self.pending.len()).map_err(|_| {
+                PropertySpillError::Corrupt("property spill block count exceeds u32".to_string())
+            })?;
+            let mut block_digest = Crc32cHasher::new();
+            write_double_hashed(
+                &mut self.file,
+                &mut self.artifact_digest,
+                &mut block_digest,
+                BLOCK_HEADER,
+            )?;
+            write_double_hashed(
+                &mut self.file,
+                &mut self.artifact_digest,
+                &mut block_digest,
+                &self.generation.0.to_le_bytes(),
+            )?;
+            write_double_hashed(
+                &mut self.file,
+                &mut self.artifact_digest,
+                &mut block_digest,
+                &self.next_block_id.to_le_bytes(),
+            )?;
+            write_double_hashed(
+                &mut self.file,
+                &mut self.artifact_digest,
+                &mut block_digest,
+                &value_count.to_le_bytes(),
+            )?;
+            for (spill_id, value) in &self.pending {
+                write_double_hashed(
+                    &mut self.file,
+                    &mut self.artifact_digest,
+                    &mut block_digest,
+                    &spill_id.to_le_bytes(),
+                )?;
+                write_double_hashed(
+                    &mut self.file,
+                    &mut self.artifact_digest,
+                    &mut block_digest,
+                    &(value.len() as u64).to_le_bytes(),
+                )?;
+                write_double_hashed(
+                    &mut self.file,
+                    &mut self.artifact_digest,
+                    &mut block_digest,
+                    value,
+                )?;
+            }
+            let length = NonZeroU64::new(block_bytes).expect("property spill block is non-empty");
+            let descriptor = PropertySpillBlockDescriptor {
+                block_id: self.next_block_id,
+                offset: self.artifact_len,
+                length,
+                content_digest: ContentDigest(block_digest.finish()),
+                min_spill_id,
+                max_spill_id,
+                value_count,
+            };
+            drop(_wave);
+            self.pending_descriptor = Some(descriptor);
+            unit.finish();
         }
-        let min_spill_id = self.pending.first().expect("pending block is non-empty").0;
-        let max_spill_id = self.pending.last().expect("pending block is non-empty").0;
-        let value_count = u32::try_from(self.pending.len()).map_err(|_| {
-            PropertySpillError::Corrupt("property spill block count exceeds u32".to_string())
-        })?;
-        let mut block_digest = Crc32cHasher::new();
-        write_double_hashed(
-            &mut self.file,
-            &mut self.artifact_digest,
-            &mut block_digest,
-            BLOCK_HEADER,
-        )?;
-        write_double_hashed(
-            &mut self.file,
-            &mut self.artifact_digest,
-            &mut block_digest,
-            &self.generation.0.to_le_bytes(),
-        )?;
-        write_double_hashed(
-            &mut self.file,
-            &mut self.artifact_digest,
-            &mut block_digest,
-            &self.next_block_id.to_le_bytes(),
-        )?;
-        write_double_hashed(
-            &mut self.file,
-            &mut self.artifact_digest,
-            &mut block_digest,
-            &value_count.to_le_bytes(),
-        )?;
-        for (spill_id, value) in &self.pending {
-            write_double_hashed(
-                &mut self.file,
-                &mut self.artifact_digest,
-                &mut block_digest,
-                &spill_id.to_le_bytes(),
-            )?;
-            write_double_hashed(
-                &mut self.file,
-                &mut self.artifact_digest,
-                &mut block_digest,
-                &(value.len() as u64).to_le_bytes(),
-            )?;
-            write_double_hashed(
-                &mut self.file,
-                &mut self.artifact_digest,
-                &mut block_digest,
-                value,
-            )?;
-        }
-        let length = NonZeroU64::new(block_bytes).expect("property spill block is non-empty");
-        let descriptor = PropertySpillBlockDescriptor {
-            block_id: self.next_block_id,
-            offset: self.artifact_len,
-            length,
-            content_digest: ContentDigest(block_digest.finish()),
-            min_spill_id,
-            max_spill_id,
-            value_count,
-        };
+        self.work.checkpoint()?;
+        let descriptor = self
+            .pending_descriptor
+            .as_ref()
+            .expect("completed property spill block");
         self.descriptor_tree.push(
             descriptor.descriptor_tree_key(),
             descriptor.encode_descriptor_tree_value()?,
@@ -645,16 +900,18 @@ impl PropertySpillWriter {
         self.block_count = self.block_count.checked_add(1).ok_or_else(|| {
             PropertySpillError::Corrupt("property spill block count overflow".to_string())
         })?;
-        self.artifact_len = self.artifact_len.saturating_add(block_bytes);
+        self.artifact_len = self.artifact_len.saturating_add(descriptor.length.get());
         self.next_block_id = self.next_block_id.saturating_add(1);
         self.pending.clear();
         self.pending_bytes = 0;
+        self.pending_descriptor = None;
         Ok(())
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct PreparedPropertySpillArtifact {
+    work: crate::background::CheckpointWorkContext,
     temporary_artifact_path: PathBuf,
     generation: ManifestGeneration,
     artifact_len: u64,
@@ -664,15 +921,43 @@ pub(crate) struct PreparedPropertySpillArtifact {
     value_bytes: u64,
     block_count: u64,
     descriptor_tree: PreparedGraphDescriptorTree,
+    data_published: bool,
+    published_path: Option<PathBuf>,
 }
 
 impl PreparedPropertySpillArtifact {
+    #[cfg(test)]
     pub(crate) fn publish(
-        self,
+        mut self,
         artifact_path: &Path,
     ) -> Result<PropertySpillWriteOutput, PropertySpillError> {
-        durable_replace_file(&self.temporary_artifact_path, artifact_path)?;
-        let descriptor_tree = self.descriptor_tree.publish()?;
+        let work = self.work.clone();
+        self.publish_with_work_context(artifact_path, &work)
+    }
+
+    pub(crate) fn publish_with_work_context(
+        &mut self,
+        artifact_path: &Path,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<PropertySpillWriteOutput, PropertySpillError> {
+        work.checkpoint()?;
+        if self
+            .published_path
+            .as_deref()
+            .is_some_and(|original| original != artifact_path)
+        {
+            return Err(PropertySpillError::Corrupt(
+                "retained property spill publication path changed".into(),
+            ));
+        }
+        self.work = work.clone();
+        if !self.data_published {
+            let _wave = self.work.io_wave()?;
+            durable_replace_file(&self.temporary_artifact_path, artifact_path)?;
+            self.data_published = true;
+            self.published_path = Some(artifact_path.to_path_buf());
+        }
+        let descriptor_tree = self.descriptor_tree.publish_with_work_context(work)?;
         if descriptor_tree.root.kind != GraphDescriptorKind::PropertySpill
             || descriptor_tree.root.generation != self.generation.0
             || descriptor_tree.root.descriptor_count != self.block_count
@@ -1182,9 +1467,9 @@ fn property_spill_error_requires_poison(error: &PropertySpillError) -> bool {
                 | GraphDescriptorTreeError::Page(GraphDescriptorPageError::Corrupt(_))
                 | GraphDescriptorTreeError::Corrupt(_)
         ),
-        PropertySpillError::ValueTooLarge { .. } | PropertySpillError::BlockTooLarge { .. } => {
-            false
-        }
+        PropertySpillError::Work(_)
+        | PropertySpillError::ValueTooLarge { .. }
+        | PropertySpillError::BlockTooLarge { .. } => false,
     }
 }
 

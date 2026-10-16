@@ -429,6 +429,7 @@ impl ExpectedErrorClass {
             | HawDBError::BranchBusy { .. }
             | HawDBError::BranchReclamationBlocked { .. } => Self::Storage,
             HawDBError::Execution(_)
+            | HawDBError::BranchEvidenceBudgetExceeded { .. }
             | HawDBError::ReadBudgetExceeded(_)
             | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
             | HawDBError::GraphExpansionPayloadLimitExceeded { .. }

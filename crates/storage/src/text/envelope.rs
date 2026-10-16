@@ -18,18 +18,140 @@
 //! envelope bytes, validation order, and caller-supplied decoded byte limit.
 
 use super::parse_u64;
+use crate::background::CheckpointWorkContext;
+use crate::background::{CheckpointBytes, CheckpointText, CheckpointWorkError};
 use crate::config::DurableCompression;
 use hawdb_core::{HawDBError, Result};
 use hawdb_integrity::checksum_u64 as checksum_bytes;
 use std::collections::BTreeSet;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Write};
 
 pub const DURABLE_COMPRESSION_HEADER: &str = "HAWDB_COMPRESSED_V1";
 const DEFAULT_COMPRESSION_LEVEL: i32 = 3;
 
+pub(crate) fn encode_owned_durable_text_with_work_context(
+    text: &str,
+    compression: DurableCompression,
+    work: &CheckpointWorkContext,
+) -> Result<CheckpointBytes> {
+    match compression {
+        DurableCompression::Zstd => {
+            let output = crate::compression::AdmittedCompressionOutput::new(text.len(), work)
+                .map_err(HawDBError::from_storage_error)?;
+            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+            let mut encoder = crate::compression::Encoder::new_with_work_context(
+                output,
+                DEFAULT_COMPRESSION_LEVEL,
+                work,
+            )
+            .map_err(|error| HawDBError::Storage(format!("zstd compression failed: {error}")))?;
+            unit.finish();
+            for block in text.as_bytes().chunks(64 * 1024) {
+                let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                encoder.write_all(block).map_err(|error| {
+                    HawDBError::Storage(format!("zstd compression failed: {error}"))
+                })?;
+                unit.finish();
+            }
+            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+            let output = encoder.finish().map_err(|error| {
+                HawDBError::Storage(format!("zstd compression failed: {error}"))
+            })?;
+            let output = output.into_bytes();
+            unit.finish();
+            let compressed_checksum = work
+                .checksum(&output)
+                .map_err(HawDBError::from_storage_error)?;
+            let uncompressed_checksum = work
+                .checksum(text.as_bytes())
+                .map_err(HawDBError::from_storage_error)?;
+            let mut header = CheckpointText::new();
+            header.append(DURABLE_COMPRESSION_HEADER, work)?;
+            header.append("\ncodec\tzstd\n", work)?;
+            header.fields(
+                format_args!("uncompressed_checksum\t{uncompressed_checksum}\n"),
+                work,
+            )?;
+            header.fields(
+                format_args!("compressed_checksum\t{compressed_checksum}\n"),
+                work,
+            )?;
+            header.fields(format_args!("uncompressed_len\t{}\n", text.len()), work)?;
+            header.fields(format_args!("compressed_len\t{}\n\n", output.len()), work)?;
+            let capacity = header.len().checked_add(output.len()).ok_or_else(|| {
+                HawDBError::from_storage_error(work.record_failure(
+                    CheckpointWorkError::Allocation {
+                        bytes: u64::MAX,
+                        reason: "compressed envelope length overflows usize".into(),
+                    },
+                ))
+            })?;
+            let mut encoded =
+                CheckpointBytes::new(capacity, work).map_err(HawDBError::from_storage_error)?;
+            encoded
+                .append(header.as_bytes(), work)
+                .map_err(HawDBError::from_storage_error)?;
+            encoded
+                .append(&output, work)
+                .map_err(HawDBError::from_storage_error)?;
+            work.checkpoint().map_err(HawDBError::from_storage_error)?;
+            Ok(encoded)
+        }
+    }
+}
+
 pub fn encode_durable_text(text: &str, compression: DurableCompression) -> Result<Vec<u8>> {
     match compression {
         DurableCompression::Zstd => encode_zstd_durable_text(text),
+    }
+}
+
+/// Encode the existing envelope using the owner's already-admitted task.
+#[doc(hidden)]
+pub fn encode_durable_text_with_work_context(
+    text: &str,
+    compression: DurableCompression,
+    work: &CheckpointWorkContext,
+) -> Result<Vec<u8>> {
+    match compression {
+        DurableCompression::Zstd => {
+            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+            let mut encoder =
+                zstd::stream::write::Encoder::new(Vec::new(), DEFAULT_COMPRESSION_LEVEL).map_err(
+                    |error| HawDBError::Storage(format!("zstd compression failed: {error}")),
+                )?;
+            unit.finish();
+            for block in text.as_bytes().chunks(64 * 1024) {
+                let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                encoder.write_all(block).map_err(|error| {
+                    HawDBError::Storage(format!("zstd compression failed: {error}"))
+                })?;
+                unit.finish();
+            }
+            let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+            let compressed = encoder.finish().map_err(|error| {
+                HawDBError::Storage(format!("zstd compression failed: {error}"))
+            })?;
+            unit.finish();
+            let compressed_checksum = work
+                .checksum(&compressed)
+                .map_err(HawDBError::from_storage_error)?;
+            let uncompressed_checksum = work
+                .checksum(text.as_bytes())
+                .map_err(HawDBError::from_storage_error)?;
+            let header = format!(
+                "{DURABLE_COMPRESSION_HEADER}\ncodec\tzstd\nuncompressed_checksum\t{uncompressed_checksum}\ncompressed_checksum\t{compressed_checksum}\nuncompressed_len\t{}\ncompressed_len\t{}\n\n",
+                text.len(), compressed.len()
+            );
+            let mut encoded = header.into_bytes();
+            for block in compressed.chunks(64 * 1024) {
+                let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
+                encoded.extend_from_slice(block);
+                unit.finish();
+            }
+            work.checkpoint().map_err(HawDBError::from_storage_error)?;
+            Ok(encoded)
+        }
     }
 }
 
@@ -207,3 +329,6 @@ fn parse_usize(input: &str, name: &str) -> Result<usize> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod owned_tests;

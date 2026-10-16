@@ -30,6 +30,8 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+pub(super) mod checkpoint;
+
 const SEGMENT_MAGIC: &[u8; 8] = b"SKAPSEG1";
 const SEGMENT_VERSION: u16 = 2;
 const SEGMENT_HEADER_BYTES: usize = 96;
@@ -197,6 +199,16 @@ pub struct AppendSegmentReadOutput {
 pub struct AppendSegmentWriter;
 
 impl AppendSegmentWriter {
+    pub(in crate::append_table) fn encode_with_work_context(
+        generation: u64,
+        source_commit_epoch: u64,
+        rows: &[AppendTableRow],
+        config: AppendSegmentConfig,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<checkpoint::CheckpointSegmentWriteOutput, AppendTableError> {
+        checkpoint::encode(generation, source_commit_epoch, rows, config, work)
+    }
+
     pub fn encode(
         generation: u64,
         source_commit_epoch: u64,
@@ -344,10 +356,12 @@ pub struct AppendSegmentReader {
     source_commit_epoch: u64,
     source: AppendSegmentSource,
     payload_start: usize,
-    descriptors: Arc<[AppendSegmentBlockDescriptor]>,
+    descriptors: Arc<Vec<AppendSegmentBlockDescriptor>>,
     config: AppendSegmentConfig,
     decoded_block_cache: Arc<Mutex<AppendDecodedBlockCache>>,
     read_result_cache: Arc<Mutex<AppendReadResultCache>>,
+    // Shared roots are destroyed before their retained allocation inventory.
+    _memory: crate::background::CheckpointAllocationOwner,
 }
 
 #[derive(Debug, Clone)]
@@ -517,6 +531,15 @@ struct AppendSegmentHeader {
 }
 
 impl AppendSegmentReader {
+    pub(crate) fn open_bound_file_with_work_context(
+        path: &Path,
+        expected: AppendSegmentArtifactMetadata,
+        config: AppendSegmentConfig,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<Self, AppendTableError> {
+        checkpoint::read::open(path, expected, config, work)
+    }
+
     pub fn open(encoded: Arc<[u8]>, config: AppendSegmentConfig) -> Result<Self, AppendTableError> {
         validate_config(config)?;
         let header = decode_segment_header(
@@ -548,6 +571,7 @@ impl AppendSegmentReader {
             config,
             decoded_block_cache: Arc::new(Mutex::new(AppendDecodedBlockCache::new(0))),
             read_result_cache: Arc::new(Mutex::new(AppendReadResultCache::new(0))),
+            _memory: Default::default(),
         })
     }
 
@@ -635,6 +659,7 @@ impl AppendSegmentReader {
             read_result_cache: Arc::new(Mutex::new(AppendReadResultCache::new(
                 config.decoded_block_cache_bytes - config.decoded_block_cache_bytes / 2,
             ))),
+            _memory: Default::default(),
         })
     }
 
@@ -1392,24 +1417,40 @@ fn decode_directory(
     payload_len: usize,
     config: AppendSegmentConfig,
 ) -> Result<Vec<AppendSegmentBlockDescriptor>, AppendTableError> {
-    let mut decoder = Decoder::new(encoded);
-    let mut descriptors = Vec::with_capacity(descriptor_count);
+    decode_directory_with_allocations(encoded, descriptor_count, payload_len, config, None)
+}
+
+fn decode_directory_with_allocations(
+    encoded: &[u8],
+    descriptor_count: usize,
+    payload_len: usize,
+    config: AppendSegmentConfig,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<Vec<AppendSegmentBlockDescriptor>, AppendTableError> {
+    if let Some(owned) = allocations {
+        owned.checkpoint().map_err(super::checkpoint::work_error)?;
+    }
+    let mut decoder = Decoder::with_allocations(encoded, allocations);
+    let mut descriptors = decoder.vector(descriptor_count)?;
     let mut row_count = 0usize;
     let mut expected_offset = 0u64;
     for _ in 0..descriptor_count {
         let descriptor = AppendSegmentBlockDescriptor {
             table: decoder.string(config.max_key_bytes, "append block table")?,
-            partition_key: decode_append_key(
+            partition_key: decode_append_key_with_allocations(
                 decoder.bytes(config.max_key_bytes, "append partition key")?,
                 true,
+                allocations,
             )?,
-            min_order_key: decode_append_key(
+            min_order_key: decode_append_key_with_allocations(
                 decoder.bytes(config.max_key_bytes, "append minimum order key")?,
                 false,
+                allocations,
             )?,
-            max_order_key: decode_append_key(
+            max_order_key: decode_append_key_with_allocations(
                 decoder.bytes(config.max_key_bytes, "append maximum order key")?,
                 false,
+                allocations,
             )?,
             row_count: decoder.u32()?,
             payload_offset: decoder.u64()?,
@@ -1423,6 +1464,10 @@ fn decode_directory(
                     .expect("fixed SHA-256"),
             ),
         };
+        let unit = allocations
+            .map(|owned| owned.start_unit())
+            .transpose()
+            .map_err(super::checkpoint::work_error)?;
         if descriptor.table.is_empty()
             || descriptor.row_count == 0
             || descriptor.min_order_key > descriptor.max_order_key
@@ -1456,21 +1501,39 @@ fn decode_directory(
             ));
         }
         descriptors.push(descriptor);
+        if let Some(unit) = unit {
+            unit.finish();
+        }
     }
     decoder.finish("append descriptor directory")?;
-    if expected_offset != payload_len as u64
-        || !descriptors.windows(2).all(|pair| {
-            pair[0].table < pair[1].table
-                || (pair[0].table == pair[1].table
-                    && (pair[0].partition_key < pair[1].partition_key
-                        || (pair[0].partition_key == pair[1].partition_key
-                            && pair[0].max_order_key < pair[1].min_order_key)))
-        })
-    {
+    if expected_offset != payload_len as u64 {
         return Err(AppendTableError::Corruption(
-            "append descriptor directory has gaps, overlap, or unordered partitions".to_string(),
+            "append descriptor directory has gaps, overlap, or unordered partitions".into(),
         ));
     }
+    for pair in descriptors.windows(2) {
+        let unit = allocations
+            .map(|owned| owned.start_unit())
+            .transpose()
+            .map_err(super::checkpoint::work_error)?;
+        let ordered = pair[0].table < pair[1].table
+            || (pair[0].table == pair[1].table
+                && (pair[0].partition_key < pair[1].partition_key
+                    || (pair[0].partition_key == pair[1].partition_key
+                        && pair[0].max_order_key < pair[1].min_order_key)));
+        if !ordered {
+            return Err(AppendTableError::Corruption(
+                "append descriptor directory has gaps, overlap, or unordered partitions".into(),
+            ));
+        }
+        if let Some(unit) = unit {
+            unit.finish();
+        }
+    }
+    if let Some(owned) = allocations {
+        owned.checkpoint().map_err(super::checkpoint::work_error)?;
+    }
+
     Ok(descriptors)
 }
 
@@ -1498,13 +1561,26 @@ fn decode_append_key(
     encoded: &[u8],
     allow_global: bool,
 ) -> Result<RelationalKey, AppendTableError> {
+    decode_append_key_with_allocations(encoded, allow_global, None)
+}
+
+fn decode_append_key_with_allocations(
+    encoded: &[u8],
+    allow_global: bool,
+    allocations: Option<&crate::background::CheckpointDecodeContext>,
+) -> Result<RelationalKey, AppendTableError> {
     match encoded {
         [GLOBAL_PARTITION_TAG] if allow_global => Ok(RelationalKey(Vec::new())),
         [GLOBAL_PARTITION_TAG] => Err(AppendTableError::Corruption(
             "append order key cannot be empty".to_string(),
         )),
         [ORDERED_KEY_TAG, body @ ..] if !body.is_empty() => {
-            decode_relational_primary_key(body).map_err(map_relational)
+            if let Some(owned) = allocations {
+                crate::relational::decode_relational_primary_key_owned(body, owned)
+                    .map_err(map_relational)
+            } else {
+                decode_relational_primary_key(body).map_err(map_relational)
+            }
         }
         _ => Err(AppendTableError::Corruption(
             "append key has an invalid encoding tag".to_string(),

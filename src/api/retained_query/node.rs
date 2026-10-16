@@ -1158,6 +1158,7 @@ mod tests {
         let id = row.id.0 as i64;
         let value_address = &row.properties["text"] as *const Value as usize;
         let label_address = state.catalog.label_name(label).unwrap().as_ptr() as usize;
+        drop(state);
         let prepared = query_runtime::parse_runtime_execution(QUERY).unwrap();
         let optimized = db
             .optimized_query_plan_for_request(

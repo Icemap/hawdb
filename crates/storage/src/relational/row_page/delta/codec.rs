@@ -21,7 +21,6 @@ use crate::file_io::{self as fs, File, OpenOptions};
 use crate::relational::row_page::{RelationalRowPageRootReader, RelationalRowPageTableRoot};
 use crate::relational::{RelationalRecoverySourceIdentity, RELATIONAL_RECOVERY_SOURCE_BYTES};
 use hawdb_integrity::{IntegrityDigest, IntegrityHasher, Sha256Digest, SHA256_BYTES};
-use std::collections::BTreeMap;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
@@ -126,6 +125,28 @@ pub(super) fn run_set_digest(
     Ok(hasher.finish().sha256)
 }
 
+/// Exact final buffer capacity plus the largest sequential run-digest buffer.
+/// Computing these scalar sizes does not allocate metadata or encoded payloads.
+pub(super) fn manifest_encoding_workspace_bytes(
+    tables: &[RelationalRowDeltaTableMetadata],
+    runs: &[RowDeltaRunDescriptor],
+) -> Result<usize, RelationalRowDeltaError> {
+    let overflow =
+        || RelationalRowDeltaError::Admission("row delta encoding workspace overflow".into());
+    let encoded = MANIFEST_HEADER_BYTES
+        .checked_add(manifest_payload_len(tables, runs)?)
+        .ok_or_else(overflow)?;
+    let mut scratch = 0;
+    for run in runs {
+        let bytes = RUN_DESCRIPTOR_BYTES
+            .checked_add(run.lower_bound.encoded_primary_key.len())
+            .and_then(|bytes| bytes.checked_add(run.upper_bound.encoded_primary_key.len()))
+            .ok_or_else(overflow)?;
+        scratch = scratch.max(bytes);
+    }
+    encoded.checked_add(scratch).ok_or_else(overflow)
+}
+
 pub(super) fn ensure_manifest_capacity(
     tables: &[RelationalRowDeltaTableMetadata],
     runs: &[RowDeltaRunDescriptor],
@@ -201,15 +222,6 @@ pub(super) fn encode_manifest(
             "row delta manifest payload length does not fit u64".to_string(),
         )
     })?;
-    let mut payload = Vec::with_capacity(payload_len);
-    for table in &manifest.tables {
-        encode_table_metadata(table, &mut payload)?;
-    }
-    for run in &manifest.runs {
-        payload.extend_from_slice(&encode_run_descriptor(run)?);
-    }
-    debug_assert_eq!(payload.len(), payload_len);
-
     let mut encoded = Vec::with_capacity(total_len);
     encoded.extend_from_slice(MANIFEST_MAGIC);
     encoded.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
@@ -238,14 +250,24 @@ pub(super) fn encode_manifest(
     encoded.extend_from_slice(&manifest.total_entries.to_le_bytes());
     encoded.extend_from_slice(&payload_len_u64.to_le_bytes());
     debug_assert_eq!(encoded.len(), MANIFEST_INTEGRITY_OFFSET);
+    // Reserve the integrity slot and encode the payload directly into its
+    // final backing allocation. The digest excludes this slot, as before.
+    encoded.resize(MANIFEST_HEADER_BYTES, 0);
+    for table in &manifest.tables {
+        encode_table_metadata(table, &mut encoded)?;
+    }
+    for run in &manifest.runs {
+        encode_run_descriptor_into(run, &mut encoded)?;
+    }
+    debug_assert_eq!(encoded.len(), total_len);
     let mut hasher = IntegrityHasher::new();
-    hasher.update(&encoded);
-    hasher.update(&payload);
+    hasher.update(&encoded[..MANIFEST_INTEGRITY_OFFSET]);
+    hasher.update(&encoded[MANIFEST_HEADER_BYTES..]);
     let digest = hasher.finish();
-    encoded.extend_from_slice(&digest.crc32c.get().to_le_bytes());
-    encoded.extend_from_slice(digest.sha256.as_bytes());
-    debug_assert_eq!(encoded.len(), MANIFEST_HEADER_BYTES);
-    encoded.extend_from_slice(&payload);
+    encoded[MANIFEST_INTEGRITY_OFFSET..MANIFEST_INTEGRITY_OFFSET + 4]
+        .copy_from_slice(&digest.crc32c.get().to_le_bytes());
+    encoded[MANIFEST_INTEGRITY_OFFSET + 4..MANIFEST_HEADER_BYTES]
+        .copy_from_slice(digest.sha256.as_bytes());
     Ok(encoded)
 }
 
@@ -264,6 +286,25 @@ pub(super) fn read_manifest(
     path: &Path,
     config: RelationalRowDeltaConfig,
 ) -> Result<RelationalRowDeltaManifest, RelationalRowDeltaError> {
+    read_manifest_with_work_context(
+        path,
+        config,
+        &crate::background::CheckpointWorkContext::default(),
+    )
+    .map(|(manifest, _memory)| manifest)
+}
+
+pub(super) fn read_manifest_with_work_context(
+    path: &Path,
+    config: RelationalRowDeltaConfig,
+    work: &crate::background::CheckpointWorkContext,
+) -> Result<
+    (
+        RelationalRowDeltaManifest,
+        crate::background::CheckpointAllocationOwner,
+    ),
+    RelationalRowDeltaError,
+> {
     let encoded_len = fs::metadata(path)
         .map_err(durability("read row delta manifest metadata"))?
         .len();
@@ -278,17 +319,56 @@ pub(super) fn read_manifest(
             "row delta manifest length exceeds this target".to_string(),
         )
     })?;
-    let mut encoded = Vec::with_capacity(capacity);
-    File::open(path)
-        .map_err(durability("open row delta manifest"))?
-        .read_to_end(&mut encoded)
+    let mut encoded_memory = crate::background::CheckpointAllocationOwner::default();
+    admit_manifest_allocation(&mut encoded_memory, capacity, work)?;
+    let mut memory = crate::background::CheckpointAllocationOwner::default();
+    let mut encoded = vec![0; capacity];
+    let mut file = File::open(path).map_err(durability("open row delta manifest"))?;
+    file.read_exact(&mut encoded)
         .map_err(durability("read row delta manifest"))?;
-    decode_manifest(&encoded, config)
+    let mut extra = [0];
+    if file
+        .read(&mut extra)
+        .map_err(durability("read row delta manifest tail"))?
+        != 0
+    {
+        return Err(RelationalRowDeltaError::Corrupt(
+            "row delta manifest changed length during read".into(),
+        ));
+    }
+    let result = decode_manifest(&encoded, config, work, &mut memory);
+    drop(encoded);
+    drop(encoded_memory);
+    result.map(|manifest| (manifest, memory))
+}
+
+fn admit_manifest_allocation(
+    memory: &mut crate::background::CheckpointAllocationOwner,
+    bytes: usize,
+    work: &crate::background::CheckpointWorkContext,
+) -> Result<(), RelationalRowDeltaError> {
+    memory
+        .reserve(bytes, work)
+        .map(|_| ())
+        .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))
+}
+
+fn admit_manifest_vector<T>(
+    memory: &mut crate::background::CheckpointAllocationOwner,
+    count: usize,
+    work: &crate::background::CheckpointWorkContext,
+) -> Result<(), RelationalRowDeltaError> {
+    let bytes = count.checked_mul(std::mem::size_of::<T>()).ok_or_else(|| {
+        RelationalRowDeltaError::Admission("row delta decoded vector size overflow".into())
+    })?;
+    admit_manifest_allocation(memory, bytes, work)
 }
 
 fn decode_manifest(
     encoded: &[u8],
     config: RelationalRowDeltaConfig,
+    work: &crate::background::CheckpointWorkContext,
+    memory: &mut crate::background::CheckpointAllocationOwner,
 ) -> Result<RelationalRowDeltaManifest, RelationalRowDeltaError> {
     if encoded.len() < MANIFEST_HEADER_BYTES || &encoded[..8] != MANIFEST_MAGIC {
         return Err(RelationalRowDeltaError::Corrupt(
@@ -327,8 +407,15 @@ fn decode_manifest(
     }
     let payload = &encoded[MANIFEST_HEADER_BYTES..];
     let mut hasher = IntegrityHasher::new();
-    hasher.update(&encoded[..MANIFEST_INTEGRITY_OFFSET]);
-    hasher.update(payload);
+    for bytes in [&encoded[..MANIFEST_INTEGRITY_OFFSET], payload] {
+        for block in bytes.chunks(64 * 1024) {
+            let unit = work
+                .start_unit()
+                .map_err(|error| RelationalRowDeltaError::Admission(error.to_string()))?;
+            hasher.update(block);
+            unit.finish();
+        }
+    }
     let digest = hasher.finish();
     if digest.crc32c.get() != read_u32(&encoded[268..272])
         || digest.sha256.as_bytes() != &encoded[272..304]
@@ -338,14 +425,43 @@ fn decode_manifest(
         ));
     }
 
+    let minimum_payload = table_count
+        .checked_mul(TABLE_DESCRIPTOR_BYTES)
+        .and_then(|bytes| {
+            run_count
+                .checked_mul(RUN_DESCRIPTOR_BYTES)
+                .and_then(|runs| bytes.checked_add(runs))
+        })
+        .ok_or_else(|| {
+            RelationalRowDeltaError::Corrupt("row delta record count overflow".into())
+        })?;
+    if minimum_payload > payload.len() {
+        return Err(RelationalRowDeltaError::Corrupt(
+            "row delta record counts exceed payload".into(),
+        ));
+    }
     let mut offset = 0usize;
+    admit_manifest_vector::<RelationalRowDeltaTableMetadata>(memory, table_count, work)?;
     let mut tables = Vec::with_capacity(table_count);
     for _ in 0..table_count {
-        tables.push(decode_table_metadata(payload, &mut offset, config)?);
+        tables.push(decode_table_metadata(
+            payload,
+            &mut offset,
+            config,
+            work,
+            memory,
+        )?);
     }
+    admit_manifest_vector::<RowDeltaRunDescriptor>(memory, run_count, work)?;
     let mut runs = Vec::with_capacity(run_count);
     for _ in 0..run_count {
-        runs.push(decode_run_descriptor(payload, &mut offset, config)?);
+        runs.push(decode_run_descriptor(
+            payload,
+            &mut offset,
+            config,
+            work,
+            memory,
+        )?);
     }
     if offset != payload.len() {
         return Err(RelationalRowDeltaError::Corrupt(
@@ -404,7 +520,13 @@ fn decode_manifest(
         runs,
         total_entries: read_u64(&encoded[252..260]),
     };
+    let mut scratch_memory = crate::background::CheckpointAllocationOwner::default();
+    let workspace = manifest_encoding_workspace_bytes(&manifest.tables, &manifest.runs)?;
+    let encoded_bytes =
+        MANIFEST_HEADER_BYTES + manifest_payload_len(&manifest.tables, &manifest.runs)?;
+    admit_manifest_allocation(&mut scratch_memory, workspace - encoded_bytes, work)?;
     validate_manifest(&manifest, config, ErrorClass::Corrupt)?;
+    drop(scratch_memory);
     Ok(manifest)
 }
 
@@ -456,6 +578,8 @@ fn decode_table_metadata(
     encoded: &[u8],
     offset: &mut usize,
     config: RelationalRowDeltaConfig,
+    work: &crate::background::CheckpointWorkContext,
+    memory: &mut crate::background::CheckpointAllocationOwner,
 ) -> Result<RelationalRowDeltaTableMetadata, RelationalRowDeltaError> {
     let fixed = take(
         encoded,
@@ -468,14 +592,13 @@ fn decode_table_metadata(
         RelationalRowDeltaError::Corrupt("row delta table has zero columns".to_string())
     })?;
     let name = take(encoded, offset, name_len, "row delta table name")?;
+    // Validate the borrowed bytes before admission and their owned copy.
+    let name = std::str::from_utf8(name).map_err(|error| {
+        RelationalRowDeltaError::Corrupt(format!("row delta table name is not UTF-8: {error}"))
+    })?;
+    admit_manifest_allocation(memory, name.len(), work)?;
     let table = RelationalRowDeltaTableMetadata {
-        table: std::str::from_utf8(name)
-            .map_err(|error| {
-                RelationalRowDeltaError::Corrupt(format!(
-                    "row delta table name is not UTF-8: {error}"
-                ))
-            })?
-            .to_string(),
+        table: name.to_string(),
         schema_digest: Sha256Digest::from_bytes(
             fixed[16..48]
                 .try_into()
@@ -508,6 +631,25 @@ fn encode_run_descriptor(run: &RowDeltaRunDescriptor) -> Result<Vec<u8>, Relatio
             )
         })?;
     let mut encoded = Vec::with_capacity(capacity);
+    encode_run_descriptor_into(run, &mut encoded)?;
+    Ok(encoded)
+}
+
+fn encode_run_descriptor_into(
+    run: &RowDeltaRunDescriptor,
+    encoded: &mut Vec<u8>,
+) -> Result<(), RelationalRowDeltaError> {
+    let lower_len = u32::try_from(run.lower_bound.encoded_primary_key.len()).map_err(|_| {
+        RelationalRowDeltaError::Admission(
+            "row delta lower key length does not fit u32".to_string(),
+        )
+    })?;
+    let upper_len = u32::try_from(run.upper_bound.encoded_primary_key.len()).map_err(|_| {
+        RelationalRowDeltaError::Admission(
+            "row delta upper key length does not fit u32".to_string(),
+        )
+    })?;
+    let start = encoded.len();
     encoded.extend_from_slice(&run.ordinal.to_le_bytes());
     encoded.extend_from_slice(&run.start_epoch.to_le_bytes());
     encoded.extend_from_slice(&run.end_epoch.to_le_bytes());
@@ -521,16 +663,18 @@ fn encode_run_descriptor(run: &RowDeltaRunDescriptor) -> Result<Vec<u8>, Relatio
     encoded.extend_from_slice(&lower_len.to_le_bytes());
     encoded.extend_from_slice(&run.upper_bound.table_ordinal.to_le_bytes());
     encoded.extend_from_slice(&upper_len.to_le_bytes());
-    debug_assert_eq!(encoded.len(), RUN_DESCRIPTOR_BYTES);
+    debug_assert_eq!(encoded.len() - start, RUN_DESCRIPTOR_BYTES);
     encoded.extend_from_slice(&run.lower_bound.encoded_primary_key);
     encoded.extend_from_slice(&run.upper_bound.encoded_primary_key);
-    Ok(encoded)
+    Ok(())
 }
 
 fn decode_run_descriptor(
     encoded: &[u8],
     offset: &mut usize,
     config: RelationalRowDeltaConfig,
+    work: &crate::background::CheckpointWorkContext,
+    memory: &mut crate::background::CheckpointAllocationOwner,
 ) -> Result<RowDeltaRunDescriptor, RelationalRowDeltaError> {
     let fixed = take(
         encoded,
@@ -547,8 +691,12 @@ fn decode_run_descriptor(
             "row delta run bound exceeds key limit".to_string(),
         ));
     }
-    let lower_key = take(encoded, offset, lower_len, "row delta lower bound")?.to_vec();
-    let upper_key = take(encoded, offset, upper_len, "row delta upper bound")?.to_vec();
+    let lower = take(encoded, offset, lower_len, "row delta lower bound")?;
+    let upper = take(encoded, offset, upper_len, "row delta upper bound")?;
+    admit_manifest_allocation(memory, lower.len(), work)?;
+    admit_manifest_allocation(memory, upper.len(), work)?;
+    let lower_key = lower.to_vec();
+    let upper_key = upper.to_vec();
     Ok(RowDeltaRunDescriptor {
         ordinal: read_u32(&fixed[..4]),
         start_epoch: read_u64(&fixed[4..12]),
@@ -710,11 +858,13 @@ pub(super) struct RunWrite<'a> {
     pub delta_generation: u64,
     pub schema_set_digest: Sha256Digest,
     pub ordinal: u32,
-    pub entries: &'a BTreeMap<RowDeltaKey, RowDeltaValue>,
+    pub entries: &'a super::DirtyEntries,
+    pub lower_bound: RowDeltaBound,
+    pub upper_bound: RowDeltaBound,
 }
 
 pub(super) fn estimated_run_encoded_len(
-    entries: &BTreeMap<RowDeltaKey, RowDeltaValue>,
+    entries: &super::DirtyEntries,
 ) -> Result<u64, RelationalRowDeltaError> {
     let descriptor_bytes = u64::try_from(entries.len())
         .ok()
@@ -811,16 +961,8 @@ pub(super) fn write_run(
         .map(|value| value.last_modified_epoch)
         .max()
         .expect("non-empty row delta run has an end epoch");
-    let (lower_key, _) = run.entries.first_key_value().expect("non-empty run");
-    let (upper_key, _) = run.entries.last_key_value().expect("non-empty run");
-    let lower_bound = RowDeltaBound {
-        table_ordinal: lower_key.table_ordinal,
-        encoded_primary_key: lower_key.encoded_primary_key.clone(),
-    };
-    let upper_bound = RowDeltaBound {
-        table_ordinal: upper_key.table_ordinal,
-        encoded_primary_key: upper_key.encoded_primary_key.clone(),
-    };
+    let lower_bound = run.lower_bound;
+    let upper_bound = run.upper_bound;
     let header_fields = RunHeaderFields {
         base: run.base,
         delta_generation: run.delta_generation,
@@ -865,7 +1007,7 @@ pub(super) fn write_run(
         content_hasher.update(&descriptor);
     }
     debug_assert_eq!(payload_offset, payload_bytes);
-    for (key, value) in run.entries {
+    for (key, value) in run.entries.iter() {
         file.write_all(&key.encoded_primary_key)
             .map_err(durability("write row delta primary key"))?;
         file.write_all(&value.encoded_row)
@@ -874,9 +1016,11 @@ pub(super) fn write_run(
         content_hasher.update(&value.encoded_row);
     }
     let content_digest = content_hasher.finish();
-    let mut header = prefix;
-    header.extend_from_slice(&content_digest.crc32c.get().to_le_bytes());
-    header.extend_from_slice(content_digest.sha256.as_bytes());
+    let mut header = [0; RUN_HEADER_BYTES];
+    header[..RUN_INTEGRITY_OFFSET].copy_from_slice(&prefix);
+    header[RUN_INTEGRITY_OFFSET..RUN_INTEGRITY_OFFSET + 4]
+        .copy_from_slice(&content_digest.crc32c.get().to_le_bytes());
+    header[RUN_INTEGRITY_OFFSET + 4..].copy_from_slice(content_digest.sha256.as_bytes());
     debug_assert_eq!(header.len(), RUN_HEADER_BYTES);
     file.seek(SeekFrom::Start(0))
         .map_err(durability("seek row delta run header"))?;
@@ -913,23 +1057,29 @@ struct RunHeaderFields {
     payload_bytes: u64,
 }
 
-fn encode_run_prefix(fields: &RunHeaderFields) -> Vec<u8> {
-    let mut prefix = Vec::with_capacity(RUN_INTEGRITY_OFFSET);
-    prefix.extend_from_slice(RUN_MAGIC);
-    prefix.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
-    prefix.extend_from_slice(&0u16.to_le_bytes());
-    prefix.extend_from_slice(&fields.base.generation.to_le_bytes());
-    prefix.extend_from_slice(&fields.delta_generation.to_le_bytes());
-    prefix.extend_from_slice(&fields.base.source_commit_epoch.to_le_bytes());
-    prefix.extend_from_slice(&fields.ordinal.to_le_bytes());
-    prefix.extend_from_slice(&fields.start_epoch.to_le_bytes());
-    prefix.extend_from_slice(&fields.end_epoch.to_le_bytes());
-    prefix.extend_from_slice(&fields.entry_count.to_le_bytes());
-    prefix.extend_from_slice(&fields.descriptor_bytes.to_le_bytes());
-    prefix.extend_from_slice(&fields.payload_bytes.to_le_bytes());
-    prefix.extend_from_slice(fields.base.root_set_digest.as_bytes());
-    prefix.extend_from_slice(fields.schema_set_digest.as_bytes());
-    debug_assert_eq!(prefix.len(), RUN_INTEGRITY_OFFSET);
+fn encode_run_prefix(fields: &RunHeaderFields) -> [u8; RUN_INTEGRITY_OFFSET] {
+    let mut prefix = [0; RUN_INTEGRITY_OFFSET];
+    let mut offset = 0;
+    let mut append = |bytes: &[u8]| {
+        let end = offset + bytes.len();
+        prefix[offset..end].copy_from_slice(bytes);
+        offset = end;
+    };
+    append(RUN_MAGIC);
+    append(&FORMAT_VERSION.to_le_bytes());
+    append(&0u16.to_le_bytes());
+    append(&fields.base.generation.to_le_bytes());
+    append(&fields.delta_generation.to_le_bytes());
+    append(&fields.base.source_commit_epoch.to_le_bytes());
+    append(&fields.ordinal.to_le_bytes());
+    append(&fields.start_epoch.to_le_bytes());
+    append(&fields.end_epoch.to_le_bytes());
+    append(&fields.entry_count.to_le_bytes());
+    append(&fields.descriptor_bytes.to_le_bytes());
+    append(&fields.payload_bytes.to_le_bytes());
+    append(fields.base.root_set_digest.as_bytes());
+    append(fields.schema_set_digest.as_bytes());
+    debug_assert_eq!(offset, RUN_INTEGRITY_OFFSET);
     prefix
 }
 

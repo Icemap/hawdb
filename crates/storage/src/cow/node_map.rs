@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::retained_capacity::{properties_capacity, tree_capacity};
-use super::{CowPageWeight, CowSegmentedMap};
+use super::{CowMapValueMut, CowPageWeight, CowSegment, CowSegmentedMap};
 use crate::{NodeId, NodeRecord};
 use hawdb_core::LabelId;
 use std::collections::BTreeMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 /// Borrow node records independently of their resident ownership layout.
@@ -25,8 +26,11 @@ pub trait NodeRecordRead {
 /// Mutation contracts used by snapshot WAL replay.
 #[doc(hidden)]
 pub trait NodeRecordWrite: NodeRecordRead {
+    type Mutable<'a>: DerefMut<Target = NodeRecord>
+    where
+        Self: 'a;
     fn insert(&mut self, id: NodeId, node: NodeRecord) -> Option<NodeRecord>;
-    fn get_mut(&mut self, id: &NodeId) -> Option<&mut NodeRecord>;
+    fn get_mut(&mut self, id: &NodeId) -> Option<Self::Mutable<'_>>;
     fn remove(&mut self, id: &NodeId) -> Option<NodeRecord>;
 }
 
@@ -42,10 +46,11 @@ impl NodeRecordRead for CowSegmentedMap<NodeId, NodeRecord> {
     }
 }
 impl NodeRecordWrite for CowSegmentedMap<NodeId, NodeRecord> {
+    type Mutable<'a> = CowMapValueMut<'a, NodeRecord>;
     fn insert(&mut self, id: NodeId, node: NodeRecord) -> Option<NodeRecord> {
         self.insert(id, node)
     }
-    fn get_mut(&mut self, id: &NodeId) -> Option<&mut NodeRecord> {
+    fn get_mut(&mut self, id: &NodeId) -> Option<Self::Mutable<'_>> {
         self.get_mut(id)
     }
     fn remove(&mut self, id: &NodeId) -> Option<NodeRecord> {
@@ -54,15 +59,18 @@ impl NodeRecordWrite for CowSegmentedMap<NodeId, NodeRecord> {
 }
 
 #[derive(Debug, Clone)]
-struct NodeOwner(Arc<NodeRecord>);
+struct NodeOwner(CowSegment<NodeRecord>);
 impl CowPageWeight for NodeOwner {
     fn cow_page_bytes(&self) -> usize {
-        self.0.cow_page_bytes()
+        (*self.0).cow_page_bytes()
+    }
+    fn delta_pressure_bytes(&self) -> u64 {
+        self.0.delta_pressure_bytes()
     }
 }
 impl NodeOwner {
     fn into_record(self) -> NodeRecord {
-        Arc::unwrap_or_clone(self.0)
+        Arc::unwrap_or_clone(self.0 .0).value
     }
 }
 
@@ -72,7 +80,7 @@ impl NodeOwner {
 pub struct CowNodeMap(CowSegmentedMap<NodeId, NodeOwner>);
 
 fn node_capacity(node: &NodeRecord) -> Option<usize> {
-    std::mem::size_of::<NodeRecord>()
+    std::mem::size_of::<super::CowData<NodeRecord>>()
         .checked_add(2 * std::mem::size_of::<usize>())?
         .checked_add(tree_capacity::<LabelId, ()>(node.labels.len())?)?
         .checked_add(properties_capacity(&node.properties, 0)?)
@@ -83,7 +91,7 @@ impl From<BTreeMap<NodeId, NodeRecord>> for CowNodeMap {
         Self(CowSegmentedMap::from_ordered_entries(
             nodes
                 .into_iter()
-                .map(|(id, node)| (id, NodeOwner(Arc::new(node)))),
+                .map(|(id, node)| (id, NodeOwner(CowSegment::from(node)))),
         ))
     }
 }
@@ -95,13 +103,20 @@ impl CowNodeMap {
         self.0.is_empty()
     }
     pub fn get(&self, id: &NodeId) -> Option<&NodeRecord> {
-        self.0.get(id).map(|owner| owner.0.as_ref())
+        self.0.get(id).map(|owner| &*owner.0)
+    }
+    pub(crate) fn range<'a>(
+        &'a self,
+        first: &'a NodeId,
+        last: &'a NodeId,
+    ) -> impl Iterator<Item = (&'a NodeId, &'a NodeRecord)> {
+        self.0.range(first, last).map(|(id, row)| (id, &*row.0))
     }
     pub fn contains_key(&self, id: &NodeId) -> bool {
         self.0.contains_key(id)
     }
     pub fn iter(&self) -> impl Iterator<Item = (&NodeId, &NodeRecord)> {
-        self.0.iter().map(|(id, owner)| (id, owner.0.as_ref()))
+        self.0.iter().map(|(id, owner)| (id, &*owner.0))
     }
     pub fn values(&self) -> impl Iterator<Item = &NodeRecord> {
         self.iter().map(|(_, node)| node)
@@ -113,18 +128,15 @@ impl CowNodeMap {
         &self,
         after: Option<NodeId>,
     ) -> impl Iterator<Item = (&NodeId, &NodeRecord)> {
-        self.0
-            .iter_after(after)
-            .map(|(id, owner)| (id, owner.0.as_ref()))
+        self.0.iter_after(after).map(|(id, owner)| (id, &*owner.0))
     }
     pub fn insert(&mut self, id: NodeId, node: NodeRecord) -> Option<NodeRecord> {
         self.0
-            .insert(id, NodeOwner(Arc::new(node)))
+            .insert(id, NodeOwner(CowSegment::from(node)))
             .map(NodeOwner::into_record)
     }
-    pub fn get_mut(&mut self, id: &NodeId) -> Option<&mut NodeRecord> {
-        // The underlying map invalidates its generation capacity before mutation.
-        self.0.get_mut(id).map(|owner| Arc::make_mut(&mut owner.0))
+    pub fn get_mut(&mut self, id: &NodeId) -> Option<NodeRecordMut<'_>> {
+        self.0.get_mut(id).map(NodeRecordMut)
     }
     pub fn remove(&mut self, id: &NodeId) -> Option<NodeRecord> {
         self.0.remove(id).map(NodeOwner::into_record)
@@ -147,7 +159,7 @@ impl CowNodeMap {
     pub(crate) fn retained_point_row_preflight(
         &self,
         id: NodeId,
-    ) -> Option<(&Arc<NodeRecord>, Option<usize>)> {
+    ) -> Option<(&CowSegment<NodeRecord>, Option<usize>)> {
         let owner = self.0.get(&id)?;
         Some((&owner.0, node_capacity(&owner.0)))
     }
@@ -160,7 +172,9 @@ impl CowNodeMap {
                 .try_fold(self.directory_capacity_bytes(), |bytes, page| {
                     let bytes = bytes
                         .checked_add(2 * std::mem::size_of::<usize>())?
-                        .checked_add(std::mem::size_of::<BTreeMap<NodeId, NodeOwner>>())?
+                        .checked_add(std::mem::size_of::<
+                            super::CowData<BTreeMap<NodeId, NodeOwner>>,
+                        >())?
                         .checked_add(tree_capacity::<NodeId, NodeOwner>(page.len())?)?;
                     page.values().try_fold(bytes, |bytes, owner| {
                         inspected += 1;
@@ -183,14 +197,93 @@ impl NodeRecordRead for CowNodeMap {
     }
 }
 impl NodeRecordWrite for CowNodeMap {
+    type Mutable<'a> = NodeRecordMut<'a>;
     fn insert(&mut self, id: NodeId, node: NodeRecord) -> Option<NodeRecord> {
         self.insert(id, node)
     }
-    fn get_mut(&mut self, id: &NodeId) -> Option<&mut NodeRecord> {
+    fn get_mut(&mut self, id: &NodeId) -> Option<Self::Mutable<'_>> {
         self.get_mut(id)
     }
     fn remove(&mut self, id: &NodeId) -> Option<NodeRecord> {
         self.remove(id)
+    }
+}
+
+/// Mutable node access updates checkpoint pressure when its borrow ends.
+#[doc(hidden)]
+pub struct NodeRecordMut<'a>(CowMapValueMut<'a, NodeOwner>);
+impl Deref for NodeRecordMut<'_> {
+    type Target = NodeRecord;
+    fn deref(&self) -> &NodeRecord {
+        &self.0 .0
+    }
+}
+impl DerefMut for NodeRecordMut<'_> {
+    fn deref_mut(&mut self) -> &mut NodeRecord {
+        &mut self.0 .0
+    }
+}
+impl super::checkpoint::CheckpointCopyBytes for NodeOwner {
+    fn checkpoint_copy_bytes(&self) -> usize {
+        0
+    } // Page copies only clone the row owner.
+}
+impl CowNodeMap {
+    pub fn delta_pressure_bytes(&self) -> u64 {
+        self.0.delta_pressure_bytes()
+    }
+    pub(crate) fn first_after(&self, id: Option<&NodeId>) -> Option<(&NodeId, &NodeRecord)> {
+        self.0.first_after(id).map(|(id, owner)| (id, &*owner.0))
+    }
+    pub(crate) fn prepare_checkpoint_insertions_for_key(
+        &mut self,
+        id: &NodeId,
+        count: usize,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), crate::background::CheckpointWorkError> {
+        self.0
+            .prepare_checkpoint_insertions_for_key(id, count, work)
+    }
+    pub(crate) fn prepare_checkpoint_insert_copy_for_key(
+        &mut self,
+        id: &NodeId,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), crate::background::CheckpointWorkError> {
+        self.prepare_checkpoint_insertions_for_key(id, 1, work)
+    }
+    pub(crate) fn prepare_checkpoint_copy_for_key(
+        &mut self,
+        id: &NodeId,
+        work: &crate::background::CheckpointWorkContext,
+    ) -> Result<(), crate::background::CheckpointWorkError> {
+        let Some(index) = self.0.segment_index(id) else {
+            return work.checkpoint();
+        };
+        let Some(row) = self.0.get(id) else {
+            return work.checkpoint();
+        };
+        let copy_row =
+            self.0.segments.is_shared() || self.0.segments[index].is_shared() || row.0.is_shared();
+        // Admit row payload before detaching any shared directory or page.
+        // A refused indivisible row must preserve the original physical roots.
+        let mut memory = crate::background::CheckpointAllocationOwner::default();
+        if copy_row {
+            let bytes = hawdb_core::ids::node_allocation_bytes(&row.0)
+                .saturating_add(CowSegment::<NodeRecord>::checkpoint_ownership_bytes());
+            let unit = work.start_unit()?;
+            memory.reserve(bytes, work)?;
+            unit.finish();
+        }
+        self.0.prepare_checkpoint_copy_for_key(id, work)?;
+        if copy_row {
+            let mut row = self.0.get_mut(id).expect("prepared node exists");
+            let unit = work.start_unit()?;
+            let copied = CowSegment::from_checkpoint_value((*row.0).clone(), memory);
+            unit.finish();
+            work.checkpoint()?;
+            row.0 = copied;
+        }
+        Ok(())
     }
 }
 
@@ -222,25 +315,29 @@ mod tests {
         let bound = bound.unwrap();
         assert!(bound >= 1024);
         assert!(bound < map.retained_capacity_preflight().0.unwrap());
-        let address = std::ptr::from_ref(row.as_ref());
+        let address = std::ptr::from_ref(&**row);
         let Value::String(text) = &row.properties["text"] else {
             unreachable!()
         };
         let text_address = text.as_ptr();
-        let held = Arc::clone(row);
-        let unrelated = Arc::downgrade(map.retained_point_row_preflight(NodeId(2)).unwrap().0);
+        let held = row.clone();
+        let unrelated = map
+            .retained_point_row_preflight(NodeId(2))
+            .unwrap()
+            .0
+            .downgrade();
         map.get_mut(&id).unwrap().properties.clear();
         assert_ne!(std::ptr::from_ref(map.get(&id).unwrap()), address);
         drop(map);
         assert!(unrelated.upgrade().is_none());
-        assert_eq!(std::ptr::from_ref(held.as_ref()), address);
+        assert_eq!(std::ptr::from_ref(&*held), address);
         let Value::String(text) = &held.properties["text"] else {
             unreachable!()
         };
         assert_eq!(text, "original");
         assert_eq!(text.as_ptr(), text_address);
         assert_eq!(node_capacity(&held), Some(bound));
-        let weak = Arc::downgrade(&held);
+        let weak = held.downgrade();
         drop(held);
         assert!(weak.upgrade().is_none());
     }
@@ -299,7 +396,7 @@ mod tests {
         let map = CowNodeMap::from(BTreeMap::from([(record.id, record)]));
         let (row, bound) = map.retained_point_row_preflight(NodeId(1)).unwrap();
         assert!(bound.is_none());
-        assert_eq!(Arc::strong_count(row), 1);
+        assert_eq!(row.owner_count(), 1);
         assert!(map.retained_capacity_preflight().0.is_none());
     }
 }

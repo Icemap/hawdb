@@ -1273,6 +1273,7 @@ pub enum BranchReclamationError {
     Head(BranchHeadError),
     Lease(io::Error),
     Objects(ImmutableObjectError),
+    Evidence(crate::error::HawDBError),
     PendingCreate {
         branch_id: BranchId,
         catalog_revision: u64,
@@ -1297,6 +1298,7 @@ impl Display for BranchReclamationError {
                 write!(formatter, "inspect branch lease for reclamation: {error}")
             }
             Self::Objects(error) => write!(formatter, "reclaim branch objects: {error}"),
+            Self::Evidence(error) => write!(formatter, "verify branch quarantine: {error}"),
             Self::PendingCreate {
                 branch_id, source, ..
             } => write!(
@@ -1314,6 +1316,7 @@ impl std::error::Error for BranchReclamationError {
             Self::Catalog(error) | Self::Lease(error) => Some(error),
             Self::Head(error) => Some(error),
             Self::Objects(error) => Some(error),
+            Self::Evidence(error) => Some(error),
             Self::PendingCreate { source, .. } => Some(source.as_ref()),
             Self::MissingPath(_) => None,
         }
@@ -1323,6 +1326,7 @@ impl std::error::Error for BranchReclamationError {
 impl From<BranchReclamationError> for crate::error::HawDBError {
     fn from(error: BranchReclamationError) -> Self {
         match error {
+            BranchReclamationError::Evidence(error) => error,
             BranchReclamationError::PendingCreate {
                 branch_id,
                 catalog_revision,
@@ -1394,22 +1398,33 @@ pub fn reclaim_catalog_branches(
     objects: &[ObjectReference],
     paths: &[BranchReclamationPath],
 ) -> Result<ReclamationReport, BranchReclamationError> {
-    let project_directory = catalog_path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .ok_or_else(|| BranchReclamationError::Catalog(invalid_data("catalog has no parent")))?;
+    reclaim_catalog_branches_with_evidence_limits(
+        catalog_path,
+        object_store,
+        objects,
+        paths,
+        Default::default(),
+    )
+}
+
+/// As `reclaim_catalog_branches`, with a caller-selected quarantine budget
+/// independent of the already inventoried current object namespace.
+pub fn reclaim_catalog_branches_with_evidence_limits(
+    catalog_path: &Path,
+    object_store: &mut ImmutableObjectStore,
+    objects: &[ObjectReference],
+    paths: &[BranchReclamationPath],
+    evidence_limits: crate::branch_abandonment::BranchAbandonmentLimits,
+) -> Result<ReclamationReport, BranchReclamationError> {
     // Admission validates metadata before exposing a runtime. Holding this
     // lease through sweep prevents a new owner from publishing candidates
     // after the lease inventory was inspected.
-    let _metadata_lease = CatalogMetadataLease::acquire_blocking(project_directory)
-        .map_err(BranchReclamationError::Catalog)?;
-    let catalog = read_catalog(catalog_path).map_err(BranchReclamationError::Catalog)?;
-    let proofs = crate::branch_abandonment::reclamation_evidence(
-        project_directory,
-        &catalog,
-        Default::default(),
-    )
-    .map_err(|error| BranchReclamationError::Catalog(io::Error::other(error)))?;
+    let crate::branch_abandonment::ReclamationSnapshot {
+        catalog,
+        proofs,
+        metadata: _metadata_lease,
+    } = crate::branch_abandonment::prepare_reclamation(catalog_path, evidence_limits)
+        .map_err(BranchReclamationError::Evidence)?;
     let branches = reclamation_entries(&catalog, paths, None)?;
     let inventory = BranchReclamationInventory {
         objects: objects.to_vec(),
@@ -1442,6 +1457,62 @@ pub(crate) fn reclamation_entries(
         );
     }
     Ok(branches)
+}
+
+pub(crate) struct RegisteredReclamationRoots {
+    pub branches: Vec<BranchReclamationEntry>,
+    pub roots: Vec<ObjectReference>,
+}
+
+/// An active owner may be swept around only after its complete live registry
+/// and selected head are validated under the publication barrier.
+pub(crate) fn reclamation_entries_with_pins(
+    catalog: &Catalog,
+    paths: &[BranchReclamationPath],
+    owner: (&DatabaseDirectoryLease, &BranchHead),
+    max_roots: usize,
+    metadata: &CatalogMetadataLease,
+) -> Result<RegisteredReclamationRoots, BranchReclamationError> {
+    let mut branches = reclamation_entries(catalog, paths, None)?;
+    let indexed_paths: BTreeMap<_, _> = paths.iter().map(|path| (path.id, path)).collect();
+    let mut roots = Vec::new();
+    for (record, entry) in catalog.branches.iter().zip(&mut branches) {
+        if !entry.active_lease || record.state != BranchState::Ready {
+            continue;
+        }
+        let Some(pinned) = crate::branch_root_pins::active_roots(
+            &entry.directory,
+            *catalog.project_id.as_uuid().as_bytes(),
+            *record.id.as_uuid().as_bytes(),
+            max_roots - roots.len(),
+            metadata,
+        )
+        .map_err(BranchReclamationError::Lease)?
+        else {
+            continue;
+        };
+        let path = indexed_paths[&record.id];
+        let head = read_branch_head(&path.head_path).map_err(BranchReclamationError::Head)?;
+        if head.project_id != *catalog.project_id.as_uuid().as_bytes()
+            || head.branch_id != *record.id.as_uuid().as_bytes()
+            || (head.branch_id == owner.1.branch_id
+                && (head != *owner.1
+                    || !owner
+                        .0
+                        .owns_directory(&path.directory)
+                        .map_err(BranchReclamationError::Lease)?))
+        {
+            return Err(BranchReclamationError::Catalog(invalid_data(
+                "registered reclamation head does not match its catalog or owner",
+            )));
+        }
+        roots.extend(pinned);
+        entry.sealed_root = Some(head.sealed_root);
+        // Only Ready records reach this path, so clearing the unaccounted
+        // lease barrier cannot authorize private-directory retirement.
+        entry.active_lease = false;
+    }
+    Ok(RegisteredReclamationRoots { branches, roots })
 }
 
 fn reclamation_entry(

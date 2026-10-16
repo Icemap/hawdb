@@ -12,15 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::checkpoint::CheckpointAppendRows;
+use crate::background::CheckpointWorkContext;
+
+mod checkpoint;
+mod manifest_encoding;
+
 use super::binary::{
     compare_rows, read_u16_at as read_u16, read_u32_at as read_u32, read_u64_at as read_u64,
     to_usize, Decoder, Encoder,
 };
 use super::{
-    decode_append_wal_batch, encode_append_wal_batch, AppendDecodeLimits,
-    AppendSegmentArtifactMetadata, AppendSegmentConfig, AppendSegmentReadOutput,
-    AppendSegmentReadReport, AppendSegmentReader, AppendSegmentWriter, AppendTableError,
-    AppendTableRow, AppendTableSchema, AppendTransaction, AppendWrite,
+    decode_append_wal_batch, AppendDecodeLimits, AppendSegmentArtifactMetadata,
+    AppendSegmentConfig, AppendSegmentReadOutput, AppendSegmentReadReport, AppendSegmentReader,
+    AppendSegmentWriter, AppendTableError, AppendTableRow, AppendTableSchema, AppendWrite,
 };
 use crate::file_io::{self as fs, File};
 use crate::{durability::durable_replace_file, relational::RelationalKey};
@@ -168,9 +173,10 @@ pub struct AppendPublicationReport {
 
 pub struct AppendPublisher;
 
+#[derive(Debug)]
 struct AppendCompactionPlan {
     due: bool,
-    checkpoint_rows: Option<Vec<AppendTableRow>>,
+    checkpoint_rows: Option<CheckpointAppendRows>,
 }
 
 fn plan_compaction(
@@ -217,7 +223,7 @@ fn plan_compaction(
     }
     Ok(AppendCompactionPlan {
         due,
-        checkpoint_rows,
+        checkpoint_rows: checkpoint_rows.map(CheckpointAppendRows::unadmitted),
     })
 }
 
@@ -254,108 +260,331 @@ impl AppendPublisher {
         rows: &[AppendTableRow],
         config: AppendPublicationConfig,
     ) -> Result<AppendPublicationReport, AppendTableError> {
-        validate_publication_request(
-            generation,
-            source_commit_epoch,
-            previous,
-            state.schemas,
-            state.generated_order_watermarks,
-            rows,
-            config,
-        )?;
-        fs::create_dir_all(directory).map_err(durability("create append directory"))?;
+        publish_checkpoint_request(
+            AppendCheckpointPublicationRequest {
+                directory,
+                generation,
+                source_commit_epoch,
+                previous,
+                state,
+                rows,
+                config,
+            },
+            None,
+        )
+    }
 
-        let prior_segment_count = previous.map_or(0, |reader| reader.manifest.segments.len());
-        let compaction = plan_compaction(previous, rows, config)?;
-        let compact = compaction.checkpoint_rows.is_some();
-        let rows_to_write = compaction.checkpoint_rows.as_deref().unwrap_or(rows);
-        let mut segments = if compact {
-            Vec::new()
-        } else {
-            previous
-                .map(|reader| reader.manifest.segments.clone())
-                .unwrap_or_default()
-        };
-        let mut segment_bytes_written = 0;
-        if !rows_to_write.is_empty() {
-            let output = AppendSegmentWriter::encode(
+    pub(crate) fn publish_checkpoint_with_work_context(
+        request: AppendCheckpointPublicationRequest<'_>,
+        work: &CheckpointWorkContext,
+    ) -> Result<AppendPublicationReport, AppendTableError> {
+        publish_checkpoint_request(request, Some(work))
+    }
+}
+
+/// Internal private-generation publication, carrying the existing identity and
+/// state arguments alongside the owner's cooperative task.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct AppendCheckpointPublicationRequest<'a> {
+    pub(crate) directory: &'a Path,
+    pub(crate) generation: u64,
+    pub(crate) source_commit_epoch: u64,
+    pub(crate) previous: Option<&'a AppendGenerationReader>,
+    pub(crate) state: AppendPublicationState<'a>,
+    pub(crate) rows: &'a [AppendTableRow],
+    pub(crate) config: AppendPublicationConfig,
+}
+
+fn publish_checkpoint_request(
+    request: AppendCheckpointPublicationRequest<'_>,
+    work: Option<&CheckpointWorkContext>,
+) -> Result<AppendPublicationReport, AppendTableError> {
+    if let Some(work) = work {
+        work.checkpoint().map_err(super::checkpoint::work_error)?;
+    }
+    checkpoint::validate_request(&request, work)?;
+    let AppendCheckpointPublicationRequest {
+        directory,
+        generation,
+        source_commit_epoch,
+        previous,
+        state,
+        rows,
+        config,
+    } = request;
+
+    if let Some(work) = work {
+        let unit = work.start_unit().map_err(super::checkpoint::work_error)?;
+        let wave = work.io_wave().map_err(super::checkpoint::work_error)?;
+        fs::create_dir_all(directory).map_err(durability("create append directory"))?;
+        drop(wave);
+        unit.finish();
+    } else {
+        fs::create_dir_all(directory).map_err(durability("create append directory"))?;
+    }
+
+    let prior_segment_count = previous.map_or(0, |reader| reader.manifest.segments.len());
+    let compaction = if let Some(work) = work {
+        checkpoint::plan_compaction(previous, rows, config, work)?
+    } else {
+        plan_compaction(previous, rows, config)?
+    };
+    let compact = compaction.checkpoint_rows.is_some();
+    let rows_to_write = compaction.checkpoint_rows.as_deref().unwrap_or(rows);
+    let segments = if compact {
+        &[][..]
+    } else {
+        previous.map_or(&[][..], |reader| reader.manifest.segments.as_slice())
+    };
+    let mut tail = None;
+    let mut segment_bytes_written = 0;
+    if !rows_to_write.is_empty() {
+        enum Output {
+            Ordinary(super::AppendSegmentWriteOutput),
+            Admitted(super::segment::checkpoint::CheckpointSegmentWriteOutput),
+        }
+        let output = if let Some(work) = work {
+            Output::Admitted(AppendSegmentWriter::encode_with_work_context(
                 generation,
                 source_commit_epoch,
                 rows_to_write,
                 config.segment,
-            )?;
-            write_durable_artifact(directory, &append_segment_file(generation), &output.encoded)?;
-            segment_bytes_written = output.artifact.encoded_len;
-            segments.push(AppendSegmentBinding {
+                work,
+            )?)
+        } else {
+            Output::Ordinary(AppendSegmentWriter::encode(
                 generation,
                 source_commit_epoch,
-                artifact: output.artifact,
-            });
-        }
-        if segments.len() > config.max_segments {
-            return Err(AppendTableError::Admission(format!(
-                "append generation contains {} segments, exceeding limit {}",
-                segments.len(),
-                config.max_segments
-            )));
-        }
-
-        let mut manifest = AppendGenerationManifest {
+                rows_to_write,
+                config.segment,
+            )?)
+        };
+        let (encoded, artifact): (&[u8], _) = match &output {
+            Output::Ordinary(output) => (&output.encoded, output.artifact),
+            Output::Admitted(output) => (&output.encoded, output.artifact),
+        };
+        checkpoint::write_artifact(directory, &append_segment_file(generation), encoded, work)?;
+        segment_bytes_written = artifact.encoded_len;
+        tail = Some(AppendSegmentBinding {
             generation,
             source_commit_epoch,
-            previous_generation: previous.map(|reader| reader.manifest.generation),
-            root_set_digest: integrity_digest(&[]).sha256,
-            schemas: state.schemas.clone(),
-            generated_order_watermarks: state.generated_order_watermarks.clone(),
-            segments,
-        };
-        let payload = encode_manifest_payload(&manifest, config)?;
-        manifest.root_set_digest = integrity_digest(&payload).sha256;
-        let encoded_manifest = encode_manifest_with_payload(&manifest, payload, config)?;
-        let manifest_digest = integrity_digest(&encoded_manifest);
-        let manifest_artifact = AppendSegmentArtifactMetadata {
-            encoded_len: encoded_manifest.len() as u64,
-            encoded_crc32c: manifest_digest.crc32c.get(),
-            encoded_sha256: manifest_digest.sha256,
-        };
-        write_durable_artifact(
-            directory,
-            &append_generation_manifest_file(generation),
-            &encoded_manifest,
-        )?;
-        let generation_artifacts = AppendGenerationArtifacts {
-            generation,
-            source_commit_epoch,
-            root_set_digest: manifest.root_set_digest,
-            manifest_artifact,
-        };
-        Ok(AppendPublicationReport {
-            generation,
-            source_commit_epoch,
-            rows_written: rows.len(),
-            segment_bytes_written,
-            manifest_bytes_written: manifest_artifact.encoded_len,
-            compacted_segments: if compact { prior_segment_count } else { 0 },
-            rows_rewritten: if compact { rows_to_write.len() } else { 0 },
-            compaction_deferred: compaction.due && !compact,
-            generation_artifacts,
-            events: [
-                AppendPublicationPhase::CandidateStarted,
-                AppendPublicationPhase::CandidateSegmentDurable,
-                AppendPublicationPhase::CandidateManifestDurable,
-                AppendPublicationPhase::CanonicalSelectionDeferred,
-            ],
-        })
+            artifact,
+        });
     }
+    let mut manifest = manifest_encoding::Manifest {
+        generation,
+        source_commit_epoch,
+        previous_generation: previous.map(|reader| reader.manifest.generation),
+        root_set_digest: integrity_digest(&[]).sha256,
+        schemas: state.schemas,
+        generated_order_watermarks: state.generated_order_watermarks,
+        segments,
+        tail: tail.as_slice(),
+    };
+    let segment_count = manifest.segment_count()?;
+    if segment_count > config.max_segments {
+        return Err(AppendTableError::Admission(format!(
+            "append generation contains {segment_count} segments, exceeding limit {}",
+            config.max_segments
+        )));
+    }
+    enum ManifestBytes {
+        Ordinary(Vec<u8>),
+        Admitted(crate::background::CheckpointBytes),
+    }
+    impl std::ops::Deref for ManifestBytes {
+        type Target = [u8];
+        fn deref(&self) -> &Self::Target {
+            match self {
+                Self::Ordinary(bytes) => bytes,
+                Self::Admitted(bytes) => bytes,
+            }
+        }
+    }
+    let (encoded_manifest, manifest_digest) = if let Some(work) = work {
+        let encoded = manifest_encoding::encode(&mut manifest, config, work)?;
+        let digest = work
+            .integrity(&encoded)
+            .map_err(super::checkpoint::work_error)?;
+        (ManifestBytes::Admitted(encoded), digest)
+    } else {
+        let payload = encode_manifest_payload(manifest, config)?;
+        manifest.root_set_digest = integrity_digest(&payload).sha256;
+        let encoded = encode_manifest_with_payload(manifest, payload, config)?;
+        let digest = integrity_digest(&encoded);
+        (ManifestBytes::Ordinary(encoded), digest)
+    };
+    let manifest_artifact = AppendSegmentArtifactMetadata {
+        encoded_len: encoded_manifest.len() as u64,
+        encoded_crc32c: manifest_digest.crc32c.get(),
+        encoded_sha256: manifest_digest.sha256,
+    };
+    checkpoint::write_artifact(
+        directory,
+        &append_generation_manifest_file(generation),
+        &encoded_manifest,
+        work,
+    )?;
+    let generation_artifacts = AppendGenerationArtifacts {
+        generation,
+        source_commit_epoch,
+        root_set_digest: manifest.root_set_digest,
+        manifest_artifact,
+    };
+    Ok(AppendPublicationReport {
+        generation,
+        source_commit_epoch,
+        rows_written: rows.len(),
+        segment_bytes_written,
+        manifest_bytes_written: manifest_artifact.encoded_len,
+        compacted_segments: if compact { prior_segment_count } else { 0 },
+        rows_rewritten: if compact { rows_to_write.len() } else { 0 },
+        compaction_deferred: compaction.due && !compact,
+        generation_artifacts,
+        events: [
+            AppendPublicationPhase::CandidateStarted,
+            AppendPublicationPhase::CandidateSegmentDurable,
+            AppendPublicationPhase::CandidateManifestDurable,
+            AppendPublicationPhase::CanonicalSelectionDeferred,
+        ],
+    })
 }
 
 #[derive(Debug, Clone)]
 pub struct AppendGenerationReader {
-    manifest: Arc<AppendGenerationManifest>,
-    segments: Arc<[AppendSegmentReader]>,
+    manifest: AppendManifestRoot,
+    segments: AppendSegmentRoots,
+}
+
+#[derive(Debug)]
+struct CheckpointAppendManifest {
+    // Destroy decoded allocations before their inventory.
+    data: AppendGenerationManifest,
+    memory: crate::background::CheckpointAllocationOwner,
+}
+
+impl std::ops::Deref for CheckpointAppendManifest {
+    type Target = AppendGenerationManifest;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl PartialEq<AppendGenerationManifest> for CheckpointAppendManifest {
+    fn eq(&self, other: &AppendGenerationManifest) -> bool {
+        self.data == *other
+    }
+}
+
+impl CheckpointAppendManifest {
+    #[cfg(test)]
+    fn into_unadmitted(self) -> AppendGenerationManifest {
+        assert!(
+            self.memory.is_empty(),
+            "admitted manifest cannot detach its inventory"
+        );
+        self.data
+    }
+}
+
+#[derive(Debug, Clone)]
+enum AppendManifestRoot {
+    Inline(AppendGenerationManifest),
+    Shared(Arc<CheckpointAppendManifest>),
+}
+
+impl PartialEq for AppendManifestRoot {
+    fn eq(&self, other: &Self) -> bool {
+        **self == **other
+    }
+}
+
+impl From<CheckpointAppendManifest> for AppendManifestRoot {
+    fn from(manifest: CheckpointAppendManifest) -> Self {
+        if manifest.schemas.is_empty()
+            && manifest.segments.is_empty()
+            && manifest.generated_order_watermarks.is_empty()
+        {
+            assert!(
+                manifest.memory.is_empty(),
+                "empty root must not retain admission"
+            );
+            Self::Inline(manifest.data)
+        } else {
+            Self::Shared(Arc::new(manifest))
+        }
+    }
+}
+
+impl From<AppendGenerationManifest> for AppendManifestRoot {
+    fn from(data: AppendGenerationManifest) -> Self {
+        CheckpointAppendManifest {
+            data,
+            memory: Default::default(),
+        }
+        .into()
+    }
+}
+
+impl std::ops::Deref for AppendManifestRoot {
+    type Target = AppendGenerationManifest;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Inline(data) => data,
+            Self::Shared(data) => data,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum AppendSegmentRoots {
+    Empty,
+    Shared {
+        readers: Arc<Vec<AppendSegmentReader>>,
+        _memory: crate::background::CheckpointAllocationOwner,
+    },
+}
+
+impl From<Vec<AppendSegmentReader>> for AppendSegmentRoots {
+    fn from(readers: Vec<AppendSegmentReader>) -> Self {
+        if readers.is_empty() {
+            Self::Empty
+        } else {
+            Self::Shared {
+                readers: readers.into(),
+                _memory: Default::default(),
+            }
+        }
+    }
+}
+
+impl std::ops::Deref for AppendSegmentRoots {
+    type Target = [AppendSegmentReader];
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Empty => &[],
+            Self::Shared { readers, .. } => readers,
+        }
+    }
 }
 
 impl AppendGenerationReader {
+    pub(crate) fn checkpoint_state_with_work_context(
+        &self,
+        work: &CheckpointWorkContext,
+    ) -> hawdb_core::Result<super::AppendState> {
+        checkpoint::state::build(self, work)
+    }
+
+    pub(crate) fn open_bound_with_work_context(
+        directory: &Path,
+        expected: AppendGenerationArtifacts,
+        config: AppendPublicationConfig,
+        work: &CheckpointWorkContext,
+    ) -> Result<Self, AppendTableError> {
+        checkpoint::read::open(directory, expected, config, work)
+    }
+
     pub fn open_bound(
         directory: &Path,
         expected: AppendGenerationArtifacts,
@@ -434,7 +663,7 @@ impl AppendGenerationReader {
             &manifest.generated_order_watermarks,
         )?;
         Ok(Self {
-            manifest: Arc::new(manifest),
+            manifest: manifest.into(),
             segments: readers.into(),
         })
     }
@@ -728,47 +957,23 @@ fn validate_config(config: AppendPublicationConfig) -> Result<(), AppendTableErr
     Ok(())
 }
 
-fn encode_manifest_payload(
-    manifest: &AppendGenerationManifest,
+fn encode_manifest_payload<'a>(
+    manifest: impl Into<manifest_encoding::Manifest<'a>>,
     config: AppendPublicationConfig,
 ) -> Result<Vec<u8>, AppendTableError> {
+    let manifest = manifest.into();
+    let _len = manifest_encoding::length(&manifest, config, None)?;
     let mut encoder = Encoder::default();
-    for schema in manifest.schemas.values() {
-        let encoded = encode_append_wal_batch(
-            0,
-            &AppendTransaction {
-                writes: vec![AppendWrite::CreateTable {
-                    schema: schema.clone(),
-                }],
-            },
-        )?;
-        if encoded.len() > config.max_schema_bytes {
-            return Err(AppendTableError::Admission(format!(
-                "append schema {} contains {} bytes, exceeding limit {}",
-                schema.name,
-                encoded.len(),
-                config.max_schema_bytes
-            )));
-        }
-        encoder.bytes(&encoded, "append manifest schema record")?;
-    }
-    for (table, watermark) in &manifest.generated_order_watermarks {
-        encoder.string(table, "append generated-order table")?;
-        encoder.raw(&watermark.to_le_bytes());
-    }
-    for binding in &manifest.segments {
-        encoder.u64(binding.generation);
-        encoder.u64(binding.source_commit_epoch);
-        encode_artifact(binding.artifact, &mut encoder);
-    }
+    manifest_encoding::payload(&mut encoder, &manifest, None)?;
     Ok(encoder.finish())
 }
 
-fn encode_manifest_with_payload(
-    manifest: &AppendGenerationManifest,
+fn encode_manifest_with_payload<'a>(
+    manifest: impl Into<manifest_encoding::Manifest<'a>>,
     payload: Vec<u8>,
     config: AppendPublicationConfig,
 ) -> Result<Vec<u8>, AppendTableError> {
+    let manifest = manifest.into();
     let encoded_len = MANIFEST_HEADER_BYTES
         .checked_add(payload.len())
         .ok_or_else(|| AppendTableError::Admission("append manifest size overflow".to_string()))?;
@@ -779,32 +984,12 @@ fn encode_manifest_with_payload(
         )));
     }
     let mut encoded = Vec::with_capacity(encoded_len);
-    encoded.extend_from_slice(MANIFEST_MAGIC);
-    encoded.extend_from_slice(&MANIFEST_VERSION.to_le_bytes());
-    encoded.extend_from_slice(&0u16.to_le_bytes());
-    encoded.extend_from_slice(&manifest.generation.to_le_bytes());
-    encoded.extend_from_slice(&manifest.source_commit_epoch.to_le_bytes());
-    encoded.extend_from_slice(&manifest.previous_generation.unwrap_or(0).to_le_bytes());
-    encoded.extend_from_slice(&(manifest.schemas.len() as u32).to_le_bytes());
-    encoded.extend_from_slice(&(manifest.segments.len() as u32).to_le_bytes());
-    encoded.extend_from_slice(&(payload.len() as u64).to_le_bytes());
-    encoded.extend_from_slice(manifest.root_set_digest.as_bytes());
-    encoded.extend_from_slice(&0u32.to_le_bytes());
-    encoded.extend_from_slice(&[0u8; SHA256_BYTES]);
-    encoded.extend_from_slice(&(manifest.generated_order_watermarks.len() as u32).to_le_bytes());
-    encoded.extend_from_slice(&0u32.to_le_bytes());
-    debug_assert_eq!(encoded.len(), MANIFEST_HEADER_BYTES);
+    encoded.extend_from_slice(&manifest_encoding::header(&manifest, payload.len())?);
     encoded.extend_from_slice(&payload);
-    let mut integrity_input = Vec::with_capacity(
-        MANIFEST_INTEGRITY_OFFSET
-            + (MANIFEST_HEADER_BYTES - MANIFEST_INTEGRITY_TRAILER_OFFSET)
-            + payload.len(),
-    );
-    integrity_input.extend_from_slice(&encoded[..MANIFEST_INTEGRITY_OFFSET]);
-    integrity_input
-        .extend_from_slice(&encoded[MANIFEST_INTEGRITY_TRAILER_OFFSET..MANIFEST_HEADER_BYTES]);
-    integrity_input.extend_from_slice(&payload);
-    let digest = integrity_digest(&integrity_input);
+    let mut hasher = hawdb_integrity::IntegrityHasher::new();
+    hasher.update(&encoded[..MANIFEST_INTEGRITY_OFFSET]);
+    hasher.update(&encoded[MANIFEST_INTEGRITY_TRAILER_OFFSET..]);
+    let digest = hasher.finish();
     encoded[84..88].copy_from_slice(&digest.crc32c.get().to_le_bytes());
     encoded[88..120].copy_from_slice(digest.sha256.as_bytes());
     Ok(encoded)
@@ -945,12 +1130,6 @@ fn decode_manifest(
         generated_order_watermarks,
         segments,
     })
-}
-
-fn encode_artifact(artifact: AppendSegmentArtifactMetadata, encoder: &mut Encoder) {
-    encoder.u64(artifact.encoded_len);
-    encoder.u32(artifact.encoded_crc32c);
-    encoder.raw(artifact.encoded_sha256.as_bytes());
 }
 
 fn decode_artifact(
