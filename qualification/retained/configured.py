@@ -11,12 +11,12 @@ observations = []
 def configured_open(path=None):
     db = native._open_large_result_qualification(path)
     values = tuple(db._qualification_limits())
-    assert values == (1000000, 268435456, 1073741824, 268435456, 2147483648), values
+    assert values == (1000000, 1073741824, 1073741824, 1073741824, 4294967296, 268435456, 67108864), values
     observations.append(values)
     return db
 hawdb.open = configured_open
 @atexit.register
-def record():
-    (Path(__file__).parent.parent / "observed-limits.json").write_text(json.dumps(observations) + "\n")
+def record(output=Path(__file__).parent.parent / "observed-limits.json", dumps=json.dumps, observed=observations):
+    output.write_text(dumps(observed) + "\n")
 sys.argv = sys.argv[1:]
 runpy.run_path(sys.argv[0], run_name="__main__")

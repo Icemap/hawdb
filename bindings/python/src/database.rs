@@ -102,6 +102,8 @@ impl Database {
             u64::try_from(config.execution_memory.query_memory_bytes.get()).unwrap(),
             limits.result_budget_bytes,
             limits.memory_budget_bytes,
+            u64::try_from(config.execution_memory.batch_payload_bytes.get()).unwrap(),
+            u64::try_from(config.execution_memory.blocking_operator_bytes.get()).unwrap(),
         ])
     }
 
@@ -738,16 +740,17 @@ pub fn open(path: Option<PathBuf>, read_only: bool) -> PyResult<Database> {
 pub fn _open_large_result_qualification(path: Option<PathBuf>) -> PyResult<Database> {
     let config = DatabaseConfig {
         max_read_result_rows: Some(1_000_000),
-        max_read_result_payload_bytes: Some(256 * 1024 * 1024),
+        max_read_result_payload_bytes: Some(1024 * 1024 * 1024),
         execution_memory: hawdb::executor::ExecutionMemoryConfig {
             query_memory_bytes: std::num::NonZeroUsize::new(1024 * 1024 * 1024).unwrap(),
+            batch_payload_bytes: std::num::NonZeroUsize::new(256 * 1024 * 1024).unwrap(),
             ..Default::default()
         },
         ..Default::default()
     };
     let governor = hawdb::RuntimeGovernorConfig {
-        memory_budget_bytes: Some(2 * 1024 * 1024 * 1024),
-        result_budget_bytes: 256 * 1024 * 1024,
+        memory_budget_bytes: Some(4 * 1024 * 1024 * 1024),
+        result_budget_bytes: 1024 * 1024 * 1024,
         ..hawdb::RuntimeGovernorConfig::shared_host()
     };
     let inner = if let Some(path) = &path {
