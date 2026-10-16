@@ -659,7 +659,8 @@ impl RetainedQueryCursor {
                 .min(config.execution_memory.batch_payload_bytes.get()),
         )
         .unwrap();
-        options.max_result_rows = restrictive(config.max_read_result_rows, options.max_result_rows);
+        options.max_result_rows =
+            restrictive(config.read_result_row_limit(), options.max_result_rows);
         options.max_result_payload_bytes = restrictive(
             config.max_read_result_payload_bytes,
             options.max_result_payload_bytes,

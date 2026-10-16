@@ -442,7 +442,7 @@ impl HawDBTokioEmbedded {
         let (max_rows, batch_rows, batch_payload_bytes) = self.with_embedded(|embedded| {
             let config = embedded.database().config();
             (
-                config.max_read_result_rows,
+                config.read_result_row_limit(),
                 config.execution_memory.batch_rows.get(),
                 config.execution_memory.batch_payload_bytes.get(),
             )
@@ -635,7 +635,7 @@ impl HawDBTokioEmbedded {
                 .map_err(HawDBTokioEmbeddedError::Task)
         } else {
             let max_rows =
-                self.with_embedded(|embedded| embedded.database().config().max_read_result_rows);
+                self.with_embedded(|embedded| embedded.database().config().read_result_row_limit());
             let max_payload_bytes = usize::try_from(request.result_bytes).unwrap_or(usize::MAX);
             self.runtime
                 .execute_blocking_with_request_factory(

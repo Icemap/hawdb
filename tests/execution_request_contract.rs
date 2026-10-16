@@ -71,14 +71,14 @@ fn consume_limit_arrow(cursor: hawdb::RetainedQueryCursor) -> Result<usize, (usi
 }
 
 #[test]
-fn default_read_row_limit_is_exact_and_never_silently_truncates_delivery() {
+fn default_unlimited_and_explicit_read_row_limits_preserve_complete_delivery() {
     use hawdb::{
         DatabaseConfig, EmbeddedQueryError, HawDBEmbedded, HawDBError, ReadBudgetResource,
         RetainedColumnValues, RetainedQueryError, RetainedQueryOptions, RetainedQueryStatus,
     };
 
-    let cap = DatabaseConfig::default().max_read_result_rows.unwrap();
-    assert_eq!(cap, 100_000);
+    assert_eq!(DatabaseConfig::default().max_read_result_rows, Some(0));
+    let cap = 100_000;
     let directory = (0..1000)
         .find_map(|attempt| {
             let path = std::env::temp_dir().join(format!(
@@ -92,12 +92,18 @@ fn default_read_row_limit_is_exact_and_never_silently_truncates_delivery() {
             }
         })
         .expect("a uniquely reserved fixture directory");
-    for persistent in [false, true] {
-        let path = directory.0.join("project");
+    for (persistent, bounded) in [(false, false), (true, false), (false, true), (true, true)] {
+        let config = DatabaseConfig {
+            max_read_result_rows: Some(if bounded { cap } else { 0 }),
+            ..DatabaseConfig::default()
+        };
+        let path = directory.0.join(format!("project-{bounded}"));
         let mut engine = if persistent {
-            HawDBEmbedded::open(&path).unwrap()
+            let mut options = hawdb::HawDBEmbeddedOpenOptions::new(&path);
+            options.config = config;
+            HawDBEmbedded::open_with_options(options).unwrap()
         } else {
-            HawDBEmbedded::open_in_memory()
+            HawDBEmbedded::open_in_memory_with_config(config)
         };
         engine.query_admitted("CREATE NODE TABLE RowLimit").unwrap();
         engine
@@ -125,7 +131,7 @@ fn default_read_row_limit_is_exact_and_never_silently_truncates_delivery() {
             let params =
                 BTreeMap::from([("count".into(), Value::Int(i64::try_from(count).unwrap()))]);
             let owned = engine.query_with_params_admitted(query, &params);
-            if count <= cap {
+            if !bounded || count <= cap {
                 let output = owned.unwrap();
                 assert_eq!(output.rows.len(), count);
                 for (index, row) in output.rows.iter().enumerate() {
@@ -155,15 +161,19 @@ fn default_read_row_limit_is_exact_and_never_silently_truncates_delivery() {
                             assert_eq!(values[*index as usize], retained_rows as i64);
                             retained_rows += 1;
                         }
-                        assert!(retained_rows <= cap);
+                        assert!(!bounded || retained_rows <= cap);
                     }
                     Ok(None) => {
-                        assert!(count <= cap, "over-cap result must not appear complete");
+                        assert!(
+                            !bounded || count <= cap,
+                            "over-cap result must not appear complete"
+                        );
                         assert_eq!(retained_rows, count);
                         assert_eq!(cursor.status(), RetainedQueryStatus::Completed);
                         break;
                     }
                     Err(error) => {
+                        assert!(bounded);
                         assert_eq!(count, cap + 1);
                         assert!(
                             matches!(error, RetainedQueryError::ResultBudget { rows, .. } if rows > cap)
@@ -183,10 +193,11 @@ fn default_read_row_limit_is_exact_and_never_silently_truncates_delivery() {
                 .unwrap();
             match consume_limit_arrow(arrow) {
                 Ok(rows) => {
-                    assert!(count <= cap);
+                    assert!(!bounded || count <= cap);
                     assert_eq!(rows, count);
                 }
                 Err((rows, message)) => {
+                    assert!(bounded);
                     assert_eq!(count, cap + 1);
                     assert!(rows <= cap);
                     assert!(
@@ -844,4 +855,362 @@ fn host_can_implement_external_reads_using_only_the_hawdb_facade() {
             .query_memory_completion_bytes,
         0
     );
+}
+
+#[test]
+fn session_result_row_settings_are_isolated_and_inherited_by_transactions() {
+    use hawdb::{Database, DatabaseConfig, RetainedQueryError, RetainedQueryOptions};
+
+    for configured in [Some(0), None, Some(2)] {
+        let mut db = Database::new_with_config(DatabaseConfig {
+            max_read_result_rows: configured,
+            ..DatabaseConfig::default()
+        });
+        db.query("CREATE NODE TABLE SessionLimit").unwrap();
+        db.query("CREATE PROPERTY ON NODE TABLE SessionLimit(score) TYPE INT")
+            .unwrap();
+        for score in 0..3 {
+            db.query(&format!("CREATE (:SessionLimit {{score: {score}}})"))
+                .unwrap();
+        }
+        let epoch = db.commit_epoch().unwrap();
+        let query = "MATCH (n:SessionLimit) WHERE n.score >= 0 RETURN n.score AS score";
+        {
+            let mut session = db.session();
+            assert_eq!(session.config().max_result_rows, 0);
+            session.set_max_result_rows(1);
+            assert!(session.query(query).is_err());
+            let mutation_error = session.query("MATCH (n:SessionLimit) WHERE n.score >= 0 SET n.score = 42 RETURN n.score AS score").unwrap_err();
+            assert!(
+                mutation_error
+                    .to_string()
+                    .contains("max_mutation_result_rows 1"),
+                "unexpected mutation refusal: {mutation_error}"
+            );
+            assert_eq!(
+                session
+                    .query("MATCH (n:SessionLimit) WHERE n.score >= 0 RETURN count(n) AS total")
+                    .unwrap()
+                    .rows[0]
+                    .get("total"),
+                Some(&Value::Int(3))
+            );
+            assert!(session
+                .query(&format!("{query} LIMIT 0"))
+                .unwrap()
+                .rows
+                .is_empty());
+            let mut cursor = session
+                .query_with_params_retained(
+                    query,
+                    &BTreeMap::new(),
+                    RetainedQueryOptions::default(),
+                )
+                .unwrap();
+            session.set_max_result_rows(0);
+            assert!(matches!(
+                cursor.next_batch(),
+                Err(RetainedQueryError::ResultBudget { rows: 3, .. })
+            ));
+            assert!(cursor.next_batch().is_err());
+            drop(cursor);
+            session.set_max_result_rows(1);
+            assert!(consume_limit_arrow(
+                session
+                    .query_with_params_retained(
+                        query,
+                        &BTreeMap::new(),
+                        RetainedQueryOptions::default()
+                    )
+                    .unwrap()
+            )
+            .is_err());
+            session.query("BEGIN TRANSACTION").unwrap();
+            session.set_max_result_rows(0);
+            assert!(
+                session.query(query).is_err(),
+                "BEGIN captures the session policy"
+            );
+            session.query("ROLLBACK").unwrap();
+            session.set_max_result_rows(1);
+            session.query("BEGIN TRANSACTION").unwrap();
+            session.query("CREATE (:SessionLimit {score: 3})").unwrap();
+            session.query("CREATE (:SessionLimit {score: 4})").unwrap();
+            session.set_max_result_rows(0);
+            let commit_error = session.query("COMMIT").unwrap_err();
+            assert!(
+                commit_error
+                    .to_string()
+                    .contains("max_mutation_result_rows 1"),
+                "unexpected commit refusal: {commit_error}"
+            );
+            assert_eq!(
+                session
+                    .query("MATCH (n:SessionLimit) RETURN count(n) AS total")
+                    .unwrap()
+                    .rows[0]
+                    .get("total"),
+                Some(&Value::Int(3))
+            );
+            match session.query(query) {
+                Ok(output) => {
+                    assert_ne!(configured, Some(2));
+                    assert_eq!(output.rows.len(), 3);
+                }
+                Err(_) => assert_eq!(configured, Some(2)),
+            }
+        }
+        assert_eq!(db.config().max_read_result_rows, configured);
+        assert_eq!(db.session().config().max_result_rows, 0);
+        assert_eq!(db.commit_epoch().unwrap(), epoch);
+    }
+}
+
+#[test]
+fn sql_session_row_limits_preserve_aggregates_and_rollback_failed_returning() {
+    use hawdb::Database;
+
+    let mut db = Database::new();
+    db.query_sql("CREATE TABLE session_rows (id BIGINT PRIMARY KEY)")
+        .unwrap();
+    for id in 0..3 {
+        db.query_sql(&format!("INSERT INTO session_rows (id) VALUES ({id})"))
+            .unwrap();
+    }
+    let epoch = db.commit_epoch().unwrap();
+    {
+        let mut session = db.sql_session();
+        assert_eq!(session.config().max_result_rows, 0);
+        session.set_max_result_rows(1);
+        assert!(session.query("SELECT id FROM session_rows", &[]).is_err());
+        assert_eq!(
+            session
+                .query("SELECT COUNT(*) AS total FROM session_rows", &[])
+                .unwrap()
+                .output
+                .rows[0]
+                .get("total"),
+            Some(&Value::Int(3))
+        );
+        assert!(session
+            .query("SELECT id FROM session_rows LIMIT 0", &[])
+            .unwrap()
+            .output
+            .rows
+            .is_empty());
+        assert_eq!(
+            session
+                .query(
+                    "SELECT id FROM session_rows WHERE id = $1",
+                    &[Value::Int(2)]
+                )
+                .unwrap()
+                .output
+                .rows[0]
+                .get("id"),
+            Some(&Value::Int(2))
+        );
+        let failed = session.transaction(|transaction| {
+            transaction.query("INSERT INTO session_rows (id) VALUES (3)", &[])?;
+            assert!(transaction
+                .query("SELECT id FROM session_rows", &[])
+                .is_err());
+            Ok(())
+        });
+        assert!(
+            failed.is_err(),
+            "caught result refusal still rolls back staged writes"
+        );
+        assert!(session
+            .query(
+                "INSERT INTO session_rows (id) VALUES (4), (5) RETURNING id",
+                &[]
+            )
+            .is_err());
+        assert_eq!(
+            session
+                .query("SELECT COUNT(*) AS total FROM session_rows", &[])
+                .unwrap()
+                .output
+                .rows[0]
+                .get("total"),
+            Some(&Value::Int(3))
+        );
+        session.set_max_result_rows(0);
+        assert_eq!(
+            session
+                .query("SELECT id FROM session_rows", &[])
+                .unwrap()
+                .output
+                .rows
+                .len(),
+            3
+        );
+        session
+            .transaction(|transaction| {
+                assert_eq!(
+                    transaction
+                        .query("SELECT id FROM session_rows", &[])?
+                        .output
+                        .rows
+                        .len(),
+                    3
+                );
+                Ok(())
+            })
+            .unwrap();
+    }
+    {
+        let mut session = db.session();
+        session.set_max_result_rows(1);
+        assert!(session
+            .query_sql("INSERT INTO session_rows (id) VALUES (6), (7) RETURNING id")
+            .is_err());
+        assert_eq!(
+            session
+                .query_sql("SELECT COUNT(*) AS total FROM session_rows")
+                .unwrap()
+                .rows[0]
+                .get("total"),
+            Some(&Value::Int(3))
+        );
+    }
+    assert_eq!(db.commit_epoch().unwrap(), epoch);
+    assert_eq!(db.sql_session().config().max_result_rows, 0);
+    assert_eq!(
+        db.sql_session()
+            .query("SELECT id FROM session_rows", &[])
+            .unwrap()
+            .output
+            .rows
+            .len(),
+        3
+    );
+}
+
+#[test]
+fn unlimited_sql_results_cross_the_former_default_boundary_without_hidden_scan_caps() {
+    use hawdb::{Database, DatabaseConfig};
+
+    let directory = IdentityDirectory::new();
+    for persistent in [false, true] {
+        let mut db = if persistent {
+            Database::open(directory.0.join("sql-unlimited")).unwrap()
+        } else {
+            Database::new_with_config(DatabaseConfig {
+                max_read_result_rows: None,
+                ..DatabaseConfig::default()
+            })
+        };
+        db.query_sql("CREATE TABLE unlimited_rows (id BIGINT PRIMARY KEY)")
+            .unwrap();
+        // File output cardinality comes from a real cross join, independently
+        // of finite storage overlay/checkpoint-object budgets for source rows.
+        let source_rows = if persistent { 1_001 } else { 100_001 };
+        for start in (0..source_rows).step_by(512) {
+            let values = (start..(start + 512).min(source_rows))
+                .map(|id| format!("({id})"))
+                .collect::<Vec<_>>()
+                .join(",");
+            db.query_sql(&format!("INSERT INTO unlimited_rows (id) VALUES {values}"))
+                .unwrap();
+        }
+        if persistent {
+            db.query_sql("CREATE TABLE buckets (bucket BIGINT PRIMARY KEY)")
+                .unwrap();
+            let values = (0..100)
+                .map(|id| format!("({id})"))
+                .collect::<Vec<_>>()
+                .join(",");
+            db.query_sql(&format!("INSERT INTO buckets (bucket) VALUES {values}"))
+                .unwrap();
+        }
+        let epoch = db.commit_epoch().unwrap();
+        let mut session = db.sql_session();
+        let selected = if persistent {
+            "SELECT id, bucket FROM unlimited_rows CROSS JOIN buckets ORDER BY id, bucket LIMIT 100001"
+        } else {
+            "SELECT id FROM unlimited_rows ORDER BY id"
+        };
+        let output = session.query(selected, &[]).unwrap().output;
+        assert_eq!(output.rows.len(), 100_001);
+        for (index, row) in output.rows.iter().enumerate() {
+            let id = if persistent { index / 100 } else { index };
+            assert_eq!(row.get("id"), Some(&Value::Int(id as i64)));
+            if persistent {
+                assert_eq!(row.get("bucket"), Some(&Value::Int((index % 100) as i64)));
+            }
+        }
+        session.set_max_result_rows(1);
+        let counted = if persistent {
+            "SELECT COUNT(*) AS total FROM unlimited_rows CROSS JOIN buckets"
+        } else {
+            "SELECT COUNT(*) AS total FROM unlimited_rows"
+        };
+        assert_eq!(
+            session.query(counted, &[]).unwrap().output.rows[0].get("total"),
+            Some(&Value::Int(if persistent { 100_100 } else { 100_001 }))
+        );
+        assert!(session.query("SELECT id FROM unlimited_rows", &[]).is_err());
+        assert_eq!(db.commit_epoch().unwrap(), epoch);
+    }
+}
+
+#[test]
+fn read_only_sql_sessions_inherit_limits_without_altering_database_configuration() {
+    use hawdb::{Database, DatabaseConfig};
+
+    let directory = IdentityDirectory::new();
+    let path = directory.0.join("session-read-only");
+    {
+        let mut db = Database::open(&path).unwrap();
+        db.query_sql("CREATE TABLE session_rows (id BIGINT PRIMARY KEY)")
+            .unwrap();
+        db.query_sql("INSERT INTO session_rows (id) VALUES (0), (1)")
+            .unwrap();
+    }
+    let mut db = Database::open_with_config(
+        &path,
+        DatabaseConfig {
+            read_only: true,
+            ..DatabaseConfig::default()
+        },
+    )
+    .unwrap();
+    {
+        let mut session = db.sql_session();
+        session.set_max_result_rows(1);
+        assert!(session.query("SELECT id FROM session_rows", &[]).is_err());
+        assert_eq!(
+            session
+                .query("SELECT COUNT(*) AS total FROM session_rows", &[])
+                .unwrap()
+                .output
+                .rows[0]
+                .get("total"),
+            Some(&Value::Int(2))
+        );
+        session.set_max_result_rows(0);
+        assert_eq!(
+            session
+                .query("SELECT id FROM session_rows", &[])
+                .unwrap()
+                .output
+                .rows
+                .len(),
+            2
+        );
+        session.set_max_result_rows(u64::MAX);
+        assert_eq!(
+            session
+                .query("SELECT id FROM session_rows", &[])
+                .unwrap()
+                .output
+                .rows
+                .len(),
+            2
+        );
+    }
+    assert_eq!(db.config().max_read_result_rows, Some(0));
+    assert!(db.config().read_only);
 }

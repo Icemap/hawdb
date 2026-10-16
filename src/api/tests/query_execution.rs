@@ -331,7 +331,7 @@ fn database_config_caps_read_query_result_rows() {
 }
 
 #[test]
-fn database_config_defaults_to_bounded_read_results() {
+fn database_config_defaults_to_unlimited_rows_and_bounded_payload() {
     let config = DatabaseConfig::default();
 
     assert_eq!(
@@ -350,11 +350,11 @@ fn relational_query_index_limits_separate_logical_work_from_file_io() {
 
     let limits = super::super::relational_query_limits_with_payload(&config, None, None);
     let index = limits.index_read;
-    let expected_pages = crate::DEFAULT_MAX_READ_RESULT_ROWS.saturating_mul(
+    let expected_pages = usize::MAX.saturating_mul(
         hawdb_storage::relational::DEFAULT_RELATIONAL_INDEX_READ_TREE_HEIGHT as usize,
     );
 
-    assert_eq!(index.max_rows.get(), crate::DEFAULT_MAX_READ_RESULT_ROWS);
+    assert_eq!(index.max_rows.get(), usize::MAX);
     assert_eq!(index.max_pages.get(), expected_pages);
     assert_eq!(
         index.max_bytes.get(),

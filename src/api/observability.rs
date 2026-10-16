@@ -348,7 +348,7 @@ impl Database {
     }
 
     pub fn query_sql(&mut self, sql_text: &str) -> Result<QueryOutput> {
-        self.query_sql_bounded(sql_text, self.config.max_read_result_rows)
+        self.query_sql_bounded(sql_text, self.config.read_result_row_limit())
     }
 
     pub fn query_sql_with_params(
@@ -356,7 +356,11 @@ impl Database {
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<QueryOutput> {
-        self.query_sql_with_params_bounded(sql_text, parameters, self.config.max_read_result_rows)
+        self.query_sql_with_params_bounded(
+            sql_text,
+            parameters,
+            self.config.read_result_row_limit(),
+        )
     }
 
     pub fn query_sql_bounded(
@@ -396,7 +400,7 @@ impl Database {
         }
         let started = hawdb_core::time::Instant::now();
         let max_rows =
-            super::restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+            super::restrictive_query_limit(self.config.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = super::restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
@@ -446,7 +450,7 @@ impl Database {
             sql_text,
             parameters,
             prepared,
-            self.config.max_read_result_rows,
+            self.config.read_result_row_limit(),
             self.config.max_read_result_payload_bytes,
             started,
         )

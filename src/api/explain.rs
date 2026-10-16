@@ -93,7 +93,7 @@ pub(super) fn admit_explain_output(
     let mut accumulator = QueryOutputAccumulator::new(
         OutputLimits {
             max_rows: restrictive_query_limit(
-                config.max_read_result_rows,
+                config.read_result_row_limit(),
                 options.output_limits.max_rows,
             ),
             max_payload_bytes: restrictive_query_limit(

@@ -334,6 +334,8 @@ pub struct DatabaseConfig {
     pub read_only: bool,
     /// Bounded pending-child recovery during a writable project open.
     pub branch_create_recovery_limits: BranchCreateRecoveryLimits,
+    /// Optional host-wide row ceiling. `Some(0)` (the default) and `None` mean unlimited.
+    /// Session settings may lower a positive ceiling, but cannot raise it.
     pub max_read_result_rows: Option<usize>,
     pub max_read_result_payload_bytes: Option<usize>,
     pub execution_memory: executor::ExecutionMemoryConfig,
@@ -404,7 +406,8 @@ pub struct DatabaseConfig {
     pub adaptive_vector_backend_policy: hawdb_optimizer::AdaptiveVectorBackendPolicy,
 }
 
-pub const DEFAULT_MAX_READ_RESULT_ROWS: usize = 100_000;
+/// Zero disables the default result row-count limit. Byte budgets remain active.
+pub const DEFAULT_MAX_READ_RESULT_ROWS: usize = 0;
 pub const DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES: usize = 64 * 1024 * 1024;
 
 fn restrictive_query_limit(configured: Option<usize>, requested: Option<usize>) -> Option<usize> {
@@ -421,13 +424,12 @@ fn relational_query_limits_with_payload(
     max_rows: Option<usize>,
     max_payload_bytes: Option<usize>,
 ) -> crate::relational_sql::RelationalQueryLimits {
-    let max_output_rows = max_rows.unwrap_or(DEFAULT_MAX_READ_RESULT_ROWS);
+    let max_output_rows =
+        restrictive_query_limit(config.read_result_row_limit(), max_rows).unwrap_or(usize::MAX);
     let max_output_payload_bytes =
         restrictive_query_limit(config.max_read_result_payload_bytes, max_payload_bytes)
             .unwrap_or(DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES);
-    let max_intermediate_rows = config
-        .max_read_result_rows
-        .unwrap_or(DEFAULT_MAX_READ_RESULT_ROWS);
+    let max_intermediate_rows = config.read_result_row_limit().unwrap_or(usize::MAX);
     // A blocking relational query first reads the bounded scan projection and
     // then re-reads at most `max_output_rows` selected locators with the final
     // output projection. Budget both phases explicitly so a scan that exactly
@@ -545,7 +547,43 @@ fn relational_index_read_mode<
     }
 }
 
+/// Per-session result policy. Independent sessions start with no row-count limit.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SessionConfig {
+    /// Maximum result rows; zero means no session row-count limit.
+    /// Payload, execution-memory and explicit host ceilings remain enforced.
+    pub max_result_rows: u64,
+}
+
+impl SessionConfig {
+    fn row_limit(self) -> Option<usize> {
+        // No representable result can exceed usize::MAX rows. Avoid asking
+        // the execution detector to add one to that effective infinity.
+        (self.max_result_rows != 0)
+            .then(|| usize::try_from(self.max_result_rows).unwrap_or(usize::MAX))
+            .filter(|rows| *rows != usize::MAX)
+    }
+
+    fn validate_result_rows(self, rows: usize) -> Result<()> {
+        if let Some(limit) = self.row_limit()
+            && rows > limit
+        {
+            return Err(HawDBError::read_budget_exceeded(
+                crate::ReadBudgetResource::Rows,
+                limit,
+                "session result exceeds max_result_rows",
+            ));
+        }
+        Ok(())
+    }
+}
+
 impl DatabaseConfig {
+    /// Effective host row-count ceiling. Both zero and `None` disable it.
+    pub fn read_result_row_limit(&self) -> Option<usize> {
+        self.max_read_result_rows.filter(|rows| *rows != 0)
+    }
+
     fn wal_replay_config(&self) -> WalReplayConfig {
         WalReplayConfig {
             max_open_files: self.max_open_files,
@@ -807,6 +845,7 @@ pub struct DatabaseTransaction<'a> {
 
 #[derive(Debug)]
 pub(super) struct DatabaseTransactionRuntime {
+    session_config: SessionConfig,
     optimizer: CascadesOptimizer,
     plan_cache: SharedState<PlanCache>,
     relational_plan_template_cache: Arc<crate::relational_sql::RelationalPlanTemplateCache>,
@@ -850,6 +889,7 @@ pub(super) struct GraphTransactionStatementOutcome {
 
 #[derive(Debug)]
 pub struct DatabaseSession<'a> {
+    config: SessionConfig,
     db: &'a mut Database,
     graph_transaction: Option<GraphMutationTransaction>,
     transaction_runtime: Option<DatabaseTransactionRuntime>,
@@ -875,6 +915,7 @@ impl std::ops::Deref for ReadPlanCache {
 
 #[derive(Debug)]
 pub struct DatabaseReadTransaction<S: crate::executor::ExecutionStore = GraphStore> {
+    session_config: SessionConfig,
     catalog: Catalog,
     store: S,
     published_read_view: PublishedReadView,
@@ -921,6 +962,7 @@ impl DatabaseReadSnapshot {
         self.ensure_usable()?;
         let source = &self.0;
         Ok(DatabaseReadTransaction {
+            session_config: source.session_config,
             catalog: source.catalog.clone(),
             store: source.store.snapshot_for_read(),
             published_read_view: source.published_read_view,
@@ -1626,6 +1668,7 @@ impl Database {
     pub fn session(&mut self) -> DatabaseSession<'_> {
         let system_variables = self.system_variables.clone();
         DatabaseSession {
+            config: SessionConfig::default(),
             db: self,
             graph_transaction: None,
             transaction_runtime: None,
@@ -1739,6 +1782,7 @@ impl Database {
         Ok({
             let (published_read_view, pin) = self.pin_read_view()?;
             DatabaseReadTransaction {
+                session_config: SessionConfig::default(),
                 catalog: self.runtime.get()?.catalog.clone(),
                 store: self.runtime.get()?.store.snapshot_for_read(),
                 published_read_view,
@@ -1893,7 +1937,7 @@ impl Database {
                 &self.config.execution_memory,
             )
             .with_output_limits(
-                self.config.max_read_result_rows,
+                self.config.read_result_row_limit(),
                 self.config.max_read_result_payload_bytes,
             ),
             {
@@ -2070,7 +2114,7 @@ impl Database {
     ) -> Result<AppendSegmentReadOutput> {
         let max_rows = self
             .config
-            .max_read_result_rows
+            .read_result_row_limit()
             .map_or(max_rows, |configured| configured.min(max_rows));
         let max_payload_bytes = self
             .config
@@ -2089,7 +2133,7 @@ impl Database {
     ) -> Result<AppendSegmentReadOutput> {
         let max_rows = self
             .config
-            .max_read_result_rows
+            .read_result_row_limit()
             .map_or(max_rows, |configured| configured.min(max_rows));
         let max_payload_bytes = self
             .config
@@ -20358,6 +20402,7 @@ impl DatabaseTransactionRuntime {
     ) -> Result<Self> {
         let runtime = db.runtime.get()?;
         Ok(Self {
+            session_config: SessionConfig::default(),
             optimizer: runtime.optimizer.clone(),
             plan_cache: SharedState::new(PlanCache::new(db.config.max_plan_cache_entries)),
             relational_plan_template_cache: Arc::clone(&runtime.relational_plan_template_cache),
@@ -20369,6 +20414,13 @@ impl DatabaseTransactionRuntime {
             branch_catalog_path: db.branch_catalog_path().ok(),
             current_branch: db.current_branch()?,
         })
+    }
+
+    fn read_result_row_limit(&self) -> Option<usize> {
+        restrictive_query_limit(
+            self.config.read_result_row_limit(),
+            self.session_config.row_limit(),
+        )
     }
 
     fn ensure_writable(&self, store: &GraphStore) -> Result<()> {
@@ -20591,10 +20643,10 @@ fn execute_graph_transaction_statement(
                 &summary.rows,
                 runtime.config.mutation_limits,
             )?;
+            let rows = returned_rows.unwrap_or_default();
+            runtime.session_config.validate_result_rows(rows.len())?;
             Ok((
-                QueryOutput {
-                    rows: returned_rows.unwrap_or_default().into(),
-                },
+                QueryOutput { rows: rows.into() },
                 transaction.lock_footprint_since(&statement_savepoint)?,
             ))
         })();
@@ -20621,7 +20673,7 @@ fn execute_graph_transaction_statement(
                 &runtime.config.execution_memory,
             )
             .with_output_limits(
-                runtime.config.max_read_result_rows,
+                runtime.read_result_row_limit(),
                 runtime.config.max_read_result_payload_bytes,
             )
             .with_optional_task_context(task_context),
@@ -20768,7 +20820,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
             "explicit transaction",
             statement,
             parameters,
-            runtime.config.max_read_result_rows,
+            runtime.read_result_row_limit(),
             max_read_result_payload_bytes,
         )
         .map(sql_query_result);
@@ -20795,7 +20847,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         return system_sql::query_sql_with_params(
             sql_text,
             parameters,
-            runtime.config.max_read_result_rows,
+            runtime.read_result_row_limit(),
             max_read_result_payload_bytes,
             &system_sql::SystemSqlContext {
                 catalog: graph_transaction.catalog(),
@@ -20834,7 +20886,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         &prepared.template,
         parameters,
         &state.append_state,
-        runtime.config.max_read_result_rows.unwrap_or(usize::MAX),
+        runtime.read_result_row_limit().unwrap_or(usize::MAX),
     )? {
         let store = state
             .graph_transaction
@@ -20857,7 +20909,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         &prepared.template,
         parameters,
         &state.append_state,
-        runtime.config.max_read_result_rows.unwrap_or(usize::MAX),
+        runtime.read_result_row_limit().unwrap_or(usize::MAX),
     )? {
         let report = if plan.analyze {
             let store = state
@@ -20884,7 +20936,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
             crate::relational_sql::format_append_explain(&plan, report.as_ref()),
             &runtime.config,
             QueryStreamOptions {
-                max_rows: runtime.config.max_read_result_rows,
+                max_rows: runtime.read_result_row_limit(),
                 max_payload_bytes: max_read_result_payload_bytes,
             },
             options.task_context,
@@ -20935,7 +20987,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
             crate::relational_sql::RelationalQueryReadModes::new(index_read_mode, row_read_mode),
             relational_query_resource_context(
                 &runtime.config,
-                runtime.config.max_read_result_rows,
+                runtime.read_result_row_limit(),
                 max_read_result_payload_bytes,
                 options.task_context,
             ),
@@ -21069,6 +21121,11 @@ pub(super) fn execute_database_transaction_prepared_sql(
             )
         })
         .transpose()?;
+    if let Some(mutation) = &mutation {
+        runtime
+            .session_config
+            .validate_result_rows(mutation.rows.len())?;
+    }
     let next_relational_rows = if let Some(row_capture) = pending_row_capture {
         let rows = match &state.relational_rows {
             Ok(Some(rows)) => rows,
@@ -21378,6 +21435,10 @@ fn commit_database_transaction_state_inner(
 }
 
 impl DatabaseTransaction<'_> {
+    pub(crate) fn apply_session_config(&mut self, config: SessionConfig) {
+        self.runtime.session_config = config;
+    }
+
     pub fn query(&mut self, cypher_text: &str) -> Result<QueryOutput> {
         self.query_with_params(cypher_text, &BTreeMap::new())
     }
@@ -21467,6 +21528,23 @@ impl DatabaseTransaction<'_> {
 }
 
 impl DatabaseSession<'_> {
+    pub fn config(&self) -> &SessionConfig {
+        &self.config
+    }
+
+    /// Changes this session only. Active transactions retain the settings
+    /// captured at BEGIN; the next transaction inherits the new settings.
+    pub fn set_max_result_rows(&mut self, max_result_rows: u64) {
+        self.config.max_result_rows = max_result_rows;
+    }
+
+    fn row_limit(&self) -> Option<usize> {
+        restrictive_query_limit(
+            self.db.config.read_result_row_limit(),
+            self.config.row_limit(),
+        )
+    }
+
     pub fn query_sql(&mut self, sql_text: &str) -> Result<QueryOutput> {
         self.query_sql_with_params(sql_text, &[])
     }
@@ -21477,7 +21555,25 @@ impl DatabaseSession<'_> {
         parameters: &[Value],
     ) -> Result<QueryOutput> {
         if self.graph_transaction.is_none() {
-            return self.db.query_sql_with_params(sql_text, parameters);
+            if self.config.max_result_rows != 0
+                && matches!(
+                    crate::sql::parse_postgres_sql(sql_text)?,
+                    crate::sql::SqlStatement::Insert(_)
+                        | crate::sql::SqlStatement::Update(_)
+                        | crate::sql::SqlStatement::Delete(_)
+                )
+            {
+                // Validate RETURNING before commit through the same native
+                // transaction path as SQL sessions; never reject after writing.
+                let mut session = self.db.sql_session();
+                session.set_max_result_rows(self.config.max_result_rows);
+                return session
+                    .query(sql_text, parameters)
+                    .map(|result| result.output);
+            }
+            return self
+                .db
+                .query_sql_with_params_bounded(sql_text, parameters, self.row_limit());
         }
         let prepared = self
             .db
@@ -21496,13 +21592,30 @@ impl DatabaseSession<'_> {
                 "explicit transaction",
                 statement,
                 parameters,
-                runtime.config.max_read_result_rows,
+                runtime.read_result_row_limit(),
                 runtime.config.max_read_result_payload_bytes,
             );
         }
         Err(HawDBError::Execution(
             "SQL data statements are unavailable in an explicit Cypher session transaction".into(),
         ))
+    }
+
+    /// Opens a retained numeric cursor using this session's row ceiling.
+    /// Arrow streams derived from it inherit the same terminal-error contract.
+    pub fn query_with_params_retained(
+        &self,
+        cypher: &str,
+        parameters: &BTreeMap<String, Value>,
+        mut options: RetainedQueryOptions,
+    ) -> std::result::Result<RetainedQueryCursor, RetainedQueryError> {
+        if self.graph_transaction.is_some() {
+            return Err(RetainedQueryError::UnsupportedPlan);
+        }
+        options.max_result_rows =
+            restrictive_query_limit(self.row_limit(), options.max_result_rows);
+        self.db
+            .query_with_params_retained(cypher, parameters, options)
     }
 
     pub fn system_variables(&self) -> &QuerySystemVariables {
@@ -21572,6 +21685,10 @@ impl DatabaseSession<'_> {
                         self.system_variables.clone(),
                     )?,
                 );
+                self.transaction_runtime
+                    .as_mut()
+                    .expect("new session transaction")
+                    .session_config = self.config;
                 let branch_runtime = self.db.runtime.get()?;
                 self.graph_transaction = Some(
                     branch_runtime
@@ -21589,7 +21706,18 @@ impl DatabaseSession<'_> {
                         "COMMIT requires an active transaction".to_string(),
                     ));
                 };
-                self.transaction_runtime.take();
+                let runtime = self
+                    .transaction_runtime
+                    .take()
+                    .expect("active session transaction");
+                let mut mutation_limits = self.db.config.mutation_limits;
+                if let Some(limit) = runtime
+                    .session_config
+                    .row_limit()
+                    .and_then(NonZeroUsize::new)
+                {
+                    mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
+                }
                 self.db.ensure_writable()?;
                 let branch_runtime = self.db.runtime.get_mut()?;
                 let summary = branch_runtime
@@ -21598,7 +21726,7 @@ impl DatabaseSession<'_> {
                         &mut branch_runtime.catalog,
                         transaction,
                         hawdb_storage::relational::RelationalTransaction::default(),
-                        self.db.config.mutation_limits,
+                        mutation_limits,
                     )?;
                 Ok(QueryOutput {
                     rows: summary.rows.into(),
@@ -21660,7 +21788,14 @@ impl DatabaseSession<'_> {
             }
             _ => {
                 query_work_request_for_statement(&self.system_variables, &statement)?;
-                self.db.query_with_params(cypher_text, parameters)
+                self.db.query_request(
+                    QueryRequest::new(cypher_text)
+                        .with_params(parameters)
+                        .with_output_limits(QueryStreamOptions {
+                            max_rows: self.row_limit(),
+                            max_payload_bytes: None,
+                        }),
+                )
             }
         }
     }
@@ -21676,7 +21811,8 @@ impl DatabaseSession<'_> {
         let optimized =
             self.db
                 .optimized_explain_query_plan(cypher_text, &explain.statement, parameters)?;
-        let options = query_runtime::QueryExecutionOptions::for_bounded_read(None, None, None);
+        let options =
+            query_runtime::QueryExecutionOptions::for_bounded_read(self.row_limit(), None, None);
         let inner_statement_kind = statement_kind(statement_body(&explain.statement));
         if explain.analyze {
             if executor::is_mutation_plan(&optimized.physical_plan)? {
@@ -21692,7 +21828,7 @@ impl DatabaseSession<'_> {
                     &self.db.config.execution_memory,
                 )
                 .with_output_limits(
-                    self.db.config.max_read_result_rows,
+                    self.row_limit(),
                     self.db.config.max_read_result_payload_bytes,
                 ),
                 {
@@ -21821,6 +21957,17 @@ struct DatabaseReadSqlOptions<'a> {
 }
 
 impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
+    fn read_result_row_limit(&self) -> Option<usize> {
+        restrictive_query_limit(
+            self.config.read_result_row_limit(),
+            self.session_config.row_limit(),
+        )
+    }
+
+    pub(crate) fn apply_session_config(&mut self, config: SessionConfig) {
+        self.session_config = config;
+    }
+
     pub fn commit_epoch(&self) -> u64 {
         self.published_read_view.visible_commit_epoch()
     }
@@ -21838,7 +21985,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<QueryOutput> {
-        self.query_with_params_bounded(cypher_text, parameters, self.config.max_read_result_rows)
+        self.query_with_params_bounded(cypher_text, parameters, self.read_result_row_limit())
     }
 
     pub fn query_with_params_context(
@@ -21851,7 +21998,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             .query_with_params_bounded_profile_internal(
                 cypher_text,
                 parameters,
-                self.config.max_read_result_rows,
+                self.read_result_row_limit(),
                 None,
                 Some(task_context),
             )?
@@ -21891,7 +22038,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 &cypher_text,
                 prepared,
                 parameters,
-                self.config.max_read_result_rows,
+                self.read_result_row_limit(),
                 None,
                 Some(task_context),
             )?
@@ -21909,7 +22056,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             &cypher_text,
             prepared,
             parameters,
-            self.config.max_read_result_rows,
+            self.read_result_row_limit(),
             None,
             task_context.as_ref(),
         )
@@ -21924,7 +22071,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         self.query_with_params_bounded_profile_access_control(
             cypher_text,
             parameters,
-            self.config.max_read_result_rows,
+            self.read_result_row_limit(),
             access_control,
         )
         .map(|output| output.output)
@@ -22079,7 +22226,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         consumer: &mut impl FnMut(Row) -> Result<()>,
     ) -> Result<QueryStreamReport> {
         self.store.ensure_usable()?;
-        let max_rows = restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+        let max_rows = restrictive_query_limit(self.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
@@ -22223,7 +22370,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
     ) -> Result<BoundedReadQueryOutput> {
         self.store.ensure_usable()?;
         query_runtime::query_runtime_checkpoint(task_context)?;
-        let max_rows = restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+        let max_rows = restrictive_query_limit(self.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
@@ -22354,7 +22501,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 )
                 .with_output_limits(
                     restrictive_query_limit(
-                        self.config.max_read_result_rows,
+                        self.read_result_row_limit(),
                         options.output_limits.max_rows,
                     ),
                     restrictive_query_limit(
@@ -22405,7 +22552,7 @@ where
     S: crate::executor::ExecutionStore + hawdb_system_sql::SystemSqlStore,
 {
     pub fn query_sql(&self, sql_text: &str) -> Result<QueryOutput> {
-        self.query_sql_bounded(sql_text, self.config.max_read_result_rows)
+        self.query_sql_bounded(sql_text, self.read_result_row_limit())
     }
 
     pub fn query_sql_with_params(
@@ -22413,7 +22560,7 @@ where
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<QueryOutput> {
-        self.query_sql_with_params_bounded(sql_text, parameters, self.config.max_read_result_rows)
+        self.query_sql_with_params_bounded(sql_text, parameters, self.read_result_row_limit())
     }
 
     pub fn query_sql_bounded(
@@ -22546,7 +22693,7 @@ where
     ) -> Result<ProfiledRelationalSqlQueryOutput> {
         self.store.ensure_usable()?;
         query_runtime::query_runtime_checkpoint(Some(task_context))?;
-        let max_rows = restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+        let max_rows = restrictive_query_limit(self.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
@@ -22602,7 +22749,7 @@ where
     ) -> Result<QueryOutput> {
         self.store.ensure_usable()?;
         query_runtime::query_runtime_checkpoint(Some(task_context))?;
-        let max_rows = restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+        let max_rows = restrictive_query_limit(self.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
@@ -22636,7 +22783,7 @@ where
             parameters,
             prepared,
             DatabaseReadSqlOptions {
-                max_rows: self.config.max_read_result_rows,
+                max_rows: self.read_result_row_limit(),
                 max_payload_bytes: self.config.max_read_result_payload_bytes,
                 task_context,
                 join_planning: RelationalJoinPlanningDirective::Auto,

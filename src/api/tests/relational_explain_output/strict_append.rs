@@ -225,15 +225,15 @@ fn declared_positive_limit_still_obeys_row_cap() {
             let error = query(
                 &mut database,
                 door,
-                &explain_sql(analyze),
+                &explain_sql(analyze).replace("LIMIT 1", "LIMIT 2"),
                 QueryStreamOptions {
-                    max_rows: Some(0),
+                    max_rows: Some(1),
                     max_payload_bytes: None,
                 },
             )
             .unwrap_err();
             assert!(
-                error.to_string().contains("LIMIT must be between 1 and 0"),
+                error.to_string().contains("LIMIT must be between 1 and 1"),
                 "{error}"
             );
         }
@@ -448,5 +448,23 @@ fn transaction_report_obeys_runtime_result_reservation() {
             "{error}"
         );
         transaction.rollback();
+    }
+}
+
+#[test]
+fn zero_database_row_setting_does_not_reject_declared_append_limits() {
+    for analyze in [false, true] {
+        let mut database = fixture();
+        let report = query(
+            &mut database,
+            FrontDoor::Transaction,
+            &explain_sql(analyze),
+            QueryStreamOptions {
+                max_rows: Some(0),
+                max_payload_bytes: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(report.rows.len(), 1);
     }
 }

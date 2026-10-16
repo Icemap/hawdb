@@ -872,7 +872,7 @@ fn admit_node(
                 .checked_add(catalog.label_name(*label).map_or(0, str::len))
                 .ok_or(RetainedQueryError::SizeOverflow)?;
         }
-        if restrictive(config.max_read_result_rows, options.max_result_rows)
+        if restrictive(config.read_result_row_limit(), options.max_result_rows)
             .is_some_and(|limit| limit < 1)
             || restrictive(
                 config.max_read_result_payload_bytes,
