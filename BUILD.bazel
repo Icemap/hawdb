@@ -739,6 +739,21 @@ rust_test(
     ]
 ]
 
+# Complete canonical baseline comparison owns independent unique expected output.
+[
+    rust_test(
+        name = "hawdb_mvcc_baseline_comparison" + suffix + "_tests",
+        crate_root = "tests/mvcc_baseline_comparison.rs",
+        srcs = ["tests/mvcc_baseline_comparison.rs"],
+        edition = "2024",
+        deps = [library],
+    )
+    for suffix, library in [
+        ("", ":hawdb"),
+        ("_minimal", ":hawdb_minimal"),
+    ]
+]
+
 # Joint graph/relational intake and stage custody, separate from publication.
 [
     rust_test(

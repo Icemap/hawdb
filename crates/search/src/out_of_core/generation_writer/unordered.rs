@@ -10,6 +10,11 @@ use crate::out_of_core::mutation_run::SearchMutationOperation;
 use crate::SearchOutOfCoreReader;
 use std::num::{NonZeroU64, NonZeroUsize};
 
+mod baseline;
+pub use baseline::{
+    SearchBaselineComparisonLimits, SearchBaselineComparisonReport, SearchMatchedBaseline,
+    SearchOutOfCoreBaselineComparison,
+};
 mod heap;
 mod inspection;
 pub use inspection::{SearchMutationInspectionInput, SearchMutationInspectionStep};
@@ -178,6 +183,17 @@ impl SearchOutOfCoreUnorderedMutationWriter<'_> {
     #[doc(hidden)]
     pub fn reserve_session_metadata(&self, bytes: usize) -> Result<QueryMemoryLease> {
         self.inner.writer.memory.retained.reserve(bytes)
+    }
+    /// Full-source mapping must supply each document once. Enable before input;
+    /// identical duplicate bodies are rejected too. This cannot be disabled.
+    #[doc(hidden)]
+    pub fn require_unique_upserts(&mut self) -> Result<()> {
+        if self.failed || self.control.report.input_operations != 0 || !self.ready_for_input() {
+            self.failed = true;
+            return Err(unusable());
+        }
+        self.control.unique_upserts = true;
+        Ok(())
     }
     pub fn report(&self) -> SearchUnorderedMutationReport {
         self.control.report

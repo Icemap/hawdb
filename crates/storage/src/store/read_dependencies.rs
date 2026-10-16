@@ -112,6 +112,13 @@ impl GraphReadDependencies {
     /// Used by trusted query collectors, including absence/domain dependencies.
     /// An ignored budget error permanently invalidates this capture.
     pub fn record(&mut self, key: VersionKey) -> std::result::Result<(), VersionWriteSetError> {
+        // Whole-epoch equality already implies every precise identity is
+        // unchanged. In full-source scans this keeps retained metadata constant
+        // rather than adding one redundant key per enumerated row. A refused
+        // capture stays refused; it cannot regain validity through this path.
+        if !self.refused && self.keys.contains_key(&VersionKey::Database) {
+            return Ok(());
+        }
         let result = self.keys.record_live(key);
         self.refused |= result.is_err();
         result
@@ -563,6 +570,38 @@ mod tests {
             .commit_mutations(&mut catalog, vec![update(0, 20)])
             .unwrap();
         assert!(store.validate_read_dependencies(&later).is_err());
+    }
+
+    #[test]
+    fn database_scope_subsumes_precise_history_without_resetting_refusal() {
+        let mut store = GraphStore::default();
+        let mut catalog = Catalog::default();
+        let mut broad = store.capture_read_dependencies(1, 4096).unwrap();
+        broad.record(VersionKey::Database).unwrap();
+        let bytes = broad.estimated_bytes();
+        for id in 0..1000 {
+            broad.record(VersionKey::GraphNode(NodeId(id))).unwrap();
+        }
+        assert_eq!(broad.estimated_bytes(), bytes);
+        store.validate_read_dependencies(&broad).unwrap();
+        store
+            .commit_mutations(&mut catalog, vec![create("Other")])
+            .unwrap();
+        assert!(matches!(
+            store.validate_read_dependencies(&broad),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::Database,
+                ..
+            }))
+        ));
+        let mut refused = store.capture_read_dependencies(1, 4096).unwrap();
+        refused.record(VersionKey::GraphNode(NodeId(0))).unwrap();
+        assert!(refused.record(VersionKey::GraphNode(NodeId(1))).is_err());
+        assert!(refused.record(VersionKey::Database).is_err());
+        assert!(matches!(
+            store.validate_read_dependencies(&refused),
+            Err(GraphReadDependencyError::CaptureRefused)
+        ));
     }
 
     #[test]

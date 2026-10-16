@@ -64,9 +64,10 @@ mod text_seed;
 mod vector_serving;
 pub use generation_writer::{
     GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
-    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchGenerationAdmission,
+    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchBaselineComparisonLimits,
+    SearchBaselineComparisonReport, SearchGenerationAdmission, SearchMatchedBaseline,
     SearchMutationInspectionInput, SearchMutationInspectionStep, SearchMutationSortStep,
-    SearchMutationSortStepLimits, SearchMutationSortStepUsage,
+    SearchMutationSortStepLimits, SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison,
     SearchOutOfCoreGenerationBuildOptions, SearchOutOfCoreGenerationBuildReport,
     SearchOutOfCoreGenerationUpdate, SearchOutOfCoreGenerationWriter,
     SearchOutOfCoreMutationWriter, SearchOutOfCorePreparedGeneration,

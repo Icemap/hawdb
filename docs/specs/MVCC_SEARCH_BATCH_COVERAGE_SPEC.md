@@ -95,6 +95,15 @@ query context may close. Output checks cannot replace verified baseline/owner
 contracts or authorize publication. See
 [the source-linked proof](../tla/PROJECTION_OUTPUT_VERIFICATION_PROOF.md).
 
+`begin_projection_baseline_comparison` now drives complete native source input
+through a fixed zero/one-document mapper and unique private sort, then compares
+every expected full document and the complete visible count against the held C
+Search reader. Identical duplicate IDs from distinct native inputs refuse. It
+returns a nonpublishable historical match observation, not a capture/mapping/
+binding/external-vector or durable activation receipt. Unknown/lagged heads still
+need a genuine full rebuild. See
+[the baseline comparison proof](../tla/PROJECTION_BASELINE_COMPARISON_PROOF.md).
+
 The reusable facade session owns PreparedRead, the immutable feed cursor,
 budgets, binding/base identity and private staging. Raw mutable cursor fields,
 public operation vectors and callback-provided processed counts cannot produce

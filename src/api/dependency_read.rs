@@ -27,8 +27,11 @@ mod full_source;
 #[path = "dependency_read/staging_session.rs"]
 mod staging_session;
 pub use staging_session::{
-    ProjectionMappingContext, ProjectionMappingFunction, ProjectionMappingInput,
-    ProjectionMappingLimits, ProjectionMappingStatus, ProjectionMappingUsage,
+    ProjectionBaselineComparisonConfig, ProjectionBaselineComparisonSession,
+    ProjectionBaselineComparisonStep, ProjectionBaselineMappingContext,
+    ProjectionBaselineMappingFunction, ProjectionBaselineMappingLimits, ProjectionMappingContext,
+    ProjectionMappingFunction, ProjectionMappingInput, ProjectionMappingLimits,
+    ProjectionMappingStatus, ProjectionMappingUsage, ProjectionMatchedBaseline,
     ProjectionOutputVerificationContext, ProjectionOutputVerificationFunction,
     ProjectionOutputVerificationSession, ProjectionStagedInputs, ProjectionStagingSession,
     ProjectionStagingSessionConfig, ProjectionStagingSessionStep,

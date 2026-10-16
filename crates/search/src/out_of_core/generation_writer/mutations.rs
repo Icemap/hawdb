@@ -112,6 +112,9 @@ impl<'reader> SearchOutOfCoreMutationWriter<'reader> {
         })
     }
 
+    pub(super) fn base_reader(&self) -> &'reader SearchOutOfCoreReader {
+        self.reader
+    }
     pub fn upsert_reader(
         &mut self,
         header: SearchDocumentHeader,

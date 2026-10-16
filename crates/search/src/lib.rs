@@ -206,19 +206,21 @@ pub use lexical_source_policy::SearchLexicalSourcePolicy;
 pub use lexical_term_policy::SearchLexicalTermPolicy;
 pub use out_of_core::{
     GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
-    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchBodyReadOptions,
-    SearchGenerationAdmission, SearchMutationInspectionInput, SearchMutationInspectionStep,
+    ScheduledSearchOutOfCoreSegmentCompactionReport, SearchBaselineComparisonLimits,
+    SearchBaselineComparisonReport, SearchBodyReadOptions, SearchGenerationAdmission,
+    SearchMatchedBaseline, SearchMutationInspectionInput, SearchMutationInspectionStep,
     SearchMutationSortStep, SearchMutationSortStepLimits, SearchMutationSortStepUsage,
-    SearchOutOfCoreCandidate, SearchOutOfCoreConfig, SearchOutOfCoreExecutionContext,
-    SearchOutOfCoreGenerationBuildOptions, SearchOutOfCoreGenerationBuildReport,
-    SearchOutOfCoreGenerationUpdate, SearchOutOfCoreGenerationWriter,
-    SearchOutOfCoreHydrationOutput, SearchOutOfCoreMetrics, SearchOutOfCoreMutationWriter,
-    SearchOutOfCoreOutput, SearchOutOfCorePreparedGeneration, SearchOutOfCorePreparedUpdate,
-    SearchOutOfCoreReader, SearchOutOfCoreRefreshReport, SearchOutOfCoreSegmentCompaction,
-    SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
-    SearchOutOfCoreSegmentCompactionStopReason, SearchOutOfCoreUnorderedMutationWriter,
-    SearchStagingCleanupReport, SearchTextSeedOutput, SearchTextSeedReport,
-    SearchUnorderedMutationLimits, SearchUnorderedMutationReport, SearchVerifiedBody,
+    SearchOutOfCoreBaselineComparison, SearchOutOfCoreCandidate, SearchOutOfCoreConfig,
+    SearchOutOfCoreExecutionContext, SearchOutOfCoreGenerationBuildOptions,
+    SearchOutOfCoreGenerationBuildReport, SearchOutOfCoreGenerationUpdate,
+    SearchOutOfCoreGenerationWriter, SearchOutOfCoreHydrationOutput, SearchOutOfCoreMetrics,
+    SearchOutOfCoreMutationWriter, SearchOutOfCoreOutput, SearchOutOfCorePreparedGeneration,
+    SearchOutOfCorePreparedUpdate, SearchOutOfCoreReader, SearchOutOfCoreRefreshReport,
+    SearchOutOfCoreSegmentCompaction, SearchOutOfCoreSegmentCompactionPolicy,
+    SearchOutOfCoreSegmentCompactionReport, SearchOutOfCoreSegmentCompactionStopReason,
+    SearchOutOfCoreUnorderedMutationWriter, SearchStagingCleanupReport, SearchTextSeedOutput,
+    SearchTextSeedReport, SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
+    SearchVerifiedBody,
 };
 // These are internal ownership seams. Hosts continue to use the embedded facade.
 #[doc(hidden)]

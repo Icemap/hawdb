@@ -123,8 +123,15 @@ impl SpoolRecord {
         memory: &BuildMemory,
         task: &RuntimeTaskContext,
     ) -> Result<()> {
-        let encoding = DocumentEncoding::new_with_context(expected, Some(task))?;
-        if encoding.len() as u64 != self.encoded_bytes {
+        self.require_source(expected, memory, task)
+    }
+    pub(in super::super) fn require_source(
+        &self,
+        expected: &impl crate::document_encoding::RecordSource,
+        memory: &BuildMemory,
+        task: &RuntimeTaskContext,
+    ) -> Result<()> {
+        if expected.encoded_len(Some(task))? as u64 != self.encoded_bytes {
             return Err(HawDBError::Execution(
                 "staged document differs from expected document".into(),
             ));
@@ -141,7 +148,7 @@ impl SpoolRecord {
             digest: Crc32cHasher::new(),
             equal: true,
         };
-        encoding.write_to(&mut compare)?;
+        expected.write_encoded(&mut compare)?;
         if compare.input.remaining != 0 || compare.digest.finish() != self.checksum {
             return Err(HawDBError::Storage(
                 "immutable spool record checksum changed".into(),

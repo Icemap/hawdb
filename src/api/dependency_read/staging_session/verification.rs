@@ -22,6 +22,26 @@ pub struct ProjectionOutputVerificationContext<'a, 'source> {
     queries: usize,
     failed: bool,
 }
+impl<'a, 'source> ProjectionOutputVerificationContext<'a, 'source> {
+    pub(super) fn new(
+        read: &'a ProjectionFeedRead<'source>,
+        limits: ProjectionMappingLimits,
+        reads: PreparedReadLimits,
+        usage: &'a mut ProjectionMappingUsage,
+    ) -> Self {
+        Self {
+            read,
+            limits,
+            reads,
+            usage,
+            queries: 0,
+            failed: false,
+        }
+    }
+    pub(super) fn is_failed(&self) -> bool {
+        self.failed
+    }
+}
 impl ProjectionOutputVerificationContext<'_, '_> {
     pub fn source_epoch(&self) -> u64 {
         self.read.source_epoch()

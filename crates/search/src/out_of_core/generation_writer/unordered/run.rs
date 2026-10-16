@@ -11,6 +11,7 @@ use std::io::{BufWriter, Write};
 pub(super) struct Control {
     pub(super) limits: SearchUnorderedMutationLimits,
     pub(super) report: SearchUnorderedMutationReport,
+    pub(super) unique_upserts: bool,
     memory: BuildMemory,
     task: RuntimeTaskContext,
     max_id_bytes: usize,
@@ -26,6 +27,7 @@ impl Control {
         Self {
             limits,
             report: Default::default(),
+            unique_upserts: false,
             memory,
             task,
             max_id_bytes,
@@ -762,6 +764,9 @@ pub(super) fn reduce(left: Entry, right: Entry, control: &mut Control) -> Result
         | (upsert @ Entry::Upsert(..), Entry::Delete(_)) => Ok(upsert),
         (Entry::Delete(left), Entry::Delete(_)) => Ok(Entry::Delete(left)),
         (Entry::Upsert(left, a), Entry::Upsert(right, b)) => {
+            if control.unique_upserts {
+                return Err(invalid("duplicate full-source document ID"));
+            }
             control.read(
                 left.encoded_bytes
                     .checked_add(right.encoded_bytes)

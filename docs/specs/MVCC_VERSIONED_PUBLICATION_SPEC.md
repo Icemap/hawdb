@@ -344,7 +344,10 @@ ordering primitives now have joint native intake/mapping/stage custody and a
 closed-output verification phase retaining queryable E until every final
 mutation and End is checked by a fixed trusted verifier under shared logical
 admission, returning
-only an opaque nonpublishable artifact. The complete verified-baseline/coverage
+only an opaque nonpublishable artifact. Independent full-source baseline set/content comparison is also implemented,
+including native unique-owner-ID refusal and complete-count checks; its historical
+match observation grants no publication authority. The complete versioned
+baseline/capture/mapping/coverage
 activation session, binding/external-version/receipt protocol and incremental
 final index build remain outstanding. Activation still
 checksums/installs artifacts and performs cleanup under the Search lease, so a

@@ -8,6 +8,13 @@ use crate::search::{
     SearchOutOfCorePreparedUpdate, SearchOutOfCoreReader, SearchOutOfCoreUnorderedMutationWriter,
     SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
 };
+#[path = "staging_session/baseline.rs"]
+mod baseline;
+pub use baseline::{
+    ProjectionBaselineComparisonConfig, ProjectionBaselineComparisonSession,
+    ProjectionBaselineComparisonStep, ProjectionBaselineMappingContext,
+    ProjectionBaselineMappingFunction, ProjectionBaselineMappingLimits, ProjectionMatchedBaseline,
+};
 #[path = "staging_session/verification.rs"]
 mod verification;
 use hawdb_core::RuntimeTaskContext;

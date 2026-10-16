@@ -6,8 +6,8 @@ use super::*;
 /// One borrowed final mutation, or explicit End (`id() == None`). No stage,
 /// reader, cursor or document body can escape through this view.
 pub struct SearchMutationInspectionInput<'a> {
-    entry: Option<&'a run::Entry>,
-    control: &'a mut Control,
+    pub(super) entry: Option<&'a run::Entry>,
+    pub(super) control: &'a mut Control,
     checked: bool,
     failed: bool,
 }
