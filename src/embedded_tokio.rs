@@ -979,7 +979,7 @@ mod tests {
                         .query_with_request(
                             "CALL project_graph('custom', ['Memory'], [])",
                             BTreeMap::new(),
-                            RuntimeWorkRequest::foreground_query(0, 1024),
+                            RuntimeWorkRequest::foreground_query(0, 2048),
                             RuntimeTaskContext::default(),
                         )
                         .await
