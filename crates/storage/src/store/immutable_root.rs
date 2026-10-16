@@ -2548,7 +2548,7 @@ mod tests {
             let project = temp_dir("branch-runtime");
             let fixture = Self {
                 objects: project.join("immutable"),
-                catalog_path: project.join("catalog.hawdb"),
+                catalog_path: project.join("branches").join("catalog.hawdb"),
                 main: branch_id(1),
                 project,
             };
