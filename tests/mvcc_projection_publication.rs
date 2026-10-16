@@ -2288,3 +2288,277 @@ fn prepared_hydration_uses_internal_id_roots_without_owning_unrelated_bodies() {
         }
     }
 }
+
+fn relational_prefix_fixture(cold: bool) -> (TestRoot, Database) {
+    let (root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
+    db.query_sql("CREATE TABLE thread_messages (content_message_id TEXT PRIMARY KEY, thread_storage_id TEXT, order_index BIGINT, body TEXT)").unwrap();
+    db.query_sql("CREATE INDEX message_group ON thread_messages (thread_storage_id, order_index, content_message_id)").unwrap();
+    db.query_sql("INSERT INTO thread_messages (content_message_id, thread_storage_id, order_index, body) VALUES ('a','g',1,'one'), ('b','g',2,'two'), ('c','other',1,'other')").unwrap();
+    if cold {
+        db.checkpoint().unwrap();
+        drop(db);
+        db = Database::open_with_config(
+            &root.0,
+            hawdb::DatabaseConfig {
+                storage_residency_mode: hawdb::StorageResidencyMode::OutOfCore,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(db.storage_residency_report().unwrap().out_of_core);
+    }
+    (root, db)
+}
+fn relational_prefix_page(read: &mut hawdb::PreparedRead, group: &str) -> hawdb::QueryOutput {
+    read.query_sql_with_params("SELECT m.content_message_id, m.body FROM public.thread_messages AS m WHERE m.thread_storage_id = $1 AND (m.order_index > $2 OR (m.order_index = $2 AND m.content_message_id > $3)) ORDER BY m.order_index ASC, m.content_message_id ASC LIMIT $4",&[Value::String(group.into()),Value::Int(0),Value::String(String::new()),Value::Int(1)]).unwrap()
+}
+#[test]
+fn relational_prefix_capture_precedes_query_and_allows_disjoint_large_payload_writes() {
+    for cold in [false, true] {
+        for related in [false, true] {
+            let (_root, mut db) = relational_prefix_fixture(cold);
+            let mut read = db.begin_prepared_read(limits()).unwrap();
+            db.query_sql_with_params(
+                "UPDATE thread_messages SET body = $1 WHERE content_message_id = $2",
+                &[
+                    Value::String("x".repeat(1024 * 1024)),
+                    Value::String(if related { "a" } else { "c" }.into()),
+                ],
+            )
+            .unwrap();
+            let output = relational_prefix_page(&mut read, "g");
+            assert_eq!(output.rows.len(), 1);
+            assert_eq!(output.rows[0]["body"], Value::String("one".into()));
+            let dependencies = read.finish().unwrap();
+            assert_eq!(dependencies.relational_index_prefix_count(), 1);
+            assert_eq!(dependencies.exact_relational_row_count(), 0);
+            assert!(!dependencies.requires_unchanged_database_epoch());
+            let staged = seal(
+                &db.projection_generation_store().unwrap(),
+                "prefix_capture",
+                dependencies.source_epoch(),
+                None,
+            );
+            let result = db.publish_prepared_projection(&dependencies, &staged);
+            if related {
+                assert!(
+                    matches!(result, Err(ProjectionPublicationError::Dependency(_))),
+                    "cold={cold}"
+                );
+            } else {
+                result.unwrap();
+            }
+        }
+    }
+}
+#[test]
+fn relational_prefix_pages_cover_membership_deletes_aba_off_page_and_absence() {
+    for cold in [false, true] {
+        for change in [
+            "delete", "move_out", "move_in", "aba", "off_page", "empty", "schema",
+        ] {
+            let (_root, mut db) = relational_prefix_fixture(cold);
+            let mut read = db.begin_prepared_read(limits()).unwrap();
+            let output =
+                relational_prefix_page(&mut read, if change == "empty" { "missing" } else { "g" });
+            assert_eq!(output.rows.is_empty(), change == "empty");
+            let dependencies = read.finish().unwrap();
+            assert_eq!(dependencies.relational_index_prefix_count(), 1);
+            match change {
+                "delete" => {
+                    db.query_sql("DELETE FROM thread_messages WHERE content_message_id = 'a'")
+                        .unwrap();
+                }
+                "move_out" | "aba" => {
+                    db.query_sql("UPDATE thread_messages SET thread_storage_id = 'other' WHERE content_message_id = 'a'").unwrap();
+                    if change == "aba" {
+                        db.query_sql("UPDATE thread_messages SET thread_storage_id = 'g' WHERE content_message_id = 'a'").unwrap();
+                    }
+                }
+                "move_in" => {
+                    db.query_sql("UPDATE thread_messages SET thread_storage_id = 'g' WHERE content_message_id = 'c'").unwrap();
+                }
+                "off_page" => {
+                    db.query_sql("UPDATE thread_messages SET body = 'changed' WHERE content_message_id = 'b'").unwrap();
+                }
+                "empty" => {
+                    db.query_sql("INSERT INTO thread_messages (content_message_id, thread_storage_id, order_index, body) VALUES ('new','missing',1,'new')")
+                        .unwrap();
+                }
+                "schema" => {
+                    db.query_sql("ALTER TABLE thread_messages ADD COLUMN extra TEXT")
+                        .unwrap();
+                }
+                _ => unreachable!(),
+            }
+            let staged = seal(
+                &db.projection_generation_store().unwrap(),
+                "prefix_changed",
+                dependencies.source_epoch(),
+                None,
+            );
+            assert!(
+                matches!(
+                    db.publish_prepared_projection(&dependencies, &staged),
+                    Err(ProjectionPublicationError::Dependency(_))
+                ),
+                "cold={cold} change={change}"
+            );
+        }
+    }
+}
+#[test]
+fn relational_prefix_selection_preserves_nonnecessary_and_unsupported_fallbacks() {
+    for query in [
+        "SELECT body FROM thread_messages WHERE thread_storage_id = 'g' OR body = 'other'",
+        "SELECT body FROM thread_messages WHERE NOT (thread_storage_id = 'g')",
+        "SELECT body FROM thread_messages WHERE order_index = 1",
+        "SELECT body FROM thread_messages WHERE thread_storage_id = NULL",
+        "SELECT body FROM thread_messages WHERE body = 'one'",
+    ] {
+        let (_root, mut db) = relational_prefix_fixture(false);
+        let mut read = db.begin_prepared_read(limits()).unwrap();
+        read.query_sql_with_params(query, &[]).unwrap();
+        let dependencies = read.finish().unwrap();
+        assert!(dependencies.requires_unchanged_database_epoch(), "{query}");
+        assert_eq!(dependencies.relational_index_prefix_count(), 0);
+        db.query("CREATE (:Unrelated {id:'new'})").unwrap();
+        let staged = seal(
+            &db.projection_generation_store().unwrap(),
+            "prefix_fallback",
+            dependencies.source_epoch(),
+            None,
+        );
+        assert!(matches!(
+            db.publish_prepared_projection(&dependencies, &staged),
+            Err(ProjectionPublicationError::Dependency(_))
+        ));
+    }
+}
+
+#[test]
+fn relational_prefix_can_bind_a_complete_composite_leading_tuple() {
+    for cold in [false, true] {
+        for related in [false, true] {
+            let (_root, mut db) = relational_prefix_fixture(cold);
+            let mut read = db.begin_prepared_read(limits()).unwrap();
+            let output=read.query_sql_with_params("SELECT body FROM thread_messages WHERE thread_storage_id = $1 AND order_index = $2",&[Value::String("g".into()),Value::Int(1)]).unwrap();
+            assert_eq!(output.rows[0]["body"], Value::String("one".into()));
+            let dependencies = read.finish().unwrap();
+            assert_eq!(dependencies.relational_index_prefix_count(), 1);
+            assert!(!dependencies.requires_unchanged_database_epoch());
+            db.query_sql_with_params(
+                "UPDATE thread_messages SET body = 'changed' WHERE content_message_id = $1",
+                &[Value::String(if related { "a" } else { "b" }.into())],
+            )
+            .unwrap();
+            let staged = seal(
+                &db.projection_generation_store().unwrap(),
+                "prefix_composite",
+                dependencies.source_epoch(),
+                None,
+            );
+            let result = db.publish_prepared_projection(&dependencies, &staged);
+            if related {
+                assert!(matches!(
+                    result,
+                    Err(ProjectionPublicationError::Dependency(_))
+                ));
+            } else {
+                result.unwrap();
+            }
+        }
+    }
+}
+#[test]
+fn relational_prefix_float_and_oversized_equality_values_keep_epoch_barriers() {
+    for large in [false, true] {
+        let (_root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
+        db.query_sql(if large {
+            "CREATE TABLE unqualified_scope (id BIGINT PRIMARY KEY, group_value TEXT)"
+        } else {
+            "CREATE TABLE unqualified_scope (id BIGINT PRIMARY KEY, group_value DOUBLE PRECISION)"
+        })
+        .unwrap();
+        db.query_sql("CREATE INDEX unsupported_group ON unqualified_scope (group_value)")
+            .unwrap();
+        let value = if large {
+            Value::String("x".repeat(5000))
+        } else {
+            Value::Float(1.0)
+        };
+        db.query_sql_with_params(
+            "INSERT INTO unqualified_scope (id, group_value) VALUES (1,$1)",
+            std::slice::from_ref(&value),
+        )
+        .unwrap();
+        let mut read = db.begin_prepared_read(limits()).unwrap();
+        assert_eq!(
+            read.query_sql_with_params(
+                "SELECT id FROM unqualified_scope WHERE group_value = $1",
+                &[value]
+            )
+            .unwrap()
+            .rows
+            .len(),
+            1
+        );
+        let dependencies = read.finish().unwrap();
+        assert_eq!(dependencies.relational_index_prefix_count(), 0);
+        assert!(dependencies.requires_unchanged_database_epoch());
+    }
+}
+
+#[test]
+fn relational_prefix_nullable_unique_suffix_requires_complete_nonnull_binding() {
+    for cold in [false, true] {
+        for constraint in [false, true] {
+            let (root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
+            db.query_sql(if constraint {
+                "CREATE TABLE nullable_groups (id BIGINT PRIMARY KEY, group_value TEXT, sort_value BIGINT, UNIQUE (group_value, sort_value))"
+            } else {
+                "CREATE TABLE nullable_groups (id BIGINT PRIMARY KEY, group_value TEXT, sort_value BIGINT)"
+            }).unwrap();
+            if !constraint {
+                db.query_sql("CREATE UNIQUE INDEX nullable_group_index ON nullable_groups (group_value, sort_value)").unwrap();
+            }
+            db.query_sql("INSERT INTO nullable_groups (id, group_value, sort_value) VALUES (1,'g',NULL), (2,'g',1)").unwrap();
+            db.query_sql("CREATE TABLE group_owners (group_value TEXT PRIMARY KEY)")
+                .unwrap();
+            db.query_sql("INSERT INTO group_owners (group_value) VALUES ('g')")
+                .unwrap();
+            if cold {
+                db.checkpoint().unwrap();
+                drop(db);
+                db = Database::open_with_config(
+                    &root.0,
+                    hawdb::DatabaseConfig {
+                        storage_residency_mode: hawdb::StorageResidencyMode::OutOfCore,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            }
+            let joined = db.query_sql("SELECT r.id FROM group_owners AS o INNER JOIN nullable_groups AS r ON r.group_value = o.group_value WHERE o.group_value = 'g' ORDER BY r.id").unwrap();
+            assert_eq!(joined.rows.len(), 2, "cold={cold} constraint={constraint}");
+            for complete in [false, true] {
+                let mut read = db.begin_prepared_read(limits()).unwrap();
+                let query = if complete {
+                    "SELECT id FROM nullable_groups WHERE group_value = 'g' AND sort_value = 1"
+                } else {
+                    "SELECT id FROM nullable_groups WHERE group_value = 'g'"
+                };
+                let output = read.query_sql_with_params(query, &[]).unwrap();
+                assert_eq!(output.rows.len(), if complete { 1 } else { 2 });
+                let dependencies = read.finish().unwrap();
+                // Only declared indexes participate in prepared prefix reads.
+                let precise = complete && !constraint;
+                assert_eq!(dependencies.requires_unchanged_database_epoch(), !precise);
+                assert_eq!(
+                    dependencies.relational_index_prefix_count(),
+                    usize::from(precise)
+                );
+            }
+        }
+    }
+}

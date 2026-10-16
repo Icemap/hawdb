@@ -50,6 +50,7 @@ STORAGE_MODELS = [
     "HawDBPrimaryKeyPredicate",
     "HawDBProjectionCaptureClosure",
     "HawDBInternalIdPointAccess",
+    "HawDBRelationalIndexPrefixReads",
     "HawDBProjectionChangeCapture",
     "HawDBProjectionChangefeed",
     "HawDBProjectionDurability",

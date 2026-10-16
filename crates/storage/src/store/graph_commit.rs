@@ -1802,8 +1802,16 @@ impl GraphStore {
                 self.validate_version_writes(&version_writes, read_epoch)?;
             }
             let authoritative_index = self.authoritative_relational_constraint_index()?;
-            let index_limits = self.relational_index_live_capture_limits();
-            let row_limits = self.relational_row_live_capture_limits();
+            // Captured old index membership plus new row values also supply
+            // read-only prefix invalidation, including payload-only updates.
+            let tracking = self.tracks_read_dependencies()
+                && !version_writes.contains_key(&VersionKey::Database);
+            let index_limits = self
+                .relational_index_live_capture_limits()
+                .or_else(|| tracking.then(Default::default));
+            let row_limits = self
+                .relational_row_live_capture_limits()
+                .or_else(|| tracking.then(Default::default));
             let staged = if self.relational_state.canonical_row_metadata_only() {
                 let index = authoritative_index.as_ref().ok_or_else(|| {
                     HawDBError::StorageIntegrity(
@@ -1910,6 +1918,14 @@ impl GraphStore {
         if let Some(read_epoch) = mvcc_read_epoch {
             self.validate_version_writes(&version_writes, read_epoch)?;
         }
+        // No writer validation may consume read-only summaries. All the final
+        // mixed destinations above have now been validated; admission is pre-WAL.
+        self.extend_relational_read_invalidation_stamps(
+            staged_relational_state.as_ref(),
+            staged_relational_index_capture.as_ref(),
+            staged_relational_row_capture.as_ref(),
+            &mut version_writes,
+        )?;
         let staged_relational_index_publication = self.stage_relational_index_live_publication(
             next_commit_epoch,
             staged_relational_index_capture,
@@ -2477,6 +2493,7 @@ fn version_key_kind(key: &VersionKey) -> &'static str {
         VersionKey::ReadBarrier => "read_barrier",
         VersionKey::ReadNodeDomain(_) => "read_node_domain",
         VersionKey::ReadNodeProperty { .. } => "read_node_property",
+        VersionKey::ReadRelationalIndexPrefix { .. } => "read_relational_index_prefix",
         VersionKey::GraphNode(_) => "graph_node",
         VersionKey::GraphRelationship(_) => "graph_relationship",
         VersionKey::GraphAdjacency { .. } => "graph_adjacency",

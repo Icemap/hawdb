@@ -415,3 +415,18 @@ capture/validation and its native refinement, implement backend staging/activati
 integrate the outer owner, then finish fault and workload qualification. These can
 remain commits in one PR; do not stack PR bases. Keep #231/#232 open until their
 full original and added acceptance requirements are proven.
+
+## Relational prefix read refinement (2026-10-16)
+
+Prepared single-table SQL can record necessary leading tuples of declared
+indexes, including complete group membership, payload-only changes, empty
+results and off-page updates. The new read-only summary family is added only
+after writer validation. Bounded complete index/row captures supply old/new
+membership and payload stamps; incomplete/admission cases use ReadBarrier.
+Unsupported scalar domains retain whole-epoch fallback. Nullable unique
+prefixes require nonnullable unbound suffixes; the ordinary base/JOIN selectors
+share that correctness condition. See
+[the conditional argument and model](../tla/RELATIONAL_INDEX_PREFIX_READS_PROOF.md).
+This enables an engine prerequisite for Thread fanout; joined SourceChunk
+reads, artifact-bound coverage, actual Mem owner migration and the original
+resource/concurrency qualification remain required.

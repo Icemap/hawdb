@@ -568,6 +568,26 @@ impl RelationalTableSchema {
         self.columns.iter().position(|column| column.name == name)
     }
 
+    /// A non-NULL equality-bound prefix covers all matching rows only if
+    /// nullable suffixes cannot be omitted by the unique-index NULL policy.
+    pub fn index_prefix_covers_matches(
+        &self,
+        columns: &[String],
+        prefix_len: usize,
+        unique: bool,
+    ) -> bool {
+        prefix_len > 0
+            && prefix_len <= columns.len()
+            && columns
+                .iter()
+                .all(|name| self.column_position(name).is_some())
+            && (!unique
+                || columns[prefix_len..].iter().all(|name| {
+                    self.column_position(name)
+                        .is_some_and(|p| !self.columns[p].nullable)
+                }))
+    }
+
     pub fn required_index_definitions(&self) -> Vec<RelationalIndexDefinition> {
         let mut definitions = Vec::with_capacity(
             1 + self.unique_constraints.len() + self.indexes.len() + self.foreign_keys.len(),

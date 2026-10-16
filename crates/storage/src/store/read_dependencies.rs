@@ -30,6 +30,8 @@ use std::fmt;
 
 #[path = "read_dependencies/indexed_nodes.rs"]
 mod indexed_nodes;
+#[path = "read_dependencies/relational_indexes.rs"]
+mod relational_indexes;
 use indexed_nodes::{record_stamp, IndexedNodeReadInvalidations};
 
 #[cfg(test)]
@@ -90,6 +92,13 @@ impl GraphReadDependencies {
         self.keys
             .iter()
             .filter(|(key, _)| matches!(key, VersionKey::RelationalRow { .. }))
+            .count()
+    }
+
+    pub fn relational_index_prefix_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::ReadRelationalIndexPrefix { .. }))
             .count()
     }
 
@@ -240,10 +249,12 @@ impl GraphStore {
                 committed_epoch: self.commit_epoch,
             }));
         }
-        let has_node_domain = captured.keys.iter().any(|(key, _)| {
+        let has_read_summary = captured.keys.iter().any(|(key, _)| {
             matches!(
                 key,
-                VersionKey::ReadNodeDomain(_) | VersionKey::ReadNodeProperty { .. }
+                VersionKey::ReadNodeDomain(_)
+                    | VersionKey::ReadNodeProperty { .. }
+                    | VersionKey::ReadRelationalIndexPrefix { .. }
             )
         });
         let barrier_keys = [VersionKey::Database, VersionKey::Schema];
@@ -252,7 +263,7 @@ impl GraphStore {
             .iter()
             .map(|(key, _)| key)
             .chain(barrier_keys.iter())
-            .chain(has_node_domain.then_some(&VersionKey::ReadBarrier));
+            .chain(has_read_summary.then_some(&VersionKey::ReadBarrier));
         for key in keys {
             if let Some(stamp) = self.version_index.stamp(key)
                 && stamp.commit_epoch > captured.source_epoch
@@ -264,6 +275,11 @@ impl GraphStore {
             }
         }
         Ok(())
+    }
+
+    pub(super) fn tracks_read_dependencies(&self) -> bool {
+        self.version_snapshot_pin.is_none()
+            && self.read_dependency_readers.load(AtomicOrdering::Acquire) > 0
     }
 
     pub(super) fn extend_read_invalidation_stamps(

@@ -166,3 +166,14 @@ Complete the original Mem outer-owner interleaving and 1/4/8-writer enabled/
 disabled catch-up measurements, retained-source RSS, fault composition and
 single-stream latency/fairness gates. A passing coverage model or primitive
 iterator alone does not complete #231/#232.
+
+## Relational fanout prerequisite (2026-10-16)
+
+Prepared single-table SQL now admits necessary declared-index prefix
+dependencies. A Thread group page can cover its whole group despite keyset
+ranges/LIMIT, allowing unrelated groups to commit. Complete old/new/payload
+summaries or conservative barriers invalidate relevant changes. Nullable unique
+indexes cannot supply incomplete prefix results. This remains a read token, not
+a stage-bound coverage certificate; SQL joins, session continuation, baseline
+verification and actual host adoption remain open. The conditional proof is
+[here](../tla/RELATIONAL_INDEX_PREFIX_READS_PROOF.md).

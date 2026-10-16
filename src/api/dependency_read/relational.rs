@@ -21,6 +21,9 @@ use crate::sql::{
 use hawdb_relational::query_value::value_to_relational_as;
 use hawdb_storage::relational::{RelationalKey, RelationalTableSchema, RelationalValue};
 
+#[path = "relational/indexed.rs"]
+mod indexed;
+
 const MAX_INPUT_BYTES: usize = 64 * 1024;
 const MAX_PARAMETERS: usize = 1024;
 const MAX_TOKENS: usize = 4096;
@@ -33,7 +36,9 @@ const MAX_KEY_BYTES: usize = 4096;
 impl PreparedRead {
     /// Executes a bounded canonical single-table SELECT. Necessary complete
     /// primary-key equalities under AND use existing row stamps, including
-    /// absent keys; other qualified reads expose a whole-epoch fallback.
+    /// absent keys. Necessary leading equalities of declared indexes record
+    /// complete prefix domains, including payload and empty-page changes.
+    /// Other qualified reads expose a whole-epoch fallback.
     /// Joins, functions, catalogs, projection bindings and locking reads fail
     /// closed. Metadata admission bounds SQL plus scalar parameters to 64 KiB,
     /// 1024 parameters/expression nodes and 64 nested expression levels. A lexical
@@ -86,6 +91,11 @@ impl PreparedRead {
             .table_schema(&table.name)
             .ok_or_else(|| refusal("noncanonical or unknown relational table"))?;
         let key = primary_key(select, schema, parameters)?;
+        let key = if matches!(key, VersionKey::Database) {
+            indexed::prefix_key(select, schema, parameters)?.unwrap_or(key)
+        } else {
+            key
+        };
         self.dependencies
             .graph
             .record(key)

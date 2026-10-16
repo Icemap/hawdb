@@ -89,6 +89,10 @@ impl PreparedReadDependencies {
         self.graph.exact_relational_row_count()
     }
 
+    pub fn relational_index_prefix_count(&self) -> usize {
+        self.graph.relational_index_prefix_count()
+    }
+
     pub fn node_domain_count(&self) -> usize {
         self.graph.node_domain_count()
     }

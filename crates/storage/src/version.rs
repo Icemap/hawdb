@@ -35,6 +35,8 @@ use std::sync::{Arc, Mutex};
 /// Bounds one exact read-invalidation key before copying query/data values.
 /// Larger identities retain a conservative read barrier instead.
 pub const MAX_NODE_PROPERTY_READ_KEY_BYTES: usize = 4096;
+/// Maximum retained identity for one declared relational index-prefix summary.
+pub const MAX_RELATIONAL_INDEX_READ_KEY_BYTES: usize = 4096;
 
 // All storage snapshots register, including transaction workspaces, savepoints,
 // and snapshots from which another transaction might later be created.
@@ -119,6 +121,13 @@ pub enum VersionKey {
         property: String,
         value: Box<crate::Value>,
     },
+    /// Read invalidation only. Covers all rows formerly/currently matching an
+    /// exact leading tuple of a declared relational index, including payloads.
+    ReadRelationalIndexPrefix {
+        table: String,
+        index: String,
+        prefix: RelationalKey,
+    },
     GraphNode(NodeId),
     GraphRelationship(RelId),
     GraphAdjacency {
@@ -158,6 +167,14 @@ impl CowPageWeight for VersionKey {
                 .saturating_add(property.len())
                 .saturating_add(std::mem::size_of::<crate::Value>())
                 .saturating_add(value.cow_page_bytes()),
+            Self::ReadRelationalIndexPrefix {
+                table,
+                index,
+                prefix,
+            } => base
+                .saturating_add(table.len())
+                .saturating_add(index.len())
+                .saturating_add(relational_key_bytes(prefix)),
             Self::GraphNode(_) | Self::GraphRelationship(_) => base,
             Self::GraphAdjacency { .. } => base,
             Self::RelationalRow { table, primary_key } => base
@@ -194,6 +211,58 @@ pub fn node_property_read_key(
         label: label.into(),
         property: property.into(),
         value: Box::new(value.clone()),
+    })
+}
+
+/// Admission before cloning a typed equality prefix. Floating keys, NULL and
+/// overflow references keep a conservative query barrier; SQL/index equality
+/// must agree before a narrower family is admitted.
+pub fn relational_index_prefix_read_key_bytes<'a>(
+    table: &str,
+    index: &str,
+    values: impl Iterator<Item = &'a crate::relational::RelationalValue>,
+) -> Option<usize> {
+    use crate::relational::RelationalValue;
+    let mut count = 0;
+    let mut bytes = std::mem::size_of::<VersionKey>()
+        .saturating_add(table.len())
+        .saturating_add(index.len())
+        .saturating_add(std::mem::size_of::<RelationalKey>());
+    for value in values {
+        count += 1;
+        if count > 32 {
+            return None;
+        }
+        match value {
+            RelationalValue::Boolean(_)
+            | RelationalValue::BigInt(_)
+            | RelationalValue::Text(_)
+            | RelationalValue::Bytea(_)
+            | RelationalValue::Uuid(_) => {}
+            RelationalValue::Null
+            | RelationalValue::DoublePrecision(_)
+            | RelationalValue::Overflow(_) => return None,
+        }
+        bytes = bytes
+            .saturating_add(std::mem::size_of_val(value))
+            .saturating_add(value.estimated_payload_bytes());
+        if bytes > MAX_RELATIONAL_INDEX_READ_KEY_BYTES {
+            return None;
+        }
+    }
+    (count > 0).then_some(bytes)
+}
+/// The borrowed iterator must enumerate the same immutable tuple when cloned.
+pub fn relational_index_prefix_read_key<'a>(
+    table: &str,
+    index: &str,
+    values: impl Iterator<Item = &'a crate::relational::RelationalValue> + Clone,
+) -> Option<VersionKey> {
+    relational_index_prefix_read_key_bytes(table, index, values.clone())?;
+    Some(VersionKey::ReadRelationalIndexPrefix {
+        table: table.into(),
+        index: index.into(),
+        prefix: RelationalKey(values.cloned().collect()),
     })
 }
 
