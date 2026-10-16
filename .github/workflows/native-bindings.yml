@@ -1,4 +1,4 @@
-name: Configured Retained Source Qualification
+name: Current-head Configured Retained Source Qualification
 on:
   workflow_dispatch:
 permissions:
@@ -9,8 +9,9 @@ jobs:
     timeout-minutes: 360
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
-        rows: [1000000, 1000001]
+        rows: [1000, 100000, 1000000, 1000001]
         backend: [memory, file]
     env:
       USE_BAZEL_VERSION: "9.3.0"

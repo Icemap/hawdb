@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import sys
 
-ENGINE = "c6bfb264f1f1ff0b5a4ea099ef0ecb3ac4545c09"
+ENGINE = "a68cda8e605de113e7e8837176145b807f3c12a5"
 
 
 def digest(path):
