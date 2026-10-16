@@ -377,15 +377,16 @@ impl GraphStore {
         if let Some(start_epoch) = decoded.search_projection_change_log_start_epoch {
             self.search_projection_change_log_start_epoch = start_epoch;
         }
-        self.search_projection_change_log_retained_bytes =
-            decoded.search_projection_change_log_retained_bytes;
         self.search_projection_database_identity = decoded.search_projection_database_identity;
+        // Legacy checkpoints preserve canonical state but cannot certify the
+        // owner events they never captured, including owner-only deletions.
+        let log = SearchProjectionChangeLog::recover_owner_capture(&mut decoded, self.commit_epoch);
+        self.search_projection_change_log_retained_bytes = log
+            .iter()
+            .map(|change| change.estimated_retained_bytes())
+            .fold(0, usize::saturating_add);
+        self.search_projection_graph_changes = log;
         self.initial_import_source_fingerprint = decoded.initial_import_source_fingerprint;
-        self.search_projection_graph_changes = decoded
-            .search_projection_graph_changes
-            .into_iter()
-            .map(Arc::new)
-            .collect();
         self.basic_statistics = decoded.basic_statistics.into();
         self.checkpoint_statistics = decoded.checkpoint_statistics.into();
         for (name, definition) in decoded.projected_graphs {
@@ -490,7 +491,9 @@ impl GraphStore {
                 validate_search_projection_checkpoint_changes(
                     start_epoch,
                     self.commit_epoch,
-                    self.search_projection_graph_changes.iter().map(Arc::as_ref),
+                    self.search_projection_graph_changes
+                        .iter()
+                        .map(|change| change.legacy.as_ref()),
                 )?;
             }
             None => {

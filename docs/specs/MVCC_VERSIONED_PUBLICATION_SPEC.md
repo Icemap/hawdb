@@ -481,3 +481,23 @@ verified C..E activation session, actual Mem owner migration, power-loss
 composition and the original
 1/4/8-writer latency/fairness/resource qualification remain required. Enumeration
 completion must not mint any of those authorities.
+
+## V1 owner source facts and recovery fence (2026-10-17)
+
+The native capture log now retains physical owner-only graph effects, including
+Thread deletion, separately from the legacy built-in document event. ID changes
+and deletions retain transaction-start labels and old string/absent/unsupported
+identity. Other effects require hydration at the pinned end. The retained byte
+budget covers these payloads; the existing future-capture retention limit still
+applies independently of C snapshot pins.
+
+Persistent GraphStore checkpoints include an explicit V1 owner floor and
+transaction/effect rows inside the existing integrity/publication envelope.
+Opening an old checkpoint preserves canonical data but fences owner capture at
+its head. Missing or malformed V1 facts refuse recovery. Older readers reject
+the new extension. The public legacy checkpoint encoder remains an old-format
+oracle and does not confer V1 completeness.
+
+See [the contract, source correspondence, tests and finite recovery model](../tla/PROJECTION_OWNER_CAPTURE_PROOF.md).
+These internal facts are prerequisites for the original complete bounded C..E
+session and actual Mem integration, not coverage or publication authority.

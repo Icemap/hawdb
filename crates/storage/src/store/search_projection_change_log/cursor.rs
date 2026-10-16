@@ -467,7 +467,12 @@ mod tests {
                 .unwrap();
                 let snapshot = log.clone();
                 log.discard_prefix(log.len());
-                log.push(record(194));
+                log.push(Arc::new(
+                    crate::projection::owner_capture::CapturedProjectionChange {
+                        legacy: record(194),
+                        owners_v1: None,
+                    },
+                ));
                 let mut found = Vec::new();
                 while !cursor.is_complete() {
                     let step = cursor

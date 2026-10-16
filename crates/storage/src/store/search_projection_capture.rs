@@ -15,6 +15,9 @@
 //! Pre-WAL projection capture from canonical metadata and live overlays.
 
 use super::*;
+use crate::projection::owner_capture::{
+    CapturedProjectionChange, OwnerBeforeV1, OwnerEffectV1, OwnerIdV1,
+};
 use crate::projection::projection_document_id_for_label_and_properties;
 
 const MAX_WORK: usize = 65_536;
@@ -74,7 +77,7 @@ pub(super) fn projection_wal_requires_rebuild(ops: &[WalOp]) -> bool {
 }
 
 pub(super) enum PreparedSearchProjectionChange {
-    Complete(Option<SearchProjectionGraphChange>),
+    Complete(Option<CapturedProjectionChange>),
     Gap(u64),
 }
 
@@ -112,6 +115,11 @@ struct NodeMetadata {
     label: bool,
     projected: bool,
     document_id: Option<String>,
+    before: OwnerBeforeV1,
+}
+struct CollectedOwner {
+    legacy_upsert: bool,
+    before: OwnerBeforeV1,
 }
 struct Collector<'a> {
     store: &'a GraphStore,
@@ -119,7 +127,7 @@ struct Collector<'a> {
     budget: Budget,
     created_nodes: BTreeMap<NodeId, &'a str>,
     created_relationships: BTreeMap<RelId, (NodeId, NodeId, &'a str)>,
-    upserts: BTreeSet<NodeId>,
+    owners: BTreeMap<NodeId, CollectedOwner>,
     deletes: BTreeSet<String>,
 }
 impl<'a> Collector<'a> {
@@ -151,12 +159,33 @@ impl<'a> Collector<'a> {
         }
         Ok(())
     }
-    fn upsert(&mut self, id: NodeId) -> CaptureResult<()> {
-        if !self.upserts.contains(&id) {
-            self.budget.bytes(64)?;
-            self.upserts.insert(id);
+    fn owner(
+        &mut self,
+        id: NodeId,
+        legacy_upsert: bool,
+        before: OwnerBeforeV1,
+    ) -> CaptureResult<()> {
+        if let Some(owner) = self.owners.get_mut(&id) {
+            owner.legacy_upsert |= legacy_upsert;
+            // Pre-transaction facts take precedence over an unneeded preimage.
+            if !matches!(before, OwnerBeforeV1::NotRecorded) {
+                owner.before = before;
+            }
+        } else {
+            self.budget
+                .bytes(96 + std::mem::size_of::<CollectedOwner>())?;
+            self.owners.insert(
+                id,
+                CollectedOwner {
+                    legacy_upsert,
+                    before,
+                },
+            );
         }
         Ok(())
+    }
+    fn upsert(&mut self, id: NodeId) -> CaptureResult<()> {
+        self.owner(id, true, OwnerBeforeV1::NotRecorded)
     }
     fn delete(&mut self, id: String) -> CaptureResult<()> {
         if !self.deletes.contains(&id) {
@@ -204,6 +233,26 @@ impl<'a> Collector<'a> {
             .catalog
             .label_id("Label")
             .is_some_and(|label| node.labels.contains(&label));
+        let before = if with_id {
+            // Admit the additional owned copy before allocating it.
+            self.budget
+                .bytes(node.labels.len().saturating_mul(4).saturating_add(
+                    match node.properties.get("id") {
+                        Some(Value::String(id)) => id.len(),
+                        _ => 0,
+                    },
+                ))?;
+            OwnerBeforeV1::Present {
+                labels: node.labels.iter().map(|label| label.0).collect(),
+                id: match node.properties.get("id") {
+                    None => OwnerIdV1::Absent,
+                    Some(Value::String(value)) => OwnerIdV1::String(value.clone()),
+                    Some(_) => OwnerIdV1::Unsupported,
+                },
+            }
+        } else {
+            OwnerBeforeV1::NotRecorded
+        };
         let node = NodeRecord {
             id: node.id,
             labels: node.labels,
@@ -214,6 +263,7 @@ impl<'a> Collector<'a> {
             label,
             projected: document_id.is_some(),
             document_id: if with_id { document_id } else { None },
+            before,
         }))
     }
     fn endpoint(&mut self, id: NodeId) -> CaptureResult<Option<NodeMetadata>> {
@@ -227,6 +277,7 @@ impl<'a> Collector<'a> {
                 )
                 .is_some(),
                 document_id: None,
+                before: OwnerBeforeV1::Absent,
             }));
         }
         self.node(id, false)
@@ -342,23 +393,30 @@ impl<'a> Collector<'a> {
         for op in ops {
             self.budget.work()?;
             match op {
-                WalOp::CreateNode { id, .. } => self.upsert(*id)?,
+                WalOp::CreateNode { id, .. } => self.owner(*id, true, OwnerBeforeV1::Absent)?,
                 WalOp::SetNodeProperty { id, property, .. } => {
                     self.upsert(*id)?;
-                    if property == "id"
-                        && let Some(meta) = self.node(*id, true)?
-                        && let Some(old) = meta.document_id
-                    {
-                        self.delete(old)?;
+                    if property == "id" {
+                        let meta = self.node(*id, true)?;
+                        let (before, old) = meta.map_or((OwnerBeforeV1::Absent, None), |meta| {
+                            (meta.before, meta.document_id)
+                        });
+                        self.owner(*id, false, before)?;
+                        if let Some(old) = old {
+                            self.delete(old)?;
+                        }
                     }
                     if matches!(property.as_str(), "id" | "name" | "canonical_name") {
                         self.label_neighbors(*id)?;
                     }
                 }
                 WalOp::DeleteNode { id } => {
-                    if let Some(meta) = self.node(*id, true)?
-                        && let Some(old) = meta.document_id
-                    {
+                    let meta = self.node(*id, true)?;
+                    let (before, old) = meta.map_or((OwnerBeforeV1::Absent, None), |meta| {
+                        (meta.before, meta.document_id)
+                    });
+                    self.owner(*id, false, before)?;
+                    if let Some(old) = old {
                         self.delete(old)?;
                     }
                     self.label_neighbors(*id)?;
@@ -419,7 +477,7 @@ impl GraphStore {
             },
             created_nodes: BTreeMap::new(),
             created_relationships: BTreeMap::new(),
-            upserts: BTreeSet::new(),
+            owners: BTreeMap::new(),
             deletes: BTreeSet::new(),
         };
         let result = collector
@@ -457,19 +515,46 @@ impl GraphStore {
             )
         });
         let relational = omit_internal_search_projection_relational_changes(relational);
-        if collector.upserts.is_empty()
+        if collector.owners.is_empty()
             && collector.deletes.is_empty()
             && relational.operation_count() == 0
             && !relational.requires_rebuild()
         {
             return Ok(PreparedSearchProjectionChange::Complete(None));
         }
+        // Collection storage and output vectors are both charged before WAL.
+        if collector
+            .budget
+            .bytes(
+                collector
+                    .owners
+                    .len()
+                    .saturating_mul(8 + std::mem::size_of::<OwnerEffectV1>()),
+            )
+            .is_err()
+        {
+            return Ok(PreparedSearchProjectionChange::Gap(commit_epoch));
+        }
+        let mut upsert_node_ids = Vec::with_capacity(collector.owners.len());
+        let mut owners = Vec::with_capacity(collector.owners.len());
+        for (id, owner) in collector.owners {
+            if owner.legacy_upsert {
+                upsert_node_ids.push(id.0);
+            }
+            owners.push(OwnerEffectV1 {
+                node_id: id.0,
+                before: owner.before,
+            });
+        }
         Ok(PreparedSearchProjectionChange::Complete(Some(
-            SearchProjectionGraphChange {
-                commit_epoch,
-                upsert_node_ids: collector.upserts.into_iter().map(|id| id.0).collect(),
-                delete_document_ids: collector.deletes.into_iter().collect(),
-                relational_primary_key_changes: relational,
+            CapturedProjectionChange {
+                legacy: Arc::new(SearchProjectionGraphChange {
+                    commit_epoch,
+                    upsert_node_ids,
+                    delete_document_ids: collector.deletes.into_iter().collect(),
+                    relational_primary_key_changes: relational,
+                }),
+                owners_v1: Some(owners),
             },
         )))
     }
@@ -489,7 +574,8 @@ impl GraphStore {
             PreparedSearchProjectionChange::Gap(epoch) => {
                 self.search_projection_change_log_start_epoch =
                     self.search_projection_change_log_start_epoch.max(epoch);
-                self.search_projection_graph_changes = Default::default();
+                self.search_projection_graph_changes =
+                    SearchProjectionChangeLog::at_owner_floor(epoch);
                 self.search_projection_change_log_retained_bytes = 0;
             }
         }
@@ -690,6 +776,12 @@ mod tests {
                 let cursor = store.commit_epoch();
                 let before = store.search_projection_changes_after(0);
                 let floor = store.search_projection_change_log_start_epoch();
+                let owner_before = store
+                    .search_projection_graph_changes
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let owner_floor = store.search_projection_graph_changes.owner_floor();
                 let op = WalOp::SetNodeProperty {
                     id,
                     property: "id".into(),
@@ -702,6 +794,18 @@ mod tests {
                 assert_eq!(store.commit_epoch(), cursor);
                 assert_eq!(store.search_projection_changes_after(0), before);
                 assert_eq!(store.search_projection_change_log_start_epoch(), floor);
+                assert_eq!(
+                    store.search_projection_graph_changes.owner_floor(),
+                    owner_floor
+                );
+                assert_eq!(
+                    store
+                        .search_projection_graph_changes
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                    owner_before
+                );
                 drop(store);
                 // An uncertain failure can recover a complete operation. It
                 // must recover its capture or a gap, never a silent empty prefix.
@@ -781,3 +885,7 @@ mod tests {
 #[cfg(test)]
 #[path = "search_projection_capture/closure_tests.rs"]
 mod closure_tests;
+
+#[cfg(test)]
+#[path = "search_projection_capture/owner_tests.rs"]
+mod owner_tests;

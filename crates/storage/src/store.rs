@@ -141,7 +141,7 @@ pub mod relational_row_pages;
 #[path = "store/search_projection_capture.rs"]
 mod search_projection_capture;
 #[path = "store/search_projection_change_log.rs"]
-mod search_projection_change_log;
+pub(crate) mod search_projection_change_log;
 #[doc(hidden)]
 pub use projection_full_source::{
     ProjectionFullSourceCursor, ProjectionFullSourceItem, ProjectionFullSourceLimits,
@@ -2012,7 +2012,11 @@ impl GraphStore {
         self.search_projection_graph_changes
             .iter()
             .filter(|change| change.commit_epoch > commit_epoch)
-            .map(|change| change.as_ref().clone())
+            .filter(|change| {
+                change.operation_count() != 0
+                    || change.relational_primary_key_changes.requires_rebuild()
+            })
+            .map(|change| change.legacy.as_ref().clone())
             .collect()
     }
 

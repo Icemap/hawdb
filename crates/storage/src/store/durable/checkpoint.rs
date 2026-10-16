@@ -165,10 +165,21 @@ impl DurableStore {
         generation: u64,
         changes: impl Iterator<Item = &'a SearchProjectionGraphChange> + Clone,
         work: &crate::background::CheckpointWorkContext,
+        owner_log: Option<&crate::store::search_projection_change_log::SearchProjectionChangeLog>,
     ) -> Result<DurableArtifactMetadata> {
         let mut data = hawdb_storage::checkpoint::encode_checkpoint_body_with_work_context(
             &image, generation, changes, work,
         )?;
+        if let Some(log) = owner_log {
+            crate::checkpoint::owner_capture::append(
+                &mut data,
+                log.owner_floor()
+                    .max(image.search_projection_change_log_start_epoch),
+                image.commit_epoch,
+                log.iter(),
+                work,
+            )?;
+        }
         let checksum = work
             .checksum(data.as_bytes())
             .map_err(HawDBError::from_storage_error)?;

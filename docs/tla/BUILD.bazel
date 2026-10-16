@@ -161,3 +161,16 @@ tla_check(
     timeout_seconds = 1800,
     tlc_args = ["-cleanup", "-workers", "auto"],
 )
+
+[
+    tla_check(
+        name = "HawDBProjectionOwnerCapture" + control + "_check",
+        module = "HawDBProjectionOwnerCapture.tla",
+        config = "mutants/HawDBProjectionOwnerCapture" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["TrustLegacyFloor", "DropOwnerOnly", "ForgetTrimFloor", "PublishBeforeWal", "IgnoreMissingRows", "UpgradeWitness"]
+]

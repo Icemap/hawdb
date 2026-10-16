@@ -318,3 +318,8 @@ rustc --edition=2024 --crate-name owner_capture_probe docs/tla/owner_capture_pro
 
 These observations strengthen the prerequisites for the next native C/E work;
 they do not remove the conservative unchanged-C fence from full replacement.
+
+The later [V1 native capture component](PROJECTION_OWNER_CAPTURE_PROOF.md) now
+retains owner-only deletion facts internally. The probe above still observes
+the legacy public document feed, whose variants do not expose those facts.
+The complete owner session and future-capture retention lease remain open.

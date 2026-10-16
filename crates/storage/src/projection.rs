@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 #[doc(hidden)]
 pub mod artifact;
 
+pub(crate) mod owner_capture;
 pub(crate) mod predicate_checkpoint;
 mod predicate_decode;
 
