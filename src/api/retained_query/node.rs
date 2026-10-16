@@ -706,9 +706,9 @@ impl RetainedNodeCursor {
             return Err(RetainedQueryError::WorkingUnitTooLarge);
         }
         let governor = runtime.governor(options.minimum_shared_handles.get())?;
-        let allowance = governor.snapshot().limits.result_budget_bytes;
-        let permit = governor
-            .try_admit(RuntimeWorkRequest::foreground_query(0, allowance).with_blocking(false))?;
+        let permit = governor.try_admit(
+            RuntimeWorkRequest::foreground_query(control_bytes as u64, 0).with_blocking(false),
+        )?;
         let memory = account.reserve(observation_bytes)?;
         let runtime_memory = permit.reserve_retained_memory(observation_bytes as u64)?;
         let adapter_control = if adapter_control_bytes == 0 {
@@ -835,8 +835,6 @@ fn admit_node(
         .ok_or(RetainedQueryError::SizeOverflow)?;
     let governor = runtime.governor(options.minimum_shared_handles.get())?;
     let allowance = governor.snapshot().limits.result_budget_bytes;
-    let permit = governor
-        .try_admit(RuntimeWorkRequest::foreground_query(0, allowance).with_blocking(false))?;
     let mut charges = None;
     let read = store.materialized_node_point_read_with_admission(id, |row_bytes| -> Result<_> {
         let capacity = row_bytes
@@ -885,6 +883,11 @@ fn admit_node(
                 payload_bytes: payload,
             });
         }
+        let work_bytes =
+            retained_result_work_bytes(capacity, std::mem::size_of::<RetainedNodeView>())?
+                .min(allowance);
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::foreground_query(0, work_bytes).with_blocking(false))?;
         let result = permit.reserve_retained_result(
             capacity as u64,
             std::mem::size_of::<RetainedNodeView>() as u64,
@@ -895,7 +898,7 @@ fn admit_node(
                 .and_then(|bytes| bytes.checked_add(result.handle_bytes() as usize))
                 .ok_or(RetainedQueryError::SizeOverflow)?,
         )?;
-        charges = Some((result, memory));
+        charges = Some((result, memory, permit));
         profile.source_pinned_capacity_bytes = row_bytes + symbol_bytes;
         profile.output_payload_bytes = payload;
         Ok(PrepaidSource(row_bytes))
@@ -913,7 +916,7 @@ fn admit_node(
             labels.push(label);
         }
     }
-    let (result, memory) = charges.expect("point source was admitted");
+    let (result, memory, _permit) = charges.expect("point source was admitted");
     profile.source_pinned_rows = 1;
     profile.source_preflight_rows = 1;
     profile.query_peak_bytes = ledger.snapshot().peak_bytes;
@@ -969,6 +972,53 @@ mod tests {
 
     fn params() -> BTreeMap<String, Value> {
         BTreeMap::from([("key".into(), Value::Int(37))])
+    }
+
+    #[test]
+    fn point_result_ceiling_does_not_reserve_unused_memory() {
+        let (mut db, _) = fixture(128);
+        let governor = RuntimeGovernor::new(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(64 * 1024),
+                result_budget_bytes: 64 * 1024,
+                retained_result_handle_limit: NonZeroUsize::new(128).unwrap(),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            RuntimeResourceSnapshot::from_parts(
+                crate::RuntimeResourceBudget::from_limits(
+                    NonZeroUsize::new(4).unwrap(),
+                    None,
+                    None,
+                ),
+                crate::RuntimeMemorySnapshot::from_limits(
+                    Some(1 << 30),
+                    Some(1 << 30),
+                    None,
+                    None,
+                    None,
+                ),
+            ),
+            IoConcurrencyBudget::new(2, 1),
+        );
+        db.set_runtime_governor(governor.clone());
+        let other_work = governor
+            .try_admit(RuntimeWorkRequest::foreground_query(32 * 1024, 0).with_blocking(false))
+            .unwrap();
+        let mut cursor = db
+            .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap();
+        let view = cursor.next_node().unwrap().unwrap();
+        assert!(matches!(
+            view.field("score").unwrap(),
+            Some(RetainedNodeField::Value(Value::Int(37)))
+        ));
+        assert!(cursor.next_node().unwrap().is_none());
+        assert_eq!(governor.snapshot().active_foreground_tasks, 1);
+        drop((cursor, view));
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 32 * 1024);
+        drop(other_work);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 
     #[test]

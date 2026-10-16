@@ -136,6 +136,18 @@ impl From<RetainedNumericError> for RetainedQueryError {
 
 type Result<T> = std::result::Result<T, RetainedQueryError>;
 
+// A result allowance is a ceiling, not an allocation request. Work admission
+// covers the actual owner and view being constructed; the retained charge
+// still overlaps that permit until construction completes.
+fn retained_result_work_bytes(capacity: usize, view_metadata: usize) -> Result<u64> {
+    u64::try_from(capacity)
+        .ok()
+        .and_then(|bytes| bytes.checked_add(view_metadata as u64))
+        .and_then(|bytes| bytes.checked_add(RuntimeRetainedResult::owner_overhead_bytes()))
+        .and_then(|bytes| bytes.checked_add(RuntimeRetainedResult::handle_overhead_bytes()))
+        .ok_or(RetainedQueryError::SizeOverflow)
+}
+
 /// One admission binding per database, shared by all snapshots/cursors. Late
 /// ordinary-governor replacement cannot multiply retained-result allowances.
 #[derive(Debug, Default)]
@@ -579,15 +591,6 @@ impl RetainedQueryCursor {
             .governor(options.minimum_shared_handles.get())?
             .clone();
         let result_allowance = governor.snapshot().limits.result_budget_bytes;
-        let permit = governor.try_admit(
-            RuntimeWorkRequest::foreground_query(0, result_allowance).with_blocking(false),
-        )?;
-        let ledger = QueryMemoryLedger::new(config.execution_memory.query_memory_bytes);
-        let account = ledger.account(
-            QueryMemoryClass::ResultMaterialization,
-            "retained_query",
-            config.execution_memory.query_memory_bytes,
-        );
         let schema_bytes = plan
             .projections
             .iter()
@@ -606,6 +609,15 @@ impl RetainedQueryCursor {
             .and_then(|bytes| bytes.checked_add(options.adapter_metadata_bytes))
             .and_then(|bytes| bytes.checked_add(128))
             .ok_or(RetainedQueryError::SizeOverflow)?;
+        let work_bytes = retained_result_work_bytes(metadata, 0)?.min(result_allowance);
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::foreground_query(0, work_bytes).with_blocking(false))?;
+        let ledger = QueryMemoryLedger::new(config.execution_memory.query_memory_bytes);
+        let account = ledger.account(
+            QueryMemoryClass::ResultMaterialization,
+            "retained_query",
+            config.execution_memory.query_memory_bytes,
+        );
         let runtime = permit.reserve_retained_result(metadata as u64, 0)?;
         let memory = account.reserve(
             metadata
@@ -908,10 +920,21 @@ impl RetainedQueryCursor {
             });
         }
         let rows = self.admitted_rows(adapter_metadata_bytes)?;
-        let permit = self.governor.try_admit(
-            RuntimeWorkRequest::foreground_query(0, self.result_allowance).with_blocking(false),
-        )?;
         let owner_metadata = std::mem::size_of::<SlotGuard>() + 2 * std::mem::size_of::<usize>();
+        let view_metadata = std::mem::size_of::<RetainedQueryBatch>()
+            .checked_add(adapter_metadata_bytes)
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        let capacity = RetainedNumericBuilder::required_capacity_bytes(rows, self.needs_ids)
+            .and_then(|bytes| bytes.checked_add(owner_metadata))
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        let complete_view_metadata = std::mem::size_of::<RetainedNumericBatch>()
+            .checked_add(view_metadata)
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        let work_bytes = retained_result_work_bytes(capacity, complete_view_metadata)?
+            .min(self.result_allowance);
+        let permit = self
+            .governor
+            .try_admit(RuntimeWorkRequest::foreground_query(0, work_bytes).with_blocking(false))?;
         let mut builder = RetainedNumericBuilder::new_with_metadata(
             self.fragment.borrowed(),
             rows,
@@ -919,9 +942,7 @@ impl RetainedQueryCursor {
             self.account.clone(),
             &permit,
             owner_metadata,
-            std::mem::size_of::<RetainedQueryBatch>()
-                .checked_add(adapter_metadata_bytes)
-                .ok_or(RetainedQueryError::SizeOverflow)?,
+            view_metadata,
         )?;
         self.shared.outstanding.fetch_add(1, Ordering::AcqRel);
         self.profile.peak_outstanding_batches = self

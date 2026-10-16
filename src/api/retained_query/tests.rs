@@ -17,13 +17,24 @@ fn governor_with_handles(handles: usize) -> RuntimeGovernor {
     governor_with_budget(handles, 64 * 1024 * 1024)
 }
 fn governor_with_budget(handles: usize, memory_bytes: u64) -> RuntimeGovernor {
+    governor_with_result_ceiling(
+        handles,
+        memory_bytes,
+        RuntimeGovernorConfig::shared_host()
+            .result_budget_bytes
+            .min(memory_bytes / 4),
+    )
+}
+fn governor_with_result_ceiling(
+    handles: usize,
+    memory_bytes: u64,
+    result_bytes: u64,
+) -> RuntimeGovernor {
     RuntimeGovernor::new(
         RuntimeGovernorConfig {
             retained_result_handle_limit: nz(handles),
             memory_budget_bytes: Some(memory_bytes),
-            result_budget_bytes: RuntimeGovernorConfig::shared_host()
-                .result_budget_bytes
-                .min(memory_bytes / 4),
+            result_budget_bytes: result_bytes,
             ..RuntimeGovernorConfig::shared_host()
         },
         RuntimeResourceSnapshot::from_parts(
@@ -897,4 +908,38 @@ fn adapter_minimum_handles_refuse_before_binding_and_allow_host_correction() {
         .query_with_params_retained(QUERY, &params(), options)
         .unwrap();
     assert_eq!(cursor.profile().visited_rows, 0);
+}
+
+#[test]
+fn result_ceiling_does_not_reserve_unused_memory_while_streaming() {
+    let mut db = fixture_with_unrequested_payload(128 * 1024);
+    let source_bytes = db
+        .runtime
+        .get()
+        .unwrap()
+        .store
+        .materialized_node_read_source_capacity_bytes()
+        .unwrap()
+        .unwrap();
+    let memory_bytes = (source_bytes + 64 * 1024) as u64;
+    let governor = governor_with_result_ceiling(128, memory_bytes, memory_bytes);
+    db.set_runtime_governor(governor.clone());
+    let other_work = governor
+        .try_admit(RuntimeWorkRequest::foreground_query(32 * 1024, 0).with_blocking(false))
+        .unwrap();
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let mut actual = Vec::new();
+    while let Some(batch) = cursor.next_batch().unwrap() {
+        actual.extend(scores(&batch));
+    }
+    assert_eq!(actual, (2..9).collect::<Vec<_>>());
+    assert_eq!(cursor.status(), RetainedQueryStatus::Completed);
+    assert_eq!(governor.snapshot().active_foreground_tasks, 1);
+    drop(cursor);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 32 * 1024);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    drop(other_work);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
