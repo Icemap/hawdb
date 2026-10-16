@@ -162,6 +162,33 @@ impl SearchGenerationAdmission {
         )
     }
 
+    /// Artifact-only owner/phase overlay followed by strict document ordering.
+    /// The facade must separately certify source owners, intervals and mapping.
+    pub fn prepare_owner_replacement(
+        self,
+        reader: &SearchOutOfCoreReader,
+        options: SearchOutOfCoreGenerationBuildOptions,
+        limits: super::SearchOwnerOverlayLimits,
+        task: RuntimeTaskContext,
+    ) -> Result<super::SearchOutOfCoreOwnerReplacementWriter> {
+        if options.source_graph_commit_epoch.is_some() {
+            return Err(crate::HawDBError::Execution(
+                "owner replacement binds its epoch when input closes".into(),
+            ));
+        }
+        let task = self.permit.bind_task_context(task);
+        let mut memory = crate::build_memory::BuildMemory::new(&task)?;
+        memory.host_admission = Some(self.permit.clone());
+        let inner = super::mutations::SearchOutOfCoreMutationWriter::create_replacement(
+            reader, options, task, memory,
+        )?;
+        super::unordered::owner::from_inner(
+            inner,
+            limits,
+            reader.config().max_document_header_bytes.get(),
+        )
+    }
+
     /// Prepares a governed update with a default task context.
     pub fn prepare_update(
         self,

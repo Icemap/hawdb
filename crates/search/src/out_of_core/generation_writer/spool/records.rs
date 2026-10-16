@@ -44,6 +44,12 @@ pub(in super::super) struct SpoolRecord {
 }
 
 impl SpoolRecord {
+    pub(in super::super) fn retained_bytes(&self) -> Result<usize> {
+        self._memory
+            .bytes()
+            .checked_add(self.header._memory.bytes())
+            .ok_or_else(|| crate::HawDBError::Storage("spool retained extent overflow".into()))
+    }
     pub(in super::super) fn add_digest(&self, digest: &mut DocumentsDigest) {
         digest.add_record(self.checksum, self.encoded_bytes);
     }

@@ -7,11 +7,14 @@ use crate::build_memory::path::OwnedPath;
 use crate::lexical_projection::DocumentsDigest;
 use hawdb_integrity::Crc32cHasher;
 use std::io::{BufWriter, Write};
+mod owner;
 
 pub(super) struct Control {
     pub(super) limits: SearchUnorderedMutationLimits,
     pub(super) report: SearchUnorderedMutationReport,
     pub(super) unique_upserts: bool,
+    pub(super) owner_order: bool,
+    pub(super) max_owner_bytes: usize,
     memory: BuildMemory,
     task: RuntimeTaskContext,
     max_id_bytes: usize,
@@ -28,6 +31,8 @@ impl Control {
             limits,
             report: Default::default(),
             unique_upserts: false,
+            owner_order: false,
+            max_owner_bytes: 0,
             memory,
             task,
             max_id_bytes,
@@ -176,6 +181,7 @@ impl Control {
             bytes: spool::SPOOL_HEADER.len() as u64,
             digest: Default::default(),
             _buffer: buffer,
+            owner_order: self.owner_order,
         })
     }
 }
@@ -198,6 +204,7 @@ pub(super) struct Run {
     records: usize,
     bytes: u64,
     digest: DocumentsDigest,
+    owner_order: bool,
 }
 pub(super) struct Output {
     file: BufWriter<File>,
@@ -206,6 +213,7 @@ pub(super) struct Output {
     bytes: u64,
     digest: DocumentsDigest,
     _buffer: QueryMemoryLease,
+    owner_order: bool,
 }
 impl Output {
     fn reserve(
@@ -232,6 +240,10 @@ impl Output {
         writer: &mut SearchOutOfCoreGenerationWriter,
     ) -> Result<()> {
         match entry {
+            Buffered::Owner(stamp, body) => self.owner_buffered(stamp, body, control, writer),
+            Buffered::Spool(record, flag) => {
+                self.copied(&Entry::Upsert(record, flag), control, writer)
+            }
             Buffered::Delete(id) => self.delete(&id, control, writer),
             Buffered::Upsert(document, _) => {
                 let encoding = DocumentEncoding::new_with_context(&document, Some(&control.task))?;
@@ -294,6 +306,7 @@ impl Output {
         writer: &mut SearchOutOfCoreGenerationWriter,
     ) -> Result<()> {
         match entry {
+            Entry::Owner(stamp, body) => self.owner_copied(stamp, body.as_ref(), control, writer),
             Entry::Delete(id) => self.delete(id, control, writer),
             Entry::Upsert(record, chinese) => {
                 let extent = record
@@ -325,6 +338,7 @@ impl Output {
             records: self.records,
             bytes: self.bytes,
             digest: self.digest,
+            owner_order: self.owner_order,
         })
     }
 }
@@ -332,19 +346,36 @@ impl Output {
 pub(super) enum Entry {
     Delete(Term),
     Upsert(Box<spool::SpoolRecord>, bool),
+    Owner(OwnerStamp, Option<(Box<spool::SpoolRecord>, bool)>),
 }
 impl Entry {
     pub(super) fn copy_cost(&self) -> (u64, u64) {
         match self {
+            Self::Owner(stamp, body) => {
+                let prefix = stamp.key.len() as u64 + 26;
+                body.as_ref().map_or((0, prefix), |(record, _)| {
+                    (record.encoded_bytes, prefix + 17 + record.encoded_bytes)
+                })
+            }
             Self::Delete(id) => (0, id.len() as u64 + 17),
             Self::Upsert(record, _) => (record.encoded_bytes, record.encoded_bytes + 18),
         }
     }
     pub(super) fn id(&self) -> &str {
         match self {
+            Self::Owner(stamp, _) => &stamp.key,
             Self::Delete(id) => id,
             Self::Upsert(record, _) => &record.header.id,
         }
+    }
+    pub(super) fn key(&self) -> (&str, u64) {
+        (
+            self.id(),
+            match self {
+                Self::Owner(stamp, _) => stamp.phase,
+                _ => 0,
+            },
+        )
     }
 }
 pub(super) struct Reader {
@@ -353,7 +384,7 @@ pub(super) struct Reader {
     position: u64,
     records: usize,
     digest: DocumentsDigest,
-    previous: Option<Term>,
+    previous: Option<(Term, u64)>,
     inspected_read_bytes: Option<u64>,
     memory: BuildMemory,
     task: RuntimeTaskContext,
@@ -401,6 +432,7 @@ impl Reader {
         let mut tag = [0];
         self.raw(self.position, &mut tag, control)?;
         let cost = match tag[0] {
+            2 if self.run.owner_order => self.inspect_owner(control)?,
             0 => {
                 let mut length = [0; 8];
                 self.raw(self.position + 1, &mut length, control)?;
@@ -451,7 +483,7 @@ impl Reader {
             };
         }
         if self.inspected_read_bytes.is_none() {
-            if !control.allow(1, 18, 0)? {
+            if !control.allow(1, if self.run.owner_order { 43 } else { 18 }, 0)? {
                 return Ok(None);
             }
             self.inspect(control)?;
@@ -479,7 +511,11 @@ impl Reader {
         let start = self.position;
         let mut tag = [0];
         self.raw(start, &mut tag, control)?;
+        if (tag[0] == 2) != self.run.owner_order {
+            return Err(invalid("run ordering kind changed"));
+        }
         let (entry, end) = match tag[0] {
+            2 => self.read_owner(control)?,
             0 => {
                 let mut length = [0; 8];
                 self.raw(start + 1, &mut length, control)?;
@@ -550,15 +586,22 @@ impl Reader {
             }
             _ => return Err(invalid("invalid operation tag")),
         };
-        validate_id(entry.id(), control.max_id_bytes)?;
+        validate_id(
+            entry.id(),
+            if self.run.owner_order {
+                control.max_owner_bytes
+            } else {
+                control.max_id_bytes
+            },
+        )?;
         if self
             .previous
             .as_ref()
-            .is_some_and(|previous| &**previous > entry.id())
+            .is_some_and(|(previous, phase)| (&**previous, *phase) > entry.key())
         {
             return Err(invalid("run IDs are not ordered"));
         }
-        self.previous = Some(Term::copy(entry.id(), Some(&self.memory))?);
+        self.previous = Some((Term::copy(entry.id(), Some(&self.memory))?, entry.key().1));
         self.position = end;
         self.records += 1;
         Ok(Some(entry))
@@ -696,7 +739,7 @@ impl Merge {
                         return Ok(false);
                     }
                     self.from_left = match (&self.a, &self.b) {
-                        (Some(a), Some(b)) => a.id() <= b.id(),
+                        (Some(a), Some(b)) => a.key() <= b.key(),
                         (Some(_), None) => true,
                         (None, Some(_)) => false,
                         (None, None) => {
@@ -760,6 +803,12 @@ impl Merge {
 
 pub(super) fn reduce(left: Entry, right: Entry, control: &mut Control) -> Result<Entry> {
     match (left, right) {
+        (Entry::Owner(a, left), Entry::Owner(b, right)) => {
+            owner::reduce(a, left, b, right, control)
+        }
+        (Entry::Owner(..), _) | (_, Entry::Owner(..)) => {
+            Err(invalid("mixed owner/document reduction"))
+        }
         (Entry::Delete(_), upsert @ Entry::Upsert(..))
         | (upsert @ Entry::Upsert(..), Entry::Delete(_)) => Ok(upsert),
         (Entry::Delete(left), Entry::Delete(_)) => Ok(Entry::Delete(left)),
@@ -778,6 +827,23 @@ pub(super) fn reduce(left: Entry, right: Entry, control: &mut Control) -> Result
             Ok(Entry::Upsert(left, a || b))
         }
     }
+}
+
+pub(super) fn comparison_cost(left: &Entry, right: &Entry) -> Result<u64> {
+    let pair = match (left, right) {
+        (Entry::Upsert(a, _), Entry::Upsert(b, _)) => Some((a, b)),
+        (Entry::Owner(a, Some((left, _))), Entry::Owner(b, Some((right, _))))
+            if a.phase == b.phase =>
+        {
+            Some((left, right))
+        }
+        _ => None,
+    };
+    pair.map_or(Ok(0), |(a, b)| {
+        a.encoded_bytes
+            .checked_add(b.encoded_bytes)
+            .ok_or_else(|| invalid("comparison extent overflow"))
+    })
 }
 
 #[cfg(test)]

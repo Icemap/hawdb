@@ -132,15 +132,8 @@ impl Ordering {
                 }
                 Phase::WriteBuffer => {
                     if let Some(entry) = buffer.last() {
-                        let bytes = match entry {
-                            Buffered::Delete(id) => id.len() as u64 + 17,
-                            Buffered::Upsert(_, bytes) => {
-                                bytes.checked_add(18).ok_or_else(|| {
-                                    HawDBError::Storage("unordered frame extent overflow".into())
-                                })?
-                            }
-                        };
-                        if !control.allow(1, 0, bytes)? {
+                        let (read, bytes) = entry.copy_cost()?;
+                        if !control.allow(1, read, bytes)? {
                             return Ok(());
                         }
                         self.output.as_mut().unwrap().buffered(
@@ -256,18 +249,10 @@ impl Ordering {
                     }
                 }
                 Phase::Equal => {
-                    let read = match (
+                    let read = run::comparison_cost(
                         self.winner.as_ref().unwrap(),
                         self.current.as_ref().unwrap(),
-                    ) {
-                        (Entry::Upsert(a, _), Entry::Upsert(b, _)) => a
-                            .encoded_bytes
-                            .checked_add(b.encoded_bytes)
-                            .ok_or_else(|| {
-                                HawDBError::Storage("unordered comparison extent overflow".into())
-                            })?,
-                        _ => 0,
-                    };
+                    )?;
                     if !control.allow(1, read, 0)? {
                         return Ok(());
                     }

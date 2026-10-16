@@ -70,11 +70,12 @@ pub use generation_writer::{
     SearchMutationSortStepLimits, SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison,
     SearchOutOfCoreGenerationBuildOptions, SearchOutOfCoreGenerationBuildReport,
     SearchOutOfCoreGenerationUpdate, SearchOutOfCoreGenerationWriter,
-    SearchOutOfCoreMutationWriter, SearchOutOfCorePreparedGeneration,
-    SearchOutOfCorePreparedUpdate, SearchOutOfCoreSegmentCompaction,
-    SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
-    SearchOutOfCoreSegmentCompactionStopReason, SearchOutOfCoreUnorderedMutationWriter,
-    SearchOutOfCoreUnorderedReplacementWriter, SearchStagingCleanupReport,
+    SearchOutOfCoreMutationWriter, SearchOutOfCoreOwnerReplacementWriter,
+    SearchOutOfCorePreparedGeneration, SearchOutOfCorePreparedUpdate,
+    SearchOutOfCoreSegmentCompaction, SearchOutOfCoreSegmentCompactionPolicy,
+    SearchOutOfCoreSegmentCompactionReport, SearchOutOfCoreSegmentCompactionStopReason,
+    SearchOutOfCoreUnorderedMutationWriter, SearchOutOfCoreUnorderedReplacementWriter,
+    SearchOwnerOverlayLimits, SearchOwnerOverlayReport, SearchStagingCleanupReport,
     SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
 };
 pub(super) use publish_lease::SearchProjectionPublishLease;

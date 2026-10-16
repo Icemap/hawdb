@@ -48,7 +48,7 @@ impl Heap {
                     return Ok(false);
                 }
                 self.child = None;
-                if values[root].id() > values[child].id() {
+                if values[root].key() > values[child].key() {
                     values.swap(root, child);
                     self.root = Some(child);
                 } else {
@@ -75,7 +75,7 @@ impl Heap {
                 return Ok(false);
             }
             self.child = Some(
-                if child + 1 < self.end && values[child].id() > values[child + 1].id() {
+                if child + 1 < self.end && values[child].key() > values[child + 1].key() {
                     child + 1
                 } else {
                     child

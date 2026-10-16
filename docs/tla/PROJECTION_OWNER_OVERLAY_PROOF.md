@@ -1,7 +1,8 @@
 # Source-owner C/E overlay: algebra and implementation contract
 
-Status: finite design model plus independent algebraic oracle; the native owner
-spool/reducer, complete host capture and activation are not implemented here.
+Status: finite design model, independent algebraic oracles and a native
+artifact-only owner/phase external reducer. Complete host capture and qualified
+facade C/E activation are not implemented here.
 This work contributes to #231/#232/#1043 and preserves every remaining gate in
 [the versioned-publication ledger](../specs/MVCC_VERSIONED_PUBLICATION_SPEC.md).
 It is not a replacement for baseline/capture/mapping/binding/external-vector
@@ -82,9 +83,10 @@ provenance, actual host mapping and source-linked regressions remain required.
 The complete full-C replacement owns its source/stage and can leave the outer
 owner/old-reader scope. It still uses a whole-C dependency and rejects all later
 canonical writes; it has no owner sidecar or C/E merge. Ordinary unordered runs
-currently carry document-ID upsert/delete intents. Introduce admitted canonical
-owner framing and explicit source phase, resolve owner state, then reuse strict
-full-document sorting. Shared actual admission must cover both stages and
+carry document-ID upsert/delete intents. The artifact builder below adds admitted
+owner framing and ordinal phases, owner reduction and strict final document
+sorting. Native canonical owner/phase provenance remains required.
+Shared actual admission must cover both stages and
 intermediate I/O. Do not acquire a second permit from a one-background-slot host,
 reset cumulative credit at E, or expose ordinary artifacts as coverage receipts.
 
@@ -114,6 +116,88 @@ runs, comparisons and cumulative query/physical costs. Preserve source poisoning
 partial-input refusal, cancellation and cleanup custody. No new crate or broad
 index/optimizer feature is needed merely for this representation.
 
+## Native artifact implementation and its boundary
+
+`SearchGenerationAdmission::prepare_owner_replacement` constructs an owned
+[`SearchOutOfCoreOwnerReplacementWriter`](../../crates/search/src/out_of_core/generation_writer/unordered/owner.rs).
+It copies target policy/base information
+and does not borrow the old reader. The new API builds private content; it does
+not return a source-qualified C/E coverage or baseline receipt. Opaque owner keys
+and phase ordinals supplied to this layer cannot establish canonical identity or
+complete native source intervals. The Database full-C session retains its existing
+unchanged-C dependency fence and does not yet use this artifact builder.
+
+Source correspondence, rather than a verified machine-checked refinement:
+
+| Conditional obligation | Native mechanism |
+| --- | --- |
+| Keep owner identity separate from document ID | Admitted `OwnerStamp` key and phase in private run framing; original encoded document body is not rewritten. Key bytes and ordinal range are bounded before intake. Canonical typed-key provenance remains a facade requirement. |
+| Preserve older same-phase conflicts | Heap and run merge order by `(owner, phase)`; intermediate merges retain all records. Final owner reduction checks every equal-phase pair with exact encoded-body comparison before selecting a later phase. None/Some disagreement refuses. |
+| Resolve owners before document uniqueness | The reduced owner run feeds a second document-ID sort. Only final nonempty states enter it; strict unique upserts reject different owners emitting the same ID, including identical bodies. |
+| Bound both stages under one admitted attempt | The same `Control`, `BuildMemory`, task, stage and actual governor permit survive handoff. Input/read/spill/work/merge counters and private run sequence do not reset. Input credit includes both source owner records and transferred final documents. |
+| Keep file/cleanup ownership through handoff | Owner source readers stay alive until document ordering has drained copied spool references; readers close before stage cleanup. Cancellation and any failed step poison the attempt. Prepared artifacts retain actual governor custody until publication/drop. |
+| Refuse damaged or incomplete private runs | Owner/phase/body-descriptor checksum, canonical body frame checksum, expected run digest/extent and monotone key checks. Run End is validated before ordering completion; incomplete ordering cannot return a candidate. These are integrity checks, not cryptographic authority. |
+
+The owner run retains original spool bodies; transfer copies those frames into
+document runs under the same accounting rather than decoding all bodies into
+host collections. One current owner/phase winner is enough after external sorting.
+All temporary owner state is removed afterward: the final artifact does **not**
+persist a reusable owner sidecar. The model's owner-state invariant therefore
+describes the transient owner reduction, not durable baseline reuse authority.
+Reports distinguish owner inputs, reduced owners (including None), final
+documents and shared cumulative sorting counters. Final artifact construction
+and installation remain blocking and are not bounded by an ordering quantum.
+
+Focused all-feature native tests pass **9/9** (9.98s). They cover late C records,
+rename/deletion, a repaired transient collision and valid ID swap, duplicate final
+IDs with identical bodies, conflicting superseded same-phase content/title/
+metadata/vector/absence, empty and partitioned replacement, actual governor
+custody, old-reader closure and cross-thread completion, cumulative input credit,
+key/phase/body/checksum corruption, truncation, and cancellation at both sorts,
+handoff and completed ordering. Cancellation tests assert zero retained task
+memory and unchanged visible heads after cleanup.
+
+The independent native reference case exhausts **252** small C/E, input-order
+and spill-buffer combinations: 7 unique C states, 9 E states, C-before/after-E
+orders, and one/eight-record buffers. It compares every emitted canonical body
+against a separately constructed complete E set and expects **56** duplicate-ID
+refusals. It inspects private output and does not claim 252 durable publications.
+The first corruption fixture assumed plaintext body encoding and failed before
+injecting corruption; the corrected fixture locates the actual framed payload.
+That fixture failure is not a native corruption-refusal result.
+
+Minimal-feature focused tests pass **9/9** (7.40s). The full all-feature Cargo
+Search unit suite passes **873 / 20 existing ignored**, 245.86s native. The
+default-feature Bazel Search suite passes **870 / 20 existing ignored**, 236.86s;
+the different feature profiles account for their different counts.
+
+The frozen native input tree is `14067df637198c493a710ca954aa8eeea28079c0`, based
+on `29557a4`. The first 122-target matrix completes **121 passed / 1 TIMEOUT**,
+46 executed / 76 cached; invocation `de73d7ba-3406-4661-9619-582c1389887f`,
+2,836.960s elapsed / 554.17s critical path. Minimal publication completes 63/64
+native cases before its unchanged 300s deadline; the unfinished case is
+`relational_prefix_pages_cover_membership_deletes_aba_off_page_and_absence`.
+Its log/XML and the terminal campaign are retained before retry. This is an
+action failure and not a proven code-performance cause.
+
+After terminal completion and frozen inputs are verified, an exact-command
+retry passes **122/122**, **1 executed / 121 cached**, 148.510s elapsed / 146.30s
+critical path; invocation `fde4b166-7ca1-42f3-a1fc-18006f49220c`. Minimal
+publication passes **64/64**, 146.07s native / 146.2s action, with the same
+timeout, assertions and concurrency settings. This scope includes both profiles of the
+six MVCC facade groups, default Search, all three required local fuzz suites,
+ten selected positive models and the evidence-script check. It is not a fresh
+all-model or whole-workspace runtime qualification. Both graph-residency halves
+pass **16 seeds / 992 state checks** each, 298.21s / 388.41s native. The retry
+launcher initially refused the singular `1 fails locally` summary before
+starting any retry; its terminal parser was corrected without changing tests.
+
+The finite TLC model and its controls remain conditional; they do not prove
+the frame codec, file operations, complete physical owner/parent capture, native
+phase Ends, mapping contract, capture retention, binding/incarnation, independent
+vectors, final-E dependencies, durable receipts or actual Mem integration. Those
+premises and the original resource/power-loss/writer gates remain open.
+
 ## Finite model and oracle
 
 `HawDBProjectionOwnerOverlay.tla` uses two source owners, absent/present documents,
@@ -130,7 +214,7 @@ priority hiding a cross-phase collision, duplicate-owner coalescing, reading C
 instead of pinned E, ignored conflicting same-E repeats, reset admission, skipped
 End and ignored context. Witnesses require success, deletion, a valid ID swap,
 identical repeated input and a complete empty result. All fourteen controls pass with
-exact TLC exit 12 and their named invariant. This is not a native codec/reducer refinement or a proof of complete
+exact TLC exit 12 and their named invariant. This is not a verified native codec/reducer refinement or a proof of complete
 capture, actual host authority, I/O/RSS, physical power loss or fairness.
 
 An independent finite Python oracle checks 17,738 ordered/repeated input
@@ -150,8 +234,8 @@ bazel test //docs/tla:HawDBProjectionOwnerOverlay_check
 ```
 
 The oracle is retained with this argument; it adds no production control plane
-or CI fuzz target. The native complete owner spool/reducer and its source-linked
-regressions remain required before this model can support activation authority.
+or CI fuzz target. The artifact reducer below does not supply source-qualified
+owner framing, complete capture or activation authority.
 
 ## Phased catch-up during the C scan
 

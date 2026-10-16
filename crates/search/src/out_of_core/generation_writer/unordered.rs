@@ -17,6 +17,10 @@ pub use baseline::{
     SearchOutOfCoreBaselineComparison,
 };
 pub use replacement::SearchOutOfCoreUnorderedReplacementWriter;
+pub(super) mod owner;
+pub use owner::{
+    SearchOutOfCoreOwnerReplacementWriter, SearchOwnerOverlayLimits, SearchOwnerOverlayReport,
+};
 mod heap;
 mod inspection;
 pub use inspection::{SearchMutationInspectionInput, SearchMutationInspectionStep};
@@ -96,13 +100,51 @@ pub struct SearchMutationSortStep {
 enum Buffered {
     Upsert(AdmittedDocument, u64),
     Delete(Term),
+    Owner(OwnerStamp, Option<(AdmittedDocument, u64)>),
+    Spool(Box<spool::SpoolRecord>, bool),
+}
+struct OwnerStamp {
+    key: Term,
+    phase: u64,
 }
 impl Buffered {
     fn id(&self) -> &str {
         match self {
             Self::Upsert(doc, _) => &doc.id,
             Self::Delete(id) => id,
+            Self::Owner(owner, _) => &owner.key,
+            Self::Spool(record, _) => &record.header.id,
         }
+    }
+    fn key(&self) -> (&str, u64) {
+        (
+            self.id(),
+            match self {
+                Self::Owner(owner, _) => owner.phase,
+                _ => 0,
+            },
+        )
+    }
+    fn copy_cost(&self) -> Result<(u64, u64)> {
+        let (read, spill) = match self {
+            Self::Delete(id) => (0, id.len() as u64 + 17),
+            Self::Upsert(_, bytes) => (0, bytes.checked_add(18).ok_or_else(unusable)?),
+            Self::Spool(record, _) => (
+                record.encoded_bytes,
+                record.encoded_bytes.checked_add(18).ok_or_else(unusable)?,
+            ),
+            Self::Owner(stamp, body) => (
+                0,
+                (stamp.key.len() as u64)
+                    .checked_add(26)
+                    .and_then(|n| {
+                        body.as_ref()
+                            .map_or(Some(n), |(_, bytes)| n.checked_add(17)?.checked_add(*bytes))
+                    })
+                    .ok_or_else(unusable)?,
+            ),
+        };
+        Ok((read, spill))
     }
 }
 
@@ -391,6 +433,7 @@ impl SearchOutOfCoreUnorderedMutationWriter<'_> {
                     .writer
                     .push_spool_record(*record, needs_chinese)?;
             }
+            run::Entry::Owner(..) => return Err(unusable()),
         }
         Ok(())
     }
