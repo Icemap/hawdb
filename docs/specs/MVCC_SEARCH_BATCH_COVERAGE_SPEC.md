@@ -174,6 +174,14 @@ dependencies. A Thread group page can cover its whole group despite keyset
 ranges/LIMIT, allowing unrelated groups to commit. Complete old/new/payload
 summaries or conservative barriers invalidate relevant changes. Nullable unique
 indexes cannot supply incomplete prefix results. This remains a read token, not
-a stage-bound coverage certificate; SQL joins, session continuation, baseline
+a stage-bound coverage certificate; additional join families, session continuation, baseline
 verification and actual host adoption remain open. The conditional proof is
 [here](../tla/RELATIONAL_INDEX_PREFIX_READS_PROOF.md).
+
+The qualified one-parent-PK SourceChunk point and page JOINs can now execute
+through prepared SQL with complete child/parent dependencies. Exact chunk reads
+may add one pinned PK query of join fields (one row / 4 KiB); fanout pages bind
+the parent directly from necessary child equalities. See the
+[JOIN argument](../tla/JOINED_PROJECTION_READS_PROOF.md). The legacy host callback
+and its complete fanout loop are unchanged; actual migration and cumulative
+query/fanout/stage governance remain required.

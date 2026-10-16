@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Canonical single-table SQL reads using existing relational writer identities.
+//! Canonical SQL reads using existing row and declared-index identities.
 
 use super::*;
 use crate::sql::{
@@ -23,6 +23,8 @@ use hawdb_storage::relational::{RelationalKey, RelationalTableSchema, Relational
 
 #[path = "relational/indexed.rs"]
 mod indexed;
+#[path = "relational/joined.rs"]
+mod joined;
 
 const MAX_INPUT_BYTES: usize = 64 * 1024;
 const MAX_PARAMETERS: usize = 1024;
@@ -34,12 +36,15 @@ const MAX_KEY_COLUMNS: usize = 32;
 const MAX_KEY_BYTES: usize = 4096;
 
 impl PreparedRead {
-    /// Executes a bounded canonical single-table SELECT. Necessary complete
+    /// Executes a bounded canonical SELECT. Necessary complete
     /// primary-key equalities under AND use existing row stamps, including
     /// absent keys. Necessary leading equalities of declared indexes record
     /// complete prefix domains, including payload and empty-page changes.
+    /// One aliased INNER JOIN to a complete parent primary key collects the
+    /// child scope and parent point, including absent/filtered parents. A pinned
+    /// child point query may read its join fields (at most one row / 4 KiB).
     /// Other qualified reads expose a whole-epoch fallback.
-    /// Joins, functions, catalogs, projection bindings and locking reads fail
+    /// Other joins, functions, catalogs, projection bindings and locking reads fail
     /// closed. Metadata admission bounds SQL plus scalar parameters to 64 KiB,
     /// 1024 parameters/expression nodes and 64 nested expression levels. A lexical
     /// preflight caps 4096 non-whitespace tokens and 32 conservative recursive
@@ -78,12 +83,22 @@ impl PreparedRead {
                 .schema
                 .as_deref()
                 .is_some_and(|schema| schema != "public")
-            || !select.joins.is_empty()
             || select.lock_strength.is_some()
         {
             return Err(refusal("catalog, join or locking SELECT"));
         }
         qualify_expressions(select)?;
+        if !select.joins.is_empty() {
+            for key in joined::keys(self, select, parameters)? {
+                self.dependencies
+                    .graph
+                    .record(key)
+                    .map_err(|error| HawDBError::Execution(error.to_string()))?;
+            }
+            return self
+                .read
+                .query_sql_with_prepared_params(sql, parameters, prepared);
+        }
         let schema = self
             .read
             .store
@@ -144,6 +159,9 @@ fn qualify_expressions(select: &SelectStatement) -> Result<()> {
         if let SelectProjection::Expression { expression, .. } = projection {
             qualify_expression(expression, &mut nodes, 0)?;
         }
+    }
+    for expression in select.joins.iter().map(|join| &join.on) {
+        qualify_expression(expression, &mut nodes, 0)?;
     }
     for expression in select
         .selection
@@ -261,9 +279,13 @@ fn necessary_equality<'a>(
         } => {
             let column = left.as_column()?;
             (column.name == name
-                && column.qualifier.as_deref().is_none_or(|qualifier| {
-                    qualifier == select.from_table().name
-                        || Some(qualifier) == select.from_alias.as_deref()
+                && (if select.joins.is_empty() {
+                    column.qualifier.as_deref().is_none_or(|qualifier| {
+                        qualifier == select.from_table().name
+                            || Some(qualifier) == select.from_alias.as_deref()
+                    })
+                } else {
+                    column.qualifier.as_deref() == select.from_alias.as_deref()
                 }))
             .then(|| right.as_value())
             .flatten()

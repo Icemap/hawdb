@@ -138,11 +138,13 @@ partial-write/rollback/sync failures with live state/stamp and reopen assertions
 The audited Mem mapping at `a78432d280609fedd94bc22c4c90da53867b1086`
 uses a Thread fanout page with necessary `thread_storage_id` equality and
 (order_index, content_message_id) keyset ordering. A declared index with that
-leading field can now yield a group dependency instead of Database. SourceChunk
-SQL joins, bounded fanout continuation, baseline/mapping verification and actual
-outer-owner migration remain open. No host callback is automatically certified.
+leading field can now yield a group dependency instead of Database. Qualified
+SourceChunk point/page joins are covered by `JOINED_PROJECTION_READS_PROOF.md`.
+Bounded fanout continuation, baseline/mapping verification and actual outer-owner
+migration remain open. No host callback is automatically certified.
 
-Local native evidence on the final Rust sources (Rust 1.97.1, macOS arm64):
+Local prefix-component evidence at `436aa97` (Rust 1.97.1, macOS arm64;
+the later joined-read component extends the facade suite):
 
 - The six `relational_prefix` Cargo facade tests pass. Both default/minimal
   Bazel facade consumers pass all 64 tests; both owner consumers pass all 5.

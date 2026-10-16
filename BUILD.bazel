@@ -690,7 +690,28 @@ rust_test(
     rust_test(
         name = "hawdb_mvcc_projection_publication" + suffix + "_tests",
         crate_root = "tests/mvcc_projection_publication.rs",
-        srcs = ["tests/mvcc_projection_publication.rs"],
+        srcs = [
+            "tests/mvcc_projection_publication.rs",
+            "tests/support/mvcc_fixture.rs",
+        ],
+        edition = "2024",
+        deps = [library],
+    )
+    for suffix, library in [
+        ("", ":hawdb"),
+        ("_minimal", ":hawdb_minimal"),
+    ]
+]
+
+# Keep complete JOIN coverage under the existing per-action timeout; share fixtures.
+[
+    rust_test(
+        name = "hawdb_mvcc_joined_reads" + suffix + "_tests",
+        crate_root = "tests/mvcc_joined_reads.rs",
+        srcs = [
+            "tests/mvcc_joined_reads.rs",
+            "tests/support/mvcc_fixture.rs",
+        ],
         edition = "2024",
         deps = [library],
     )

@@ -307,10 +307,12 @@ heads, readers, sealed tokens and open writers as distinct roots. Dropping an
 unpublished token makes its candidate eligible for bounded reclamation; dropping
 a committed token does not remove the durable head root.
 
-Prepared SQL hydration now supports canonical public single-table SELECTs.
+Prepared SQL hydration supports canonical public single-table SELECTs and the
+qualified one-parent-primary-key INNER JOIN family described below.
 A complete necessary primary-key tuple under AND records the existing relational
 row intent, including absent keys and UUID coercion shared with query/writer
-keys. Other admitted reads expose a Database-epoch fallback; joins, functions,
+keys. Declared leading index tuples cover complete domains. Other admitted
+reads expose a Database-epoch fallback; other joins, functions,
 system/projection-bound sources and locking/mutation statements fail closed.
 SQL and Cypher share one sticky dependency budget. Pre-parse admission uses the
 execution frontend's PostgreSQL tokenizer to bound recursive parser/lowering/drop
@@ -404,7 +406,7 @@ path do not prove starvation freedom.
 | Version retention/admission | Existing history budget/pin models and tests | Churn/long-pin allocator/RSS and cleanup-latency qualification |
 | Publication protocol | [Finite safety model and 14 controls](../tla/VERSIONED_PROJECTION_PUBLICATION_PROOF.md), registered safety action and initial source-validation/catalog path | Complete source refinement and embedded integration |
 | Search preparation/activation | Owned single/partitioned/update candidates, selector CAS, shared source-validation facade and lifecycle model | Mem catch-up/outer-owner migration, host bindings and bounded batch receipts, size-independent activation I/O and fault/performance composition |
-| Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain, internal-ID/single-hop and relational primary-tuple collectors, native cold/hot regressions | Graph composite/range/other traversal and relational multi-key/range/join/domain collectors, host dependencies and full completeness qualification |
+| Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain, internal-ID/single-hop and relational primary-tuple/index-prefix and qualified parent-PK JOIN collectors, native cold/hot regressions | Graph composite/range/other traversal and additional relational multi-key/range/multiway-join/domain collectors, host dependencies and full completeness qualification |
 | Invisible staging and durable activation | Existing `ProjectionGenerationStore` candidate/seal/head protocol and Search mutation components | Compose source validation and Search activation with complete receipt/closure and failure states |
 | Embedded owner concurrency | Current catch-up path; #1032 owner/fence merged on main at cfbea1b | Merged main owner available; integrate prepared sessions into the actual path; prove a competing disjoint writer commits while preparation is paused |
 | Recovery/power loss | Existing WAL/group/branch proofs, #820 fault harness | Compose new staging/selector/source barriers, cancellation, lost responses and replay |
@@ -427,6 +429,23 @@ Unsupported scalar domains retain whole-epoch fallback. Nullable unique
 prefixes require nonnullable unbound suffixes; the ordinary base/JOIN selectors
 share that correctness condition. See
 [the conditional argument and model](../tla/RELATIONAL_INDEX_PREFIX_READS_PROOF.md).
-This enables an engine prerequisite for Thread fanout; joined SourceChunk
-reads, artifact-bound coverage, actual Mem owner migration and the original
+This enables an engine prerequisite for Thread fanout. The qualified joined
+SourceChunk family is described below; artifact-bound coverage, actual Mem owner
+migration and the original
 resource/concurrency qualification remain required.
+
+## Joined SourceChunk read refinement (2026-10-16)
+
+One aliased INNER JOIN to a complete parent PK collects child row/prefix and
+parent row dependencies, including absent and filtered parents. The parent tuple
+is fixed by necessary child equalities or a bounded same-snapshot child-PK SQL
+lookup of join fields. All original graph/relational semantics remain in the
+query runtime. Internal lookup limits are one row / 4 KiB, with generated SQL
+metadata preflight; all errors remain sticky. Partial ON keys, multiple/outer
+joins, ambiguous aliases and unsupported expressions refuse. Unqualified child
+scopes and unsupported scalar identities keep whole-epoch fallback. See
+[the conditional source argument and finite model](../tla/JOINED_PROJECTION_READS_PROOF.md).
+The actual Mem mapper still uses the legacy batch callback and unbounded fanout
+loop; this collector does not provide bounded host continuation, stage-bound
+coverage, verified baseline/binding receipts, actual owner migration or the
+remaining resource/recovery/scaling qualification.

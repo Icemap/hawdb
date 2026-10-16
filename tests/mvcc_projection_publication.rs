@@ -13,56 +13,16 @@
 // limitations under the License.
 
 use hawdb::{
-    Database, DurabilityPolicy, PreparedReadLimits, ProjectionGenerationBatchLimits,
-    ProjectionGenerationBegin, ProjectionGenerationDigestBuilder, ProjectionGenerationError,
-    ProjectionGenerationIdentity, ProjectionGenerationMember, ProjectionGenerationStore,
-    ProjectionPublicationError, SealedProjectionGeneration, Value,
+    Database, DurabilityPolicy, ProjectionGenerationError, ProjectionPublicationError, Value,
 };
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
-struct TestRoot(PathBuf);
-impl TestRoot {
-    fn new() -> Self {
-        static NEXT_ROOT: AtomicUsize = AtomicUsize::new(0);
-        Self(std::env::temp_dir().join(format!(
-            "hawdb_mvcc_publication_{}_{}_{}",
-                std::process::id(),
-            NEXT_ROOT.fetch_add(1, Ordering::Relaxed),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-            )))
-    }
-}
-impl Drop for TestRoot {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-fn limits() -> PreparedReadLimits {
-    PreparedReadLimits {
-        dependency_entries: NonZeroUsize::new(32).unwrap(),
-        dependency_bytes: NonZeroUsize::new(4096).unwrap(),
-        statement_rows: NonZeroUsize::new(32).unwrap(),
-        statement_payload_bytes: NonZeroUsize::new(4096).unwrap(),
-    }
-}
-
-fn fixture(policy: DurabilityPolicy) -> (TestRoot, Database) {
-    let root = TestRoot::new();
-    let mut db = Database::open_with_durability(&root.0, policy)
-        .unwrap_or_else(|error| panic!("opening fixture {}: {error}", root.0.display()));
-    db.query("CREATE (:Memory {id: 'a', value: 1})").unwrap();
-    db.query("CREATE (:Other {id: 'b', value: 1})").unwrap();
-    (root, db)
-}
+#[path = "support/mvcc_fixture.rs"]
+mod support;
+use support::{fixture, limits, seal, TestRoot};
 
 fn read(db: &Database) -> hawdb::PreparedReadDependencies {
     let mut read = db.begin_prepared_read(limits()).unwrap();
@@ -77,38 +37,6 @@ fn read(db: &Database) -> hawdb::PreparedReadDependencies {
     let dependencies = read.finish().unwrap();
     assert!(!dependencies.requires_unchanged_database_epoch());
     dependencies
-}
-
-fn seal(
-    store: &ProjectionGenerationStore,
-    generation: &str,
-    epoch: u64,
-    expected: Option<&str>,
-) -> SealedProjectionGeneration {
-    let mut writer = store
-        .begin_candidate(
-            ProjectionGenerationBegin {
-                identity: ProjectionGenerationIdentity {
-                    projection: "test_mvcc".into(),
-                    owner_key: b"workspace".to_vec(),
-                    generation: generation.into(),
-                },
-                source_watermark: epoch,
-                projection_version: 1,
-                expected_head: expected.map(str::to_owned),
-            },
-            ProjectionGenerationBatchLimits::default(),
-        )
-        .unwrap();
-    let member = ProjectionGenerationMember {
-        collection: "values".into(),
-        key: b"a".to_vec(),
-        payload: b"one".to_vec(),
-    };
-    writer.append_batch(std::slice::from_ref(&member)).unwrap();
-    let mut digest = ProjectionGenerationDigestBuilder::default();
-    digest.update(&member).unwrap();
-    writer.seal(digest.finish()).unwrap()
 }
 
 #[test]
