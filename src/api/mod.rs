@@ -334,7 +334,7 @@ pub struct DatabaseConfig {
     pub read_only: bool,
     /// Bounded pending-child recovery during a writable project open.
     pub branch_create_recovery_limits: BranchCreateRecoveryLimits,
-    /// Optional host-wide row ceiling. `Some(0)` (the default) and `None` mean unlimited.
+    /// Optional host-wide read row ceiling. `Some(0)` (the default) and `None` mean unlimited.
     /// Session settings may lower a positive ceiling, but cannot raise it.
     pub max_read_result_rows: Option<usize>,
     pub max_read_result_payload_bytes: Option<usize>,
@@ -562,19 +562,6 @@ impl SessionConfig {
         (self.max_result_rows != 0)
             .then(|| usize::try_from(self.max_result_rows).unwrap_or(usize::MAX))
             .filter(|rows| *rows != usize::MAX)
-    }
-
-    fn validate_result_rows(self, rows: usize) -> Result<()> {
-        if let Some(limit) = self.row_limit()
-            && rows > limit
-        {
-            return Err(HawDBError::read_budget_exceeded(
-                crate::ReadBudgetResource::Rows,
-                limit,
-                "session result exceeds max_result_rows",
-            ));
-        }
-        Ok(())
     }
 }
 
@@ -20423,6 +20410,19 @@ impl DatabaseTransactionRuntime {
         )
     }
 
+    fn validate_result_rows(&self, rows: usize) -> Result<()> {
+        if let Some(limit) = self.read_result_row_limit()
+            && rows > limit
+        {
+            return Err(HawDBError::read_budget_exceeded(
+                crate::ReadBudgetResource::Rows,
+                limit,
+                "session result exceeds the effective host/session row ceiling",
+            ));
+        }
+        Ok(())
+    }
+
     fn ensure_writable(&self, store: &GraphStore) -> Result<()> {
         store.ensure_usable()?;
         if self.config.read_only {
@@ -20644,7 +20644,7 @@ fn execute_graph_transaction_statement(
                 runtime.config.mutation_limits,
             )?;
             let rows = returned_rows.unwrap_or_default();
-            runtime.session_config.validate_result_rows(rows.len())?;
+            runtime.validate_result_rows(rows.len())?;
             Ok((
                 QueryOutput { rows: rows.into() },
                 transaction.lock_footprint_since(&statement_savepoint)?,
@@ -21122,9 +21122,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         })
         .transpose()?;
     if let Some(mutation) = &mutation {
-        runtime
-            .session_config
-            .validate_result_rows(mutation.rows.len())?;
+        runtime.validate_result_rows(mutation.rows.len())?;
     }
     let next_relational_rows = if let Some(row_capture) = pending_row_capture {
         let rows = match &state.relational_rows {
@@ -21555,7 +21553,8 @@ impl DatabaseSession<'_> {
         parameters: &[Value],
     ) -> Result<QueryOutput> {
         if self.graph_transaction.is_none() {
-            if self.config.max_result_rows != 0
+            if (self.config.max_result_rows != 0
+                || self.db.config.read_result_row_limit().is_some())
                 && matches!(
                     crate::sql::parse_postgres_sql(sql_text)?,
                     crate::sql::SqlStatement::Insert(_)
@@ -21711,11 +21710,7 @@ impl DatabaseSession<'_> {
                     .take()
                     .expect("active session transaction");
                 let mut mutation_limits = self.db.config.mutation_limits;
-                if let Some(limit) = runtime
-                    .session_config
-                    .row_limit()
-                    .and_then(NonZeroUsize::new)
-                {
+                if let Some(limit) = runtime.read_result_row_limit().and_then(NonZeroUsize::new) {
                     mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
                 }
                 self.db.ensure_writable()?;

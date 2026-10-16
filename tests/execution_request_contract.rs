@@ -1214,3 +1214,159 @@ fn read_only_sql_sessions_inherit_limits_without_altering_database_configuration
     assert_eq!(db.config().max_read_result_rows, Some(0));
     assert!(db.config().read_only);
 }
+
+fn host_ceiling_graph_fixture() -> hawdb::Database {
+    let mut database = hawdb::Database::new_with_config(hawdb::DatabaseConfig {
+        max_read_result_rows: Some(2),
+        ..hawdb::DatabaseConfig::default()
+    });
+    database.query("CREATE NODE TABLE HostLimit").unwrap();
+    database
+        .query("CREATE PROPERTY ON NODE TABLE HostLimit(score) TYPE INT")
+        .unwrap();
+    for _ in 0..3 {
+        database.query("CREATE (:HostLimit {score: 0})").unwrap();
+    }
+    database
+}
+
+fn host_ceiling_sql_fixture() -> hawdb::Database {
+    let mut database = hawdb::Database::new_with_config(hawdb::DatabaseConfig {
+        max_read_result_rows: Some(2),
+        ..hawdb::DatabaseConfig::default()
+    });
+    database
+        .query_sql("CREATE TABLE host_limit (id BIGINT PRIMARY KEY)")
+        .unwrap();
+    for id in 0..3 {
+        database
+            .query_sql(&format!("INSERT INTO host_limit (id) VALUES ({id})"))
+            .unwrap();
+    }
+    database
+}
+
+fn assert_host_row_ceiling(error: hawdb::HawDBError) {
+    assert!(
+        matches!(&error, hawdb::HawDBError::ReadBudgetExceeded(cause)
+            if cause.resource == hawdb::ReadBudgetResource::Rows && cause.limit == 2)
+            || matches!(&error, hawdb::HawDBError::Execution(message)
+                if message.contains("max_mutation_result_rows 2")),
+        "unexpected host-ceiling refusal: {error}"
+    );
+}
+
+#[test]
+fn session_host_ceiling_bounds_cypher_mutations_in_both_transaction_modes() {
+    for max_result_rows in [0, 4, u64::MAX] {
+        for explicit in [false, true] {
+            let mut database = host_ceiling_graph_fixture();
+            let epoch = database.commit_epoch().unwrap();
+            {
+                let mut session = database.session();
+                session.set_max_result_rows(max_result_rows);
+                if explicit {
+                    session.query("BEGIN TRANSACTION").unwrap();
+                }
+                assert_host_row_ceiling(
+                    session
+                        .query("MATCH (n:HostLimit) SET n.score = 1 RETURN n.score AS score")
+                        .unwrap_err(),
+                );
+                assert_eq!(
+                    session
+                        .query("MATCH (n:HostLimit) WHERE n.score = 1 RETURN count(n) AS total")
+                        .unwrap()
+                        .rows[0]
+                        .get("total"),
+                    Some(&Value::Int(0))
+                );
+                if explicit {
+                    session.query("ROLLBACK").unwrap();
+                }
+            }
+            assert_eq!(database.commit_epoch().unwrap(), epoch);
+        }
+    }
+}
+
+#[test]
+fn session_host_ceiling_bounds_commit_results_before_publication() {
+    for max_result_rows in [0, 4, u64::MAX] {
+        let mut database = host_ceiling_graph_fixture();
+        let epoch = database.commit_epoch().unwrap();
+        {
+            let mut session = database.session();
+            session.set_max_result_rows(max_result_rows);
+            session.query("BEGIN TRANSACTION").unwrap();
+            for _ in 0..3 {
+                session.query("CREATE (:HostLimit {score: 9})").unwrap();
+            }
+            assert_host_row_ceiling(session.query("COMMIT").unwrap_err());
+            assert_eq!(
+                session
+                    .query("MATCH (n:HostLimit) WHERE n.score = 9 RETURN count(n) AS total")
+                    .unwrap()
+                    .rows[0]
+                    .get("total"),
+                Some(&Value::Int(0))
+            );
+        }
+        assert_eq!(database.commit_epoch().unwrap(), epoch);
+    }
+}
+
+#[test]
+fn session_host_ceiling_bounds_sql_returning_and_rolls_back_caught_errors() {
+    const RETURNING: &str = "INSERT INTO host_limit (id) VALUES (3), (4), (5) RETURNING id";
+    for max_result_rows in [0, 4, u64::MAX] {
+        for native_sql in [false, true] {
+            let mut database = host_ceiling_sql_fixture();
+            let epoch = database.commit_epoch().unwrap();
+            let error = if native_sql {
+                let mut session = database.sql_session();
+                session.set_max_result_rows(max_result_rows);
+                session.query(RETURNING, &[]).unwrap_err()
+            } else {
+                let mut session = database.session();
+                session.set_max_result_rows(max_result_rows);
+                session.query_sql(RETURNING).unwrap_err()
+            };
+            assert_host_row_ceiling(error);
+            assert_eq!(database.commit_epoch().unwrap(), epoch);
+            for id in 3..6 {
+                assert!(database
+                    .query_sql_with_params(
+                        "SELECT id FROM host_limit WHERE id = $1",
+                        &[Value::Int(id)]
+                    )
+                    .unwrap()
+                    .rows
+                    .is_empty());
+            }
+        }
+        let mut database = host_ceiling_sql_fixture();
+        let epoch = database.commit_epoch().unwrap();
+        {
+            let mut session = database.sql_session();
+            session.set_max_result_rows(max_result_rows);
+            let failed = session.transaction(|transaction| {
+                transaction.query("INSERT INTO host_limit (id) VALUES (6)", &[])?;
+                assert_host_row_ceiling(transaction.query(RETURNING, &[]).unwrap_err());
+                Ok(())
+            });
+            assert!(
+                failed.is_err(),
+                "caught RETURNING refusal must abort the transaction"
+            );
+        }
+        assert_eq!(database.commit_epoch().unwrap(), epoch);
+        for id in 3..7 {
+            assert!(database
+                .query_sql_with_params("SELECT id FROM host_limit WHERE id = $1", &[Value::Int(id)])
+                .unwrap()
+                .rows
+                .is_empty());
+        }
+    }
+}

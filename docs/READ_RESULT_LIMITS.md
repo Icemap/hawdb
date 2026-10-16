@@ -42,6 +42,11 @@ request ceiling. These low-level budgets differ from the session setting.
 The existing `DatabaseConfig::max_read_result_rows` remains an optional host
 ceiling. Its default is `Some(0)`; both `Some(0)` and `None` mean unlimited.
 A positive host ceiling cannot be raised or disabled by a session or cursor.
+Session mutation `RETURNING` rows and explicit `COMMIT` summaries apply the same
+host/session minimum as reads, before publishing staged writes. Autocommit,
+explicit Cypher transactions and SQL sessions enforce this consistently, even
+when the session ceiling is zero or greater than the host ceiling. Direct
+database mutation APIs retain their separate `MutationLimits` contract.
 The SQL frontend does not substitute the former 100,000-row default when the
 host is unlimited. Explicit host ceilings continue to bound SQL intermediate
 work; a session's result ceiling does not lower that intermediate-work budget.
