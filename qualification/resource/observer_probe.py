@@ -11,29 +11,21 @@ import subprocess
 import sys
 import tracemalloc
 
+from observe import process_memory
+
 
 BASE = "baf113543889e01abdf8ac86f3f1e89f35445f38"
 OVERLAY = {
     ".github/workflows/native-bindings.yml",
     "qualification/resource/observer_probe.py",
+    "qualification/resource/observe.py",
+    "qualification/resource/test_observe.py",
 }
 PROBE_BYTES = 64 * 1024 * 1024
 
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
-
-
-def proc_memory():
-    values = {}
-    for line in Path("/proc/self/status").read_text().splitlines():
-        name, _, value = line.partition(":")
-        if name in ("VmRSS", "VmHWM"):
-            number, unit = value.split()
-            assert unit == "kB"
-            values[name] = int(number) * 1024
-    assert set(values) == {"VmRSS", "VmHWM"}
-    return values
 
 
 def touch(buffer):
@@ -55,9 +47,9 @@ def probe(kind):
     touch(warmup)
     del warmup
     gc.collect()
-    before_reset = proc_memory()
+    before_reset = process_memory()
     Path("/proc/self/clear_refs").write_text("5\n")
-    baseline = proc_memory()
+    baseline = process_memory()
     assert before_reset["VmHWM"] - baseline["VmHWM"] >= PROBE_BYTES // 2
     assert baseline["VmHWM"] <= baseline["VmRSS"] + 1024 * 1024
     tracemalloc.start()
@@ -70,7 +62,7 @@ def probe(kind):
         else bytearray(PROBE_BYTES)
     )
     touch(allocation)
-    during = proc_memory()
+    during = process_memory()
     traced_current, traced_peak = tracemalloc.get_traced_memory()
     pool_during = (
         None
@@ -92,7 +84,7 @@ def probe(kind):
     gc.collect()
     pool_after = None if pool is None else pool.bytes_allocated()
     assert pool_after in (None, 0)
-    after = proc_memory()
+    after = process_memory()
     traced_after, _ = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     return {

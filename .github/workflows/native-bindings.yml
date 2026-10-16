@@ -20,6 +20,8 @@ jobs:
         run: python3 -m pip install pyarrow==26.0.0
       - name: Probe process peak RSS and foreign pool observations
         run: python3 -B qualification/resource/observer_probe.py --output "$RUNNER_TEMP/resource-observer"
+      - name: Verify consumer observer success and failure semantics
+        run: python3 -B qualification/resource/test_observe.py --output "$RUNNER_TEMP/resource-observer/consumer-tests"
       - name: Preserve every outcome
         if: always()
         uses: actions/upload-artifact@v7
