@@ -100,6 +100,7 @@ impl Database {
             u64::try_from(config.max_read_result_rows.unwrap()).unwrap(),
             u64::try_from(config.max_read_result_payload_bytes.unwrap()).unwrap(),
             u64::try_from(config.execution_memory.query_memory_bytes.get()).unwrap(),
+            u64::try_from(config.execution_memory.batch_payload_bytes.get()).unwrap(),
             limits.result_budget_bytes,
             limits.memory_budget_bytes,
         ])
@@ -741,6 +742,8 @@ pub fn _open_large_result_qualification(path: Option<PathBuf>) -> PyResult<Datab
         max_read_result_payload_bytes: Some(256 * 1024 * 1024),
         execution_memory: hawdb::executor::ExecutionMemoryConfig {
             query_memory_bytes: std::num::NonZeroUsize::new(1024 * 1024 * 1024).unwrap(),
+            // Admission derives the working reservation from planned batch capacity.
+            batch_payload_bytes: std::num::NonZeroUsize::new(64 * 1024 * 1024).unwrap(),
             ..Default::default()
         },
         ..Default::default()
