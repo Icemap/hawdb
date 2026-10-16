@@ -22,10 +22,15 @@ use hawdb_storage::store::{GraphReadDependencies, GraphReadDependencyError};
 use hawdb_storage::version::VersionKey;
 use std::fmt;
 
+#[path = "dependency_read/full_source.rs"]
+mod full_source;
 #[path = "dependency_read/graph_match.rs"]
 mod graph_match;
 #[path = "dependency_read/projection_feed.rs"]
 mod projection_feed;
+pub use full_source::{
+    PreparedProjectionFullSource, ProjectionFullSourceItem, ProjectionFullSourceLimits,
+};
 pub use projection_feed::{
     PreparedProjectionFeed, ProjectionFeedError, ProjectionFeedItem, ProjectionFeedLimits,
     ProjectionFeedRead, ProjectionFeedResource, ProjectionFeedStep, ProjectionFeedUsage,

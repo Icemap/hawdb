@@ -408,6 +408,7 @@ path do not prove starvation freedom.
 | Search preparation/activation | Owned single/partitioned/update candidates, selector CAS, shared source-validation facade and lifecycle model | Mem catch-up/outer-owner migration, host bindings and bounded batch receipts, size-independent activation I/O and fault/performance composition |
 | Precise read dependencies | Pinned tokens, bounded exact scalar-index/domain, internal-ID/single-hop and relational primary-tuple/index-prefix and qualified parent-PK JOIN collectors, native cold/hot regressions | Graph composite/range/other traversal and additional relational multi-key/range/multiway-join/domain collectors, host dependencies and full completeness qualification |
 | Invisible staging and durable activation | Existing `ProjectionGenerationStore` candidate/seal/head protocol and Search mutation components | Compose source validation and Search activation with complete receipt/closure and failure states |
+| Complete baseline input | Pinned graph candidate frontier, all canonical relational tables/PKs, tracked callback reads and explicit End; [conditional model/source argument](../tla/PROJECTION_FULL_SOURCE_PROOF.md) | Verified full mapped document comparison, ownership/capture/mapping contract, artifact-bound session authority and cumulative physical-work/RSS qualification |
 | Embedded owner concurrency | Current catch-up path; #1032 owner/fence merged on main at cfbea1b | Merged main owner available; integrate prepared sessions into the actual path; prove a competing disjoint writer commits while preparation is paused |
 | Recovery/power loss | Existing WAL/group/branch proofs, #820 fault harness | Compose new staging/selector/source barriers, cancellation, lost responses and replay |
 | Scaling/fairness/latency | Existing 1/4/8-writer harness and retained adverse samples | Small/large catch-up enabled/disabled runs, p50/p95/p99, lock wait/hold time, unchanged latency gates |
@@ -449,3 +450,22 @@ The actual Mem mapper still uses the legacy batch callback and unbounded fanout
 loop; this collector does not provide bounded host continuation, stage-bound
 coverage, verified baseline/binding receipts, actual owner migration or the
 remaining resource/recovery/scaling qualification.
+
+## Full baseline input prerequisite (2026-10-16)
+
+`begin_prepared_full_projection_source` enumerates graph allocation candidates
+(including holes), every canonical relational table (including empty and engine
+tables), and ordered primary keys from one immutable source. Callback queries
+share that source and cancellation context. Metadata/two key slots are admitted
+before ownership; logical input and seek counters accumulate across steps.
+Failures are sticky and End must be acknowledged. Finish returns conservative
+whole-epoch read dependencies, never a verified baseline or stage receipt.
+
+The [source argument, six native tests and finite model](../tla/PROJECTION_FULL_SOURCE_PROOF.md)
+cover pinned enumeration and failure custody. Cold range seeks still have
+per-seek rather than cumulative physical-I/O limits. Complete source/host effect
+mapping, verified baseline document comparison, unique source ownership,
+source/capture/mapping/binding/incarnation/operation receipts, an artifact-owning
+C..E session, actual Mem owner migration, power-loss composition and the original
+1/4/8-writer latency/fairness/resource qualification remain required. Enumeration
+completion must not mint any of those authorities.

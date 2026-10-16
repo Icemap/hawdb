@@ -120,6 +120,7 @@ pub use immutable_root::{
     AdmittedBranchStore, BranchAdmissionError, BranchAdmissionRequest,
     PreparedImmutableRootHandoff, SealedBranchSource,
 };
+mod projection_full_source;
 #[path = "store/relational_index_shadow.rs"]
 mod relational_index_shadow;
 #[path = "store/relational_row_pages.rs"]
@@ -129,6 +130,10 @@ pub mod relational_row_pages;
 mod search_projection_capture;
 #[path = "store/search_projection_change_log.rs"]
 mod search_projection_change_log;
+#[doc(hidden)]
+pub use projection_full_source::{
+    ProjectionFullSourceCursor, ProjectionFullSourceItem, ProjectionFullSourceLimits,
+};
 #[path = "store/statistics_refresh.rs"]
 mod statistics_refresh;
 #[path = "store/wal_codec.rs"]

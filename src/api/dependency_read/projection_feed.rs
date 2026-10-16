@@ -64,6 +64,26 @@ impl ProjectionFeedRead<'_> {
         self.with_read(|read| read.hydrate_search_projection_nodes(ids, max_output_payload_bytes))
     }
 }
+
+pub(super) fn with_projection_read(
+    read: &mut PreparedRead,
+    visitor: impl FnOnce(&ProjectionFeedRead<'_>) -> Result<()>,
+) -> Result<()> {
+    let context = ProjectionFeedRead {
+        source_epoch: read.source_epoch(),
+        read: RefCell::new(read),
+        failed: Cell::new(false),
+    };
+    visitor(&context)?;
+    let read = context.read.borrow();
+    if context.failed.get() || read.failed {
+        return Err(HawDBError::Execution(
+            "projection feed callback ignored a tracked read failure".into(),
+        ));
+    }
+    read.read.store.ensure_usable()
+}
+
 impl Database {
     /// Captures source and feed under one immutable owner borrow. Both graph and
     /// relational keys are split without eagerly cloning the retained log.
@@ -124,19 +144,7 @@ impl PreparedProjectionFeed {
             .map_err(ProjectionFeedError::Source)?;
         let read = &mut self.prepared;
         let result = self.cursor.visit_next(step, |item| {
-            let context = ProjectionFeedRead {
-                source_epoch: read.source_epoch(),
-                read: RefCell::new(read),
-                failed: Cell::new(false),
-            };
-            visitor(&context, item)?;
-            let read = context.read.borrow();
-            if context.failed.get() || read.failed {
-                return Err(HawDBError::Execution(
-                    "projection feed callback ignored a tracked read failure".into(),
-                ));
-            }
-            read.read.store.ensure_usable()
+            with_projection_read(read, |context| visitor(context, item))
         });
         if result.is_ok() {
             self.failed = false;

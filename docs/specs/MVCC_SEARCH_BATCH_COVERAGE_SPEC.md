@@ -29,6 +29,13 @@ authority for the new source-validated path.
 
 ## Publication unit and bounded steps
 
+The [Mem effect/baseline audit](MVCC_MEM_PROJECTION_EFFECT_AUDIT.md) records
+the current-only parent/fanout gaps and independent vector writers at Mem
+`bf0a527a0d48fd2e6ec38e839cf96555cc57c763`. These require explicit capture,
+mapping, source-owner and external-version contracts before a native session
+can mint complete coverage. The full-source input cursor is an enumeration
+prerequisite, not a verified baseline or an exemption from those obligations.
+
 One preparation session binds the following immutable inputs under the current
 authoritative owner: canonical source instance, pinned source epoch E, verified
 Search base generation and complete base watermark C, host binding/incarnation,

@@ -721,6 +721,24 @@ rust_test(
     ]
 ]
 
+# Full-source baseline input is separate from retained-feed and JOIN actions.
+[
+    rust_test(
+        name = "hawdb_mvcc_full_source" + suffix + "_tests",
+        crate_root = "tests/mvcc_full_source.rs",
+        srcs = [
+            "tests/mvcc_full_source.rs",
+            "tests/support/mvcc_fixture.rs",
+        ],
+        edition = "2024",
+        deps = [library],
+    )
+    for suffix, library in [
+        ("", ":hawdb"),
+        ("_minimal", ":hawdb_minimal"),
+    ]
+]
+
 # Compose the public main owner with pinned reads and sealed Search activation.
 [
     rust_test(

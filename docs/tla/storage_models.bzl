@@ -52,6 +52,7 @@ STORAGE_MODELS = [
     "HawDBInternalIdPointAccess",
     "HawDBRelationalIndexPrefixReads",
     "HawDBJoinedProjectionReads",
+    "HawDBProjectionFullSource",
     "HawDBProjectionChangeCapture",
     "HawDBProjectionChangefeed",
     "HawDBProjectionDurability",

@@ -89,9 +89,10 @@ mod canonical_snapshot;
 mod concurrent;
 mod dependency_read;
 pub use dependency_read::{
-    PreparedProjectionFeed, PreparedRead, PreparedReadDependencies, PreparedReadLimits,
-    ProjectionFeedError, ProjectionFeedItem, ProjectionFeedLimits, ProjectionFeedRead,
-    ProjectionFeedResource, ProjectionFeedStep, ProjectionFeedUsage, ProjectionPublicationError,
+    PreparedProjectionFeed, PreparedProjectionFullSource, PreparedRead, PreparedReadDependencies,
+    PreparedReadLimits, ProjectionFeedError, ProjectionFeedItem, ProjectionFeedLimits,
+    ProjectionFeedRead, ProjectionFeedResource, ProjectionFeedStep, ProjectionFeedUsage,
+    ProjectionFullSourceItem, ProjectionFullSourceLimits, ProjectionPublicationError,
     ProjectionSourceDurability,
 };
 mod explain;
