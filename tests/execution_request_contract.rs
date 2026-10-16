@@ -186,9 +186,16 @@ fn default_read_row_limit_is_exact_and_never_silently_truncates_delivery() {
                     assert!(count <= cap);
                     assert_eq!(rows, count);
                 }
-                Err((rows, _)) => {
+                Err((rows, message)) => {
                     assert_eq!(count, cap + 1);
                     assert!(rows <= cap);
+                    assert!(
+                        message.starts_with(&format!(
+                            "retained query ResultBudget {{ rows: {},",
+                            cap + 1
+                        )),
+                        "unexpected Arrow refusal: {message}"
+                    );
                 }
             }
             assert_eq!(engine.database().commit_epoch().unwrap(), epoch);
@@ -227,6 +234,16 @@ fn default_read_row_limit_is_exact_and_never_silently_truncates_delivery() {
             .unwrap();
         assert_eq!(
             output.rows[0].get("total"),
+            Some(&Value::Int((cap + 1) as i64))
+        );
+        // A predicate exercises aggregate execution independently of the
+        // unfiltered label-count fast path above.
+        let aggregate = engine
+            .query_admitted("MATCH (n:RowLimit) WHERE n.score >= 0 RETURN count(n) AS total")
+            .unwrap();
+        assert_eq!(aggregate.rows.len(), 1);
+        assert_eq!(
+            aggregate.rows[0].get("total"),
             Some(&Value::Int((cap + 1) as i64))
         );
         let limited =
