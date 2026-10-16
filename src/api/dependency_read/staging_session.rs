@@ -15,6 +15,12 @@ pub use baseline::{
     ProjectionBaselineComparisonStep, ProjectionBaselineMappingContext,
     ProjectionBaselineMappingFunction, ProjectionBaselineMappingLimits, ProjectionMatchedBaseline,
 };
+#[path = "staging_session/rebuild.rs"]
+mod rebuild;
+pub use rebuild::{
+    ProjectionFullRebuildConfig, ProjectionFullRebuildSession, ProjectionFullRebuildStep,
+    ProjectionPreparedFullRebuild,
+};
 #[path = "staging_session/verification.rs"]
 mod verification;
 use hawdb_core::RuntimeTaskContext;

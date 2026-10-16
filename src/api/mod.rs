@@ -96,13 +96,15 @@ pub use dependency_read::{
     ProjectionBaselineComparisonStep, ProjectionBaselineMappingContext,
     ProjectionBaselineMappingFunction, ProjectionBaselineMappingLimits, ProjectionFeedError,
     ProjectionFeedItem, ProjectionFeedLimits, ProjectionFeedRead, ProjectionFeedResource,
-    ProjectionFeedStep, ProjectionFeedUsage, ProjectionFullSourceItem, ProjectionFullSourceLimits,
-    ProjectionMappingContext, ProjectionMappingFunction, ProjectionMappingInput,
-    ProjectionMappingLimits, ProjectionMappingStatus, ProjectionMappingUsage,
-    ProjectionMatchedBaseline, ProjectionOutputVerificationContext,
+    ProjectionFeedStep, ProjectionFeedUsage, ProjectionFullRebuildConfig,
+    ProjectionFullRebuildSession, ProjectionFullRebuildStep, ProjectionFullSourceItem,
+    ProjectionFullSourceLimits, ProjectionMappingContext, ProjectionMappingFunction,
+    ProjectionMappingInput, ProjectionMappingLimits, ProjectionMappingStatus,
+    ProjectionMappingUsage, ProjectionMatchedBaseline, ProjectionOutputVerificationContext,
     ProjectionOutputVerificationFunction, ProjectionOutputVerificationSession,
-    ProjectionPublicationError, ProjectionSourceDurability, ProjectionStagedInputs,
-    ProjectionStagingSession, ProjectionStagingSessionConfig, ProjectionStagingSessionStep,
+    ProjectionPreparedFullRebuild, ProjectionPublicationError, ProjectionSourceDurability,
+    ProjectionStagedInputs, ProjectionStagingSession, ProjectionStagingSessionConfig,
+    ProjectionStagingSessionStep,
 };
 mod explain;
 mod graph_analytics;

@@ -66,8 +66,8 @@ pub use unordered::{
     SearchBaselineComparisonLimits, SearchBaselineComparisonReport, SearchMatchedBaseline,
     SearchMutationInspectionInput, SearchMutationInspectionStep, SearchMutationSortStep,
     SearchMutationSortStepLimits, SearchMutationSortStepUsage, SearchOutOfCoreBaselineComparison,
-    SearchOutOfCoreUnorderedMutationWriter, SearchUnorderedMutationLimits,
-    SearchUnorderedMutationReport,
+    SearchOutOfCoreUnorderedMutationWriter, SearchOutOfCoreUnorderedReplacementWriter,
+    SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
 };
 mod prepared;
 mod publication;

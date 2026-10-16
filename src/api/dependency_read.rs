@@ -29,11 +29,13 @@ mod staging_session;
 pub use staging_session::{
     ProjectionBaselineComparisonConfig, ProjectionBaselineComparisonSession,
     ProjectionBaselineComparisonStep, ProjectionBaselineMappingContext,
-    ProjectionBaselineMappingFunction, ProjectionBaselineMappingLimits, ProjectionMappingContext,
-    ProjectionMappingFunction, ProjectionMappingInput, ProjectionMappingLimits,
-    ProjectionMappingStatus, ProjectionMappingUsage, ProjectionMatchedBaseline,
-    ProjectionOutputVerificationContext, ProjectionOutputVerificationFunction,
-    ProjectionOutputVerificationSession, ProjectionStagedInputs, ProjectionStagingSession,
+    ProjectionBaselineMappingFunction, ProjectionBaselineMappingLimits,
+    ProjectionFullRebuildConfig, ProjectionFullRebuildSession, ProjectionFullRebuildStep,
+    ProjectionMappingContext, ProjectionMappingFunction, ProjectionMappingInput,
+    ProjectionMappingLimits, ProjectionMappingStatus, ProjectionMappingUsage,
+    ProjectionMatchedBaseline, ProjectionOutputVerificationContext,
+    ProjectionOutputVerificationFunction, ProjectionOutputVerificationSession,
+    ProjectionPreparedFullRebuild, ProjectionStagedInputs, ProjectionStagingSession,
     ProjectionStagingSessionConfig, ProjectionStagingSessionStep,
 };
 #[path = "dependency_read/graph_match.rs"]

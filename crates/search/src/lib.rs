@@ -218,9 +218,9 @@ pub use out_of_core::{
     SearchOutOfCorePreparedUpdate, SearchOutOfCoreReader, SearchOutOfCoreRefreshReport,
     SearchOutOfCoreSegmentCompaction, SearchOutOfCoreSegmentCompactionPolicy,
     SearchOutOfCoreSegmentCompactionReport, SearchOutOfCoreSegmentCompactionStopReason,
-    SearchOutOfCoreUnorderedMutationWriter, SearchStagingCleanupReport, SearchTextSeedOutput,
-    SearchTextSeedReport, SearchUnorderedMutationLimits, SearchUnorderedMutationReport,
-    SearchVerifiedBody,
+    SearchOutOfCoreUnorderedMutationWriter, SearchOutOfCoreUnorderedReplacementWriter,
+    SearchStagingCleanupReport, SearchTextSeedOutput, SearchTextSeedReport,
+    SearchUnorderedMutationLimits, SearchUnorderedMutationReport, SearchVerifiedBody,
 };
 // These are internal ownership seams. Hosts continue to use the embedded facade.
 #[doc(hidden)]

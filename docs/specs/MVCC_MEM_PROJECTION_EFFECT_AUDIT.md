@@ -14,6 +14,46 @@ Its `message_projection_changefeed.rs` is byte-identical to the previously
 audited `a78432d280609fedd94bc22c4c90da53867b1086` version. These observations
 do not establish the invariants of every application mutation route.
 
+## Refresh against current Mem main
+
+A read-only source snapshot at
+[`cb850597a892efaf76720e4d9ba175277ff69a12`](https://github.com/nowledge-co/mem/tree/cb850597a892efaf76720e4d9ba175277ff69a12)
+compares all 69 Rust files under `integrations/hawdb/src/` plus the server's
+`hawdb_content_store.rs` with the pinned revision above using Git blob identities.
+Of these 70 files, 60 are unchanged, seven changed and three were added. The
+message changefeed, incremental Search mapper, message-source mapper and
+bootstrap current-source comparison remain byte-identical. This confirms the
+previous mapping/vector observations for those exact files; it does not establish
+complete mutation-route coverage or remove the outer-owner integration requirement.
+
+The source adds
+[`graph_mirror_destination.rs`](https://github.com/nowledge-co/mem/blob/cb850597a892efaf76720e4d9ba175277ff69a12/integrations/hawdb/src/graph_mirror_destination.rs),
+[`graph_mirror_evolves.rs`](https://github.com/nowledge-co/mem/blob/cb850597a892efaf76720e4d9ba175277ff69a12/integrations/hawdb/src/graph_mirror_evolves.rs)
+and a graph-target schema contract. EVOLVES replay applies retained Memory
+lifecycle/metadata post-state through a native transaction and has an independently
+identified Search component. These writers belong in the required host-effect
+inventory; a mirror/replay receipt is not a native complete Search baseline or
+C..E activation receipt. Their complete effect, retry and ownership composition
+has not been executed by this audit.
+
+The refreshed
+[`graph_source.rs`](https://github.com/nowledge-co/mem/blob/cb850597a892efaf76720e4d9ba175277ff69a12/integrations/hawdb/src/graph_source.rs)
+and graph preparation explicitly exclude `GraphMirrorJournal`,
+`GraphMirrorResolution` and `GraphMirrorResolvedIdentity` from canonical graph
+pages. They are retained source-side coordination/resolution state, and pending
+or orphan resolution blocks preparation. Named source tests cover these exclusions
+and blocking outcomes; this refresh inspects their source rather than claiming
+the tests ran here. Any new full-source contract must retain those names and
+rationales, and distinguish these source-only tables from authoritative HawDB
+projection source families.
+
+The changed content schema helper exposes transaction-local catalog verification.
+The server content-store diff only adds test-adapter dead-code expectations;
+the two atomic mutation routes audited below retain their bodies. New graph
+bootstrap/target-contract work still needs its own source-linked qualification.
+No local Mem worktree was modified, and no host migration, readiness, ACK or
+stable-release authorization follows from this read-only refresh.
+
 ## Effects that must reach the session
 
 | Source | Current mapping/capture | Obligation before complete coverage |

@@ -11,10 +11,12 @@ use crate::SearchOutOfCoreReader;
 use std::num::{NonZeroU64, NonZeroUsize};
 
 mod baseline;
+pub(super) mod replacement;
 pub use baseline::{
     SearchBaselineComparisonLimits, SearchBaselineComparisonReport, SearchMatchedBaseline,
     SearchOutOfCoreBaselineComparison,
 };
+pub use replacement::SearchOutOfCoreUnorderedReplacementWriter;
 mod heap;
 mod inspection;
 pub use inspection::{SearchMutationInspectionInput, SearchMutationInspectionStep};

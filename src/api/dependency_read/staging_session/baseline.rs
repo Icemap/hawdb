@@ -247,29 +247,9 @@ impl ProjectionBaselineComparisonSession<'_> {
                 let config = &self.config;
                 let ended = &mut self.ended;
                 self.source.visit_next(feed, |read, item| {
-                    increment(&mut usage.calls, 1, config.mapping.calls.get())?;
-                    let mut context = ProjectionBaselineMappingContext {
-                        read: verification::ProjectionOutputVerificationContext::new(
-                            read,
-                            config.mapping.read_limits(),
-                            config.reads,
-                            usage,
-                        ),
-                    };
-                    let document = mapper(&mut context, item)?;
-                    if context.read.is_failed() {
-                        return Err(refusal("baseline mapper ignored a failed read"));
-                    }
-                    if let Some(document) = document {
-                        if matches!(
-                            item,
-                            ProjectionFullSourceItem::RelationalTable { .. }
-                                | ProjectionFullSourceItem::End { .. }
-                        ) {
-                            return Err(refusal(
-                                "table boundary or End cannot own a baseline document",
-                            ));
-                        }
+                    if let Some(document) =
+                        map_full_input(read, item, mapper, config.mapping, config.reads, usage)?
+                    {
                         stage.queue_upsert(document)?;
                     }
                     if matches!(item, ProjectionFullSourceItem::End { .. }) {
@@ -315,4 +295,39 @@ impl<'reader> ProjectionBaselineComparisonSession<'reader> {
             _mapper: self.mapper,
         })
     }
+}
+
+// Shared complete-source mapping rules for comparison and genuine replacement.
+pub(super) fn map_full_input(
+    read: &ProjectionFeedRead<'_>,
+    item: ProjectionFullSourceItem<'_>,
+    mapper: ProjectionBaselineMappingFunction,
+    limits: ProjectionBaselineMappingLimits,
+    reads: PreparedReadLimits,
+    usage: &mut ProjectionMappingUsage,
+) -> Result<Option<SearchDocument>> {
+    increment(&mut usage.calls, 1, limits.calls.get())?;
+    let mut context = ProjectionBaselineMappingContext {
+        read: verification::ProjectionOutputVerificationContext::new(
+            read,
+            limits.read_limits(),
+            reads,
+            usage,
+        ),
+    };
+    let document = mapper(&mut context, item)?;
+    if context.read.is_failed() {
+        return Err(refusal("full-source mapper ignored a failed read"));
+    }
+    if document.is_some()
+        && matches!(
+            item,
+            ProjectionFullSourceItem::RelationalTable { .. } | ProjectionFullSourceItem::End { .. }
+        )
+    {
+        return Err(refusal(
+            "table boundary or End cannot own a baseline document",
+        ));
+    }
+    Ok(document)
 }

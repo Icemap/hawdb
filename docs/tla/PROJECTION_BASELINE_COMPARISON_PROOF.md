@@ -3,7 +3,7 @@
 This implements complete historical set/content comparison for #231/#232/#1043.
 It does not yet mint the versioned baseline/capture/mapping/binding/external-vector
 or durable operation receipts required for activation. Actual Mem migration,
-unknown/lagged-head full rebuild, native C..E coverage activation, incremental
+native C..E coverage activation, incremental
 final artifacts, power-loss composition, physical-cost/RSS and writer qualification
 remain open in [the acceptance ledger](../specs/MVCC_VERSIONED_PUBLICATION_SPEC.md).
 
@@ -116,7 +116,9 @@ Each lookup may reread/decompress a segment; this is not a linear-I/O merge scan
 Base routing, source snapshots/reader residency, host document construction and
 canonical query work retain additional obligations. The total reservations are
 conservative per-lookup credits, not measured bytes or a numeric wall-clock bound.
-A full rebuild and size-independent final activation remain unimplemented.
+A genuine conservative full-C replacement is now implemented separately in
+[the full rebuild path](PROJECTION_FULL_REBUILD_PROOF.md). Ongoing C..E
+composition and size-independent final activation remain unimplemented.
 
 ## Database-scope dependency subsumption
 

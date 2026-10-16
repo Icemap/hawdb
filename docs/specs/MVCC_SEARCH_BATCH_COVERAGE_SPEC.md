@@ -104,6 +104,28 @@ binding/external-vector or durable activation receipt. Unknown/lagged heads stil
 need a genuine full rebuild. See
 [the baseline comparison proof](../tla/PROJECTION_BASELINE_COMPARISON_PROOF.md).
 
+`begin_projection_full_rebuild` now provides that genuine replacement for a
+readable unknown/lagged head: complete native C input and unique private ordering
+produce a full single/empty/partitioned candidate, with no old-target retractions
+or retained-old union. `publish_projection_full_rebuild` consumes the opaque
+candidate under the existing instance/source/durability/expected-base fences.
+Any canonical commit after C rejects this initial conservative fallback.
+Versioned host contracts, external-vector authority, ongoing C..E composition,
+receipts and short activation remain required. See
+[the full replacement argument](../tla/PROJECTION_FULL_REBUILD_PROOF.md).
+
+The next C/E design resolves explicit E state (including None) per stable source
+owner before checking final document-ID uniqueness. Document-ID phase priority
+can hide a collision between a changed owner and an unchanged C owner; a valid
+ID swap must first replace both old owner states. The
+[owner-overlay algebra/model](../tla/PROJECTION_OWNER_OVERLAY_PROOF.md) and retained
+finite oracle establish that rule conditionally on complete compatible effects.
+They do not implement the native owner spool/capture contract or grant coverage
+activation authority. Thread metadata-parent lineage/preimages, independent
+vectors and final-E validation remain required.
+
+
+
 The reusable facade session owns PreparedRead, the immutable feed cursor,
 budgets, binding/base identity and private staging. Raw mutable cursor fields,
 public operation vectors and callback-provided processed counts cannot produce

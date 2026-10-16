@@ -553,3 +553,6 @@ fn baseline_cold_pages_keep_one_database_dependency_slot() {
     assert!(matched.mapping_usage().queries >= 524);
     assert_eq!(g.snapshot().active_background_tasks, 0);
 }
+
+#[path = "mvcc_baseline_comparison/full_rebuild.rs"]
+mod full_rebuild;

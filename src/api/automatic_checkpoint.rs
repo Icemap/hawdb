@@ -397,8 +397,10 @@ impl Control {
                 capacity_work_progress = work_progress;
                 capacity_deadline = None;
             }
-            let capacity_remaining = if state.phase == Phase::Preparing
-                && !state.sync_group_active
+            let capacity_remaining = if matches!(
+                state.phase,
+                Phase::Preparing | Phase::Discarding | Phase::Releasing
+            ) && !state.sync_group_active
                 && preparation_needs_capacity(&state)
             {
                 let deadline = capacity_deadline
@@ -427,8 +429,10 @@ impl Control {
             let must_fence = state.phase == Phase::Finalizing
                 || (self.publication_requested.load(Ordering::Acquire) && !state.sync_group_active)
                 || (state.phase == Phase::Draining && !state.sync_group_active)
-                || (state.phase == Phase::Preparing
-                    && !state.sync_group_active
+                || (matches!(
+                    state.phase,
+                    Phase::Preparing | Phase::Discarding | Phase::Releasing
+                ) && !state.sync_group_active
                     && preparation_needs_capacity(&state))
                 || (state.phase == Phase::Retiring
                     && !state.sync_group_active
@@ -1680,6 +1684,9 @@ fn needs_headroom(state: &State) -> bool {
     })
 }
 
+// Cleanup can still own the admission needed by the next checkpoint. Letting
+// a near-capacity writer bypass it can turn an otherwise fitting small write
+// into a storage-pressure refusal while the owner cannot start a new attempt.
 fn preparation_needs_capacity(state: &State) -> bool {
     let Some(debt) = state.debt else {
         return false;
