@@ -1613,24 +1613,80 @@ impl GraphStore {
         label_id: LabelId,
         properties: &BTreeMap<String, Value>,
     ) -> Result<Option<NodeId>> {
-        // Cold stores retain only delta postings in memory. Their complete
-        // canonical/delta scan also preserves the first matching node by ID.
-        if !self.canonical_base_out_of_core
-            && let Some((property, value)) = properties
-                .iter()
-                .find(|(property, _)| catalog.has_scalar_property_index(label_id, property))
-        {
-            return Ok(self
+        let cold_projection = self
+            .canonical_base
+            .as_ref()
+            .zip(self.persistent_property_projection.as_ref());
+        // A newly declared index may cover the resident delta but not the
+        // canonical base. Only a complete checkpoint projection can exclude it.
+        if let Some((property, value)) = properties.iter().find(|(property, _)| {
+            catalog.has_scalar_property_index(label_id, property)
+                && (!self.canonical_base_out_of_core
+                    || cold_projection.is_some_and(|(_, projection)| {
+                        projection.manifest().supports(
+                            label_id,
+                            property,
+                            PersistentPropertyProjectionKind::Equality,
+                        )
+                    }))
+        }) {
+            let mut found = self
                 .seek_nodes_by_property(label_id, property, value)
                 .find(|node| properties_contain_all(&node.properties, properties))
-                .map(|node| node.id));
+                .map(|node| node.id);
+            let mut scan_fallback = false;
+            if self.canonical_base_out_of_core
+                && let Some((reader, projection)) = cold_projection
+            {
+                // Repeated point reads revisit canonical segment framing. Bound
+                // this work before falling back for low-selectivity predicates.
+                const MAX_POINT_READS: usize = 32;
+                let mut point_reads = 0;
+                let (report, _) = projection
+                    .scan_equality_candidates(label_id, property, value, |node_id| {
+                        if self.node_tombstones.contains(&node_id)
+                            || self.nodes.contains_key(&node_id)
+                            || found.is_some_and(|id| node_id >= id)
+                        {
+                            return Ok(CanonicalScanControl::Continue);
+                        }
+                        if point_reads == MAX_POINT_READS {
+                            scan_fallback = true;
+                            return Ok(CanonicalScanControl::Stop);
+                        }
+                        point_reads += 1;
+                        let node = reader.get_node(node_id)?.ok_or_else(|| {
+                            PersistentPropertyProjectionError::Corrupt(format!(
+                                "property projection references missing canonical node {}",
+                                node_id.0
+                            ))
+                        })?;
+                        if !node.labels.contains(&label_id)
+                            || node.properties.get(property) != Some(value)
+                        {
+                            return Err(PersistentPropertyProjectionError::Corrupt(format!(
+                                "property projection candidate {} fails its canonical equality predicate",
+                                node_id.0
+                            )));
+                        }
+                        // Preserve the scan's first match across base and delta
+                        // without collecting or sorting the candidate IDs.
+                        if properties_contain_all(&node.properties, properties) {
+                            found = Some(node_id);
+                        }
+                        Ok(CanonicalScanControl::Continue)
+                    })
+                    .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
+                self.graph_index_read_metrics
+                    .record_property(PersistentGraphIndexClass::NodeEquality, report);
+            }
+            if !scan_fallback {
+                return Ok(found);
+            }
         }
         let mut found = None;
         self.visit_nodes_owned(Some(label_id), |node| {
-            if properties
-                .iter()
-                .all(|(key, value)| node.properties.get(key) == Some(value))
-            {
+            if properties_contain_all(&node.properties, properties) {
                 found = Some(node.id);
                 GraphScanControl::Stop
             } else {
