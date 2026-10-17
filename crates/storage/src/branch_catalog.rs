@@ -2747,10 +2747,18 @@ mod tests {
             image::{CrashPlan, ImageLimits},
             PowerLossModel,
         };
+        let recorder_root_fds = if cfg!(any(target_os = "linux", target_vendor = "apple", windows))
+        {
+            1
+        } else {
+            0
+        };
         for inject_failure in [false, true] {
             let (directory, catalog_path) = temporary_catalog_path();
             let project = ProjectFileDescriptors::acquire(&directory, 32).unwrap();
+            assert_eq!(project.metrics().open, 0);
             let model = PowerLossModel::attach(&project, ImageLimits::default()).unwrap();
+            assert_eq!(project.metrics().open, recorder_root_fds);
             write_catalog(&catalog_path, &catalog()).unwrap();
             let root = ObjectReference::for_bytes(ObjectKind::SealedRoot, 1, b"root");
             let mut request = create_request();
@@ -2826,6 +2834,11 @@ mod tests {
                     .state,
                 BranchState::Ready
             );
+            // Recovery returned all operation files; the recorder still owns
+            // its captured directory until the model itself closes.
+            assert_eq!(project.metrics().open, recorder_root_fds);
+            assert_eq!(project.metrics().reserved, 0);
+            drop(model);
             assert_eq!(project.metrics().open, 0);
             assert!(project.metrics().high_water <= 32);
             std::fs::remove_dir_all(directory).unwrap();

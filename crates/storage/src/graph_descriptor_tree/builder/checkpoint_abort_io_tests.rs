@@ -27,11 +27,17 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 const CEILING: u64 = 64 * 1024;
+const RECORDER_ROOT_FDS: usize = if cfg!(any(target_os = "linux", target_vendor = "apple", windows))
+{
+    1
+} else {
+    0
+};
 
 struct Fixture {
     root: PathBuf,
     reference: PathBuf,
-    model: PowerLossModel,
+    model: Option<PowerLossModel>,
 }
 
 fn paths(root: &Path) -> GraphDescriptorTreePaths {
@@ -84,16 +90,23 @@ impl Fixture {
         assert_eq!(count, 1);
         drop(ordinary);
         let project = ProjectFileDescriptors::acquire(&root, 32).unwrap();
+        assert_eq!(project.metrics().open, 0);
         let model = PowerLossModel::attach(&project, ImageLimits::default()).unwrap();
+        // The recorder owns one counted root directory until its final close.
+        assert_eq!(project.metrics().open, RECORDER_ROOT_FDS);
         Self {
             root,
             reference,
-            model,
+            model: Some(model),
         }
     }
 
+    fn model(&self) -> &PowerLossModel {
+        self.model.as_ref().expect("live fixture owns its recorder")
+    }
+
     fn observe_write(&self, path: &Path) {
-        self.model
+        self.model()
             .observe(ObservationPoint {
                 event: IoEvent::Write,
                 relative_path: path.strip_prefix(&self.root).unwrap().to_path_buf(),
@@ -108,6 +121,12 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        let project = self.model().project().clone();
+        // All operation files must close before the recorder's root directory.
+        assert_eq!(project.metrics().open, RECORDER_ROOT_FDS);
+        assert_eq!(project.metrics().reserved, 0);
+        drop(self.model.take());
+        assert_eq!(project.metrics().open, 0);
         std::fs::remove_dir_all(&self.root).unwrap();
         std::fs::remove_dir_all(&self.reference).unwrap();
     }
@@ -154,17 +173,20 @@ fn checkpoint_units_descriptor_abort_io_reference_buffer_is_discarded_after_exec
     );
     fixture.observe_write(&paths(&fixture.root).ref_run(0));
     assert_eq!(governor.snapshot().active_background_io_slots, 0);
-    assert_eq!(fixture.model.project().metrics().open, 2);
+    assert_eq!(
+        fixture.model().project().metrics().open,
+        2 + RECORDER_ROOT_FDS
+    );
     drop(permit);
     assert_eq!(governor.snapshot().active_background_tasks, 0);
     assert_eq!(governor.snapshot().active_background_io_slots, 0);
     drop(actual);
-    let observed = fixture.model.take_observation().unwrap();
+    let observed = fixture.model().take_observation().unwrap();
     assert!(
         observed.is_none(),
         "private reference-run abort must discard buffered bytes rather than write after execution/I/O admission closes"
     );
-    assert_eq!(fixture.model.project().metrics().open, 0);
+    assert_eq!(fixture.model().project().metrics().open, RECORDER_ROOT_FDS);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     assert_eq!(fs::read_dir(&fixture.root).unwrap().count(), 0);
 }
@@ -189,12 +211,12 @@ fn checkpoint_units_descriptor_abort_io_page_buffer_is_discarded_after_execution
     drop(permit);
     assert_eq!(governor.snapshot().active_background_tasks, 0);
     drop(actual);
-    let observed = fixture.model.take_observation().unwrap();
+    let observed = fixture.model().take_observation().unwrap();
     assert!(
         observed.is_none(),
         "private descriptor-page abort must discard buffered bytes rather than write after execution/I/O admission closes"
     );
-    assert_eq!(fixture.model.project().metrics().open, 0);
+    assert_eq!(fixture.model().project().metrics().open, RECORDER_ROOT_FDS);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     assert_eq!(fs::read_dir(&fixture.root).unwrap().count(), 0);
 }
