@@ -161,3 +161,41 @@ exact independent-child pins, publication-excluded capture/GC, native recorder
 mapping and logical incarnation still need integration. The admitted-root
 conversion fence remains in place; these results authorize no public governed
 serving or complete source-custody claim.
+
+## Cold registry gate allocation (qualification in progress)
+
+The first unfiltered native Search campaign exposed an actual scope gap in the
+focused single-thread runs: **928 passed / 21 failed / 20 ignored**, with every
+failure observing the same 64 live measured bytes. The first measured admitted
+root initialized the process-static `std::sync::Mutex` on macOS. Its native
+backing allocation stays with that static owner after all root entries close;
+subsequent complete-reclamation guards correctly continued to reject it.
+
+A standalone Rust 1.97.1 diagnostic using the same allocation tracker confirms
+64 retained bytes for the first static Mutex lock. A local Mutex allocates its
+own backing and releases it on destruction, leaving just the static 64 bytes.
+This is not evidence that the per-root retirement ordering leaked an entry.
+Neither warming the registry outside measurement nor subtracting 64 bytes from
+the assertions establishes a complete cold governed-construction contract.
+
+The proposed fix gives the process-static registry an Apple `os_unfair_lock`
+word in static storage. It calls the exported public lock/unlock functions;
+it does not implement a spin loop or copy OS internals. Other platforms retain
+`std::sync::Mutex`. The Apple guard requires a `'static` gate, preventing moves
+after first use, and cannot cross threads. Exclusive guard borrows protect the
+UnsafeCell payload; Drop unlocks on the acquiring thread, including unwind.
+Native resources, final payload/control-block destruction and entry receipt
+release still occur outside registry exclusion. The nonfinal decrement stays
+inside the same critical section as the count check.
+
+This refines the finite models' existing mutual-exclusion premise without
+changing their reference/retirement transitions. It adds no scheduler fairness
+or liveness guarantee. OS lock behavior, contention/resource qualification and
+all original MVCC gates remain explicit requirements. A new cold-lock heap guard
+and the existing full-reclamation assertions must pass without relaxed budgets,
+changed assertions or excluded first-use initialization.
+
+The native word layout and zero initializer were checked against the pinned
+local macOS SDK `os/lock.h`. Apple's public contracts describe
+[the initializer](https://developer.apple.com/documentation/os/os_unfair_lock_init)
+and [blocking acquisition](https://developer.apple.com/documentation/os/os_unfair_lock_lock).

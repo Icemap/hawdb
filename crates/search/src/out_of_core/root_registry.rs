@@ -16,10 +16,12 @@ use hawdb_storage::file_io::{
 use std::collections::LinkedList;
 use std::mem::size_of;
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard, RwLock};
+use std::sync::RwLock;
+
+mod gate;
 
 const PROCESS_LOCK: &str = ".search-source-process.lock";
-static ROOTS: Mutex<LinkedList<Entry>> = Mutex::new(LinkedList::new());
+static ROOTS: gate::Gate<LinkedList<Entry>> = gate::Gate::new(LinkedList::new());
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
@@ -247,8 +249,8 @@ impl Drop for RootRef {
     }
 }
 
-fn registry() -> MutexGuard<'static, LinkedList<Entry>> {
-    ROOTS.lock().unwrap_or_else(|p| p.into_inner())
+fn registry() -> gate::Guard<'static, LinkedList<Entry>> {
+    gate::lock(&ROOTS)
 }
 
 #[cfg(test)]

@@ -94,6 +94,24 @@ jobs:
           cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
             2>&1 | tee windows-native-results/clippy.txt
 
+      - name: Test captured source directories and crash-image operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            -- file_io::source_directory::tests:: power_loss::image::tests:: \
+            --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/source-directories.txt
+
+      - name: Test retained root custody and captured head reads
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            -- out_of_core::root_registry::tests:: out_of_core::admitted_root::tests:: \
+            build_memory::read::tests:: --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/root-custody.txt
+
       - name: Test abandonment GC power-loss cuts
         shell: bash
         run: |

@@ -400,3 +400,13 @@ fn retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close()
     assert!(root.exists(), "runtime custody never deletes durable roots");
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn cold_registry_gate_has_no_query_lifetime_heap() {
+    use crate::test_allocation as allocation;
+    let _serial = allocation::serial();
+    assert_eq!(allocation::live(), 0);
+    let (_, peak) = allocation::measure(|| drop(registry()));
+    assert_eq!(peak, 0);
+    assert_eq!(allocation::live(), 0);
+}
