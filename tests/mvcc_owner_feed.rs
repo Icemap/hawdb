@@ -340,3 +340,88 @@ fn metadata_absence_publication_rejects_implicit_label_creation_but_allows_other
         std::fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[test]
+fn endpoint_property_inputs_cross_one_item_steps_at_one_pinned_end() {
+    for cold in [false, true] {
+        let root = std::env::temp_dir().join(format!(
+            "hawdb-endpoint-feed-{}-{}-{cold}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut db = Database::open(&root).unwrap();
+        db.query("CREATE (:Parent {id:'a'})").unwrap();
+        db.query("CREATE (:Child {id:'b'})").unwrap();
+        db.query("MATCH (a:Parent),(b:Child) CREATE (a)-[:DEPENDS_ON {weight:1}]->(b)")
+            .unwrap();
+        let parent = db
+            .query("MATCH (a:Parent) RETURN id(a) AS id")
+            .unwrap()
+            .rows[0]
+            .get("id")
+            .unwrap()
+            .clone();
+        let child = db.query("MATCH (b:Child) RETURN id(b) AS id").unwrap().rows[0]
+            .get("id")
+            .unwrap()
+            .clone();
+        if cold {
+            db.checkpoint().unwrap();
+        }
+        let c = db.commit_epoch().unwrap();
+        db.query("MATCH (a:Parent)-[r:DEPENDS_ON]->(b:Child) SET r.weight=2")
+            .unwrap();
+        let e = db.commit_epoch().unwrap();
+        let mut config = reads();
+        config.dependency_entries = NonZeroUsize::new(3).unwrap();
+        let mut feed = db
+            .begin_prepared_projection_owner_feed_with_scopes(
+                c,
+                config,
+                budget(8),
+                hawdb::ProjectionReadScopes {
+                    node_labels: &["Parent", "Child"],
+                    relationship_types: &["DEPENDS_ON"],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        db.query("MATCH (a:Parent)-[r:DEPENDS_ON]->(b:Child) SET r.weight=3")
+            .unwrap();
+        let mut observed = vec![];
+        let mut ended = 0;
+        let mut steps = 0;
+        while !feed.is_complete() {
+            steps += 1;
+            assert!(steps <= 16, "one-item feed did not progress");
+            let result=feed.visit_next(budget(1),|read,item| {
+                assert_eq!(read.source_epoch(),e);
+                match item {
+                    ProjectionOwnerFeedItem::GraphOwner {epoch,node_id,before} => {
+                        assert_eq!(epoch,e);assert_eq!(before,ProjectionOwnerBefore::NotRecorded);
+                        observed.push(Value::Int(i64::try_from(node_id).unwrap()));
+                        let rows=read.query_with_params("MATCH (a:Parent)-[r:DEPENDS_ON]->(b:Child) WHERE id(a)=$id RETURN r.weight AS weight",&BTreeMap::from([("id".into(),parent.clone())]))?;
+                        assert_eq!(rows.output.rows.len(),1);
+                        assert_eq!(rows.output.rows[0].get("weight"),Some(&Value::Int(2)));
+                    }
+                    ProjectionOwnerFeedItem::End {source_epoch} => {assert_eq!(source_epoch,e);ended+=1;}
+                    ProjectionOwnerFeedItem::RelationalKey {..} => panic!("unexpected relational input"),
+                }
+                Ok(())
+            }).unwrap();
+            assert!(result.usage.items <= 1);
+        }
+        assert_eq!(observed, vec![parent, child]);
+        assert_eq!(ended, 1);
+        let deps = feed.finish().unwrap();
+        assert_eq!(deps.node_domain_count(), 2);
+        assert_eq!(deps.relationship_domain_count(), 1);
+        // Enumeration and dependencies only: no stage or watermark receipt.
+        drop(deps);
+        drop(db);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}

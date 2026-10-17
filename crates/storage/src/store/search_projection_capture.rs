@@ -359,16 +359,31 @@ impl<'a> Collector<'a> {
         }
         Ok(())
     }
-    fn relationship(&mut self, id: RelId) -> CaptureResult<()> {
+    fn endpoint_owners(&mut self, source: NodeId, target: NodeId) -> CaptureResult<()> {
+        for id in [source, target] {
+            self.budget.work()?;
+            let before = if self.created_nodes.contains_key(&id) {
+                OwnerBeforeV1::Absent
+            } else {
+                OwnerBeforeV1::NotRecorded
+            };
+            // Native owner enumeration is independent of legacy Search label
+            // eligibility and never copies an endpoint's property body.
+            self.owner(id, false, before)?;
+        }
+        Ok(())
+    }
+    fn relationship(&mut self, id: RelId, legacy: bool) -> CaptureResult<()> {
         self.budget.work()?;
         if let Some((source, target, kind)) = self.created_relationships.get(&id).copied() {
-            if kind == "HAS_LABEL" {
+            self.endpoint_owners(source, target)?;
+            if legacy && kind == "HAS_LABEL" {
                 self.endpoints(source, target)?;
             }
             return Ok(());
         }
         if self.store.relationship_tombstones.contains(&id) {
-            return Ok(());
+            return Err(CaptureError::Limit);
         }
         let identity = if let Some(rel) = self.store.relationships.get(&id) {
             Some((rel.source, rel.target, rel.rel_type))
@@ -379,9 +394,16 @@ impl<'a> Collector<'a> {
         } else {
             None
         };
-        if let Some((source, target, kind)) = identity
-            && self.catalog.rel_type_name(kind) == Some("HAS_LABEL")
-        {
+        let Some((source, target, kind)) = identity else {
+            return Err(CaptureError::Limit);
+        };
+        let name = self.catalog.rel_type_name(kind).ok_or_else(|| {
+            HawDBError::StorageIntegrity(
+                "projection relationship type is absent from catalog".into(),
+            )
+        })?;
+        self.endpoint_owners(source, target)?;
+        if legacy && name == "HAS_LABEL" {
             self.endpoints(source, target)?;
         }
         Ok(())
@@ -426,8 +448,14 @@ impl<'a> Collector<'a> {
                     target,
                     rel_type,
                     ..
-                } if rel_type == "HAS_LABEL" => self.endpoints(*source, *target)?,
-                WalOp::DeleteRelationship { id } => self.relationship(*id)?,
+                } => {
+                    self.endpoint_owners(*source, *target)?;
+                    if rel_type == "HAS_LABEL" {
+                        self.endpoints(*source, *target)?;
+                    }
+                }
+                WalOp::SetRelationshipProperty { id, .. } => self.relationship(*id, false)?,
+                WalOp::DeleteRelationship { id } => self.relationship(*id, true)?,
                 WalOp::Batch(ops) => self.collect(ops, depth + 1)?,
                 _ => {}
             }

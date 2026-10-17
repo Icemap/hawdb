@@ -43,8 +43,10 @@ impl OwnerEffectV1 {
     }
 }
 
-/// None means a legacy unqualified record. An empty V1 set is meaningful for
-/// relational-only commits. Deleted physical nodes are never legacy upserts.
+/// The payload encoding remains V1; checkpoint capture contract V2 additionally
+/// guarantees all relationship-effect endpoints. None means an unqualified
+/// record. An empty set is meaningful for relational-only commits. Deleted
+/// physical nodes are never legacy upserts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CapturedProjectionChange {
     pub legacy: std::sync::Arc<SearchProjectionGraphChange>,

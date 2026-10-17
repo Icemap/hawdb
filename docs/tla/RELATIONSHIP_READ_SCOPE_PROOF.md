@@ -126,12 +126,15 @@ and reported files changed; the subsequent unchanged-index run passed.
 
 ## Remaining C..E integration
 
-V1 graph owner capture currently follows the built-in graph Search mapping's
+At the recorded guard-only qualification, V1 graph owner capture followed the built-in graph Search mapping's
 effects: relationship property updates alone do not enumerate endpoint owners
 or declare a capture gap. The built-in mapping ignores those properties. A
 custom mapper that reads relationship properties therefore needs an extended
 capture/fanout completeness contract for changes in (C,E]. The new relationship
 guard protects commits after E; it cannot repair a missing interval event.
+The subsequent [capture V2 component](OWNER_ENDPOINT_CAPTURE_PROOF.md) adds
+all relationship endpoint effects, while complete mapping/fanout custody remains
+separate. Historical test results above do not qualify that newer source.
 
 
 The native session must consume C-ready custody, retain its source identity and

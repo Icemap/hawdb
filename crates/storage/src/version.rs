@@ -356,6 +356,15 @@ impl VersionWriteSet {
         self.writes.contains_key(key)
     }
 
+    /// Borrow an ordered suffix without constructing owned lookup names. Enum
+    /// families are contiguous under VersionKey's derived Ord; callers can stop
+    /// at the first different family rather than scanning later point keys.
+    pub(crate) fn keys_from(&self, start: &VersionKey) -> impl Iterator<Item = &VersionKey> {
+        self.writes
+            .range((std::ops::Bound::Included(start), std::ops::Bound::Unbounded))
+            .map(|(key, _)| key)
+    }
+
     pub fn record_live(&mut self, key: VersionKey) -> Result<(), VersionWriteSetError> {
         self.record(key, VersionDisposition::Live)
     }

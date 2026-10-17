@@ -218,10 +218,10 @@ fn collect_node_dependencies(
         ));
     }
     if let P::FilterExec { predicate, input } = plan {
-        if let Some((variable, _)) = complete_node_source(input)
+        if let Some((variable, label)) = complete_node_source(input)
             && let Some(values) = graph_match::ids(predicate, variable)
         {
-            return graph_match::record_ids(values, dependencies);
+            return graph_match::record_ids(values, label, dependencies);
         }
         if let P::GraphMatchExec {
             program,
@@ -250,7 +250,7 @@ fn collect_node_dependencies(
         P::NodeProjectionScanExec { variable, label, access, predicate, .. } => {
             if !matches!(access, hawdb_plan_cypher::NodeProjectionAccess::FullText { .. })
                 && let Some(values) = predicate.as_ref().and_then(|predicate| graph_match::ids(predicate, variable)) {
-                return graph_match::record_ids(values, dependencies);
+                return graph_match::record_ids(values, label, dependencies);
             }
             if !matches!(access, hawdb_plan_cypher::NodeProjectionAccess::FullText { .. })
                 && let Some((property, values)) = predicate.as_ref().and_then(|predicate| necessary_scalar_bound(predicate, variable, label, catalog)) {

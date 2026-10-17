@@ -31,7 +31,8 @@ type ChangePage = CowSegment<VecDeque<Arc<CapturedProjectionChange>>>;
 pub(crate) struct SearchProjectionChangeLog {
     pages: CowSegment<VecDeque<ChangePage>>,
     len: usize,
-    // Exclusive floor for V1 facts; a legacy checkpoint starts at its head.
+    // Exclusive floor for the current endpoint-complete capture contract.
+    // Older contracts start at their checkpoint head.
     owner_floor: u64,
 }
 
@@ -50,8 +51,19 @@ impl SearchProjectionChangeLog {
         state: &mut crate::checkpoint::DecodedCheckpoint,
         head: u64,
     ) -> Self {
-        let floor = state.projection_owner_capture_floor.unwrap_or(head);
+        // V1 payloads did not enumerate arbitrary relationship endpoints or
+        // relationship-property changes. Preserve their source transactions,
+        // but never upgrade those old facts into the stronger V2 contract.
+        let qualified = state.projection_owner_capture_version == Some(2);
+        let floor = if qualified {
+            state.projection_owner_capture_floor.unwrap_or(head)
+        } else {
+            head
+        };
         let mut log = Self::at_owner_floor(floor);
+        if !qualified {
+            state.projection_owner_changes.clear();
+        }
         for legacy in std::mem::take(&mut state.search_projection_graph_changes) {
             let owners_v1 = state
                 .projection_owner_changes

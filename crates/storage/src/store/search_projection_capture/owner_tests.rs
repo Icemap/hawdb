@@ -224,3 +224,261 @@ fn owner_floors_advance_on_gap_trim_and_do_not_follow_live_mutation() {
         floor
     );
 }
+
+#[test]
+fn all_relationship_effects_capture_endpoint_owners_without_legacy_upserts() {
+    use crate::mutation::{GraphMutation, MutationLimits};
+    for mode in [
+        StorageResidencyMode::Materialized,
+        StorageResidencyMode::OutOfCore,
+    ] {
+        let path = super::tests::directory();
+        let mut catalog = Catalog::default();
+        let config = WalReplayConfig {
+            residency_mode: mode,
+            ..Default::default()
+        };
+        let mut store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            Default::default(),
+            config,
+        )
+        .unwrap();
+        let a = store
+            .create_node(&mut catalog, "Parent", BTreeMap::new())
+            .unwrap();
+        let b = store
+            .create_node(&mut catalog, "Child", BTreeMap::new())
+            .unwrap();
+        let c = store.commit_epoch();
+        store
+            .create_relationship(
+                &mut catalog,
+                a,
+                b,
+                "DEPENDS_ON",
+                BTreeMap::from([("body".into(), Value::String("x".repeat(1024 * 1024)))]),
+            )
+            .unwrap();
+        let first = store.commit_epoch();
+        let assert_endpoints = |record: &CapturedProjectionChange| {
+            let owners = record.owners_v1.as_ref().unwrap();
+            assert_eq!(
+                owners.iter().map(|owner| owner.node_id).collect::<Vec<_>>(),
+                vec![a.0, b.0]
+            );
+            assert!(owners
+                .iter()
+                .all(|owner| owner.before == OwnerBeforeV1::NotRecorded));
+            assert!(record.upsert_node_ids.is_empty());
+            assert!(record.delete_document_ids.is_empty());
+            assert!(record.estimated_retained_bytes() < 4096);
+        };
+        assert_endpoints(owner_record(&store));
+        store.checkpoint(&catalog).unwrap();
+        drop(store);
+        store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            Default::default(),
+            config,
+        )
+        .unwrap();
+        if mode == StorageResidencyMode::OutOfCore {
+            assert!(store.relationships.is_empty());
+        }
+        store
+            .commit_mutations_with_limits(
+                &mut catalog,
+                vec![GraphMutation::SetRelationshipProperty {
+                    source_label: "Parent".into(),
+                    filter: None,
+                    rel_type: "DEPENDS_ON".into(),
+                    target_label: "Child".into(),
+                    target_filter: None,
+                    rel_filter: None,
+                    property: "weight".into(),
+                    value: Value::Int(2),
+                }],
+                MutationLimits::default(),
+            )
+            .unwrap();
+        let second = store.commit_epoch();
+        assert_endpoints(owner_record(&store));
+        store
+            .commit_mutations_with_limits(
+                &mut catalog,
+                vec![GraphMutation::DeleteRelationship {
+                    source_label: "Parent".into(),
+                    filter: None,
+                    rel_type: "DEPENDS_ON".into(),
+                    target_label: "Child".into(),
+                    target_filter: None,
+                    rel_filter: None,
+                }],
+                MutationLimits::default(),
+            )
+            .unwrap();
+        let third = store.commit_epoch();
+        assert_endpoints(owner_record(&store));
+        store.checkpoint(&catalog).unwrap();
+        drop(store);
+        let store = GraphStore::open_with_durability_and_replay_config(
+            &path,
+            &mut catalog,
+            Default::default(),
+            config,
+        )
+        .unwrap();
+        assert_eq!(store.commit_epoch(), third);
+        let expected = [first, second, third];
+        let changes = store
+            .search_projection_graph_changes
+            .iter()
+            .filter(|record| record.commit_epoch > c)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            changes
+                .iter()
+                .map(|record| record.commit_epoch)
+                .collect::<Vec<_>>(),
+            expected
+        );
+        for record in changes {
+            assert_endpoints(record);
+        }
+        assert!(store.search_projection_changes_after(c).is_empty());
+        drop(store);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+}
+
+#[test]
+fn nested_new_endpoints_keep_birth_facts_and_unknown_relationship_requires_rebuild() {
+    let store = GraphStore::in_memory();
+    let catalog = Catalog::default();
+    let ops = vec![WalOp::Batch(vec![
+        WalOp::CreateNode {
+            id: NodeId(3),
+            label: "Parent".into(),
+            properties: BTreeMap::new(),
+        },
+        WalOp::CreateNode {
+            id: NodeId(4),
+            label: "Child".into(),
+            properties: BTreeMap::new(),
+        },
+        WalOp::CreateRelationship {
+            id: RelId(1),
+            source: NodeId(3),
+            target: NodeId(4),
+            rel_type: "ANY_TYPE".into(),
+            properties: BTreeMap::new(),
+        },
+        WalOp::SetRelationshipProperty {
+            id: RelId(1),
+            property: "weight".into(),
+            value: Value::Int(1),
+        },
+        WalOp::DeleteRelationship { id: RelId(1) },
+    ])];
+    let PreparedSearchProjectionChange::Complete(Some(record)) = store
+        .prepare_search_projection_changes_for_ops(&catalog, 1, &ops, None)
+        .unwrap()
+    else {
+        panic!("new endpoints must be captured")
+    };
+    assert_eq!(
+        record
+            .owners_v1
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|owner| (owner.node_id, &owner.before))
+            .collect::<Vec<_>>(),
+        vec![(3, &OwnerBeforeV1::Absent), (4, &OwnerBeforeV1::Absent)]
+    );
+    let record = store
+        .prepare_search_projection_changes_for_ops(
+            &catalog,
+            1,
+            &[WalOp::SetRelationshipProperty {
+                id: RelId(99),
+                property: "weight".into(),
+                value: Value::Int(1),
+            }],
+            None,
+        )
+        .unwrap();
+    assert!(matches!(record, PreparedSearchProjectionChange::Gap(1)));
+}
+
+#[test]
+fn label_relationship_property_capture_keeps_the_legacy_projection_unchanged() {
+    use crate::mutation::{GraphMutation, MutationLimits};
+    let mut store = GraphStore::in_memory();
+    let mut catalog = Catalog::default();
+    let a = store
+        .create_node(&mut catalog, "Memory", BTreeMap::new())
+        .unwrap();
+    let b = store
+        .create_node(&mut catalog, "Label", BTreeMap::new())
+        .unwrap();
+    store
+        .create_relationship(&mut catalog, a, b, "HAS_LABEL", BTreeMap::new())
+        .unwrap();
+    let c = store.commit_epoch();
+    store
+        .commit_mutations_with_limits(
+            &mut catalog,
+            vec![GraphMutation::SetRelationshipProperty {
+                source_label: "Memory".into(),
+                filter: None,
+                rel_type: "HAS_LABEL".into(),
+                target_label: "Label".into(),
+                target_filter: None,
+                rel_filter: None,
+                property: "weight".into(),
+                value: Value::Int(1),
+            }],
+            MutationLimits::default(),
+        )
+        .unwrap();
+    let record = owner_record(&store);
+    assert_eq!(
+        record
+            .owners_v1
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|owner| owner.node_id)
+            .collect::<Vec<_>>(),
+        vec![a.0, b.0]
+    );
+    assert!(record.upsert_node_ids.is_empty());
+    assert!(record.delete_document_ids.is_empty());
+    assert!(store.search_projection_changes_after(c).is_empty());
+}
+
+#[test]
+fn repeated_relationship_owner_work_exhaustion_requires_rebuild() {
+    let store = GraphStore::in_memory();
+    let catalog = Catalog::default();
+    let mut ops = vec![WalOp::CreateRelationship {
+        id: RelId(1),
+        source: NodeId(2),
+        target: NodeId(3),
+        rel_type: "ANY_TYPE".into(),
+        properties: BTreeMap::new(),
+    }];
+    ops.extend((0..MAX_WORK / 4).map(|_| WalOp::SetRelationshipProperty {
+        id: RelId(1),
+        property: "weight".into(),
+        value: Value::Int(1),
+    }));
+    let result = store
+        .prepare_search_projection_changes_for_ops(&catalog, 1, &ops, None)
+        .unwrap();
+    assert!(matches!(result, PreparedSearchProjectionChange::Gap(1)));
+}

@@ -21,7 +21,7 @@ pub(crate) fn append(
         ));
     }
     let unit = work.start_unit().map_err(HawDBError::from_storage_error)?;
-    body.push_str(&format!("projection_owner_capture\t1\t{floor}\n"));
+    body.push_str(&format!("projection_owner_capture\t2\t{floor}\n"));
     unit.finish();
     for change in changes {
         let change = change.as_ref();
@@ -57,12 +57,14 @@ pub(crate) fn parse(fields: &[&str], state: &mut DecodedCheckpoint) -> Result<()
     let invalid =
         || HawDBError::Storage("invalid projection owner capture checkpoint extension".into());
     match fields {
-        ["projection_owner_capture", "1", raw_floor] => {
+        ["projection_owner_capture", version @ ("1" | "2"), raw_floor] => {
             if state.projection_owner_capture_floor.is_some() {
                 return Err(invalid());
             }
             state.projection_owner_capture_floor =
                 Some(parse_u64(raw_floor, "owner capture floor")?);
+            state.projection_owner_capture_version =
+                Some(parse_u64(version, "owner capture version")?);
         }
         ["projection_owner_change_v1", raw_epoch, raw_count] => {
             let epoch = parse_u64(raw_epoch, "owner change epoch")?;
@@ -120,6 +122,9 @@ pub(crate) fn validate(state: &DecodedCheckpoint) -> Result<()> {
             Err(invalid())
         };
     };
+    if !matches!(state.projection_owner_capture_version, Some(1 | 2)) {
+        return Err(invalid());
+    }
     let head = state.commit_epoch.ok_or_else(invalid)?;
     let legacy_floor = state
         .search_projection_change_log_start_epoch
@@ -250,6 +255,46 @@ mod tests {
         assert!(next.last().unwrap().owners_v1.is_some());
     }
     #[test]
+    fn v1_facts_preserve_legacy_history_but_require_a_new_owner_baseline() {
+        let body = native_body().replace(
+            "projection_owner_capture\t2\t0",
+            "projection_owner_capture\t1\t0",
+        );
+        let mut state = decode(&body).unwrap();
+        assert_eq!(state.projection_owner_capture_version, Some(1));
+        let legacy = state.search_projection_graph_changes.clone();
+        let log = SearchProjectionChangeLog::recover_owner_capture(&mut state, 3);
+        assert_eq!(log.owner_floor(), 3);
+        assert_eq!(
+            log.iter()
+                .map(|record| record.legacy.as_ref())
+                .collect::<Vec<_>>(),
+            legacy.iter().collect::<Vec<_>>()
+        );
+        assert!(log.iter().all(|record| record.owners_v1.is_none()));
+        assert!(state.projection_owner_changes.is_empty());
+        let mut upgraded = body
+            .lines()
+            .filter(|line| !line.starts_with("projection_owner_"))
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        append(
+            &mut upgraded,
+            log.owner_floor(),
+            3,
+            log.iter(),
+            &CheckpointWorkContext::default(),
+        )
+        .unwrap();
+        let mut state = decode(&upgraded).unwrap();
+        assert_eq!(state.projection_owner_capture_version, Some(2));
+        let log = SearchProjectionChangeLog::recover_owner_capture(&mut state, 3);
+        assert_eq!(log.owner_floor(), 3);
+        assert!(log.iter().all(|record| record.owners_v1.is_none()));
+    }
+
+    #[test]
     fn native_checkpoint_round_trip_and_count_fences_reject_missing_or_unknown_facts() {
         let body = native_body();
         let mut state = decode(&body).unwrap();
@@ -277,12 +322,12 @@ mod tests {
         }
         for damaged in [
             body.replace(
-                "projection_owner_capture\t1\t0",
                 "projection_owner_capture\t2\t0",
+                "projection_owner_capture\t3\t0",
             ),
             body.replace(
-                "projection_owner_capture\t1\t0",
-                "projection_owner_capture\t1\t4",
+                "projection_owner_capture\t2\t0",
+                "projection_owner_capture\t2\t4",
             ),
             body.replace(
                 "projection_owner_change_v1\t3\t1",

@@ -1,7 +1,7 @@
 // Copyright 2026 Nowledge
 // Licensed under the Apache License, Version 2.0.
 
-//! Borrowed V1 source facts. End is not mapping, staging or publication authority.
+//! Borrowed versioned source facts. End is not mapping, staging or publication authority.
 
 use super::*;
 use crate::projection::owner_capture::{OwnerBeforeV1, OwnerEffectV1, OwnerIdV1};
@@ -58,8 +58,9 @@ pub enum ProjectionOwnerFeedItem<'a> {
 
 /// Shares immutable paged records. No public resume ordinal or mutable source
 /// escape can substitute a different source between steps. The owner scope is
-/// V1 node identities, built-in HAS_LABEL effects and typed relational capture;
-/// arbitrary host relationship mappings still need qualification.
+/// node identities, endpoints of every relationship effect (including property
+/// updates) and typed relational keys under capture contract V2. Endpoint facts
+/// alone do not qualify arbitrary host mapping, parent-key preimages or fanout.
 #[derive(Debug)]
 pub struct ProjectionOwnerFeedCursor {
     inner: ProjectionFeedCursor,

@@ -32,7 +32,8 @@ impl Database {
             .map_err(ProjectionFeedError::Source)?;
         Ok(feed)
     }
-    /// Pins one immutable E and enumerates V1 owner facts after the requested C.
+    /// Pins one immutable E and enumerates endpoint-complete owner facts after C.
+    /// Capture contract V2 retains the V1 preimage payload encoding.
     /// Old capture contracts or trimmed intervals require a full baseline. This
     /// method does not pin future appends or certify a host mapping or stage.
     pub fn begin_prepared_projection_owner_feed(

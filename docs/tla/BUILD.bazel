@@ -253,3 +253,51 @@ tla_check(
         "BothWritersWitness",
     ]
 ]
+
+[
+    tla_check(
+        name = "HawDBScopedGraphRead" + control + "_check",
+        module = "HawDBScopedGraphRead.tla",
+        config = "mutants/HawDBScopedGraphRead" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "SkipRoot",
+        "SkipTarget",
+        "SkipKind",
+        "WrongName",
+        "WildcardAsNamed",
+        "IgnoreRefusal",
+        "IgnoreBarrier",
+        "IgnoreSchema",
+        "GlobalEpochFallback",
+        "SuccessWitness",
+    ]
+]
+
+[
+    tla_check(
+        name = "HawDBProjectionEndpointCapture" + control + "_check",
+        module = "HawDBProjectionEndpointCapture.tla",
+        config = "mutants/HawDBProjectionEndpointCapture" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "TrustV1",
+        "SkipProperty",
+        "SkipOtherType",
+        "DropEndpoint",
+        "DropOwnerOnly",
+        "IgnoreRefusal",
+        "EarlyPublish",
+        "ForgetTrimFloor",
+        "IgnoreMissingRows",
+        "UpgradeWitness",
+    ]
+]

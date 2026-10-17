@@ -679,6 +679,7 @@ pub fn decode_search_projection_relational_primary_key_changes(
 #[derive(Default)]
 pub struct DecodedCheckpoint {
     pub(crate) projection_owner_capture_floor: Option<u64>,
+    pub(crate) projection_owner_capture_version: Option<u64>,
     pub(crate) projection_owner_changes:
         BTreeMap<u64, (usize, Vec<crate::projection::owner_capture::OwnerEffectV1>)>,
     pub generation: Option<u64>,

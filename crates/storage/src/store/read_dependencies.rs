@@ -83,6 +83,38 @@ impl GraphReadDependencies {
         self.keys.contains_key(&VersionKey::Database)
     }
 
+    /// Trusted query collectors may omit physical identities only after proving
+    /// that their complete query source is restricted to this label domain.
+    #[doc(hidden)]
+    pub fn covers_node_domain(&self, label: &str) -> bool {
+        !self.refused
+            && (self.keys.contains_key(&VersionKey::Database)
+                || self
+                    .keys
+                    .keys_from(&VersionKey::ReadNodeDomain(None))
+                    .take_while(|key| matches!(key, VersionKey::ReadNodeDomain(_)))
+                    .any(|key| {
+                        matches!(key, VersionKey::ReadNodeDomain(name)
+                        if name.as_deref().is_none_or(|name| !label.is_empty() && name == label))
+                    }))
+    }
+
+    /// An empty type requires the all-relationship scope. This only reports
+    /// protection already held; it does not register or qualify a query.
+    #[doc(hidden)]
+    pub fn covers_relationship_domain(&self, kind: &str) -> bool {
+        !self.refused
+            && (self.keys.contains_key(&VersionKey::Database)
+                || self
+                    .keys
+                    .keys_from(&VersionKey::ReadRelationshipDomain(None))
+                    .take_while(|key| matches!(key, VersionKey::ReadRelationshipDomain(_)))
+                    .any(|key| {
+                        matches!(key, VersionKey::ReadRelationshipDomain(name)
+                        if name.as_deref().is_none_or(|name| !kind.is_empty() && name == kind))
+                    }))
+    }
+
     pub fn exact_node_property_count(&self) -> usize {
         self.keys
             .iter()

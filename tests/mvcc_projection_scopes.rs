@@ -240,3 +240,202 @@ fn scope_constructor_refuses_unknown_tables_empty_names_and_unadmitted_input() {
         )
         .is_err());
 }
+
+#[test]
+fn eager_label_scope_bounds_qualified_physical_id_reads() {
+    let mut db = Database::new();
+    db.query("CREATE (:Memory {id:'a'})").unwrap();
+    let mut config = limits();
+    config.dependency_entries = NonZeroUsize::new(1).unwrap();
+    let mut feed = db
+        .begin_prepared_projection_owner_feed_with_scopes(
+            db.commit_epoch().unwrap(),
+            config,
+            budget(),
+            ProjectionReadScopes {
+                node_labels: &["Memory"],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    feed.visit_next(budget(), |read, _| {
+        let mut seen = 0;
+        for id in 0..64 {
+            let result = read.query_with_params(
+                "MATCH (m:Memory) WHERE id(m)=$id RETURN m.id AS id",
+                &std::collections::BTreeMap::from([("id".into(), Value::Int(id))]),
+            )?;
+            assert!(result.output.rows.len() <= 1);
+            seen += result.output.rows.len();
+        }
+        assert_eq!(seen, 1, "fixture must read the existing physical owner");
+        Ok(())
+    })
+    .unwrap();
+    let deps = feed.finish().unwrap();
+    assert_eq!(deps.node_domain_count(), 1);
+    assert!(!deps.requires_unchanged_database_epoch());
+}
+
+#[test]
+fn complete_hop_scopes_bound_identity_reads_and_partial_scopes_refuse() {
+    for missing in [
+        "none",
+        "root",
+        "target",
+        "kind",
+        "wrong_root",
+        "unlabeled",
+        "untyped",
+    ] {
+        let mut db = Database::new();
+        db.query("CREATE (:Memory {id:'a'})").unwrap();
+        db.query("CREATE (:Label {id:'l'})").unwrap();
+        db.query("MATCH (m:Memory),(l:Label) CREATE (m)-[:HAS_LABEL]->(l)")
+            .unwrap();
+        let labels: &[&str] = match missing {
+            "root" => &["Label"],
+            "target" => &["Memory"],
+            "wrong_root" => &["Other", "Label"],
+            _ => &["Memory", "Label"],
+        };
+        let kinds: &[&str] = if missing == "kind" {
+            &[]
+        } else {
+            &["HAS_LABEL"]
+        };
+        let mut config = limits();
+        config.dependency_entries = NonZeroUsize::new(labels.len() + kinds.len()).unwrap();
+        let mut feed = db
+            .begin_prepared_projection_owner_feed_with_scopes(
+                db.commit_epoch().unwrap(),
+                config,
+                budget(),
+                ProjectionReadScopes {
+                    node_labels: labels,
+                    relationship_types: kinds,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let result = feed.visit_next(budget(), |read, _| {
+            let mut seen = 0;
+            for id in 0..64 {
+                let text = match missing {
+                    "unlabeled" => {
+                        "MATCH (m)-[:HAS_LABEL]->(l:Label) WHERE id(m)=$id RETURN l.id AS id"
+                    }
+                    "untyped" => "MATCH (m:Memory)-[]->(l:Label) WHERE id(m)=$id RETURN l.id AS id",
+                    _ => {
+                        "MATCH (m:Memory)-[:HAS_LABEL]->(l:Label) WHERE id(m)=$id RETURN l.id AS id"
+                    }
+                };
+                let output = read.query_with_params(
+                    text,
+                    &std::collections::BTreeMap::from([("id".into(), Value::Int(id))]),
+                )?;
+                assert!(output.output.rows.len() <= 1);
+                seen += output.output.rows.len();
+            }
+            assert_eq!(seen, 1, "fixture must traverse the existing relationship");
+            Ok(())
+        });
+        if missing == "none" {
+            result.unwrap();
+            let deps = feed.finish().unwrap();
+            assert_eq!(deps.node_domain_count(), 2);
+            assert_eq!(deps.relationship_domain_count(), 1);
+            assert!(!deps.requires_unchanged_database_epoch());
+        } else {
+            assert!(result.is_err(), "incomplete domains passed: {missing}");
+            assert!(feed.finish().is_err(), "ignored refusal passed: {missing}");
+        }
+    }
+}
+
+#[test]
+fn complete_hop_guards_validate_hot_and_cold_pinned_values() {
+    for (cold, change) in [false, true]
+        .into_iter()
+        .flat_map(|cold| ["root", "target", "edge", "unrelated"].map(|change| (cold, change)))
+    {
+        let root = std::env::temp_dir().join(format!(
+            "hawdb-covered-hop-{}-{}-{cold}-{change}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let mut db = Database::open(root.join("db")).unwrap();
+        db.query("CREATE (:Memory {id:'a'})").unwrap();
+        db.query("CREATE (:Label {id:'l'})").unwrap();
+        db.query("MATCH (m:Memory),(l:Label) CREATE (m)-[:HAS_LABEL {weight:1}]->(l)")
+            .unwrap();
+        let output = db.query("MATCH (m:Memory) RETURN id(m) AS id").unwrap();
+        let node_id = output.rows[0].get("id").unwrap().clone();
+        if cold {
+            db.checkpoint().unwrap();
+        }
+        let e = db.commit_epoch().unwrap();
+        let mut config = limits();
+        config.dependency_entries = NonZeroUsize::new(3).unwrap();
+        let mut feed = db
+            .begin_prepared_projection_owner_feed_with_scopes(
+                e,
+                config,
+                budget(),
+                ProjectionReadScopes {
+                    node_labels: &["Memory", "Label"],
+                    relationship_types: &["HAS_LABEL"],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        db.query(match change {
+            "root" => "MATCH (m:Memory) SET m.id='new'",
+            "target" => "MATCH (l:Label) SET l.id='new'",
+            "edge" => "MATCH (m:Memory)-[r:HAS_LABEL]->(l:Label) SET r.weight=2",
+            "unrelated" => "CREATE (:Other {id:'other'})",
+            _ => unreachable!(),
+        })
+        .unwrap();
+        feed.visit_next(budget(),|read,_| {
+            let result=read.query_with_params(
+                "MATCH (m:Memory)-[r:HAS_LABEL]->(l:Label) WHERE id(m)=$id RETURN m.id AS root,l.id AS label,r.weight AS weight",
+                &std::collections::BTreeMap::from([("id".into(),node_id.clone())]),
+            )?;
+            assert_eq!(result.output.rows.len(),1);
+            assert_eq!(result.output.rows[0].get("root"),Some(&Value::String("a".into())));
+            assert_eq!(result.output.rows[0].get("label"),Some(&Value::String("l".into())));
+            assert_eq!(result.output.rows[0].get("weight"),Some(&Value::Int(1)));
+            Ok(())
+        }).unwrap();
+        let deps = feed.finish().unwrap();
+        assert_eq!(deps.node_domain_count(), 2);
+        assert_eq!(deps.relationship_domain_count(), 1);
+        // Deliberately empty candidate exercises source validation only; this
+        // test does not authorize output completeness or a C..E watermark.
+        let writer = hawdb::SearchOutOfCoreGenerationWriter::create(
+            root.join("search"),
+            hawdb::SearchOutOfCoreGenerationBuildOptions {
+                source_graph_commit_epoch: Some(e),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let result = db.publish_prepared_search(&deps, writer.prepare_publication().unwrap());
+        if change == "unrelated" {
+            result.unwrap();
+        } else {
+            assert!(
+                matches!(result, Err(ProjectionPublicationError::Dependency(_))),
+                "stale {change} passed, cold={cold}"
+            );
+        }
+        drop(deps);
+        drop(db);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}

@@ -563,3 +563,39 @@ keys, without clearing sticky refusal or arbitrary physical dependencies.
 See [the source correspondence, conditional proof and finite model](../tla/RELATIONSHIP_READ_SCOPE_PROOF.md).
 This additive guard API does not authorize closed mapping, stage coverage,
 C..E source continuity or Mem activation. Full integration gates remain open.
+
+
+## Complete relationship endpoint inputs (capture contract V2)
+
+Native owner capture now enumerates both endpoints of all relationship types for
+create, property update and deletion. Borrowed same-transaction identities and
+cold identity headers avoid property-body ownership; unknown identity or refused
+admission retains a gap. Legacy built-in Search invalidation remains separate:
+relationship properties do not cause lexical rewrites of its documents.
+
+The checkpoint capture header advances to 2 while preserving V1 effect encoding.
+Old V1/no-owner checkpoints keep canonical data and legacy records but fence V2
+completeness at the checkpoint head. Source durability defaults and WAL framing
+remain unchanged. See [the source argument, finite model and current native
+qualification](../tla/OWNER_ENDPOINT_CAPTURE_PROOF.md). This stronger event
+primitive does not confer complete fanout, mapping, stage or activation authority.
+
+
+## Scoped qualified graph reads (E guard primitive)
+
+The existing qualified physical-ID and single-hop collectors can reuse already
+held complete domains. A labeled ID root needs that label's domain; an unlabeled
+root needs the all-node domain. Omitting a hop's physical dependency scan needs
+both endpoint domains and its relationship-type domain. Untyped edges require
+the all-relationship domain. IDs and the root-count cap remain validated before
+subsumption. Missing guards retain the existing precise collector and its
+refusal behavior; sticky refusal cannot be cleared. Hidden adjacency predicates
+and unsupported shapes retain the existing rejection. Scope lookup borrows an
+ordered key-family suffix without owning query names or scanning later point
+keys. Query execution and its access-path reports remain in the normal runtime;
+this changes dependency collection, not Cypher execution semantics.
+
+See [the source-shape argument and finite model](../tla/SCOPED_GRAPH_READ_PROOF.md).
+This is neither a closed mapping contract nor complete C..E custody. Native
+source identity/schema continuity, reverse fanout, producer/vector contracts,
+stage completion, incremental final artifacts and activation remain required.

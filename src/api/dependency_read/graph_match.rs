@@ -34,18 +34,25 @@ pub(super) fn ids<'a>(predicate: &'a Predicate, variable: &str) -> Option<&'a [V
     }
 }
 
-pub(super) fn record_ids(values: &[Value], dependencies: &mut GraphReadDependencies) -> Result<()> {
+pub(super) fn record_ids(
+    values: &[Value],
+    label: &str,
+    dependencies: &mut GraphReadDependencies,
+) -> Result<()> {
     if values.len() > MAX_ADJACENCY_WORK {
         return Err(refusal());
     }
+    let covered = dependencies.covers_node_domain(label);
     for value in values {
         let Value::Int(value) = value else {
             return Err(refusal());
         };
         let value = u64::try_from(*value).map_err(|_| refusal())?;
-        dependencies
-            .record(VersionKey::GraphNode(NodeId(value)))
-            .map_err(|error| HawDBError::Execution(error.to_string()))?;
+        if !covered {
+            dependencies
+                .record(VersionKey::GraphNode(NodeId(value)))
+                .map_err(|error| HawDBError::Execution(error.to_string()))?;
+        }
     }
     Ok(())
 }
@@ -79,7 +86,7 @@ pub(super) fn collect(
                 .and_then(|predicate| ids(predicate, &root.variable))
         })
         .ok_or_else(refusal)?;
-    record_ids(values, dependencies)?;
+    record_ids(values, &root.label, dependencies)?;
     if rest.is_empty() {
         return Ok(());
     }
@@ -87,6 +94,7 @@ pub(super) fn collect(
         source,
         rel_type,
         direction,
+        target,
         min_hops: 1,
         max_hops: 1,
         ..
@@ -96,6 +104,9 @@ pub(super) fn collect(
     };
     if source != &root.variable {
         return Err(refusal());
+    }
+    if covered_hop(dependencies, &root.label, rel_type, &target.label) {
+        return Ok(());
     }
     let kind = if rel_type.is_empty() {
         None
@@ -135,6 +146,7 @@ pub(super) fn collect_expand(
 ) -> Result<()> {
     let PhysicalPlan::AdjacencyExpandExec {
         source_variable,
+        target_label,
         rel_type,
         direction,
         min_hops: 1,
@@ -145,14 +157,17 @@ pub(super) fn collect_expand(
     else {
         return Err(refusal());
     };
-    let Some((variable, _)) = complete_node_source(input) else {
+    let Some((variable, root_label)) = complete_node_source(input) else {
         return Err(refusal());
     };
     if variable != source_variable {
         return Err(refusal());
     }
     let values = bound_ids(input, variable).ok_or_else(refusal)?;
-    record_ids(values, dependencies)?;
+    record_ids(values, root_label, dependencies)?;
+    if covered_hop(dependencies, root_label, rel_type, target_label) {
+        return Ok(());
+    }
     let kind = if rel_type.is_empty() {
         None
     } else {
@@ -198,4 +213,14 @@ fn bound_ids<'a>(plan: &'a PhysicalPlan, variable: &str) -> Option<&'a [Value]> 
 
 fn refusal() -> HawDBError {
     HawDBError::Execution("prepared graph MATCH requires a complete internal-ID root and a qualified single-hop shape".into())
+}
+
+// The plan qualifier above establishes a complete internal-ID root and one
+// explicit hop. Both endpoint labels and the relationship type must be guarded;
+// an unlabeled/untyped source requires its all-domain guard. Filters, result
+// limits and which endpoints happen to exist at E do not weaken these premises.
+fn covered_hop(dependencies: &GraphReadDependencies, root: &str, kind: &str, target: &str) -> bool {
+    dependencies.covers_node_domain(root)
+        && dependencies.covers_node_domain(target)
+        && dependencies.covers_relationship_domain(kind)
 }
