@@ -85,23 +85,6 @@ func (r *Result) Dicts() []map[string]any {
 	return out
 }
 
-// Open opens a HawDB database at path on the default library, creating it
-// if needed. Pass an OpenOptions to override defaults, e.g.
-// Open(path, &OpenOptions{ReadOnly: true}).
-func Open(path string, opts ...*OpenOptions) (*DB, error) {
-	lib, err := defaultLibrary()
-	if err != nil {
-		return nil, err
-	}
-	return lib.Open(path, opts...)
-}
-
-// OpenReadOnly opens an existing database on the default library without
-// permitting writes.
-func OpenReadOnly(path string) (*DB, error) {
-	return Open(path, &OpenOptions{ReadOnly: true})
-}
-
 // OpenInMemory opens an independent in-memory database on the default library.
 func OpenInMemory() (*DB, error) {
 	lib, err := defaultLibrary()
@@ -128,6 +111,23 @@ func (lib *Library) OpenInMemory() (*DB, error) {
 	db := &DB{lib: lib, ptr: ptr}
 	runtime.SetFinalizer(db, (*DB).Close)
 	return db, nil
+}
+
+// Open opens a HawDB database at path on the default library, creating it
+// if needed. Pass an OpenOptions to override defaults, e.g.
+// Open(path, &OpenOptions{ReadOnly: true}).
+func Open(path string, opts ...*OpenOptions) (*DB, error) {
+	lib, err := defaultLibrary()
+	if err != nil {
+		return nil, err
+	}
+	return lib.Open(path, opts...)
+}
+
+// OpenReadOnly opens an existing database on the default library without
+// permitting writes.
+func OpenReadOnly(path string) (*DB, error) {
+	return Open(path, &OpenOptions{ReadOnly: true})
 }
 
 // Open opens a HawDB database at path on this library.

@@ -81,6 +81,8 @@ fn _hawdb(module: &Bound<'_, PyModule>) -> PyResult<()> {
 
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     module.add_class::<Database>()?;
+    #[cfg(feature = "boundary-profiling")]
+    module.add_function(wrap_pyfunction!(_boundary_profile_snapshot, module)?)?;
     module.add_class::<QueryResult>()?;
     module.add_class::<Transaction>()?;
     module.add_class::<ReadTransaction>()?;
@@ -92,8 +94,6 @@ fn _hawdb(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<retained::node::RetainedNodeView>()?;
     module.add_function(wrap_pyfunction!(open, module)?)?;
     module.add_function(wrap_pyfunction!(capabilities, module)?)?;
-    #[cfg(feature = "boundary-profiling")]
-    module.add_function(wrap_pyfunction!(_boundary_profile_snapshot, module)?)?;
 
     let exceptions = PyModule::new(py, "hawdb.exceptions")?;
     register_exceptions(py, &exceptions)?;

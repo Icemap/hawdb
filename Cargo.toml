@@ -180,22 +180,6 @@ rpath = false
 name = "optimizer_smoke"
 harness = false
 
-[[bench]]
-name = "host_boundary"
-harness = false
-
-[[bench]]
-name = "host_boundary_allocations"
-harness = false
-
-[[bench]]
-name = "retained_source_capacity"
-harness = false
-
-[[bench]]
-name = "mixed_point_growth"
-harness = false
-
 [[example]]
 name = "wasm_playground"
 path = "examples/wasm_playground.rs"
@@ -339,4 +323,20 @@ harness = false
 
 [[bench]]
 name = "graph_analytics"
+harness = false
+
+[[bench]]
+name = "host_boundary"
+harness = false
+
+[[bench]]
+name = "host_boundary_allocations"
+harness = false
+
+[[bench]]
+name = "retained_source_capacity"
+harness = false
+
+[[bench]]
+name = "mixed_point_growth"
 harness = false

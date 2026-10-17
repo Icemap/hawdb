@@ -31,6 +31,12 @@
 //! database handle usable. Passing NULL for an out parameter discards that
 //! output.
 
+#[cfg(feature = "boundary-profiling")]
+#[path = "../../benchmarks/native_profile.rs"]
+mod boundary_profile;
+#[cfg(feature = "boundary-profiling")]
+pub use boundary_profile::BoundaryProfileSnapshot;
+
 use std::collections::BTreeMap;
 use std::ffi::{c_char, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -48,12 +54,6 @@ use serde_json::json;
 
 mod retained;
 pub use retained::*;
-
-#[cfg(feature = "boundary-profiling")]
-#[path = "../../benchmarks/native_profile.rs"]
-mod boundary_profile;
-#[cfg(feature = "boundary-profiling")]
-pub use boundary_profile::BoundaryProfileSnapshot;
 
 /// Developer profiling build only. This observation is not an admission ledger
 /// or an allocator-capacity bound. NULL output is a no-op; no buffer is allocated.
