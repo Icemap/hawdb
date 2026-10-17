@@ -1188,6 +1188,28 @@ fn autocommit_sql_preserves_session_variables_and_validates_before_commit() {
         database
             .query_sql("CREATE TABLE session_dml (id BIGINT PRIMARY KEY, body TEXT)")
             .unwrap();
+        // These RowPage statements have empty results by AST shape, even
+        // though they mutate data. Strict zero budgets must allow the native
+        // commit while result-bearing statements below still fail atomically.
+        for sql in [
+            "INSERT INTO session_dml (id, body) VALUES (99, 'empty result')",
+            "UPDATE session_dml SET body = 'changed' WHERE id = 99",
+            "DELETE FROM session_dml WHERE id = 99",
+        ] {
+            let epoch = database.commit_epoch().unwrap();
+            let output = database
+                .query_sql_with_params_options(
+                    sql,
+                    &[],
+                    hawdb::QueryStreamOptions {
+                        max_rows: Some(0),
+                        max_payload_bytes: Some(0),
+                    },
+                )
+                .unwrap();
+            assert!(output.rows.is_empty());
+            assert!(database.commit_epoch().unwrap() > epoch);
+        }
         {
             let mut session = database.session();
             session

@@ -429,12 +429,36 @@ impl Database {
                         .to_string(),
                 ));
             }
-            if matches!(
-                prepared.statement(),
-                SqlStatement::Insert(_) | SqlStatement::Update(_) | SqlStatement::Delete(_)
-            ) {
-                // Every autocommit DML statement stages and validates RETURNING
-                // before publication, regardless of whether a ceiling exists.
+            // RowPage DML without RETURNING has a statically empty result, so
+            // even an explicit zero-row/zero-byte budget needs no preview.
+            // Keep its native single-pass commit instead of hydrating sparse
+            // rows twice (once for a provisional result and once at commit).
+            // Strict append tables can return generated keys without RETURNING
+            // and must still validate their provisional result before commit.
+            let empty_result_table = match prepared.statement() {
+                SqlStatement::Insert(insert) if insert.returning.is_empty() => Some(&insert.table),
+                SqlStatement::Update(update) => Some(&update.table),
+                SqlStatement::Delete(delete) => Some(&delete.table),
+                _ => None,
+            };
+            let has_empty_rowpage_result = match empty_result_table {
+                Some(table) => self
+                    .runtime
+                    .get()?
+                    .store
+                    .relational_state()
+                    .table_schema(&table.name)
+                    .is_some(),
+                None => false,
+            };
+            if !has_empty_rowpage_result
+                && matches!(
+                    prepared.statement(),
+                    SqlStatement::Insert(_) | SqlStatement::Update(_) | SqlStatement::Delete(_)
+                )
+            {
+                // Validate result-bearing DML before publication, regardless
+                // of whether a ceiling exists.
                 let mut transaction = self.begin_transaction()?;
                 transaction.runtime.system_variables = system_variables;
                 transaction.runtime.config.max_read_result_rows = max_rows;
