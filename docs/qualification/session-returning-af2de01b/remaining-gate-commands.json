@@ -1,0 +1,47 @@
+{
+  "worktree": "/private/tmp/hawdb-wip-ready-20261015/split-session-policy-final",
+  "head": "6a588f13857a51250b93073966f202f3a537aee7",
+  "tree": "a0f5fcc0750a3a4c5f35925a16d4d07b481000e6",
+  "main": "34c690651f13004b9292362c1d155b0eabecd079",
+  "preceding_general_exit": 0,
+  "steps": [
+    {
+      "name": "append",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-append.bep.json"
+      ],
+      "started": 1792250390.896727,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-append.log",
+      "exit": 0,
+      "ended": 1792250415.729197
+    },
+    {
+      "name": "gates",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_execution_request_contract_tests",
+        "//bindings/go:hawdb_go_tests",
+        "//bindings/go:hawdb_go_boundary_profile_tests",
+        "//bindings/python:hawdb_python_tests",
+        "//bindings/benchmarks:driver_tests",
+        "//crates/fuzz:hawdb_fuzz_tests",
+        "//crates/fuzz:hawdb_fuzz_cli_tests",
+        "//:hawdb_linux_ci_fuzz_smoke_test",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-gates.bep.json"
+      ],
+      "started": 1792250415.764553,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-gates.log",
+      "exit": 0,
+      "ended": 1792252108.375913
+    }
+  ],
+  "status": "passed"
+}

@@ -1,0 +1,51 @@
+{
+  "captured_at": "2026-10-17T15:09:11.886411+00:00",
+  "runs": [
+    {
+      "file": "pr1050-returning-final-general-failed-test.log",
+      "sha256": "4e986bb76c42d3fe5750579b3c91af948f8a1d37c510462b3197776c7310bc19",
+      "summaries": [
+        "test result: FAILED. 1664 passed; 13 failed; 1 ignored; 0 measured; 322 filtered out; finished in 851.10s"
+      ],
+      "failures": [
+        "api::automatic_checkpoint::tests::execution_progress::denied_candidate_releases_execution_and_reuses_its_memory_after_recovery",
+        "api::automatic_checkpoint::tests::branch_reclamation_releases_parked_source_and_rearms_age_without_a_write",
+        "api::automatic_checkpoint::tests::idle_handoff::idle_handle_adopts_and_retires_two_generations_without_frontend_access",
+        "api::automatic_checkpoint::tests::idle_handoff::read_guard_release_before_park_keeps_the_handoff_notification",
+        "api::automatic_checkpoint::tests::idle_handoff::stopping_a_parked_handoff_does_not_wait_for_the_runtime_read_guard",
+        "api::automatic_checkpoint::tests::idle_handoff::metadata_snapshots_outlive_background_adoption_and_the_handle",
+        "api::automatic_checkpoint::tests::idle_handoff::projected_artifact_rebuild_invalidates_paused_checkpoint_source",
+        "api::automatic_checkpoint::tests::manual::concurrent_manual_during_automatic_preparation_resumes_automatic_progress",
+        "api::automatic_checkpoint::tests::memory_progress::fixed_memory_budget_advances_two_generations_without_accumulating_unused_reservation",
+        "api::automatic_checkpoint::tests::manual::ordinary_manual_during_automatic_preparation_resumes_automatic_progress",
+        "api::automatic_checkpoint::tests::manual_checkpoint_adopts_a_selected_job_and_resumes_automatic_work",
+        "api::automatic_checkpoint::tests::plain_database_idle_age_checkpoints_without_a_host_loop",
+        "api::automatic_checkpoint::tests::read_handoff::invalid_read_handoff_fails_closed_and_preserves_disk_authority"
+      ]
+    },
+    {
+      "file": "pr1050-returning-final-general-second-failed-test.log",
+      "sha256": "da9bd42f1ea6e029ccb85b78c633a3e0d7a112b75dfa2090b1c23609d0829870",
+      "summaries": [
+        "test result: FAILED. 1674 passed; 3 failed; 1 ignored; 0 measured; 322 filtered out; finished in 701.70s"
+      ],
+      "failures": [
+        "api::automatic_checkpoint::tests::idle_handoff::projected_artifact_rebuild_invalidates_paused_checkpoint_source",
+        "api::automatic_checkpoint::tests::idle_handoff::metadata_snapshots_outlive_background_adoption_and_the_handle",
+        "api::automatic_checkpoint::tests::read_handoff::invalid_read_handoff_fails_closed_and_preserves_disk_authority"
+      ]
+    },
+    {
+      "file": "pr1050-general-full-control-6a-test.log",
+      "sha256": "80d83345a12c6dc886ac5adba4086ce3ac4496c38601a0e817053e956d05484c",
+      "summaries": [
+        "test result: FAILED. 1675 passed; 2 failed; 1 ignored; 0 measured; 322 filtered out; finished in 815.74s"
+      ],
+      "failures": [
+        "api::automatic_checkpoint::tests::idle_handoff::projected_artifact_rebuild_invalidates_paused_checkpoint_source",
+        "api::automatic_checkpoint::tests::read_handoff::invalid_read_handoff_fails_closed_and_preserves_disk_authority"
+      ]
+    }
+  ],
+  "conclusion": "Two completegeneral failure cases also occur without the SQLpayloadguard. This does not establish cause or waive finalgeneral acceptance. Selected13 controls passed on both sources. Final34c source has no case/concurrency/deadline changes."
+}

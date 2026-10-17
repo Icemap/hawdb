@@ -1,0 +1,103 @@
+{
+  "worktree": "/private/tmp/hawdb-wip-ready-20261015/split-session-policy-final",
+  "head": "6a588f13857a51250b93073966f202f3a537aee7",
+  "tree": "a0f5fcc0750a3a4c5f35925a16d4d07b481000e6",
+  "main": "34c690651f13004b9292362c1d155b0eabecd079",
+  "steps": [
+    {
+      "name": "prek-install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792249680.1809332,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-prek-install.log",
+      "exit": 0,
+      "ended": 1792249680.290996
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792249680.308397,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-fmt.log",
+      "exit": 0,
+      "ended": 1792249685.587899
+    },
+    {
+      "name": "strict-native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792249685.605411,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-strict-native.log",
+      "exit": 0,
+      "ended": 1792249740.543743
+    },
+    {
+      "name": "strict-wasm",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "hawdb",
+        "--no-default-features",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--lib",
+        "--test",
+        "in_memory_portable",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792249740.557606,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-strict-wasm.log",
+      "exit": 0,
+      "ended": 1792249781.544492
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792249781.5569751,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-prek.log",
+      "exit": 0,
+      "ended": 1792249787.026309
+    },
+    {
+      "name": "general",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--nocache_test_results",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-general.bep.json"
+      ],
+      "started": 1792249787.03777,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-general.log",
+      "exit": 0,
+      "ended": 1792250385.2581708
+    }
+  ],
+  "status": "passed"
+}

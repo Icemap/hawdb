@@ -1,0 +1,62 @@
+{
+  "identical_red": {
+    "explicit_user_options": [
+      "--test_arg=native_sql_returning_payload_",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-returning-payload-identical-red.bep.json"
+    ]
+  },
+  "green_before_main": {
+    "explicit_user_options": [
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-returning-payload-green.bep.json"
+    ]
+  },
+  "general": {
+    "explicit_user_options": [
+      "--cache_test_results=0",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-general.bep.json"
+    ]
+  },
+  "first_general_failed": {
+    "explicit_user_options": [
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-returning-final-general.bep.json"
+    ]
+  },
+  "second_general_failed": {
+    "explicit_user_options": [
+      "--cache_test_results=0",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-returning-final-general.bep.json"
+    ]
+  },
+  "full_control_failed": {
+    "explicit_user_options": [
+      "--cache_test_results=0",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-general-full-control-6a.bep.json"
+    ]
+  },
+  "append": {
+    "explicit_user_options": [
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-append.bep.json"
+    ]
+  },
+  "regression_fuzz": {
+    "explicit_user_options": [
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-main34c-gates.bep.json"
+    ]
+  }
+}

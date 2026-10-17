@@ -1,0 +1,82 @@
+{
+  "started_at": "2026-10-17T14:58:37.309863+00:00",
+  "available_before": 51847589888,
+  "removed": [
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/qual-configured/target/debug/incremental",
+      "estimated_allocated_bytes_before": 6044676096
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/qual-main/target/debug/incremental",
+      "estimated_allocated_bytes_before": 1420091392
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/qual-retained/target/debug/incremental",
+      "estimated_allocated_bytes_before": 2075922432
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/qual-session-configured/target/debug/incremental",
+      "estimated_allocated_bytes_before": 4385558528
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/qual-session-configured/target/wasm32-unknown-unknown/debug/incremental",
+      "estimated_allocated_bytes_before": 445710336
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/ordinary-tools-main/target/debug/incremental",
+      "estimated_allocated_bytes_before": 1536315392
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/pr1009/target/debug/incremental",
+      "estimated_allocated_bytes_before": 7650209792
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/pr1036/target/debug/incremental",
+      "estimated_allocated_bytes_before": 2699489280
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/go-host-profile-main/target/debug/incremental",
+      "estimated_allocated_bytes_before": 1536401408
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/pr1009-review/target/debug/incremental",
+      "estimated_allocated_bytes_before": 4122484736
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/pr1029/target/debug/incremental",
+      "estimated_allocated_bytes_before": 4533039104
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/pr1028/target/debug/incremental",
+      "estimated_allocated_bytes_before": 1425321984
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/qual-default-refusal/target/debug/incremental",
+      "estimated_allocated_bytes_before": 4581519360
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/qual-default-refusal/target/wasm32-unknown-unknown/debug/incremental",
+      "estimated_allocated_bytes_before": 445722624
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/pr1032/target/debug/incremental",
+      "estimated_allocated_bytes_before": 2703167488
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/checkpoint-release-main/target/debug/incremental",
+      "estimated_allocated_bytes_before": 1527074816
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/checkpoint-release-main/target/wasm32-unknown-unknown/debug/incremental",
+      "estimated_allocated_bytes_before": 438423552
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/pr986-limits/target/debug/incremental",
+      "estimated_allocated_bytes_before": 1550176256
+    }
+  ],
+  "skipped": [],
+  "scope": "Only own idle Cargo debug/wasm incremental scratch. Keep sources, executable/deps outputs, raw evidence, frozen producer artifacts, registry caches and active worktrees.",
+  "available_after": 94184120320,
+  "finished_at": "2026-10-17T14:59:45.456775+00:00"
+}

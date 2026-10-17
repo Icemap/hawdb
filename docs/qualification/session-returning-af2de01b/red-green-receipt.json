@@ -1,0 +1,8 @@
+{
+  "production_red": "6a588f13857a51250b93073966f202f3a537aee7",
+  "test_file_identical": true,
+  "test_sha256": "8df3330cf39c60c4fef72a3235c6cb1c9d12f0118bf05890a387c2d15be7a8dc",
+  "red": "9new tests:6unsupported-clause controlsPASS,3INSERT routesFAIL; all3 publish and advance3to4 under0byte host ceiling. Later loop controls not reached in failing cases.",
+  "green": "Complete30contract tests PASS0failed0ignored146.07s. New9tests cover54controls:3routes\u00d73mutations\u00d7host/admitted\u00d70/1/4096. INSERT has12typed refusal and6positive controls;36UPDATE/DELETE unsupported-clause controls retain semantic refusal and unchangedrows/epoch.",
+  "scope": "SQL native RETURNING payload fix only. Original graph mutation payloads remain under independent MutationLimits. Full general/fuzz/strict/finalCI and independent re-review pending."
+}

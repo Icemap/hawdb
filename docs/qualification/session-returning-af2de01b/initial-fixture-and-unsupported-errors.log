@@ -1,0 +1,77 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_execution_request_contract_tests
+-----------------------------------------------------------------------------
+
+running 9 tests
+test native_sql_returning_payload_delete_session ... FAILED
+test native_sql_returning_payload_delete_direct ... FAILED
+test native_sql_returning_payload_insert_session ... FAILED
+test native_sql_returning_payload_insert_callback ... FAILED
+test native_sql_returning_payload_insert_direct ... FAILED
+test native_sql_returning_payload_delete_callback ... FAILED
+test native_sql_returning_payload_update_session ... FAILED
+test native_sql_returning_payload_update_direct ... FAILED
+test native_sql_returning_payload_update_callback ... FAILED
+
+failures:
+
+---- native_sql_returning_payload_delete_session stdout ----
+
+thread 'native_sql_returning_payload_delete_session' (76888719) panicked at tests/execution_request_contract.rs:23:36:
+called `Result::unwrap()` on an `Err` value: Os { code: 17, kind: AlreadyExists, message: "File exists" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- native_sql_returning_payload_delete_direct stdout ----
+
+thread 'native_sql_returning_payload_delete_direct' (76888718) panicked at tests/execution_request_contract.rs:1417:13:
+direct/delete/0: result=Err(Semantic("unsupported PostgreSQL DELETE clause")), epochs=3->3, stored=[(Int(1), String("original")), (Int(2), String("other"))]
+
+---- native_sql_returning_payload_insert_session stdout ----
+
+thread 'native_sql_returning_payload_insert_session' (76888722) panicked at tests/execution_request_contract.rs:1417:13:
+session/insert/0: result=Ok(()), epochs=3->4, stored=[(Int(1), String("original")), (Int(2), String("other")), (Int(3), String("new"))]
+
+---- native_sql_returning_payload_insert_callback stdout ----
+
+thread 'native_sql_returning_payload_insert_callback' (76888720) panicked at tests/execution_request_contract.rs:1417:13:
+callback/insert/0: result=Ok(()), epochs=3->4, stored=[(Int(1), String("original")), (Int(2), String("other")), (Int(3), String("new")), (Int(9), String("prior"))]
+
+---- native_sql_returning_payload_insert_direct stdout ----
+
+thread 'native_sql_returning_payload_insert_direct' (76888721) panicked at tests/execution_request_contract.rs:1417:13:
+direct/insert/0: result=Ok(()), epochs=3->4, stored=[(Int(1), String("original")), (Int(2), String("other")), (Int(3), String("new"))]
+
+---- native_sql_returning_payload_delete_callback stdout ----
+
+thread 'native_sql_returning_payload_delete_callback' (76888717) panicked at tests/execution_request_contract.rs:1417:13:
+callback/delete/0: result=Err(Semantic("unsupported PostgreSQL DELETE clause")), epochs=3->3, stored=[(Int(1), String("original")), (Int(2), String("other"))]
+
+---- native_sql_returning_payload_update_session stdout ----
+
+thread 'native_sql_returning_payload_update_session' (76888725) panicked at tests/execution_request_contract.rs:1417:13:
+session/update/0: result=Err(Semantic("unsupported PostgreSQL UPDATE clause")), epochs=3->3, stored=[(Int(1), String("original")), (Int(2), String("other"))]
+
+---- native_sql_returning_payload_update_direct stdout ----
+
+thread 'native_sql_returning_payload_update_direct' (76888724) panicked at tests/execution_request_contract.rs:1417:13:
+direct/update/0: result=Err(Semantic("unsupported PostgreSQL UPDATE clause")), epochs=3->3, stored=[(Int(1), String("original")), (Int(2), String("other"))]
+
+---- native_sql_returning_payload_update_callback stdout ----
+
+thread 'native_sql_returning_payload_update_callback' (76888723) panicked at tests/execution_request_contract.rs:1417:13:
+callback/update/0: result=Err(Semantic("unsupported PostgreSQL UPDATE clause")), epochs=3->3, stored=[(Int(1), String("original")), (Int(2), String("other"))]
+
+
+failures:
+    native_sql_returning_payload_delete_callback
+    native_sql_returning_payload_delete_direct
+    native_sql_returning_payload_delete_session
+    native_sql_returning_payload_insert_callback
+    native_sql_returning_payload_insert_direct
+    native_sql_returning_payload_insert_session
+    native_sql_returning_payload_update_callback
+    native_sql_returning_payload_update_direct
+    native_sql_returning_payload_update_session
+
+test result: FAILED. 0 passed; 9 failed; 0 ignored; 0 measured; 21 filtered out; finished in 13.18s
+

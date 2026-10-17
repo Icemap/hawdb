@@ -1,0 +1,15 @@
+{
+  "baseline": {
+    "head": "6a588f13857a51250b93073966f202f3a537aee7",
+    "passed": 13,
+    "failed": 0,
+    "seconds": 23.2
+  },
+  "candidate": {
+    "tree": "fc8a3dfbf4e5ef88678b5a9a374e35cb0f6aa0a3",
+    "passed": 13,
+    "failed": 0,
+    "seconds": 51.57
+  },
+  "scope": "Exact same13 selectedcheckpointcases pass in both sources under original internal concurrency/deadlines. This is a diagnostic subset, does not explain or waive complete candidate general failure, and establishes no causal environment attribution."
+}

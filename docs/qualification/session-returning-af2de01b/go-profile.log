@@ -1,0 +1,14 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //bindings/go:hawdb_go_boundary_profile_tests
+-----------------------------------------------------------------------------
+=== RUN   TestBoundaryProfileConversionsAndBufferRelease
+--- PASS: TestBoundaryProfileConversionsAndBufferRelease (0.00s)
+=== RUN   TestBoundaryProfileParameterFailureDoesNotCountNativeWork
+--- PASS: TestBoundaryProfileParameterFailureDoesNotCountNativeWork (0.00s)
+=== RUN   TestBoundaryProfileErrorAndMalformedOutput
+--- PASS: TestBoundaryProfileErrorAndMalformedOutput (0.00s)
+=== RUN   TestBoundaryProfileConcurrentQueries
+--- PASS: TestBoundaryProfileConcurrentQueries (0.00s)
+=== RUN   TestBoundaryProfileOverflowSaturates
+--- PASS: TestBoundaryProfileOverflowSaturates (0.00s)
+PASS

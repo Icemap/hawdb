@@ -1,0 +1,13 @@
+{
+  "command": [
+    "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/7d531134c1466c4f55a47b7d6113da09/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/hawdb_unit_general_tests",
+    "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/7d531134c1466c4f55a47b7d6113da09/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/hawdb_unit_test_binary",
+    "general",
+    "--list"
+  ],
+  "scope": "Read-only libtest --list through the unchanged registered general partition wrapper; executes no database test. Final terminal passed+ignored count must equal this inventory.",
+  "cases": 1684,
+  "inventory_sha256": "1729ff3f2f9b0c9e9f6434f95eda55a72c79d24aa6ba0ad02ffbef02565cb1d6",
+  "wrapper_sha256": "130262b6bf4893bce33840ddc967c4f64b2092aea763da4f479c3c21891c515c",
+  "unit_binary_sha256": "4e1b3ac3e8295a9282f61d4b902a609ce75614757f8963b74dd657bc5d59016d"
+}

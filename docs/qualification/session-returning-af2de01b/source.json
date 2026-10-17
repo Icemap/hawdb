@@ -1,0 +1,33 @@
+{
+  "pinned_toolchain": "[toolchain]\nchannel = \"1.97.1\"\nprofile = \"minimal\"\ncomponents = [\"clippy\", \"rustfmt\"]\n",
+  "actual_rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+  "head": "af2de01b0fafd006b84cadeb88015899ee694a02",
+  "tree": "a0f5fcc0750a3a4c5f35925a16d4d07b481000e6",
+  "integrated_main": "34c690651f13004b9292362c1d155b0eabecd079",
+  "red_engine": "6a588f13857a51250b93073966f202f3a537aee7",
+  "changed_files": {
+    "crates/executor/src/limit.rs": "ce600e6f05b8bf08a3322ea9e94c05c6038adc5d54c8b3bf01b694450f9d4651",
+    "crates/executor/src/observer/profile/tests.rs": "665f9c27fd9e3b0ee020310f58694df3c656bf6367964f303e80465c944b4923",
+    "crates/relational/src/query/projection.rs": "7ab11a77c0e4c18d42a81f2e15ca5bce038e8037989f508a574b11bdb7be1f25",
+    "crates/relational/src/query/streaming_projection.rs": "b2a5cba68d708470f996f3b3ea092c8abca8c410b963bc59436bffa4b5d52a66",
+    "docs/READ_RESULT_LIMITS.md": "8a4784eda08672dca0f5f4f4795ad66731eae512f31d3169e0c7ad3615867dcd",
+    "docs/SESSION_RESULT_POLICY_REVIEW.md": "3f1d96ad71630ed86e6f6adc33a5310f25a56a386fae4f6f1c77cfc7591bc3d7",
+    "src/api/explain.rs": "a35227ad0c912002365682dfab44e7ecd4f04d1840345a6e511977b18bc7e222",
+    "src/api/mod.rs": "e9158a38de328fb0471429a2889ec40980e3f41e6e4308d5d520b4b522611353",
+    "src/api/observability.rs": "1c54ba3f9f1032d1970ba3e23ab81b97f247c79dc41e42d3e13a911ff152de97",
+    "src/api/query_request.rs": "ef2f6f132ad3a14293fa3c38587e414f46c5168fdca74857f1c742d930efd5a4",
+    "src/api/query_runtime.rs": "4dfad33ac7d881eaeb41083e2cbb5efc3d60d5369cf5118db388596adf5e4a36",
+    "src/api/schema_guidance.rs": "0547f192ebcfda3ff134ff75ea99b06066ab079c3459c49ebeb540a8f3f3bfcb",
+    "src/api/tests/query_execution.rs": "7b9e5e21f3945e6fe73ae5a8a0922c09b5b5a83a2a5ba6afc8979d9c28480dd3",
+    "src/api/tests/query_observability.rs": "92b5c700c999b391da0724b64acb13d67ef78faa4f8256e80630531ba88cd171",
+    "src/api/tests/relational_explain_output/strict_append.rs": "1948ca9d5aa84d3fe12a2eb26173604b9598eebcda02dd753f199c5f1cc86f0a",
+    "src/embedded.rs": "ed92943086c55325b0a76e3845800fd8ea25d7a4c7762a87020567124accb428",
+    "src/embedded_tokio.rs": "d6f13c9a3f509e7a123c66ec73d7180dc0a8d8a7be9ba9aec05c610b12e4cf2b",
+    "src/lib.rs": "e7f4d15da0f9a6c199e84ee31d631ed1e01471917acc3ff8c077fdb80601acdf",
+    "src/nowledge_mem.rs": "f0c3b03693e52c04a5b2c9086979e40213efe068bca0e2a0584112ae5aa89084",
+    "src/sql_session.rs": "5426562d684745f1a015c6a276fa90e18ca5cffc3528e7260939b14c3786af3f",
+    "tests/execution_request_contract.rs": "8df3330cf39c60c4fef72a3235c6cb1c9d12f0118bf05890a387c2d15be7a8dc"
+  },
+  "contract_registration_sha256": "f6c371c82dd064e82f1b60dd0a298d9cbec173843479b8f53485f556bd06f82b",
+  "session_config_definitions": "src/api/mod.rs:561:pub struct SessionConfig {"
+}

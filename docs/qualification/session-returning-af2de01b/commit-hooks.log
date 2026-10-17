@@ -1,0 +1,3 @@
+Cargo format check (workspace)...........................................Passed
+Cargo Clippy (workspace, all targets and features).......................Passed
+[fix/session-result-policy-final af2de01b] fix(api): enforce native SQL RETURNING payload budgets

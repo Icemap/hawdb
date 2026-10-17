@@ -1,0 +1,5 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test
+-----------------------------------------------------------------------------
+benchmark started: hawdb_bench_relational_monotonic_append
+benchmark completed: hawdb_bench_relational_monotonic_append (11s)

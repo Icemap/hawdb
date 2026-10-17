@@ -1,0 +1,29 @@
+{
+  "created_at": "2026-10-17T15:48:33.237047+00:00",
+  "head": "af2de01b0fafd006b84cadeb88015899ee694a02",
+  "tree": "a0f5fcc0750a3a4c5f35925a16d4d07b481000e6",
+  "integrated_main": "34c690651f13004b9292362c1d155b0eabecd079",
+  "general": {
+    "passed": 1683,
+    "failed": 0,
+    "ignored": 1,
+    "seconds": 528.98,
+    "cached": false
+  },
+  "registered_targets": 103,
+  "mandatory_fuzz": 98,
+  "executed": 62,
+  "cached": 41,
+  "contracts": 30,
+  "same_test_file_red_green": true,
+  "new_controls": 54,
+  "red_scope": "Three INSERT routes publish under0host bytes and advance epoch3to4; failing cases stop before subsequent loop controls. Six unsupportedUPDATE/DELETE cases pass. Initial directory collision and invalid expectations for unsupportedclauses are preserved separately.",
+  "green_scope": "Host and admitted0/1byte INSERT refusals,4096byte positive controls, session/direct/caughtcallback routes, durable complete rows/epoch, and unsupported UPDATE/DELETE RETURNING refusals.",
+  "graph_scope": "Adjacent Cypher graph mutation paths retain the existing MutationLimits payload contract; comments identify executor preflight and storage MutationCommitLimitTracker. Read-output byte ceilings do not replace that mutation contract.",
+  "remaining": [
+    "Final-source CI and independent maintainer re-review",
+    "Actualmain landing of1050 then dependent986 integration/splits",
+    "Complete original986 performance/resource qualification and genuine approval/merge"
+  ],
+  "scope": "Local source-qualified correctness evidence only. Full original cases/seeds/concurrency/deadlines retained. No fullBEP/client environment publication or performance/whole-memory approval claim."
+}
