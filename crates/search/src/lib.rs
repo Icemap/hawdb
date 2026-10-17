@@ -95,6 +95,7 @@ pub mod projection_evidence;
 #[doc(hidden)]
 pub mod projection_evidence_cli;
 mod query_control;
+mod resident_text_seed;
 
 #[doc(hidden)]
 pub mod projection_consumer;
@@ -217,6 +218,7 @@ pub use out_of_core::{
     SearchOutOfCoreSegmentCompactionStopReason, SearchStagingCleanupReport, SearchTextSeedOutput,
     SearchTextSeedReport, SearchVerifiedBody,
 };
+pub use resident_text_seed::SearchResidentTextSeedOutput;
 // These are internal ownership seams. Hosts continue to use the embedded facade.
 #[doc(hidden)]
 pub use projection_catch_up::{

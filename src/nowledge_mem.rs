@@ -2061,6 +2061,45 @@ impl crate::executor::ExternalReadOperator for SearchProjectionExternalReadOpera
         request: crate::executor::TextSeedExecutionRequest<'_>,
     ) -> Result<crate::executor::TextSeedExecutionOutput> {
         request.resources.checkpoint()?;
+        let mut output = crate::executor::TextSeedExecutionOutput::new(
+            request.result_account,
+            request.resources.result,
+        )?;
+        if let (Some(projection), None) = (self.projection, self.out_of_core_projection) {
+            let default_task = RuntimeTaskContext::default();
+            let task = request.resources.task_context.unwrap_or(&default_task);
+            let scored = projection.index().text_seed_scores_with_context(
+                request.query_text,
+                request.metadata_filters,
+                request.resources.result.max_rows,
+                request.working_account,
+                task,
+            )?;
+            let ranked_bytes = scored
+                .scores()
+                .len()
+                .checked_mul(std::mem::size_of::<(&String, &f64)>())
+                .ok_or_else(|| HawDBError::Execution("text seed rank size overflow".into()))?;
+            let _ranked_memory = request.working_account.reserve(ranked_bytes)?;
+            let mut ranked = scored.scores().iter().collect::<Vec<_>>();
+            ranked.sort_unstable_by(|(left_id, left_score), (right_id, right_score)| {
+                right_score
+                    .total_cmp(left_score)
+                    .then_with(|| left_id.cmp(right_id))
+            });
+            for (id, score) in ranked {
+                request.resources.checkpoint()?;
+                let document = projection.index().document(id).ok_or_else(|| {
+                    HawDBError::Storage(format!("text seed document {id} is missing"))
+                })?;
+                output.push(
+                    id,
+                    document.metadata.get("external_id").map(String::as_str),
+                    *score,
+                )?;
+            }
+            return Ok(output);
+        }
         let search_request = NowledgeMemSearchCandidateRequest::text(
             request.query_text,
             request.resources.result.max_rows,
@@ -2071,22 +2110,16 @@ impl crate::executor::ExternalReadOperator for SearchProjectionExternalReadOpera
             request.resources.max_working_memory_bytes.get(),
             request.resources.task_context,
         );
-        let mut output = crate::executor::TextSeedExecutionOutput::new(
-            request.result_account,
-            request.resources.result,
-        )?;
         let search = match (self.projection, self.out_of_core_projection) {
-            (Some(projection), None) => projection
-                .try_search_candidates_with_report_context(&search_request, execution_options)?,
             (None, Some(projection)) => projection
-                .search_candidates_with_report_context(&search_request, execution_options)?
-                .into(),
+                .search_candidates_with_report_context(&search_request, execution_options)?,
             (None, None) => return Err(missing_search_projection_error()),
             (Some(_), Some(_)) => {
                 return Err(HawDBError::Storage(
                     "nowledge mem search projection ownership is ambiguous".to_string(),
                 ));
             }
+            (Some(_), None) => unreachable!("resident text seeds returned above"),
         };
         for hit in search.result.hits {
             request.resources.checkpoint()?;
