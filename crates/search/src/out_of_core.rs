@@ -240,16 +240,32 @@ pub struct SearchOutOfCoreReader {
 /// from reader-wide identity and admission state is the boundary needed for
 /// incremental segment publication.
 #[derive(Debug, Clone)]
-pub(super) struct SearchOutOfCoreSegmentReader {
+pub(super) struct SearchOutOfCoreSegmentReader(
+    crate::build_memory::shared::Shared<SegmentReaderContents>,
+);
+
+// Share one complete immutable payload. A future retained admission can live
+// beside these values and follow every snapshot/reuse clone, rather than being
+// detached from independently cloned descriptor/layout/lexical metadata.
+#[derive(Debug)]
+pub(super) struct SegmentReaderContents {
     content_segment_id: u64,
-    descriptor: Arc<SearchSegmentDescriptor>,
-    payload: Arc<File>,
-    metadata_payload: Arc<File>,
-    vector_payload: Arc<File>,
-    layout: Arc<SearchOutOfCoreLayoutBody>,
-    lexical_projection: Arc<LexicalProjectionReader>,
+    descriptor: SearchSegmentDescriptor,
+    payload: File,
+    metadata_payload: File,
+    vector_payload: File,
+    layout: SearchOutOfCoreLayoutBody,
+    lexical_projection: LexicalProjectionReader,
     #[cfg(feature = "vector-search")]
-    rabitq_projection: Option<Arc<hawdb_vector_projection::FileProjection>>,
+    rabitq_projection: Option<hawdb_vector_projection::FileProjection>,
+}
+
+impl std::ops::Deref for SearchOutOfCoreSegmentReader {
+    type Target = SegmentReaderContents;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -415,6 +431,24 @@ impl SearchOutOfCoreExecutionContext<'_> {
 }
 
 impl SearchOutOfCoreManifestBody {
+    /// Reserve before serde can grow either vector, including invalid inputs
+    /// rejected only after decoding. Each record opens a JSON map or sequence.
+    /// Include validation's ID sets as well as the largest owned record type.
+    fn decode_capacity(bytes: &[u8], task: &hawdb_core::RuntimeTaskContext) -> Result<usize> {
+        use crate::build_memory::{checked_add, SET_ENTRY_BYTES};
+        let element = std::mem::size_of::<SearchOutOfCoreSegmentManifest>()
+            .max(std::mem::size_of::<SearchOutOfCoreMutationRunManifest>());
+        checked_add(
+            crate::build_control::json::decode_capacity(
+                bytes,
+                checked_add(element, SET_ENTRY_BYTES)?,
+                2,
+                task,
+            )?,
+            3 * 128,
+        )
+    }
+
     fn encode(&self) -> Result<Vec<u8>> {
         self.validate_names()?;
         let body = serde_json::to_vec(self).map_err(|error| {
@@ -434,16 +468,20 @@ impl SearchOutOfCoreManifestBody {
     }
 
     fn decode(bytes: &[u8]) -> Result<Self> {
+        Self::decode_with_context(bytes, None)
+    }
+
+    fn decode_with_context(
+        bytes: &[u8],
+        task: Option<&hawdb_core::RuntimeTaskContext>,
+    ) -> Result<Self> {
         let envelope: SearchOutOfCoreManifestEnvelope =
             serde_json::from_slice(bytes).map_err(|error| {
                 HawDBError::Storage(format!("invalid search out-of-core manifest: {error}"))
             })?;
-        let body = serde_json::to_vec(&envelope.body).map_err(|error| {
-            HawDBError::Storage(format!(
-                "failed to verify search out-of-core manifest: {error}"
-            ))
-        })?;
-        if checksum_bytes(&body) != envelope.checksum {
+        if crate::build_control::json::checksum_with_context(&envelope.body, task)?
+            != envelope.checksum
+        {
             return Err(HawDBError::Storage(
                 "search out-of-core manifest checksum mismatch".to_string(),
             ));
@@ -884,6 +922,11 @@ impl SearchOutOfCoreSegmentReader {
             )
         })?;
         drop(lexical_manifest_bytes);
+        // This loader constructs a fresh reader. Extract its payload so all
+        // segment metadata has one shared lifetime, including lexical ownership.
+        let lexical_projection = Arc::into_inner(lexical_projection).ok_or_else(|| {
+            HawDBError::Storage("new lexical segment reader was unexpectedly shared".into())
+        })?;
 
         #[cfg(feature = "vector-search")]
         let rabitq_projection = open_rabitq_projection(
@@ -895,17 +938,19 @@ impl SearchOutOfCoreSegmentReader {
         #[cfg(not(feature = "vector-search"))]
         verify_rabitq_artifact(root, manifest)?;
 
-        Ok(Self {
-            content_segment_id: manifest.segment_id,
-            descriptor: Arc::new(descriptor),
-            payload: Arc::new(payload),
-            metadata_payload: Arc::new(metadata_payload),
-            vector_payload: Arc::new(vector_payload),
-            layout: Arc::new(layout),
-            lexical_projection,
-            #[cfg(feature = "vector-search")]
-            rabitq_projection,
-        })
+        Ok(Self(crate::build_memory::shared::Shared::new(
+            SegmentReaderContents {
+                content_segment_id: manifest.segment_id,
+                descriptor,
+                payload,
+                metadata_payload,
+                vector_payload,
+                layout,
+                lexical_projection,
+                #[cfg(feature = "vector-search")]
+                rabitq_projection,
+            },
+        )))
     }
 }
 
@@ -1744,7 +1789,7 @@ impl SearchOutOfCoreReader {
                 let mut lexical_statistics = LexicalCorpusStatistics::aggregate(
                     self.segments
                         .iter()
-                        .map(|segment| segment.lexical_projection.as_ref()),
+                        .map(|segment| &segment.lexical_projection),
                     &query_terms,
                     self.lexical_term_policy.max_term_bytes(),
                 )?;
@@ -2674,7 +2719,7 @@ fn open_rabitq_projection(
     active_manifest: &SearchOutOfCoreManifestBody,
     manifest: &SearchOutOfCoreSegmentManifest,
     max_working_bytes: usize,
-) -> Result<Option<Arc<hawdb_vector_projection::FileProjection>>> {
+) -> Result<Option<hawdb_vector_projection::FileProjection>> {
     verify_rabitq_artifact(root, manifest)?;
     let Some(file_name) = manifest.rabitq_artifact_file.as_deref() else {
         return Ok(None);
@@ -2706,7 +2751,7 @@ fn open_rabitq_projection(
             "search out-of-core RaBitQ identity does not match its generation".to_string(),
         ));
     }
-    Ok(Some(Arc::new(projection)))
+    Ok(Some(projection))
 }
 
 fn file_len_checksum_streaming(path: &Path) -> Result<(u64, u64)> {
@@ -5038,9 +5083,7 @@ mod tests {
         writer.push(document(1, "team")).unwrap();
         writer.finish().unwrap();
         let mut reader = SearchOutOfCoreReader::open(&path).unwrap();
-        let original_payload = reader.primary_segment().payload.clone();
-        let original_descriptor = reader.primary_segment().descriptor.clone();
-        let original_layout = reader.primary_segment().layout.clone();
+        let original = reader.primary_segment().clone();
         for round in 0..24 {
             let row = crate::SearchProjectionRow {
                 kind: crate::SearchProjectionKind::Memory,
@@ -5068,16 +5111,16 @@ mod tests {
             assert_eq!(report.reused_retractions, round);
             assert_eq!(report.opened_content_segments, 1);
             assert_eq!(report.reused_content_segments, round + 1);
-            assert!(Arc::ptr_eq(
-                &original_payload,
+            assert!(std::ptr::eq(
+                &original.payload,
                 &reader.primary_segment().payload
             ));
-            assert!(Arc::ptr_eq(
-                &original_descriptor,
+            assert!(std::ptr::eq(
+                &original.descriptor,
                 &reader.primary_segment().descriptor
             ));
-            assert!(Arc::ptr_eq(
-                &original_layout,
+            assert!(std::ptr::eq(
+                &original.layout,
                 &reader.primary_segment().layout
             ));
             assert_eq!(reader.manifest.mutation_runs.len(), round + 1);

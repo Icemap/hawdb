@@ -215,7 +215,7 @@ fn out_of_core_text_seed_corpus_merge_peak_stays_within_the_shared_root() {
         reader
             .segments
             .iter()
-            .map(|segment| segment.lexical_projection.as_ref())
+            .map(|segment| &segment.lexical_projection)
     };
     let expected =
         LexicalCorpusStatistics::aggregate(projections(), &terms, policy.max_term_bytes()).unwrap();

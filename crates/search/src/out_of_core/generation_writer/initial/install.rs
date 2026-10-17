@@ -15,7 +15,7 @@
 //! Preflight the complete closure, install new dependencies, then select it.
 
 use super::*;
-use crate::out_of_core::SearchOutOfCoreSegmentManifest;
+use crate::out_of_core::{SearchOutOfCoreManifestBody, SearchOutOfCoreSegmentManifest};
 
 pub(super) struct InstalledInitial {
     head: json::EncodedManifest,
@@ -72,12 +72,14 @@ pub(super) fn install(
         &io.path(private, Path::new(OUT_OF_CORE_MANIFEST_FILE))?,
         MAX_OUT_OF_CORE_MANIFEST_BYTES,
     )?;
-    let _decode = memory.spool.reserve(checked_add(
-        json::decode_capacity(&head.bytes, 0, 0, task)?,
-        3 * 128,
-    )?)?;
-    let mut envelope: SearchOutOfCoreManifestEnvelope = serde_json::from_slice(&head.bytes)
-        .map_err(|error| {
+    let decode = memory
+        .spool
+        .reserve(SearchOutOfCoreManifestBody::decode_capacity(
+            &head.bytes,
+            task,
+        )?)?;
+    let envelope: SearchOutOfCoreManifestEnvelope =
+        serde_json::from_slice(&head.bytes).map_err(|error| {
             HawDBError::Storage(format!("invalid staged initial manifest: {error}"))
         })?;
     if json::checksum_with_context(&envelope.body, Some(task))? != envelope.checksum {
@@ -85,7 +87,7 @@ pub(super) fn install(
             "staged initial manifest checksum mismatch".into(),
         ));
     }
-    let manifest = &mut envelope.body;
+    let manifest = &envelope.body;
     manifest.validate_names()?;
     if manifest.generation != report.generation
         || manifest.document_count != writer.document_count
@@ -97,7 +99,8 @@ pub(super) fn install(
             "staged initial manifest identity mismatch".into(),
         ));
     }
-    let update = update::prepare(writer, manifest)?;
+    let update = update::prepare(writer, envelope.body, decode)?;
+    let manifest = update.manifest();
     manifest.validate_names()?;
     let final_head = json::encode_with_context(
         manifest,

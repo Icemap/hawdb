@@ -129,6 +129,73 @@ C..E authority is delivered by the current preparation-only token. The finite
 activation model abstracts file identities and does not prove this directory
 layout's physical implementation.
 
+## Reader ownership and admission refinement
+
+The native reader foundation groups each immutable segment's descriptor, layout,
+lexical reader, optional vector projection and three payload handles inside one
+`Shared<SegmentReaderContents>`. Refresh and cleanup reuse clone that shared
+owner; they borrow its children. A future segment capacity owner must be the
+last field of these contents, rather than a field of the outer reader. Otherwise
+an escaped segment clone could outlive the wrapper that refunded its metadata.
+`Shared` frees its Arc allocation before dropping its extracted contents; it
+exposes neither weak references nor raw Arcs. This representation is implemented;
+a segment retained-memory owner and a fully admitted reader constructor are not.
+
+The required resource invariant is:
+
+```
+for every live payload allocation a:
+    exists an unreleased reservation r from the originating governor
+    such that a is covered by r
+and total live admitted capacity <= that governor's admitted memory
+```
+
+The inductive ownership argument has four cases. Reserve before allocation;
+failed reserve creates no payload. Clone only increments ownership and does not
+refund capacity. Dropping a nonfinal reference preserves the same payload and
+reservation. The final drop first frees shared allocation metadata and payloads,
+then releases the reservation. Wrapper moves and rejected activation must obey
+the same cases. The reservation is `RuntimeRetainedMemory`, obtained from the
+existing operation permit before constructing retained state. It does not retain
+execution slots. An operation's working ceiling overlaps this extra reservation
+until work finishes; failure to fit that overlap must refuse privately. A local
+`QueryMemoryLease` alone cannot establish the originating-governor invariant.
+This is a refinement obligation, not a TLC-checked native lifetime theorem.
+
+Root-manifest preflight must cover both `Vec<SegmentManifest>` and
+`Vec<MutationRunManifest>`, including input rejected only after deserialization.
+The schema-aware capacity uses the larger owned record size, two vectors and
+per-record validation-set capacity in the existing checked JSON bound. The
+bound counts opened containers, so it also covers serde's compact sequence
+encoding of a struct. Passing zero record size does not: a 65-record malformed
+segment fixture requested 85,214 bytes with only 27,444 admitted on the retained
+pre-fix allocator run. Checksum or filename rejection happens too late to avoid
+that allocation. Streaming checksum verification avoids a second serialized-body
+buffer. The three partitioned/discovery call sites and the append/mutation/
+compaction publication branches now pre-admit this decoding. Publication keeps
+the decode lease alive after moving the vectors into the final manifest.
+
+The bound depends on the fixed schema, pinned serde/Rust vector-growth behavior
+and conservative B-tree node allowances. It is not a generic bound for arrays
+of scalar values, an allocator-independent theorem, or an RSS measurement.
+Regressions measure requested live allocation peaks for compact segment and
+mutation records, assert refusal at one byte below the observed admission peak,
+and assert full ledger release. These tests complement the argument; they do
+not qualify descriptor/layout/lexical/vector decoding, cumulative visibility,
+FD retention, same-governor handoff, physical recovery or C-ready as a whole.
+
+The partitioned metadata join now returns one private `Prepared` owner containing
+its merged manifest and input/decode/growth/reference leases. Reservations are
+attached before decoding or growing the payload they cover. The manifest is the
+first field, and only an immutable accessor escapes to the installer. Thus both
+success and error destruction free the joined payload before its leases; the
+installer also transfers the original staged-input lease rather than relying on
+an outer local's lifetime. The pre-fix native regression left 1,792 requested
+bytes live after result destruction while the extra admission was already zero.
+The repaired regression exercises both ordinary drop and caller unwind, including
+unchanged active-head bytes. This proves that bounded join's observed lifetime
+boundary; it does not establish the still-unimplemented retained-governor reader.
+
 ## Durable metadata and retry contract to implement
 
 One immutable view record must identify the source E and native binding/target

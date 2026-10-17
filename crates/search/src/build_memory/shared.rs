@@ -25,6 +25,11 @@ impl<T> Shared<T> {
     pub(crate) fn new(value: T) -> Self {
         Self(ManuallyDrop::new(Arc::new(value)))
     }
+
+    #[cfg(test)]
+    pub(crate) fn strong_count(&self) -> usize {
+        Arc::strong_count(&self.0)
+    }
 }
 
 impl<T> Clone for Shared<T> {

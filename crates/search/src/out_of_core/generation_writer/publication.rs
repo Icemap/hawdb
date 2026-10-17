@@ -19,7 +19,6 @@ use super::super::{
 use super::{
     artifact_name::Name, RaBitQGenerationArtifact, STAGE_METADATA_FILE, STAGE_VECTOR_FILE,
 };
-use crate::bounded_file::read_bounded_file;
 use crate::build_control::json;
 use crate::build_memory::BuildMemory;
 use crate::error::{HawDBError, Result};
@@ -255,17 +254,26 @@ pub(super) fn install_generation(
     if let (Some(budget), Some(entries)) = (reopen_budget, mutation_entries) {
         budget.admit_entries(entries)?;
     }
+    // Keep decoded ownership admitted after the branch moves its vectors into
+    // the final manifest. This guard precedes every payload it accounts for.
+    let mut _active_decode = None;
     let mut mutation_runs = Vec::new();
     let (mut segments, document_count, documents_digest, segment_id, level, compact_range) =
         match input.active_manifest_update {
             Some(ActiveManifestUpdate::Mutate {
                 expected_generation,
             }) => {
-                let active_bytes = read_bounded_file(
-                    &input.root.join(OUT_OF_CORE_MANIFEST_FILE),
+                let active_bytes = io.read(
+                    &io.path(input.root, Path::new(OUT_OF_CORE_MANIFEST_FILE))?,
                     MAX_OUT_OF_CORE_MANIFEST_BYTES,
                 )?;
-                let active = SearchOutOfCoreManifestBody::decode(&active_bytes)?;
+                _active_decode = Some(memory.spool.reserve(
+                    SearchOutOfCoreManifestBody::decode_capacity(&active_bytes.bytes, task)?,
+                )?);
+                let active = SearchOutOfCoreManifestBody::decode_with_context(
+                    &active_bytes.bytes,
+                    Some(task),
+                )?;
                 if active.generation != *expected_generation {
                     return Err(super::generation_changed(
                         *expected_generation,
@@ -310,11 +318,17 @@ pub(super) fn install_generation(
             Some(ActiveManifestUpdate::Append {
                 expected_generation,
             }) => {
-                let active_bytes = read_bounded_file(
-                    &input.root.join(OUT_OF_CORE_MANIFEST_FILE),
+                let active_bytes = io.read(
+                    &io.path(input.root, Path::new(OUT_OF_CORE_MANIFEST_FILE))?,
                     MAX_OUT_OF_CORE_MANIFEST_BYTES,
                 )?;
-                let active = SearchOutOfCoreManifestBody::decode(&active_bytes)?;
+                _active_decode = Some(memory.spool.reserve(
+                    SearchOutOfCoreManifestBody::decode_capacity(&active_bytes.bytes, task)?,
+                )?);
+                let active = SearchOutOfCoreManifestBody::decode_with_context(
+                    &active_bytes.bytes,
+                    Some(task),
+                )?;
                 if active.generation != *expected_generation {
                     return Err(super::generation_changed(
                         *expected_generation,
@@ -360,11 +374,17 @@ pub(super) fn install_generation(
                         "search segment compaction requires at least two source segments".into(),
                     ));
                 }
-                let active_bytes = read_bounded_file(
-                    &input.root.join(OUT_OF_CORE_MANIFEST_FILE),
+                let active_bytes = io.read(
+                    &io.path(input.root, Path::new(OUT_OF_CORE_MANIFEST_FILE))?,
                     MAX_OUT_OF_CORE_MANIFEST_BYTES,
                 )?;
-                let active = SearchOutOfCoreManifestBody::decode(&active_bytes)?;
+                _active_decode = Some(memory.spool.reserve(
+                    SearchOutOfCoreManifestBody::decode_capacity(&active_bytes.bytes, task)?,
+                )?);
+                let active = SearchOutOfCoreManifestBody::decode_with_context(
+                    &active_bytes.bytes,
+                    Some(task),
+                )?;
                 if active.generation != *expected_generation {
                     return Err(super::generation_changed(
                         *expected_generation,

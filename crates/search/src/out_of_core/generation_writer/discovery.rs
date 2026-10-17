@@ -16,10 +16,11 @@
 
 use super::io::GenerationIo;
 use crate::build_control::{checkpoint, json};
-use crate::build_memory::{checked_add as add, checked_mul as mul, directory, BuildMemory};
+use crate::build_memory::{checked_mul as mul, directory, BuildMemory};
 use crate::lexical_projection::admitted_manifest_generation;
 use crate::out_of_core::{
-    SearchOutOfCoreManifestEnvelope, MAX_OUT_OF_CORE_MANIFEST_BYTES, OUT_OF_CORE_MANIFEST_FILE,
+    SearchOutOfCoreManifestBody, SearchOutOfCoreManifestEnvelope, MAX_OUT_OF_CORE_MANIFEST_BYTES,
+    OUT_OF_CORE_MANIFEST_FILE,
 };
 use crate::{HawDBError, Result};
 use hawdb_core::RuntimeTaskContext;
@@ -52,7 +53,7 @@ pub(super) fn active_identity(
         return Ok(None);
     }
     let bytes = io.read(&manifest, MAX_OUT_OF_CORE_MANIFEST_BYTES)?;
-    let capacity = add(json::decode_capacity(&bytes.bytes, 0, 0, task)?, 3 * 128)?;
+    let capacity = SearchOutOfCoreManifestBody::decode_capacity(&bytes.bytes, task)?;
     let _decode = memory.spool.reserve(capacity)?;
     let envelope: SearchOutOfCoreManifestEnvelope =
         serde_json::from_slice(&bytes.bytes).map_err(|error| {

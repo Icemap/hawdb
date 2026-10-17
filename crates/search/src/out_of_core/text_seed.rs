@@ -98,7 +98,7 @@ impl SearchOutOfCoreReader {
         let mut statistics = AccountedCorpusStatistics::aggregate(
             self.segments
                 .iter()
-                .map(|segment| segment.lexical_projection.as_ref()),
+                .map(|segment| &segment.lexical_projection),
             &terms.terms,
             max_term_bytes,
             context,
