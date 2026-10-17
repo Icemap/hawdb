@@ -7285,8 +7285,20 @@ fn encode_search_segment_descriptor_body(descriptor: &SearchSegmentDescriptor) -
 }
 
 fn decode_search_segment_descriptor_text(text: &str) -> Result<SearchSegmentDescriptor> {
+    decode_search_segment_descriptor_with_context(text, None)
+}
+
+fn decode_search_segment_descriptor_with_context(
+    text: &str,
+    task: Option<&hawdb_core::RuntimeTaskContext>,
+) -> Result<SearchSegmentDescriptor> {
     let (body, checksum) = split_checksum(text)?;
-    let actual = checksum_bytes(body.as_bytes());
+    let mut hasher = hawdb_integrity::Crc32cHasher::new();
+    for chunk in body.as_bytes().chunks(8192) {
+        task.map_or(Ok(()), build_control::checkpoint)?;
+        hasher.update(chunk);
+    }
+    let actual = hasher.finish();
     if checksum != actual {
         return Err(HawDBError::Storage(format!(
             "search segment descriptor checksum mismatch: expected {checksum}, got {actual}"
@@ -7299,14 +7311,28 @@ fn decode_search_segment_descriptor_text(text: &str) -> Result<SearchSegmentDesc
     let mut current_segment = None::<SearchSegmentDescriptorEntry>;
 
     for line in body.lines() {
+        task.map_or(Ok(()), build_control::checkpoint)?;
         if line == "HAWDB_SEARCH_SEGMENTS_V1"
             || line == "HAWDB_SEARCH_SEGMENTS_V2"
             || line == "HAWDB_SEARCH_SEGMENTS_V3"
         {
             continue;
         }
-        let fields = line.split('\t').collect::<Vec<_>>();
-        match fields.as_slice() {
+        // The longest descriptor production has nine fields. Keep the field
+        // table on the stack: rejected input may contain a tab per byte, and
+        // collecting those borrowed slices would amplify it into a large Vec.
+        let mut fields = [""; 9];
+        let mut count = 0;
+        for field in line.split('\t') {
+            let Some(slot) = fields.get_mut(count) else {
+                return Err(HawDBError::Storage(format!(
+                    "invalid search segment descriptor line: {line}"
+                )));
+            };
+            *slot = field;
+            count += 1;
+        }
+        match &fields[..count] {
             ["target_documents", raw] => {
                 target_documents = Some(parse_usize(raw, "search segment target documents")?);
             }

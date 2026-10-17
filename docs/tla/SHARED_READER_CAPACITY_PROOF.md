@@ -60,13 +60,13 @@ not require reclaiming an intentionally retained reader.
 
 | Model | Current implementation obligation/evidence |
 | --- | --- |
-| Query then host reserve | `ProjectionReadAdmission` implementation in `generation_writer/governed/reader.rs`; query guard rolls back if host reservation fails. |
+| Query then host reserve | `ProjectionReadAdmission` in `generation_writer/governed/reader.rs` delegates to `ReadAdmission::retained` in `build_memory/read.rs`; query guard rolls back if host reservation fails. |
 | Admit before backing | `FileProjection::open_admitted_file`: path, encoded manifest and decoded metadata grants precede their allocations; scratch is separate. |
 | No backing on clone | `FileProjection<Memory>::clone` clones `SharedAllocation<ProjectionContents<Memory>>`; the generic retained owner needs no `Clone`. |
 | Last decrement/extraction | `SharedAllocation::drop` uses `Arc::into_inner` for every clone. The atomic/exactly-once property is a standard-library contract assumed by this model; concurrent native final-drop regression tests cover its use here. |
 | Control block before payload | No weak/raw Arc escapes; `into_inner` returns the value after freeing its allocation. Then `drop(Option<T>)` destroys the payload. |
 | Payload before grants | `ProjectionContents` declares path/manifest/mmap before its two retained guards; field order preserves this on drop and unwind. |
-| Ledger before host refund | `ProjectionReaderMemory` declares `QueryMemoryLease` before `RuntimeRetainedMemory`. The former refunds its bytes and drops its account reference before the latter refunds host capacity. Ledger metadata dies only after both producer and retained account references are gone. Shared ledger metadata remains covered conservatively by each surviving receipt. |
+| Ledger before host refund | `ProjectionReaderMemory` aliases the common `ReaderMemory`, which declares `QueryMemoryLease` before `RuntimeRetainedMemory`. The former refunds its bytes and drops its account reference before the latter refunds host capacity. Ledger metadata dies only after both producer and retained account references are gone. Shared ledger metadata remains covered conservatively by each surviving receipt. |
 | Execution closes independently | Returned receipts contain no `RuntimePermit` or task context. Native tests close the producer, check CPU/task/I/O zero, admit a fresh query, retain memory through all clones, and finally check zero live allocation/host charge. |
 
 The model collapses successful construction's multiple leases into one charge
@@ -107,3 +107,10 @@ Inspect retained
 TLC logs for the named invariant failures; a parser/tool failure is not a passing
 negative control. Finite exploration and these counterexamples do not establish
 an unbounded implementation theorem or complete the MVCC qualification gates.
+
+The in-progress [governed reader construction design](../specs/MVCC_GOVERNED_READER_DESIGN.md)
+records the common receipt's use by descriptor/layout metadata and the scoped
+Storage read primitive. The model and its state space are unchanged by that
+extraction. Its proof scope does not expand to the full constructor, cold-file
+validation, parser work, source custody or activation merely because those paths
+now share a receipt type.

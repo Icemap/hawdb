@@ -38,6 +38,7 @@ pub(crate) mod compression;
 pub(crate) mod decoder;
 pub(crate) mod directory;
 pub(crate) mod path;
+pub(crate) mod read;
 pub(crate) mod reserved;
 pub(crate) mod shared;
 

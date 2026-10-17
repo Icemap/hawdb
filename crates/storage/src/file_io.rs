@@ -26,6 +26,10 @@ use std::sync::Arc;
 
 pub use std::fs::{FileType, Metadata, Permissions, TryLockError};
 
+mod read;
+#[doc(hidden)]
+pub use read::{AdmittedFileRead, ReadAdmissionControl};
+
 /// A mutable native handle or an immutable logical reference. Logical files
 /// retain their object identity and cursor without retaining a native handle.
 #[derive(Debug)]
