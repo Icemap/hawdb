@@ -177,13 +177,15 @@ The recorder refusal continues to apply to these new child captures.
 ## Windows cursor correction
 
 PR head 91c6c0c's Windows native job executed all 28 selected cases: 24 passed
-and four enumeration-dependent cases failed with access denied. The cross-target
+and four failed with access denied. Three failed on enumeration; the fourth
+failed earlier at the fixture's ancestor-directory rename, before enumeration. The cross-target
 Clippy pass had not established runtime support for ReOpenFile on directories.
 The implementation now reopens the held directory directly with NtCreateFile,
 without pathname fallback, handle duplication or shared enumeration offsets.
 Its separately admitted new directory handle must have the captured root's full
-native identity. The original four regressions remain unchanged and must pass
-in the native Windows job; local cross-compilation cannot supply that evidence.
+native identity. The three cursor regressions remain selected; the captured-child case also
+qualifies native ancestor-rename outcomes as described below. Native Windows
+execution is required; local cross-compilation cannot supply that evidence.
 
 The primary [Wine Win32 conformance test](https://github.com/wine-mirror/wine/blob/master/dlls/kernel32/tests/file.c)
 explicitly exercises ReOpenFile on a directory and expects access denied even
@@ -191,3 +193,28 @@ with backup semantics. The native CI failure is retained separately from this
 source reference; the proposed NT cursor still needs its own native green run.
 Public child-directory opens now explicitly test rejection of an empty name,
 which remains reserved for the private captured-object reopen.
+
+
+## Windows ancestor rename qualification
+
+After the NT cursor correction, head cca99b8's native selection has 27 passed
+and one failed. Source-line inspection places that last failure at the fixture's
+standard-library ancestor rename (line 644), while a descendant directory handle
+remains open. It is not evidence of a cursor failure. Native raw logs and the
+previous failed result remain retained.
+
+The authority test keeps Unix's original move-after-child-capture order and all
+final data, foreign-path and descriptor-refund assertions. Windows moves the
+parent while its own handle is retained, installs a foreign directory at its old
+path, then captures the child through that retained parent, moves/replaces the
+child name and closes the parent. It therefore checks both replaced paths and
+independent child authority using an operation order supported by this platform.
+A separate Windows case attempts ancestor rename with the descendant retained:
+success must preserve authority at the moved name; a native permission refusal
+must leave the old namespace and bytes intact. Both branches must still enumerate
+and read the retained child after parent closure and refund every descriptor.
+Other errors remain failures. No production error is ignored, no public access
+mask is widened, and no final assertion, seed, budget or deadline is removed.
+Test-only failure-stage reporting preserves raw error identity/classification.
+These are platform-specific safety checks, not proof that every host namespace
+mutation succeeds or that native GC/source-custody refinement is complete.

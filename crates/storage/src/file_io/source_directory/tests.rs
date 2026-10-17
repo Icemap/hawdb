@@ -632,18 +632,50 @@ fn enumeration_rejects_foreign_domains_and_unsupported_names_without_partial_suc
 fn child_directory_retains_relative_authority_after_both_pathnames_move_and_parent_closes() {
     let fixture = Fixture::new(8);
     let selected = fixture.root.join("selected");
+    let moved = fixture.root.join("moved");
     fs::create_dir_all(selected.join("child")).unwrap();
     fs::write(selected.join("child/payload"), b"retained").unwrap();
     let parent = fixture.capture(&selected);
     let context = fixture.project.io_context();
+    // Windows can refuse moving an ancestor with an open descendant directory.
+    // Capture the child through the held parent after replacing its old path.
+    // Unix retains the original stronger move-after-child-capture sequence.
+    #[cfg(windows)]
+    {
+        fs::rename(&selected, &moved).unwrap();
+        fs::create_dir_all(selected.join("child")).unwrap();
+        fs::write(selected.join("child/payload"), b"foreign-root").unwrap();
+    }
+    let captured_parent = if cfg!(windows) { &moved } else { &selected };
     let child = parent.open_directory(&context, "child").unwrap();
     assert_eq!(fixture.project.metrics().open, 2);
-    fs::rename(selected.join("child"), selected.join("old-child")).unwrap();
-    fs::create_dir(selected.join("child")).unwrap();
-    fs::write(selected.join("child/payload"), b"replacement-child").unwrap();
-    fs::rename(&selected, fixture.root.join("moved")).unwrap();
-    fs::create_dir_all(selected.join("child")).unwrap();
-    fs::write(selected.join("child/payload"), b"foreign-root").unwrap();
+    let inspect = |phase: &str| {
+        let mut visited = 0;
+        child
+            .visit_children(&context, 1, |name| {
+                assert_eq!(name, "payload");
+                visited += 1;
+                Ok(())
+            })
+            .unwrap_or_else(|error| panic!("captured child enumeration {phase}: {error}"));
+        assert_eq!(visited, 1);
+    };
+    inspect("after capture through retained parent");
+    fs::rename(
+        captured_parent.join("child"),
+        captured_parent.join("old-child"),
+    )
+    .unwrap();
+    inspect("after child rename");
+    fs::create_dir(captured_parent.join("child")).unwrap();
+    fs::write(captured_parent.join("child/payload"), b"replacement-child").unwrap();
+    #[cfg(not(windows))]
+    {
+        fs::rename(&selected, &moved).unwrap();
+        fs::create_dir_all(selected.join("child")).unwrap();
+        fs::write(selected.join("child/payload"), b"foreign-root").unwrap();
+    }
+    inspect("after both replacement paths exist");
     drop(parent);
     assert_eq!(fixture.project.metrics().open, 1);
     let mut names = Vec::new();
@@ -665,10 +697,58 @@ fn child_directory_retains_relative_authority_after_both_pathnames_move_and_pare
         b"foreign-root"
     );
     assert_eq!(
-        fs::read(fixture.root.join("moved/child/payload")).unwrap(),
+        fs::read(moved.join("child/payload")).unwrap(),
         b"replacement-child"
     );
-    assert!(!fixture.root.join("moved/old-child/payload").exists());
+    assert!(!moved.join("old-child/payload").exists());
+    drop(child);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[cfg(windows)]
+#[test]
+fn ancestor_rename_with_retained_child_preserves_authority_on_success_or_native_refusal() {
+    let fixture = Fixture::new(8);
+    let selected = fixture.root.join("selected");
+    let moved = fixture.root.join("moved");
+    fs::create_dir_all(selected.join("child")).unwrap();
+    fs::write(selected.join("child/payload"), b"retained").unwrap();
+    let parent = fixture.capture(&selected);
+    let context = fixture.project.io_context();
+    let child = parent.open_directory(&context, "child").unwrap();
+    let physical_parent = match fs::rename(&selected, &moved) {
+        Ok(()) => {
+            assert!(!selected.exists());
+            &moved
+        }
+        Err(error) => {
+            assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+            assert!(selected.is_dir());
+            assert!(!moved.exists());
+            &selected
+        }
+    };
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(parent);
+    assert_eq!(fixture.project.metrics().open, 1);
+    let mut visited = 0;
+    child
+        .visit_children(&context, 1, |name| {
+            assert_eq!(name, "payload");
+            visited += 1;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(visited, 1);
+    let mut file = child.open_child(&context, "payload").unwrap();
+    let mut bytes = String::new();
+    file.read_to_string(&mut bytes).unwrap();
+    assert_eq!(bytes, "retained");
+    assert_eq!(
+        fs::read(physical_parent.join("child/payload")).unwrap(),
+        b"retained"
+    );
+    drop(file);
     drop(child);
     assert_eq!(fixture.project.metrics().open, 0);
 }

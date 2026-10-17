@@ -243,9 +243,13 @@ pub(super) fn visit_children(
     // RootDirectory. FILE_DIRECTORY_FILE selects a directory and creates an
     // independent cursor. Public component validation continues to reject
     // empty names. ReOpenFile rejects directories on native Windows.
-    let cursor = relative_open_kind(root, ChildName(""), READ_DATA, false, 1)?;
-    if crate::native_file_identity::of_file(&cursor)? != crate::native_file_identity::of_file(root)?
-    {
+    let cursor = relative_open_kind(root, ChildName(""), READ_DATA, false, 1)
+        .map_err(|error| report_cursor_error("reopen held directory", error))?;
+    let cursor_identity = crate::native_file_identity::of_file(&cursor)
+        .map_err(|error| report_cursor_error("query cursor identity", error))?;
+    let root_identity = crate::native_file_identity::of_file(root)
+        .map_err(|error| report_cursor_error("query held directory identity", error))?;
+    if cursor_identity != root_identity {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "directory cursor identity differs from captured root",
@@ -283,8 +287,9 @@ pub(super) fn visit_children(
         if result != 0 {
             // SAFETY: pure NTSTATUS translation; overflow/pending are errors,
             // never a successfully truncated enumeration.
-            return Err(io::Error::from_raw_os_error(
-                unsafe { status_to_error(result) } as i32,
+            return Err(report_cursor_error(
+                "query directory entries",
+                io::Error::from_raw_os_error(unsafe { status_to_error(result) } as i32),
             ));
         }
         // SAFETY: fixed initialized scratch, borrowed only until next query.
@@ -320,4 +325,18 @@ pub(super) fn visit_children(
             visitor(name)?;
         }
     }
+}
+
+fn report_cursor_error(stage: &str, error: io::Error) -> io::Error {
+    // Preserve raw native errors for descriptor-exhaustion classification.
+    // Test binaries identify the failing API without changing access or retry.
+    #[cfg(test)]
+    eprintln!(
+        "source-directory cursor {stage}: kind={:?} raw={:?} error={error}",
+        error.kind(),
+        error.raw_os_error()
+    );
+    #[cfg(not(test))]
+    let _ = stage;
+    error
 }
