@@ -451,7 +451,13 @@ impl Database {
                     .is_some(),
                 None => false,
             };
-            if !has_empty_rowpage_result
+            // The native entry uses storage's default mutation limits. A
+            // custom mutation ceiling needs the transaction's pre-commit
+            // outcome validation even when its result is empty.
+            let can_commit_empty_result = has_empty_rowpage_result
+                && self.config.mutation_limits
+                    == hawdb_storage::mutation::MutationLimits::default();
+            if !can_commit_empty_result
                 && matches!(
                     prepared.statement(),
                     SqlStatement::Insert(_) | SqlStatement::Update(_) | SqlStatement::Delete(_)

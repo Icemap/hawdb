@@ -9,7 +9,7 @@ This is implementation evidence, not independent approval.
 | --- | --- |
 | Runtime view shows raw zero | system_runtime_snapshot uses read_result_row_limit. The contract exercises None, Some(0) and a positive ceiling through database, Cypher session, read snapshot and SQL session views; unlimited is NULL. |
 | Numeric default can become a zero-row budget | DEFAULT_MAX_READ_RESULT_ROWS now has type Option<usize> and value None. SessionConfig::max_result_rows still defaults to u64 zero, meaning unlimited. Explicit host Some(0) remains accepted; low-level request Some(0) stays strict. |
-| SQL DML route depends on ceiling | DatabaseSession delegates all SQL to one bounded database entry with its own system variables. Result-bearing DML uses native transaction staging, validates result rows/payload before commit, and reuses the prepared statement. RowPage INSERT without RETURNING, UPDATE and DELETE have statically empty results and retain native single-pass commit. The AST/table shape chooses the path, independently of configured ceilings; strict append generated-key results still require validation. This removes the session-only parse and temporary SqlSession. Ordinary limited/unlimited DML follows the same route. |
+| SQL DML route depends on ceiling | DatabaseSession delegates all SQL to one bounded database entry with its own system variables. Result-bearing DML uses native transaction staging, validates result rows/payload before commit, and reuses the prepared statement. With default mutation limits, RowPage INSERT without RETURNING, UPDATE and DELETE have statically empty results and retain native single-pass commit. Custom mutation limits retain transaction pre-commit outcome validation. The AST/table shape chooses the path, independently of configured ceilings; strict append generated-key results still require validation. This removes the session-only parse and temporary SqlSession. Ordinary limited/unlimited DML follows the same route. |
 | Session settings and rollback | The contract sets background/analytics/estimated-operation variables, runs parameterized RETURNING, UPDATE and DELETE with session ceilings zero/four, and checks settings and results. It then verifies row, strict zero-request and payload refusals preserve committed data/epoch. These variables currently govern Cypher work requests; SQL does not expose a current_setting expression or consume those Cypher work hints. The test does not claim new SQL variable syntax or scheduling behavior. |
 | BEGIN/COMMIT expect | Runtime construction takes SessionConfig directly. COMMIT returns a storage-integrity error if its runtime is unexpectedly absent rather than panicking. |
 | wasm32 ceiling | Public field documentation and READ_RESULT_LIMITS explain that a u64 ceiling at/above usize::MAX adds no representable bound, including five billion on wasm32. Finite host/byte/memory ceilings still apply. |
@@ -44,3 +44,10 @@ single-pass commit for this AST/table shape. Result-bearing writes still validat
 before publication. The existing contract now also exercises INSERT, UPDATE and
 DELETE under explicit zero-row and zero-byte budgets, checking empty output and
 committed epochs. Final-source regression and broader checks remain pending.
+
+A follow-up boundary audit reproduced a lower custom affected-row ceiling
+returning an error after native publication. The empty-result fast path now
+requires default mutation limits. A registered contract exercises multi-row
+INSERT, UPDATE and DELETE under max_affected_rows=1 and checks that each
+refusal preserves both epoch and complete stored rows. The new assertion fails
+on e8c1cfaf before the guard; final-source validation is recorded separately.

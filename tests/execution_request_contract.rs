@@ -1292,6 +1292,42 @@ fn autocommit_sql_preserves_session_variables_and_validates_before_commit() {
 }
 
 #[test]
+fn empty_sql_results_preserve_custom_mutation_limits() {
+    let mut config = hawdb::DatabaseConfig::default();
+    config.mutation_limits.max_affected_rows = std::num::NonZeroUsize::new(1).unwrap();
+    let mut database = hawdb::Database::new_with_config(config);
+    database
+        .query_sql("CREATE TABLE bounded_writes (id BIGINT PRIMARY KEY, body TEXT)")
+        .unwrap();
+    for id in [1, 2] {
+        database
+            .query_sql_with_params(
+                "INSERT INTO bounded_writes (id, body) VALUES ($1, 'original')",
+                &[Value::Int(id)],
+            )
+            .unwrap();
+    }
+    for sql in [
+        "INSERT INTO bounded_writes (id, body) VALUES (3, 'new'), (4, 'new')",
+        "UPDATE bounded_writes SET body = 'changed' WHERE body = 'original'",
+        "DELETE FROM bounded_writes WHERE body = 'original'",
+    ] {
+        let epoch = database.commit_epoch().unwrap();
+        let error = database.query_sql(sql).unwrap_err();
+        assert!(error.to_string().contains("max_affected_rows 1"), "{error}");
+        assert_eq!(database.commit_epoch().unwrap(), epoch, "{sql}");
+        let output = database
+            .query_sql("SELECT id, body FROM bounded_writes ORDER BY id")
+            .unwrap();
+        assert_eq!(output.rows.len(), 2, "{sql}");
+        for (row, id) in output.rows.iter().zip([1, 2]) {
+            assert_eq!(row["id"], Value::Int(id));
+            assert_eq!(row["body"], Value::String("original".into()));
+        }
+    }
+}
+
+#[test]
 fn unlimited_rows_still_refuse_wide_json_payload_before_delivery() {
     let payload_limit = 4096;
     let mut database = hawdb::Database::new_with_config(hawdb::DatabaseConfig {
