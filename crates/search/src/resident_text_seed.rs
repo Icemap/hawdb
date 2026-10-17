@@ -36,6 +36,8 @@ impl SearchResidentTextSeedOutput {
 
 impl SearchIndex {
     /// Scores the filtered resident corpus without materializing its candidate IDs.
+    /// The in-memory path scans and tokenizes twice to retain corpus statistics
+    /// without caching per-document frequencies outside the query memory account.
     pub fn text_seed_scores_with_context(
         &self,
         query_text: &str,

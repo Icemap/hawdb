@@ -216,6 +216,87 @@ fn bounded_read_snapshot_uses_its_pinned_projection_for_text_seeds() {
 }
 
 #[test]
+fn resident_and_out_of_core_text_seeds_return_the_same_document_identities() {
+    let root = SnapshotTestRoot::new();
+    let search_path = root.0.join("search");
+    let mut writer =
+        crate::SearchOutOfCoreGenerationWriter::create(&search_path, Default::default()).unwrap();
+    let mut resident = SearchIndex::in_memory();
+    for external_id in ["first", "second"] {
+        let row = SearchProjectionRow {
+            kind: SearchProjectionKind::Memory,
+            external_id: external_id.into(),
+            title: "shared text".into(),
+            body: "same document".into(),
+            embedding: None,
+            source_id: None,
+            metadata: BTreeMap::new(),
+        };
+        resident.upsert_projection_row(row.clone()).unwrap();
+        writer.push(row.into_document()).unwrap();
+    }
+    writer.finish().unwrap();
+
+    let graph = || {
+        let mut database = Database::new_with_config(DatabaseConfig {
+            max_read_result_rows: Some(16),
+            max_read_result_payload_bytes: Some(16 * 1024),
+            ..Default::default()
+        });
+        database.query("CREATE (:Memory {id: 'first'})").unwrap();
+        database.query("CREATE (:Memory {id: 'second'})").unwrap();
+        NowledgeMemGraph::from_database_with_runtime_governor(
+            database,
+            NowledgeMemGraphMode::ShadowReadOnly,
+            snapshot_governor(),
+        )
+    };
+    let resident_handle = NowledgeMemEmbeddedStoreHandle::new(NowledgeMemEmbeddedStore::new(
+        graph(),
+        Some(NowledgeMemSearchProjection::from_index(resident)),
+    ))
+    .unwrap();
+    let out_of_core_handle =
+        NowledgeMemEmbeddedStoreHandle::new(NowledgeMemEmbeddedStore::new_with_out_of_core_search(
+            graph(),
+            super::NowledgeMemOutOfCoreSearchProjection::open(&search_path).unwrap(),
+            Default::default(),
+        ))
+        .unwrap();
+    let query = |handle: &NowledgeMemEmbeddedStoreHandle| {
+        handle
+            .with_bounded_read_snapshot(
+                NowledgeMemReadSnapshotBudget {
+                    max_rows: 2,
+                    max_payload_bytes: 4096,
+                },
+                |snapshot| {
+                    snapshot
+                        .query_cypher(
+                            "CALL text_search($text, topK := 2) YIELD id, score \
+                             MATCH (m:Memory) RETURN id, m.id AS external_id ORDER BY id",
+                            &BTreeMap::from([("text".into(), Value::String("shared".into()))]),
+                            2,
+                        )
+                        .map(|result| result.rows)
+                },
+            )
+            .unwrap()
+    };
+    let resident_rows = query(&resident_handle);
+    assert_eq!(resident_rows.len(), 2);
+    assert_eq!(
+        resident_rows[0]["external_id"],
+        Value::String("first".into())
+    );
+    assert_eq!(
+        resident_rows[1]["external_id"],
+        Value::String("second".into())
+    );
+    assert_eq!(query(&out_of_core_handle), resident_rows);
+}
+
+#[test]
 fn bounded_text_seed_snapshot_retains_its_projection_during_a_writer_update() {
     let handle = app_read_handle();
     let writer_handle = handle.clone();
