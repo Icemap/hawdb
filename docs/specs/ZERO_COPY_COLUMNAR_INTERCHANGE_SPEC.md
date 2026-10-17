@@ -77,11 +77,16 @@ eligible numeric workloads. A storage transpose or second canonical column
 store is not required for Arrow interoperability. General Arrow node export
 and row/column crossover still require their own layout and workload evidence.
 
-At the user's current review decision, performance qualification is deferred,
-particularly write/load timings on the loaded local machine. This deferral does
-not turn historical diagnostic ratios into acceptance, remove adverse controls,
-weaken durability/budgets, or close the measurement gates below. The complete
-before/after workload matrix and total-memory qualification remain open.
+At the user's current review decision, performance qualification has resumed.
+The complete original before/after workload matrix, including write/load
+regression controls, and total-memory qualification remain required for
+PR #986's readiness review. Historical deferrals apply only to their recorded
+sources and reviews; they do not waive the current gates or turn diagnostic
+ratios into acceptance. Preserve adverse samples, refusals and incomplete
+groups, with their actual configurations, without weakening durability,
+resource allowances, sample counts or deadlines to obtain a pass. Separately
+reviewed row-limit policy changes must not silently rewrite frozen-baseline
+evidence.
 
 ## Existing foundations and gaps
 
