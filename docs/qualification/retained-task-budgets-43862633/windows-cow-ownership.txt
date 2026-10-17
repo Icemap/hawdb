@@ -1,0 +1,48 @@
+[1m[92m   Compiling[0m hawdb-storage v0.9.0 (D:\a\hawdb\hawdb\crates\storage)
+[1m[92m    Finished[0m `test` profile [unoptimized] target(s) in 1m 27s
+[1m[92m     Running[0m unittests src\lib.rs (target\debug\deps\hawdb_storage-5c59de55391ee460.exe)
+
+running 33 tests
+test cow::checkpoint::tests::consumed_growth_allowance_requires_new_admission_for_the_next_batch ... ok
+test cow::checkpoint::tests::denied_retained_node_checkpoint_copy_preserves_rows_and_releases_admission ... ok
+test cow::checkpoint::tests::absent_key_insertion_copies_the_target_page_with_retained_ownership ... ok
+test cow::checkpoint::tests::empty_map_cancellation_at_every_initial_unit_preserves_the_original_root ... ok
+test cow::checkpoint::tests::empty_map_copy_after_a_snapshot_keeps_its_first_insertion_capacity_admitted ... ok
+test cow::checkpoint::tests::empty_map_first_page_charge_survives_insertion_task_close_and_snapshot_pins ... ok
+test cow::checkpoint::tests::empty_map_insert_denies_initial_capacity_before_changing_shared_storage ... ok
+test cow::checkpoint::tests::existing_growth_allowance_does_not_bypass_a_lower_resumed_memory_ceiling ... ok
+test cow::checkpoint::tests::insertion_cancellation_at_every_growth_unit_keeps_the_original_root ... ok
+test cow::checkpoint::tests::graph_page_copy_charge_follows_pins_after_pause_and_foreground_detachment ... ok
+test cow::checkpoint::tests::missing_key_update_keeps_shared_storage_without_a_copy_charge ... ok
+test cow::checkpoint::tests::replacing_a_record_consumes_growth_before_another_split_can_be_admitted ... ok
+test cow::checkpoint::tests::retained_node_pressure_tracks_snapshot_mutations_and_removal ... ok
+test cow::checkpoint::tests::retained_node_row_keeps_checkpoint_copy_charge_after_directory_release ... ok
+test cow::checkpoint::tests::unique_page_insertion_denies_growth_before_mutating_or_losing_ownership ... ok
+test cow::node_map::tests::nested_row_bound_refuses_excessive_depth_before_adoption ... ok
+test cow::node_map::tests::row_source_keeps_only_its_record_and_preserves_buffer_addresses ... ok
+test cow::node_map::tests::snapshot_detaches_only_the_changed_row_and_invalidates_capacity ... ok
+test cow::retained_capacity::tests::capacity_cache_is_generation_local_and_every_mutation_invalidates_it ... ok
+test cow::retained_capacity::tests::independent_point_page_preserves_values_without_retaining_other_pages ... ok
+test cow::retained_capacity::tests::retained_capacity_includes_spare_and_nested_buffers_without_copying ... ok
+test cow::retained_capacity::tests::snapshots_created_before_preflight_share_the_source_bound ... ok
+test cow::retained_capacity::tests::source_bound_survives_mutation_and_keeps_each_generation_independent ... ok
+test cow::retained_capacity::tests::sparse_root_and_recursive_overflow_fail_closed ... ok
+test cow::checkpoint::tests::preflighted_insertions_keep_growth_and_split_charges_with_every_live_page ... ok
+test cow::retained_scan_tests::resumed_borrowed_pages_match_full_order_at_gaps_and_page_boundaries ... ok
+test cow::segmented_range_tests::borrowed_key_interval_matches_btree_across_segments_and_snapshots ... ok
+test cow::tests::checkpoint_delta_pressure_recovers_exactly_after_saturated_totals ... ok
+test cow::tests::checkpoint_delta_pressure_tracks_all_mutations_and_snapshots_without_read_hydration ... ok
+
+thread 'cow::tests::checkpoint_delta_pressure_unwind_updates_mutated_values_and_retains_a_searchable_directory' (7500) panicked at crates\storage\src\cow\tests.rs:145:9:
+after pressure-tracked mutation
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'cow::tests::checkpoint_delta_pressure_unwind_updates_mutated_values_and_retains_a_searchable_directory' (7500) panicked at crates\storage\src\cow\tests.rs:152:13:
+after preceding pages were removed
+test cow::tests::checkpoint_delta_pressure_unwind_updates_mutated_values_and_retains_a_searchable_directory ... ok
+test cow::retained_scan_tests::resumed_scan_survives_new_publication_without_cloning_its_values ... ok
+test cow::checkpoint::tests::cancellation_at_every_copy_unit_preserves_original_directory_and_refunds_buffers ... ok
+test cow::checkpoint::tests::large_directory_denies_before_allocating_and_keeps_every_shared_page ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 1893 filtered out; finished in 0.30s
+

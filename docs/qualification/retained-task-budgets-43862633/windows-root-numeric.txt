@@ -1,0 +1,305 @@
+[1m[92m    Updating[0m crates.io index
+[1m[92m Downloading[0m crates ...
+[1m[92m  Downloaded[0m allocator-api2 v0.2.21
+[1m[92m  Downloaded[0m byteorder v1.5.0
+[1m[92m  Downloaded[0m crc32c v0.6.8
+[1m[92m  Downloaded[0m crunchy v0.2.4
+[1m[92m  Downloaded[0m libflate_lz77 v2.3.0
+[1m[92m  Downloaded[0m block-buffer v0.10.4
+[1m[92m  Downloaded[0m include-flate-codegen v0.3.4
+[1m[92m  Downloaded[0m tinyvec_macros v0.1.1
+[1m[92m  Downloaded[0m bitpacking v0.9.3
+[1m[92m  Downloaded[0m bytecount v0.6.9
+[1m[92m  Downloaded[0m crossbeam-epoch v0.9.20
+[1m[92m  Downloaded[0m dary_heap v0.3.9
+[1m[92m  Downloaded[0m either v1.16.0
+[1m[92m  Downloaded[0m pkg-config v0.3.33
+[1m[92m  Downloaded[0m windows-interface v0.59.3
+[1m[92m  Downloaded[0m adler32 v1.2.0
+[1m[92m  Downloaded[0m autocfg v1.5.1
+[1m[92m  Downloaded[0m libflate v2.3.1
+[1m[92m  Downloaded[0m windows-core v0.62.2
+[1m[92m  Downloaded[0m bytemuck v1.25.2
+[1m[92m  Downloaded[0m cfg-if v1.0.4
+[1m[92m  Downloaded[0m crc32fast v1.5.2
+[1m[92m  Downloaded[0m equivalent v1.0.2
+[1m[92m  Downloaded[0m foldhash v0.2.0
+[1m[92m  Downloaded[0m generic-array v0.14.7
+[1m[92m  Downloaded[0m getrandom v0.4.3
+[1m[92m  Downloaded[0m cpufeatures v0.2.17
+[1m[92m  Downloaded[0m crossbeam-utils v0.8.22
+[1m[92m  Downloaded[0m include-flate v0.3.4
+[1m[92m  Downloaded[0m ar_archive_writer v0.5.2
+[1m[92m  Downloaded[0m itoa v1.0.18
+[1m[92m  Downloaded[0m fs2 v0.4.3
+[1m[92m  Downloaded[0m cc v1.2.67
+[1m[92m  Downloaded[0m windows-numerics v0.3.1
+[1m[92m  Downloaded[0m proc-macro-error-attr3 v3.1.0
+[1m[92m  Downloaded[0m recursive v0.1.1
+[1m[92m  Downloaded[0m zstd-safe v8.1.0
+[1m[92m  Downloaded[0m memmap2 v0.9.11
+[1m[92m  Downloaded[0m no_std_io2 v0.9.4
+[1m[92m  Downloaded[0m include-flate-compress v0.3.4
+[1m[92m  Downloaded[0m rustc_version v0.4.1
+[1m[92m  Downloaded[0m version_check v0.9.5
+[1m[92m  Downloaded[0m crypto-common v0.1.7
+[1m[92m  Downloaded[0m find-msvc-tools v0.1.9
+[1m[92m  Downloaded[0m jobserver v0.1.35
+[1m[92m  Downloaded[0m rustc-hash v2.1.3
+[1m[92m  Downloaded[0m sha2-asm v0.6.4
+[1m[92m  Downloaded[0m windows-implement v0.60.2
+[1m[92m  Downloaded[0m windows-strings v0.5.1
+[1m[92m  Downloaded[0m windows-collections v0.3.2
+[1m[92m  Downloaded[0m zstd-sys v2.1.1+zstd.1.5.7
+[1m[92m  Downloaded[0m crossbeam-deque v0.8.7
+[1m[92m  Downloaded[0m windows-threading v0.2.1
+[1m[92m  Downloaded[0m recursive-proc-macro-impl v0.1.1
+[1m[92m  Downloaded[0m windows-link v0.2.1
+[1m[92m  Downloaded[0m pin-project-lite v0.2.17
+[1m[92m  Downloaded[0m quote v1.0.46
+[1m[92m  Downloaded[0m serde_core v1.0.229
+[1m[92m  Downloaded[0m sha2 v0.10.9
+[1m[92m  Downloaded[0m stacker v0.1.24
+[1m[92m  Downloaded[0m windows-future v0.3.2
+[1m[92m  Downloaded[0m windows-result v0.4.1
+[1m[92m  Downloaded[0m zmij v1.0.23
+[1m[92m  Downloaded[0m zstd v0.13.3
+[1m[92m  Downloaded[0m zstd-safe v7.2.4
+[1m[92m  Downloaded[0m caseless v0.2.2
+[1m[92m  Downloaded[0m digest v0.10.7
+[1m[92m  Downloaded[0m opentelemetry v0.33.0
+[1m[92m  Downloaded[0m proc-macro-error3 v3.1.0
+[1m[92m  Downloaded[0m proc-macro2 v1.0.106
+[1m[92m  Downloaded[0m psm v0.1.31
+[1m[92m  Downloaded[0m zstd v0.14.0
+[1m[92m  Downloaded[0m aho-corasick v1.1.4
+[1m[92m  Downloaded[0m memchr v2.8.3
+[1m[92m  Downloaded[0m num-traits v0.2.19
+[1m[92m  Downloaded[0m rle-decode-fast v1.0.3
+[1m[92m  Downloaded[0m semver v1.0.28
+[1m[92m  Downloaded[0m serde_derive v1.0.229
+[1m[92m  Downloaded[0m shlex v2.0.1
+[1m[92m  Downloaded[0m tinyvec v1.12.0
+[1m[92m  Downloaded[0m unicode-ident v1.0.24
+[1m[92m  Downloaded[0m uuid v1.27.0
+[1m[92m  Downloaded[0m log v0.4.33
+[1m[92m  Downloaded[0m serde v1.0.229
+[1m[92m  Downloaded[0m rayon-core v1.13.0
+[1m[92m  Downloaded[0m typenum v1.20.1
+[1m[92m  Downloaded[0m hashbrown v0.16.1
+[1m[92m  Downloaded[0m roaring v0.11.5
+[1m[92m  Downloaded[0m unicode-normalization v0.1.25
+[1m[92m  Downloaded[0m ntapi v0.4.3
+[1m[92m  Downloaded[0m serde_json v1.0.151
+[1m[92m  Downloaded[0m regex v1.13.1
+[1m[92m  Downloaded[0m chrono v0.4.45
+[1m[92m  Downloaded[0m jieba-macros v0.11.0
+[1m[92m  Downloaded[0m libm v0.2.16
+[1m[92m  Downloaded[0m rayon v1.12.0
+[1m[92m  Downloaded[0m object v0.37.3
+[1m[92m  Downloaded[0m sysinfo v0.39.6
+[1m[92m  Downloaded[0m unicode-width v0.2.2
+[1m[92m  Downloaded[0m regex-syntax v0.8.11
+[1m[92m  Downloaded[0m syn v2.0.118
+[1m[92m  Downloaded[0m syn v3.0.3
+[1m[92m  Downloaded[0m sqlparser v0.63.0
+[1m[92m  Downloaded[0m regex-automata v0.4.18
+[1m[92m  Downloaded[0m libc v0.2.190
+[1m[92m  Downloaded[0m tokio v1.53.2
+[1m[92m  Downloaded[0m winapi v0.3.9
+[1m[92m  Downloaded[0m fst v0.4.7
+[1m[92m  Downloaded[0m windows-sys v0.61.2
+[1m[92m  Downloaded[0m jieba-rs v0.11.0
+[1m[92m  Downloaded[0m windows v0.62.2
+[1m[92m   Compiling[0m cfg-if v1.0.4
+[1m[92m   Compiling[0m getrandom v0.4.3
+[1m[92m   Compiling[0m memchr v2.8.3
+[1m[92m   Compiling[0m proc-macro2 v1.0.106
+[1m[92m   Compiling[0m unicode-ident v1.0.24
+[1m[92m   Compiling[0m quote v1.0.46
+[1m[92m   Compiling[0m find-msvc-tools v0.1.9
+[1m[92m   Compiling[0m shlex v2.0.1
+[1m[92m   Compiling[0m aho-corasick v1.1.4
+[1m[92m   Compiling[0m regex-syntax v0.8.11
+[1m[92m   Compiling[0m jobserver v0.1.35
+[1m[92m   Compiling[0m cc v1.2.67
+[1m[92m   Compiling[0m syn v2.0.118
+[1m[92m   Compiling[0m regex-automata v0.4.18
+[1m[92m   Compiling[0m windows-link v0.2.1
+[1m[92m   Compiling[0m pkg-config v0.3.33
+[1m[92m   Compiling[0m zstd-sys v2.1.1+zstd.1.5.7
+[1m[92m   Compiling[0m uuid v1.27.0
+[1m[92m   Compiling[0m serde_core v1.0.229
+[1m[92m   Compiling[0m version_check v0.9.5
+[1m[92m   Compiling[0m regex v1.13.1
+[1m[92m   Compiling[0m hawdb-core v0.9.0 (D:\a\hawdb\hawdb\crates\core)
+[1m[92m   Compiling[0m libc v0.2.190
+[1m[92m   Compiling[0m windows-implement v0.60.2
+[1m[92m   Compiling[0m windows-interface v0.59.3
+[1m[92m   Compiling[0m generic-array v0.14.7
+[1m[92m   Compiling[0m windows-result v0.4.1
+[1m[92m   Compiling[0m windows-strings v0.5.1
+[1m[92m   Compiling[0m zmij v1.0.23
+[1m[92m   Compiling[0m windows-core v0.62.2
+[1m[92m   Compiling[0m winapi v0.3.9
+[1m[92m   Compiling[0m serde_json v1.0.151
+[1m[92m   Compiling[0m typenum v1.20.1
+[1m[92m   Compiling[0m hawdb-ddl v0.9.0 (D:\a\hawdb\hawdb\crates\ddl)
+[1m[92m   Compiling[0m hawdb-expression v0.9.0 (D:\a\hawdb\hawdb\crates\expression)
+[1m[92m   Compiling[0m windows-sys v0.61.2
+[1m[92m   Compiling[0m syn v3.0.3
+[1m[92m   Compiling[0m hawdb-plan-core v0.9.0 (D:\a\hawdb\hawdb\crates\plan-core)
+[1m[92m   Compiling[0m itoa v1.0.18
+[1m[92m   Compiling[0m hawdb-cypher v0.9.0 (D:\a\hawdb\hawdb\crates\cypher)
+[1m[92m   Compiling[0m windows-threading v0.2.1
+[1m[92m   Compiling[0m crossbeam-utils v0.8.22
+[1m[92m   Compiling[0m ntapi v0.4.3
+[1m[92m   Compiling[0m semver v1.0.28
+[1m[92m   Compiling[0m rustc_version v0.4.1
+[1m[92m   Compiling[0m windows-future v0.3.2
+[1m[92m   Compiling[0m hawdb-plan-cypher v0.9.0 (D:\a\hawdb\hawdb\crates\plan-cypher)
+[1m[92m   Compiling[0m block-buffer v0.10.4
+[1m[92m   Compiling[0m crypto-common v0.1.7
+[1m[92m   Compiling[0m windows-numerics v0.3.1
+[1m[92m   Compiling[0m windows-collections v0.3.2
+[1m[92m   Compiling[0m crossbeam-epoch v0.9.20
+[1m[92m   Compiling[0m digest v0.10.7
+[1m[92m   Compiling[0m crc32c v0.6.8
+[1m[92m   Compiling[0m windows v0.62.2
+[1m[92m   Compiling[0m crossbeam-deque v0.8.7
+[1m[92m   Compiling[0m autocfg v1.5.1
+[1m[92m   Compiling[0m cpufeatures v0.2.17
+[1m[92m   Compiling[0m sha2 v0.10.9
+[1m[92m   Compiling[0m num-traits v0.2.19
+[1m[92m   Compiling[0m serde v1.0.229
+[1m[92m   Compiling[0m hawdb-cgroup v0.9.0 (D:\a\hawdb\hawdb\crates\cgroup)
+[1m[92m   Compiling[0m rayon-core v1.13.0
+[1m[92m   Compiling[0m zstd-safe v8.1.0
+[1m[92m   Compiling[0m serde_derive v1.0.229
+[1m[92m   Compiling[0m hawdb-integrity v0.9.0 (D:\a\hawdb\hawdb\crates\integrity)
+[1m[92m   Compiling[0m either v1.16.0
+[1m[92m   Compiling[0m byteorder v1.5.0
+[1m[92m   Compiling[0m bytemuck v1.25.2
+[1m[92m   Compiling[0m opentelemetry v0.33.0
+[1m[92m   Compiling[0m roaring v0.11.5
+[1m[92m   Compiling[0m rayon v1.12.0
+[1m[92m   Compiling[0m zstd v0.14.0
+[1m[92m   Compiling[0m chrono v0.4.45
+[1m[92m   Compiling[0m fs2 v0.4.3
+[1m[92m   Compiling[0m hawdb-analytics v0.9.0 (D:\a\hawdb\hawdb\crates\analytics)
+[1m[92m   Compiling[0m memmap2 v0.9.11
+[1m[92m   Compiling[0m zstd-safe v7.2.4
+[1m[92m   Compiling[0m object v0.37.3
+[1m[92m   Compiling[0m hawdb-cascades v0.9.0 (D:\a\hawdb\hawdb\crates\cascades)
+[1m[92m   Compiling[0m allocator-api2 v0.2.21
+[1m[92m   Compiling[0m crc32fast v1.5.2
+[1m[92m   Compiling[0m equivalent v1.0.2
+[1m[92m   Compiling[0m foldhash v0.2.0
+[1m[92m   Compiling[0m hashbrown v0.16.1
+[1m[92m   Compiling[0m no_std_io2 v0.9.4
+[1m[92m   Compiling[0m rle-decode-fast v1.0.3
+[1m[92m   Compiling[0m libflate_lz77 v2.3.0
+[1m[92m   Compiling[0m hawdb-optimizer-vector v0.9.0 (D:\a\hawdb\hawdb\crates\optimizer-vector)
+[1m[92m   Compiling[0m dary_heap v0.3.9
+[1m[92m   Compiling[0m adler32 v1.2.0
+[1m[92m   Compiling[0m libflate v2.3.1
+[1m[92m   Compiling[0m zstd v0.13.3
+[1m[92m   Compiling[0m hawdb-optimizer-predicate v0.9.0 (D:\a\hawdb\hawdb\crates\optimizer-predicate)
+[1m[92m   Compiling[0m stacker v0.1.24
+[1m[92m   Compiling[0m proc-macro-error-attr3 v3.1.0
+[1m[92m   Compiling[0m ar_archive_writer v0.5.2
+[1m[92m   Compiling[0m proc-macro-error3 v3.1.0
+[1m[92m   Compiling[0m psm v0.1.31
+[1m[92m   Compiling[0m include-flate-compress v0.3.4
+[1m[92m   Compiling[0m tinyvec_macros v0.1.1
+[1m[92m   Compiling[0m crunchy v0.2.4
+[1m[92m   Compiling[0m tinyvec v1.12.0
+[1m[92m   Compiling[0m include-flate-codegen v0.3.4
+[1m[92m   Compiling[0m hawdb-evidence v0.9.0 (D:\a\hawdb\hawdb\crates\evidence)
+[1m[92m   Compiling[0m recursive-proc-macro-impl v0.1.1
+[1m[92m   Compiling[0m fst v0.4.7
+[1m[92m   Compiling[0m include-flate v0.3.4
+[1m[92m   Compiling[0m recursive v0.1.1
+[1m[92m   Compiling[0m unicode-normalization v0.1.25
+[1m[92m   Compiling[0m hawdb-plan-cache v0.9.0 (D:\a\hawdb\hawdb\crates\plan-cache)
+[1m[92m   Compiling[0m log v0.4.33
+[1m[92m   Compiling[0m jieba-macros v0.11.0
+[1m[92m   Compiling[0m bytecount v0.6.9
+[1m[92m   Compiling[0m rustc-hash v2.1.3
+[1m[92m   Compiling[0m sqlparser v0.63.0
+[1m[92m   Compiling[0m jieba-rs v0.11.0
+[1m[92m   Compiling[0m caseless v0.2.2
+[1m[92m   Compiling[0m bitpacking v0.9.3
+[1m[92m   Compiling[0m hawdb-optimizer-graph v0.9.0 (D:\a\hawdb\hawdb\crates\optimizer-graph)
+[1m[92m   Compiling[0m sysinfo v0.39.6
+[1m[92m   Compiling[0m hawdb-qos v0.9.0 (D:\a\hawdb\hawdb\crates\qos)
+[1m[92m   Compiling[0m hawdb-telemetry v0.9.0 (D:\a\hawdb\hawdb\crates\telemetry)
+[1m[92m   Compiling[0m hawdb-storage v0.9.0 (D:\a\hawdb\hawdb\crates\storage)
+[1m[92m   Compiling[0m hawdb-optimizer-relational v0.9.0 (D:\a\hawdb\hawdb\crates\optimizer-relational)
+[1m[92m   Compiling[0m hawdb-sql-syntax v0.9.0 (D:\a\hawdb\hawdb\crates\sql-syntax)
+[1m[92m   Compiling[0m hawdb-optimizer v0.9.0 (D:\a\hawdb\hawdb\crates\optimizer)
+[1m[92m   Compiling[0m hawdb-query v0.9.0 (D:\a\hawdb\hawdb\crates\query)
+[1m[92m   Compiling[0m pin-project-lite v0.2.17
+[1m[92m   Compiling[0m tokio v1.53.2
+[1m[92m   Compiling[0m hawdb-route-ownership v0.9.0 (D:\a\hawdb\hawdb\crates\route-ownership)
+[1m[92m   Compiling[0m unicode-width v0.2.2
+[1m[92m   Compiling[0m hawdb-query-policy v0.9.0 (D:\a\hawdb\hawdb\crates\query-policy)
+[1m[92m   Compiling[0m hawdb-fuzz-contracts v0.9.0 (D:\a\hawdb\hawdb\crates\fuzz-contracts)
+[1m[92m   Compiling[0m hawdb-sql v0.9.0 (D:\a\hawdb\hawdb\crates\sql)
+[1m[92m   Compiling[0m hawdb-executor v0.9.0 (D:\a\hawdb\hawdb\crates\executor)
+[1m[92m   Compiling[0m hawdb-vector-projection v0.9.0 (D:\a\hawdb\hawdb\crates\vector-projection)
+[1m[92m   Compiling[0m hawdb-runtime-tokio v0.9.0 (D:\a\hawdb\hawdb\crates\runtime-tokio)
+[1m[92m   Compiling[0m hawdb-search v0.9.0 (D:\a\hawdb\hawdb\crates\search)
+[1m[92m   Compiling[0m hawdb-system-sql v0.9.0 (D:\a\hawdb\hawdb\crates\system-sql)
+[1m[92m   Compiling[0m hawdb-artifact v0.9.0 (D:\a\hawdb\hawdb\crates\artifact)
+[1m[92m   Compiling[0m hawdb-compat v0.9.0 (D:\a\hawdb\hawdb\crates\compat)
+[1m[92m   Compiling[0m hawdb-resource-profile v0.9.0 (D:\a\hawdb\hawdb\crates\resource-profile)
+[1m[92m   Compiling[0m hawdb-relational v0.9.0 (D:\a\hawdb\hawdb\crates\relational)
+[1m[92m   Compiling[0m hawdb-explain v0.9.0 (D:\a\hawdb\hawdb\crates\explain)
+[1m[92m   Compiling[0m hawdb-nowledge-contracts v0.9.0 (D:\a\hawdb\hawdb\crates\nowledge-contracts)
+[1m[92m   Compiling[0m hawdb-bootstrap v0.9.0 (D:\a\hawdb\hawdb\crates\bootstrap)
+[1m[92m   Compiling[0m hawdb-readiness v0.9.0 (D:\a\hawdb\hawdb\crates\readiness)
+[1m[92m   Compiling[0m hawdb v0.9.0 (D:\a\hawdb\hawdb)
+[1m[92m    Finished[0m `test` profile [unoptimized] target(s) in 2m 56s
+[1m[92m     Running[0m unittests src\lib.rs (target\debug\deps\hawdb-677c8ff0c39536fa.exe)
+
+running 36 tests
+test api::retained_query::tests::adapter_minimum_handles_refuse_before_binding_and_allow_host_correction ... ok
+test api::retained_query::tests::adapter_delivery_failure_is_sticky_and_drops_source_without_revoking_views ... ok
+test api::retained_query::tests::an_impossible_batch_is_terminal_even_while_another_cursor_retains_data ... ok
+test api::retained_query::tests::adapter_capacity_is_admitted_before_source_work_and_stays_with_the_view ... ok
+test api::retained_query::tests::bytes_too_small_fail_before_visiting_a_source_row ... ok
+test api::retained_query::tests::cancellation_is_terminal_without_revoking_a_previous_batch_or_source_pin ... ok
+test api::retained_query::tests::consumed_numeric_task_query_cap_includes_pinned_source ... ok
+test api::retained_query::tests::consumed_numeric_task_larger_allowance_never_raises_host_query_cap ... ok
+test api::retained_query::tests::cumulative_budget_failure_remains_terminal_and_marks_earlier_batches_failed ... ok
+test api::retained_query::tests::different_cursors_share_the_configured_handle_limit_and_release_every_charge ... ok
+test api::retained_query::tests::demanded_eof_releases_source_capacity_while_last_batch_remains_owned ... ok
+test api::retained_query::tests::empty_typed_source_has_a_schema_and_completes_on_demand ... ok
+test api::retained_query::tests::consumed_numeric_task_reservations_never_widen_zero_or_tiny_caps ... ok
+test api::retained_query::tests::heap_source_continues_after_database_close_without_retaining_its_read_pin ... ok
+test api::retained_query::tests::distinct_pinned_source_generations_share_aggregate_memory_admission ... ok
+test api::retained_query::tests::incompatible_requests_refuse_before_creating_owners ... ok
+test api::retained_query::tests::nullable_float_schema_and_ieee_bits_do_not_depend_on_the_first_row ... ok
+test api::retained_query::tests::more_slots_still_obey_shared_handles_and_never_prefetch ... ok
+test api::retained_query::tests::larger_cursor_options_cannot_bypass_database_row_or_payload_limits ... ok
+test api::retained_query::tests::offset_and_limit_preserve_physical_values_and_selection_range ... ok
+test api::retained_query::tests::one_shared_handle_cannot_fit_a_cursor_and_its_first_batch ... ok
+test api::retained_query::tests::oversized_adapter_cursor_capacity_fails_without_retaining_control_or_source ... ok
+test api::retained_query::tests::pinned_source_runtime_boundary_is_terminal_and_neighboring_budget_progresses ... ok
+test api::retained_query::tests::pinned_source_temporary_shared_work_remains_retryable_without_advancing ... ok
+test api::retained_query::tests::pinned_source_is_separate_from_the_result_ceiling_and_held_views_are_retryable ... ok
+test api::retained_query::tests::pinned_source_query_boundary_is_terminal_and_neighboring_budget_progresses ... ok
+test api::retained_query::tests::replacing_the_ordinary_governor_cannot_multiply_a_bound_retained_allowance ... ok
+test api::retained_query::tests::precreated_read_snapshots_reuse_the_same_source_capacity_bound ... ok
+test api::retained_query::tests::result_ceiling_does_not_reserve_unused_memory_while_streaming ... ok
+test api::retained_query::tests::snapshot_created_before_runtime_configuration_uses_the_shared_host_owner ... ok
+test api::retained_query::tests::snapshot_isolation_and_cursor_database_close_do_not_revoke_batches ... ok
+test api::retained_query::tests::sparse_labels_bound_source_work_and_empty_batch_is_not_eof ... ok
+test api::retained_query::tests::two_slots_apply_before_source_work_and_last_view_release_allows_retry ... ok
+test api::retained_query::tests::source_capacity_charge_survives_database_close_and_ends_without_revoking_views ... ok
+test api::retained_query::tests::unrequested_source_capacity_refuses_before_pinning_and_rolls_back_admission ... ok
+test api::retained_query::tests::consumed_numeric_task_result_cap_has_an_exact_first_batch_boundary ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 2062 filtered out; finished in 0.44s
+

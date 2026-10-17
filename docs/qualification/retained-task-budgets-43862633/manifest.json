@@ -1,0 +1,181 @@
+{
+  "head": "4386263386d3b40cf6f42e8da1c8abaa5cf01ea9",
+  "files": {
+    "commands.json": {
+      "bytes": 7500,
+      "sha256": "2eb9ce3cc82d9fe28ce04592df6c3943249d341d8eee06ae269c7e8d619b3b77"
+    },
+    "initial-main-two-case-red.log": {
+      "bytes": 2234,
+      "sha256": "65aa6e2d7bff30e816b902c3c13fd17bd7580d56523d7fa79d2c4faee2dd7312"
+    },
+    "numeric-task-final-43862633-analytics-core-test-_hawdb_unit_analytics_core_general_tests.log": {
+      "bytes": 7571,
+      "sha256": "b3a3ab9513acb92e24310fdd34c9d9d50e0fc5c8e2de68e7fb32c26b3e003254"
+    },
+    "numeric-task-final-43862633-analytics-rss-test-_hawdb_unit_analytics_rss_tests.log": {
+      "bytes": 1231,
+      "sha256": "429e4a3a791a4010ac805b9caee9e9a43007dfbfb304f558db4ffffff02d8ea9"
+    },
+    "numeric-task-final-43862633-compaction-admission-test-_hawdb_unit_row_page_compaction_admission_tests.log": {
+      "bytes": 670,
+      "sha256": "3c5cdac140652bd4bb31c232b452aaf8625be888ec052b5f33456891bc816278"
+    },
+    "numeric-task-final-43862633-concurrent-test-_hawdb_unit_concurrent_tests.log": {
+      "bytes": 16287,
+      "sha256": "0e79e8a30b52e33e8aa210d2f1251674ab5f6b3a6f93ca89de69cf3efcd4747e"
+    },
+    "numeric-task-final-43862633-foundation-test-crates_core_hawdb_core_tests.log": {
+      "bytes": 5080,
+      "sha256": "360a59b8530a2b199c6cffadb09a2d59160fb38a92c8f10e8de37344a67a0808"
+    },
+    "numeric-task-final-43862633-foundation-test-crates_executor_hawdb_executor_unit_tests.log": {
+      "bytes": 43784,
+      "sha256": "791b607d670b6775391feb90548d5046df2d364d23cc8b01c19dbe0c638e71b4"
+    },
+    "numeric-task-final-43862633-foundation-test-crates_qos_hawdb_qos_tests.log": {
+      "bytes": 11582,
+      "sha256": "3696c2324bb731b5449ad36fca9657918bebe09a670e38f466a3034958445293"
+    },
+    "numeric-task-final-43862633-foundation-test-crates_storage_hawdb_storage_tests.log": {
+      "bytes": 222695,
+      "sha256": "df359e5ba6616915b7d0e3c0e54bbf3eefe77957911d5d4a8e7787454380f77e"
+    },
+    "numeric-task-final-43862633-general-test-_hawdb_unit_general_tests.log": {
+      "bytes": 182552,
+      "sha256": "c3ae7a0ffe360544720f3396e5d9482e13b0e3f522f0a160afe2204732dcc701"
+    },
+    "numeric-task-final-43862633-portable-test-_hawdb_in_memory_portable_tests.log": {
+      "bytes": 812,
+      "sha256": "2e67eca52960b7834f06757e2790bd9d8d221708c0de444d7302902c86636f66"
+    },
+    "numeric-task-final-43862633-recovery-test-_hawdb_unit_recovery_tests.log": {
+      "bytes": 16592,
+      "sha256": "fbfcc939ef76cdfbcd44a04c1e16b42605b2a0c1b9f23d7c22303960f0e07961"
+    },
+    "numeric-task-final-43862633-state.json": {
+      "bytes": 6789,
+      "sha256": "dcd68b96d5a61acc0a7e49a36b755dcd5d8ea55fc67a1a7efc30f3f85ced85b6"
+    },
+    "numeric-task-fix-commit.log": {
+      "bytes": 307,
+      "sha256": "894c23ebdd524f6fcda4d83ff023f0e4d65d122d8f8937894a9bc2a40847df97"
+    },
+    "numeric-task-fix-contract-test-_hawdb_execution_request_contract_tests.log": {
+      "bytes": 3334,
+      "sha256": "8a3050b34cd5d9542bb810550b3b78e3ab426cfaaa093fef0051207097080fa8"
+    },
+    "numeric-task-fix-contract.log": {
+      "bytes": 2812,
+      "sha256": "3b3b93397910ca323d4ddce4acf1e25c8c8fe506ab8e4c74c2779302a2b77a2c"
+    },
+    "numeric-task-fix-fmt.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "numeric-task-fix-fuzz-test-_hawdb_graph_projection_residency_fuzz_first_half_tests.log": {
+      "bytes": 665,
+      "sha256": "262ed845b6f5038fc163bbfc27968ceb943d0b4b3c62bc5b1432323b0f389da1"
+    },
+    "numeric-task-fix-fuzz-test-_hawdb_graph_projection_residency_fuzz_second_half_tests.log": {
+      "bytes": 669,
+      "sha256": "4fb768317a28d2c690c23a26de81fe6553bfcb37cb3fd6778f56ef22c5e62dd9"
+    },
+    "numeric-task-fix-fuzz.log": {
+      "bytes": 16976,
+      "sha256": "4c8effb630cb355c5ebfceb9b22a0d12a9a3d270397aecb3a506cb56a9c24f4c"
+    },
+    "numeric-task-fix-install.log": {
+      "bytes": 89,
+      "sha256": "6dd3a3ee6c0892e5369e843cabf8ddc982f55665d60d1d1359fc0d198ee6f427"
+    },
+    "numeric-task-fix-native.log": {
+      "bytes": 5270,
+      "sha256": "163536c28c29dd378b5b1c211328af0efd6061f5e389ec938bea61c3cb769690"
+    },
+    "numeric-task-fix-prek.log": {
+      "bytes": 160,
+      "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
+    },
+    "numeric-task-fix-publication-state.json": {
+      "bytes": 543,
+      "sha256": "9f369b382c9935bdc6de5a483cd37e1a65b875f92f1f36ad5ec429949096cff1"
+    },
+    "numeric-task-fix-retained-green-test-_hawdb_unit_general_tests.log": {
+      "bytes": 4181,
+      "sha256": "fea2c7c4b029b46266502ac3fb023c8bd5f060bd603dbddc0289d14f330e90a8"
+    },
+    "numeric-task-fix-retained-green.log": {
+      "bytes": 2444,
+      "sha256": "bf1a9bfa54abfa7f5692cf087612179495992b9c7fd6f0993567276e503b3db9"
+    },
+    "numeric-task-fix-semantic-red-test-_hawdb_unit_general_tests.log": {
+      "bytes": 2845,
+      "sha256": "6bd8a388cf75907d0e46de4b56d5d3a2c3aad95cf1484e0098ee7cc680a97f4f"
+    },
+    "numeric-task-fix-semantic-red.log": {
+      "bytes": 2964,
+      "sha256": "02134e914232b6703627d07dfff4d5da12229479143f0a0fd0dbcec2e6664b13"
+    },
+    "numeric-task-fix-verification-state.json": {
+      "bytes": 18494,
+      "sha256": "f78c16927a0e29fbf12f669543016c3836ddd93bfa8974a4301c7180b2cd9260"
+    },
+    "numeric-task-fix-wasm.log": {
+      "bytes": 4756,
+      "sha256": "4ebd342e742e0196e801288914d491cc339f147884cbfd13fb2e30220abb3431"
+    },
+    "packet.json": {
+      "bytes": 3049,
+      "sha256": "b262158d08af651d7f6e6eccc39f28778ba5936fef211371f960afa049e5e0d9"
+    },
+    "repair.patch": {
+      "bytes": 10026,
+      "sha256": "7b85a9fe0e3f98f933cded74e71ab299fb2f2e1c9d9486da2b71cf7f80e0e3f8"
+    },
+    "test-events.json": {
+      "bytes": 26307,
+      "sha256": "27f747268bf756e5ba09866d4a3d4a866b74b56ac8906d25b40ad22f280b4e4c"
+    },
+    "windows-cow-ownership.txt": {
+      "bytes": 4351,
+      "sha256": "e02a519e92b8d785b8bc515789fa46383a6cf2b6d5b7a7afe86a4995c1830ade"
+    },
+    "windows-engine.txt": {
+      "bytes": 494,
+      "sha256": "52b778cc62015dfd7db9388d6b91cf8fc0995717eb2a61dd6e17e14c735b59c9"
+    },
+    "windows-executor-numeric.txt": {
+      "bytes": 2433,
+      "sha256": "08b1b9249c3d47540665b8fafa6e10a1bec505621f86e2b946bf424036c5a9c6"
+    },
+    "windows-receipt.json": {
+      "bytes": 4524,
+      "sha256": "b94992d1b3903d6761303aa1bef753023950e6d9f5062159598b5e21682e5305"
+    },
+    "windows-retained-admission.txt": {
+      "bytes": 3223,
+      "sha256": "b407c0e9c1810e0b1139e957d9c514d8f067707365bf6d530f12e6d1ebc6cd56"
+    },
+    "windows-root-numeric.txt": {
+      "bytes": 17516,
+      "sha256": "88d46a84adefc183ad753203e3f6aa9ee945c1c5a08de62d43826130ba6ef98a"
+    },
+    "windows-source-ownership.txt": {
+      "bytes": 2213,
+      "sha256": "2130247a3360193c995d3d2d3bfef14b763953d4b1d3fdb422495e0ffb2ce10d"
+    },
+    "windows-source.txt": {
+      "bytes": 123,
+      "sha256": "b106ff30bf66922c0861c0513fff3222acbfd24a5205c6e22010cfb953cd03a4"
+    },
+    "windows-toolchain.txt": {
+      "bytes": 194,
+      "sha256": "7fad09dd8c16d49de37932475436003b5b1763c1015c5ce081ad7692db368ca3"
+    },
+    "windows-workflow-only.patch": {
+      "bytes": 6636,
+      "sha256": "18a1e3fcad8f4020ee24903d4b3ef1f978e4dd020f36d814e13df3d2636e598d"
+    }
+  }
+}

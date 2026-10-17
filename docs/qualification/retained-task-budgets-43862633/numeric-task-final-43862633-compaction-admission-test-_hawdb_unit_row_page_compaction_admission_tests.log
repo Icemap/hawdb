@@ -1,0 +1,11 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_row_page_compaction_admission_tests
+-----------------------------------------------------------------------------
+
+running 3 tests
+test store_facade_tests::row_page_compaction::row_page_compaction_failure_limits_leave_the_generation_retryable ... ok
+test store_facade_tests::row_page_compaction::row_page_compaction_admits_before_building_and_shares_shadow_capacity ... ok
+test store_facade_tests::row_page_compaction::row_page_compaction_dirty_and_materialized_limits_release_admission ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 22.04s
+

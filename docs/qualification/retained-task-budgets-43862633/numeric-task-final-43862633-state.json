@@ -1,0 +1,207 @@
+{
+  "head": "4386263386d3b40cf6f42e8da1c8abaa5cf01ea9",
+  "pid": 7653,
+  "status": "passed",
+  "started": 1792274586.0499442,
+  "steps": [
+    {
+      "name": "general",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--nocache_test_results",
+        "--test_arg=--nocapture",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-general.bep.json"
+      ],
+      "started": 1792274586.107344,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-general.log",
+      "exit": 0,
+      "ended": 1792275059.638106,
+      "targets": [
+        {
+          "label": "//:hawdb_unit_general_tests",
+          "status": "PASSED"
+        }
+      ]
+    },
+    {
+      "name": "concurrent",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_concurrent_tests",
+        "--nocache_test_results",
+        "--test_arg=--nocapture",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-concurrent.bep.json"
+      ],
+      "started": 1792275059.76478,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-concurrent.log",
+      "exit": 0,
+      "ended": 1792275693.132941,
+      "targets": [
+        {
+          "label": "//:hawdb_unit_concurrent_tests",
+          "status": "PASSED"
+        }
+      ]
+    },
+    {
+      "name": "recovery",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_recovery_tests",
+        "--nocache_test_results",
+        "--test_arg=--nocapture",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-recovery.bep.json"
+      ],
+      "started": 1792275693.2082932,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-recovery.log",
+      "exit": 0,
+      "ended": 1792275957.8641331,
+      "targets": [
+        {
+          "label": "//:hawdb_unit_recovery_tests",
+          "status": "PASSED"
+        }
+      ]
+    },
+    {
+      "name": "analytics-core",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_analytics_core_general_tests",
+        "--nocache_test_results",
+        "--test_arg=--nocapture",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-analytics-core.bep.json"
+      ],
+      "started": 1792275957.924156,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-analytics-core.log",
+      "exit": 0,
+      "ended": 1792276045.06229,
+      "targets": [
+        {
+          "label": "//:hawdb_unit_analytics_core_general_tests",
+          "status": "PASSED"
+        }
+      ]
+    },
+    {
+      "name": "analytics-rss",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_analytics_rss_tests",
+        "--nocache_test_results",
+        "--test_arg=--nocapture",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-analytics-rss.bep.json"
+      ],
+      "started": 1792276045.118496,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-analytics-rss.log",
+      "exit": 0,
+      "ended": 1792276346.397567,
+      "targets": [
+        {
+          "label": "//:hawdb_unit_analytics_rss_tests",
+          "status": "PASSED"
+        }
+      ]
+    },
+    {
+      "name": "compaction-admission",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_row_page_compaction_admission_tests",
+        "--nocache_test_results",
+        "--test_arg=--nocapture",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-compaction-admission.bep.json"
+      ],
+      "started": 1792276346.4693491,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-compaction-admission.log",
+      "exit": 0,
+      "ended": 1792276372.3561118,
+      "targets": [
+        {
+          "label": "//:hawdb_unit_row_page_compaction_admission_tests",
+          "status": "PASSED"
+        }
+      ]
+    },
+    {
+      "name": "portable",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_in_memory_portable_tests",
+        "--nocache_test_results",
+        "--test_arg=--nocapture",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-portable.bep.json"
+      ],
+      "started": 1792276372.410701,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-portable.log",
+      "exit": 0,
+      "ended": 1792276378.742499,
+      "targets": [
+        {
+          "label": "//:hawdb_in_memory_portable_tests",
+          "status": "PASSED"
+        }
+      ]
+    },
+    {
+      "name": "foundation",
+      "command": [
+        "bazel",
+        "test",
+        "//crates/core:hawdb_core_tests",
+        "//crates/qos:hawdb_qos_tests",
+        "//crates/executor:hawdb_executor_unit_tests",
+        "//crates/storage:hawdb_storage_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-foundation.bep.json"
+      ],
+      "started": 1792276378.7942772,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-foundation.log",
+      "exit": 0,
+      "ended": 1792276379.367541,
+      "targets": [
+        {
+          "label": "//crates/core:hawdb_core_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_executor_unit_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/qos:hawdb_qos_tests",
+          "status": "PASSED"
+        }
+      ]
+    }
+  ],
+  "scope": "Final exact-head serial complete registered target replay. Original test cases, internal concurrency, seeds, deadlines and durability unchanged. Historical RED/partial runs remain separate.",
+  "ended": 1792276379.3818822
+}

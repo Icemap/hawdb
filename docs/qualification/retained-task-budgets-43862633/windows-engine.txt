@@ -1,0 +1,9 @@
+commit 4386263386d3b40cf6f42e8da1c8abaa5cf01ea9
+Author:     Weizhen Wang <hawking.rei@gmail.com>
+AuthorDate: Sun Oct 18 06:02:48 2026 +0800
+Commit:     Weizhen Wang <hawking.rei@gmail.com>
+CommitDate: Sun Oct 18 06:02:48 2026 +0800
+
+    fix(api): enforce retained snapshot task reservations
+    
+    Bound source/query and live result ownership by the inherited task reservations without widening host caps. Preserve permanent minimum-unit failure and recoverable held-view pressure. Ref #987.

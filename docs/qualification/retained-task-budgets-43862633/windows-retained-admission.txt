@@ -1,0 +1,61 @@
+[1m[92m Downloading[0m crates ...
+[1m[92m  Downloaded[0m lazy_static v1.5.0
+[1m[92m  Downloaded[0m scoped-tls v1.0.1
+[1m[92m  Downloaded[0m loom v0.7.2
+[1m[92m  Downloaded[0m smallvec v1.15.2
+[1m[92m  Downloaded[0m once_cell v1.21.4
+[1m[92m  Downloaded[0m rustversion v1.0.23
+[1m[92m  Downloaded[0m tracing-log v0.2.0
+[1m[92m  Downloaded[0m tracing-core v0.1.36
+[1m[92m  Downloaded[0m sharded-slab v0.1.7
+[1m[92m  Downloaded[0m generator v0.8.9
+[1m[92m  Downloaded[0m tracing-subscriber v0.3.23
+[1m[92m  Downloaded[0m matchers v0.2.0
+[1m[92m  Downloaded[0m tracing v0.1.44
+[1m[92m  Downloaded[0m thread_local v1.1.10
+[1m[92m  Downloaded[0m nu-ansi-term v0.50.3
+[1m[92m   Compiling[0m windows-result v0.4.1
+[1m[92m   Compiling[0m rustversion v1.0.23
+[1m[92m   Compiling[0m regex-automata v0.4.18
+[1m[92m   Compiling[0m once_cell v1.21.4
+[1m[92m   Compiling[0m windows-core v0.62.2
+[1m[92m   Compiling[0m cc v1.2.67
+[1m[92m   Compiling[0m tracing-core v0.1.36
+[1m[92m   Compiling[0m winapi v0.3.9
+[1m[92m   Compiling[0m log v0.4.33
+[1m[92m   Compiling[0m windows-sys v0.61.2
+[1m[92m   Compiling[0m lazy_static v1.5.0
+[1m[92m   Compiling[0m sharded-slab v0.1.7
+[1m[92m   Compiling[0m generator v0.8.9
+[1m[92m   Compiling[0m tracing v0.1.44
+[1m[92m   Compiling[0m tracing-log v0.2.0
+[1m[92m   Compiling[0m windows-future v0.3.2
+[1m[92m   Compiling[0m matchers v0.2.0
+[1m[92m   Compiling[0m nu-ansi-term v0.50.3
+[1m[92m   Compiling[0m windows-collections v0.3.2
+[1m[92m   Compiling[0m windows-numerics v0.3.1
+[1m[92m   Compiling[0m thread_local v1.1.10
+[1m[92m   Compiling[0m smallvec v1.15.2
+[1m[92m   Compiling[0m tracing-subscriber v0.3.23
+[1m[92m   Compiling[0m ntapi v0.4.3
+[1m[92m   Compiling[0m windows v0.62.2
+[1m[92m   Compiling[0m regex v1.13.1
+[1m[92m   Compiling[0m scoped-tls v1.0.1
+[1m[92m   Compiling[0m hawdb-core v0.9.0 (D:\a\hawdb\hawdb\crates\core)
+[1m[92m   Compiling[0m loom v0.7.2
+[1m[92m   Compiling[0m sysinfo v0.39.6
+[1m[92m   Compiling[0m hawdb-qos v0.9.0 (D:\a\hawdb\hawdb\crates\qos)
+[1m[92m    Finished[0m `test` profile [unoptimized] target(s) in 27.69s
+[1m[92m     Running[0m unittests src\lib.rs (target\debug\deps\hawdb_qos-9136daed104fbacb.exe)
+
+running 7 tests
+test runtime::retained_result::tests::byte_capacity_is_aggregate_and_includes_native_owner_and_handles ... ok
+test runtime::retained_result::tests::failed_handle_memory_admission_rolls_back_buffer_memory_without_peak_growth ... ok
+test runtime::retained_result::tests::handle_retain_after_close_still_honors_the_process_policy ... ok
+test runtime::retained_result::tests::shared_payload_survives_permit_close_without_work_slots_or_double_charge ... ok
+test runtime::retained_result::tests::oversized_and_overflowing_requests_never_admit_or_change_existing_owners ... ok
+test runtime::retained_result::tests::multiple_permits_share_handle_capacity_and_release_allows_retry ... ok
+test runtime::retained_result::tests::concurrent_retains_cannot_multiply_the_shared_handle_allowance ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 116 filtered out; finished in 0.00s
+

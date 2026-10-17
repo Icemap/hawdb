@@ -1,0 +1,66 @@
+{
+  "head": "4386263386d3b40cf6f42e8da1c8abaa5cf01ea9",
+  "tree": "593377430ad97841b252464473cac9f65a555d20",
+  "parent": "4c32610910cc78771eeb23d729be7107ff769bf6",
+  "source_sha256": {
+    "src/api/retained_query.rs": "6f157bb5bde7046db6e0e5be73f8dccda211e77179fbab018a01678e6eb2be98",
+    "src/api/retained_query/tests.rs": "728938f22bdebf39cfe705bdd479307790a9d5dcb50e54f6104a2f2f1b581d1a"
+  },
+  "scope": "Retained Rust numeric snapshot task query/live-result enforcement. Full registered root replay, foundations, strict native/WASM, original mandatory fuzz and exact-source Windows99. No foreign/Arrow/indexed-node or full #986 performance/resource acceptance claim.",
+  "causal": "Original main two-case RED0/2. Final identical tests semantic RED1/3 with task enforcement disabled, restored complete retained GREEN36. Calibrated one-byte result floors, held-view release, 1024-row live-vs-cumulative streaming and host-cap preservation.",
+  "precommit_bridge": "All final repaired source bytes exactly match the committed head. Complete contract and mandatory fuzz ran before commit on these identical files; broad replay runs on the frozen committed head.",
+  "adverse": "Earlier augmented fixture probes used unsupported scalar UNWIND syntax and remain separate local setup failures. Final fixtures use the existing parameterized map shape. Previous approval/qualification of the parent did not cover this inherited task-reservation bypass.",
+  "windows": {
+    "engine_head": "4386263386d3b40cf6f42e8da1c8abaa5cf01ea9",
+    "engine_tree": "593377430ad97841b252464473cac9f65a555d20",
+    "qualification_head": "1391903f29becf37187b3faf1d904d2771dde2d3",
+    "qualification_tree": "a85590aef82dc67f7ac8ca26d33d218c1537cb4f",
+    "run_id": 39073771784,
+    "url": "https://github.com/nowledge-co/hawdb/actions/runs/39073771784",
+    "artifact_id": 12116198061,
+    "artifact_zip_sha256": "dd9279bd3ad3f83edfcedf0972cf84c05a103ce8dc1b37d67696d0e1c934e598",
+    "source_guard": "Exact SHA/tree/parent, sole workflow diff and entire patch verified. Git abbreviations expand only after matching known full blob IDs; line endings alone normalized.",
+    "results": [
+      {
+        "file": "root-numeric.txt",
+        "passed": 36,
+        "failed": 0,
+        "ignored": 0,
+        "filtered_out": 2062,
+        "seconds": 0.44
+      },
+      {
+        "file": "executor-numeric.txt",
+        "passed": 11,
+        "failed": 0,
+        "ignored": 0,
+        "filtered_out": 447,
+        "seconds": 0.0
+      },
+      {
+        "file": "retained-admission.txt",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0,
+        "filtered_out": 116,
+        "seconds": 0.0
+      },
+      {
+        "file": "cow-ownership.txt",
+        "passed": 33,
+        "failed": 0,
+        "ignored": 0,
+        "filtered_out": 1893,
+        "seconds": 0.3
+      },
+      {
+        "file": "source-ownership.txt",
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0,
+        "filtered_out": 1914,
+        "seconds": 2.4
+      }
+    ]
+  }
+}

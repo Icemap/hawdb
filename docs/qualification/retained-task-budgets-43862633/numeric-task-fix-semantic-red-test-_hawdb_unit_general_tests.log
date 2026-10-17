@@ -1,0 +1,30 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_general_tests
+-----------------------------------------------------------------------------
+
+running 4 tests
+
+thread 'api::retained_query::tests::consumed_numeric_task_query_cap_includes_pinned_source' (79647994) panicked at src/api/retained_query/tests.rs:1166:23:
+numeric cursor exceeded task query cap with pinned source; profile=RetainedQueryProfile { source_snapshot_rows: 10, source_pinned_rows: 10, source_pinned_pages: 2, source_directory_capacity_bytes: 112, source_pinned_capacity_bytes: 273128, source_preflight_rows: 10, pulls: 0, visited_rows: 0, predicate_selected_rows: 0, emitted_rows: 0, output_payload_bytes: 0, source_constructed_bytes: 0, selection_bytes_generated: 0, projection_payload_copy_bytes: 0, handoff_payload_copy_bytes: 0, backpressure_events: 0, peak_outstanding_batches: 0, query_peak_bytes: 274611 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'api::retained_query::tests::consumed_numeric_task_reservations_never_widen_zero_or_tiny_caps' (79647995) panicked at src/api/retained_query/tests.rs:1145:27:
+numeric cursor accepted task caps query=65536, result=0; profile=RetainedQueryProfile { source_snapshot_rows: 9, source_pinned_rows: 9, source_pinned_pages: 1, source_directory_capacity_bytes: 88, source_pinned_capacity_bytes: 9897, source_preflight_rows: 9, pulls: 0, visited_rows: 0, predicate_selected_rows: 0, emitted_rows: 0, output_payload_bytes: 0, source_constructed_bytes: 0, selection_bytes_generated: 0, projection_payload_copy_bytes: 0, handoff_payload_copy_bytes: 0, backpressure_events: 0, peak_outstanding_batches: 0, query_peak_bytes: 11380 }
+test api::retained_query::tests::consumed_numeric_task_reservations_never_widen_zero_or_tiny_caps ... FAILED
+test api::retained_query::tests::consumed_numeric_task_query_cap_includes_pinned_source ... FAILED
+
+thread 'api::retained_query::tests::consumed_numeric_task_result_cap_has_an_exact_first_batch_boundary' (79647996) panicked at src/api/retained_query/tests.rs:1214:21:
+assertion failed: matches!(cursor.next_batch_with_metadata(adapter_bytes),
+    Err(RetainedQueryError::WorkingUnitTooLarge))
+test api::retained_query::tests::consumed_numeric_task_larger_allowance_never_raises_host_query_cap ... ok
+test api::retained_query::tests::consumed_numeric_task_result_cap_has_an_exact_first_batch_boundary ... FAILED
+
+failures:
+
+failures:
+    api::retained_query::tests::consumed_numeric_task_query_cap_includes_pinned_source
+    api::retained_query::tests::consumed_numeric_task_reservations_never_widen_zero_or_tiny_caps
+    api::retained_query::tests::consumed_numeric_task_result_cap_has_an_exact_first_batch_boundary
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 2038 filtered out; finished in 0.02s
+

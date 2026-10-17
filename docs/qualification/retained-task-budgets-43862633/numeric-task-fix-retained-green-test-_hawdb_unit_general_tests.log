@@ -1,0 +1,44 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_general_tests
+-----------------------------------------------------------------------------
+
+running 36 tests
+test api::retained_query::tests::empty_typed_source_has_a_schema_and_completes_on_demand ... ok
+test api::retained_query::tests::bytes_too_small_fail_before_visiting_a_source_row ... ok
+test api::retained_query::tests::different_cursors_share_the_configured_handle_limit_and_release_every_charge ... ok
+test api::retained_query::tests::adapter_minimum_handles_refuse_before_binding_and_allow_host_correction ... ok
+test api::retained_query::tests::demanded_eof_releases_source_capacity_while_last_batch_remains_owned ... ok
+test api::retained_query::tests::heap_source_continues_after_database_close_without_retaining_its_read_pin ... ok
+test api::retained_query::tests::cumulative_budget_failure_remains_terminal_and_marks_earlier_batches_failed ... ok
+test api::retained_query::tests::an_impossible_batch_is_terminal_even_while_another_cursor_retains_data ... ok
+test api::retained_query::tests::consumed_numeric_task_query_cap_includes_pinned_source ... ok
+test api::retained_query::tests::cancellation_is_terminal_without_revoking_a_previous_batch_or_source_pin ... ok
+test api::retained_query::tests::adapter_capacity_is_admitted_before_source_work_and_stays_with_the_view ... ok
+test api::retained_query::tests::adapter_delivery_failure_is_sticky_and_drops_source_without_revoking_views ... ok
+test api::retained_query::tests::distinct_pinned_source_generations_share_aggregate_memory_admission ... ok
+test api::retained_query::tests::consumed_numeric_task_larger_allowance_never_raises_host_query_cap ... ok
+test api::retained_query::tests::nullable_float_schema_and_ieee_bits_do_not_depend_on_the_first_row ... ok
+test api::retained_query::tests::incompatible_requests_refuse_before_creating_owners ... ok
+test api::retained_query::tests::more_slots_still_obey_shared_handles_and_never_prefetch ... ok
+test api::retained_query::tests::offset_and_limit_preserve_physical_values_and_selection_range ... ok
+test api::retained_query::tests::one_shared_handle_cannot_fit_a_cursor_and_its_first_batch ... ok
+test api::retained_query::tests::replacing_the_ordinary_governor_cannot_multiply_a_bound_retained_allowance ... ok
+test api::retained_query::tests::oversized_adapter_cursor_capacity_fails_without_retaining_control_or_source ... ok
+test api::retained_query::tests::result_ceiling_does_not_reserve_unused_memory_while_streaming ... ok
+test api::retained_query::tests::consumed_numeric_task_reservations_never_widen_zero_or_tiny_caps ... ok
+test api::retained_query::tests::larger_cursor_options_cannot_bypass_database_row_or_payload_limits ... ok
+test api::retained_query::tests::pinned_source_temporary_shared_work_remains_retryable_without_advancing ... ok
+test api::retained_query::tests::precreated_read_snapshots_reuse_the_same_source_capacity_bound ... ok
+test api::retained_query::tests::snapshot_created_before_runtime_configuration_uses_the_shared_host_owner ... ok
+test api::retained_query::tests::sparse_labels_bound_source_work_and_empty_batch_is_not_eof ... ok
+test api::retained_query::tests::source_capacity_charge_survives_database_close_and_ends_without_revoking_views ... ok
+test api::retained_query::tests::unrequested_source_capacity_refuses_before_pinning_and_rolls_back_admission ... ok
+test api::retained_query::tests::two_slots_apply_before_source_work_and_last_view_release_allows_retry ... ok
+test api::retained_query::tests::snapshot_isolation_and_cursor_database_close_do_not_revoke_batches ... ok
+test api::retained_query::tests::pinned_source_runtime_boundary_is_terminal_and_neighboring_budget_progresses ... ok
+test api::retained_query::tests::pinned_source_query_boundary_is_terminal_and_neighboring_budget_progresses ... ok
+test api::retained_query::tests::pinned_source_is_separate_from_the_result_ceiling_and_held_views_are_retryable ... ok
+test api::retained_query::tests::consumed_numeric_task_result_cap_has_an_exact_first_batch_boundary ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 2006 filtered out; finished in 0.24s
+

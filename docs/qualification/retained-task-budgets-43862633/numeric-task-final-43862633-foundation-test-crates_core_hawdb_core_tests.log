@@ -1,0 +1,63 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //crates/core:hawdb_core_tests
+-----------------------------------------------------------------------------
+
+running 55 tests
+test capability::tests::requested_capabilities_are_bounded_by_compiled_availability ... ok
+test capability::tests::mobile_disables_only_optional_heavy_runtime_capabilities ... ok
+test capability::tests::disabled_capability_returns_typed_error ... ok
+test cancellation::tests::cancellation_is_shared_across_context_clones ... ok
+test cancellation::tests::child_preserves_memory_reservation ... ok
+test cancellation::tests::child_preserves_io_controller_and_permit_releases_slots ... ok
+test cancellation::tests::child_preserves_admitted_parallelism ... ok
+test cancellation::tests::ungoverned_try_acquire_is_immediately_ready ... ok
+test cancellation::tests::expired_deadline_fails_at_a_cooperative_checkpoint ... ok
+test cancellation::tests::child_cancellation_is_local_and_parent_cancellation_propagates ... ok
+test graph_rag::scoring::tests::hop_decay_multiplies_and_holds_its_floor ... ok
+test graph_rag::scoring::tests::scoring_spec_reports_missing_features_instead_of_ranking_them_zero ... ok
+test cancellation::tests::cancellation_future_is_woken_by_parent_cancellation ... ok
+test graph_rag::scoring::tests::scoring_spec_validation_rejects_unusable_shapes ... ok
+test graph_rag::scoring::tests::scoring_shape_fingerprint_ignores_weights ... ok
+test graph_rag::scoring::tests::timestamp_decay_ages_against_the_request_clock ... ok
+test graph_rag::scoring::tests::scoring_spec_combines_weighted_features ... ok
+test access_control::tests::visibility_scopes_normalize_duplicate_values_and_expose_stable_order ... ok
+test access_control::tests::validation_rejects_invalid_policy_inputs ... ok
+test cancellation::tests::dropped_cancellation_future_unregisters_from_its_parent_chain ... ok
+test graph_rag::query_generation_tests::rejects_two_hop_draft_when_either_leg_is_unobserved ... ok
+test graph_rag::query_generation_tests::rejects_mutated_schema_context_before_generation ... ok
+test graph_rag::query_generation_tests::rejects_stale_schema_and_invented_identifiers ... ok
+test graph_rag::query_generation_tests::rejects_reused_parameter_with_conflicting_schema_types ... ok
+test graph_rag::query_generation_tests::rejects_unavailable_bindings_and_unbounded_limits ... ok
+test graph_rag::scoring_program::tests::missing_features_are_explicit_and_nonfinite_products_fail ... ok
+test graph_rag::scoring_program::tests::negative_product_bases_preserve_integer_powers_and_reject_fractional_powers ... ok
+test graph_rag::query_generation_tests::generates_bounded_parameterized_route_query ... ok
+test graph_rag::query_generation_tests::generates_schema_validated_two_hop_query ... ok
+test graph_rag::query_generation_tests::validates_generated_query_parameter_shapes ... ok
+test graph_rag::scoring_program::tests::product_and_sum_use_declared_weights_decay_and_execution_time ... ok
+test graph_rag::scoring_program::tests::structural_identity_excludes_numbers_but_keeps_composition_and_missing_policy ... ok
+test graph_rag::tests::context_ignores_statistics_with_unknown_catalog_tokens ... ok
+test logical_type::tests::logical_type_compatibility_keeps_nullability_external ... ok
+test graph_rag::tests::context_is_bounded_ranked_and_does_not_render_property_values ... ok
+test schema::tests::advanced_statistics_freshness_requires_complete_current_epoch_data ... ok
+test schema::tests::import_label_removes_only_its_own_previous_name_mapping ... ok
+test schema::tests::imported_identifier_collision_disables_ambiguous_statistics ... ok
+test schema::tests::index_identifiers_are_unique_across_descriptor_kinds ... ok
+test schema::tests::index_sample_estimate_is_bounded_and_rejects_stale_churn ... ok
+test schema::tests::label_admission_preserves_typed_host_refusal ... ok
+test schema::tests::label_admission_refusal_and_missing_do_not_retain_source ... ok
+test schema::tests::label_directory_shares_names_and_preserves_borrowed_lookup_order ... ok
+test schema::tests::property_types_map_to_shared_logical_types ... ok
+test schema::tests::retained_label_name_preserves_source_and_snapshot_without_catalog_pin ... ok
+test regex::tests::invalid_patterns_fail_during_construction ... ok
+test uuidv7::tests::uuidv7_generation_propagates_clock_and_randomness_errors ... ok
+test uuidv7::tests::uuidv7_uses_postgres_18_timestamp_version_variant_and_entropy_layout ... ok
+test value::tests::binary_value_ref_borrows_and_formats_postgres_hex ... ok
+test value::tests::null_has_no_intrinsic_logical_type ... ok
+test value::tests::value_ref_borrows_variable_width_payloads ... ok
+test value::tests::value_ref_preserves_owned_value_order_and_hash_semantics ... ok
+test regex::tests::clone_reuses_compiled_regex ... ok
+test regex::tests::equality_and_debug_use_the_source_pattern ... ok
+test schema::snapshot_tests::catalog_snapshots_preserve_complete_old_schema_across_independent_fork_mutations ... ok
+
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

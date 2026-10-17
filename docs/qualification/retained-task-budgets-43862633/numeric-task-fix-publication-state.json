@@ -1,0 +1,15 @@
+{
+  "status": "draft_pr_published",
+  "pid": 87593,
+  "source_sha256": {
+    "src/api/retained_query.rs": "6f157bb5bde7046db6e0e5be73f8dccda211e77179fbab018a01678e6eb2be98",
+    "src/api/retained_query/tests.rs": "728938f22bdebf39cfe705bdd479307790a9d5dcb50e54f6104a2f2f1b581d1a"
+  },
+  "head": "4386263386d3b40cf6f42e8da1c8abaa5cf01ea9",
+  "tree": "593377430ad97841b252464473cac9f65a555d20",
+  "pr": 1065,
+  "url": "https://github.com/nowledge-co/hawdb/pull/1065",
+  "fuzz_targets": 98,
+  "fuzz_cached": 85,
+  "replay_controller_pid": 7653
+}

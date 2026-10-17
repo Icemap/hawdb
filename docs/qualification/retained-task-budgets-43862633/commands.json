@@ -1,0 +1,285 @@
+[
+  {
+    "group": "basic",
+    "name": "semantic-red",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--test_arg=consumed_numeric_task_",
+      "--test_arg=--nocapture",
+      "--nocache_test_results",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-fix-semantic-red.bep.json"
+    ],
+    "exit": 3,
+    "started": 1792273424.7570229,
+    "ended": 1792273446.449631
+  },
+  {
+    "group": "basic",
+    "name": "retained-green",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--test_arg=api::retained_query::",
+      "--test_arg=--nocapture",
+      "--nocache_test_results",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-fix-retained-green.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792273446.456508,
+    "ended": 1792273452.642163
+  },
+  {
+    "group": "basic",
+    "name": "install",
+    "command": [
+      "prek",
+      "install"
+    ],
+    "exit": 0,
+    "started": 1792273452.6435761,
+    "ended": 1792273452.7489312
+  },
+  {
+    "group": "basic",
+    "name": "fmt",
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit": 0,
+    "started": 1792273452.749334,
+    "ended": 1792273458.62206
+  },
+  {
+    "group": "basic",
+    "name": "native",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--all-features",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "started": 1792273458.622566,
+    "ended": 1792273507.500915
+  },
+  {
+    "group": "basic",
+    "name": "wasm",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "-p",
+      "hawdb",
+      "--no-default-features",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--lib",
+      "--test",
+      "in_memory_portable",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "started": 1792273507.501863,
+    "ended": 1792273538.256086
+  },
+  {
+    "group": "basic",
+    "name": "prek",
+    "command": [
+      "prek",
+      "run",
+      "--all-files"
+    ],
+    "exit": 0,
+    "started": 1792273538.256803,
+    "ended": 1792273545.4330099
+  },
+  {
+    "group": "basic",
+    "name": "contract",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_execution_request_contract_tests",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-fix-contract.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792273545.433425,
+    "ended": 1792273641.801058
+  },
+  {
+    "group": "basic",
+    "name": "fuzz",
+    "command": [
+      "bazel",
+      "test",
+      "//crates/fuzz:hawdb_fuzz_tests",
+      "//crates/fuzz:hawdb_fuzz_cli_tests",
+      "//:hawdb_linux_ci_fuzz_smoke_test",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-fix-fuzz.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792273641.8079329,
+    "ended": 1792274551.5859
+  },
+  {
+    "group": "broad",
+    "name": "general",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-general.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792274586.107344,
+    "ended": 1792275059.638106
+  },
+  {
+    "group": "broad",
+    "name": "concurrent",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_concurrent_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-concurrent.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792275059.76478,
+    "ended": 1792275693.132941
+  },
+  {
+    "group": "broad",
+    "name": "recovery",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_recovery_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-recovery.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792275693.2082932,
+    "ended": 1792275957.8641331
+  },
+  {
+    "group": "broad",
+    "name": "analytics-core",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_analytics_core_general_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-analytics-core.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792275957.924156,
+    "ended": 1792276045.06229
+  },
+  {
+    "group": "broad",
+    "name": "analytics-rss",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_analytics_rss_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-analytics-rss.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792276045.118496,
+    "ended": 1792276346.397567
+  },
+  {
+    "group": "broad",
+    "name": "compaction-admission",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_row_page_compaction_admission_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-compaction-admission.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792276346.4693491,
+    "ended": 1792276372.3561118
+  },
+  {
+    "group": "broad",
+    "name": "portable",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_in_memory_portable_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-portable.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792276372.410701,
+    "ended": 1792276378.742499
+  },
+  {
+    "group": "broad",
+    "name": "foundation",
+    "command": [
+      "bazel",
+      "test",
+      "//crates/core:hawdb_core_tests",
+      "//crates/qos:hawdb_qos_tests",
+      "//crates/executor:hawdb_executor_unit_tests",
+      "//crates/storage:hawdb_storage_tests",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-task-final-43862633-foundation.bep.json"
+    ],
+    "exit": 0,
+    "started": 1792276378.7942772,
+    "ended": 1792276379.367541
+  }
+]
