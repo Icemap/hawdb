@@ -1437,7 +1437,8 @@ pub struct SearchIndex {
     documents: BTreeMap<String, SearchDocument>,
     consumer_binding: Option<consumer::ConsumerBinding>,
     consumer_binding_valid: bool,
-    consumer_owned_mutation: bool,
+    consumer_owner: std::sync::Weak<consumer::MutationOwner>,
+    consumer_mutation_generation: Option<u64>,
     consumer_receipt: Mutex<Option<consumer::CheckpointReceipt>>,
     path: Option<PathBuf>,
     _project_files: Option<hawdb_storage::file_descriptors::ProjectFileDescriptors>,
@@ -1529,14 +1530,14 @@ impl SearchIndex {
     }
 
     pub fn with_analyzer_lexicon(mut self, analyzer_lexicon: SearchAnalyzerLexicon) -> Self {
-        self.mark_untracked_consumer_mutation();
+        let _consumer_mutation = self.mark_untracked_consumer_mutation();
         self.analyzer_lexicon = analyzer_lexicon;
         self.invalidate_lexical_projection();
         self
     }
 
     pub fn set_analyzer_lexicon(&mut self, analyzer_lexicon: SearchAnalyzerLexicon) {
-        self.mark_untracked_consumer_mutation();
+        let _consumer_mutation = self.mark_untracked_consumer_mutation();
         self.analyzer_lexicon = analyzer_lexicon;
         self.invalidate_lexical_projection();
     }
@@ -1594,7 +1595,7 @@ impl SearchIndex {
         &mut self,
         options: RaBitQCandidateProjectionBuildOptions,
     ) {
-        self.mark_untracked_consumer_mutation();
+        let _consumer_mutation = self.mark_untracked_consumer_mutation();
         self.rabitq_build_options = options;
         self.invalidate_rabitq_projection();
     }
@@ -1746,7 +1747,7 @@ impl SearchIndex {
     }
 
     pub fn set_telemetry_sink(&mut self, telemetry: Option<Arc<dyn TelemetrySink>>) {
-        self.mark_untracked_consumer_mutation();
+        let _consumer_mutation = self.mark_untracked_consumer_mutation();
         self.telemetry = telemetry;
     }
 
@@ -1755,7 +1756,7 @@ impl SearchIndex {
     }
 
     pub fn set_range_read_config(&mut self, config: SearchRangeReadConfig) {
-        self.mark_untracked_consumer_mutation();
+        let _consumer_mutation = self.mark_untracked_consumer_mutation();
         self.range_read_config = config;
     }
 
@@ -1764,7 +1765,7 @@ impl SearchIndex {
     }
 
     pub fn set_runtime_capabilities(&mut self, capabilities: RuntimeCapabilities) {
-        self.mark_untracked_consumer_mutation();
+        let _consumer_mutation = self.mark_untracked_consumer_mutation();
         self.runtime_capabilities =
             crate::compiled_capabilities::effective_runtime_capabilities(capabilities);
     }
@@ -1774,7 +1775,7 @@ impl SearchIndex {
     }
 
     pub fn upsert(&mut self, document: SearchDocument) -> Result<()> {
-        self.require_owned_mutation_or_unregistered()?;
+        let _consumer_mutation = self.require_owned_mutation_or_unregistered()?;
         if let Some(embedding) = &document.embedding {
             self.validate_or_set_dimension(embedding.len())?;
         }
@@ -1791,7 +1792,7 @@ impl SearchIndex {
     }
 
     pub fn delete(&mut self, id: &str) {
-        self.mark_untracked_consumer_mutation();
+        let _consumer_mutation = self.mark_untracked_consumer_mutation();
         self.record_lexical_delete(id);
         self.documents.remove(id);
         #[cfg(feature = "vector-search")]
@@ -1803,7 +1804,7 @@ impl SearchIndex {
         &mut self,
         delta: SearchProjectionDelta,
     ) -> Result<SearchProjectionDeltaReport> {
-        self.require_owned_mutation_or_unregistered()?;
+        let _consumer_mutation = self.require_owned_mutation_or_unregistered()?;
         let operation_count = delta.operation_count();
         if let Some(limit) = delta.max_operations
             && operation_count > limit
@@ -2004,7 +2005,7 @@ impl SearchIndex {
     /// Records immutable provenance for an external graph bootstrap. The
     /// mutable local projection cursor remains independent.
     pub fn record_import_source_graph_commit_epoch(&mut self, epoch: u64) -> Result<()> {
-        self.require_owned_mutation_or_unregistered()?;
+        let _consumer_mutation = self.require_owned_mutation_or_unregistered()?;
         self.validate_import_source_graph_commit_epoch(epoch)?;
         self.import_source_graph_commit_epoch = Some(epoch);
         Ok(())
@@ -2114,7 +2115,7 @@ impl SearchIndex {
     }
 
     pub fn apply_embedding_manifest(&mut self, manifest: SearchEmbeddingManifest) -> Result<()> {
-        self.require_owned_mutation_or_unregistered()?;
+        let _consumer_mutation = self.require_owned_mutation_or_unregistered()?;
         if let Some(existing) = &self.embedding_manifest {
             if existing == &manifest {
                 return Ok(());
@@ -2143,7 +2144,7 @@ impl SearchIndex {
         store: &S,
         options: SearchRebuildOptions,
     ) -> Result<SearchRebuildSummary> {
-        self.require_owned_mutation_or_unregistered()?;
+        let _consumer_mutation = self.require_owned_mutation_or_unregistered()?;
         let started = hawdb_core::time::Instant::now();
         let mut next_documents = BTreeMap::new();
         let mut scanned_nodes = 0;
@@ -2312,7 +2313,7 @@ impl SearchIndex {
         store: &S,
         options: MetadataRepairOptions,
     ) -> Result<MetadataRepairSummary> {
-        self.require_owned_mutation_or_unregistered()?;
+        let _consumer_mutation = self.require_owned_mutation_or_unregistered()?;
         let started = hawdb_core::time::Instant::now();
         let mut repairs = Vec::new();
         let mut scanned_nodes = 0;
@@ -2483,9 +2484,9 @@ impl SearchIndex {
         let Some(path) = &self.path else {
             return self.projection_cleanup_report();
         };
-        if self.consumer_owned_mutation
-            && self.consumer_binding_valid
+        if self.consumer_binding_valid
             && self.consumer_binding.is_some()
+            && let Ok(_consumer_mutation) = self.borrow_consumer_mutation()
         {
             return self.retry_projection_cleanup_under_publication(options);
         }
@@ -4137,7 +4138,7 @@ impl SearchIndex {
     }
 
     fn append_marker(&self, name: &str, reason: &str) -> Result<()> {
-        self.require_owned_mutation_or_unregistered()?;
+        let _marker_authority = self.require_marker_mutation()?;
         {
             let mut marker_lines = self
                 .marker_lines
@@ -4165,7 +4166,7 @@ impl SearchIndex {
     }
 
     fn write_marker(&self, name: &str, reason: &str) -> Result<()> {
-        self.require_owned_mutation_or_unregistered()?;
+        let _marker_authority = self.require_marker_mutation()?;
         self.marker_lines
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -4178,7 +4179,7 @@ impl SearchIndex {
     }
 
     fn clear_marker(&self, name: &str) -> Result<()> {
-        self.require_owned_mutation_or_unregistered()?;
+        let _marker_authority = self.require_marker_mutation()?;
         self.marker_lines
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -4219,7 +4220,8 @@ impl Default for SearchIndex {
             documents: BTreeMap::new(),
             consumer_binding: None,
             consumer_binding_valid: true,
-            consumer_owned_mutation: false,
+            consumer_owner: std::sync::Weak::new(),
+            consumer_mutation_generation: None,
             consumer_receipt: Mutex::new(None),
             path: None,
             _project_files: None,

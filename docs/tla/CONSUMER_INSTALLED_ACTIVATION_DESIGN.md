@@ -71,6 +71,11 @@ Persisted identity/recovery and process-local proof lifetimes need distinct rule
 
 ## Candidate-directory layout for native consumer implementation
 
+The [native root binding check](NATIVE_PUBLICATION_ROOT_IDENTITY_PROOF.md)
+strengthens acquisition of the existing lease. It does not capture a logical
+target incarnation or bind worker output to source C/E; the native constructor
+and fenced selection still need that context.
+
 The [dependency-install backend split](PRIVATE_GENERATION_INSTALLATION_PROOF.md)
 is an internal seam only. Existing wrappers still immediately select their
 component head under the caller's publication exclusion; they do not construct

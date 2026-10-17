@@ -378,3 +378,40 @@ tla_check(
         "RetireAndContinueWitness",
     ]
 ]
+
+[
+    tla_check(
+        name = "HawDBConsumerMutationCustody" + control + "_check",
+        module = "HawDBConsumerMutationCustody.tla",
+        config = "mutants/HawDBConsumerMutationCustody" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "IgnoreGeneration",
+        "AdmitAfterClose",
+        "ReleaseBusyEarly",
+        "ForgetNativePin",
+        "SkipOwnerAssociation",
+    ]
+]
+
+[
+    tla_check(
+        name = "HawDBConsumerDirectoryRelocation" + control + "_check",
+        module = "HawDBConsumerDirectoryRelocation.tla",
+        config = "mutants/HawDBConsumerDirectoryRelocation" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "KeepOldPath",
+        "TrustFailedPublish",
+        "ReleaseNativeEarly",
+        "DeleteUncertain",
+    ]
+]

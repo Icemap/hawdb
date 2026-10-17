@@ -2,7 +2,7 @@
 
 This component implements target-operation exclusion and clean-checkpoint
 admission for the future C-ready/E session. It does not implement that session,
-private generation installation, source/binding incarnation validation, a new
+consumer-private generation installation, source/binding incarnation validation, a new
 read-view/head format, operation receipts or activation. The
 [installed-activation design](CONSUMER_INSTALLED_ACTIVATION_DESIGN.md) and
 [receipt-ledger design](CONSUMER_RECEIPT_LEDGER_DESIGN.md) remain proposals.
@@ -10,20 +10,31 @@ read-view/head format, operation receipts or activation. The
 ## Source correspondence
 
 [Consumer operation authority](../../crates/search/src/consumer/operation.rs)
-contains the actual native publication lease and one AtomicBool, retained through
-an Arc. Its non-cloneable preparation token shares that existing authority;
-reservation does not create a second memory ledger or governor. Successful CAS
-admits exactly one target operation. apply, checkpoint and directory publication
-acquire the same slot before invoking a callback, changing checkpoint_uuid or
-creating/moving a directory. Busy is a typed `HawDBError::ProjectionBusy`.
-Marker writes already require owned mutation, so a shared index view cannot
-bypass apply's guard. Public cleanup either runs inside that guarded owned scope
-or must acquire the retained native root lease and defer. Cache-only reads do
-not grant artifact publication authority.
+retains the actual native publication lease in an Arc. One AtomicU64 encodes a
+checked, non-reused operation generation, admission-open bit and reference count.
+The non-cloneable preparation token contributes one reference. Apply and checkpoint
+admit mutation methods only through permits that verify the index's private Weak
+owner association and current open generation, retaining the actual lease and busy
+state until each admitted method completes. Closing a callback revokes new
+admissions independently of any whole-index move. A later operation cannot start
+until all earlier admitted methods have released their references. See the
+[mutation-custody source argument and model](CONSUMER_MUTATION_CUSTODY_PROOF.md).
 
-The token can move to a worker and outlive its ConsumerProjection. The last
-owner/token, not just the consumer handle, releases the actual root lease.
-Durable registration remains until explicitly removed.
+Apply, checkpoint and directory publication acquire the same slot and reject an
+invalid/foreign index before callbacks, checkpoint identity changes or filesystem
+mutation. Busy is a typed `HawDBError::ProjectionBusy`. Marker I/O retains either
+a mutation permit or a native unregistered-directory lease, checking the durable
+binding before changing marker state. Public cleanup reuses a valid admitted
+scope or acquires native root exclusion and defers without scanning/deleting.
+Cache-only reads do not grant publication authority.
+
+The token can move to a worker and outlive its ConsumerProjection. The final
+strong owner/token/admitted method releases the actual root lease; a Weak index
+association cannot keep a closed native owner alive or turn into a new owner.
+Durable registration remains until explicitly removed. A successful directory
+rename immediately updates the resident path; later synchronization/reload failure
+revokes operations and retains the destination, as covered by the separate
+[directory-relocation argument](CONSUMER_DIRECTORY_RELOCATION_PROOF.md).
 
 [The facade admission](../../src/api/search_projection_consumer/mod.rs) validates
 the source namespace, registration/projection identities, recorded completed
@@ -72,8 +83,9 @@ Conditional on conforming native lease users and safe Rust ownership:
    closure alone cannot permit another opener or a standalone cleanup sweep.
 3. Without an admitted mutation or checkpoint, the guarded clean binding/receipt
    state cannot be changed through the consumer's protected methods.
-4. RAII releases the slot on admission failure, cancellation and unwinding; root
-   exclusion persists while either consumer or token still owns the authority.
+4. RAII revokes admission on cancellation/unwinding and releases each owned
+   reference exactly once. Already admitted methods retain busy/native custody
+   through completion; failed preparation admission releases its local scope.
 
 This is a Rust source/lifetime argument and native regression evidence, not
 mechanized refinement. It supports part of the proposed activation model's
@@ -82,7 +94,19 @@ selector/receipt, durability, unknown-outcome and heavy-custody transitions are
 not implemented by this component. Its finite checks must not be presented as
 proof that the full native activation path exists.
 
-## Qualification status
+## Historical qualification and superseding checks
+
+The counts below qualify the original preparation-only component `3a51d160`.
+A later safe-Rust whole-index-move regression disproved its Boolean mutation
+scope assumption on published `23adf8d`: cleanup scanned 13 entries under a peer's
+native lease (zero deletions). A stale ordinary-handle marker bypass and a failed
+directory-rename barrier path were subsequently reproduced as well. Those
+historical passes do not prove these boundaries. The linked mutation/root/
+relocation proofs describe the stronger implementation and targeted evidence;
+the combined component qualification is recorded in the mutation-custody proof.
+That qualification does not implement the complete C-ready/E protocol.
+
+## Original preparation-only evidence
 
 The first native vector-profile consumer selection passed 11/11 tests; a
 strengthened real checkpoint-publication failure fixture passed 11/11 again.

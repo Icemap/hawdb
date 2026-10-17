@@ -217,6 +217,33 @@ impl File {
     pub fn metadata(&self) -> io::Result<Metadata> {
         self.with_native(std::fs::File::metadata)
     }
+    /// Compares this held file with the native file currently named by `path`.
+    /// Follows symlinks; it does not reserve that path or prove logical identity.
+    /// For native Unix handles, path lookup uses metadata without opening and closing another descriptor
+    /// for the same inode, which can release process-owned POSIX record locks.
+    /// Windows uses a counted validation handle and the full 128-bit file ID.
+    pub fn matches_native_path(&self, path: impl AsRef<Path>) -> io::Result<bool> {
+        let identity = self.with_native(crate::native_file_identity::of_file)?;
+        let path = path.as_ref();
+        #[cfg(unix)]
+        {
+            Ok(identity == crate::native_file_identity::of_metadata(&metadata(path)?))
+        }
+        #[cfg(windows)]
+        {
+            let named = Self::open(path)?;
+            Ok(identity == named.with_native(crate::native_file_identity::of_file)?)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (identity, path);
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "native path identity requires Unix or Windows",
+            ))
+        }
+    }
+
     pub fn sync_all(&self) -> io::Result<()> {
         self.synchronize(false)
     }

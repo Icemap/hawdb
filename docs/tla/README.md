@@ -2198,3 +2198,18 @@ the linked specification includes a verified legacy partial-prefix failure.
 [Bounded pinned feed enumeration](PROJECTION_FEED_CURSOR_PROOF.md) maps the
 implemented graph/relational cursor and tracked callback context to its finite
 admission/prefix model. Enumeration does not authorize staged output or a watermark.
+
+## Consumer mutation custody
+
+`HawDBConsumerMutationCustody` checks revocation of moved mutation capabilities,
+reference conservation, exclusion of later operations while admitted methods
+remain live, and native lease retention after owner closure. Five controls
+exercise generation, closure, outstanding references, native pins and owner
+association. See [the source argument and finite-proof limits](CONSUMER_MUTATION_CUSTODY_PROOF.md).
+
+## Consumer directory relocation
+
+`HawDBConsumerDirectoryRelocation` checks path/lease agreement after rename,
+revocation on later synchronization failure and retention of uncertain output.
+Four negative controls exercise stale paths, failed-owner reuse, early native
+release and uncertain cleanup. See [the relocation source argument and limits](CONSUMER_DIRECTORY_RELOCATION_PROOF.md).
