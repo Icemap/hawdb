@@ -1,8 +1,9 @@
-name: Preserve historical PR986 raw evidence
+name: Preserve historical PR986 review metadata
 on:
   workflow_dispatch:
 permissions:
   contents: read
+  pull-requests: read
 jobs:
   archive:
     runs-on: ubuntu-24.04
@@ -10,30 +11,33 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Verify and archive unchanged historical reports
+      - name: Archive readiness history and merge-resolution hunks
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY_ARCHIVE'
           from pathlib import Path
-          import subprocess,json,hashlib,os
+          import subprocess,json,hashlib,os,datetime
           source='254f1cf38990dfbf6f7895b2a09cdc005aa9200a'
           def git(*args):return subprocess.check_output(['git',*args],text=True).strip()
           assert git('diff','--name-only',source,'HEAD').splitlines()==['.github/workflows/native-bindings.yml']
           assert not git('status','--porcelain')
-          paths=git('diff','--diff-filter=A','--name-only','b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44...'+source,'--','bindings/benchmarks/evidence').splitlines()
-          assert len(paths)==25
           out=Path(os.environ['RUNNER_TEMP'])/'historical-evidence';out.mkdir()
-          files=[]
-          for relative in paths:
-              data=subprocess.check_output(['git','show',source+':'+relative])
-              assert Path(relative).read_bytes()==data
-              (out/Path(relative).name).write_bytes(data)
-              files.append({'path':relative,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
-          (out/'manifest.json').write_text(json.dumps({'source':source,'files':files,'scope':'Historical reports archived before removal from final PR diff; no new benchmark qualification'},indent=2)+'\n')
-          print(json.dumps({'files':len(files),'bytes':sum(x['bytes'] for x in files)}))
+          pr=json.loads(subprocess.check_output(['gh','api','repos/nowledge-co/hawdb/pulls/986'],text=True))
+          assert pr['head']['sha']==source
+          (out/'pr-body-history.md').write_text(pr['body'])
+          for endpoint,name in [('issues/986/comments','issue-comments.json'),('pulls/986/reviews','reviews.json')]:
+              data=subprocess.check_output(['gh','api','repos/nowledge-co/hawdb/'+endpoint,'--paginate','--slurp'])
+              (out/name).write_bytes(data)
+          merge='e33baaea32102e9be9634f7d2630d39ba6f694c5'
+          (out/'merge-conflict-resolutions.patch').write_bytes(subprocess.check_output(['git','show','--remerge-diff','--format=',merge]))
+          files=[{'name':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(out.iterdir())]
+          (out/'manifest.json').write_text(json.dumps({'pr':986,'published_head':source,'merge':merge,'merge_parents':git('show','-s','--format=%P',merge).split(),'captured_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'git_version':git('--version'),'files':files,'scope':'Historical readiness/comments and conflict resolutions, not new validation'},indent=2)+'\n')
+          print(json.dumps({'archived_files':len(files),'bytes':sum(x['bytes'] for x in files)}))
           PY_ARCHIVE
       - uses: actions/upload-artifact@v7
         with:
-          name: pr986-historical-raw-evidence-254f1cf3
+          name: pr986-readiness-history-before-review-cleanup
           path: ${{ runner.temp }}/historical-evidence
           if-no-files-found: error
           retention-days: 90
