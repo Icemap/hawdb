@@ -118,6 +118,7 @@ STORAGE_MODELS = [
     "HawDBStatisticsEligibility",
     "HawDBStorageDurability",
     "HawDBSystemSchemaUpgrade",
+    "HawDBTargetReanalysisIo",
     "HawDBTransactionAdmissionLease",
     "HawDBTransactionConcurrency",
     "HawDBTransactionIndexOverlay",

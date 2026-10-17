@@ -115,11 +115,17 @@ the original typed admission error instead of reporting storage corruption.
 The execution protocol is described in
 [borrowed query cursor safety](../tla/BORROWED_QUERY_CURSOR_PROOF.md). Its finite
 model and three negative controls do not establish a complete governed closure.
-`validate_targets` still creates a legacy default task, uses the legacy document
-probe and reads hydration input through the ordinary range path. Those operations
-must be connected to the same constructor admission before exposing an admitted
-root factory. Root/visibility collection and closure-validation set capacity also
-remain unconnected. The new tests exercise native files, with project owners
+The private `validate_targets_with_admission` branch now uses the constructor's
+task and ledger for document probes, captured body decoding, CJK reanalysis and
+stored-term comparison. The document probe admits its range and decode buffers;
+capture retains a full-file read scope. Later body and term reads acquire I/O
+per bounded call, and an admitted temporary `Source` borrows execution until its
+worker joins and its consumers finish. The one-slot protocol and its limits are
+recorded in [target reanalysis I/O safety](../tla/TARGET_REANALYSIS_IO_PROOF.md).
+The complete root loader still calls the legacy branch, which creates its own
+default task; there is no admitted root factory yet. Root/visibility collection
+and closure-validation set capacity remain unconnected. These tests exercise
+native files, with project owners
 explicitly closed for final heap reclamation; managed cache/registry ownership
 remains a separate unresolved requirement.
 

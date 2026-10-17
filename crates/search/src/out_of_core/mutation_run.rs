@@ -588,15 +588,47 @@ pub(super) fn validate_targets<'a>(
     analyzer: &SearchAnalyzerLexicon,
     source_policy: crate::SearchLexicalSourcePolicy,
 ) -> Result<()> {
+    validate_targets_with_admission(root, segments, runs, config, analyzer, source_policy, None)
+}
+
+pub(super) fn validate_targets_with_admission<'a>(
+    root: &Path,
+    segments: &[SearchOutOfCoreSegmentReader],
+    runs: impl Iterator<Item = &'a SearchMutationRun>,
+    config: &SearchOutOfCoreConfig,
+    analyzer: &SearchAnalyzerLexicon,
+    source_policy: crate::SearchLexicalSourcePolicy,
+    admission: Option<(&crate::build_memory::read::ReadAdmission<'_>, u64)>,
+) -> Result<()> {
     let mut runs = runs.peekable();
     if runs.peek().is_none() {
         return Ok(());
     }
-    let task = hawdb_core::RuntimeTaskContext::default().with_memory_reservation(
-        hawdb_core::RuntimeMemoryReservation::new(config.max_reanalysis_working_bytes.get(), 0),
-    );
-    let memory = crate::build_memory::BuildMemory::new(&task)?;
-    let mut stage = super::generation_writer::StageDirectory::create(root, &memory, &task)?;
+    if admission.is_none() && runs.peek().is_some_and(|run| run._reader_memory.is_some()) {
+        return Err(HawDBError::Execution(
+            "admitted mutation validation requires borrowed execution".into(),
+        ));
+    }
+    let legacy;
+    let (memory, task) = match admission {
+        Some((admission, _)) => (admission.memory, admission.task),
+        None => {
+            let task = hawdb_core::RuntimeTaskContext::default().with_memory_reservation(
+                hawdb_core::RuntimeMemoryReservation::new(
+                    config.max_reanalysis_working_bytes.get(),
+                    0,
+                ),
+            );
+            let memory = crate::build_memory::BuildMemory::new(&task)?;
+            legacy = (memory, task);
+            (&legacy.0, &legacy.1)
+        }
+    };
+    let query = admission.map(|(admission, _)| {
+        crate::lexical_projection::QueryContext::from_read_admission(admission)
+    });
+    crate::build_control::checkpoint(task)?;
+    let mut stage = super::generation_writer::StageDirectory::create(root, memory, task)?;
     stage.reserve_disk(
         config
             .max_uncompressed_segment_bytes
@@ -607,10 +639,15 @@ pub(super) fn validate_targets<'a>(
     let path = crate::build_memory::path::OwnedPath::join(
         &stage.path,
         Path::new("validate-target.body"),
-        &memory,
-        &task,
+        memory,
+        task,
     )?;
     for entry in runs.flat_map(SearchMutationRun::entries) {
+        crate::build_control::checkpoint(task)?;
+        let mut terms = entry
+            .retraction
+            .unique_terms
+            .cursor_with_query_context(query)?;
         let missing = || {
             HawDBError::Storage(
                 "search mutation-run target document is absent from its content segment".into(),
@@ -634,35 +671,58 @@ pub(super) fn validate_targets<'a>(
                 }
             })
             .map_err(|_| missing())?;
-        if !artifact.lexical_projection.probe_document_id(id)?.present {
+        if !artifact
+            .lexical_projection
+            .probe_document_id_with_admission(id, admission)?
+            .present
+        {
             return Err(missing());
         }
-        let file = hawdb_storage::file_io::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&*path)?;
-        let source = super::hydration::source::Source::capture(
-            artifact,
-            &artifact.descriptor.segments[position],
-            id,
-            file,
-            (
-                config.max_uncompressed_segment_bytes.get(),
-                config.max_document_header_bytes.get(),
-            ),
-            &memory,
-            &task,
-        )?;
-        let mut terms = entry.retraction.unique_terms.cursor()?;
+        let file = {
+            let _io = admission
+                .map(|(admission, _)| admission.io())
+                .transpose()
+                .map_err(|error| HawDBError::Execution(error.to_string()))?;
+            hawdb_storage::file_io::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&*path)?
+        };
+        let limits = (
+            config.max_uncompressed_segment_bytes.get(),
+            config.max_document_header_bytes.get(),
+        );
+        let source = match admission {
+            Some((admission, maximum)) => {
+                super::hydration::source::Source::capture_with_read_admission(
+                    artifact,
+                    &artifact.descriptor.segments[position],
+                    id,
+                    file,
+                    limits,
+                    admission,
+                    maximum,
+                )?
+            }
+            None => super::hydration::source::Source::capture(
+                artifact,
+                &artifact.descriptor.segments[position],
+                id,
+                file,
+                limits,
+                memory,
+                task,
+            )?,
+        };
         let length = artifact.lexical_projection.source_retraction(
             &source,
             analyzer,
             crate::lexical_projection::retraction::RetractionContext {
                 root: &stage.path,
-                memory: &memory,
-                task: &task,
+                memory,
+                task,
                 needs_chinese: source.needs_chinese,
                 source_policy,
             },

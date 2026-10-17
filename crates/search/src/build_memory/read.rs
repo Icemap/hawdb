@@ -37,6 +37,38 @@ pub(crate) struct ReadAdmission<'a> {
     pub(crate) permit: &'a RuntimePermit,
 }
 
+mod query;
+pub(crate) use query::{io_error, QueryFileRange};
+
+/// A bounded positioned range inside an already admitted, held native scope.
+pub(crate) struct ScopedRange<'a, 'scope> {
+    pub(crate) reader: &'a mut hawdb_storage::file_io::AdmittedFileRead<'scope>,
+    pub(crate) offset: u64,
+    pub(crate) remaining: u64,
+}
+
+impl std::io::Read for ScopedRange<'_, '_> {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        let count = self.remaining.min(output.len() as u64).min(8192) as usize;
+        if count == 0 {
+            return Ok(0);
+        }
+        let read = self.reader.read_at(&mut output[..count], self.offset)?;
+        self.offset = self
+            .offset
+            .checked_add(read as u64)
+            .ok_or_else(|| std::io::Error::other("admitted range offset overflow"))?;
+        self.remaining -= read as u64;
+        Ok(read)
+    }
+}
+
+pub(crate) struct FileRange {
+    pub(crate) offset: u64,
+    pub(crate) length: u64,
+    pub(crate) checksum: u64,
+}
+
 impl ReadAdmission<'_> {
     pub(crate) fn retained(&self, bytes: usize) -> Result<ReaderMemory> {
         let query = self.memory.retained.reserve(bytes)?;
@@ -61,7 +93,14 @@ impl ReadAdmission<'_> {
         &self,
     ) -> std::result::Result<Option<Box<dyn hawdb_core::RuntimeIoWavePermit>>, RuntimeIoWaveError>
     {
-        self.task.acquire_io_wave(std::num::NonZeroUsize::MIN)
+        let permit = self
+            .task
+            .acquire_io_wave(std::num::NonZeroUsize::MIN)?
+            .ok_or(RuntimeIoWaveError::ReservationExceeded {
+                requested_slots: 1,
+                reserved_slots: 0,
+            })?;
+        Ok(Some(permit))
     }
 
     pub(crate) fn checkpoint(&self) -> std::result::Result<(), RuntimeCancellationReason> {
@@ -101,6 +140,62 @@ impl std::ops::Deref for ReadBytes<'_> {
 }
 
 impl<'execution> ReadAdmission<'execution> {
+    /// Charge the selected buffer before allocation, but validate a cold full
+    /// object under the same I/O scope before consuming any selected bytes.
+    pub(crate) fn read_file_range(
+        &self,
+        file: &hawdb_storage::file_io::File,
+        full_length: u64,
+        maximum: u64,
+        range: FileRange,
+    ) -> Result<ReadBytes<'execution>> {
+        use std::io::Read;
+        if range
+            .offset
+            .checked_add(range.length)
+            .is_none_or(|end| end > full_length)
+        {
+            return Err(HawDBError::Storage(
+                "reader range exceeds its artifact".into(),
+            ));
+        }
+        let length = usize::try_from(range.length)
+            .map_err(|_| HawDBError::Execution("reader range exceeds address space".into()))?;
+        let memory = self.scratch(length)?;
+        let mut output = ReadBytes {
+            _execution: std::marker::PhantomData,
+            value: Vec::new(),
+            _memory: Some(memory),
+        };
+        self.with_read_scope(file, full_length, maximum, |reader| {
+            output.value.try_reserve_exact(length).map_err(|error| {
+                HawDBError::Execution(format!("reader range allocation failed: {error}"))
+            })?;
+            if output.value.capacity() > length {
+                return Err(HawDBError::Execution(
+                    "reader range exceeded admitted capacity".into(),
+                ));
+            }
+            output.value.resize(length, 0);
+            let mut input = ScopedRange {
+                reader,
+                offset: range.offset,
+                remaining: range.length,
+            };
+            input.read_exact(&mut output.value)?;
+            if crate::build_control::write_checksummed(
+                &mut std::io::sink(),
+                &output.value,
+                Some(self.task),
+            )? != range.checksum
+            {
+                return Err(HawDBError::Storage("reader range checksum mismatch".into()));
+            }
+            Ok(())
+        })?;
+        Ok(output)
+    }
+
     pub(crate) fn require_read_limit(&self, bytes: u64, maximum: u64) -> Result<()> {
         crate::build_control::checkpoint(self.task)?;
         if bytes > maximum {

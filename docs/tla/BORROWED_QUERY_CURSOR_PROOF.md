@@ -29,7 +29,7 @@ outside that completed operation; the model does not retract past results.
 | --- | --- |
 | `OpenCursor` | `Terms::cursor_with_query_context` rejects an admitted file when execution is absent, before reserving/allocating its buffer. |
 | Cursor lifetime | `Cursor<'a>` borrows `Terms` and `QueryContext<'a>`; the context borrows `RuntimePermit`. Safe Rust cannot drop that permit while using the cursor. |
-| `BeginIo` / `CompleteIo` | Mutation `read::read_at` acquires an I/O guard from the current task, uses `File::with_admitted_read`, then rechecks cancellation before accepting the result. |
+| `BeginIo` / `CompleteIo` | Shared `build_memory::read::query::read_at` acquires an I/O guard from the current task, uses `File::with_admitted_read`, then rechecks cancellation before accepting the result. Mutation ranges delegate to it. |
 | Cancellation on buffered data | `Cursor::next` checks the current task even when no physical read is necessary. |
 | Independent producer closure | `TermFile` retains memory receipts and the file, with no producer task/permit; admitted decoded `Terms` retain no writer `BuildMemory`. |
 

@@ -2240,3 +2240,10 @@ controls reject task-only cursor creation, permit release before cursor close,
 and cancelled I/O delivery. See [the protocol and source correspondence](BORROWED_QUERY_CURSOR_PROOF.md).
 This finite safety model does not prove full closure admission, pairing of task
 and permit, native cancellation latency, GC or MVCC activation.
+
+
+`HawDBTargetReanalysisIo` checks capture, body, term and digest I/O scopes sharing
+one query slot. Its two-chunk finite graph has 32 distinct states. Two negative
+controls expose self-wait when capture or body I/O is retained across the next
+read. See [the safety argument and native correspondence](TARGET_REANALYSIS_IO_PROOF.md).
+This is not a proof of external wait fairness or global deadlock freedom.

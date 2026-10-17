@@ -239,3 +239,58 @@ fn streamed_artifact_uses_bounded_scratch_and_cancellation_refunds_it() {
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
+
+#[test]
+fn borrowed_reader_refuses_an_unbound_task_before_range_allocation_or_io() {
+    let _serial = allocation::serial();
+    assert_eq!(allocation::live(), 0);
+    let directory = Directory::new();
+    let path = directory.0.join("artifact");
+    let bytes = vec![b'x'; 2 << 20];
+    std::fs::write(&path, &bytes).unwrap();
+    let file = hawdb_storage::file_io::File::open(&path).unwrap();
+    let governor = governor();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(2 << 20).with_io_wave_slots(1))
+        .unwrap();
+    let task = RuntimeTaskContext::default();
+    let memory = BuildMemory::new(&task).unwrap();
+    let admission = ReadAdmission {
+        memory: &memory,
+        task: &task,
+        permit: &permit,
+    };
+    let (error, peak) = allocation::measure(|| {
+        admission
+            .read_file_range(
+                &file,
+                bytes.len() as u64,
+                4 << 20,
+                FileRange {
+                    offset: 0,
+                    length: bytes.len() as u64,
+                    checksum: crate::checksum_bytes(&bytes),
+                },
+            )
+            .err()
+            .expect("raw task has no I/O controller")
+    });
+    assert!(
+        peak < 16 << 10,
+        "range buffer allocated before execution refusal: {peak}"
+    );
+    assert!(
+        matches!(&error, HawDBError::Execution(message) if message.contains("0-slot reservation")),
+        "{error:?}"
+    );
+    drop(error);
+    assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
+    drop(memory);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    // Lazy ledger account metadata belongs to these owners, not the refused
+    // range buffer; include their destruction in the complete heap audit.
+    assert_eq!(allocation::live(), 0);
+}

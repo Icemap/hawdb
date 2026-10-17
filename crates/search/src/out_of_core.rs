@@ -253,6 +253,7 @@ pub(super) struct SegmentReaderContents {
     content_segment_id: u64,
     descriptor: crate::document_encoding::DecodedDescriptor,
     payload: File,
+    payload_length: u64,
     metadata_payload: File,
     vector_payload: File,
     layout: SearchOutOfCoreLayoutBody,
@@ -1168,6 +1169,7 @@ impl SearchOutOfCoreSegmentReader {
                 content_segment_id: manifest.segment_id,
                 descriptor,
                 payload,
+                payload_length: manifest.payload_len,
                 metadata_payload,
                 vector_payload,
                 layout,
@@ -4355,6 +4357,7 @@ fn read_search_range(file: &File, offset: u64, bytes: &mut [u8]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     mod reader_admission;
+    mod target_admission;
     #[cfg(feature = "full-text-search")]
     mod text_seed;
 
