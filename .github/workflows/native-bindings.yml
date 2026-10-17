@@ -1,216 +1,67 @@
-name: Native Bindings
-
+name: PR986 exact-source core and storage qualification
 on:
   workflow_dispatch:
-    inputs:
-      boundary_comparison:
-        description: "Run the manual Linux ordinary-boundary comparison instead of binding tests"
-        type: boolean
-        default: false
-      benchmark_sizes:
-        description: "Comma-separated row counts; default is the complete three-size matrix"
-        type: string
-        default: "1000,100000,1000000"
-      benchmark_cases:
-        description: "Comma-separated workload cases"
-        type: string
-        default: "select,point,fill,fill_bulk,wide"
-      benchmark_samples:
-        description: "Measured iterations, in addition to one discarded iteration"
-        type: string
-        default: "3"
-      benchmark_layers:
-        description: "Comma-separated language layers; select a shard without changing its workload"
-        type: string
-        default: "rust,python,go"
-      benchmark_backends:
-        description: "Comma-separated storage backends"
-        type: string
-        default: "memory,file"
-  pull_request:
-    paths:
-      - "src/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "scripts/cargo-test-required.sh"
-      - "bindings/ffi/**"
-      - "bindings/go/**"
-      - "MODULE.bazel"
-      - "BUILD.bazel"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/native-bindings.yml"
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "scripts/cargo-test-required.sh"
-      - "bindings/ffi/**"
-      - "bindings/go/**"
-      - "MODULE.bazel"
-      - "BUILD.bazel"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/native-bindings.yml"
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.boundary_comparison }}-${{ inputs.benchmark_sizes }}-${{ inputs.benchmark_cases }}-${{ inputs.benchmark_layers }}-${{ inputs.benchmark_backends }}-${{ inputs.benchmark_samples }}
-  cancel-in-progress: true
-
+permissions:
+  contents: read
 jobs:
-  bazel:
-    if: github.event_name != 'workflow_dispatch' || !inputs.boundary_comparison
-    name: Bazel native bindings (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-latest]
-        include:
-          - os: ubuntu-24.04
-            library: libhawdb_ffi.so
-          - os: macos-latest
-            library: libhawdb_ffi.dylib
-    env:
-      USE_BAZEL_VERSION: "9.3.0"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
-        with:
-          bazelisk-cache: true
-          repository-cache: true
-
-      - name: Build the C ABI libraries and Go package
-        run: bazel build //bindings/ffi:hawdb_ffi //bindings/ffi:hawdb_ffi_static //bindings/go:hawdb
-
-      - name: Test Go against the Bazel-built C ABI
-        run: bazel test --test_output=errors --test_arg=-test.v //bindings/go:hawdb_go_tests
-
-      - name: Test the retained C ABI contract
-        run: bazel test --test_output=errors //bindings/ffi:hawdb_ffi_tests
-
-      - name: Install Go for the race detector
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: bindings/go/go.mod
-          cache-dependency-path: bindings/go/go.sum
-
-      - name: Check retained read and close concurrency with the race detector
-        working-directory: bindings/go
-        env:
-          HAWDB_LIBRARY: ${{ github.workspace }}/bazel-bin/bindings/ffi/${{ matrix.library }}
-          # The race runtime needs cgo; the production package stays purego.
-          CGO_ENABLED: "1"
-        # The Go test cache does not qualify the newly built dynamic library.
-        run: go test -race -count=1 -run '^TestRetained' ./...
-
-  windows-native-contracts:
-    if: github.event_name != 'workflow_dispatch' || !inputs.boundary_comparison
-    name: Windows native contracts
-    runs-on: windows-2025
-    timeout-minutes: 120
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 2
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-        with:
-          components: clippy
-
-      - name: Record tested source and toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p windows-native-results
-          git log -1 --format='%H%n%T%n%P' > windows-native-results/source.txt
-          rustc --version --verbose > windows-native-results/toolchain.txt
-
-      - name: Run strict native Windows Clippy
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
-            2>&1 | tee windows-native-results/clippy.txt
-
-      - name: Test retained indexed node ownership and task controls
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --features tokio-runtime \
-            --lib api::retained_query::node::tests -- --nocapture \
-            2>&1 | tee windows-native-results/retained-node.txt
-
-      - name: Test abandonment GC power-loss cuts
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::tests::power_loss::branch_abandonment::abandonment_gc_cuts_preserve_quarantine_and_live_branches \
-            -- --exact --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/abandonment.txt
-
-      - name: Preserve Windows validation evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: windows-native-contracts-${{ github.sha }}
-          path: windows-native-results
-          if-no-files-found: error
-
-  boundary-comparison:
-    if: github.event_name == 'workflow_dispatch' && inputs.boundary_comparison
-    name: Manual ordinary-boundary comparison (Linux)
+  storage:
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
+    timeout-minutes: 30
     env:
       USE_BAZEL_VERSION: "9.3.0"
-      BENCHMARK_SIZES: ${{ inputs.benchmark_sizes }}
-      BENCHMARK_CASES: ${{ inputs.benchmark_cases }}
-      BENCHMARK_SAMPLES: ${{ inputs.benchmark_samples }}
-      BENCHMARK_LAYERS: ${{ inputs.benchmark_layers }}
-      BENCHMARK_BACKENDS: ${{ inputs.benchmark_backends }}
     steps:
-      - name: Checkout the candidate
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
-      - name: Install Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
           bazelisk-cache: true
           repository-cache: true
-
-      - name: Install Go for provenance
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: bindings/go/go.mod
-          cache-dependency-path: bindings/go/go.sum
-
-      - name: Compare frozen ordinary producers with unchanged defaults
+      - name: Record exact source identity
         run: |
-          python3 -B bindings/benchmarks/compare.py \
-            --output "$RUNNER_TEMP/hawdb-boundary-comparison" \
-            --sizes "$BENCHMARK_SIZES" --cases "$BENCHMARK_CASES" \
-            --layers "$BENCHMARK_LAYERS" --backends "$BENCHMARK_BACKENDS" \
-            --samples "$BENCHMARK_SAMPLES"
-
-      - name: Preserve complete or partial evidence, including failed outcomes
+          python3 - <<'PY_SOURCE'
+          from pathlib import Path
+          import subprocess,json,os
+          source='fcb7107e790253461daa91068b4acce446dda67d'
+          def git(*args):return subprocess.check_output(['git',*args],text=True).strip()
+          assert git('diff','--name-only',source,'HEAD').splitlines()==['.github/workflows/native-bindings.yml']
+          assert not git('status','--porcelain')
+          out=Path(os.environ['RUNNER_TEMP'])/'storage-qualification';out.mkdir()
+          (out/'source.json').write_text(json.dumps({'engine':source,'engine_tree':git('rev-parse',source+'^{tree}'),'checkout':git('rev-parse','HEAD'),'checkout_tree':git('rev-parse','HEAD^{tree}'),'overlay_files':['.github/workflows/native-bindings.yml'],'scope':'Complete default core/storage targets, original deadlines; not a waiver of local storage TIMEOUT or complete PR acceptance'},indent=2)+'\n')
+          PY_SOURCE
+      - name: Run complete original targets without test-result reuse
+        run: |
+          bazel test //crates/core:hawdb_core_tests //crates/storage:hawdb_storage_tests --nocache_test_results --test_output=errors --local_test_jobs=1 --build_event_json_file="${RUNNER_TEMP}/storage-qualification/events.json"
+      - name: Preserve complete target logs and hashes
         if: always()
-        uses: actions/upload-artifact@v7
+        run: |
+          python3 - <<'PY_LOGS'
+          from pathlib import Path
+          import os,json,urllib.parse,hashlib,re
+          out=Path(os.environ['RUNNER_TEMP'])/'storage-qualification';out.mkdir(exist_ok=True)
+          bep=out/'events.json';results=[]
+          if bep.exists():
+              for line in bep.read_text().splitlines():
+                  try:event=json.loads(line)
+                  except json.JSONDecodeError:continue
+                  if 'testSummary' not in event:continue
+                  label=event['id']['testSummary']['label'];summary=event['testSummary'];logs=[]
+                  for kind in ['passed','failed']:
+                      for index,item in enumerate(summary.get(kind,[])):
+                          path=Path(urllib.parse.urlparse(item['uri']).path)
+                          if not path.is_file():continue
+                          name=label.replace('//','').replace('/','_').replace(':','_')+'-'+kind+'-'+str(index)+'.log'
+                          raw=path.read_bytes();(out/name).write_bytes(raw)
+                          logs.append({'name':name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'suite_summaries':re.findall(r'test result: (?:ok|FAILED)[^\n]*',raw.decode(errors='replace'))})
+                  results.append({'label':label,'summary':summary,'logs':logs})
+          (out/'receipts.json').write_text(json.dumps(results,indent=2)+'\n')
+          files=[{'name':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(out.iterdir()) if p.is_file()]
+          (out/'manifest.json').write_text(json.dumps({'files':files,'scope':'Raw complete-target outcomes, including failures/timeouts'},indent=2)+'\n')
+          PY_LOGS
+      - uses: actions/upload-artifact@v7
+        if: always()
         with:
-          name: ordinary-boundary-comparison-${{ github.sha }}
-          path: ${{ runner.temp }}/hawdb-boundary-comparison/evidence
+          name: pr986-core-storage-fcb7107e
+          path: ${{ runner.temp }}/storage-qualification
           if-no-files-found: error
+          retention-days: 90
