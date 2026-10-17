@@ -2051,6 +2051,7 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
         .to_string();
     assert!(plan.contains("TextSeedScan"));
     assert!(plan.contains("top_k=1"));
+    let pinned_reader = crate::SearchOutOfCoreReader::open(&search_path).unwrap();
     let graph = NowledgeMemGraph::from_database_with_runtime_governor(
         database,
         NowledgeMemGraphMode::ShadowReadOnly,
@@ -2067,8 +2068,8 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
     handle
         .with_bounded_read_snapshot(
             NowledgeMemReadSnapshotBudget {
-                max_rows: 1,
-                max_payload_bytes: 4096,
+                max_rows: 2,
+                max_payload_bytes: 8192,
             },
             |snapshot| {
                 let result = snapshot.query_cypher_profiled(query, &parameters, 1)?;
@@ -2088,10 +2089,36 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
                 let memory = &result.execution_profile.pipeline_memory_report;
                 assert!(memory.query_memory_peak_bytes > 0);
                 assert!(memory.query_memory_peak_bytes <= memory.query_memory_budget_bytes);
+                crate::SearchOutOfCoreGenerationWriter::prepare_delta(
+                    &pinned_reader,
+                    crate::SearchProjectionDelta {
+                        upserts: vec![SearchProjectionRow {
+                            kind: SearchProjectionKind::Memory,
+                            external_id: "team".into(),
+                            title: "replacement".into(),
+                            body: "storage".into(),
+                            embedding: None,
+                            source_id: None,
+                            metadata: BTreeMap::from([("space_id".into(), "team".into())]),
+                        }],
+                        deletes: vec!["memory:other".into()],
+                        ..Default::default()
+                    },
+                    Default::default(),
+                )?
+                .finish()?;
+                let after_publication = snapshot.query_cypher(query, &parameters, 1)?;
+                assert_eq!(
+                    after_publication.rows[0].get("id"),
+                    Some(&Value::String("team".into()))
+                );
+                assert_eq!(snapshot.report().output_rows, 2);
                 Ok(())
             },
         )
         .unwrap();
+    let current_reader = crate::SearchOutOfCoreReader::open(&search_path).unwrap();
+    assert_ne!(pinned_reader.generation(), current_reader.generation());
 }
 
 #[test]
