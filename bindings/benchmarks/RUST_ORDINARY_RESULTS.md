@@ -84,7 +84,7 @@ refusals, not successful timings or speedups. No result is truncated.
 
 ## Evidence and remaining qualification
 
-[Complete evidence JSON](evidence/rust_ordinary_controls_20261011.json) preserves
+[Complete evidence JSON](evidence/README.md#rust-ordinary-controls-20261011) preserves
 every record, paired ratio, source/artifact manifest, raw stdout/stderr and their
 hashes, and the final audit. The original report SHA-256 is
 `d5f1266574a88bf877abf9981e8121af31b679a14f36a446f28e343a46242c09`.
@@ -139,7 +139,7 @@ and 0.977x (file) at 10,000 rows. These outcomes cannot close the comprehensive
 performance gate or prove write neutrality. This experiment predates the
 [read-free CREATE statistics change](../../docs/READ_FREE_CREATE_STATISTICS.md).
 
-[Complete shared-cache control evidence](evidence/rust_ordinary_shared_cache_controls_20261011.json)
+[Complete shared-cache control evidence](evidence/README.md#rust-ordinary-shared-cache-controls-20261011)
 contains raw stdout/stderr, hashes, all ratios and the final audit. The original
 report SHA-256 is `6c27ac81694b3812503221a4acf9b6b86665abe0c5a498a465cc82ae1f788949`.
 The earlier `9630934b` observations above remain a separate historical control;
@@ -192,7 +192,7 @@ file iteration. They were not terminated. This shared-host control supports
 the measured ordinary-write improvement; it does not prove an idle-host latency
 guarantee or isolate the optimization from all environmental variation.
 
-[Complete CREATE-control evidence](evidence/rust_ordinary_create_controls_20261011.json)
+[Complete CREATE-control evidence](evidence/README.md#rust-ordinary-create-controls-20261011)
 contains all raw streams, hashes, alternating ratios, frozen source/artifact
 identities and the final audit. Original report SHA-256:
 `6eff00f7330636323e91a7031964f1ce76429307d638cb78dd3120b4142e008a`.
@@ -225,7 +225,7 @@ exclude setup, snapshot acquisition and consumption. This is same-generation
 cold/warm evidence, not a prior-head comparison or a pure capacity-walk timer.
 It does not qualify Arrow, source reuse, foreign heaps or whole-operation memory.
 
-[Complete source-capacity evidence](evidence/rust_source_capacity_controls_20261011.json)
+[Complete source-capacity evidence](evidence/README.md#rust-source-capacity-controls-20261011)
 includes raw streams, hashes, counters, resource observations and the final audit.
 Original report SHA-256:
 `a52e5df4fefceec0a97cbb1843761f4277e72123688996e0266309832326d19a`.
@@ -249,7 +249,7 @@ dereferences external links and rewrites manifests to the frozen tree. It checks
 runfiles hashes after all builds and before/after each producer matrix. Children
 use the selected tree without inherited Python/runfiles paths or bytecode writes.
 
-[Preserved partial evidence](evidence/linux_boundary_timeout_20261011.json)
+[Preserved partial evidence](evidence/README.md#linux-boundary-timeout-20261011)
 contains all baseline raw streams and hashes, source/artifact manifest, timeout
 annotations and qualification limits. The primary log SHA-256 is
 `c5126615e33f84bdb42bcc4f56112c37cf81768161082fb20c9186be5c43b480`.
@@ -302,7 +302,7 @@ the 0.998x Rust file bulk-write result remain visible. This small native phase
 does not prove large-size scaling, Python parity, retained/Arrow speedups or
 whole-operation memory bounds, and cannot complete the full performance gate.
 
-[Complete Linux native-control evidence](evidence/linux_ordinary_native_controls_20261011.json)
+[Complete Linux native-control evidence](evidence/README.md#linux-ordinary-native-controls-20261011)
 contains both full reports, every raw stream/hash, reconstructed fixture-hash
 checks, copied native-producer checks and recomputed summaries. Original
 comparison SHA-256: `85ed8fbf9d8e75cc3c5c0ce72fe10969486cd621cdf9aadbbf3006e15af5057a`.
@@ -345,8 +345,8 @@ Their plans/profiles describe the raw Database API, not admitted private read
 plans. The mixed-plan quality obligation remains open; neither the small hot
 speedups nor post-refresh results complete the comprehensive performance gate.
 
-[Rotating-parameter evidence](evidence/mixed_point_rotating_controls_20261011.json)
-and [stable-parameter evidence](evidence/mixed_point_stable_controls_20261011.json)
+[Rotating-parameter evidence](evidence/README.md#mixed-point-rotating-controls-20261011)
+and [stable-parameter evidence](evidence/README.md#mixed-point-stable-controls-20261011)
 preserve every individual timing, raw stream/hash, source/artifact guard receipt,
 cache counter, diagnostic and exact source snapshot. These shared-host memory
 controls do not qualify file backends, large sizes, Arrow, source reuse or
@@ -391,7 +391,7 @@ The [corrected Linux run](https://github.com/nowledge-co/hawdb/actions/runs/3810
 
 Python individual-CREATE write-phase ratios are 5.119x (memory) and 2.637x (file). Its point-query ratios are 1.086x/1.073x. The unfavorable Go memory scan (0.981x), Go wide reads (0.917x/0.883x memory/file), and Rust memory scan (0.998x) remain visible. Near-one bulk medians are not a general regression exclusion. Ordinary APIs in this control use no Arrow or retained result APIs. This small phase resolves the Python comparison defect; it does not qualify large sizes, current cache-fix performance or whole-operation memory.
 
-[Complete corrected Linux evidence](evidence/linux_ordinary_frozen_python_controls_20261011.json) preserves both full reports and every raw stream/hash. The audit reconstructs all input hashes, checks values/parity/profiles/phases/RSS, compares copied producer bytes and matching Python wrapper/extension pairs, and recomputes all summaries. Complete runfiles identities are checked in the actual CI process before/after both matrices. GitHub artifact transport does not preserve executable modes or symlink types, so the local audit does not claim a transported runfiles identity recomputation. Original comparison SHA-256: `9fdb41b314a39102367bb841ec556e7b3216d2078370a6549d3c8c10abf48fa8`.
+[Complete corrected Linux evidence](evidence/README.md#linux-ordinary-frozen-python-controls-20261011) preserves both full reports and every raw stream/hash. The audit reconstructs all input hashes, checks values/parity/profiles/phases/RSS, compares copied producer bytes and matching Python wrapper/extension pairs, and recomputes all summaries. Complete runfiles identities are checked in the actual CI process before/after both matrices. GitHub artifact transport does not preserve executable modes or symlink types, so the local audit does not claim a transported runfiles identity recomputation. Original comparison SHA-256: `9fdb41b314a39102367bb841ec556e7b3216d2078370a6549d3c8c10abf48fa8`.
 
 ## Maintained index-size-class cache fix
 
@@ -410,7 +410,7 @@ The raw fix has 99 cache hits/one miss in every child at both sizes; the preserv
 
 Growth ratios versus the previous binary remain near one. The admitted hot ratios versus the previous binary are slightly unfavorable (0.992x/0.989x at 1,000/10,000 rows); raw post-refresh ratios are also 0.992x/0.978x. All individual timings and these unfavorable comparisons are retained. The helper therefore does not receive a general write/read neutrality claim from this control. Force-refresh diagnostics run after the hot timer and cannot reconstruct the previously cached hot plan.
 
-[Complete index-class control evidence](evidence/mixed_point_index_class_controls_20261011.json) includes every native output, individual timing, phase median, raw hash, RSS observation, producer identity, source snapshot and source/artifact guard receipt. Timers exclude exact value checks; growth includes parameter/loop work. This memory-only shared-host control does not qualify file backends, other languages, arbitrary plan distributions, Arrow, source reuse or whole-operation memory. Ordinary full-case controls on the same fixed producer are reported separately.
+[Complete index-class control evidence](evidence/README.md#mixed-point-index-class-controls-20261011) includes every native output, individual timing, phase median, raw hash, RSS observation, producer identity, source snapshot and source/artifact guard receipt. Timers exclude exact value checks; growth includes parameter/loop work. This memory-only shared-host control does not qualify file backends, other languages, arbitrary plan distributions, Arrow, source reuse or whole-operation memory. Ordinary full-case controls on the same fixed producer are reported separately.
 
 
 | Rows | API | First-call fix median | main / fix first call | previous / fix first call | main / fix total 100 calls | previous / fix total 100 calls |
@@ -453,7 +453,7 @@ All 320 expected records are present: 288 successes and the same 32 wide warmup 
 
 At 10,000 rows the point medians are 2.949x/2.540x and individual-CREATE write-phase medians are 53.229x/2.078x (memory/file). Both sizes have unfavorable scan medians, about 0.974x-0.983x. The 10,000-row memory bulk median is also unfavorable at 0.997x query-boundary and 0.999x write-boundary. These are complete shared-host controls against main, not isolated cache-change causality or comprehensive acceptance.
 
-[Complete ordinary index-class evidence](evidence/rust_ordinary_index_class_controls_20261011.json) includes every raw native outcome/hash, all paired ratios, fixture checks and consumer/driver snapshots, source/artifact guards and recomputed summaries. Original report SHA-256: `ffd7fdd4e9291bdb5bc3d8b70ef5b22ba4af8f5295a3826526757324585dde9b`. This control does not establish idle-host guarantees, larger sizes, cross-language neutrality, Arrow/source reuse or whole-operation memory bounds.
+[Complete ordinary index-class evidence](evidence/README.md#rust-ordinary-index-class-controls-20261011) includes every raw native outcome/hash, all paired ratios, fixture checks and consumer/driver snapshots, source/artifact guards and recomputed summaries. Original report SHA-256: `ffd7fdd4e9291bdb5bc3d8b70ef5b22ba4af8f5295a3826526757324585dde9b`. This control does not establish idle-host guarantees, larger sizes, cross-language neutrality, Arrow/source reuse or whole-operation memory bounds.
 
 
 ## Linux index-class control at 94503681
@@ -476,7 +476,7 @@ alternating paired observations and do not establish change causality.
 
 These are query-boundary ratios; separate write-phase ratios, complete raw
 records and all unfavorable samples remain in the
-[complete evidence](evidence/linux_ordinary_index_class_controls_20261011.json).
+[complete evidence](evidence/README.md#linux-ordinary-index-class-controls-20261011).
 The package SHA-256 is
 `5a3cab91122fcdad3dfb4f5196a5f3005b443ec95d33920b3a15e6c2ab4ac570`.
 Its audit reconstructs every fixture, checks every native result, checksum,
@@ -519,7 +519,7 @@ At 10,000 rows, first-point paired medians improve 23.231x raw and 27.672x admit
 
 Hot medians versus the previous producer are about 0.8-2.8% unfavorable, and several p95/p99 comparisons are unfavorable. Every sample remains visible. Raw cache counters report 99 hits/one miss; admitted private-cache behavior is not inferred from raw Database diagnostics. Force-refresh diagnostics run after the hot timer and cannot reconstruct its plan. Growth stays close to the previous producer; main-to-candidate growth improvements include earlier CREATE work and are not isolated causality for this point change.
 
-[Complete mixed-growth evidence](evidence/mixed_point_local_statistics_controls_20261011.json) preserves each native result/raw stream, all 100 individual timings per phase, first/total/nearest-rank-tail calculations, RSS, source snapshots, frozen producer/consumer identities and before/after guards. Package SHA-256: `602aba2343b335dc9ed9c31b7bf0dfa726cf483b6e1c2dec6f1ede5e9d53e657`. Auditing verifies record sequence, parameter/default checks, native output and each derived summary.
+[Complete mixed-growth evidence](evidence/README.md#mixed-point-local-statistics-controls-20261011) preserves each native result/raw stream, all 100 individual timings per phase, first/total/nearest-rank-tail calculations, RSS, source snapshots, frozen producer/consumer identities and before/after guards. Package SHA-256: `602aba2343b335dc9ed9c31b7bf0dfa726cf483b6e1c2dec6f1ede5e9d53e657`. Auditing verifies record sequence, parameter/default checks, native output and each derived summary.
 
 This control does not qualify file backends, other languages, dense/complex read distributions, source-to-host zero copy, larger sizes, foreign heap or whole-operation memory. The bounded probe visits at most nine borrowed candidates and publishes no shared advanced statistics, but ordinary execution/result ownership retains its existing behavior. Comprehensive performance acceptance remains open.
 
@@ -554,7 +554,7 @@ All 320 expected records are present: 288 successes and 32 identical 10,000-row 
 
 At 10,000 rows point paired medians are 2.512x/2.482x and independent-CREATE write-phase medians are 55.075x/1.935x (memory/file). Main-to-candidate improvements include earlier projected-seek/CREATE work and do not isolate this point-statistics change. The 1,000-row memory scan is unfavorable at 0.923x, file individual-CREATE write at 0.987x, and both 1,000-row bulk write medians at 0.982x/0.976x. The 10,000-row memory bulk write median is 0.996x. Several final verification-read medians are unfavorable even where total/write medians improve. No unfavorable sample is dropped or explained away as proven noise.
 
-[Complete ordinary point-statistics evidence](evidence/rust_ordinary_local_statistics_controls_20261011.json) preserves native stdout/stderr, individual pairs, source snapshots, frozen driver/consumers, fixtures, producer hashes, process/RSS observations and all recalculated summaries. Original report SHA-256: `3f20ae6b396b853d9d18174b0f5bbdf057e09ec789aefa84c6b5a151dba25027`; package SHA-256: `9ca7b5122b09bee9cc12b0d5f7f511931467700756ff2dce27b156379ed78248`. Source/artifact guards pass before and after children; the independent audit verifies native results, checksums, profile/defaults, phase sums, discard/order policy, RSS and both producer medians and paired ratios.
+[Complete ordinary point-statistics evidence](evidence/README.md#rust-ordinary-local-statistics-controls-20261011) preserves native stdout/stderr, individual pairs, source snapshots, frozen driver/consumers, fixtures, producer hashes, process/RSS observations and all recalculated summaries. Original report SHA-256: `3f20ae6b396b853d9d18174b0f5bbdf057e09ec789aefa84c6b5a151dba25027`; package SHA-256: `9ca7b5122b09bee9cc12b0d5f7f511931467700756ff2dce27b156379ed78248`. Source/artifact guards pass before and after children; the independent audit verifies native results, checksums, profile/defaults, phase sums, discard/order policy, RSS and both producer medians and paired ratios.
 
 This remains a small shared-host Rust control. It does not qualify large sizes, cross-language neutrality, Arrow/source reuse or whole-operation memory. Together with the mixed-growth cold gains and unfavorable hot/tail samples, it leaves comprehensive performance acceptance open.
 
@@ -641,7 +641,7 @@ instrumented timings are not ordinary latency qualification. The point traffic
 remains approximately 1,946/1,956 allocation calls per admitted query; this small
 metadata improvement does not establish broad execution-buffer or memory gains.
 
-[Complete metadata control evidence](evidence/point_statistics_borrowed_metadata_controls_20261011.json)
+[Complete metadata control evidence](evidence/README.md#point-statistics-borrowed-metadata-controls-20261011)
 preserves all 192 records, raw native streams, per-call timings, fixtures,
 producer/source/consumer identities, both drivers, path-confounded observations
 and corrected repetitions. Every raw native result, checksum, fixture, timing
@@ -673,7 +673,7 @@ comparison or performance qualification exists.
 
 ## Shared admitted planning templates (2026-10-11)
 
-The [audited evidence package](evidence/shared_admission_template_controls_20261011.json) has SHA-256
+The [audited evidence package](evidence/README.md#shared-admission-template-controls-20261011) has SHA-256
 `b84f70d0a13c190681f7b2f4239fd47d5094182706198cd8ff462c70dd759518`. The before producer is `a58cdf715547734d012376ad0f0715bc5b9c0e0f`,
 tree `19d7da21050d93b67f39027bb0ae3e4e58563392`; the after producer is staged tree
 `08c9304b4b75865c25878c97a2a9824b9fd68d5b` on that head. Both default-opt native producers,

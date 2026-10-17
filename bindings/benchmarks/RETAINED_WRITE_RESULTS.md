@@ -68,7 +68,7 @@ Candidate medians in milliseconds:
 
 The last column is the median of seven within-iteration time ratios, not the
 ratio of the two median times. Full ratios and all samples are preserved in
-[the evidence JSON](evidence/source_capacity_controls_20261011.json).
+[the evidence JSON](evidence/README.md#source-capacity-controls-20261011).
 The open-cursor cost is a workload observation, not a universal COW penalty.
 
 Candidate/uncached-prototype ratios of median write times, where above one is

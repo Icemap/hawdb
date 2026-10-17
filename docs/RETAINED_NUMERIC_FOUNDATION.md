@@ -134,7 +134,7 @@ value, identity, validity, or row-count state; the producer cannot seal a partia
 result. This does not change source ownership or turn construction into source
 reuse.
 
-[Isolated extraction controls](../bindings/benchmarks/evidence/retained_property_lookup_controls_20261012.json)
+[Isolated extraction controls](../bindings/benchmarks/evidence/README.md#retained-property-lookup-controls-20261012)
 preserve 54 raw observations, frozen binary identities, source hashes, the
 standalone harness, and its measurement scope. Nine alternating paired rounds
 observed median extraction speedups of 1.46x, 1.80x, and 1.93x for one immutable
@@ -802,7 +802,7 @@ prevent attributing the entire ratio to avoided payload copying. No Python/Go,
 Arrow, file/WAL, mixed/concurrent workload, tail latency, or RSS was measured.
 The earlier prototype observations remain separate. Raw observations and the
 standalone driver are preserved in
-[`native_indexed_node_controls_20261012.json`](../bindings/benchmarks/evidence/native_indexed_node_controls_20261012.json).
+[`native_indexed_node_controls_20261012.json`](../bindings/benchmarks/evidence/README.md#native-indexed-node-controls-20261012).
 Neither run satisfies the complete performance gate.
 
 #### Terminal observation and admitted cursor control
@@ -836,7 +836,7 @@ outside each warmup and timing interval. Its native module SHA-256 was
 | 1,000 | 25,808 | 11,700 | 2.206x |
 | 10,000 | 130,370 | 12,196 | 10.690x |
 
-[Raw observations and driver](../bindings/benchmarks/evidence/native_observed_node_controls_20261012.json)
+[Raw observations and driver](../bindings/benchmarks/evidence/README.md#native-observed-node-controls-20261012)
 remain a same-source API diagnostic. Shared statement recording removes a known
 missing-observation difference, but execution/RSS profiling and retained-result
 admission still differ. No before/after revision improvement or complete

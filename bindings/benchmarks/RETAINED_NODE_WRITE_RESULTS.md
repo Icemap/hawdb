@@ -20,7 +20,7 @@ at `48a2c8beb881494920e75848b849ee3b8c28982d`. The measured checkout head is
 `3f71ac4efcba443279642c550746239b49767304`; its intervening patch changes only
 Python tests and documentation. Compiled Rust/module input hashes remain identical.
 Frozen packages, complete driver, source/extension hashes, all observations and
-failure history are in [the evidence JSON](evidence/python_retained_node_point_write_20261012.json).
+failure history are in [the evidence JSON](evidence/README.md#python-retained-node-point-write-20261012).
 
 Eight children succeed, covering 288 raw and 256 measured rounds, or 8192 measured
 point-write timings across ordinary and separately instrumented producers. Every

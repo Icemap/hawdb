@@ -137,7 +137,7 @@ record does not remove selected-value allocations, property preflight/decoding
 walks, or necessarily repeated property-spill reads. It does not establish
 zero-copy delivery or a whole-process memory bound.
 
-The frozen [canonical point controls](../bindings/benchmarks/evidence/canonical_projected_point_controls_20261012.json)
+The frozen [canonical point controls](../bindings/benchmarks/evidence/README.md#canonical-projected-point-controls-20261012)
 compare the `9bbffbcf` parent with the recorded uncommitted production patch.
 They checkpoint and reopen 256 nodes with zero live delta, project one or 16
 integer properties at three record positions, and alternate producer order
