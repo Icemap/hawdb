@@ -77,7 +77,8 @@ fn default_unlimited_and_explicit_read_row_limits_preserve_complete_delivery() {
         RetainedColumnValues, RetainedQueryError, RetainedQueryOptions, RetainedQueryStatus,
     };
 
-    assert_eq!(DatabaseConfig::default().max_read_result_rows, Some(0));
+    assert_eq!(DatabaseConfig::default().max_read_result_rows, None);
+    assert_eq!(hawdb::SessionConfig::default().max_result_rows, 0);
     let cap = 100_000;
     let directory = (0..1000)
         .find_map(|attempt| {
@@ -92,12 +93,20 @@ fn default_unlimited_and_explicit_read_row_limits_preserve_complete_delivery() {
             }
         })
         .expect("a uniquely reserved fixture directory");
-    for (persistent, bounded) in [(false, false), (true, false), (false, true), (true, true)] {
+    for (persistent, configured) in [
+        (false, None),
+        (true, None),
+        (false, Some(0)),
+        (true, Some(0)),
+        (false, Some(cap)),
+        (true, Some(cap)),
+    ] {
+        let bounded = configured.is_some_and(|rows| rows != 0);
         let config = DatabaseConfig {
-            max_read_result_rows: Some(if bounded { cap } else { 0 }),
+            max_read_result_rows: configured,
             ..DatabaseConfig::default()
         };
-        let path = directory.0.join(format!("project-{bounded}"));
+        let path = directory.0.join(format!("project-{configured:?}"));
         let mut engine = if persistent {
             let mut options = hawdb::HawDBEmbeddedOpenOptions::new(&path);
             options.config = config;
