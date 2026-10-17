@@ -1,0 +1,250 @@
+
+running 12 tests
+
+thread 'retained::tests::panic_is_contained_and_output_is_already_empty' (79489109) panicked at src/retained/tests.rs:503:17:
+injected adapter panic
+stack backtrace:
+test retained::tests::misaligned_retained_inputs_and_outputs_refuse_before_typed_access ... ok
+test retained::tests::descriptor_versions_sizes_flags_and_handles_refuse_with_empty_outputs ... ok
+test retained::tests::closed_cursor_refuses_pull_without_recording_a_terminal_failure ... ok
+test retained::tests::inadequate_protocol_handle_limit_refuses_before_binding_and_can_be_corrected ... ok
+test retained::tests::nullable_float_bits_and_node_identity_are_exposed_without_casting ... ok
+test retained::tests::late_budget_failure_is_repeated_and_visible_to_earlier_readable_columns ... ok
+test retained::tests::independent_column_lifetime_identity_and_exact_final_release ... ok
+test retained::tests::handles_are_shared_across_cursors_and_borrowing_needs_no_additional_owner ... ok
+test retained::tests::slots_backpressure_before_advance_and_retry_after_last_column_release ... ok
+test retained::tests::selection_limit_shares_the_original_range_and_empty_eof_keeps_fixed_schema ... ok
+   0:        0x1067da7e4 - std[f388a05f35c6be9b]::backtrace_rs::backtrace::libunwind::trace
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/../../backtrace/src/backtrace/libunwind.rs:117:9
+   1:        0x1067da7e4 - std[f388a05f35c6be9b]::backtrace_rs::backtrace::trace_unsynchronized::<std[f388a05f35c6be9b]::sys::backtrace::_print_fmt::{closure#1}>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/../../backtrace/src/backtrace/mod.rs:66:14
+   2:        0x1067da7e4 - std[f388a05f35c6be9b]::sys::backtrace::_print_fmt
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/backtrace.rs:74:9
+   3:        0x1067da7e4 - <<std[f388a05f35c6be9b]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[d9969c9ec4563fe8]::fmt::Display>::fmt
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/backtrace.rs:44:26
+   4:        0x1067f1140 - <core[d9969c9ec4563fe8]::fmt::rt::Argument>::fmt
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/fmt/rt.rs:152:76
+   5:        0x1067f1140 - core[d9969c9ec4563fe8]::fmt::write
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/fmt/mod.rs:1687:22
+   6:        0x1067dfcd8 - core[d9969c9ec4563fe8]::io::write::default_write_fmt::<std[f388a05f35c6be9b]::sys::stdio::unix::Stderr>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/io/write.rs:402:11
+   7:        0x1067dfcd8 - <std[f388a05f35c6be9b]::sys::stdio::unix::Stderr as core[d9969c9ec4563fe8]::io::write::Write>::write_fmt
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/io/write.rs:335:13
+   8:        0x1067bc2f4 - <std[f388a05f35c6be9b]::sys::backtrace::BacktraceLock>::print
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/backtrace.rs:47:25
+   9:        0x1067bc2f4 - std[f388a05f35c6be9b]::panicking::default_hook::{closure#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:289:27
+  10:        0x1067d347c - std[f388a05f35c6be9b]::panicking::default_hook
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:316:9
+  11:        0x1067d393c - std[f388a05f35c6be9b]::panicking::panic_with_hook
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:811:13
+  12:        0x1067bc3a4 - std[f388a05f35c6be9b]::panicking::panic_handler::{closure#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:678:13
+  13:        0x1067b5704 - std[f388a05f35c6be9b]::sys::backtrace::__rust_end_short_backtrace::<std[f388a05f35c6be9b]::panicking::panic_handler::{closure#0}, !>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/backtrace.rs:182:18
+  14:        0x1067bccbc - __rustc[645588fcd52e2aab]::rust_begin_unwind
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:676:5
+  15:        0x10682c7b0 - core[d9969c9ec4563fe8]::panicking::panic_fmt
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/panicking.rs:80:14
+  16:        0x100a53e54 - hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty::{closure#0}
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained/tests.rs:503:17
+  17:        0x100a40160 - hawdb_ffi[37074f03ac5588c6]::retained::output::<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty::{closure#0}>::{closure#0}
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:323:21
+  18:        0x100a52c2c - <core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::output<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty::{closure#0}>::{closure#0}> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/panic/unwind_safe.rs:275:9
+  19:        0x100a5cf2c - std[f388a05f35c6be9b]::panicking::catch_unwind::do_call::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::output<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty::{closure#0}>::{closure#0}>, core[d9969c9ec4563fe8]::result::Result<(), u32>>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/panicking.rs:573:43
+  20:        0x100a5c704 - ___rust_try
+  21:        0x100a5a3c4 - std[f388a05f35c6be9b]::panicking::catch_unwind::<core[d9969c9ec4563fe8]::result::Result<(), u32>, core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::output<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty::{closure#0}>::{closure#0}>>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/panicking.rs:541:19
+  22:        0x100a5a3c4 - std[f388a05f35c6be9b]::panic::catch_unwind::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::output<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty::{closure#0}>::{closure#0}>, core[d9969c9ec4563fe8]::result::Result<(), u32>>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/panic.rs:359:14
+  23:        0x100a3c5bc - hawdb_ffi[37074f03ac5588c6]::retained::caught::<hawdb_ffi[37074f03ac5588c6]::retained::output<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty::{closure#0}>::{closure#0}>
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:302:11
+  24:        0x100a3de4c - hawdb_ffi[37074f03ac5588c6]::retained::output::<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty::{closure#0}>
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:313:5
+  25:        0x100a2c404 - hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained/tests.rs:502:13
+  26:        0x100a53c1c - hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty::{closure#0}
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained/tests.rs:495:52
+  27:        0x100a22524 - <hawdb_ffi[37074f03ac5588c6]::retained::tests::panic_is_contained_and_output_is_already_empty::{closure#0} as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+  28:        0x100a635d8 - <fn() -> core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/ops/function.rs:250:5
+  29:        0x100a635d8 - test[46a0974fba2cb695]::__rust_begin_short_backtrace::<core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String>, fn() -> core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String>>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/test/src/lib.rs:701:18
+  30:        0x100a6e580 - test[46a0974fba2cb695]::run_test_in_process::{closure#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/test/src/lib.rs:724:74
+  31:        0x100a6e580 - <core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<test[46a0974fba2cb695]::run_test_in_process::{closure#0}> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/panic/unwind_safe.rs:275:9
+  32:        0x100a6e580 - std[f388a05f35c6be9b]::panicking::catch_unwind::do_call::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<test[46a0974fba2cb695]::run_test_in_process::{closure#0}>, core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String>>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:573:43
+  33:        0x100a6e580 - std[f388a05f35c6be9b]::panicking::catch_unwind::<core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String>, core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<test[46a0974fba2cb695]::run_test_in_process::{closure#0}>>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:541:19
+  34:        0x100a6e580 - std[f388a05f35c6be9b]::panic::catch_unwind::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<test[46a0974fba2cb695]::run_test_in_process::{closure#0}>, core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String>>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panic.rs:359:14
+  35:        0x100a6e580 - test[46a0974fba2cb695]::run_test_in_process
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/test/src/lib.rs:724:27
+  36:        0x100a6e580 - test[46a0974fba2cb695]::run_test::{closure#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/test/src/lib.rs:645:43
+  37:        0x100a6a134 - test[46a0974fba2cb695]::run_test::{closure#1}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/test/src/lib.rs:675:41
+  38:        0x100a6a134 - std[f388a05f35c6be9b]::sys::backtrace::__rust_begin_short_backtrace::<test[46a0974fba2cb695]::run_test::{closure#1}, ()>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/backtrace.rs:166:18
+  39:        0x100a70988 - std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked::<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}::{closure#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/thread/lifecycle.rs:70:13
+  40:        0x100a70988 - <core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}::{closure#0}> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/panic/unwind_safe.rs:275:9
+  41:        0x100a70988 - std[f388a05f35c6be9b]::panicking::catch_unwind::do_call::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}::{closure#0}>, ()>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:573:43
+  42:        0x100a70988 - std[f388a05f35c6be9b]::panicking::catch_unwind::<(), core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}::{closure#0}>>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:541:19
+  43:        0x100a70988 - std[f388a05f35c6be9b]::panic::catch_unwind::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}::{closure#0}>, ()>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panic.rs:359:14
+  44:        0x100a70988 - std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked::<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/thread/lifecycle.rs:68:26
+  45:        0x100a70988 - <std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1} as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/ops/function.rs:250:5
+  46:        0x1067d9f44 - <alloc[c5303dbe5d2696ba]::boxed::Box<dyn core[d9969c9ec4563fe8]::ops::function::FnOnce<(), Output = ()> + core[d9969c9ec4563fe8]::marker::Send> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/alloc/src/boxed.rs:2314:9
+  47:        0x1067d9f44 - <std[f388a05f35c6be9b]::sys::thread::unix::Thread>::new::thread_start
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/thread/unix.rs:127:17
+  48:        0x10db7f174 - __ZL17asan_thread_startPv
+  49:        0x18cf89d00 - __pthread_exit
+
+thread 'retained::tests::registration_panic_after_pull_is_terminal_and_preserves_previous_batch' (79489110) panicked at src/retained.rs:258:13:
+injected batch registration panic
+test retained::tests::panic_is_contained_and_output_is_already_empty ... ok
+stack backtrace:
+   0:        0x1067da7e4 - std[f388a05f35c6be9b]::backtrace_rs::backtrace::libunwind::trace
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/../../backtrace/src/backtrace/libunwind.rs:117:9
+   1:        0x1067da7e4 - std[f388a05f35c6be9b]::backtrace_rs::backtrace::trace_unsynchronized::<std[f388a05f35c6be9b]::sys::backtrace::_print_fmt::{closure#1}>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/../../backtrace/src/backtrace/mod.rs:66:14
+   2:        0x1067da7e4 - std[f388a05f35c6be9b]::sys::backtrace::_print_fmt
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/backtrace.rs:74:9
+   3:        0x1067da7e4 - <<std[f388a05f35c6be9b]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[d9969c9ec4563fe8]::fmt::Display>::fmt
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/backtrace.rs:44:26
+   4:        0x1067f1140 - <core[d9969c9ec4563fe8]::fmt::rt::Argument>::fmt
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/fmt/rt.rs:152:76
+   5:        0x1067f1140 - core[d9969c9ec4563fe8]::fmt::write
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/fmt/mod.rs:1687:22
+   6:        0x1067dfcd8 - core[d9969c9ec4563fe8]::io::write::default_write_fmt::<std[f388a05f35c6be9b]::sys::stdio::unix::Stderr>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/io/write.rs:402:11
+   7:        0x1067dfcd8 - <std[f388a05f35c6be9b]::sys::stdio::unix::Stderr as core[d9969c9ec4563fe8]::io::write::Write>::write_fmt
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/io/write.rs:335:13
+   8:        0x1067bc2f4 - <std[f388a05f35c6be9b]::sys::backtrace::BacktraceLock>::print
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/backtrace.rs:47:25
+   9:        0x1067bc2f4 - std[f388a05f35c6be9b]::panicking::default_hook::{closure#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:289:27
+  10:        0x1067d347c - std[f388a05f35c6be9b]::panicking::default_hook
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:316:9
+  11:        0x1067d393c - std[f388a05f35c6be9b]::panicking::panic_with_hook
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:811:13
+  12:        0x1067bc3a4 - std[f388a05f35c6be9b]::panicking::panic_handler::{closure#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:678:13
+  13:        0x1067b5704 - std[f388a05f35c6be9b]::sys::backtrace::__rust_end_short_backtrace::<std[f388a05f35c6be9b]::panicking::panic_handler::{closure#0}, !>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/backtrace.rs:182:18
+  14:        0x1067bccbc - __rustc[645588fcd52e2aab]::rust_begin_unwind
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:676:5
+  15:        0x10682c7b0 - core[d9969c9ec4563fe8]::panicking::panic_fmt
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/panicking.rs:80:14
+  16:        0x100a4d0b0 - hawdb_ffi[37074f03ac5588c6]::retained::register::{closure#0}
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:258:13
+  17:        0x100a36a8c - <std[f388a05f35c6be9b]::thread::local::LocalKey<core[d9969c9ec4563fe8]::cell::Cell<bool>>>::try_with::<hawdb_ffi[37074f03ac5588c6]::retained::register::{closure#0}, ()>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/thread/local.rs:463:12
+  18:        0x100a36974 - <std[f388a05f35c6be9b]::thread::local::LocalKey<core[d9969c9ec4563fe8]::cell::Cell<bool>>>::with::<hawdb_ffi[37074f03ac5588c6]::retained::register::{closure#0}, ()>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/thread/local.rs:427:20
+  19:        0x100a12240 - hawdb_ffi[37074f03ac5588c6]::retained::register
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:257:37
+  20:        0x100a439a4 - hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}::{closure#1}::{closure#0}::{closure#0}
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:571:29
+  21:        0x100a38f98 - <core[d9969c9ec4563fe8]::option::Option<hawdb[257f3ab7fdff47ad]::api::retained_query::RetainedQueryBatch>>::map::<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}::{closure#1}::{closure#0}::{closure#0}>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/option.rs:1165:29
+  22:        0x100a43c7c - hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}::{closure#1}::{closure#0}
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:569:31
+  23:        0x100a1565c - <core[d9969c9ec4563fe8]::result::Result<core[d9969c9ec4563fe8]::option::Option<hawdb[257f3ab7fdff47ad]::api::retained_query::RetainedQueryBatch>, hawdb[257f3ab7fdff47ad]::api::retained_query::RetainedQueryError>>::map::<core[d9969c9ec4563fe8]::option::Option<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1>, hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}::{closure#1}::{closure#0}>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/result.rs:837:25
+  24:        0x100a440e8 - hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}::{closure#1}
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:568:22
+  25:        0x100a22360 - <hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}::{closure#1} as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+  26:        0x100a53820 - <core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}::{closure#1}> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/panic/unwind_safe.rs:275:9
+  27:        0x100a5e0b8 - std[f388a05f35c6be9b]::panicking::catch_unwind::do_call::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}::{closure#1}>, core[d9969c9ec4563fe8]::result::Result<core[d9969c9ec4563fe8]::option::Option<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1>, hawdb[257f3ab7fdff47ad]::api::retained_query::RetainedQueryError>>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/panicking.rs:573:43
+  28:        0x100a5c704 - ___rust_try
+  29:        0x100a5bcb0 - std[f388a05f35c6be9b]::panicking::catch_unwind::<core[d9969c9ec4563fe8]::result::Result<core[d9969c9ec4563fe8]::option::Option<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1>, hawdb[257f3ab7fdff47ad]::api::retained_query::RetainedQueryError>, core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}::{closure#1}>>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/panicking.rs:541:19
+  30:        0x100a5bcb0 - std[f388a05f35c6be9b]::panic::catch_unwind::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}::{closure#1}>, core[d9969c9ec4563fe8]::result::Result<core[d9969c9ec4563fe8]::option::Option<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1>, hawdb[257f3ab7fdff47ad]::api::retained_query::RetainedQueryError>>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/panic.rs:359:14
+  31:        0x100a455e0 - hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:564:26
+  32:        0x100a3f128 - hawdb_ffi[37074f03ac5588c6]::retained::output::<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}>::{closure#0}
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:323:21
+  33:        0x100a529c4 - <core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::output<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}>::{closure#0}> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/panic/unwind_safe.rs:275:9
+  34:        0x100a5cad4 - std[f388a05f35c6be9b]::panicking::catch_unwind::do_call::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::output<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}>::{closure#0}>, core[d9969c9ec4563fe8]::result::Result<(), u32>>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/panicking.rs:573:43
+  35:        0x100a5c704 - ___rust_try
+  36:        0x100a59ce8 - std[f388a05f35c6be9b]::panicking::catch_unwind::<core[d9969c9ec4563fe8]::result::Result<(), u32>, core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::output<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}>::{closure#0}>>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/panicking.rs:541:19
+  37:        0x100a59ce8 - std[f388a05f35c6be9b]::panic::catch_unwind::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<hawdb_ffi[37074f03ac5588c6]::retained::output<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}>::{closure#0}>, core[d9969c9ec4563fe8]::result::Result<(), u32>>
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/panic.rs:359:14
+  38:        0x100a3c15c - hawdb_ffi[37074f03ac5588c6]::retained::caught::<hawdb_ffi[37074f03ac5588c6]::retained::output<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}>::{closure#0}>
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:302:11
+  39:        0x100a3dab0 - hawdb_ffi[37074f03ac5588c6]::retained::output::<hawdb_ffi[37074f03ac5588c6]::retained::HawdbRetainedBatchV1, hawdb_ffi[37074f03ac5588c6]::retained::hawdb_retained_next::{closure#0}>
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:313:5
+  40:        0x100a14560 - hawdb_retained_next
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained.rs:553:9
+  41:        0x100a32078 - hawdb_ffi[37074f03ac5588c6]::retained::tests::registration_panic_after_pull_is_terminal_and_preserves_previous_batch
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained/tests.rs:117:17
+  42:        0x100a53d50 - hawdb_ffi[37074f03ac5588c6]::retained::tests::registration_panic_after_pull_is_terminal_and_preserves_previous_batch::{closure#0}
+                               at /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-bindings/bindings/ffi/src/retained/tests.rs:107:76
+  43:        0x100a22620 - <hawdb_ffi[37074f03ac5588c6]::retained::tests::registration_panic_after_pull_is_terminal_and_preserves_previous_batch::{closure#0} as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /Users/hawkingrei/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+  44:        0x100a635d8 - <fn() -> core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/ops/function.rs:250:5
+  45:        0x100a635d8 - test[46a0974fba2cb695]::__rust_begin_short_backtrace::<core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String>, fn() -> core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String>>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/test/src/lib.rs:701:18
+  46:        0x100a6e580 - test[46a0974fba2cb695]::run_test_in_process::{closure#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/test/src/lib.rs:724:74
+  47:        0x100a6e580 - <core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<test[46a0974fba2cb695]::run_test_in_process::{closure#0}> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/panic/unwind_safe.rs:275:9
+  48:        0x100a6e580 - std[f388a05f35c6be9b]::panicking::catch_unwind::do_call::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<test[46a0974fba2cb695]::run_test_in_process::{closure#0}>, core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String>>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:573:43
+  49:        0x100a6e580 - std[f388a05f35c6be9b]::panicking::catch_unwind::<core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String>, core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<test[46a0974fba2cb695]::run_test_in_process::{closure#0}>>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:541:19
+  50:        0x100a6e580 - std[f388a05f35c6be9b]::panic::catch_unwind::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<test[46a0974fba2cb695]::run_test_in_process::{closure#0}>, core[d9969c9ec4563fe8]::result::Result<(), alloc[c5303dbe5d2696ba]::string::String>>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panic.rs:359:14
+  51:        0x100a6e580 - test[46a0974fba2cb695]::run_test_in_process
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/test/src/lib.rs:724:27
+  52:        0x100a6e580 - test[46a0974fba2cb695]::run_test::{closure#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/test/src/lib.rs:645:43
+  53:        0x100a6a134 - test[46a0974fba2cb695]::run_test::{closure#1}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/test/src/lib.rs:675:41
+  54:        0x100a6a134 - std[f388a05f35c6be9b]::sys::backtrace::__rust_begin_short_backtrace::<test[46a0974fba2cb695]::run_test::{closure#1}, ()>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/backtrace.rs:166:18
+  55:        0x100a70988 - std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked::<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}::{closure#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/thread/lifecycle.rs:70:13
+  56:        0x100a70988 - <core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}::{closure#0}> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/panic/unwind_safe.rs:275:9
+  57:        0x100a70988 - std[f388a05f35c6be9b]::panicking::catch_unwind::do_call::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}::{closure#0}>, ()>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:573:43
+  58:        0x100a70988 - std[f388a05f35c6be9b]::panicking::catch_unwind::<(), core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}::{closure#0}>>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panicking.rs:541:19
+  59:        0x100a70988 - std[f388a05f35c6be9b]::panic::catch_unwind::<core[d9969c9ec4563fe8]::panic::unwind_safe::AssertUnwindSafe<std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}::{closure#0}>, ()>
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/panic.rs:359:14
+  60:        0x100a70988 - std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked::<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/thread/lifecycle.rs:68:26
+  61:        0x100a70988 - <std[f388a05f35c6be9b]::thread::lifecycle::spawn_unchecked<test[46a0974fba2cb695]::run_test::{closure#1}, ()>::{closure#1} as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/core/src/ops/function.rs:250:5
+  62:        0x1067d9f44 - <alloc[c5303dbe5d2696ba]::boxed::Box<dyn core[d9969c9ec4563fe8]::ops::function::FnOnce<(), Output = ()> + core[d9969c9ec4563fe8]::marker::Send> as core[d9969c9ec4563fe8]::ops::function::FnOnce<()>>::call_once
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/alloc/src/boxed.rs:2314:9
+  63:        0x1067d9f44 - <std[f388a05f35c6be9b]::sys::thread::unix::Thread>::new::thread_start
+                               at /rustc/8d1a76430406c877b35d0b627e7f796dcf0dfeca/library/std/src/sys/thread/unix.rs:127:17
+  64:        0x10db7f174 - __ZL17asan_thread_startPv
+  65:        0x18cf89d00 - __pthread_exit
+test retained::tests::registration_panic_after_pull_is_terminal_and_preserves_previous_batch ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+

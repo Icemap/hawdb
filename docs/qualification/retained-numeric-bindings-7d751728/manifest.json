@@ -1,0 +1,89 @@
+{
+  "source": "7d7517280b3ff20bc97473eac4f902bc21c36d41",
+  "files": {
+    "ffi-asan.log": {
+      "bytes": 36558,
+      "sha256": "66c6d84e5e5a508a210c1d46900aac4c3c3aa8b6b7d51d652bfe0a240a0abdac"
+    },
+    "ffi-native.log": {
+      "bytes": 72,
+      "sha256": "73596b79c23573c30ea3176cec2df235cf5a72cea804331b01f4aa027afa4a13"
+    },
+    "ffi-test-bindings_ffi_hawdb_ffi_tests.log": {
+      "bytes": 1450,
+      "sha256": "050b9523663b134888c21a3ab220dcf5a933fe411fc82d8917fd7bdb01ed5903"
+    },
+    "fmt.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fuzz-summary.json": {
+      "bytes": 19742,
+      "sha256": "2e67c32969d00964ddf6eec0c5e0ab29d525510828743813d49ba0c8a8b91119"
+    },
+    "go-native-asan.log": {
+      "bytes": 1347,
+      "sha256": "e080e626e39ae6a4c15abfa8818bfed738af7047933dbcdacd814f8af53635f9"
+    },
+    "go-race.log": {
+      "bytes": 1347,
+      "sha256": "d3d1c34bb6260fa8126e795ad6f6d77cf13c1551ba1dc15b78ad7fed46c4c59c"
+    },
+    "go-test-bindings_go_hawdb_go_boundary_profile_tests.log": {
+      "bytes": 778,
+      "sha256": "7797d6f4632645121bf0994abd3b801c83497b4bcc358310722ba224b7a2206a"
+    },
+    "go-test-bindings_go_hawdb_go_tests.log": {
+      "bytes": 177,
+      "sha256": "0e9861c5329a43eb57cac94191a97556fd7cc21d4c146160c2f1a7333522c268"
+    },
+    "initial-pydantic-timeout.log": {
+      "bytes": 843,
+      "sha256": "adf9f315aa2e3704b24d5dee068cb4ed070f43f224de1b0727ff455681a2fe50"
+    },
+    "initial-python-locked-check.log": {
+      "bytes": 320,
+      "sha256": "2af13595926ef950fedd6106d99184109224e0e4ff0510d75b5d77d89127610f"
+    },
+    "lifetime.json": {
+      "bytes": 4647,
+      "sha256": "c072bf16b4cf0ee7ada1ecfe91071391ad48070fe54db9ff683548b9bc628d9b"
+    },
+    "native.log": {
+      "bytes": 60,
+      "sha256": "167c7eea8e7bd4b25b81e2466b66d0d9f8548731654c1f72d81163aaf7bec76b"
+    },
+    "packet.json": {
+      "bytes": 6245,
+      "sha256": "befcf1098d2327767b326587a6462606670c83945979306deba066eefc34f327"
+    },
+    "prek.log": {
+      "bytes": 160,
+      "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
+    },
+    "pydantic-test-bindings_python_hawdb_python_pydantic_tests.log": {
+      "bytes": 911,
+      "sha256": "fb76a8dca154c739bd6b04d71e31cb70ae1652cf634c6262a3d9b27e97fc0e3f"
+    },
+    "python-native-asan.log": {
+      "bytes": 3705,
+      "sha256": "b90f250b3c9d4d726e93753ea40e1c5b3e65a8c5ce043819853f63ede9ffd276"
+    },
+    "python-native.log": {
+      "bytes": 6119,
+      "sha256": "98d79f75808a2f673028f1a551305226de31aafcafa2cdd475a2410f0c2f402a"
+    },
+    "python-qualification.Cargo.lock": {
+      "bytes": 37955,
+      "sha256": "26808b9f10311b321bccbcdda1298557c0e5f0ab2cc1f5f834f621a3dbfd545c"
+    },
+    "python-test-bindings_python_hawdb_python_tests.log": {
+      "bytes": 1626,
+      "sha256": "67cc284980bd0c9b7aa2b1440c122e5e10570ea2bbb3e187ffec75c23c60154b"
+    },
+    "validation.json": {
+      "bytes": 8797,
+      "sha256": "84698aa1e23fe006a23a79f06167e1367a7280d714d6b29c8c76305fb9b6d115"
+    }
+  }
+}

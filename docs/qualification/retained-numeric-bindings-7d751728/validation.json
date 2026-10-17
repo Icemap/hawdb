@@ -1,0 +1,242 @@
+{
+  "status": "passed",
+  "pid": 98729,
+  "base": "4c32610910cc78771eeb23d729be7107ff769bf6",
+  "steps": [
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792270587.351552,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-install.log",
+      "exit": 0,
+      "ended": 1792270587.49913
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792270587.5044749,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-fmt.log",
+      "exit": 0,
+      "ended": 1792270596.9821088
+    },
+    {
+      "name": "native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792270596.989695,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-native.log",
+      "exit": 0,
+      "ended": 1792270598.7297301
+    },
+    {
+      "name": "ffi-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "bindings/ffi/Cargo.toml",
+        "--",
+        "--check"
+      ],
+      "started": 1792270598.73789,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-ffi-fmt.log",
+      "exit": 0,
+      "ended": 1792270598.864624
+    },
+    {
+      "name": "ffi-native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/ffi/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792270598.868942,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-ffi-native.log",
+      "exit": 0,
+      "ended": 1792270599.614341
+    },
+    {
+      "name": "python-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--",
+        "--check"
+      ],
+      "started": 1792270599.6148171,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-python-fmt.log",
+      "exit": 0,
+      "ended": 1792270599.780447
+    },
+    {
+      "name": "python-native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792270599.781322,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-python-native.log",
+      "exit": 0,
+      "ended": 1792270673.967652
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792270673.9685388,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-prek.log",
+      "exit": 0,
+      "ended": 1792270685.9301782
+    },
+    {
+      "name": "ffi",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/ffi:hawdb_ffi_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--test_output=errors",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-ffi.bep.json"
+      ],
+      "started": 1792270686.044378,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-ffi.log",
+      "exit": 0,
+      "ended": 1792270693.59889
+    },
+    {
+      "name": "go",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/go:hawdb_go_tests",
+        "//bindings/go:hawdb_go_boundary_profile_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--test_output=errors",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-go.bep.json"
+      ],
+      "started": 1792270693.601181,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-go.log",
+      "exit": 0,
+      "ended": 1792270710.642672
+    },
+    {
+      "name": "python",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/python:hawdb_python_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--test_output=errors",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-python.bep.json"
+      ],
+      "started": 1792270710.646643,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-python.log",
+      "exit": 0,
+      "ended": 1792270890.5953028
+    },
+    {
+      "name": "pydantic",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/python:hawdb_python_pydantic_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--test_output=errors",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-pydantic.bep.json"
+      ],
+      "started": 1792270890.6019158,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-pydantic.log",
+      "exit": 0,
+      "ended": 1792270939.369882
+    },
+    {
+      "name": "fuzz",
+      "command": [
+        "bazel",
+        "test",
+        "//crates/fuzz:hawdb_fuzz_tests",
+        "//crates/fuzz:hawdb_fuzz_cli_tests",
+        "//:hawdb_linux_ci_fuzz_smoke_test",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--test_output=errors",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-fuzz.bep.json"
+      ],
+      "started": 1792270939.381909,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/numeric-bindings-cut-final-fuzz.log",
+      "exit": 0,
+      "ended": 1792270941.6488261
+    }
+  ],
+  "started": 1792270587.3515441,
+  "source_sha256": {
+    ".github/workflows/native-bindings.yml": "01b6f949d7918932821f1e8d1ea3df0bf1f75301cf725ad9f4a45afd4fb1fed0",
+    "bindings/ffi/BUILD.bazel": "dbba2fea0b0a38e7c06285c675c3c81878da6008e95b79fd730ae42184d5d392",
+    "bindings/ffi/README.md": "3b3f4cf7124ba9aa450dd553934eb7c50170f996f80b7e507b153f6f257133d3",
+    "bindings/ffi/include/hawdb_ffi.h": "93dac7045316cedbc794dbb0420115ae3434096c6733dd767914ecb277ca1f83",
+    "bindings/ffi/src/lib.rs": "3d5cc9c65f32b46d28e019c297745c250f875679d7c4b3d66ed10653d8f43fe3",
+    "bindings/ffi/src/retained.rs": "ee0c957cc21d4f6602ad027895575c788e95d3b414d8a83a0b089dbc5bcdc12d",
+    "bindings/ffi/src/retained/tests.rs": "a11b76b3fa84bf942eef4791dfe20c1170605bb93f958f3967eac486cbb9d09f",
+    "bindings/go/BUILD.bazel": "561d0581479f59c5bb546540cdc2841a622f2c9ab7bb8e596d12fc894f8dd521",
+    "bindings/go/README.md": "439e14624f7e897b9b5de6f18d252a8aba594d7072ce4a9564c29b9a63bcc79f",
+    "bindings/go/ffi.go": "4101fb9054d5169cb51af5f79c9d839dbbff6b9b57b14b3491c7811da563fe4f",
+    "bindings/go/retained.go": "2abb1ee2de376eb53379521be3b002e716432396388ef48088cbdc90b10ae366",
+    "bindings/go/retained_bench_test.go": "ccea21cd72972cee22a799ef3bb26f5c87d9f2095ec5b94e4abc5f2f3890c859",
+    "bindings/go/retained_test.go": "faad312cfd7db609fd2d36eea4d17638f0e21a38983883226c7821aeafe01490",
+    "bindings/python/README.md": "fcd6d0ef938798b9cff9c5bf7f9f86933468ab8b5f2f310d39a359d5a6b182f6",
+    "bindings/python/python/hawdb/__init__.py": "b3591b9144dac9a602dc1542caa726ce4ff98d6f99e43076591edc686d07f259",
+    "bindings/python/python/hawdb/__init__.pyi": "3471eb2cc5a5ba281957f2c4ae29e6fe294c60a367e2d96b2ec9f0b33f4f8bf0",
+    "bindings/python/python/hawdb/_hawdb.pyi": "2ffd99c0c51755656e017c6ede5162ffbfc311aba096b0452a843e6e4e1aef76",
+    "bindings/python/src/database.rs": "9fe433387cb6a55148191bb42996069503e006476972fc40e5ba7e04afc0427a",
+    "bindings/python/src/errors.rs": "5eecd94764dcb5561c454e4780f988385019ee34f581e0b1625774414e566ae9",
+    "bindings/python/src/lib.rs": "461f125f4d9c724a1547de6ff0e971268e26452bba3c535d60f7bc2362ec2304",
+    "bindings/python/src/retained.rs": "4f039e593d39ac85162c8fda1119db595054856912d7296ed1cc5aeddf55bb8e",
+    "bindings/python/tests/__init__.py": "1437e060699bd7f275c960a1b5f56bd2664f895e46395011ab4be9189a5fd46d",
+    "bindings/python/tests/test_retained.py": "b5231708726062836c0d0287a2324d4bc0a8a54fcdc2aff15e628c4a1abd649b",
+    "bindings/python/tests/test_smoke.py": "86dfb5d02696a1cec27875ef392b2235ea41def074a732ff46e6557cecee2b9d",
+    "bindings/python/tests/test_stubs.py": "27dc666d18dc609cb27daaf88c156f058c542c3e1775b6ec116639c85c8c4d81"
+  },
+  "ended": 1792270941.812392
+}

@@ -1,0 +1,23 @@
+=== RUN   TestRetainedABIWidths
+--- PASS: TestRetainedABIWidths (0.00s)
+=== RUN   TestRetainedIdentitySelectionAndIndependentLifetime
+--- PASS: TestRetainedIdentitySelectionAndIndependentLifetime (1.50s)
+=== RUN   TestRetainedBackpressureDoesNotAdvanceAndExplicitReleaseResumes
+--- PASS: TestRetainedBackpressureDoesNotAdvanceAndExplicitReleaseResumes (0.01s)
+=== RUN   TestRetainedEmptySchemaRefusalsAndOldLibrary
+--- PASS: TestRetainedEmptySchemaRefusalsAndOldLibrary (0.01s)
+=== RUN   TestRetainedReadAndCloseAreSerialized
+--- PASS: TestRetainedReadAndCloseAreSerialized (0.01s)
+=== RUN   TestRetainedBatchBorrowsOncePerColumnAcrossCopiedOwners
+--- PASS: TestRetainedBatchBorrowsOncePerColumnAcrossCopiedOwners (0.00s)
+=== RUN   TestRetainedCloseFailureAllowsExplicitRetry
+--- PASS: TestRetainedCloseFailureAllowsExplicitRetry (0.00s)
+=== RUN   TestRetainedSharedHandlePressureStillAllowsBorrowedBatchReads
+--- PASS: TestRetainedSharedHandlePressureStillAllowsBorrowedBatchReads (0.02s)
+=== RUN   TestRetainedFloatBitsAndNullablePhysicalLayout
+--- PASS: TestRetainedFloatBitsAndNullablePhysicalLayout (0.00s)
+=== RUN   TestRetainedFinalizerReleasesAbandonedColumn
+--- PASS: TestRetainedFinalizerReleasesAbandonedColumn (0.01s)
+=== RUN   TestRetainedIntegerBoundsAndAllNullLayout
+--- PASS: TestRetainedIntegerBoundsAndAllNullLayout (0.01s)
+PASS
