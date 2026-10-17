@@ -51,7 +51,10 @@ non-null NumPy array. `schema_copy` preserves schema even for empty completion.
 Defaults remain two payload slots, no prefetch, 1,024 inspected records and 1 MiB
 per batch, under the existing database/shared byte and handle limits. Positive
 batch/slot options cannot bypass those limits; `max_result_rows` can impose a
-lower cumulative budget. Python requires at least four shared handles for the
+lower cumulative budget. This per-cursor option is a low-level request budget:
+None inherits the host policy, while explicit zero allows no matching rows.
+The Rust session setting max_result_rows=0 separately means unlimited.
+Python requires at least four shared handles for the
 control, batch, exporter and native buffer lease.
 
 `BackpressureError` is retryable: release held views and retry the same cursor.
