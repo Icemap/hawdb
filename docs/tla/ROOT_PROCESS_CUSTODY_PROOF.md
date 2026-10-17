@@ -199,3 +199,25 @@ The native word layout and zero initializer were checked against the pinned
 local macOS SDK `os/lock.h`. Apple's public contracts describe
 [the initializer](https://developer.apple.com/documentation/os/os_unfair_lock_init)
 and [blocking acquisition](https://developer.apple.com/documentation/os/os_unfair_lock_lock).
+
+
+## Native Windows replacement cut
+
+Head 1c1d302's Windows directory/image selection passed all 29 cases. Its
+root/constructor/read selection passed 22 and failed one before the library
+read: the fixture's ancestor rename was refused while the process-lock child
+file was held. Source line 108 identifies the host rename, not a head-read or
+registry failure. The raw native adverse result is retained.
+
+The Windows head test now replaces the pathname at the existing AfterInitializing
+hook: the counted directory has been captured and the Initializing entry is
+installed, but the child process lock has not yet opened. It requires that the
+subsequent process-lock file is created in the captured moved directory and is
+absent from the foreign replacement. Then the original same-length foreign-head,
+held-head bytes, one-slot I/O, descriptor count and memory refund assertions all
+apply. Unix keeps the original replacement after complete initialization and
+process-lock acquisition. No production code, access mask, lock lifetime,
+budget, deadline, test selection or final postcondition is relaxed. This checks
+relative authority at a native supported replacement boundary; it does not
+promise that Windows permits every host rename while descendants are held, and
+does not qualify segment/run loads, source pins, GC, incarnation or activation.

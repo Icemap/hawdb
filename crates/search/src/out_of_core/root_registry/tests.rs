@@ -103,11 +103,32 @@ fn shared_root_clones_reuse_native_handles_and_refund_after_last_drop() {
 fn head_read_follows_captured_directory_after_path_replacement_with_one_io_slot() {
     let fixture = Fixture::new(8);
     std::fs::write(fixture.root.join("head"), b"captured head").unwrap();
-    let root = fixture.open().unwrap();
     let moved = fixture.root.with_extension("moved");
-    std::fs::rename(&fixture.root, &moved).unwrap();
-    std::fs::create_dir(&fixture.root).unwrap();
-    std::fs::write(fixture.root.join("head"), b"foreign head").unwrap();
+    #[cfg(windows)]
+    {
+        // Windows can refuse ancestor rename once the process-lock child is
+        // open. Replace the path after directory capture and registration, but
+        // before that lock opens; both lock and head must follow the capture.
+        let old_path = fixture.root.clone();
+        let new_path = moved.clone();
+        AFTER_INITIALIZING.with(|slot| {
+            *slot.borrow_mut() = Some(Box::new(move || {
+                std::fs::rename(&old_path, new_path).unwrap();
+                std::fs::create_dir(&old_path).unwrap();
+                std::fs::write(old_path.join("head"), b"foreign head").unwrap();
+            }));
+        });
+    }
+    let root = fixture.open().unwrap();
+    #[cfg(not(windows))]
+    {
+        // Keep the original stronger post-initialization replacement on Unix.
+        std::fs::rename(&fixture.root, &moved).unwrap();
+        std::fs::create_dir(&fixture.root).unwrap();
+        std::fs::write(fixture.root.join("head"), b"foreign head").unwrap();
+    }
+    assert!(moved.join(PROCESS_LOCK).is_file());
+    assert!(!fixture.root.join(PROCESS_LOCK).exists());
     let baseline = fixture.memory.ledger.snapshot().used_bytes;
     let head = root
         .read_head(
