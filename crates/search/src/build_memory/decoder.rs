@@ -18,7 +18,7 @@ use crate::build_control::checkpoint;
 use crate::build_memory::{checked_add as add, BuildMemory};
 use crate::{HawDBError, Result};
 use hawdb_core::RuntimeTaskContext;
-use hawdb_executor::QueryMemoryLease;
+use hawdb_executor::{QueryMemoryAccount, QueryMemoryLease};
 use hawdb_storage::compression::DecompressionContext;
 use std::io::{self, BufRead, Read};
 use zstd::zstd_safe::{InBuffer, OutBuffer};
@@ -48,10 +48,18 @@ impl<'a, R: BufRead> Decoder<'a, R> {
         memory: &BuildMemory,
         task: &'a RuntimeTaskContext,
     ) -> Result<Self> {
+        Self::with_account(input, &memory.spool, task)
+    }
+
+    pub(crate) fn with_account(
+        input: R,
+        memory: &QueryMemoryAccount,
+        task: &'a RuntimeTaskContext,
+    ) -> Result<Self> {
         checkpoint(task)?;
         super::compression::require_qualified_zstd("decode admission")?;
-        let context_memory = memory.spool.reserve(CONTEXT_BYTES)?;
-        let buffer_memory = memory.spool.reserve(0)?;
+        let context_memory = memory.reserve(CONTEXT_BYTES)?;
+        let buffer_memory = memory.reserve(0)?;
         let context = DecompressionContext::new()?;
         if context.sizeof() > CONTEXT_BYTES {
             return Err(HawDBError::Execution(

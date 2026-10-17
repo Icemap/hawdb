@@ -74,6 +74,14 @@ work; a session's result ceiling does not lower that intermediate-work budget.
 runtime governor independently allows 16 MiB of result capacity;
 physical query memory and plan-derived admitted reservations remain enforced.
 A result may therefore refuse a byte budget despite having no row-count limit.
+Native SQL `RETURNING` validates the smaller of the configured payload ceiling
+and the caller's admitted result capacity before advancing staged state. Zero
+bytes admits only empty output. This includes single-statement SQL sessions,
+direct transactions and callbacks that catch a statement refusal. INSERT
+`RETURNING` is supported; UPDATE/DELETE `RETURNING` retain their existing
+unsupported-clause errors. Graph mutation summaries keep the separate
+`MutationLimits::max_result_payload_bytes` contract, checked before publication;
+the read-output byte setting does not replace that mutation limit.
 Python `hawdb.open()` inherits these database defaults. Rust hosts can use the
 existing configured constructors and typed runtime-governor configuration.
 

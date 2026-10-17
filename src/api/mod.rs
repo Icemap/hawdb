@@ -20491,6 +20491,19 @@ impl DatabaseTransactionRuntime {
         Ok(())
     }
 
+    fn validate_result_payload(&self, bytes: usize, ceiling: Option<usize>) -> Result<()> {
+        if let Some(limit) = ceiling
+            && bytes > limit
+        {
+            return Err(HawDBError::read_budget_exceeded(
+                crate::ReadBudgetResource::PayloadBytes,
+                limit,
+                "SQL mutation result exceeds the effective host/admitted payload ceiling",
+            ));
+        }
+        Ok(())
+    }
+
     fn ensure_writable(&self, store: &GraphStore) -> Result<()> {
         store.ensure_usable()?;
         if self.config.read_only {
@@ -21191,6 +21204,10 @@ pub(super) fn execute_database_transaction_prepared_sql(
         .transpose()?;
     if let Some(mutation) = &mutation {
         runtime.validate_result_rows(mutation.rows.len())?;
+        runtime.validate_result_payload(
+            mutation.rows.payload_bytes(),
+            max_read_result_payload_bytes,
+        )?;
     }
     let next_relational_rows = if let Some(row_capture) = pending_row_capture {
         let rows = match &state.relational_rows {
@@ -21749,6 +21766,8 @@ impl DatabaseSession<'_> {
                     HawDBError::StorageIntegrity("active session transaction has no runtime".into())
                 })?;
                 let mut mutation_limits = self.db.config.mutation_limits;
+                // Graph summaries keep the MutationLimits payload contract;
+                // storage's MutationCommitLimitTracker checks it before WAL publication.
                 if let Some(limit) = runtime.read_result_row_limit().and_then(NonZeroUsize::new) {
                     mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
                 }

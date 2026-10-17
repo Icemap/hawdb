@@ -12,13 +12,15 @@ struct IdentityDirectory(std::path::PathBuf);
 
 impl IdentityDirectory {
     fn new() -> Self {
+        static NEXT_DIRECTORY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
-            "hawdb-public-identity-output-{}-{}",
+            "hawdb-public-identity-output-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos(),
+            NEXT_DIRECTORY.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         ));
         std::fs::create_dir(&path).unwrap();
         Self(path)
@@ -1326,6 +1328,191 @@ fn empty_sql_results_preserve_custom_mutation_limits() {
         }
     }
 }
+
+fn native_sql_returning_payload_control(route: &str, mutation: &str) {
+    for (ceiling, admitted) in [0, 1, 4096]
+        .into_iter()
+        .flat_map(|ceiling| [false, true].map(|admitted| (ceiling, admitted)))
+    {
+        let allowed = ceiling == 4096 && mutation == "insert";
+        let directory = IdentityDirectory::new();
+        let path = directory.0.join("returning-payload");
+        let mut database = hawdb::Database::open(&path).unwrap();
+        database
+            .query_sql("CREATE TABLE payload_writes (id BIGINT PRIMARY KEY, body TEXT)")
+            .unwrap();
+        database
+            .query_sql("INSERT INTO payload_writes (id, body) VALUES (1, 'original'), (2, 'other')")
+            .unwrap();
+        let epoch = database.commit_epoch().unwrap();
+        drop(database);
+        let mut database = hawdb::Database::open_with_config(
+            &path,
+            hawdb::DatabaseConfig {
+                max_read_result_payload_bytes: Some(if admitted { 8192 } else { ceiling }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let context = if admitted {
+            hawdb::RuntimeTaskContext::default().with_memory_reservation(
+                hawdb::RuntimeMemoryReservation::new(
+                    256 * 1024 * 1024,
+                    u64::try_from(ceiling).unwrap(),
+                ),
+            )
+        } else {
+            hawdb::RuntimeTaskContext::default()
+        };
+        let sql = match mutation {
+            "insert" => {
+                "INSERT INTO payload_writes (id, body) VALUES (3, 'new') RETURNING id, body"
+            }
+            "update" => {
+                "UPDATE payload_writes SET body = 'changed' WHERE id = 1 RETURNING id, body"
+            }
+            "delete" => "DELETE FROM payload_writes WHERE id = 1 RETURNING id, body",
+            _ => unreachable!(),
+        };
+        let result = match route {
+            "session" => database
+                .sql_session()
+                .with_task_context(&context)
+                .query(sql, &[])
+                .map(|_| ()),
+            "direct" => {
+                let mut transaction = database.begin_transaction_with_context(&context).unwrap();
+                let result = transaction.query_sql(sql).map(|_| ());
+                // A rejected statement must not remain staged and publish on
+                // a later explicit commit of the otherwise empty transaction.
+                transaction.commit().unwrap();
+                result
+            }
+            "callback" => database
+                .sql_session()
+                .with_task_context(&context)
+                .transaction(|transaction| {
+                    if !allowed {
+                        transaction.query(
+                            "INSERT INTO payload_writes (id, body) VALUES (9, 'prior')",
+                            &[],
+                        )?;
+                    }
+                    let result = transaction.query(sql, &[]);
+                    if allowed {
+                        result?;
+                    }
+                    // A caught refusal must still roll back the preceding write.
+                    Ok(())
+                }),
+            _ => unreachable!(),
+        };
+        let observed_epoch = database.commit_epoch().unwrap();
+        drop(database);
+        // Reopen through an ordinary, unrestricted reader so the result cap
+        // under test cannot mask incomplete stored-row verification.
+        let mut reopened = hawdb::Database::open(&path).unwrap();
+        let rows = reopened
+            .query_sql("SELECT id, body FROM payload_writes ORDER BY id")
+            .unwrap();
+        let stored = rows
+            .rows
+            .iter()
+            .map(|row| (row["id"].clone(), row["body"].clone()))
+            .collect::<Vec<_>>();
+        let mut expected = vec![
+            (Value::Int(1), Value::String("original".into())),
+            (Value::Int(2), Value::String("other".into())),
+        ];
+        if allowed {
+            result.unwrap();
+            match mutation {
+                "insert" => expected.push((Value::Int(3), Value::String("new".into()))),
+                "update" => expected[0].1 = Value::String("changed".into()),
+                "delete" => {
+                    expected.remove(0);
+                }
+                _ => unreachable!(),
+            }
+            assert!(observed_epoch > epoch, "{route}/{mutation}/{ceiling}");
+        } else {
+            if mutation == "insert" {
+                assert!(
+                matches!(result, Err(hawdb::HawDBError::ReadBudgetExceeded(ref cause))
+                    if cause.resource == hawdb::ReadBudgetResource::PayloadBytes && cause.limit == ceiling),
+                "{route}/{mutation}/{ceiling}: result={result:?}, epochs={epoch}->{observed_epoch}, stored={stored:?}"
+            );
+            } else {
+                // UPDATE/DELETE RETURNING are outside the current SQL
+                // fragment. Preserve their fail-closed semantic refusal;
+                // do not add new SQL capability to repair a result budget.
+                assert!(
+                    matches!(result, Err(hawdb::HawDBError::Semantic(ref message))
+                    if message.contains("unsupported PostgreSQL")),
+                    "{route}/{mutation}/{ceiling}: {result:?}"
+                );
+            }
+            assert_eq!(observed_epoch, epoch, "{route}/{mutation}/{ceiling}");
+        }
+        assert_eq!(stored, expected, "{route}/{mutation}/{ceiling}");
+        assert_eq!(reopened.commit_epoch().unwrap(), observed_epoch);
+    }
+}
+
+macro_rules! native_sql_returning_payload_regression {
+    ($name:ident, $route:literal, $mutation:literal) => {
+        #[test]
+        fn $name() {
+            native_sql_returning_payload_control($route, $mutation);
+        }
+    };
+}
+
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_insert_session,
+    "session",
+    "insert"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_update_session,
+    "session",
+    "update"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_delete_session,
+    "session",
+    "delete"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_insert_direct,
+    "direct",
+    "insert"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_update_direct,
+    "direct",
+    "update"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_delete_direct,
+    "direct",
+    "delete"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_insert_callback,
+    "callback",
+    "insert"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_update_callback,
+    "callback",
+    "update"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_delete_callback,
+    "callback",
+    "delete"
+);
 
 #[test]
 fn unlimited_rows_still_refuse_wide_json_payload_before_delivery() {

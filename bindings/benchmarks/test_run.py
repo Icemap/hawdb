@@ -28,9 +28,17 @@ def complete_profile(layer):
     return profile
 
 
+def complete_go_host_profile(calls=1):
+    return {"parameter_conversion_ns": 0, "parameter_conversion_calls": calls,
+            "ffi_call_ns": 0, "ffi_calls": calls, "result_conversion_ns": 0,
+            "result_conversion_calls": calls, "valid": True,
+            "scope": "go_query_parameter_native_call_result_phases"}
+
+
 class DriverTests(unittest.TestCase):
     def matrix(self, native_profiles, supplied_profiles, process_exit=0, read_ns=10,
-               replace_artifact=False, layers="rust,python,go", record_status="ok"):
+               replace_artifact=False, layers="rust,python,go", record_status="ok",
+               go_host_profiles=False, supplied_host_profiles=None):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             artifacts = {}
@@ -46,6 +54,8 @@ class DriverTests(unittest.TestCase):
                 arguments.extend(("--" + name, str(path)))
             if native_profiles:
                 arguments.append("--native-profiles")
+            if go_host_profiles:
+                arguments.append("--go-host-profiles")
             commands = []
 
             def child(command, artifact):
@@ -61,6 +71,10 @@ class DriverTests(unittest.TestCase):
                     "read_boundary_ns": read_ns, "elapsed_ns": 20,
                     "native_profile": supplied_profiles(layer) if record_status == "ok" else None,
                 }
+                if supplied_host_profiles is not None and layer == "go":
+                    result["go_host_profile" if record_status == "ok" else "failure_go_host_profile"] = supplied_host_profiles()
+                    if record_status != "ok":
+                        result["failure_go_host_profile_scope"] = "db_query_calls_including_setup_warmup_and_cleanup"
                 if record_status != "ok":
                     result.update(error="warmup: query memory budget exceeded",
                                   failure_native_profile=supplied_profiles(layer),
@@ -89,6 +103,41 @@ class DriverTests(unittest.TestCase):
             self.assertEqual(len(report["records"]), 2 * len(layers.split(",")))
             self.assertTrue(report["terminal"])
             return status, report
+
+    def test_go_host_profile_requires_complete_measured_calls(self):
+        status, report = self.matrix(True, complete_profile, go_host_profiles=True,
+                                     supplied_host_profiles=complete_go_host_profile)
+        self.assertEqual(status, 0)
+        self.assertTrue(report["instrumented"])
+        self.assertTrue(report["go_host_profiles"])
+        self.assertTrue(all(r["go_host_profile_valid"] for r in report["records"]))
+        for value in (None, True, -1, 2**64):
+            with self.subTest(value=value):
+                def invalid():
+                    return dict(complete_go_host_profile(), result_conversion_ns=value)
+                status, report = self.matrix(True, complete_profile, layers="go",
+                                             go_host_profiles=True, supplied_host_profiles=invalid)
+                self.assertEqual(status, 1)
+                self.assertEqual(report["go_host_profile_failures"], 2)
+                self.assertIsNone(report["summaries"][0]["median_query_boundary_ns"])
+        status, report = self.matrix(True, complete_profile, layers="go", go_host_profiles=True,
+                                     supplied_host_profiles=lambda: complete_go_host_profile(0))
+        self.assertEqual(status, 1)
+        self.assertEqual(report["successful_records"], 0)
+
+    def test_go_host_profile_cannot_be_reported_as_plain(self):
+        status, report = self.matrix(False, lambda _: None, layers="go",
+                                     supplied_host_profiles=complete_go_host_profile)
+        self.assertEqual(status, 1)
+        self.assertEqual(report["go_host_profile_failures"], 2)
+
+    def test_go_host_failure_profiles_never_qualify_latency(self):
+        status, report = self.matrix(True, complete_profile, layers="go", record_status="error",
+                                     go_host_profiles=True, supplied_host_profiles=complete_go_host_profile)
+        self.assertEqual(status, 1)
+        self.assertEqual(report["successful_records"], 0)
+        self.assertTrue(all(r["failure_go_host_profile_valid"] for r in report["records"]))
+        self.assertIsNone(report["summaries"][0]["median_query_boundary_ns"])
 
     def test_language_shard_preserves_samples_and_fixture(self):
         status, report = self.matrix(False, lambda _: None, layers="go")

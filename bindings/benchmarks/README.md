@@ -79,3 +79,41 @@ Final acceptance still requires the requested complete workload and baseline sco
 All targets are manual developer tools. This change adds no workflow or fuzz CI
 lane, retained/Arrow/node-view API, engine optimization, row-limit policy, durable
 format change or stable Mem integration. No benchmark results are claimed here.
+
+### Go host JSON conversion observations
+
+The native FFI phase timers do not include Go parameter preparation/JSON encoding
+or Go result copying/JSON decoding/normalization. Build the separate manual
+producer to observe those costs through the same ordinary binding query path:
+
+```console
+bazel build -c opt //bindings/go/cmd/boundary:boundary_profile
+```
+
+Use this producer with `run.py --native-profiles --go-host-profiles` and the
+matching explicit instrumented Rust, Python and FFI artifacts described above.
+Without an explicit `--go`, the driver selects the profile producer when
+`--go-host-profiles` is set. The ordinary target uses compile-time-false guards,
+a zero-sized state and no timing/counter observer. The tagged artifact must not
+be submitted as ordinary latency: the driver refuses unexpected host profiles.
+
+`go_host_profile` reports parameter conversion, complete native-call and result
+conversion wall times and call counts over the measured query loop only. Native
+phase times nest inside `ffi_call_ns`; do not add the two. Lock acquisition,
+host result consumption and fixture/input construction remain outside these
+three phases. The existing outer query and consumer timers cover their stated
+scopes separately. Counts must match all measured calls for the chosen workload;
+missing, saturated, malformed or incomplete host counters cannot qualify samples.
+Timing is instrumented observation, not an ordinary-latency result or a foreign
+heap/whole-process memory bound. Snapshot formatting occurs after the existing
+Go allocation observation window; that window otherwise retains its original
+checksum/native-profile bookkeeping scope.
+
+A failure after opening the database retains `failure_go_host_profile` over
+query calls in setup, warmup, measured execution and cleanup, sampled after
+Close. Close itself is not a query-conversion phase. Failures before a database
+exists have no host snapshot. These errors remain errors and never enter
+successful timing medians. Historical reports without host observers remain
+missing; they are not retroactively completed. Before/after snapshots qualify
+serial producers only; independently read atomic counters are not a coherent
+per-operation snapshot for concurrent callers.

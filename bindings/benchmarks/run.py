@@ -121,10 +121,48 @@ def failure_profile_valid(result, layer, required):
             and native_counters_valid(profile, layer))
 
 
+def go_host_counters_valid(profile):
+    fields = ("parameter_conversion_ns", "parameter_conversion_calls", "ffi_call_ns",
+              "ffi_calls", "result_conversion_ns", "result_conversion_calls")
+    return (isinstance(profile, dict) and profile.get("valid") is True
+            and profile.get("scope") == "go_query_parameter_native_call_result_phases"
+            and all(type(profile.get(key)) is int and 0 <= profile[key] < 2**64 for key in fields)
+            and profile["result_conversion_calls"] == profile["ffi_calls"]
+            and profile["ffi_calls"] <= profile["parameter_conversion_calls"])
+
+
+def go_host_profile_valid(result, required):
+    if result["status"] != "ok":
+        return None
+    profile = result.get("go_host_profile")
+    if result["layer"] != "go" or not required:
+        return profile is None
+    if not go_host_counters_valid(profile):
+        return False
+    count, case = result.get("size"), result.get("case")
+    if type(count) is not int or count < 1 or case not in CASES:
+        return False
+    calls = count + 1 if case == "fill" else 2 if case == "fill_bulk" else count if case == "point" else 1
+    return all(profile[key] == calls for key in (
+        "parameter_conversion_calls", "ffi_calls", "result_conversion_calls"))
+
+
+def failure_go_host_profile_valid(result, required):
+    if result["status"] == "ok":
+        return None
+    profile = result.get("failure_go_host_profile")
+    if result["layer"] != "go" or not required:
+        return False if profile is not None else None
+    return (result.get("failure_go_host_profile_scope") ==
+            "db_query_calls_including_setup_warmup_and_cleanup"
+            and go_host_counters_valid(profile))
+
+
 def qualified_record(result):
     return (result["status"] == "ok" and result["parity"]
             and result["process_exit"] == 0 and result["profile_valid"] is True
-            and result["phase_timing_valid"] is True)
+            and result["phase_timing_valid"] is True
+            and result.get("go_host_profile_valid", True) is True)
 
 
 def run_child(command, artifact):
@@ -170,6 +208,8 @@ def main():
     parser.add_argument("--native-profiles", action="store_true",
                         help="require native counters from all three instrumented artifacts")
     parser.add_argument("--cpu-profiles", action="store_true")
+    parser.add_argument("--go-host-profiles", action="store_true",
+                        help="require compile-tagged Go JSON/FFI phase counters with --native-profiles")
     args = parser.parse_args()
     sizes = [int(size) for size in args.sizes.split(",")]
     cases = args.cases.split(",")
@@ -181,12 +221,15 @@ def main():
         parser.error("known, distinct layers are required")
     if args.native_profiles and args.python_extension is None:
         parser.error("--native-profiles requires an explicit instrumented --python-extension")
+    if args.go_host_profiles and (not args.native_profiles or "go" not in layers):
+        parser.error("--go-host-profiles requires --native-profiles and the go layer")
     args.output.mkdir(parents=True, exist_ok=False)
     identity = source_identity()
     if args.go is None:
         # rules_go applies a pure-Go configuration transition, so its binary
         # does not necessarily live under the root bazel-bin symlink.
-        args.go = ROOT / command_text("bazel", "cquery", "-c", "opt", "//bindings/go/cmd/boundary", "--output=files")
+        target = "//bindings/go/cmd/boundary:boundary_profile" if args.go_host_profiles else "//bindings/go/cmd/boundary"
+        args.go = ROOT / command_text("bazel", "cquery", "-c", "opt", target, "--output=files")
     library = args.library or ROOT / "bazel-bin/bindings/ffi" / ("libhawdb_ffi.dylib" if sys.platform == "darwin" else "libhawdb_ffi.so")
     args.rust, args.python, args.go, library = (path.resolve() for path in (args.rust, args.python, args.go, library))
     # Freeze the extension as well: another Bazel configuration can retarget
@@ -213,7 +256,8 @@ def main():
         "rust": command_text("rustc", "--version"), "go": command_text("go", "version"),
         "build": "Bazel opt, all three engine dependencies compiled together",
         "defaults_changed": False, "strict_zero_copy": False, "terminal": False,
-        "instrumented": args.native_profiles or args.cpu_profiles,
+        "instrumented": args.native_profiles or args.cpu_profiles or args.go_host_profiles,
+        "go_host_profiles": args.go_host_profiles,
         "native_profiles": args.native_profiles, "go_cpu_profiles": args.cpu_profiles,
         "binaries": {layer: {"path": command[0], "sha256": artifacts[command[0]]} for layer, command in commands.items()},
         "library_sha256": artifacts[str(library)],
@@ -280,6 +324,8 @@ def main():
                         ) if result["status"] == "ok" else None
                         result["profile_valid"] = native_profile_valid(result, layer, args.native_profiles)
                         result["failure_profile_valid"] = failure_profile_valid(result, layer, args.native_profiles)
+                        result["go_host_profile_valid"] = go_host_profile_valid(result, args.go_host_profiles)
+                        result["failure_go_host_profile_valid"] = failure_go_host_profile_valid(result, args.go_host_profiles)
                         report["records"].append(result)
                         save()
                         # Preserve the child's raw outcome even if a rebuild
@@ -313,6 +359,8 @@ def main():
     # cannot be represented as a successful parity/performance qualification.
     report["profile_failures"] = sum(r["profile_valid"] is False for r in report["records"])
     report["failure_profile_failures"] = sum(r["failure_profile_valid"] is False for r in report["records"])
+    report["go_host_profile_failures"] = sum(r["go_host_profile_valid"] is False for r in report["records"])
+    report["failure_go_host_profile_failures"] = sum(r["failure_go_host_profile_valid"] is False for r in report["records"])
     report["phase_timing_failures"] = sum(r["phase_timing_valid"] is False for r in report["records"])
     report["all_paths_succeeded"] = all(qualified_record(r) for r in report["records"])
     save()

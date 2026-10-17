@@ -120,6 +120,95 @@ fn assert_producer_parity(reader: &SearchOutOfCoreReader, documents: &[SearchDoc
 }
 
 #[test]
+fn filtered_out_of_core_text_seeds_charge_metadata_and_keep_external_ids() {
+    let _serial = crate::test_allocation::serial();
+    let root = OwnedRoot::new("filtered-accounted");
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&root.0, Default::default()).unwrap();
+    let mut other = document(0, "other");
+    other.title = "graph graph graph graph graph graph".into();
+    other
+        .metadata
+        .insert("labels".into(), r#"["planning"]"#.into());
+    let mut team = document(1, "team");
+    team.title = "graph".into();
+    team.metadata
+        .insert("labels".into(), r#"["database"]"#.into());
+    team.metadata
+        .insert("padding".into(), "x".repeat(1024 * 1024));
+    writer.push(other).unwrap();
+    writer.push(team).unwrap();
+    writer.finish().unwrap();
+    let reader = SearchOutOfCoreReader::open(&root.0).unwrap();
+    let budget = NonZeroUsize::new(64 * 1024 * 1024).unwrap();
+    let task = crate::RuntimeTaskContext::default();
+    for filters in [
+        BTreeMap::new(),
+        BTreeMap::from([("space_id".into(), "team".into())]),
+        BTreeMap::from([("labels__in".into(), r#"["database"]"#.into())]),
+    ] {
+        let expected = reader
+            .search_with_options(
+                "graph",
+                None,
+                SearchMode::Text,
+                SearchQueryOptions {
+                    limit: 1,
+                    offset: 0,
+                    rank_window: None,
+                    fusion_weights: SearchFusionWeights::default(),
+                    metadata_filters: filters.clone(),
+                    policy_epoch: None,
+                },
+            )
+            .unwrap();
+        let ledger = QueryMemoryLedger::new(budget);
+        let account = ledger.account(QueryMemoryClass::ExternalRead, "filtered text", budget);
+        let baseline = crate::test_allocation::live();
+        let (actual, peak) = crate::test_allocation::measure(|| {
+            reader
+                .text_seed_scores_with_metadata_filters("graph", &filters, 1, &account, &task)
+                .unwrap()
+        });
+        let actual_bits = actual
+            .scores()
+            .iter()
+            .map(|(id, score)| (id.clone(), score.to_bits()))
+            .collect::<BTreeMap<_, _>>();
+        let expected_bits = expected
+            .result
+            .hits
+            .iter()
+            .map(|hit| (hit.id.clone(), hit.text_score.to_bits()))
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(actual_bits, expected_bits, "filters={filters:?}");
+        for hit in &expected.result.hits {
+            assert_eq!(actual.external_id(&hit.id), hit.external_id.as_deref());
+        }
+        let allocated = peak.checked_sub(baseline).unwrap();
+        assert!(
+            allocated <= ledger.snapshot().peak_bytes,
+            "filtered text peak exceeded its account: allocated {allocated}, charged {}",
+            ledger.snapshot().peak_bytes
+        );
+        drop(actual);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+    let tiny = NonZeroUsize::new(256).unwrap();
+    let ledger = QueryMemoryLedger::new(tiny);
+    let account = ledger.account(QueryMemoryClass::ExternalRead, "tiny filtered text", tiny);
+    assert!(reader
+        .text_seed_scores_with_metadata_filters(
+            "graph",
+            &BTreeMap::from([("space_id".into(), "team".into())]),
+            1,
+            &account,
+            &task,
+        )
+        .is_err());
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
 fn out_of_core_text_seed_scores_use_the_complete_live_corpus_and_bounded_window() {
     let mut a = document(0, "team");
     a.id = "a".into();
@@ -182,6 +271,192 @@ fn out_of_core_text_seed_scores_use_the_complete_live_corpus_and_bounded_window(
         assert!(!reader.visibility.is_empty());
         assert_producer_parity(&reader, &[live]);
     }
+}
+
+#[test]
+fn out_of_core_text_seed_retains_pinned_generation_across_replacement_and_delete() {
+    let root = OwnedRoot::new("pinned-replacement-delete");
+    let row = |id: &str, body: &str| crate::SearchProjectionRow {
+        kind: crate::SearchProjectionKind::Memory,
+        external_id: id.into(),
+        title: id.into(),
+        body: body.into(),
+        embedding: None,
+        source_id: None,
+        metadata: BTreeMap::new(),
+    };
+    let old = row("a", "legacytoken");
+    let deleted = row("b", "deletedtoken");
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&root.0, Default::default()).unwrap();
+    writer.push(old.clone().into_document()).unwrap();
+    writer.push(deleted.clone().into_document()).unwrap();
+    writer.finish().unwrap();
+
+    let pinned = SearchOutOfCoreReader::open(&root.0).unwrap();
+    let budget = NonZeroUsize::new(64 * 1024 * 1024).unwrap();
+    let ledger = QueryMemoryLedger::new(budget);
+    let account = ledger.account(QueryMemoryClass::ExternalRead, "pinned text seed", budget);
+    let task = crate::RuntimeTaskContext::default();
+    let scores = |reader: &SearchOutOfCoreReader, text: &str| {
+        reader
+            .text_seed_scores_with_context(text, 2, &account, &task, |_| Ok(true))
+            .unwrap()
+            .scores()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(scores(&pinned, "legacytoken"), vec!["memory:a"]);
+    assert_eq!(scores(&pinned, "deletedtoken"), vec!["memory:b"]);
+
+    let replacement = row("a", "freshterm");
+    SearchOutOfCoreGenerationWriter::prepare_delta(
+        &pinned,
+        crate::SearchProjectionDelta {
+            upserts: vec![replacement],
+            deletes: vec!["memory:b".into()],
+            ..Default::default()
+        },
+        Default::default(),
+    )
+    .unwrap()
+    .finish()
+    .unwrap();
+    let current = SearchOutOfCoreReader::open(&root.0).unwrap();
+    assert_ne!(pinned.generation(), current.generation());
+    assert_eq!(scores(&pinned, "legacytoken"), vec!["memory:a"]);
+    assert_eq!(scores(&pinned, "deletedtoken"), vec!["memory:b"]);
+    assert!(scores(&pinned, "freshterm").is_empty());
+    assert!(scores(&current, "legacytoken").is_empty());
+    assert!(scores(&current, "deletedtoken").is_empty());
+    assert_eq!(scores(&current, "freshterm"), vec!["memory:a"]);
+    let filtered_scores = |reader: &SearchOutOfCoreReader, text: &str| {
+        reader
+            .text_seed_scores_with_metadata_filters(text, &BTreeMap::new(), 2, &account, &task)
+            .unwrap()
+    };
+    let pinned_old = filtered_scores(&pinned, "legacytoken");
+    assert_eq!(pinned_old.external_id("memory:a"), Some("a"));
+    assert_eq!(
+        pinned_old.scores().keys().cloned().collect::<Vec<_>>(),
+        vec!["memory:a"]
+    );
+    drop(pinned_old);
+    assert!(filtered_scores(&pinned, "freshterm").scores().is_empty());
+    assert_eq!(
+        filtered_scores(&current, "freshterm")
+            .scores()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>(),
+        vec!["memory:a"]
+    );
+    assert!(filtered_scores(&current, "deletedtoken")
+        .scores()
+        .is_empty());
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn active_out_of_core_text_seed_keeps_its_generation_during_publication() {
+    let root = OwnedRoot::new("active-publication");
+    let row = |id: &str, body: &str, space: &str| crate::SearchProjectionRow {
+        kind: crate::SearchProjectionKind::Memory,
+        external_id: id.into(),
+        title: id.into(),
+        body: body.into(),
+        embedding: None,
+        source_id: None,
+        metadata: BTreeMap::from([("space_id".into(), space.into())]),
+    };
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&root.0, Default::default()).unwrap();
+    writer
+        .push(row("a", "sharedterm", "old").into_document())
+        .unwrap();
+    writer
+        .push(row("b", "sharedterm", "old").into_document())
+        .unwrap();
+    writer.finish().unwrap();
+
+    let pinned = SearchOutOfCoreReader::open(&root.0).unwrap();
+    let budget = NonZeroUsize::new(64 * 1024 * 1024).unwrap();
+    let ledger = QueryMemoryLedger::new(budget);
+    let account = ledger.account(QueryMemoryClass::ExternalRead, "active text seed", budget);
+    let task = crate::RuntimeTaskContext::default();
+    let filters = BTreeMap::from([("space_id".into(), "old".into())]);
+    let (candidate_tx, candidate_rx) = std::sync::mpsc::channel();
+    let (published_tx, published_rx) = std::sync::mpsc::channel();
+    std::thread::scope(|scope| {
+        let query_reader = &pinned;
+        let query_account = &account;
+        let query_task = &task;
+        let query_filters = &filters;
+        let query = scope.spawn(move || {
+            let mut paused = false;
+            let output = query_reader.text_seed_scores_with_metadata_filters_and_observer(
+                "sharedterm",
+                query_filters,
+                2,
+                query_account,
+                query_task,
+                |_| {
+                    if !paused {
+                        paused = true;
+                        candidate_tx.send(()).unwrap();
+                        published_rx
+                            .recv_timeout(std::time::Duration::from_secs(30))
+                            .unwrap();
+                    }
+                    Ok(())
+                },
+            )?;
+            let ids = output.scores().keys().cloned().collect::<Vec<_>>();
+            assert_eq!(output.external_id("memory:a"), Some("a"));
+            assert_eq!(output.external_id("memory:b"), Some("b"));
+            Ok::<_, crate::HawDBError>(ids)
+        });
+        candidate_rx
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .unwrap();
+        SearchOutOfCoreGenerationWriter::prepare_delta(
+            &pinned,
+            crate::SearchProjectionDelta {
+                upserts: vec![row("a", "freshterm", "new")],
+                deletes: vec!["memory:b".into()],
+                ..Default::default()
+            },
+            Default::default(),
+        )
+        .unwrap()
+        .finish()
+        .unwrap();
+        let current = SearchOutOfCoreReader::open(&root.0).unwrap();
+        assert_ne!(pinned.generation(), current.generation());
+        published_tx.send(()).unwrap();
+        assert_eq!(query.join().unwrap().unwrap(), vec!["memory:a", "memory:b"]);
+        assert!(current
+            .text_seed_scores_with_metadata_filters("sharedterm", &filters, 2, &account, &task)
+            .unwrap()
+            .scores()
+            .is_empty());
+        assert_eq!(
+            current
+                .text_seed_scores_with_metadata_filters(
+                    "freshterm",
+                    &BTreeMap::from([("space_id".into(), "new".into())]),
+                    2,
+                    &account,
+                    &task,
+                )
+                .unwrap()
+                .scores()
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec!["memory:a"]
+        );
+    });
+    assert_eq!(ledger.snapshot().used_bytes, 0);
 }
 
 #[test]
