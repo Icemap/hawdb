@@ -71,6 +71,11 @@ Persisted identity/recovery and process-local proof lifetimes need distinct rule
 
 ## Candidate-directory layout for native consumer implementation
 
+The [dependency-install backend split](PRIVATE_GENERATION_INSTALLATION_PROOF.md)
+is an internal seam only. Existing wrappers still immediately select their
+component head under the caller's publication exclusion; they do not construct
+the candidate-directory or consumer-selector lifecycle described below.
+
 Use an engine-owned candidate directory as the artifact namespace for the new
 generation-backed consumer format. Keep D's consumer selector in the registered
 root unchanged throughout C construction and C..E closure. A private component

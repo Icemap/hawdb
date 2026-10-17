@@ -89,11 +89,44 @@ pub(super) struct PublishedGeneration {
     pub(super) documents_digest: u64,
 }
 
+// Dependency installation is separate from selecting a visible closure. This
+// internal value alone owns neither publication exclusion nor cleanup custody;
+// a future consumer-installed token must retain both before exposing the split.
+pub(super) struct InstalledGeneration {
+    head: json::EncodedManifest,
+    publication: PublishedGeneration,
+}
+
+impl InstalledGeneration {
+    fn publish(
+        self,
+        root: &Path,
+        memory: &BuildMemory,
+        task: &RuntimeTaskContext,
+    ) -> Result<PublishedGeneration> {
+        let io = GenerationIo::new(memory, task);
+        io.write(
+            &io.path(root, Path::new(OUT_OF_CORE_MANIFEST_FILE))?,
+            &self.head.bytes,
+        )?;
+        Ok(self.publication)
+    }
+}
+
 pub(super) fn publish_generation(
     input: PublishGenerationInput<'_>,
     memory: &BuildMemory,
     task: &RuntimeTaskContext,
 ) -> Result<PublishedGeneration> {
+    let root = input.root;
+    install_generation(input, memory, task)?.publish(root, memory, task)
+}
+
+pub(super) fn install_generation(
+    input: PublishGenerationInput<'_>,
+    memory: &BuildMemory,
+    task: &RuntimeTaskContext,
+) -> Result<InstalledGeneration> {
     let io = GenerationIo::new(memory, task);
     let generation = input.generation;
     let descriptor_file = Name::generated("search_projection_segments.", generation, memory, task)?;
@@ -662,17 +695,17 @@ pub(super) fn publish_generation(
         )?;
     }
 
-    io.write(
-        &io.path(input.root, Path::new(OUT_OF_CORE_MANIFEST_FILE))?,
-        &manifest_bytes.bytes,
-    )?;
-    Ok(PublishedGeneration {
+    let publication = PublishedGeneration {
         content_published: publish_content,
         lexical_generation,
         manifest_bytes: manifest_bytes.bytes.len() as u64,
         generation_bytes,
         document_count,
         documents_digest,
+    };
+    Ok(InstalledGeneration {
+        head: manifest_bytes,
+        publication,
     })
 }
 
