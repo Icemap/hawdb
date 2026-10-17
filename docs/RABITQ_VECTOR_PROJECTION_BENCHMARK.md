@@ -171,7 +171,7 @@ all 1,266 records, complete warmup/repetition sets, exact returned candidate IDs
 and score bits across backends/workers, eligible counts and admitted memory.
 No failed sample was omitted. Kernel score checksums are timing controls, not
 full per-vector native-kernel parity. The separate full-query profile is below.
-Native macOS results remain pending; this evidence does not complete #994.
+The additional native-run evidence is recorded below; this evidence does not complete #994.
 
 - [Raw records](benchmarks/rabitq_scalar_linux_2026_10_18/samples.jsonl)
 - [All timings, medians, ranges and artifact SHA-256 values](benchmarks/rabitq_scalar_linux_2026_10_18/summary.json)
@@ -270,5 +270,87 @@ The 2.31 GiB raw `perf.data` remains outside Git. Its SHA-256 is
 `88cd555205c18d4133e9dc1635c59252b8252172281bde691662a84c938453bd`.
 The first attachment attempt stopped before the query loop because the driver
 rejected perf's NUL-terminated acknowledgement; it is retained separately and
-contributes no measurements to this report. Native macOS measurement and the
-remaining scalar/native-kernel qualification gates are still open.
+contributes no measurements to this report. Native artifact audits are recorded below. The remaining scalar/native-kernel
+qualification gates are still open.
+
+
+## Native Runner Baselines
+
+The optional [manual workflow run](https://github.com/nowledge-co/hawdb/actions/runs/39074306598)
+measured commit `3ae50b58614d8b15e7dc0ca5210e091c070c2e10` on native Linux
+x86_64 and macOS arm64. Both jobs completed successfully on 2026-10-17 UTC.
+The workflow verifies runner architecture and uses pinned Rust 1.97.1 with
+`storage-io` and the unchanged repository release profile. The kernel remains
+scalar on both architectures; these are not AVX2 or NEON results.
+
+Both downloads were independently re-audited: each run has all 16 corpora,
+208 timing groups and 1,266 records satisfying the complete protocol. Candidate
+IDs, exact score bits, eligibility and resource accounting match across backend/worker
+variants within that run. All 16 downloaded artifact SHA-256 values and each
+recomputed summary match the corresponding runner audit. No sample was
+discarded. The first macOS download ended with an unexpected EOF before
+extraction; one fresh-connection retry succeeded without rerunning benchmarks.
+
+The platforms also produced identical hashes for all 16 persisted artifacts.
+Comparing all 1,248 timing records across platforms found identical returned
+candidate IDs/score bits and kernel score checksums. This checks returned top-k
+parity and the timing accumulator; it is not full per-vector native-kernel
+parity. The [cross-platform accounting](benchmarks/rabitq_scalar_native_2026_10_18/platform-comparison.json)
+records that scope.
+
+Linux environment: Ubuntu 24.04, AMD EPYC 7763 VM, four logical CPUs, about
+15.6 GiB RAM, x86_64-unknown-linux-gnu Rust host. macOS environment: Darwin
+25.6.0 arm64, Apple M1 virtual machine, three logical CPUs, 7 GiB RAM and an
+aarch64-apple-darwin Rust host. Both are native architecture jobs; the macOS
+runner is virtualized, not a bare-metal idle-host qualification. The file-backed
+scans use warm-cache artifacts on each runner's filesystem. Hosted scheduling and
+virtualization differ from the local Ryzen baseline; cross-host rates are not
+an optimization speedup. No process RSS or cancellation latency is inferred
+from admitted working-byte counters.
+
+| Corpus | Linux median ns/vector | macOS median ns/vector |
+| --- | ---: | ---: |
+| `n100000-d67-b1` | 62.71 | 87.01 |
+| `n100000-d67-b4` | 218.56 | 153.51 |
+| `n100000-d384-b1` | 362.55 | 541.44 |
+| `n100000-d384-b4` | 1207.16 | 998.53 |
+| `n100000-d768-b1` | 724.96 | 1117.75 |
+| `n100000-d768-b4` | 2404.81 | 1971.11 |
+| `n100000-d1536-b1` | 1441.77 | 2239.90 |
+| `n100000-d1536-b4` | 4802.43 | 4207.87 |
+| `n1000000-d67-b1` | 62.48 | 59.99 |
+| `n1000000-d67-b4` | 218.40 | 233.02 |
+| `n1000000-d384-b1` | 362.98 | 363.33 |
+| `n1000000-d384-b4` | 1207.40 | 872.39 |
+| `n1000000-d768-b1` | 722.51 | 812.02 |
+| `n1000000-d768-b4` | 2407.42 | 1710.06 |
+| `n1000000-d1536-b1` | 1442.64 | 1551.43 |
+| `n1000000-d1536-b4` | 4801.82 | 3911.92 |
+
+Linux evidence:
+
+- [Raw records](benchmarks/rabitq_scalar_native_2026_10_18/linux/samples.jsonl)
+- [Every timing group and artifact hash](benchmarks/rabitq_scalar_native_2026_10_18/linux/audit.json)
+- [CPU](benchmarks/rabitq_scalar_native_2026_10_18/linux/cpu.txt),
+  [system](benchmarks/rabitq_scalar_native_2026_10_18/linux/system.txt),
+  [toolchain](benchmarks/rabitq_scalar_native_2026_10_18/linux/toolchain.txt),
+  [source revision](benchmarks/rabitq_scalar_native_2026_10_18/linux/source.txt)
+- [Harness output](benchmarks/rabitq_scalar_native_2026_10_18/linux/run.log)
+- [Workflow/artifact provenance and text-copy hashes](benchmarks/rabitq_scalar_native_2026_10_18/linux/provenance.json)
+
+macOS evidence:
+
+- [Raw records](benchmarks/rabitq_scalar_native_2026_10_18/macos/samples.jsonl)
+- [Every timing group and artifact hash](benchmarks/rabitq_scalar_native_2026_10_18/macos/audit.json)
+- [CPU](benchmarks/rabitq_scalar_native_2026_10_18/macos/cpu.txt),
+  [system](benchmarks/rabitq_scalar_native_2026_10_18/macos/system.txt),
+  [toolchain](benchmarks/rabitq_scalar_native_2026_10_18/macos/toolchain.txt),
+  [source revision](benchmarks/rabitq_scalar_native_2026_10_18/macos/source.txt)
+- [Harness output](benchmarks/rabitq_scalar_native_2026_10_18/macos/run.log)
+- [Workflow/artifact provenance and text-copy hashes](benchmarks/rabitq_scalar_native_2026_10_18/macos/provenance.json)
+
+Large binary artifacts remain outside Git. The workflow retains its uploads
+for 14 days; the source commit, fixture hashes, raw records and summaries are
+retained here. Neither this scalar baseline nor the Linux serving profile
+completes #994's scalar restructuring, native kernels, parity, cancellation,
+resource, WASM or end-to-end qualification.

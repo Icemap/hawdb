@@ -1,0 +1,39 @@
+{
+  "workflow_run": "https://github.com/nowledge-co/hawdb/actions/runs/39074306598",
+  "job_id": 117518181707,
+  "artifact_id": 12116703743,
+  "source_commit": "3ae50b58614d8b15e7dc0ca5210e091c070c2e10",
+  "platform": "Linux x86_64",
+  "independent_audit": "Full matrix, candidate parity, resource accounting, all 16 fixture SHA-256 values and runner summary matched.",
+  "normalization": "Text copies strip trailing whitespace at EOF; original downloads are retained outside Git.",
+  "files": {
+    "samples.jsonl": {
+      "original_sha256": "c339ff3305cba53ec249053477277972316311de2a91a1ba81f3eb251e8e66a0",
+      "recorded_sha256": "c339ff3305cba53ec249053477277972316311de2a91a1ba81f3eb251e8e66a0"
+    },
+    "audit.json": {
+      "original_sha256": "12b7181f4eabd211fce3f054d3cca1a6e15fc3b8a0767dcc70feeff358181f66",
+      "recorded_sha256": "12b7181f4eabd211fce3f054d3cca1a6e15fc3b8a0767dcc70feeff358181f66"
+    },
+    "cpu.txt": {
+      "original_sha256": "d893a2e1fe38c883e9c6304826742490a3e71cb4324cac80c4809870147219b4",
+      "recorded_sha256": "d893a2e1fe38c883e9c6304826742490a3e71cb4324cac80c4809870147219b4"
+    },
+    "system.txt": {
+      "original_sha256": "7bbe3195eae04e83d2436f7d5d1c4e021b01c49e99f638f3cdf0d8c628afb518",
+      "recorded_sha256": "7bbe3195eae04e83d2436f7d5d1c4e021b01c49e99f638f3cdf0d8c628afb518"
+    },
+    "source.txt": {
+      "original_sha256": "d292bce327bba4a5246f888fe908781ef579d195c22193552667f00a06305907",
+      "recorded_sha256": "701499f28576c1526c16155eb866bfd9b639be03bb39c4dd9e59055bf62b5292"
+    },
+    "toolchain.txt": {
+      "original_sha256": "b2bdf493bcf6d1dc55181a0efc2774b6d9cf7bf5c8dcc5bed592c994b2ad38c4",
+      "recorded_sha256": "b2bdf493bcf6d1dc55181a0efc2774b6d9cf7bf5c8dcc5bed592c994b2ad38c4"
+    },
+    "run.log": {
+      "original_sha256": "5509ed0f73aab99eca5f027b052cd2d3fee6cf16b9265cd50c6dab7fb7a34487",
+      "recorded_sha256": "082f5ab3fed777d7bf16b5eb2ec6b58d843f90ea67152db77ecbf04e240b5595"
+    }
+  }
+}

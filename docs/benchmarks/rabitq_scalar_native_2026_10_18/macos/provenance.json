@@ -1,0 +1,40 @@
+{
+  "workflow_run": "https://github.com/nowledge-co/hawdb/actions/runs/39074306598",
+  "job_id": 117518181576,
+  "artifact_id": 12117465205,
+  "source_commit": "3ae50b58614d8b15e7dc0ca5210e091c070c2e10",
+  "platform": "macOS arm64",
+  "independent_audit": "Full matrix, candidate parity, resource accounting, all 16 fixture SHA-256 values and runner summary matched.",
+  "normalization": "Text copies strip trailing whitespace at EOF; original downloads are retained outside Git.",
+  "download": "First attempt ended with unexpected EOF before extraction; one fresh-connection retry succeeded. No benchmark rerun or sample replacement.",
+  "files": {
+    "samples.jsonl": {
+      "original_sha256": "18b144daf93aff0b57685377f38af57a06ce0e56d9f38cb3d2652f0fdede4e78",
+      "recorded_sha256": "18b144daf93aff0b57685377f38af57a06ce0e56d9f38cb3d2652f0fdede4e78"
+    },
+    "audit.json": {
+      "original_sha256": "c5658e092208d45ce705d475fdf2c4592c4e63c7fc539161436ad6ddce56e043",
+      "recorded_sha256": "c5658e092208d45ce705d475fdf2c4592c4e63c7fc539161436ad6ddce56e043"
+    },
+    "cpu.txt": {
+      "original_sha256": "ee4b24f17c6fb15675ff913ff2f648cad8f83f8d60ed9c832b9b50d01c0cadbc",
+      "recorded_sha256": "ee4b24f17c6fb15675ff913ff2f648cad8f83f8d60ed9c832b9b50d01c0cadbc"
+    },
+    "system.txt": {
+      "original_sha256": "0001a1bdf0661df09f5b98a47a72f6598f037bbd147ce42b455c2759c74e4749",
+      "recorded_sha256": "0001a1bdf0661df09f5b98a47a72f6598f037bbd147ce42b455c2759c74e4749"
+    },
+    "source.txt": {
+      "original_sha256": "d292bce327bba4a5246f888fe908781ef579d195c22193552667f00a06305907",
+      "recorded_sha256": "701499f28576c1526c16155eb866bfd9b639be03bb39c4dd9e59055bf62b5292"
+    },
+    "toolchain.txt": {
+      "original_sha256": "e794146d99fad54562fdcbd4a7c8b22b0240d2b0312ff6d879d67939b3131850",
+      "recorded_sha256": "e794146d99fad54562fdcbd4a7c8b22b0240d2b0312ff6d879d67939b3131850"
+    },
+    "run.log": {
+      "original_sha256": "7e7871c87770a0c0db12dc2985e718f6cd342479826a763d86fdf36e9d1c30e3",
+      "recorded_sha256": "92e84ecf103c75ac343d7d8b7b6f4eb32be1ba82eae53474b5d1ee97209d9b30"
+    }
+  }
+}
