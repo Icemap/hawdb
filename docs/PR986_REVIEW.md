@@ -22,6 +22,11 @@ No production alignment check or output-clearing rule is weakened.
 merging main forward, verify one SessionConfig definition and no independent
 session-policy delta against main. That integration has not happened yet.
 The requested retained-core, bindings, Arrow and node-view split remains open.
+Its prerequisite checkpoint-release fix is separately proposed in
+[#1051](https://github.com/nowledge-co/hawdb/pull/1051). On 214a3f05, the full
+local general partition and all 98 mandatory fuzz targets pass, as do native
+Linux/macOS/Windows and all five Prow checks. Independent maintainer approval
+and main landing remain pending; these checks do not waive #986 qualification.
 
 The benchmark harness is reusable local developer qualification code, also
 called by the optional comparison workflow. `run.py`, `python_boundary.py`,
@@ -34,23 +39,39 @@ refusal, source identity and report completeness. These tools are documented
 for local invocation and their Bazel targets are manual, rather than production
 control planes or default CI workloads. Keeping a reproducible qualification
 path on main is useful, but does not make all historical observations or the
-whole harness an inseparable part of the retained-core delivery. Their scope
-must be assigned during the remaining split review; no blanket approval to
-land the current benchmark tree is claimed here.
+whole harness an inseparable part of the retained-core delivery.
+
+The proposed scope for the split is:
+
+| Developer tooling | Delivery boundary |
+| --- | --- |
+| `checksum.py`, `run.py`, `compare.py`, `main-baseline-adapters.json`, `python_boundary.py`, `test_run.py`, and Rust/Go ordinary drivers | Reusable ordinary qualification, delivered with the applicable host boundary or in a separate main-based qualification PR; not required to ship the retained Rust core. |
+| `native_alloc.rs`, `native_profile.rs` and their profiling build targets | Shared opt-in allocation/resource observation, kept with their Rust/FFI/Python consumers. FFI/Python imports are guarded by `boundary-profiling`; ordinary builds do not install this observer. |
+| `retained_write_control.py` | Numeric retained binding qualification. |
+| `retained_boundary.py` and `test_retained_boundary.py` | Numeric/Arrow consumer qualification; the current driver includes both modes and must not introduce Arrow into the first Rust-only core cut. |
+| `retained_node_write_control.py` | Node-view delivery. |
+| Shared BUILD/README and historical summaries/index | Select the relevant build/documentation hunks for each delivery; retain source-qualified evidence and artifact links without reintroducing raw reports. |
+
+The five Python executable/test targets in this benchmark BUILD are manual.
+The ordinary Rust allocation bench and optional FFI/Python profiling targets
+also consume the shared observer source, so removing it requires handling
+those build inputs together. This source audit supports keeping reproducible
+developer qualification on main; it is not an implemented split or maintainer
+approval of the current benchmark tree.
 
 ## Review findings
 
 | Finding | Current disposition |
 | --- | --- |
 | Raw benchmark JSON in Git | Removed 30 raw reports (27,019,916 bytes) from the final tree after verifying uploaded artifact bytes: the original 25 evidence files plus five historical benchmark-root observations. The compact [index](../bindings/benchmarks/evidence/README.md) preserves original hashes and sources. Branch history is retained; squash merging is required to exclude the raw reports from main history. |
-| Separate session policy from retained bindings | The #1046 policy is extracted directly onto main in an independent working branch. Its owned/session contract target passes 17 tests; complete verification is running. The independent PR must land before its changes disappear from this PR's main-based diff. Remaining retained/bindings scope still requires independent review and a disposition of the requested split. |
+| Separate session policy from retained bindings | The #1046 policy is extracted into #1050 directly against main. Its final owned/session contract target passes 20 tests and mandatory fuzz passes 98/98; full general verification still requires the #1051 prerequisite and final main integration. The independent PR must land before its changes disappear from this PR's main-based diff. Remaining retained/bindings scope still requires independent review and implementation of the requested split. |
 | Three meanings of zero | Public session and host settings normalize zero to unlimited at their explicit conversion helpers. Low-level request Some(0) remains a strict zero-row budget; language LIMIT 0 returns no rows. The independent policy adds a regression that exercises these boundaries together. The C retained request exposes batch_rows, not a session max_result_rows field. An internal RowLimit enum remains an optional refactor. |
 | import_label stale name key | b0cdac83 removes the previous name mapping only when it still maps to that label ID. Tests preserve snapshots, exercise overwritten name mappings, and verify that only the retained symbol survives replacement. The capacity fixture uses public import with a preallocated string, without manual map removal. |
 | Label retention expect | Capacity is computed by a private helper from the already borrowed Label. Admission no longer performs a second lookup or expects that lookup to succeed. Missing-ID and permit-refusal regressions remain selected. |
 | FFI alignment and borrowed release | Aligned access is checked before dereferencing retained request/database pointers or writing outputs. Borrowed columns return owner_id=0; releasing that sentinel returns InvalidHandle and preserves the real batch. Both numeric and node query entry points are covered. Descriptor layouts and ABI version are unchanged. |
 | FFI sanitizer coverage | Rust FFI17, Python retained/Arrow62, and Go retained17 cases pass with ASan-instrumented Rust producers. Details and instrumentation scope are below. |
 | Release-capacity boundary and expiry | Tests derive the threshold from STORAGE_PRESSURE_DEFER_RATIO_PER_MILLION and limit/10, checking one byte below and exactly at the inclusive boundary. Preparing/Releasing expiry preserves retryable BranchBusy and one five-second deadline despite repeated notifications. An Idle transition remains reusable and release-before-deadline wakes the waiter. All five capacity-wait cases pass. |
-| PR description history | The prior body, comments and merge resolution patch are archived with byte verification. The PR body is being rewritten around the current implementation, exact-source validation and remaining gates. |
+| PR description history | The prior body, comments and merge resolution patch are archived with byte verification. The PR body now describes the current implementation, source-qualified validation and remaining gates. |
 
 ## Main merge conflict resolutions
 
@@ -139,6 +160,12 @@ Frozen producer/runtime SHA-256 values:
 - Python extension: `c39cb5006db24fe10ac9a5c7ee3d6052d1fd11f09d3d23fabb534a1e7ef3d527`.
 - ASan runtime: `4b205559024dc60fdbe495f93d412ae393c17187adcffee5cb2785d79aa2d325`.
 
-Full final-head general, storage and mandatory fuzz verification is running.
+The full local Mac storage target on ab6d4ae1 passes 1,912 tests, with zero
+failures and 30 existing ignored cases, in 526.17 seconds under the original
+900-second deadline. Its earlier complete-target and individual-case timeouts
+remain recorded; the shared host is not claimed idle and the later pass does
+not establish their cause. The root general partition passes 1,742 tests with
+one ignored, and the mandatory fuzz selection passes 98/98 on identical runtime
+sources. These receipts do not substitute for later integration-head checks.
 Predecessor performance evidence retains its original source and is assessed
 separately; the complete original performance/resource gate remains open.
