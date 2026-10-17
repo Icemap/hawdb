@@ -176,6 +176,132 @@ fn bounded_read_snapshot_coordinates_search_graph_and_relational_queries() {
 }
 
 #[test]
+fn bounded_read_snapshot_uses_its_pinned_projection_for_text_seeds() {
+    let handle = app_read_handle();
+    handle
+        .with_bounded_read_snapshot(
+            NowledgeMemReadSnapshotBudget {
+                max_rows: 4,
+                max_payload_bytes: 4096,
+            },
+            |snapshot| {
+                let text = snapshot.query_cypher(
+                    "CALL text_search($text, topK := 2) YIELD id, score \
+                     RETURN id, score ORDER BY id",
+                    &BTreeMap::from([("text".to_string(), Value::String("candidate".to_string()))]),
+                    2,
+                )?;
+                assert_eq!(text.rows.len(), 2);
+                assert!(text.rows.iter().all(
+                    |row| matches!(row.get("score"), Some(Value::Float(score)) if *score > 0.0)
+                ));
+
+                let graph = snapshot.query_cypher(
+                    "MATCH (m:Memory) WHERE m.id = $id RETURN m.title AS title LIMIT 1",
+                    &BTreeMap::from([("id".to_string(), Value::String("nearest".to_string()))]),
+                    1,
+                )?;
+                let relational = snapshot.query_sql(
+                    "SELECT content FROM thread_messages WHERE content_message_id = $1 LIMIT 1",
+                    &[Value::String("message-1".to_string())],
+                    1,
+                )?;
+                assert_eq!(graph.rows.len(), 1);
+                assert_eq!(relational.rows.len(), 1);
+                assert_eq!(snapshot.report().output_rows, 4);
+                Ok(())
+            },
+        )
+        .unwrap();
+}
+
+#[test]
+fn bounded_read_snapshot_filters_text_seeds_before_top_k() {
+    let handle = app_read_handle();
+    handle
+        .write_store()
+        .unwrap()
+        .graph_mut()
+        .database_mut()
+        .query("CREATE (:Memory {id: 'farther', space_id: 'other', title: 'Farther memory'})")
+        .unwrap();
+    let unfiltered = handle
+        .search_candidates(&super::NowledgeMemSearchCandidateRequest::text(
+            "candidate",
+            1,
+        ))
+        .unwrap();
+    let excluded_space = if unfiltered.hits[0].external_id.as_deref() == Some("nearest") {
+        "other"
+    } else {
+        "default"
+    };
+    let expected = handle
+        .search_candidates(
+            &super::NowledgeMemSearchCandidateRequest::text("candidate", 1).with_metadata_filters(
+                BTreeMap::from([("space_id".into(), excluded_space.into())]),
+            ),
+        )
+        .unwrap();
+    assert_eq!(expected.hits.len(), 1);
+    assert_ne!(expected.hits[0].id, unfiltered.hits[0].id);
+    let parameters = BTreeMap::from([
+        ("text".into(), Value::String("candidate".into())),
+        ("space_id".into(), Value::String(excluded_space.into())),
+    ]);
+    handle
+        .with_bounded_read_snapshot(
+            NowledgeMemReadSnapshotBudget {
+                max_rows: 1,
+                max_payload_bytes: 4096,
+            },
+            |snapshot| {
+                let result = snapshot.query_cypher(
+                    "CALL text_search($text, topK := 1) YIELD id, score \
+                     MATCH (m:Memory) WHERE m.space_id = $space_id \
+                     RETURN m.id AS id, score",
+                    &parameters,
+                    1,
+                )?;
+                assert_eq!(result.rows.len(), 1);
+                assert_eq!(
+                    result.rows[0].get("id"),
+                    Some(&Value::String(
+                        expected.hits[0].external_id.clone().unwrap()
+                    ))
+                );
+                Ok(())
+            },
+        )
+        .unwrap();
+}
+
+#[test]
+fn graph_only_snapshot_refuses_text_seeds_without_a_pinned_projection() {
+    let handle = app_read_handle();
+    handle
+        .with_bounded_graph_read_snapshot(
+            NowledgeMemReadSnapshotBudget {
+                max_rows: 1,
+                max_payload_bytes: 4096,
+            },
+            |snapshot| {
+                let error = snapshot
+                    .query_cypher(
+                        "CALL text_search($text, topK := 1) YIELD id, score RETURN id",
+                        &BTreeMap::from([("text".into(), Value::String("candidate".into()))]),
+                        1,
+                    )
+                    .unwrap_err();
+                assert!(matches!(error, crate::HawDBError::Storage(ref message)
+                    if message == "nowledge mem search projection is not configured"));
+                Ok(())
+            },
+        )
+        .unwrap();
+}
+
+#[test]
 fn bounded_graph_read_snapshot_exposes_profiled_query_memory_evidence() {
     let handle = app_read_handle();
     let context = RuntimeTaskContext::default();
@@ -1703,6 +1829,12 @@ fn bounded_read_snapshot_projection_scan_uses_out_of_core_pin_and_releases_admis
     let mut observed = Vec::new();
     let report = handle
         .with_bounded_read_snapshot(budget, |snapshot| {
+            let text = snapshot.query_cypher(
+                "CALL text_search($text, topK := 1) YIELD id, score RETURN id, score",
+                &BTreeMap::from([("text".into(), Value::String("persistent projection".into()))]),
+                1,
+            )?;
+            assert_eq!(text.rows.len(), 1);
             snapshot.visit_search_projection(4096, |document| {
                 observed.push(document.clone());
                 Ok(())

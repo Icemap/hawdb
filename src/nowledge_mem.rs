@@ -2056,6 +2056,45 @@ struct SearchProjectionExternalReadOperator<'a> {
 }
 
 impl crate::executor::ExternalReadOperator for SearchProjectionExternalReadOperator<'_> {
+    fn execute_text_seed(
+        &mut self,
+        request: crate::executor::TextSeedExecutionRequest<'_>,
+    ) -> Result<crate::executor::TextSeedExecutionOutput> {
+        request.resources.checkpoint()?;
+        let search_request = NowledgeMemSearchCandidateRequest::text(
+            request.query_text,
+            request.resources.result.max_rows,
+        )
+        .with_metadata_filters(request.metadata_filters.clone());
+        let execution_options = VectorSearchExecutionOptions::bounded(
+            request.resources.max_parallelism,
+            request.resources.max_working_memory_bytes.get(),
+            request.resources.task_context,
+        );
+        let mut output = crate::executor::TextSeedExecutionOutput::new(
+            request.result_account,
+            request.resources.result,
+        )?;
+        let search = match (self.projection, self.out_of_core_projection) {
+            (Some(projection), None) => projection
+                .try_search_candidates_with_report_context(&search_request, execution_options)?,
+            (None, Some(projection)) => projection
+                .search_candidates_with_report_context(&search_request, execution_options)?
+                .into(),
+            (None, None) => return Err(missing_search_projection_error()),
+            (Some(_), Some(_)) => {
+                return Err(HawDBError::Storage(
+                    "nowledge mem search projection ownership is ambiguous".to_string(),
+                ));
+            }
+        };
+        for hit in search.result.hits {
+            request.resources.checkpoint()?;
+            output.push(&hit.id, hit.external_id.as_deref(), hit.text_score)?;
+        }
+        Ok(output)
+    }
+
     fn execute_vector_seed(
         &mut self,
         request: crate::executor::VectorSeedExecutionRequest<'_>,
