@@ -159,3 +159,83 @@ fn cancellation_after_native_open_precedes_large_buffer_allocation() {
     drop(permit);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
+
+#[test]
+fn streamed_artifact_uses_bounded_scratch_and_cancellation_refunds_it() {
+    let _serial = allocation::serial();
+    assert_eq!(allocation::live(), 0);
+    let directory = Directory::new();
+    let project = hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_component(
+        &directory.0,
+        false,
+    )
+    .unwrap();
+    let path = directory.0.join("streamed");
+    let bytes = vec![b'x'; 3 << 20];
+    std::fs::write(&path, &bytes).unwrap();
+    let governor = governor();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(2 << 20).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(Default::default());
+    let memory = BuildMemory::new(&task).unwrap();
+    warm(&memory);
+    drop(task.acquire_io_wave(NonZeroUsize::MIN).unwrap());
+    let baseline = memory.ledger.snapshot().used_bytes;
+    let host = governor.snapshot().admitted_memory_bytes;
+    let admission = ReadAdmission {
+        memory: &memory,
+        task: &task,
+        permit: &permit,
+    };
+    let mut visited = 0;
+    let (_, peak) = allocation::measure(|| {
+        let file = admission
+            .visit_bound(
+                &path,
+                bytes.len() as u64,
+                crate::checksum_bytes(&bytes),
+                4 << 20,
+                |chunk| {
+                    assert!(chunk.len() <= 8192);
+                    assert!(chunk.iter().all(|&byte| byte == b'x'));
+                    visited += chunk.len();
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(file.metadata().unwrap().len(), bytes.len() as u64);
+        drop(file);
+    });
+    assert_eq!(visited, bytes.len());
+    assert!(
+        peak < 16 << 10,
+        "streamed validation allocated an artifact-sized buffer: {peak}"
+    );
+    assert_eq!(memory.ledger.snapshot().used_bytes, baseline);
+    let mut cancelled_bytes = 0;
+    let error = admission
+        .visit_bound(
+            &path,
+            bytes.len() as u64,
+            crate::checksum_bytes(&bytes),
+            4 << 20,
+            |chunk| {
+                cancelled_bytes += chunk.len();
+                task.cancellation().cancel();
+                Ok(())
+            },
+        )
+        .unwrap_err();
+    assert!(matches!(error, HawDBError::Execution(_)));
+    assert!(cancelled_bytes > 0 && cancelled_bytes <= 8192);
+    assert_eq!(memory.ledger.snapshot().used_bytes, baseline);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, host);
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
+    drop(memory);
+    drop(task);
+    drop(project);
+    assert_eq!(allocation::live(), 0);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}

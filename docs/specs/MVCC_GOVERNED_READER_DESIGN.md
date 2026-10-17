@@ -80,9 +80,26 @@ replacement and concurrent cursor/eviction custody at the Storage boundary.
 Search tests currently exercise the connected native-file path; they do not yet
 establish a complete Search reader over a cold managed artifact closure.
 
-The admitted segment entry is private and currently exercised by native tests.
-The ordinary reader entry continues to select the existing ungoverned path.
+The admitted segment entry remains private. The current next-stage implementation
+also pre-admits lexical JSON metadata and its file/control storage, streams its
+artifact checksum/header through the same held file, and retains the lexical
+payload with the segment. Descriptor, layout, lexical manifest and payload paths
+use admitted construction. A per-artifact size/read limit returns an execution
+refusal before opening; this is not a cumulative physical-I/O budget.
+
+Vector-bearing segments use the same `ReadAdmission` bridge and retained owners.
+The logical input is explicitly pinned under read control while vector metadata
+is decoded, verified and mapped; the mapping reader retains no input File. This
+closes uncontrolled cold revalidation inside the vector constructor. The native
+FD argument, finite model and remaining assumptions are recorded in
+[admitted native input custody](../tla/ADMITTED_NATIVE_LEASE_PROOF.md).
+
+Targeted positive tests currently cover native-file segment construction and
+producer/clone/final-drop lifetimes, including a fresh vector query. Storage
+managed-file fixtures qualify the scoped/pinned primitives separately. They do
+not yet establish a complete cold managed Search root under a real governor.
 There is no complete public governed reader factory or actual Mem adoption yet.
+The ordinary reader entry continues to use the existing ungoverned path.
 
 ## Remaining required construction work
 
@@ -93,9 +110,9 @@ There is no complete public governed reader factory or actual Mem adoption yet.
    artifacts, including retained cache/registry metadata and the opening-lock
    wait. Warm-cache tests alone do not prove this. Preserve the original
    fairness and writer-latency gates when one I/O slot spans a whole artifact.
-2. **Complete metadata closure.** Apply the same operation to lexical manifests,
-   visibility runs, analyzer/configuration metadata, outer shared allocations
-   and root/segment collections. Hold retained guards with the actual shared
+2. **Complete metadata closure.** Lexical and shared segment allocation ownership
+   are now connected. Apply the same operation to visibility runs,
+   analyzer/configuration metadata and root/segment collections. Hold retained guards with the actual shared
    child payloads, including children reused independently of their parent.
 3. **Bounded cancellation and work.** Check long scalar/line parsing, schema
    validation loops and physical checksum work, not only record boundaries.

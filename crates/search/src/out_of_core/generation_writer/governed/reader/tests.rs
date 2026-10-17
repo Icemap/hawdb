@@ -22,7 +22,7 @@ use hawdb_qos::{
 };
 use hawdb_storage::file_io::{self as fs, File};
 use hawdb_vector_projection::{
-    FileProjection, ProjectionBuildConfig, ProjectionIdentity, ProjectionWriter,
+    FileProjection, ProjectionBuildConfig, ProjectionError, ProjectionIdentity, ProjectionWriter,
 };
 use std::num::NonZeroUsize;
 use std::path::PathBuf;

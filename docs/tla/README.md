@@ -2223,3 +2223,12 @@ execution permit. Four controls reject early backing/ledger refunds, uncharged
 clone allocation and execution-slot retention. See the [source correspondence,
 conditional termination argument and finite-model limits](SHARED_READER_CAPACITY_PROOF.md).
 This does not certify complete governed reader construction or MVCC activation.
+
+
+`HawDBAdmittedNativeLease` models counted native input custody across cold
+validation, pinned logical copies, active read scopes, eviction and mapping
+completion. Its two-client graph has 385 distinct states. Four negative controls
+cover eviction of active leases, premature identity publication, an uncharged
+native open and a construction pin retained after mapped-reader return. See
+[the proof and qualification boundary](ADMITTED_NATIVE_LEASE_PROOF.md); cache heap
+ownership, root/GC authority, cumulative work and complete MVCC remain open.

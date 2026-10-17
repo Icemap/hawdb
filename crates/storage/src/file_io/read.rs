@@ -63,6 +63,25 @@ impl Read for AdmittedFileRead<'_> {
 }
 
 impl File {
+    /// Pin one admitted native lease for immutable construction APIs that
+    /// perform multiple reads or create a mapping. Native handles stay private;
+    /// clones share the counted lease. Dropping all pinned copies restores cache
+    /// eviction. Long-lived ordinary logical readers should remain unpinned.
+    #[doc(hidden)]
+    pub fn pin_admitted(mut self, control: &mut impl ReadAdmissionControl) -> io::Result<Self> {
+        control.checkpoint()?;
+        if let FileBacking::Immutable(file) = &mut self.backing
+            && file.pinned.is_none()
+        {
+            let (lease, _) = file
+                .handles
+                .get_controlled(&file.binding, &file.context, control)?;
+            file.pinned = Some(lease);
+        }
+        control.checkpoint()?;
+        Ok(self)
+    }
+
     /// Admit cold identity validation and consume the same native lease.
     /// A warm logical file performs no identity payload read. Native descriptors,
     /// trace hooks and cache leases stay managed for the complete callback.
@@ -76,9 +95,12 @@ impl File {
         let (lease, validation_bytes) = match &self.backing {
             FileBacking::Native(_) => (None, 0),
             FileBacking::Immutable(file) => {
-                let (lease, bytes) =
-                    file.handles
-                        .get_controlled(&file.binding, &file.context, control)?;
+                let (lease, bytes) = match &file.pinned {
+                    Some(lease) => (lease.clone(), 0),
+                    None => file
+                        .handles
+                        .get_controlled(&file.binding, &file.context, control)?,
+                };
                 (Some(lease), bytes)
             }
         };

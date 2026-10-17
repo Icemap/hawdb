@@ -2,6 +2,7 @@
 
 STORAGE_MODELS = [
     "HawDBAdjacencyProjectionReadValidation",
+    "HawDBAdmittedNativeLease",
     "HawDBAgedWriterProgress",
     "HawDBAppendMixedTransaction",
     "HawDBAppendSegmentPublication",

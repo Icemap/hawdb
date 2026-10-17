@@ -434,3 +434,17 @@ tla_check(
         "RefundBeforeLedger",
     ]
 ]
+
+# Native lease custody remains counted across cache pressure and input cloning.
+[
+    tla_check(
+        name = "HawDBAdmittedNativeLease" + control + "_check",
+        module = "HawDBAdmittedNativeLease.tla",
+        config = "mutants/HawDBAdmittedNativeLease" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["EvictBusy", "PublishEarly", "SkipCharge", "KeepReturnedPin"]
+]

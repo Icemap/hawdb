@@ -101,8 +101,18 @@ impl std::ops::Deref for ReadBytes<'_> {
 }
 
 impl<'execution> ReadAdmission<'execution> {
-    /// Validate and decode must consume this same held file, never a pathname
-    /// inspected before a second open. Artifact bytes are transient ownership.
+    pub(crate) fn require_read_limit(&self, bytes: u64, maximum: u64) -> Result<()> {
+        crate::build_control::checkpoint(self.task)?;
+        if bytes > maximum {
+            return Err(HawDBError::Execution(
+                "reader artifact exceeds its operation read limit".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Admit encoded storage before opening, but allocate its buffer only after
+    /// the held file and operation have passed the admitted read boundary.
     pub(crate) fn read_bound(
         &self,
         path: &std::path::Path,
@@ -110,9 +120,6 @@ impl<'execution> ReadAdmission<'execution> {
         expected_checksum: u64,
         maximum: u64,
     ) -> Result<ReadBytes<'execution>> {
-        use super::reserved::native_path;
-        use hawdb_storage::file_io::File;
-        use std::io::Read;
         crate::build_control::checkpoint(self.task)?;
         if expected_len > maximum {
             return Err(HawDBError::Storage(
@@ -122,11 +129,132 @@ impl<'execution> ReadAdmission<'execution> {
         let length = usize::try_from(expected_len).map_err(|_| {
             HawDBError::Storage("reader artifact length exceeds address space".into())
         })?;
-        let _native = self.scratch(checked_add(native_path::bytes(path)?, 4096)?)?;
         let memory = self.scratch(length)?;
+        let mut output = ReadBytes {
+            value: Vec::new(),
+            _memory: Some(memory),
+            _execution: std::marker::PhantomData,
+        };
+        let file = self.visit_bound(path, expected_len, expected_checksum, maximum, |chunk| {
+            if output.value.capacity() == 0 {
+                output.value.try_reserve_exact(length).map_err(|error| {
+                    HawDBError::Execution(format!("reader artifact allocation failed: {error}"))
+                })?;
+                if output.value.capacity() > length {
+                    return Err(HawDBError::Execution(
+                        "reader artifact allocation exceeds admission".into(),
+                    ));
+                }
+            }
+            output.value.extend_from_slice(chunk);
+            Ok(())
+        })?;
+        drop(file);
+        Ok(output)
+    }
+
+    /// Stream a complete selected artifact through one admitted native lease.
+    /// Visitor state must remain private until this function succeeds.
+    pub(crate) fn visit_bound(
+        &self,
+        path: &std::path::Path,
+        expected_len: u64,
+        expected_checksum: u64,
+        maximum: u64,
+        mut visitor: impl FnMut(&[u8]) -> Result<()>,
+    ) -> Result<hawdb_storage::file_io::File> {
+        use std::io::Read;
+        self.require_read_limit(expected_len, maximum)?;
         let _buffer = self.scratch(super::SPOOL_BUFFER_BYTES)?;
-        // One admitted I/O scope covers cold identity validation and the
-        // selected read. No logical metadata call may bypass that scope.
+        let (file, ()) = self.with_bound_file(path, expected_len, maximum, |reader| {
+            let mut buffer = [0; super::SPOOL_BUFFER_BYTES];
+            let mut checksum = hawdb_integrity::Crc32cHasher::new();
+            let mut length = 0u64;
+            loop {
+                crate::build_control::checkpoint(self.task)?;
+                let read = match reader.read(&mut buffer) {
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                    result => result?,
+                };
+                crate::build_control::checkpoint(self.task)?;
+                if read == 0 {
+                    break;
+                }
+                if read as u64 > expected_len - length {
+                    return Err(HawDBError::Storage(
+                        "reader artifact grew during read".into(),
+                    ));
+                }
+                length += read as u64;
+                checksum.update(&buffer[..read]);
+                visitor(&buffer[..read])?;
+            }
+            if length != expected_len || checksum.finish() != expected_checksum {
+                return Err(HawDBError::Storage(
+                    "reader artifact length or checksum mismatch".into(),
+                ));
+            }
+            Ok(())
+        })?;
+        Ok(file)
+    }
+
+    /// Bind length and managed cold identity; block payload checksums remain
+    /// the serving reader's responsibility. Native files are not fully read.
+    pub(crate) fn open_bound_length(
+        &self,
+        path: &std::path::Path,
+        expected_len: u64,
+        maximum: u64,
+    ) -> Result<hawdb_storage::file_io::File> {
+        self.with_bound_file(path, expected_len, maximum, |_| Ok(()))
+            .map(|(file, ())| file)
+    }
+
+    /// Pin an already selected artifact while a downstream parser performs
+    /// multiple file/mmap operations. Cold revalidation is admitted as well.
+    #[cfg(feature = "vector-search")]
+    pub(crate) fn pin_bound_file(
+        &self,
+        file: hawdb_storage::file_io::File,
+        expected_len: u64,
+        maximum: u64,
+    ) -> Result<hawdb_storage::file_io::File> {
+        self.require_read_limit(expected_len, maximum)?;
+        let _io = self
+            .io()
+            .map_err(|error| HawDBError::Execution(error.to_string()))?;
+        let mut control = FileReadControl {
+            admission: self,
+            expected_len,
+            validation_memory: None,
+            error: None,
+        };
+        let result = file.pin_admitted(&mut control);
+        crate::build_control::checkpoint(self.task)?;
+        if let Some(error) = control.error.take() {
+            return Err(error);
+        }
+        let file = result?;
+        if file.metadata()?.len() != expected_len {
+            return Err(HawDBError::Storage(
+                "reader pinned artifact length mismatch".into(),
+            ));
+        }
+        Ok(file)
+    }
+
+    fn with_bound_file<T>(
+        &self,
+        path: &std::path::Path,
+        expected_len: u64,
+        maximum: u64,
+        operation: impl FnOnce(&mut hawdb_storage::file_io::AdmittedFileRead<'_>) -> Result<T>,
+    ) -> Result<(hawdb_storage::file_io::File, T)> {
+        use super::reserved::native_path;
+        use hawdb_storage::file_io::File;
+        self.require_read_limit(expected_len, maximum)?;
+        let _native = self.scratch(checked_add(native_path::bytes(path)?, 4096)?)?;
         let _io = self
             .io()
             .map_err(|e| HawDBError::Execution(e.to_string()))?;
@@ -142,61 +270,27 @@ impl<'execution> ReadAdmission<'execution> {
             validation_memory: None,
             error: None,
         };
-        let result = file.with_admitted_read(&mut control, |file| {
-            Ok((|| -> Result<ReadBytes<'execution>> {
-                if file.metadata()?.len() != expected_len {
+        let result = file.with_admitted_read(&mut control, |reader| {
+            Ok((|| -> Result<T> {
+                if reader.metadata()?.len() != expected_len {
                     return Err(HawDBError::Storage(
                         "reader artifact length mismatch".into(),
                     ));
                 }
-                let mut output = ReadBytes {
-                    value: Vec::new(),
-                    _memory: Some(memory),
-                    _execution: std::marker::PhantomData,
-                };
-                output.value.try_reserve_exact(length).map_err(|error| {
-                    HawDBError::Execution(format!("reader artifact allocation failed: {error}"))
-                })?;
-                if output.value.capacity() > length {
-                    return Err(HawDBError::Execution(
-                        "reader artifact allocation exceeds admission".into(),
-                    ));
-                }
-                let mut buffer = [0; super::SPOOL_BUFFER_BYTES];
-                let mut checksum = hawdb_integrity::Crc32cHasher::new();
-                loop {
-                    crate::build_control::checkpoint(self.task)?;
-                    let read = match file.read(&mut buffer) {
-                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
-                        result => result?,
-                    };
-                    if read == 0 {
-                        break;
-                    }
-                    if read > length - output.value.len() {
-                        return Err(HawDBError::Storage(
-                            "reader artifact grew during read".into(),
-                        ));
-                    }
-                    checksum.update(&buffer[..read]);
-                    output.value.extend_from_slice(&buffer[..read]);
-                }
-                if file.metadata()?.len() != expected_len
-                    || output.value.len() != length
-                    || checksum.finish() != expected_checksum
-                {
+                let value = operation(reader)?;
+                if reader.metadata()?.len() != expected_len {
                     return Err(HawDBError::Storage(
-                        "reader artifact length or checksum mismatch".into(),
+                        "reader artifact length changed during read".into(),
                     ));
                 }
-                Ok(output)
+                Ok(value)
             })())
         });
         crate::build_control::checkpoint(self.task)?;
         if let Some(error) = control.error.take() {
             return Err(error);
         }
-        result?.0
+        Ok((file, result?.0?))
     }
 }
 
@@ -233,3 +327,6 @@ impl hawdb_storage::file_io::ReadAdmissionControl for FileReadControl<'_, '_> {
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+#[cfg(feature = "vector-search")]
+mod vector;

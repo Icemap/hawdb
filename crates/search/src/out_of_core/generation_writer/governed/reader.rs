@@ -16,8 +16,7 @@
 
 use super::GovernedSearchGenerationWriter;
 use crate::build_memory::read::ReadAdmission;
-use crate::HawDBError;
-use hawdb_vector_projection::{ProjectionError, ProjectionReadAdmission};
+use hawdb_vector_projection::ProjectionReadAdmission;
 
 #[doc(hidden)]
 pub use crate::build_memory::read::ReaderMemory as ProjectionReaderMemory;
@@ -38,28 +37,19 @@ impl ProjectionReadAdmission for GovernedSearchGenerationWriter {
     type Io = Option<Box<dyn hawdb_core::RuntimeIoWavePermit>>;
 
     fn reserve_retained(&self, bytes: usize) -> hawdb_vector_projection::Result<Self::Retained> {
-        self.reader_admission()
-            .retained(bytes)
-            .map_err(ProjectionError::Admission)
+        self.reader_admission().reserve_retained(bytes)
     }
 
     fn reserve_scratch(&self, bytes: usize) -> hawdb_vector_projection::Result<Self::Scratch> {
-        self.reader_admission()
-            .scratch(bytes)
-            .map_err(ProjectionError::Admission)
+        self.reader_admission().reserve_scratch(bytes)
     }
 
     fn acquire_io(&self) -> hawdb_vector_projection::Result<Self::Io> {
-        self.reader_admission().io().map_err(|error| match error {
-            hawdb_core::RuntimeIoWaveError::Stopped(reason) => ProjectionError::Cancelled(reason),
-            error => ProjectionError::Admission(HawDBError::Execution(error.to_string())),
-        })
+        self.reader_admission().acquire_io()
     }
 
     fn checkpoint(&self) -> hawdb_vector_projection::Result<()> {
-        self.reader_admission()
-            .checkpoint()
-            .map_err(ProjectionError::Cancelled)
+        ProjectionReadAdmission::checkpoint(&self.reader_admission())
     }
 }
 

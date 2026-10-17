@@ -1314,3 +1314,90 @@ fn scoped_concurrent_readers_keep_independent_cursors_and_pin_the_native_lease()
     drop(pressure);
     assert_eq!(fixture.project.metrics().open, 1);
 }
+
+#[test]
+fn pinned_admitted_file_keeps_one_counted_native_lease_until_all_copies_drop() {
+    let fixture = Fixture::new(2);
+    let active = fixture.binding("active-pinned", b"pinned selected input");
+    let idle = fixture.binding("idle-pinned", b"idle");
+    let alias = fixture.root.join("logical-pinned");
+    fixture
+        .project
+        .immutable_handles
+        .bind(&alias, active)
+        .unwrap();
+    let logical = File::open(&alias).unwrap();
+    let mut control = ScopedReadControl::default();
+    let mut pinned = logical.pin_admitted(&mut control).unwrap();
+    assert_eq!(control.admitted_bytes, [21]);
+    let context = context_for_path(&fixture.root).unwrap();
+    drop(
+        fixture
+            .project
+            .immutable_handles
+            .get(&idle, &context)
+            .unwrap(),
+    );
+    let pressure = File::create(fixture.root.join("pinned-pressure")).unwrap();
+    assert_eq!(fixture.project.metrics().cached_handles, 1);
+    assert_eq!(fixture.project.metrics().open, 2);
+    let mut copy = pinned.try_clone().unwrap();
+    assert_eq!(
+        fixture.project.metrics().open,
+        2,
+        "a pinned copy shares the admitted descriptor"
+    );
+    assert_eq!(pinned.metadata().unwrap().len(), 21);
+    let mut bytes = [0; 21];
+    pinned.read_exact(&mut bytes).unwrap();
+    assert_eq!(&bytes, b"pinned selected input");
+    copy.seek(SeekFrom::Start(0)).unwrap();
+    let mut refuse_cold = ScopedReadControl {
+        reject_admission: true,
+        ..Default::default()
+    };
+    let (prefix, validation) = copy
+        .with_admitted_read(&mut refuse_cold, |file| {
+            let mut prefix = [0; 6];
+            file.read_exact(&mut prefix)?;
+            Ok(prefix)
+        })
+        .unwrap();
+    assert_eq!(&prefix, b"pinned");
+    assert_eq!(validation, 0);
+    assert!(refuse_cold.admitted_bytes.is_empty());
+    drop(pinned);
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(copy);
+    let second_pressure = File::create(fixture.root.join("second-pinned-pressure")).unwrap();
+    assert_eq!(fixture.project.metrics().cached_handles, 0);
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(second_pressure);
+    drop(pressure);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn pinned_cold_file_refusal_and_stop_leave_no_native_lease_or_partial_cache() {
+    let fixture = Fixture::new(2);
+    let bytes = vec![b'x'; 160 << 10];
+    let binding = fixture.binding("pin-refused", &bytes);
+    let alias = fixture.root.join("logical-pin-refused");
+    fixture
+        .project
+        .immutable_handles
+        .bind(&alias, binding)
+        .unwrap();
+    for stop in [false, true] {
+        let logical = File::open(&alias).unwrap();
+        let mut control = ScopedReadControl {
+            reject_admission: !stop,
+            stop_after: stop.then_some(6),
+            ..Default::default()
+        };
+        assert!(logical.pin_admitted(&mut control).is_err());
+        assert_eq!(control.admitted_bytes, [bytes.len() as u64]);
+        assert_eq!(fixture.project.metrics().cached_handles, 0);
+        assert_eq!(fixture.project.metrics().open, 0);
+    }
+}

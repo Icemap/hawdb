@@ -119,6 +119,7 @@ fn assert_segment_refused_before_expansion(
                 lexical_term_policy: reader.lexical_term_policy,
                 active_manifest: &reader.manifest,
                 admission: Some(&admission),
+                max_artifact_read_bytes: 32 << 20,
             },
             selected,
         );
@@ -208,4 +209,139 @@ fn cancelled_layout_decode_preserves_execution_error_before_invalid_storage() {
         SearchOutOfCoreLayoutBody::decode(b"invalid"),
         Err(HawDBError::Storage(_))
     ));
+}
+
+#[test]
+fn admitted_segment_keeps_lexical_metadata_after_producer_close_without_execution() {
+    assert_admitted_segment_lifetime(false);
+}
+
+#[cfg(feature = "vector-search")]
+#[test]
+fn admitted_vector_segment_keeps_all_metadata_without_holding_execution() {
+    assert_admitted_segment_lifetime(true);
+}
+
+fn assert_admitted_segment_lifetime(with_vectors: bool) {
+    let _serial = allocation::serial();
+    assert_eq!(allocation::live(), 0);
+    let root = test_dir("admitted-segment-lifetime");
+    let mut source = document(0, "team");
+    source.embedding = with_vectors.then(|| vec![1.0; 8]);
+    let index = if with_vectors {
+        // The out-of-core generation writer publishes the vector artifact as
+        // part of the selected closure. A resident SearchIndex checkpoint does
+        // not select that artifact in this manifest.
+        let mut writer = generation_writer::SearchOutOfCoreGenerationWriter::create(
+            &root,
+            generation_writer::SearchOutOfCoreGenerationBuildOptions {
+                embedding_manifest: Some(SearchEmbeddingManifest {
+                    model: "admitted-vector-fixture".into(),
+                    version: Some("v1".into()),
+                    dimension: 8,
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        writer.push(source).unwrap();
+        writer.finish().unwrap();
+        None
+    } else {
+        let mut index = SearchIndex::open(&root).unwrap();
+        index.upsert(source).unwrap();
+        index.checkpoint().unwrap();
+        Some(index)
+    };
+    let ordinary = SearchOutOfCoreReader::open(&root).unwrap();
+    let governor = governor();
+    let request = RuntimeWorkRequest::background_maintenance(16 << 20).with_io_wave_slots(1);
+    let permit = governor.try_admit(request).unwrap();
+    let task = permit.bind_task_context(RuntimeTaskContext::default());
+    let memory = BuildMemory::new(&task).unwrap();
+    assert!(memory.host_admission.is_none());
+    for account in [&memory.input, &memory.spool, &memory.retained] {
+        drop(account.reserve(1).unwrap());
+    }
+    drop(task.acquire_io_wave(NonZeroUsize::MIN).unwrap());
+    let (reader, peak) = allocation::measure(|| {
+        let admission = ReadAdmission {
+            memory: &memory,
+            task: &task,
+            permit: &permit,
+        };
+        SearchOutOfCoreSegmentReader::open_with_read_admission(
+            SegmentOpenContext {
+                root: &root,
+                config: &ordinary.config,
+                analyzer_lexicon: &ordinary.analyzer_lexicon,
+                lexical_source_policy: ordinary.lexical_source_policy,
+                lexical_term_policy: ordinary.lexical_term_policy,
+                active_manifest: &ordinary.manifest,
+                admission: Some(&admission),
+                max_artifact_read_bytes: 32 << 20,
+            },
+            &ordinary.manifest.segments[0],
+        )
+        .unwrap()
+    });
+    assert!(
+        peak <= memory.ledger.snapshot().peak_bytes,
+        "peak {peak} exceeds query admission"
+    );
+    assert_eq!(
+        reader.lexical_projection.generation(),
+        ordinary.segments[0].lexical_projection.generation()
+    );
+    #[cfg(feature = "vector-search")]
+    assert_eq!(reader.rabitq_projection.is_some(), with_vectors);
+    drop(memory);
+    drop(task);
+    drop(permit);
+    let snapshot = governor.snapshot();
+    assert_eq!(snapshot.active_cpu_slots, 0);
+    assert_eq!(snapshot.active_background_tasks, 0);
+    assert_eq!(snapshot.active_background_io_slots, 0);
+    assert!(snapshot.admitted_memory_bytes >= allocation::live() as u64);
+    // measure reports absolute peak live bytes, including the retained view.
+    let live = allocation::live();
+    let (clones, clone_peak) = allocation::measure(|| [reader.clone(), reader.clone()]);
+    assert_eq!(clone_peak, live, "cloning must add zero live allocation");
+    assert_eq!(allocation::live(), live);
+    assert!(std::ptr::eq(&*reader, &*clones[0]));
+    let next = governor.try_admit(request).unwrap();
+    #[cfg(feature = "vector-search")]
+    if let Some(projection) = reader.rabitq_projection.as_ref() {
+        let task = next.bind_task_context(Default::default());
+        let result = projection
+            .search(
+                &[1.0; 8],
+                1,
+                hawdb_vector_projection::ProjectionSearchOptions::new().with_task_context(&task),
+            )
+            .unwrap();
+        assert_eq!(result.hits.len(), 1);
+    }
+    drop(next);
+    drop(reader);
+    assert!(allocation::live() > 0);
+    let [first, second] = clones;
+    let start = std::sync::Barrier::new(3);
+    std::thread::scope(|scope| {
+        let start = &start;
+        scope.spawn(move || {
+            start.wait();
+            drop(first);
+        });
+        scope.spawn(move || {
+            start.wait();
+            drop(second);
+        });
+        start.wait();
+    });
+    assert_eq!(allocation::live(), 0);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    drop(ordinary);
+    drop(index);
+    fs::remove_dir_all(root).unwrap();
 }

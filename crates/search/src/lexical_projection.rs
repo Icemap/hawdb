@@ -60,6 +60,8 @@ use spill_control::Control as SpillControl;
 mod spill_memory;
 use spill_memory::{PendingPostings, RunPosting};
 mod manifest_encoding;
+mod reader_admission;
+pub(super) use reader_admission::{Identity as ReaderIdentity, OpenContext as ReaderOpenContext};
 mod posting_codec;
 
 #[cfg(test)]
@@ -408,9 +410,10 @@ impl ManifestBody {
 
     fn decode_with_context(bytes: &[u8], task: Option<&RuntimeTaskContext>) -> Result<Self> {
         task.map_or(Ok(()), checkpoint)?;
-        let envelope: ManifestEnvelope = serde_json::from_slice(bytes)
-            .map_err(|error| HawDBError::Storage(format!("invalid lexical manifest: {error}")))?;
+        let envelope = serde_json::from_slice::<ManifestEnvelope>(bytes);
         task.map_or(Ok(()), checkpoint)?;
+        let envelope = envelope
+            .map_err(|error| HawDBError::Storage(format!("invalid lexical manifest: {error}")))?;
         if manifest_encoding::checksum_with_context(&envelope.body, task)? != envelope.checksum {
             return Err(HawDBError::Storage(
                 "lexical projection manifest checksum mismatch".to_string(),
@@ -1029,6 +1032,8 @@ pub(super) struct LexicalProjectionReader {
     required_term_bytes: u64,
     // Only build-created readers retain an operation-owned metadata lease.
     _build_memory: Option<QueryMemoryLease>,
+    // Admitted immutable readers retain capacity without construction execution.
+    _reader_memory: Option<crate::build_memory::read::ReaderMemory>,
 }
 
 impl LexicalProjectionReader {
@@ -1199,6 +1204,7 @@ impl LexicalProjectionReader {
             config,
             required_term_bytes,
             _build_memory: build_memory,
+            _reader_memory: None,
         })))
     }
 
