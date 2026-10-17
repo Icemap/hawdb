@@ -1,0 +1,25 @@
+{
+  "head": "214a3f0594b58ee89c58c20c6c98d39c1e25047d",
+  "tree": "bd853e37078983ac711db5c1e76e724d3fc2eebb",
+  "targets": 99,
+  "passed": 99,
+  "failed": 0,
+  "mandatory_fuzz_targets": 98,
+  "mandatory_fuzz_passed": 98,
+  "root_general": "test result: ok. 1676 passed; 0 failed; 1 ignored; 0 measured; 322 filtered out; finished in 368.21s",
+  "bep_sha256": "c91acf66d24ab616ac8c89dc9dd89f1615c2d838e22ddfb6f018db4a7c816448",
+  "console_sha256": "546de33d8eb0fd92809acc6ee62d894f8f3c350dc5c29220e928ed23117a7400",
+  "finished": {
+    "overallSuccess": true,
+    "finishTimeMillis": "1792207294302",
+    "exitCode": {
+      "name": "SUCCESS"
+    },
+    "finishTime": "2026-10-17T03:21:34.302Z"
+  },
+  "dependency_cache_environment": {
+    "CARGO_BAZEL_ISOLATED": "false",
+    "CARGO_NET_OFFLINE": "true"
+  },
+  "scope": "Original repository test targets/features/concurrency/deadlines; earlier failed local attempts retained separately; no fuzz CI added"
+}

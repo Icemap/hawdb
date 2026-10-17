@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "pr": 1051,
+  "issue": "ref #207",
+  "old_engine": "b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44",
+  "fixed_engine": "214a3f0594b58ee89c58c20c6c98d39c1e25047d",
+  "runtime_diff_files": [
+    "src/api/automatic_checkpoint.rs",
+    "src/api/automatic_checkpoint/tests/headroom/capacity_wait.rs"
+  ],
+  "production": {
+    "path": "src/api/automatic_checkpoint.rs",
+    "old_sha256": "54ffd6a057cdc81bb9773b7316dde968b2766a8fb55157f9d69ccebe89195b1f",
+    "fixed_sha256": "2650807e939f8ef796a765c5b5476711732ead3a72b90732246382eafd17a573",
+    "patch_sha256": "d6e06e5072ccf89882624e89b042639372693663e214b01cb5532ed4fccdfb12"
+  },
+  "new_capacity_assertions": {
+    "path": "src/api/automatic_checkpoint/tests/headroom/capacity_wait.rs",
+    "old_file_sha256": "ec3347e485ce43668efc769aa46b0ff4b5c6eedd614b3a29987f0c74b9a68eff",
+    "fixed_file_sha256": "2fbff543f0d36e37d66a39c3e427ca968126a6e3f0758b95d98fd7eec0abefda",
+    "baseline_execution": "The three newly added final boundary/expiry cases were not in the historical baseline group. Do not claim a RED run of all five final capacity cases. The original regression assertions mapped below are byte-identical old/fixed and did run RED/GREEN."
+  },
+  "regressions": [
+    {
+      "name": "api::automatic_checkpoint::tests::delta_pressure_sustains_generations_and_preserves_all_values_after_reopen",
+      "source": "src/api/automatic_checkpoint.rs",
+      "old_assertions_sha256": "f93edc9b8b5a1bd9f11423936c9886de70c6fb8ee4154599e81d804055d928ae",
+      "fixed_assertions_sha256": "f93edc9b8b5a1bd9f11423936c9886de70c6fb8ee4154599e81d804055d928ae",
+      "assertions_identical": true,
+      "observed_baseline": "FAILED",
+      "observed_final": "PASSED",
+      "baseline_failure_kind": "storage-pressure",
+      "claim": "Original storage-pressure regression",
+      "source_links": {
+        "old": "https://github.com/nowledge-co/hawdb/blob/b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44/src/api/automatic_checkpoint.rs",
+        "fixed": "https://github.com/nowledge-co/hawdb/blob/214a3f0594b58ee89c58c20c6c98d39c1e25047d/src/api/automatic_checkpoint.rs"
+      },
+      "assertion_source": "    fn delta_pressure_sustains_generations_and_preserves_all_values_after_reopen() {\n        let fixture = Fixture::new();\n        let config = DatabaseConfig {\n            automatic_checkpoint_max_age: Duration::from_secs(3600),\n            storage_residency_mode: hawdb_storage::config::StorageResidencyMode::OutOfCore,\n            max_out_of_core_delta_bytes: Some(16 * 1024),\n            ..DatabaseConfig::default()\n        };\n        let mut db = Database::open_with_config(&fixture.0, config).unwrap();\n        // Establish the initial canonical base before the sustained workload.\n        db.checkpoint().unwrap();\n        for id in 0..320 {\n            db.query_with_params(\n                \"CREATE (:Memory {id: $id, body: $body})\",\n                &std::collections::BTreeMap::from([\n                    (\"id\".into(), crate::Value::Int(id)),\n                    (\"body\".into(), crate::Value::String(\"b\".repeat(512))),\n                ]),\n            )\n            .unwrap();\n        }\n        let report = db.automatic_checkpoint_report().unwrap().unwrap();\n        assert!(\n            report.completed_checkpoints >= 2,\n            \"delta pressure must rotate generations: {report:?}\"\n        );\n        let expected = db\n            .query(\"MATCH (n:Memory) RETURN n.id AS id, n.body AS body ORDER BY id\")\n            .unwrap()\n            .rows;\n        assert_eq!(expected.len(), 320);\n        for (id, row) in expected.iter().enumerate() {\n            assert_eq!(row.get(\"id\"), Some(&crate::Value::Int(id as i64)));\n            assert_eq!(\n                row.get(\"body\"),\n                Some(&crate::Value::String(\"b\".repeat(512)))\n            );\n        }\n        drop(db);\n        let mut reopened = Database::open(&fixture.0).unwrap();\n        assert_eq!(\n            reopened\n                .query(\"MATCH (n:Memory) RETURN n.id AS id, n.body AS body ORDER BY id\")\n                .unwrap()\n                .rows,\n            expected\n        );\n    }"
+    },
+    {
+      "name": "api::automatic_checkpoint::tests::headroom::pending_idle_owner_blocks_pressure_growth_before_admission",
+      "source": "src/api/automatic_checkpoint/tests/headroom.rs",
+      "old_assertions_sha256": "932e2a533cba98247b77497715f0ceb1c8c395ce5c5378e84351493d6ad4269f",
+      "fixed_assertions_sha256": "932e2a533cba98247b77497715f0ceb1c8c395ce5c5378e84351493d6ad4269f",
+      "assertions_identical": true,
+      "observed_baseline": "FAILED",
+      "observed_final": "PASSED",
+      "baseline_failure_kind": "storage-pressure",
+      "claim": "Original storage-pressure regression",
+      "source_links": {
+        "old": "https://github.com/nowledge-co/hawdb/blob/b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44/src/api/automatic_checkpoint/tests/headroom.rs",
+        "fixed": "https://github.com/nowledge-co/hawdb/blob/214a3f0594b58ee89c58c20c6c98d39c1e25047d/src/api/automatic_checkpoint/tests/headroom.rs"
+      },
+      "assertion_source": "fn pending_idle_owner_blocks_pressure_growth_before_admission() {\n    let fixture = Fixture::new();\n    let (mut db, suspension, next) = seeded(&fixture);\n    let control = db.runtime.checkpoint_control_for_test();\n    let (probe, paused, resume) = pause();\n    let (waiting, waited) = mpsc::channel();\n    {\n        let mut state = control.lock().unwrap();\n        state.idle_start_probe = Some(probe);\n        state.frontend_wait_probe = Some(waiting);\n    }\n    drop(suspension);\n    paused.recv_timeout(Duration::from_secs(15)).unwrap();\n    let producer = std::thread::spawn(move || -> Result<Database> {\n        for id in next..320 {\n            create(&mut db, id)?;\n        }\n        Ok(db)\n    });\n    let observed = waited.recv_timeout(Duration::from_secs(1));\n    resume.send(()).unwrap();\n    let produced = producer.join().unwrap();\n    assert_eq!(observed.unwrap(), Phase::Idle);\n    assert_values_and_reopen(produced.unwrap(), &fixture);\n}"
+    },
+    {
+      "name": "api::automatic_checkpoint::tests::headroom::preparation_backoff::pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused",
+      "source": "src/api/automatic_checkpoint/tests/headroom/preparation_backoff.rs",
+      "old_assertions_sha256": "cfabd8eb00d3f9534e14195c21286b952f659d8b2f76740972014d7149198bd6",
+      "fixed_assertions_sha256": "cfabd8eb00d3f9534e14195c21286b952f659d8b2f76740972014d7149198bd6",
+      "assertions_identical": true,
+      "observed_baseline": "FAILED",
+      "observed_final": "PASSED",
+      "baseline_failure_kind": "storage-pressure",
+      "claim": "Original storage-pressure regression",
+      "source_links": {
+        "old": "https://github.com/nowledge-co/hawdb/blob/b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44/src/api/automatic_checkpoint/tests/headroom/preparation_backoff.rs",
+        "fixed": "https://github.com/nowledge-co/hawdb/blob/214a3f0594b58ee89c58c20c6c98d39c1e25047d/src/api/automatic_checkpoint/tests/headroom/preparation_backoff.rs"
+      },
+      "assertion_source": "fn pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused() {\n    let fixture = Fixture::new();\n    let (mut db, suspension, next) = seeded(&fixture);\n    let old = db.runtime.get().unwrap().store.snapshot_for_read();\n    let control = db.runtime.checkpoint_control_for_test();\n    let (sealed, observed) = mpsc::channel();\n    let (resume, continuation) = mpsc::channel();\n    control.lock().unwrap().prefix_seal_probe = Some(Arc::new(PrefixSealProbe {\n        sealed,\n        resume: Mutex::new(continuation),\n    }));\n    drop(suspension);\n    observed.recv_timeout(Duration::from_secs(15)).unwrap();\n    {\n        let state = control.lock().unwrap();\n        assert_eq!(state.phase, Phase::Preparing);\n        assert!(needs_headroom(&state));\n    }\n    let (finished, completion) = mpsc::channel();\n    let producer = std::thread::spawn(move || {\n        let result = create(&mut db, next);\n        finished.send((db, result)).unwrap();\n    });\n    // The owner stays paused for this complete observation. Waiting for its\n    // entire preparation phase would fail even though the next write fits.\n    let early = completion.recv_timeout(Duration::from_secs(1));\n    control.lock().unwrap().prefix_seal_probe = None;\n    resume.send(()).unwrap();\n    producer.join().unwrap();\n    let (mut db, result) = match early {\n        Ok(value) => value,\n        Err(error) => {\n            drop(completion.recv_timeout(Duration::from_secs(15)).unwrap());\n            panic!(\"writer waited for the complete Preparing phase: {error}\");\n        }\n    };\n    result.unwrap();\n    assert!(\n        db.automatic_checkpoint_report()\n            .unwrap()\n            .unwrap()\n            .preparation_backoff_expirations\n            > 0\n    );\n    assert_eq!(old.node_count_for_label(None), next as usize);\n    drop(old);\n    for id in next + 1..320 {\n        create(&mut db, id).unwrap();\n    }\n    assert_values_and_reopen(db, &fixture);\n}"
+    },
+    {
+      "name": "api::automatic_checkpoint::tests::headroom::retiring_owner_blocks_pressure_growth_until_cleanup_finishes",
+      "source": "src/api/automatic_checkpoint/tests/headroom.rs",
+      "old_assertions_sha256": "ebd9b389ffbcb8eb4e920cfe5c6102cb669e33f916e02b09eea2983d2c7bdfb7",
+      "fixed_assertions_sha256": "ebd9b389ffbcb8eb4e920cfe5c6102cb669e33f916e02b09eea2983d2c7bdfb7",
+      "assertions_identical": true,
+      "observed_baseline": "FAILED",
+      "observed_final": "PASSED",
+      "baseline_failure_kind": "storage-pressure",
+      "claim": "Original storage-pressure regression",
+      "source_links": {
+        "old": "https://github.com/nowledge-co/hawdb/blob/b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44/src/api/automatic_checkpoint/tests/headroom.rs",
+        "fixed": "https://github.com/nowledge-co/hawdb/blob/214a3f0594b58ee89c58c20c6c98d39c1e25047d/src/api/automatic_checkpoint/tests/headroom.rs"
+      },
+      "assertion_source": "fn retiring_owner_blocks_pressure_growth_until_cleanup_finishes() {\n    let fixture = Fixture::new();\n    let (mut db, suspension, next) = seeded(&fixture);\n    let control = db.runtime.checkpoint_control_for_test();\n    let (probe, paused, resume) = pause();\n    {\n        control.lock().unwrap().retirement_probe = Some(probe);\n    }\n    drop(suspension);\n    wait_for(&db, |report| report.completed_checkpoints == 1);\n    // Adopt the selected generation before pausing its off-gate retirement.\n    drop(db.runtime.get_mut().unwrap());\n    paused.recv_timeout(Duration::from_secs(15)).unwrap();\n    let (waiting, waited) = mpsc::channel();\n    control.lock().unwrap().frontend_wait_probe = Some(waiting);\n    let (at_pressure, pressure_reached) = mpsc::channel();\n    let producer = std::thread::spawn(move || -> Result<Database> {\n        let mut at_pressure = Some(at_pressure);\n        for id in next..320 {\n            let state = control.lock()?;\n            if state.phase == Phase::Retiring\n                && pressure_pending(&state)\n                && needs_headroom(&state)\n                && let Some(at_pressure) = at_pressure.take()\n            {\n                at_pressure.send(()).unwrap();\n            }\n            drop(state);\n            create(&mut db, id)?;\n        }\n        Ok(db)\n    });\n    // Time the blocked call after preceding acknowledged writes have reached\n    // the pressure boundary. Filesystem contention during fixture preparation\n    // must not consume the separate one-second blocking observation window.\n    let reached = pressure_reached.recv_timeout(Duration::from_secs(15));\n    let observed = reached.and_then(|()| waited.recv_timeout(Duration::from_secs(1)));\n    resume.send(()).unwrap();\n    let produced = producer.join().unwrap();\n    assert_eq!(observed.unwrap(), Phase::Retiring);\n    assert_values_and_reopen(produced.unwrap(), &fixture);\n}"
+    },
+    {
+      "name": "api::automatic_checkpoint::tests::manual::ordinary_manual_completes_while_adopted_retirement_admission_is_denied",
+      "source": "src/api/automatic_checkpoint/tests/manual.rs",
+      "old_assertions_sha256": "8e07b65e8c208165f27d8f3328dcf09d1b715edc73488bf531a450f3711127ef",
+      "fixed_assertions_sha256": "8e07b65e8c208165f27d8f3328dcf09d1b715edc73488bf531a450f3711127ef",
+      "assertions_identical": true,
+      "observed_baseline": "FAILED",
+      "observed_final": "PASSED",
+      "baseline_failure_kind": "separate-owner-progress-timeout",
+      "claim": "Separate adverse observation retained; cause not attributed to this repair",
+      "source_links": {
+        "old": "https://github.com/nowledge-co/hawdb/blob/b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44/src/api/automatic_checkpoint/tests/manual.rs",
+        "fixed": "https://github.com/nowledge-co/hawdb/blob/214a3f0594b58ee89c58c20c6c98d39c1e25047d/src/api/automatic_checkpoint/tests/manual.rs"
+      },
+      "assertion_source": "fn ordinary_manual_completes_while_adopted_retirement_admission_is_denied() {\n    denied_retirement_manual(false);\n}"
+    }
+  ],
+  "healthy_controls": [
+    {
+      "name": "api::automatic_checkpoint::tests::delta_pressure_uses_the_exact_soft_boundary_without_wal_or_age_pressure",
+      "source": "src/api/automatic_checkpoint.rs",
+      "old_assertions_sha256": "8fd795f319c451a73b2ae55ad5bf8940acda8d28d65cb65e61cee0d2ec8cb793",
+      "fixed_assertions_sha256": "8fd795f319c451a73b2ae55ad5bf8940acda8d28d65cb65e61cee0d2ec8cb793",
+      "assertions_identical": true,
+      "old": "PASSED",
+      "fixed": "PASSED"
+    },
+    {
+      "name": "api::automatic_checkpoint::tests::headroom::notifications::clean_idle_owner_waits_for_an_event_instead_of_polling",
+      "source": "src/api/automatic_checkpoint/tests/headroom/notifications.rs",
+      "old_assertions_sha256": "d1d53fa9f75d4c430133a2f22d303f07b3e603784f6681a90daa395dc965812c",
+      "fixed_assertions_sha256": "d1d53fa9f75d4c430133a2f22d303f07b3e603784f6681a90daa395dc965812c",
+      "assertions_identical": true,
+      "old": "PASSED",
+      "fixed": "PASSED"
+    },
+    {
+      "name": "api::automatic_checkpoint::tests::manual::ordinary_manual_with_background_policy_disabled_is_durable",
+      "source": "src/api/automatic_checkpoint/tests/manual.rs",
+      "old_assertions_sha256": "3271f9e479f303d64f27c6878e880fd9da34a1e8f920e7bf8e2361e5614e708d",
+      "fixed_assertions_sha256": "3271f9e479f303d64f27c6878e880fd9da34a1e8f920e7bf8e2361e5614e708d",
+      "assertions_identical": true,
+      "old": "PASSED",
+      "fixed": "PASSED"
+    }
+  ],
+  "baseline_run": {
+    "receipt": "baseline-group-receipt.json",
+    "log": "baseline-red.log",
+    "suite": "77 passed; 5 failed; 0 ignored; 1914 filtered; 215.56s",
+    "exit": 101,
+    "wrapper_seconds": 217.09718275,
+    "binary_sha256": "2a40647eae49325486db852787409d348ce2d2ca02af15ed87e31517d5f8aa00",
+    "reproduction_argv": [
+      "./<frozen-binary-sha256-2a40647e>",
+      "api::automatic_checkpoint::tests",
+      "--nocapture"
+    ],
+    "argv_provenance": "Reproduction command reconstructed from the archived group receipt, raw selection and frozen binary registry (82 matching tests). Original argv was not separately archived; do not present this as a command transcript. Original receipt records default libtest concurrency."
+  },
+  "fixed_run": {
+    "log": "final-fixed-general-green.log",
+    "suite": "1676 passed; 0 failed; 1 ignored; 322 filtered; 368.21s",
+    "command_record": "final-command-line.json",
+    "receipt": "final-general-fuzz-receipt.json",
+    "linux_green_already_verified_by_reviewer": "https://github.com/nowledge-co/hawdb/actions/runs/38995574171/artifacts/12086884401"
+  },
+  "other_adverse_runs": [
+    "policy-predecessor-red.log",
+    "first-fixed-group-adverse.log"
+  ],
+  "interpretation": "The original four storage-pressure assertions are identical on old and fixed production, fail in the historical baseline group and pass in final complete local/Linux general suites. Keep the fifth baseline manual-owner failure and all four first-fix bounded-wait failures explicit. These observations do not independently isolate concurrent host invocations as their cause. Isolated earlier passes do not waive group failures. No #986 p99/RSS/performance qualification, new test run or CI lane is claimed by publishing this packet."
+}

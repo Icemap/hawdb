@@ -1,0 +1,23 @@
+{
+  "scope": "Unchanged automatic-checkpoint group diagnostic, default libtest concurrency; no waiver of full general failures",
+  "groups": [
+    {
+      "name": "main",
+      "head": "b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44",
+      "exit": 101,
+      "seconds": 217.09718275,
+      "binary_sha256": "2a40647eae49325486db852787409d348ce2d2ca02af15ed87e31517d5f8aa00",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/split-session-checkpoint-group-main.log",
+      "log_sha256": "e18353f7f0158eb9e0b65bd1ebe99bd2fb8eabab2f17d61759361236ce8773b3"
+    },
+    {
+      "name": "policy",
+      "head": "ff7baf26ed810470cd93426c0c8b6d5c2795c1cd",
+      "exit": 101,
+      "seconds": 207.88407779199997,
+      "binary_sha256": "ec051b012dfd7116b2566e336546622a4d2a5e9a82a6febaa7815ae76e20290b",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/split-session-checkpoint-group-policy.log",
+      "log_sha256": "b759ea9973bd62f1967497a81db7d700daec027a29e1c72711ae9d52596f0a0e"
+    }
+  ]
+}

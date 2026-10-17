@@ -1,0 +1,219 @@
+
+running 82 tests
+test api::automatic_checkpoint::tests::handoff_execution::handoff_yields_execution_and_retirement_reacquires_after_other_work_finishes ... ok
+test api::automatic_checkpoint::tests::handoff_execution::shutdown_of_adopted_retirement_does_not_wait_for_other_work_admission ... ok
+test api::automatic_checkpoint::tests::execution_progress::denied_candidate_releases_execution_and_reuses_its_memory_after_recovery ... ok
+test api::automatic_checkpoint::tests::headroom::notifications::clean_idle_owner_waits_for_an_event_instead_of_polling ... ok
+test api::automatic_checkpoint::tests::headroom::notifications::handoff_waits_for_adoption_without_periodic_wakes_and_then_retires ... ok
+test api::automatic_checkpoint::tests::discard::cancelled_publication_cleanup_admits_writes_but_fences_manual_generation_reuse ... ok
+test api::automatic_checkpoint::tests::branch_reclamation_releases_parked_source_and_rearms_age_without_a_write ... ok
+test api::automatic_checkpoint::tests::denied_governor_recovers_without_another_write_or_host_checkpoint ... ok
+test api::automatic_checkpoint::tests::concurrent_database_uses_the_same_idle_owner_and_keeps_old_reads ... ok
+test api::automatic_checkpoint::tests::coalesced_capture::coalesced_commits_refresh_and_checkpoint_without_another_frontend_call ... ok
+test api::automatic_checkpoint::tests::headroom::pending_idle_admission_denial_releases_the_frontend_without_a_host_retry ... ok
+test api::automatic_checkpoint::tests::delta_pressure_uses_the_exact_soft_boundary_without_wal_or_age_pressure ... ok
+test api::automatic_checkpoint::tests::headroom::preparation_backoff::preparation_deadline_cannot_bypass_capacity_or_publication_fences ... ok
+test api::automatic_checkpoint::tests::headroom::capacity_wait::critical_preparation_wait_returns_busy_without_resetting_its_deadline ... ok
+test api::automatic_checkpoint::tests::coalesced_capture::a_shared_read_guard_allows_refresh_of_a_suffix_after_prefix_sealing ... ok
+test api::automatic_checkpoint::tests::headroom::admitted_transaction::concurrent_admitted_commit_releases_pressure_wait_after_retirement_denial ... ok
+test api::automatic_checkpoint::tests::headroom::notifications::pressure_waiting_writer_wakes_admission_retry_without_the_timer ... ok
+test api::automatic_checkpoint::tests::headroom::active_cleanup::foreground_denial_wakeup_does_not_bypass_an_admitted_retirement ... ok
+test api::automatic_checkpoint::tests::headroom::foreground::admitted_foreground_request_cannot_wait_for_retirement_using_its_only_cpu ... ok
+test api::automatic_checkpoint::tests::headroom::preparation_backoff::preparing_backoff_uses_one_deadline_across_repeated_notifications ... ok
+test api::automatic_checkpoint::tests::headroom::capacity_wait::parked_preparation_rejects_no_data_and_a_busy_writer_can_retry_after_checkpoint ... ok
+test api::automatic_checkpoint::tests::idle_handoff::releasing_runtime_read_guard_does_not_wait_for_control ... ok
+test api::automatic_checkpoint::tests::idle_handoff::read_guard_release_before_park_keeps_the_handoff_notification ... ok
+test api::automatic_checkpoint::tests::idle_handoff::releasing_a_runtime_read_guard_wakes_unattended_handoff ... ok
+
+thread 'api::automatic_checkpoint::tests::headroom::retiring_owner_blocks_pressure_growth_until_cleanup_finishes' (72746432) panicked at src/api/automatic_checkpoint/tests/headroom.rs:157:39:
+called `Result::unwrap()` on an `Err` value: Storage("out-of-core mutation deferred by storage pressure at 14842 estimated bytes under the 16384 byte limit; checkpoint the database before retrying")
+stack backtrace:
+   0:        0x10856acb4 - <<std[7648081134ee26d8]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[318a34b566a36fe]::fmt::Display>::fmt
+   1:        0x10857fe44 - core[318a34b566a36fe]::fmt::write
+   2:        0x10856fed4 - <std[7648081134ee26d8]::sys::stdio::unix::Stderr as std[7648081134ee26d8]::io::Write>::write_fmt
+   3:        0x10854d674 - std[7648081134ee26d8]::panicking::default_hook::{closure#0}
+   4:        0x108562818 - std[7648081134ee26d8]::panicking::default_hook
+   5:        0x108562b40 - std[7648081134ee26d8]::panicking::panic_with_hook
+   6:        0x10854d708 - std[7648081134ee26d8]::panicking::panic_handler::{closure#0}
+   7:        0x108542c24 - std[7648081134ee26d8]::sys::backtrace::__rust_end_short_backtrace::<std[7648081134ee26d8]::panicking::panic_handler::{closure#0}, !>
+   8:        0x10854dfc0 - __rustc[6ef78fba13ac776c]::rust_begin_unwind
+   9:        0x1085a9450 - core[318a34b566a36fe]::panicking::panic_fmt
+  10:        0x1085a91f4 - core[318a34b566a36fe]::result::unwrap_failed
+  11:        0x104afc54c - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::headroom::retiring_owner_blocks_pressure_growth_until_cleanup_finishes
+  12:        0x104a613dc - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::headroom::retiring_owner_blocks_pressure_growth_until_cleanup_finishes::{closure#0}
+  13:        0x104f75fd8 - <hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::headroom::retiring_owner_blocks_pressure_growth_until_cleanup_finishes::{closure#0} as core[318a34b566a36fe]::ops::function::FnOnce<()>>::call_once
+  14:        0x10592649c - test[2c59eae1d55b8e96]::__rust_begin_short_backtrace::<core[318a34b566a36fe]::result::Result<(), alloc[fd24334a81e9fcd2]::string::String>, fn() -> core[318a34b566a36fe]::result::Result<(), alloc[fd24334a81e9fcd2]::string::String>>
+  15:        0x1059318e4 - test[2c59eae1d55b8e96]::run_test::{closure#0}
+  16:        0x10592c76c - std[7648081134ee26d8]::sys::backtrace::__rust_begin_short_backtrace::<test[2c59eae1d55b8e96]::run_test::{closure#1}, ()>
+  17:        0x105933e3c - <std[7648081134ee26d8]::thread::lifecycle::spawn_unchecked<test[2c59eae1d55b8e96]::run_test::{closure#1}, ()>::{closure#1} as core[318a34b566a36fe]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  18:        0x108569f68 - <std[7648081134ee26d8]::sys::thread::unix::Thread>::new::thread_start
+  19:        0x18cf89d00 - __pthread_exit
+
+thread 'api::automatic_checkpoint::tests::delta_pressure_sustains_generations_and_preserves_all_values_after_reopen' (72745553) panicked at src/api/automatic_checkpoint.rs:2572:14:
+called `Result::unwrap()` on an `Err` value: Storage("out-of-core mutation deferred by storage pressure at 14842 estimated bytes under the 16384 byte limit; checkpoint the database before retrying")
+stack backtrace:
+   0:        0x10856acb4 - <<std[7648081134ee26d8]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[318a34b566a36fe]::fmt::Display>::fmt
+   1:        0x10857fe44 - core[318a34b566a36fe]::fmt::write
+   2:        0x10856fed4 - <std[7648081134ee26d8]::sys::stdio::unix::Stderr as std[7648081134ee26d8]::io::Write>::write_fmt
+   3:        0x10854d674 - std[7648081134ee26d8]::panicking::default_hook::{closure#0}
+   4:        0x108562818 - std[7648081134ee26d8]::panicking::default_hook
+   5:        0x108562b40 - std[7648081134ee26d8]::panicking::panic_with_hook
+   6:        0x10854d708 - std[7648081134ee26d8]::panicking::panic_handler::{closure#0}
+   7:        0x108542c24 - std[7648081134ee26d8]::sys::backtrace::__rust_end_short_backtrace::<std[7648081134ee26d8]::panicking::panic_handler::{closure#0}, !>
+   8:        0x10854dfc0 - __rustc[6ef78fba13ac776c]::rust_begin_unwind
+   9:        0x1085a9450 - core[318a34b566a36fe]::panicking::panic_fmt
+  10:        0x1085a91f4 - core[318a34b566a36fe]::result::unwrap_failed
+  11:        0x10554eef0 - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::delta_pressure_sustains_generations_and_preserves_all_values_after_reopen
+  12:        0x1054acdd4 - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::delta_pressure_sustains_generations_and_preserves_all_values_after_reopen::{closure#0}
+  13:        0x104f65504 - <hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::delta_pressure_sustains_generations_and_preserves_all_values_after_reopen::{closure#0} as core[318a34b566a36fe]::ops::function::FnOnce<()>>::call_once
+  14:        0x10592649c - test[2c59eae1d55b8e96]::__rust_begin_short_backtrace::<core[318a34b566a36fe]::result::Result<(), alloc[fd24334a81e9fcd2]::string::String>, fn() -> core[318a34b566a36fe]::result::Result<(), alloc[fd24334a81e9fcd2]::string::String>>
+  15:        0x1059318e4 - test[2c59eae1d55b8e96]::run_test::{closure#0}
+  16:        0x10592c76c - std[7648081134ee26d8]::sys::backtrace::__rust_begin_short_backtrace::<test[2c59eae1d55b8e96]::run_test::{closure#1}, ()>
+  17:        0x105933e3c - <std[7648081134ee26d8]::thread::lifecycle::spawn_unchecked<test[2c59eae1d55b8e96]::run_test::{closure#1}, ()>::{closure#1} as core[318a34b566a36fe]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  18:        0x108569f68 - <std[7648081134ee26d8]::sys::thread::unix::Thread>::new::thread_start
+  19:        0x18cf89d00 - __pthread_exit
+test api::automatic_checkpoint::tests::headroom::retiring_owner_blocks_pressure_growth_until_cleanup_finishes ... FAILED
+test api::automatic_checkpoint::tests::idle_handoff::idle_handle_adopts_and_retires_two_generations_without_frontend_access ... ok
+
+thread 'api::automatic_checkpoint::tests::headroom::preparation_backoff::pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused' (72746243) panicked at src/api/automatic_checkpoint/tests/headroom/preparation_backoff.rs:65:29:
+called `Result::unwrap()` on an `Err` value: Storage("out-of-core mutation deferred by storage pressure at 14842 estimated bytes under the 16384 byte limit; checkpoint the database before retrying")
+stack backtrace:
+   0:        0x10856acb4 - <<std[7648081134ee26d8]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[318a34b566a36fe]::fmt::Display>::fmt
+   1:        0x10857fe44 - core[318a34b566a36fe]::fmt::write
+   2:        0x10856fed4 - <std[7648081134ee26d8]::sys::stdio::unix::Stderr as std[7648081134ee26d8]::io::Write>::write_fmt
+   3:        0x10854d674 - std[7648081134ee26d8]::panicking::default_hook::{closure#0}
+   4:        0x108562818 - std[7648081134ee26d8]::panicking::default_hook
+   5:        0x108562b40 - std[7648081134ee26d8]::panicking::panic_with_hook
+   6:        0x10854d708 - std[7648081134ee26d8]::panicking::panic_handler::{closure#0}
+   7:        0x108542c24 - std[7648081134ee26d8]::sys::backtrace::__rust_end_short_backtrace::<std[7648081134ee26d8]::panicking::panic_handler::{closure#0}, !>
+   8:        0x10854dfc0 - __rustctest api::automatic_checkpoint::tests::delta_pressure_sustains_generations_and_preserves_all_values_after_reopen ... FAILED
+[6ef78fba13ac776c]::rust_begin_unwind
+   9:        0x1085a9450 - core[318a34b566a36fe]::panicking::panic_fmt
+  10:        0x1085a91f4 - core[318a34b566a36fe]::result::unwrap_failed
+  11:        0x104b0d480 - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::headroom::preparation_backoff::pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused
+  12:        0x104a62f40 - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::headroom::preparation_backoff::pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused::{closure#0}
+  13:        0x104f77760 - <hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::headroom::preparation_backoff::pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused::{closure#0} as core[318a34b566a36fe]::ops::function::FnOnce<()>>::call_once
+  14:        0x10592649c - test[2c59eae1d55b8e96]::__rust_begin_short_backtrace::<core[318a34b566a36fe]::result::Result<(), alloc[fd24334a81e9fcd2]::string::String>, fn() -> core[318a34b566a36fe]::result::Result<(), alloc[fd24334a81e9fcd2]::string::String>>
+  15:        0x1059318e4 - test[2c59eae1d55b8e96]::run_test::{closure#0}
+  16:        0x10592c76c - std[7648081134ee26d8]::sys::backtrace::__rust_begin_short_backtrace::<test[2c59eae1d55b8e96]::run_test::{closure#1}, ()>
+  17:        0x105933e3c - <std[7648081134ee26d8]::thread::lifecycle::spawn_unchecked<test[2c59eae1d55b8e96]::run_test::{closure#1}, ()>::{closure#1} as core[318a34b566a36fe]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  18:        0x108569f68 - <std[7648081134ee26d8]::sys::thread::unix::Thread>::new::thread_start
+  19:        0x18cf89d00 - __pthread_exit
+test api::automatic_checkpoint::tests::idle_handoff::stopping_a_parked_handoff_does_not_wait_for_the_runtime_read_guard ... ok
+test api::automatic_checkpoint::tests::in_memory_and_read_only_handles_create_no_worker ... ok
+test api::automatic_checkpoint::tests::headroom::retired_cow_cleanup_allows_writes_and_fences_manual_resource_release ... ok
+test api::automatic_checkpoint::tests::headroom::preparation_backoff::pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused ... FAILED
+
+thread 'api::automatic_checkpoint::tests::headroom::pending_idle_owner_blocks_pressure_growth_before_admission' (72745908) panicked at src/api/automatic_checkpoint/tests/headroom.rs:113:39:
+called `Result::unwrap()` on an `Err` value: Storage("out-of-core mutation deferred by storage pressure at 14842 estimated bytes under the 16384 byte limit; checkpoint the database before retrying")
+stack backtrace:
+   0:        0x10856acb4 - <<std[7648081134ee26d8]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[318a34b566a36fe]::fmt::Display>::fmt
+   1:        0x10857fe44 - core[318a34b566a36fe]::fmt::write
+   2:        0x10856fed4 - <std[7648081134ee26d8]::sys::stdio::unix::Stderr as std[7648081134ee26d8]::io::Write>::write_fmt
+   3:        0x10854d674 - std[7648081134ee26d8]::panicking::default_hook::{closure#0}
+   4:        0x108562818 - std[7648081134ee26d8]::panicking::default_hook
+   5:        0x108562b40 - std[7648081134ee26d8]::panicking::panic_with_hook
+   6:        0x10854d708 - std[7648081134ee26d8]::panicking::panic_handler::{closure#0}
+   7:        0x108542c24 - std[7648081134ee26d8]::sys::backtrace::__rust_end_short_backtrace::<std[7648081134ee26d8]::panicking::panic_handler::{closure#0}, !>
+   8:        0x10854dfc0 - __rustc[6ef78fba13ac776c]::rust_begin_unwind
+   9:        0x1085a9450 - core[318a34b566a36fe]::panicking::panic_fmt
+  10:        0x1085a91f4 - core[318a34b566a36fe]::result::unwrap_failed
+  11:        0x104afb6e4 - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::headroom::pending_idle_owner_blocks_pressure_growth_before_admission
+  12:        0x104a613b4 - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::headroom::pending_idle_owner_blocks_pressure_growth_before_admission::{closure#0}
+  13:        0x104f75f9c - <hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::headroom::pending_idle_owner_blocks_pressure_growth_before_admission::{closure#0} as core[318a34b566a36fe]::ops::function::FnOnce<()>>::call_once
+  14:        0x10592649c - test[2c59eae1d55b8e96]::__rust_begin_short_backtrace::<core[318a34b566a36fe]::result::Result<(), alloc[fd24334a81e9fcd2]::string::String>, fn() -> core[318a34b566a36fe]::result::Result<(), alloc[fd24334a81e9fcd2]::string::String>>
+  15:        0x1059318e4 - test[2c59eae1d55b8e96]::run_test::{closure#0}
+  16:        0x10592c76c - std[7648081134ee26d8]::sys::backtrace::__rust_begin_short_backtrace::<test[2c59eae1d55b8e96]::run_test::{closure#1}, ()>
+  17:        0x105933e3c - <std[7648081134ee26d8]::thread::lifecycle::spawn_unchecked<test[2c59eae1d55b8e96]::run_test::{closure#1}, ()>::{closure#1} as core[318a34b566a36fe]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  18:        0x108569f68 - <std[7648081134ee26d8]::sys::thread::unix::Thread>::new::thread_start
+  19:        0x18cf89d00 - __pthread_exit
+test api::automatic_checkpoint::tests::headroom::pending_idle_owner_blocks_pressure_growth_before_admission ... FAILED
+test api::automatic_checkpoint::tests::manual::concurrent_manual_below_automatic_thresholds_is_durable ... ok
+test api::automatic_checkpoint::tests::idle_handoff::metadata_snapshots_outlive_background_adoption_and_the_handle ... ok
+retained memory after first generation: 0
+
+thread 'api::automatic_checkpoint::tests::manual::ordinary_manual_completes_while_adopted_retirement_admission_is_denied' (72747520) panicked at src/api/automatic_checkpoint.rs:2031:13:
+checkpoint owner did not progress: AutomaticCheckpointReport { preparing: true, waiting_for_handoff: false, completed_checkpoints: 0, deferred_attempts: 0, preparation_backoff_expirations: 0, failed_attempts: 0, operation_failures: 0, operation_retry_exhausted: false, planning_scans: 1, planning_cache_hits: 0, preparation_admission_denial: None, preparation_memory_denial: None }
+stack backtrace:
+   0:        0x10856acb4 - <<std[7648081134ee26d8]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[318a34b566a36fe]::fmt::Display>::fmt
+   1:        0x10857fe44 - core[318a34b566a36fe]::fmt::write
+   2:        0x10856fed4 - <std[7648081134ee26d8]::sys::stdio::unix::Stderr as std[7648081134ee26d8]::io::Write>::write_fmt
+   3:        0x10854d674 - std[7648081134ee26d8]::panicking::default_hook::{closure#0}
+   4:        0x108562818 - std[7648081134ee26d8]::panicking::default_hook
+   5:        0x108562b40 - std[7648081134ee26d8]::panicking::panic_with_hook
+   6:        0x10854d708 - std[7648081134ee26d8]::panicking::panic_handler::{closure#0}
+   7:        0x108542c24 - std[7648081134ee26d8]::sys::backtrace::__rust_end_short_backtrace::<std[7648081134ee26d8]::panicking::panic_handler::{closure#0}, !>
+   8:        0x10854dfc0 - __rustc[6ef78fba13ac776c]::rust_begin_unwind
+   9:        0x1085a9450 - core[318a34b566a36fe]::panicking::panic_fmt
+  10:        0x10547bc1c - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::wait_for::<hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::manual::denied_retirement_manual::{closure#0}>
+  11:        0x1056a79b4 - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::manual::denied_retirement_manual
+  12:        0x1056a9de8 - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::manual::ordinary_manual_completes_while_adopted_retirement_admission_is_denied
+  13:        0x10564e028 - hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::manual::ordinary_manual_completes_while_adopted_retirement_admission_is_denied::{closure#0}
+  14:        0x104f75dbc - <hawdb[bbb90962c3f61322]::api::automatic_checkpoint::tests::manual::ordinary_manual_completes_while_adopted_retirement_admission_is_denied::{closure#0} as core[318a34b566a36fe]::ops::function::FnOnce<()>>::call_once
+  15:        0x10592649c - test[2c59eae1d55b8e96]::__rust_begin_short_backtrace::<core[318a34b566a36fe]::result::Result<(), alloc[fd24334a81e9fcd2]::string::String>, fn() -> core[318a34b566a36fe]::result::Result<(), alloc[fd24334a81e9fcd2]::string::String>>
+  16:        0x1059318e4 - test[2c59eae1d55b8e96]::run_test::{closure#0}
+  17:        0x10592c76c - std[7648081134ee26d8]::sys::backtrace::__rust_begin_short_backtrace::<test[2c59eae1d55b8e96]::run_test::{closure#1}, ()>
+  18:        0x105933e3c - <std[7648081134ee26d8]::thread::lifecycle::spawn_unchecked<test[2c59eae1d55b8e96]::run_test::{closure#1}, ()>::{closure#1} as core[318a34b566a36fe]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  19:        0x108569f68 - <std[7648081134ee26d8]::sys::thread::unix::Thread>::new::thread_start
+  20:        0x18cf89d00 - __pthread_exit
+test api::automatic_checkpoint::tests::idle_handoff::projected_artifact_rebuild_invalidates_paused_checkpoint_source ... ok
+test api::automatic_checkpoint::tests::manual::concurrent_manual_completes_while_adopted_retirement_admission_is_denied ... ok
+test api::automatic_checkpoint::tests::manual::ordinary_manual_completes_while_adopted_retirement_admission_is_denied ... FAILED
+test api::automatic_checkpoint::tests::memory_progress::fixed_memory_budget_advances_two_generations_without_accumulating_unused_reservation ... ok
+test api::automatic_checkpoint::tests::manual::concurrent_manual_completes_while_automatic_memory_admission_is_denied ... ok
+test api::automatic_checkpoint::tests::planning_recovery::actual_owner_reports_cached_memory_denial_and_recovers_without_frontend_work ... ok
+test api::automatic_checkpoint::tests::planning_recovery::cached_planning_checks_fresh_cancellation_and_source_identity_before_recovery ... ok
+test api::automatic_checkpoint::tests::manual::concurrent_manual_during_automatic_preparation_resumes_automatic_progress ... ok
+test api::automatic_checkpoint::tests::operation_retry::private_wal_io_failure_releases_a_parked_candidate_without_poisoning_the_writer ... ok
+test api::automatic_checkpoint::tests::planning_recovery::permanent_allocation_denial_preserves_source_and_allows_manual_checkpoint ... ok
+test api::automatic_checkpoint::tests::manual::concurrent_manual_with_background_policy_disabled_is_durable ... ok
+test api::automatic_checkpoint::tests::manual::concurrent_manual_with_background_capability_disabled_is_durable ... ok
+test api::automatic_checkpoint::tests::manual::ordinary_manual_below_automatic_thresholds_is_durable ... ok
+test api::automatic_checkpoint::tests::preparation_resume::stopping_owner_releases_parked_preparation_while_control_observers_survive ... ok
+test api::automatic_checkpoint::tests::publication_io::contended_publication_releases_io_before_waiting_for_the_writer_gate ... ok
+test api::automatic_checkpoint::tests::manual::ordinary_manual_with_background_capability_disabled_is_durable ... ok
+test api::automatic_checkpoint::tests::preparation_resume::manual_suspension_destroys_parked_preparation_before_reusing_its_generation ... ok
+test api::automatic_checkpoint::tests::preparation_resume::preparation_survives_new_source_submission_and_resumes_original_base_before_catch_up ... ok
+test api::automatic_checkpoint::tests::planning_retry::permanently_denied_retries_traverse_an_unchanged_source_only_once ... ok
+test api::automatic_checkpoint::tests::manual::ordinary_manual_with_background_policy_disabled_is_durable ... ok
+test api::automatic_checkpoint::tests::manual::ordinary_manual_completes_while_automatic_memory_admission_is_denied ... ok
+test api::automatic_checkpoint::tests::native_tokio_idle_checkpoint_uses_the_host_governor ... ok
+test api::automatic_checkpoint::tests::qos_units::actual_owner_prepares_and_replays_with_one_local_operation_available ... ok
+test api::automatic_checkpoint::tests::manual::ordinary_manual_during_automatic_preparation_resumes_automatic_progress ... ok
+test api::automatic_checkpoint::tests::planning_retry::original_fixed_budget_prepares_and_publishes_all_1025_rows ... ok
+test api::automatic_checkpoint::tests::manual_checkpoint_adopts_a_selected_job_and_resumes_automatic_work ... ok
+test api::automatic_checkpoint::tests::resume::relaxed_denial_keeps_the_base_and_recovery_resumes_without_a_write ... ok
+test api::automatic_checkpoint::tests::resume::shutdown_releases_pending_candidate_while_observers_keep_control_alive ... ok
+test api::automatic_checkpoint::tests::operation_retry::persistent_preparation_io_failure_stops_and_manual_checkpoint_rearms_the_owner ... ok
+test api::automatic_checkpoint::tests::retirement_io::invalid_retirement_runtime_fails_closed_and_preserves_published_data ... ok
+test api::automatic_checkpoint::tests::resume::synchronous_denial_keeps_the_base_and_recovery_resumes_without_a_write ... ok
+test api::automatic_checkpoint::tests::shutdown_releases_parked_source_before_control_drop ... ok
+test api::automatic_checkpoint::tests::superseded_source_remains_owned_until_publication_guard_is_released ... ok
+test api::automatic_checkpoint::tests::plain_database_idle_age_checkpoints_without_a_host_loop ... ok
+test api::automatic_checkpoint::tests::retirement_io::occupied_physical_wave_parks_cleanup_and_release_finishes_without_a_host_call ... ok
+test api::automatic_checkpoint::tests::sealed_prefixes_keep_writes_admitted_and_release_io_before_group_drain ... ok
+test api::automatic_checkpoint::tests::shutdown_releases_selected_checkpoint_before_control_drop ... ok
+test api::automatic_checkpoint::tests::read_access::unfenced_read_execution_and_explain_analyze_reject_projection_wal_effects ... ok
+test api::automatic_checkpoint::tests::read_access::projection_procedure_waits_for_publication_and_appends_to_the_adopted_wal ... ok
+test api::automatic_checkpoint::tests::read_gate::cypher_read_does_not_hold_checkpoint_publication_gate ... ok
+test api::automatic_checkpoint::tests::read_gate::explain_analyze_does_not_hold_checkpoint_publication_gate ... ok
+test api::automatic_checkpoint::tests::read_handoff::typed_explain_analyze_runs_without_the_owner_mutex ... ok
+test api::automatic_checkpoint::tests::read_handoff::checkpoint_publishes_while_read_callback_is_running ... ok
+test api::automatic_checkpoint::tests::read_handoff::concurrent_read_only_traffic_adopts_and_releases_checkpoint_admission ... ok
+test api::automatic_checkpoint::tests::read_handoff::plain_sql_only_reads_adopt_the_ready_physical_generation ... ok
+test api::automatic_checkpoint::tests::read_handoff::invalid_read_handoff_fails_closed_and_preserves_disk_authority ... ok
+test api::automatic_checkpoint::tests::soft_wal_pressure_sustains_multiple_generations_without_host_checkpoints ... ok
+test api::automatic_checkpoint::tests::progress::default_facade_sustained_writes_checkpoint_beyond_default_operation_limit has been running for over 60 seconds
+test api::automatic_checkpoint::tests::progress::default_facade_sustained_writes_checkpoint_beyond_default_operation_limit ... ok
+
+failures:
+
+failures:
+    api::automatic_checkpoint::tests::delta_pressure_sustains_generations_and_preserves_all_values_after_reopen
+    api::automatic_checkpoint::tests::headroom::pending_idle_owner_blocks_pressure_growth_before_admission
+    api::automatic_checkpoint::tests::headroom::preparation_backoff::pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused
+    api::automatic_checkpoint::tests::headroom::retiring_owner_blocks_pressure_growth_until_cleanup_finishes
+    api::automatic_checkpoint::tests::manual::ordinary_manual_completes_while_adopted_retirement_admission_is_denied
+
+test result: FAILED. 77 passed; 5 failed; 0 ignored; 0 measured; 1914 filtered out; finished in 215.56s
+

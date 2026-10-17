@@ -1,0 +1,32 @@
+diff --git a/src/api/automatic_checkpoint.rs b/src/api/automatic_checkpoint.rs
+index 77f34918..b8a91880 100644
+--- a/src/api/automatic_checkpoint.rs
++++ b/src/api/automatic_checkpoint.rs
+@@ -397,10 +397,13 @@ impl Control {
+                 capacity_work_progress = work_progress;
+                 capacity_deadline = None;
+             }
+-            let capacity_remaining = if state.phase == Phase::Preparing
++            // Releasing old COW owners runs off the writer gate. It may take
++            // long enough for new deltas to consume the remaining capacity;
++            // only writers with room may bypass that resource release.
++            let waits_for_capacity = matches!(state.phase, Phase::Preparing | Phase::Releasing)
+                 && !state.sync_group_active
+-                && preparation_needs_capacity(&state)
+-            {
++                && preparation_needs_capacity(&state);
++            let capacity_remaining = if waits_for_capacity {
+                 let deadline = capacity_deadline
+                     .get_or_insert_with(|| Instant::now() + PREPARATION_CAPACITY_WAIT_LIMIT);
+                 let remaining = deadline.saturating_duration_since(Instant::now());
+@@ -427,9 +430,7 @@ impl Control {
+             let must_fence = state.phase == Phase::Finalizing
+                 || (self.publication_requested.load(Ordering::Acquire) && !state.sync_group_active)
+                 || (state.phase == Phase::Draining && !state.sync_group_active)
+-                || (state.phase == Phase::Preparing
+-                    && !state.sync_group_active
+-                    && preparation_needs_capacity(&state))
++                || waits_for_capacity
+                 || (state.phase == Phase::Retiring
+                     && !state.sync_group_active
+                     && (state.retired.is_none()

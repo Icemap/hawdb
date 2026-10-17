@@ -1,0 +1,42 @@
+{
+  "baseline-group-receipt.json": {
+    "bytes": 988,
+    "sha256": "14b43ea781c8f9bbffadab6285b601b5fbc9f45f74b977b828001a6870544329"
+  },
+  "baseline-red.log": {
+    "bytes": 26171,
+    "sha256": "e18353f7f0158eb9e0b65bd1ebe99bd2fb8eabab2f17d61759361236ce8773b3"
+  },
+  "final-capacity-wait-assertions.rs.txt": {
+    "bytes": 6314,
+    "sha256": "2fbff543f0d36e37d66a39c3e427ca968126a6e3f0758b95d98fd7eec0abefda"
+  },
+  "final-command-line.json": {
+    "bytes": 8321,
+    "sha256": "48fdaba59a8668b940855276d6db2d4d46d437f049fcb44c1420871b84799a33"
+  },
+  "final-fixed-general-green.log": {
+    "bytes": 175985,
+    "sha256": "c23c75ca64f1a540888c7bc6999e82b170afa1b7dae19a611147d6382346ffbc"
+  },
+  "final-general-fuzz-receipt.json": {
+    "bytes": 957,
+    "sha256": "325220b97e709c832004a2d9f4da8d81f003be87a71eeb4be55423d23ecb95be"
+  },
+  "first-fixed-group-adverse.log": {
+    "bytes": 14910,
+    "sha256": "6899c0b823db18170324a52ee4071b986565c965882725594759822915497d83"
+  },
+  "packet.json": {
+    "bytes": 16544,
+    "sha256": "1a26e96aaccb72b9262a88017525c6a414aa9537f723a75c20b571869bbf3322"
+  },
+  "policy-predecessor-red.log": {
+    "bytes": 22740,
+    "sha256": "b759ea9973bd62f1967497a81db7d700daec027a29e1c72711ae9d52596f0a0e"
+  },
+  "production.patch": {
+    "bytes": 1833,
+    "sha256": "d6e06e5072ccf89882624e89b042639372693663e214b01cb5532ed4fccdfb12"
+  }
+}
