@@ -18,6 +18,7 @@ use hawdb_qos::{
     IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeMemorySnapshot,
     RuntimeResourceBudget, RuntimeResourceSnapshot, RuntimeWorkRequest,
 };
+use hawdb_storage::file_io::File;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -301,14 +302,6 @@ fn unknown_length_head_keeps_the_opened_file_across_path_replacement() {
     let path = directory.0.join("head");
     let bytes = b"held old head";
     std::fs::write(&path, bytes).unwrap();
-    let replace = path.clone();
-    let old = directory.0.join("old-head");
-    AFTER_FILE_OPEN.with(|slot| {
-        *slot.borrow_mut() = Some(Box::new(move || {
-            std::fs::rename(&replace, old).unwrap();
-            std::fs::write(replace, b"new head").unwrap();
-        }))
-    });
     let governor = governor();
     let permit = governor
         .try_admit(RuntimeWorkRequest::background_maintenance(2 << 20).with_io_wave_slots(1))
@@ -320,10 +313,17 @@ fn unknown_length_head_keeps_the_opened_file_across_path_replacement() {
         task: &task,
         permit: &permit,
     };
-    let input = admission.read_unbound(&path, 1024).unwrap();
+    let file = {
+        let _io = admission.io().unwrap();
+        File::open(&path).unwrap()
+    };
+    std::fs::rename(&path, directory.0.join("old-head")).unwrap();
+    std::fs::write(&path, b"new head").unwrap();
+    let input = admission.read_unbound_file(&file, 1024).unwrap();
     assert_eq!(&*input, bytes);
     assert_eq!(std::fs::read(path).unwrap(), b"new head");
     drop(input);
+    drop(file);
     assert_eq!(memory.ledger.snapshot().used_bytes, 0);
     assert_eq!(governor.snapshot().active_background_io_slots, 0);
     drop(memory);
@@ -356,17 +356,16 @@ fn unknown_length_head_limit_and_open_cancellation_precede_large_buffer_allocati
             task: &task,
             permit: &permit,
         };
-        if cancelled {
-            let token = task.cancellation().clone();
-            AFTER_FILE_OPEN.with(|slot| {
-                *slot.borrow_mut() = Some(Box::new(move || {
-                    token.cancel();
-                }))
-            });
-        }
         let (error, peak) = allocation::measure(|| {
+            let file = {
+                let _io = admission.io().unwrap();
+                File::open(&path).unwrap()
+            };
+            if cancelled {
+                task.cancellation().cancel();
+            }
             admission
-                .read_unbound(&path, if cancelled { 4 << 20 } else { 2 << 20 })
+                .read_unbound_file(&file, if cancelled { 4 << 20 } else { 2 << 20 })
                 .err()
                 .expect("must refuse before buffer allocation")
         });

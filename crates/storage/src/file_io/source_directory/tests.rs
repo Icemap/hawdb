@@ -1,0 +1,510 @@
+// Copyright 2026 Nowledge
+// Licensed under the Apache License, Version 2.0.
+
+use super::*;
+use crate::file_descriptors::ProjectFileDescriptors;
+use std::fs;
+use std::io::Read;
+use std::path::PathBuf;
+
+struct Fixture {
+    root: PathBuf,
+    project: ProjectFileDescriptors,
+}
+impl Fixture {
+    fn new(limit: usize) -> Self {
+        let root = std::env::temp_dir().join(format!(
+            "hawdb-source-directory-{}",
+            hawdb_core::generate_uuidv7().unwrap()
+        ));
+        let project = ProjectFileDescriptors::acquire(&root, limit).unwrap();
+        Self { root, project }
+    }
+    fn capture(&self, path: &Path) -> SourceDirectory {
+        SourceDirectory::capture(path, &self.project.io_context()).unwrap()
+    }
+}
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.root).unwrap();
+    }
+}
+
+#[test]
+fn relative_read_and_delete_keep_captured_root_after_namespace_replacement() {
+    let fixture = Fixture::new(16);
+    let original = fixture.root.join("source");
+    let moved = fixture.root.join("moved");
+    fs::create_dir(&original).unwrap();
+    fs::write(original.join("artifact.1.hawdb"), b"captured source").unwrap();
+    let source = fixture.capture(&original);
+    fs::rename(&original, &moved).unwrap();
+    fs::create_dir(&original).unwrap();
+    fs::write(original.join("artifact.1.hawdb"), b"foreign source").unwrap();
+    let replacement = fixture.capture(&original);
+    let same = fixture.capture(&moved);
+    assert!(source.same_directory(&same));
+    assert_eq!(source.identity(), same.identity());
+    assert_ne!(source.identity(), replacement.identity());
+    assert!(!source.same_directory(&replacement));
+    // This open occurs after replacement and starts cold; no cached file can
+    // accidentally make an ordinary pathname-based implementation pass.
+    let mut child = source
+        .open_child(&fixture.project.io_context(), "artifact.1.hawdb")
+        .unwrap();
+    let mut bytes = Vec::new();
+    child.read_to_end(&mut bytes).unwrap();
+    assert_eq!(bytes, b"captured source");
+    drop(child);
+    source
+        .remove_child(&fixture.project.io_context(), "artifact.1.hawdb")
+        .unwrap();
+    assert!(!moved.join("artifact.1.hawdb").exists());
+    assert_eq!(
+        fs::read(original.join("artifact.1.hawdb")).unwrap(),
+        b"foreign source"
+    );
+    drop((source, same, replacement));
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn child_handle_remains_usable_after_directory_authority_closes() {
+    let fixture = Fixture::new(8);
+    fs::write(fixture.root.join("payload.hawdb"), b"immutable child").unwrap();
+    let source = fixture.capture(&fixture.root);
+    let mut child = source
+        .open_child(&fixture.project.io_context(), "payload.hawdb")
+        .unwrap();
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 1);
+    let mut actual = String::new();
+    child.read_to_string(&mut actual).unwrap();
+    assert_eq!(actual, "immutable child");
+    drop(child);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn descriptor_denial_precedes_child_open_and_returns_all_capacity() {
+    let fixture = Fixture::new(1);
+    fs::write(fixture.root.join("payload.hawdb"), b"unchanged").unwrap();
+    let source = fixture.capture(&fixture.root);
+    let error = source
+        .open_child(&fixture.project.io_context(), "payload.hawdb")
+        .unwrap_err();
+    assert!(
+        hawdb_core::error::file_descriptor_error(&error).is_some(),
+        "{error}"
+    );
+    assert_eq!(fixture.project.metrics().open, 1);
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 0);
+    let source = fixture.capture(&fixture.root);
+    assert!(source
+        .open_child(&fixture.project.io_context(), "absent.hawdb")
+        .is_err());
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn invalid_names_missing_files_and_directories_never_escape_or_leak() {
+    let fixture = Fixture::new(8);
+    let source = fixture.capture(&fixture.root);
+    for name in [
+        "",
+        ".",
+        "..",
+        "../outside",
+        "a/b",
+        "a\\b",
+        "a:stream",
+        "nul\0suffix",
+        "foreign name",
+        "你好",
+    ] {
+        assert_eq!(
+            source
+                .open_child(&fixture.project.io_context(), name)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert_eq!(
+            source
+                .remove_child(&fixture.project.io_context(), name)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert_eq!(fixture.project.metrics().open, 1);
+    }
+    assert_eq!(
+        source
+            .open_child(&fixture.project.io_context(), &"a".repeat(256))
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::InvalidInput
+    );
+    assert_eq!(
+        source
+            .open_child(&fixture.project.io_context(), "missing")
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::NotFound
+    );
+    fs::create_dir(fixture.root.join("directory")).unwrap();
+    assert!(source
+        .open_child(&fixture.project.io_context(), "directory")
+        .is_err());
+    assert!(source
+        .remove_child(&fixture.project.io_context(), "directory")
+        .is_err());
+    assert!(fixture.root.join("directory").is_dir());
+    fs::write(fixture.root.join("regular"), b"bytes").unwrap();
+    assert!(
+        SourceDirectory::capture(&fixture.root.join("regular"), &fixture.project.io_context())
+            .is_err()
+    );
+    assert_eq!(fixture.project.metrics().open, 1);
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn child_symlinks_are_not_followed_and_rejection_closes_capacity() {
+    let fixture = Fixture::new(8);
+    let outside = fixture.root.join("outside");
+    let directory = fixture.root.join("source");
+    fs::create_dir(&directory).unwrap();
+    fs::write(&outside, b"foreign bytes").unwrap();
+    std::os::unix::fs::symlink(&outside, directory.join("linked.hawdb")).unwrap();
+    let source = fixture.capture(&directory);
+    assert!(source
+        .open_child(&fixture.project.io_context(), "linked.hawdb")
+        .is_err());
+    assert_eq!(fixture.project.metrics().open, 1);
+    assert_eq!(fs::read(&outside).unwrap(), b"foreign bytes");
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn power_loss_context_refuses_before_opening_an_unrecorded_native_handle() {
+    let fixture = Fixture::new(8);
+    let model = crate::power_loss::PowerLossModel::attach(
+        &fixture.project,
+        crate::power_loss::image::ImageLimits::default(),
+    )
+    .unwrap();
+    let error = SourceDirectory::capture(&fixture.root, &fixture.project.io_context()).unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::Unsupported);
+    assert_eq!(fixture.project.metrics().open, 0);
+    model.capture().unwrap();
+    drop(model);
+    let source = fixture.capture(&fixture.root);
+    assert_eq!(fixture.project.metrics().open, 1);
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn corrupt_fifo_is_rejected_without_waiting_for_a_writer() {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let fixture = Fixture::new(8);
+    let path = fixture.root.join("payload.hawdb");
+    let encoded = CString::new(path.as_os_str().as_bytes()).unwrap();
+    // SAFETY: owned NUL-terminated fixture path and valid permission mode.
+    assert_eq!(unsafe { libc::mkfifo(encoded.as_ptr(), 0o600) }, 0);
+    let source = fixture.capture(&fixture.root);
+    assert_eq!(
+        source
+            .open_child(&fixture.project.io_context(), "payload.hawdb")
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::InvalidData
+    );
+    assert_eq!(fixture.project.metrics().open, 1);
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn child_open_uses_the_fresh_operations_reserved_descriptor_capacity() {
+    let fixture = Fixture::new(2);
+    fs::write(fixture.root.join("payload.hawdb"), b"reserved child").unwrap();
+    let source = fixture.capture(&fixture.root);
+    let reservation = fixture.project.reserve(1).unwrap();
+    let operation = fixture.project.io_context();
+    assert_eq!(
+        (
+            fixture.project.metrics().open,
+            fixture.project.metrics().reserved
+        ),
+        (1, 1)
+    );
+    // The original capture context predates this reservation. Reusing it would
+    // fail at the project limit despite the operation owning one available FD.
+    let mut child = source.open_child(&operation, "payload.hawdb").unwrap();
+    assert_eq!(
+        (
+            fixture.project.metrics().open,
+            fixture.project.metrics().reserved
+        ),
+        (2, 0)
+    );
+    let mut bytes = String::new();
+    child.read_to_string(&mut bytes).unwrap();
+    assert_eq!(bytes, "reserved child");
+    drop(child);
+    assert_eq!(
+        (
+            fixture.project.metrics().open,
+            fixture.project.metrics().reserved
+        ),
+        (1, 1)
+    );
+    drop(operation);
+    drop(reservation);
+    drop(source);
+    assert_eq!(
+        (
+            fixture.project.metrics().open,
+            fixture.project.metrics().reserved
+        ),
+        (0, 0)
+    );
+}
+
+#[test]
+fn foreign_project_context_cannot_open_or_remove_captured_children() {
+    let fixture = Fixture::new(8);
+    let foreign = Fixture::new(8);
+    fs::write(fixture.root.join("payload.hawdb"), b"owned child").unwrap();
+    let source = fixture.capture(&fixture.root);
+    let context = foreign.project.io_context();
+    assert_eq!(
+        source
+            .open_child(&context, "payload.hawdb")
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::InvalidInput
+    );
+    assert_eq!(
+        source
+            .remove_child(&context, "payload.hawdb")
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::InvalidInput
+    );
+    assert_eq!(
+        fs::read(fixture.root.join("payload.hawdb")).unwrap(),
+        b"owned child"
+    );
+    assert_eq!(fixture.project.metrics().open, 1);
+    assert_eq!(foreign.project.metrics().open, 0);
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn lock_opens_are_relative_nontruncating_and_support_existing_read_only_handles() {
+    use std::io::Write;
+    let fixture = Fixture::new(8);
+    let original = fixture.root.join("source");
+    let moved = fixture.root.join("moved");
+    fs::create_dir(&original).unwrap();
+    let source = fixture.capture(&original);
+    fs::rename(&original, &moved).unwrap();
+    fs::create_dir(&original).unwrap();
+    fs::write(original.join(".source.lock"), b"foreign lock").unwrap();
+    let context = fixture.project.io_context();
+    let mut lock = source
+        .open_lock_file(
+            &context,
+            ".source.lock",
+            SourceDirectoryLockMode::ReadWriteCreate,
+        )
+        .unwrap();
+    lock.write_all(b"original lock").unwrap();
+    drop(lock);
+    let mut existing = source
+        .open_lock_file(
+            &context,
+            ".source.lock",
+            SourceDirectoryLockMode::ReadWriteCreate,
+        )
+        .unwrap();
+    let mut bytes = String::new();
+    existing.read_to_string(&mut bytes).unwrap();
+    assert_eq!(bytes, "original lock");
+    drop(existing);
+    let mut readonly = source
+        .open_lock_file(
+            &context,
+            ".source.lock",
+            SourceDirectoryLockMode::ReadExisting,
+        )
+        .unwrap();
+    assert!(readonly.write_all(b"must not modify").is_err());
+    drop(readonly);
+    assert_eq!(
+        fs::read(moved.join(".source.lock")).unwrap(),
+        b"original lock"
+    );
+    assert_eq!(
+        fs::read(original.join(".source.lock")).unwrap(),
+        b"foreign lock"
+    );
+    assert_eq!(fixture.project.metrics().open, 1);
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn lock_open_uses_current_inventory_and_rejects_noncontrol_names_before_io() {
+    let fixture = Fixture::new(2);
+    let source = fixture.capture(&fixture.root);
+    let reservation = fixture.project.reserve(1).unwrap();
+    let context = fixture.project.io_context();
+    for name in ["payload.hawdb", "source.lock", ".lock", "../.source.lock"] {
+        assert_eq!(
+            source
+                .open_lock_file(&context, name, SourceDirectoryLockMode::ReadWriteCreate)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+    }
+    assert_eq!(
+        source
+            .open_lock_file(
+                &context,
+                ".missing.lock",
+                SourceDirectoryLockMode::ReadExisting
+            )
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::NotFound
+    );
+    assert!(!fixture.root.join(".missing.lock").exists());
+    let lock = source
+        .open_lock_file(
+            &context,
+            ".source.lock",
+            SourceDirectoryLockMode::ReadWriteCreate,
+        )
+        .unwrap();
+    assert_eq!(
+        (
+            fixture.project.metrics().open,
+            fixture.project.metrics().reserved
+        ),
+        (2, 0)
+    );
+    drop(lock);
+    assert_eq!(
+        (
+            fixture.project.metrics().open,
+            fixture.project.metrics().reserved
+        ),
+        (1, 1)
+    );
+    drop(context);
+    drop(reservation);
+    drop(source);
+    assert_eq!(
+        (
+            fixture.project.metrics().open,
+            fixture.project.metrics().reserved
+        ),
+        (0, 0)
+    );
+}
+
+#[test]
+fn denied_lock_open_does_not_create_an_unadmitted_control_file() {
+    let fixture = Fixture::new(1);
+    let source = fixture.capture(&fixture.root);
+    let error = source
+        .open_lock_file(
+            &fixture.project.io_context(),
+            ".source.lock",
+            SourceDirectoryLockMode::ReadWriteCreate,
+        )
+        .unwrap_err();
+    assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+    assert!(!fixture.root.join(".source.lock").exists());
+    assert_eq!(fixture.project.metrics().open, 1);
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn relative_lock_handle_enforces_native_peer_process_exclusion() {
+    const PROBE_ROOT: &str = "HAWDB_SOURCE_DIRECTORY_LOCK_PROBE_ROOT";
+    const PROBE_BUSY: &str = "HAWDB_SOURCE_DIRECTORY_LOCK_PROBE_BUSY";
+    const CASE: &str = "file_io::source_directory::tests::relative_lock_handle_enforces_native_peer_process_exclusion";
+    if let Some(root) = std::env::var_os(PROBE_ROOT) {
+        let project = ProjectFileDescriptors::acquire_existing(Path::new(&root), 8).unwrap();
+        let source = SourceDirectory::capture(Path::new(&root), &project.io_context()).unwrap();
+        let file = source
+            .open_lock_file(
+                &project.io_context(),
+                ".source.lock",
+                SourceDirectoryLockMode::ReadWriteCreate,
+            )
+            .unwrap();
+        if std::env::var_os(PROBE_BUSY).is_some() {
+            assert!(matches!(
+                file.try_lock(),
+                Err(std::fs::TryLockError::WouldBlock)
+            ));
+        } else {
+            file.try_lock().unwrap();
+        }
+        return;
+    }
+    let fixture = Fixture::new(8);
+    let source = fixture.capture(&fixture.root);
+    let file = source
+        .open_lock_file(
+            &fixture.project.io_context(),
+            ".source.lock",
+            SourceDirectoryLockMode::ReadWriteCreate,
+        )
+        .unwrap();
+    file.try_lock().unwrap();
+    let probe = |busy| {
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args(["--exact", CASE, "--nocapture"])
+            .env(PROBE_ROOT, &fixture.root);
+        if busy {
+            command.env(PROBE_BUSY, "1");
+        } else {
+            command.env_remove(PROBE_BUSY);
+        }
+        let result = command.output().unwrap();
+        let text = String::from_utf8_lossy(&result.stdout);
+        assert!(
+            result.status.success(),
+            "{text}\n{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(
+            text.contains("1 passed; 0 failed"),
+            "probe selected no case: {text}"
+        );
+    };
+    probe(true);
+    drop(file);
+    probe(false);
+    drop(source);
+    assert_eq!(fixture.project.metrics().open, 0);
+}

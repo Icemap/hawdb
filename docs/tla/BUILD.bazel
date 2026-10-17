@@ -510,3 +510,45 @@ tla_check(
         "UnlockBeforePin",
     ]
 ]
+
+[
+    tla_check(
+        name = "HawDBRootProcessCustody" + control + "_check",
+        module = "HawDBRootProcessCustody.tla",
+        config = "mutants/HawDBRootProcessCustody" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "UnregisterBeforeNativeClose",
+        "DropRootOnProducerClose",
+        "ReleaseSlotDuringMutation",
+        "IgnoreReadingOwner",
+        "RetainProducerInChild",
+        "ProcessLocalOnly",
+    ]
+]
+
+tla_check(
+    name = "HawDBRootReferenceDropOffGate_check",
+    module = "HawDBRootReferenceDrop.tla",
+    config = "mutants/HawDBRootReferenceDropOffGate.cfg",
+    expect = "invariant_violation",
+    tags = ["manual"],
+    timeout_seconds = 1800,
+    tlc_args = ["-cleanup", "-workers", "auto"],
+)
+
+# A false invariant witnesses reachability with every unsafe control disabled.
+# It is not a mutant and must not enter the positive safety suite.
+tla_check(
+    name = "HawDBRootProcessCustodySuccessor_check",
+    module = "HawDBRootProcessCustody.tla",
+    config = "witnesses/HawDBRootProcessCustodySuccessor.cfg",
+    expect = "invariant_violation",
+    tags = ["manual"],
+    timeout_seconds = 1800,
+    tlc_args = ["-cleanup", "-workers", "auto"],
+)

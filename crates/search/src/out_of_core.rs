@@ -60,6 +60,7 @@ pub use verified_body::{SearchBodyReadOptions, SearchVerifiedBody};
 pub(crate) mod mutation_run;
 mod publish_lease;
 mod reuse;
+mod root_registry;
 mod text_seed;
 #[cfg(feature = "vector-search")]
 mod vector_reader;

@@ -26,6 +26,10 @@ use std::sync::Arc;
 
 pub use std::fs::{FileType, Metadata, Permissions, TryLockError};
 
+mod source_directory;
+#[doc(hidden)]
+pub use source_directory::{SourceDirectory, SourceDirectoryIdentity, SourceDirectoryLockMode};
+
 mod read;
 #[doc(hidden)]
 pub use read::{AdmittedFileRead, ReadAdmissionControl};

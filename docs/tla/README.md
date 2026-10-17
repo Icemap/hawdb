@@ -2262,3 +2262,7 @@ Projection freshness over shared native owner history is specified in
 The proposed source-root reader/GC protocol and its required native refinement
 are recorded in [SOURCE_ROOT_CUSTODY_DESIGN.md](SOURCE_ROOT_CUSTODY_DESIGN.md).
 The finite model does not certify the current native cleanup implementation.
+
+Root process ownership, producer-slot separation and concurrent reference
+retirement are specified in [ROOT_PROCESS_CUSTODY_PROOF.md](ROOT_PROCESS_CUSTODY_PROOF.md).
+These are proposed finite protocols; native registry/GC refinement remains open.

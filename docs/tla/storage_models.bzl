@@ -121,6 +121,8 @@ STORAGE_MODELS = [
     "HawDBSystemSchemaUpgrade",
     "HawDBTargetReanalysisIo",
     "HawDBSourceRootCustody",
+    "HawDBRootProcessCustody",
+    "HawDBRootReferenceDrop",
     "HawDBTransactionAdmissionLease",
     "HawDBTransactionConcurrency",
     "HawDBTransactionIndexOverlay",

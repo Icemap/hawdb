@@ -43,6 +43,7 @@ pub(super) struct OpenContext<'a, 'execution> {
 // construction evidence must not become an ungoverned public reader capability.
 pub(super) struct OpenedRoot {
     reader: SearchOutOfCoreReader,
+    _native_custody: Option<super::root_registry::RootRef>,
     _root_memory: Option<ReaderMemory>,
     _manifest_memory: Option<ReaderMemory>,
     _collections_memory: Option<ReaderMemory>,
@@ -99,19 +100,21 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
         }
         None => ProjectFileDescriptors::acquire_component(&root, false)?,
     };
+    let native_custody = admission
+        .map(|admission| {
+            super::root_registry::RootRef::acquire(&root, &project_files.io_context(), admission)
+        })
+        .transpose()?;
     let bytes = match admission {
-        Some(admission) => {
-            let path = OwnedPath::join(
-                &root,
-                Path::new(OUT_OF_CORE_MANIFEST_FILE),
-                admission.memory,
-                admission.task,
-            )?;
-            admission.read_unbound(
-                &path,
+        Some(admission) => native_custody
+            .as_ref()
+            .expect("admitted root owns custody")
+            .read_head(
+                &project_files.io_context(),
+                OUT_OF_CORE_MANIFEST_FILE,
+                admission,
                 MAX_OUT_OF_CORE_MANIFEST_BYTES.min(max_artifact_read_bytes),
-            )?
-        }
+            )?,
         None => ReadBytes::unaccounted(read_bounded_file(
             &root.join(OUT_OF_CORE_MANIFEST_FILE),
             MAX_OUT_OF_CORE_MANIFEST_BYTES,
@@ -144,6 +147,7 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
         manifest,
     )?;
     Ok(OpenedRoot {
+        _native_custody: native_custody,
         reader: SearchOutOfCoreReader {
             root,
             _project_files: project_files,

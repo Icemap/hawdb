@@ -74,3 +74,9 @@ before its physical owners are gone, allocating an uncharged deep clone, and
 retaining execution slots after producer closure. The model separates query
 refund from dropping the final ledger reference; see the
 [resource protocol and proof limits](../SHARED_READER_CAPACITY_PROOF.md).
+
+Root-process controls reject early unregister/native close, losing ownership
+when a producer closes, ignored reads, early mutation-slot release, retained
+producer slots and process-local-only exclusion. The reference-drop control
+rejects count checks separated from nonfinal decrements. The successor witness
+is separate from these mutants; see [the proof boundary](../ROOT_PROCESS_CUSTODY_PROOF.md).

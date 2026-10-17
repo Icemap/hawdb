@@ -16,23 +16,21 @@
 use super::*;
 use hawdb_storage::file_io::{File, ReadAdmissionControl};
 use std::io::{self, Read};
-use std::path::Path;
 
 impl<'execution> ReadAdmission<'execution> {
-    pub(crate) fn read_unbound(&self, path: &Path, maximum: u64) -> Result<ReadBytes<'execution>> {
+    /// Read a caller-owned counted handle under this operation's admission.
+    /// Opening and reading may use separate waves; neither path nests a second
+    /// I/O loan inside the first when the operation has one reserved slot.
+    pub(crate) fn read_unbound_file(
+        &self,
+        file: &File,
+        maximum: u64,
+    ) -> Result<ReadBytes<'execution>> {
         crate::build_control::checkpoint(self.task)?;
-        let _native = self.scratch(checked_add(
-            super::super::reserved::native_path::bytes(path)?,
-            4096,
-        )?)?;
+        let _native = self.scratch(4096)?;
         let _io = self
             .io()
             .map_err(|error| HawDBError::Execution(error.to_string()))?;
-        let file = File::open(path)?;
-        #[cfg(test)]
-        if let Some(callback) = AFTER_FILE_OPEN.with(|slot| slot.replace(None)) {
-            callback();
-        }
         crate::build_control::checkpoint(self.task)?;
         let mut control = Control {
             admission: self,

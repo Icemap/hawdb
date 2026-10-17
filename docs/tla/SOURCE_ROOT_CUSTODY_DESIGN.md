@@ -76,6 +76,68 @@ case, not evidence already obtained. The finite `RetainBusy` control catches one
 abstract form of this exclusion error; it does not certify the current native
 lease implementation or its process-ownership mechanism.
 
+## Native relative-I/O prototype
+
+`hawdb_storage::file_io::SourceDirectory` now has an uncommitted prototype.
+It captures one counted native directory from an existing project context.
+Child opens and unlinks use that handle rather than the original root pathname.
+Each operation takes a fresh context from the same project domain, so it can
+consume a new operation's reserved FD capacity instead of reusing the expired
+capture inventory. A foreign project context refuses before opening/deleting.
+Unix uses `openat`/`unlinkat`; Windows uses `NtCreateFile` with `RootDirectory`
+and handle-based disposition. Generated artifact names are limited to one
+ASCII component of at most 255 bytes, with no separators, traversal or streams.
+Child opens reject symbolic links/reparse points and nonregular files. Unix
+opens nonblocking before checking file type so a corrupt FIFO cannot wait for
+a writer. Returned child handles own separate descriptor receipts and can
+outlive the directory wrapper. They are native handles, not an unbounded cache:
+the future reader must acquire them within its short admitted I/O operation.
+
+A cached physical identity is copied while the counted root is live. Registry
+lookup can compare it without native I/O under the registry gate; keep the
+captured handle alive while using the key. It is not an incarnation token.
+Hidden `.lock` controls can be opened relative to that same root, either
+read-only/existing or read-write/create, without truncating existing bytes.
+Each lock open uses fresh project FD admission. The caller must serialize
+lock-file opens through the process registry: on process-owned POSIX locks,
+closing another descriptor for that lock file can release an existing lock.
+
+The prototype does not capture native publication ownership, install artifact
+registrations, govern caller heap allocation, enumerate a captured directory,
+or synchronize a deletion. `same_directory` compares held physical identities;
+it does not establish logical source/binding incarnation or cross-process GC.
+No reader, publication or cleanup path uses this prototype yet. Existing
+path-based behavior is therefore unchanged. Do not expose governed serving or
+infer the finite model's native refinement from this API alone.
+
+Power-loss recording has no directory-relative namespace mapping yet. Such
+contexts explicitly refuse the new primitive before any native operation;
+test-support registration exclusion prevents recording from being enabled
+mid-operation. This is an uncompleted qualification boundary, not modeled
+directory I/O or a durability result. Native contexts still need the complete
+capture/GC recovery proof before this primitive can support activation.
+
+Thirteen Unix native guards (eleven portable-to-Windows plus symlink/FIFO guards)
+are written for cold open after root replacement, root-relative deletion that
+preserves a foreign replacement, held-root identity, independent child closure,
+FD admission/cleanup, fresh operation reservations, foreign-context refusal,
+invalid components, nonregular files, relative nontruncating lock opens,
+read-only lock handles, pre-open FD denial, and peer-process native exclusion.
+Power-loss-context refusal is also explicit. The v4 primitive ran all 13 Unix
+native cases successfully (0 failures, 1,996 filtered out), including the
+peer-process exclusion probe. Strict all-target/all-feature Storage Clippy
+passed natively and for Windows GNU; documented minimal WASM Clippy and
+workspace formatting also passed. These results cover the primitive, not its
+future registry/reader/GC adoption. Windows strict
+compilation does not establish native Windows behavior.
+
+Primary API contracts: [POSIX openat](https://pubs.opengroup.org/onlinepubs/9799919799/functions/open.html),
+[POSIX unlinkat](https://pubs.opengroup.org/onlinepubs/9699919799/functions/unlink.html),
+[Windows NtCreateFile](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile),
+and [handle-based disposition](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-setfileinformationbyhandle).
+These contracts motivate the implementation; they do not qualify its FFI,
+native resource accounting or platform execution.
+
 ## Finite safety model
 
 [HawDBSourceRootCustody](HawDBSourceRootCustody.tla) models two physical roots,

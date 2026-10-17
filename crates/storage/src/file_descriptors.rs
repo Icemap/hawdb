@@ -691,6 +691,15 @@ pub struct FileOpenContext {
 }
 
 impl FileOpenContext {
+    /// Retain project identity without retaining an operation's FD inventory.
+    /// Long-lived authorities must take fresh operation contexts for later I/O.
+    pub(crate) fn without_inventory(&self) -> Self {
+        Self {
+            state: self.state.clone(),
+            inventory: None,
+        }
+    }
+
     pub(crate) fn project_root(&self) -> &Path {
         &self.state.root
     }
