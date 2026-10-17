@@ -1,0 +1,267 @@
+[
+  {
+    "file": "1059-pinned-final-4479504a-analytics-core-test-_hawdb_unit_analytics_core_general_tests.log",
+    "bytes": 7571,
+    "sha256": "5cf9e8215a6d587aaf35871639d3c19e7ef7a51b576908267b96616c3b3207b0"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-analytics-rss-test-_hawdb_unit_analytics_rss_tests.log",
+    "bytes": 1231,
+    "sha256": "c9c800e48926c541d4ed2bcfc4b56f473a27376bef74a942c5b6518b50c4fa07"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-compaction-admission-test-_hawdb_unit_row_page_compaction_admission_tests.log",
+    "bytes": 670,
+    "sha256": "5b38d32a41891deaa783f7626ad067ee9cb499822f82e36f8427cca5e6ff6a6c"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-concurrent-test-_hawdb_unit_concurrent_tests.log",
+    "bytes": 15811,
+    "sha256": "c3edcd09ebfb0bbbc09d10fe32a2d3aed73ef52c7741bd53dc83e5d8ae46ca14"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-contract-test-_hawdb_execution_request_contract_tests.log",
+    "bytes": 3334,
+    "sha256": "40f73d31fd70967ce3aa021ad97e25db43b36534cc16703ff2cf2ebd05f74da4"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-foundation-test-crates_core_hawdb_core_tests.log",
+    "bytes": 5080,
+    "sha256": "360a59b8530a2b199c6cffadb09a2d59160fb38a92c8f10e8de37344a67a0808"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-foundation-test-crates_executor_hawdb_executor_unit_tests.log",
+    "bytes": 43784,
+    "sha256": "791b607d670b6775391feb90548d5046df2d364d23cc8b01c19dbe0c638e71b4"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-foundation-test-crates_qos_hawdb_qos_tests.log",
+    "bytes": 11582,
+    "sha256": "3696c2324bb731b5449ad36fca9657918bebe09a670e38f466a3034958445293"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-foundation-test-crates_storage_hawdb_storage_tests.log",
+    "bytes": 222695,
+    "sha256": "df359e5ba6616915b7d0e3c0e54bbf3eefe77957911d5d4a8e7787454380f77e"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-general-test-_hawdb_unit_general_tests.log",
+    "bytes": 182138,
+    "sha256": "7cb68911947bd42864c3a81d888b082a7598d70cda5a82140e9ab27384d7c1a0"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-mandatory-fuzz-test-_hawdb_graph_projection_residency_fuzz_first_half_tests.log",
+    "bytes": 665,
+    "sha256": "65712cd921e6466181ff8fdea9a0f3f082ad08755b8e6549316a86e8434843d5"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-mandatory-fuzz-test-_hawdb_graph_projection_residency_fuzz_second_half_tests.log",
+    "bytes": 669,
+    "sha256": "5c220a23b9d2935878722bec9f4d396232678ff07326371f8fc3fa804843ea3f"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-portable-test-_hawdb_in_memory_portable_tests.log",
+    "bytes": 812,
+    "sha256": "eb2e32f3352de128f55a508cc58f0966a2ee755b3ed2cccb519c11a7ca9fcdcf"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-recovery-test-_hawdb_unit_recovery_tests.log",
+    "bytes": 16592,
+    "sha256": "8fde9144d7df4d9f0eca8f883bf36cc427c0c72b1c6b611b75020bd034cec273"
+  },
+  {
+    "file": "1059-pinned-final-4479504a-state.json",
+    "bytes": 20684,
+    "sha256": "f620902e3a0db4b543fe7fcc053241a93687e2f0e5c3ab18768e1914707f9be2"
+  },
+  {
+    "file": "1059-pinned-source-bounded-followup-review.json",
+    "bytes": 4284,
+    "sha256": "7f880a449b65e0197be789ea1ebb85de3453cfdfd69809f21e85f6f7bc9cfefa"
+  },
+  {
+    "file": "1059-pinned-source-capacity-state.json",
+    "bytes": 4230,
+    "sha256": "35c93685c7e0efe1332aea288de2e390f3e9344e96b1f4a962ce86b6b866584f"
+  },
+  {
+    "file": "1059-pinned-source-commit.log",
+    "bytes": 301,
+    "sha256": "ede453c16c0c8b9ee2b1381eee0e05b48385ee62ed2aaed8656271728a132b70"
+  },
+  {
+    "file": "1059-pinned-source-exact-final-causal-state.json",
+    "bytes": 1859,
+    "sha256": "605af222e24d82c6a0980a1c8a82ad91108a0501f8eadb512f956f175e40614f"
+  },
+  {
+    "file": "1059-pinned-source-exact-final-green-test.log",
+    "bytes": 858,
+    "sha256": "6794e86589bd915fe8ee0531d163024214227cbd52e6e8a6eccad08d4b95381e"
+  },
+  {
+    "file": "1059-pinned-source-exact-final-red-test.log",
+    "bytes": 1863,
+    "sha256": "517b04ecec1087a7da31cf5262d733fb82422ce84e6a53603cd308d26808e222"
+  },
+  {
+    "file": "1059-pinned-source-final-head.json",
+    "bytes": 490,
+    "sha256": "2b16e20d913fe1948231e10b40c670d8ff439543c7a89543ff5b9343013d98c0"
+  },
+  {
+    "file": "1059-pinned-source-fix-v2-complete-retained-test.log",
+    "bytes": 3767,
+    "sha256": "18de5bf109f837eab475466ad746705f0631c3b398fcaa64ef226b6ec5c03b63"
+  },
+  {
+    "file": "1059-pinned-source-fix-v2-complete-retained.log",
+    "bytes": 2418,
+    "sha256": "3f3620b807a0387eb458439bf01b7403cdfdbf583d07fe836ca86e1a81588e45"
+  },
+  {
+    "file": "1059-pinned-source-fix-v2-final-green-test.log",
+    "bytes": 858,
+    "sha256": "81099562ce915d96a055692b41243b7b45e8c4c6549a8d72d9e58759343963b6"
+  },
+  {
+    "file": "1059-pinned-source-fix-v2-final-green.log",
+    "bytes": 2680,
+    "sha256": "9af8c0f267bf0e4ce4231cc213573d2470c94967c8a409d79348850a97f05a72"
+  },
+  {
+    "file": "1059-pinned-source-fix-v2-fmt.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "file": "1059-pinned-source-fix-v2-install.log",
+    "bytes": 89,
+    "sha256": "6dd3a3ee6c0892e5369e843cabf8ddc982f55665d60d1d1359fc0d198ee6f427"
+  },
+  {
+    "file": "1059-pinned-source-fix-v2-native.log",
+    "bytes": 155,
+    "sha256": "020a5eae7e60bf5a67c2a84ffa772725d58d4817fdf4fe48d672535f13c507de"
+  },
+  {
+    "file": "1059-pinned-source-fix-v2-prek.log",
+    "bytes": 160,
+    "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
+  },
+  {
+    "file": "1059-pinned-source-fix-v2-state.json",
+    "bytes": 3757,
+    "sha256": "143c15b30dea9cb65ddc38b600fb7e064280645477a42d8a5d659c5bc7bfbae1"
+  },
+  {
+    "file": "1059-pinned-source-fix-v2-wasm.log",
+    "bytes": 60,
+    "sha256": "43ddda3fc4d2c06eec615b56bd83f059740d1ce91f6f4d1733f6bbbc0e1a3e13"
+  },
+  {
+    "file": "1059-pinned-source-independent-review.json",
+    "bytes": 5940,
+    "sha256": "eca7701bbd3793018793a65ee3580ef4f4f00b86d0c8d37398c29109705f181f"
+  },
+  {
+    "file": "1059-windows-pinned-fix-dispatch-state.json",
+    "bytes": 3283,
+    "sha256": "b5b9bf66e0ba8c226bde1993859a7b5ea023e1903de723d8139766ab79564b35"
+  },
+  {
+    "file": "commands.json",
+    "bytes": 7417,
+    "sha256": "5e8b3621967c3cbbe7ac6262d47a7bc1fd9552861cba1b26d56921f2dfe19893"
+  },
+  {
+    "file": "core.patch",
+    "bytes": 299610,
+    "sha256": "c225814b588f2b4b44ead451fa5ca15d7651c92369b4893410b7e2809769860f"
+  },
+  {
+    "file": "packet.json",
+    "bytes": 3950,
+    "sha256": "6daef562b199d50f9882fe97358aec2d11c35a9b7ac2826e0a298d034622527d"
+  },
+  {
+    "file": "repair.patch",
+    "bytes": 12243,
+    "sha256": "f55287b63d819b9bd9a7dfc6810467201357230d9fb94b9b3e9ebec795a3831e"
+  },
+  {
+    "file": "source-capacity-build.log",
+    "bytes": 2367,
+    "sha256": "36cef305a824a439117ac0387b091bfc4b69d75f42335a4344bf597e7366455a"
+  },
+  {
+    "file": "source-capacity-file.json",
+    "bytes": 543,
+    "sha256": "a102bb5f70b00041101a93a39a26b0d9291d7cf2232ab3eec3fc1e2abe5d2fac"
+  },
+  {
+    "file": "source-capacity-memory.json",
+    "bytes": 546,
+    "sha256": "5f392209ccbe2de7215204250b810a46d865e5bacc65e9ea0a7de12bbc43b523"
+  },
+  {
+    "file": "source.json",
+    "bytes": 7258,
+    "sha256": "d7965704416f25b57c37eb2021e77b056a651585fc413b9471313abcde1d3a82"
+  },
+  {
+    "file": "test-events.json",
+    "bytes": 37283,
+    "sha256": "f3e4f0c7ffe29cc8fda46f19c7ed12838c2250155d8f064d535c68fc0a655b50"
+  },
+  {
+    "file": "windows-cow-ownership.txt",
+    "bytes": 4351,
+    "sha256": "3fb9925cdc7d790b99614095d33cc3e771737349041027e998363feb967c3af5"
+  },
+  {
+    "file": "windows-engine.txt",
+    "bytes": 676,
+    "sha256": "2105330c18d7d524f6a0283faa02a86c412af169c5195c620c909112f812068c"
+  },
+  {
+    "file": "windows-executor-numeric.txt",
+    "bytes": 2433,
+    "sha256": "5055b061c744ccfe405f3ad8bb92707c6373854ee1c41f272b55fb4b8bdf8680"
+  },
+  {
+    "file": "windows-receipt.json",
+    "bytes": 4547,
+    "sha256": "0ac9e4abdda5b163667c8b2abec773c0470b582946657f70399cd47c54c71bb3"
+  },
+  {
+    "file": "windows-retained-admission.txt",
+    "bytes": 3223,
+    "sha256": "d2f897e800e4536def426cb6b7ef21b903abe13eb5b8469d6a38f8213aa9220c"
+  },
+  {
+    "file": "windows-root-numeric.txt",
+    "bytes": 17102,
+    "sha256": "5804d6b69dda565583612ad35bf9f634f8db882360dbdf996ebc90da8e326c8c"
+  },
+  {
+    "file": "windows-source-ownership.txt",
+    "bytes": 2213,
+    "sha256": "fa9c6c6598ff62d2d143ca65bd5f114e902eda83b065764bd4207f58e085a468"
+  },
+  {
+    "file": "windows-source.txt",
+    "bytes": 123,
+    "sha256": "00c4035b482a2a79b4f417134394bd7987f979335138c0d1bf626aa2a4d45f1e"
+  },
+  {
+    "file": "windows-toolchain.txt",
+    "bytes": 194,
+    "sha256": "7fad09dd8c16d49de37932475436003b5b1763c1015c5ce081ad7692db368ca3"
+  },
+  {
+    "file": "windows-workflow-only.patch",
+    "bytes": 6636,
+    "sha256": "d6a7704e2030fc529d1c9103ec17e08c3ff60787b9d55a4997117eac07037a4d"
+  }
+]

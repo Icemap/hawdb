@@ -1,0 +1,40 @@
+{
+  "id": 5559728170,
+  "node_id": "PRR_kwDOTX6JAc8AAAABS2K4Kg",
+  "user": {
+    "login": "wey-gu",
+    "id": 1651790,
+    "node_id": "MDQ6VXNlcjE2NTE3OTA=",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1651790?u=5a5ea37c495f7787f35172f0f86569daf5a5a65e&v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/wey-gu",
+    "html_url": "https://github.com/wey-gu",
+    "followers_url": "https://api.github.com/users/wey-gu/followers",
+    "following_url": "https://api.github.com/users/wey-gu/following{/other_user}",
+    "gists_url": "https://api.github.com/users/wey-gu/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/wey-gu/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/wey-gu/subscriptions",
+    "organizations_url": "https://api.github.com/users/wey-gu/orgs",
+    "repos_url": "https://api.github.com/users/wey-gu/repos",
+    "events_url": "https://api.github.com/users/wey-gu/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/wey-gu/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "body": "Bounded follow-up at `4479504a108302c8e9ff85d8202938d9344dfc2e` against reviewed14e: root plus independent correctness/test/PM refresh confirms the original irreducible pinned-source finding is repaired in source. Query sizing subtracts source+control, retained-result sizing correctly subtracts control only, and runtime work/output overlap is accounted separately. The new actual-allocation-calibrated guards assert sticky nonretryable terminal failure, zero advancement, exact source release, neighboring sufficient-budget progress and genuine held-view/shared-work retry for Database and read-snapshot paths. Existing build registration is unchanged.\n\nIndependently downloaded current Windows run39060992527's artifact12111243396, verified API/ZIP SHA25606d7236816761d4bc0f4e68d38c15cf6e48991ff27fb606cf65951cd149a9b1c and all nine members. Source/engine receipts bind6206ad91 to447; the compare changes only the manual workflow. Actual root output explicitly passes all four new pinned-source guards,32 root cases; executor11+admission7+COW33+source12 gives95/95. This is current repair GREEN evidence, distinct from the predecessor61-file packet. The local semantic RED3PASS/2FAIL and other new-head whole-run/fuzz/capacity claims still need their current published source/log/command packet for independent audit. Complete447 qualification and affected final review remain pending; no approval from partial CI or old14e passes.\n\nWe also inspected attached ProcessMemoryPolicy headroom. Under stable externally owned RSS, sizing may repeatedly request a larger batch although a smaller one would fit its current policy; the source trace is concrete. After checking987, the maintained retained contract and the exact interchange proposal, we are **not promoting it to a new blocker**: the available-byte sizing clause needs interpretation alongside the host policy's explicitly retryable/fail-closed external pressure boundary. This is distinct from the fixed, irreducible self-owned query charge. Please clarify the intended RSS-adaptive boundary when publishing qualification; no blanket liveness guarantee or terminal treatment of sampled RSS is inferred here.\n\nThis COMMENT closes only the original source-level defect in the bounded repair. The overall changes-request/qualification boundary remains until the current differential packet, complete required gates and affected exact-head review are finished. No reviewer build/test/native execution, foreign/Arrow/full986 resource acceptance, stable Mem activation or merge/deployment claim.",
+  "state": "COMMENTED",
+  "html_url": "https://github.com/nowledge-co/hawdb/pull/1059#pullrequestreview-5559728170",
+  "pull_request_url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/1059",
+  "author_association": "MEMBER",
+  "_links": {
+    "html": {
+      "href": "https://github.com/nowledge-co/hawdb/pull/1059#pullrequestreview-5559728170"
+    },
+    "pull_request": {
+      "href": "https://api.github.com/repos/nowledge-co/hawdb/pulls/1059"
+    }
+  },
+  "submitted_at": "2026-10-17T19:43:03Z",
+  "commit_id": "4479504a108302c8e9ff85d8202938d9344dfc2e"
+}

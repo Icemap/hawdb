@@ -1,0 +1,30 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_general_tests
+-----------------------------------------------------------------------------
+
+running 5 tests
+test api::retained_query::tests::distinct_pinned_source_generations_share_aggregate_memory_admission ... ok
+
+thread 'api::retained_query::tests::pinned_source_runtime_boundary_is_terminal_and_neighboring_budget_progresses' (78709765) panicked at src/api/retained_query/tests.rs:244:17:
+assertion `left == right` failed
+  left: RetainedAdmission(Admission(RuntimeAdmissionError { code: MemorySaturated, requested: 4416, available: 4335, retryable: true }))
+ right: WorkingUnitTooLarge
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test api::retained_query::tests::pinned_source_temporary_shared_work_remains_retryable_without_advancing ... ok
+
+thread 'api::retained_query::tests::pinned_source_query_boundary_is_terminal_and_neighboring_budget_progresses' (78709764) panicked at src/api/retained_query/tests.rs:244:17:
+assertion `left == right` failed
+  left: Backpressure { outstanding_batches: 0, batch_limit: 2 }
+ right: WorkingUnitTooLarge
+test api::retained_query::tests::pinned_source_runtime_boundary_is_terminal_and_neighboring_budget_progresses ... FAILED
+test api::retained_query::tests::pinned_source_is_separate_from_the_result_ceiling_and_held_views_are_retryable ... ok
+test api::retained_query::tests::pinned_source_query_boundary_is_terminal_and_neighboring_budget_progresses ... FAILED
+
+failures:
+
+failures:
+    api::retained_query::tests::pinned_source_query_boundary_is_terminal_and_neighboring_budget_progresses
+    api::retained_query::tests::pinned_source_runtime_boundary_is_terminal_and_neighboring_budget_progresses
+
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 2033 filtered out; finished in 0.05s
+

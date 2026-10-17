@@ -1,0 +1,130 @@
+{
+  "status": "passed",
+  "engine_head": "4479504a108302c8e9ff85d8202938d9344dfc2e",
+  "engine_tree": "3fcf5608e290f3eda4e2eabd6428fc7c8f7ef26a",
+  "qualification_head": "6206ad91892b1772c7c421a2affe9f29b6dd24c5",
+  "qualification_tree": "61cef00670a9dc8f65f3a9b929129d3eeed4efa1",
+  "run_id": 39060992527,
+  "url": "https://github.com/nowledge-co/hawdb/actions/runs/39060992527",
+  "job_id": 117478739796,
+  "artifact_id": 12111243396,
+  "artifact_api_digest": "sha256:06d7236816761d4bc0f4e68d38c15cf6e48991ff27fb606cf65951cd149a9b1c",
+  "artifact_zip_sha256": "06d7236816761d4bc0f4e68d38c15cf6e48991ff27fb606cf65951cd149a9b1c",
+  "source_guard": "Exact SHA/tree/parent, sole workflow diff and entire patch verified. Git abbreviations expand only after matching known full blob IDs; line endings alone normalized.",
+  "patch_normalization": {
+    "old_blob": "85619b833485bdc3e7397903e2068e1295ee1878",
+    "new_blob": "8f2d7bf1f52b2cbafd8bf90308eea8daf3d07493",
+    "local_abbreviations": [
+      [
+        "85619b83",
+        "8f2d7bf1"
+      ]
+    ],
+    "windows_abbreviations": [
+      [
+        "85619b8",
+        "8f2d7bf"
+      ]
+    ],
+    "canonical_patch_sha256": "1023677dbb35db6f63bbab38e4ac306966d5052eb876ca91a259b7b888f23f44"
+  },
+  "results": [
+    {
+      "file": "root-numeric.txt",
+      "passed": 32,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 2062,
+      "seconds": 0.1
+    },
+    {
+      "file": "executor-numeric.txt",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 447,
+      "seconds": 0.0
+    },
+    {
+      "file": "retained-admission.txt",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 116,
+      "seconds": 0.0
+    },
+    {
+      "file": "cow-ownership.txt",
+      "passed": 33,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 1893,
+      "seconds": 0.21
+    },
+    {
+      "file": "source-ownership.txt",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 1914,
+      "seconds": 2.12
+    }
+  ],
+  "files": [
+    {
+      "file": "cow-ownership.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-verified/cow-ownership.txt",
+      "bytes": 4351,
+      "sha256": "3fb9925cdc7d790b99614095d33cc3e771737349041027e998363feb967c3af5"
+    },
+    {
+      "file": "engine.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-verified/engine.txt",
+      "bytes": 676,
+      "sha256": "2105330c18d7d524f6a0283faa02a86c412af169c5195c620c909112f812068c"
+    },
+    {
+      "file": "executor-numeric.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-verified/executor-numeric.txt",
+      "bytes": 2433,
+      "sha256": "5055b061c744ccfe405f3ad8bb92707c6373854ee1c41f272b55fb4b8bdf8680"
+    },
+    {
+      "file": "retained-admission.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-verified/retained-admission.txt",
+      "bytes": 3223,
+      "sha256": "d2f897e800e4536def426cb6b7ef21b903abe13eb5b8469d6a38f8213aa9220c"
+    },
+    {
+      "file": "root-numeric.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-verified/root-numeric.txt",
+      "bytes": 17102,
+      "sha256": "5804d6b69dda565583612ad35bf9f634f8db882360dbdf996ebc90da8e326c8c"
+    },
+    {
+      "file": "source-ownership.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-verified/source-ownership.txt",
+      "bytes": 2213,
+      "sha256": "fa9c6c6598ff62d2d143ca65bd5f114e902eda83b065764bd4207f58e085a468"
+    },
+    {
+      "file": "source.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-verified/source.txt",
+      "bytes": 123,
+      "sha256": "00c4035b482a2a79b4f417134394bd7987f979335138c0d1bf626aa2a4d45f1e"
+    },
+    {
+      "file": "toolchain.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-verified/toolchain.txt",
+      "bytes": 194,
+      "sha256": "7fad09dd8c16d49de37932475436003b5b1763c1015c5ce081ad7692db368ca3"
+    },
+    {
+      "file": "workflow-only.patch",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-verified/workflow-only.patch",
+      "bytes": 6636,
+      "sha256": "d6a7704e2030fc529d1c9103ec17e08c3ff60787b9d55a4997117eac07037a4d"
+    }
+  ],
+  "scope": "Exact447 Windows targeted root/executor/shared-admission/COW/source tests. No foreign, Arrow, indexed-node or full original986 performance acceptance."
+}

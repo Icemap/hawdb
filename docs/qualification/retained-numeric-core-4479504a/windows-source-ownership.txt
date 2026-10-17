@@ -1,0 +1,31 @@
+[1m[92m    Finished[0m `test` profile [unoptimized] target(s) in 0.11s
+[1m[92m     Running[0m unittests src\lib.rs (target\debug\deps\hawdb_storage-5c59de55391ee460.exe)
+
+running 12 tests
+test store::graph_read::retained_scan_tests::admitted_point_source_observes_later_poison ... ok
+test store::graph_read::retained_scan_tests::admitted_point_source_preserves_addresses_and_reservation_until_release ... ok
+test store::graph_read::retained_scan_tests::completion_health_guard_preserves_both_poison_signals_after_store_drop ... ok
+test store::graph_read::retained_scan_tests::minimal_source_observes_both_shared_poison_signals ... ok
+test store::graph_read::retained_scan_tests::minimal_source_shares_records_and_survives_store_mutation_and_destruction ... ok
+test store::graph_read::retained_scan_tests::point_source_preserves_host_refusal_before_pin ... ok
+test store::graph_read::retained_scan_tests::point_source_rejects_short_permits_before_pin_and_missing_skips_admission ... ok
+test store::graph_read::retained_scan_tests::typed_point_admission_validates_before_and_after_retained_transfer ... ok
+test store::graph_read::retained_scan_tests::typed_point_source_preserves_auto_traits_and_cross_thread_release ... ok
+test store::graph_read::retained_scan_tests::demanded_scan_resumes_borrowed_label_order_across_publication ... ok
+bounded-preparation-stage append-start
+bounded-preparation-stage append-start
+bounded-preparation-stage source-write-start
+bounded-preparation-stage canonical-start
+bounded-preparation-stage source-write-start
+bounded-preparation-stage canonical-start
+bounded-preparation-stage adjacency-start
+bounded-preparation-stage adjacency-start
+bounded-preparation-stage property-projection-start
+bounded-preparation-stage property-projection-start
+bounded-preparation-stage relational-start
+bounded-preparation-stage relational-start
+test store::graph_read::retained_scan_tests::canonical_decoding_refuses_instead_of_returning_only_the_live_overlay ... ok
+test store::graph_read::retained_scan_tests::canonical_projected_point_admission_preserves_refusal_and_allows_retry ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1914 filtered out; finished in 2.12s
+

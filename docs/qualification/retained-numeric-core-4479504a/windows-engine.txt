@@ -1,0 +1,13 @@
+commit 4479504a108302c8e9ff85d8202938d9344dfc2e
+Author:     Weizhen Wang <hawking.rei@gmail.com>
+AuthorDate: Sun Oct 18 03:03:50 2026 +0800
+Commit:     Weizhen Wang <hawking.rei@gmail.com>
+CommitDate: Sun Oct 18 03:03:50 2026 +0800
+
+    fix(api): reject irreducible retained working units
+    
+    Subtract pinned source and cursor control charges before classifying a minimal output as recoverable pressure. Bound construction by runtime capacity and the overlapping work/output reservations, preserving shared and held-view retryability.
+    
+    Add deterministic query/runtime/result near-fit and temporary shared-work regression controls.
+    
+    Issue Number: ref #987

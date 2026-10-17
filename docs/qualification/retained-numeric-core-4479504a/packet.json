@@ -1,0 +1,29 @@
+{
+  "created_at": "2026-10-17T19:53:53.307243+00:00",
+  "head": "4479504a108302c8e9ff85d8202938d9344dfc2e",
+  "tree": "3fcf5608e290f3eda4e2eabd6428fc7c8f7ef26a",
+  "base": "a1012720decca3844864c910360057a5c71dddd8",
+  "predecessor": "14e852d46b22769196027f3936229cdc1c21bfd0",
+  "pr": 1059,
+  "issue": 987,
+  "scope": "Exact Rust-only retained numeric core and independent P2 sizing repair; not complete original986 delivery or performance acceptance.",
+  "repair": "Subtract irreducible source/control query charges. Distinguish retained-result bytes from source bytes. Include hard total-runtime/process capacity and overlapping construction/output reservations. Shrink demanded rows; retain transient dynamic/shared/held-view pressure.",
+  "causal": "Same final test bytes: original production RED3PASS/2FAIL, restored production GREEN5PASS. Query/runtime tests each fail on their first impossible case in RED; do not claim all20 combined cases reached RED. Restored GREEN executes all20 cases plus independent temporary-work recovery; complete retained module32PASS.",
+  "coverage": "All8 complete registered root targets,4 foundation targets,98 original mandatory fuzz selections, strict native/minimalWASM/prek/hooks, memory/file source-capacity controls,95 direct Windows ownership/admission tests. Full BEP/client environment omitted; terminal summaries projected safely.",
+  "predecessor_packet": "https://github.com/nowledge-co/hawdb/blob/54862528b8b24d2ba323863346c78ad434888ef3/docs/qualification/retained-numeric-core-14e852d4/packet.json",
+  "predecessor_adverse_evidence": "Original combined14e invocation had3PASS,3TIMEOUT,2incomplete after deliberate diagnosis stop, with partial checkpoint/concurrency failures. Independently reviewed predecessor packet preserves these and actual-main controls. New passes do not erase or establish causes of those observations.",
+  "windows": {
+    "run": 39060992527,
+    "qualification_head": "6206ad91892b1772c7c421a2affe9f29b6dd24c5",
+    "tests": 95,
+    "source_guard": "Exact SHA/tree/parent, sole workflow diff and entire patch verified. Git abbreviations expand only after matching known full blob IDs; line endings alone normalized."
+  },
+  "capacity_scope": "Four precreated snapshots/one livecursor,1000rows each memory/file. Not whole-operation memory or latency comparison.",
+  "external_rss_boundary": "Batch sizing uses query-account capacity, shared retained-result bytes, governor memory availability and the hard process-policy resident ceiling. It does not adapt the selected row count to ProcessMemoryPolicySnapshot.available_bytes. Final policy admission remains fail-closed and may return retryable external-pressure refusal, even when a smaller batch could fit current sampled headroom. No blanket liveness guarantee under stable externally owned RSS is claimed; an open cursor may require host pressure/sample/reservation changes before retry can progress. Smaller batch options can be selected at cursor construction; open-cursor options remain captured. Sampled RSS pressure is not reclassified as a permanent self-owned sizing failure.",
+  "bounded_followup_review": "https://github.com/nowledge-co/hawdb/pull/1059#pullrequestreview-5559728170 confirms the original source defect is repaired and independently verifies Windows95/current artifact bytes. It does not approve the full delivery or qualify unpublished differential/whole-run/fuzz/capacity evidence. The external RSS sizing trace is retained as a scope limitation, not promoted by that review to a new blocker.",
+  "remaining": [
+    "Genuine independent re-review and maintainer/Tide approval, actual1059mainlanding",
+    "Later main-based numeric foreign and Arrow cuts, original986 indexed-node/fullqualification delivery",
+    "Original986 final90ordinary/110resource, allocation/conversion/wholeRSS/tail/exception, defaultrefusal/explicitlarge and allsupportedplatform/approval/actualmerge gates"
+  ]
+}

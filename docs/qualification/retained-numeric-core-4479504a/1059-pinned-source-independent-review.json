@@ -1,0 +1,40 @@
+{
+  "id": 5559483774,
+  "node_id": "PRR_kwDOTX6JAc8AAAABS179fg",
+  "user": {
+    "login": "wey-gu",
+    "id": 1651790,
+    "node_id": "MDQ6VXNlcjE2NTE3OTA=",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1651790?u=5a5ea37c495f7787f35172f0f86569daf5a5a65e&v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/wey-gu",
+    "html_url": "https://github.com/wey-gu",
+    "followers_url": "https://api.github.com/users/wey-gu/followers",
+    "following_url": "https://api.github.com/users/wey-gu/following{/other_user}",
+    "gists_url": "https://api.github.com/users/wey-gu/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/wey-gu/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/wey-gu/subscriptions",
+    "organizations_url": "https://api.github.com/users/wey-gu/orgs",
+    "repos_url": "https://api.github.com/users/wey-gu/repos",
+    "events_url": "https://api.github.com/users/wey-gu/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/wey-gu/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "body": "Reviewed exact `14e852d46b22769196027f3936229cdc1c21bfd0` against main base `a1012720decca3844864c910360057a5c71dddd8`, with independent correctness, test, PM and build perspectives plus the bounded owning dependencies.\n\n**P2 \u2014 Account for irreducible pinned-source memory before classifying first-batch refusal as recoverable Backpressure.** `src/api/retained_query.rs:849\u2013857` computes complete_allowance by subtracting only `shared._memory` from the query budget. Opening the cursor has also reserved source_bytes in the same query ledger (`source_account.reserve(source_bytes)`), and that source remains pinned while the cursor is Open. Actual available_bytes correctly subtracts both.\n\nConcrete legal boundary, without concurrent callers: let M be cursor control memory, S the pinned source capacity, R the minimum one-row output/owner/handle capacity, and use query budget Q=M+S+r with 0<=r<R and S>=R. Keep runtime/batch ceilings ample and use a nonempty matching source. Opening admits M+S. The permanent check sees Q-M=S+r and passes, but actual available is r, so admitted_rows returns `Backpressure { outstanding_batches: 0 }`. Its retryable path keeps the source pinned and status Open. There is no returned view to release, and repeated pulls cannot progress; closing releases the source but makes the cursor unusable. The contract promises recoverable held-view pressure separately from explicit oversized units/terminal resource failures. This state violates that distinction.\n\nInclude the cursor's irreducible source/control charges when deciding whether even one working unit can ever fit (for each applicable query/runtime ceiling); preserve genuine temporary shared/held-view backpressure. Refuse at opening or return the existing nonretryable sizing failure before source advancement, releasing source pins and keeping terminal failure sticky. Add a deterministic combined near-fit guard: source+control fit but source+control+one output unit does not; no outstanding views; first pull must be terminal rather than retryable, subsequent pull repeats its cause, no rows advance and pins release. Keep the neighboring sufficient-budget success and genuine held-view-release retry controls. Run the same terminal assertion against the current implementation/minimal production mutation for semantic RED, then restored GREEN. Existing source-alone-too-large and batch_bytes=1 tests do not cover this combined boundary. Database, read-snapshot/session and embedded entry points share from_plan; cover materially different boundaries without duplicating equivalent adapters.\n\nEvidence credited with explicit limits: independently downloaded all60 manifest-listed packet files plus the manifest, verified byte lengths and SHA256, and checked all44 changed-source hashes against the immutable head. Independently downloaded Windows artifact12110651226, verified ZIP SHA25662c5c577..., all nine files, and successful run39057847682; the qualification compare changes only native-bindings.yml. Published Windows numeric91PASS and complete source-qualified suite/98-fuzz records are substantive positive evidence. The preserved first combined invocation still has three passes, three timeouts and two incomplete targets; later complete passes/main comparisons do not erase it or establish its cause. Main/candidate GREEN comparisons are compatibility evidence, not the new sizing regression's causal RED/GREEN. No reviewer build/test/native execution occurred.\n\nCargo/manual-benchmark registration and new test wiring have no change-specific build finding. Historical exact-head six Prow successes are visible with filter=all; the Ready rerun currently still has root running, so historical and latest checks remain distinct. No test or CI gate is waived by this review.\n\nThe Rust-only partial987 delivery boundary is clear: this review does not require foreign/Arrow delivery in this cut and does not accept it as complete986 allocation/conversion/whole-operation RSS/tail/exception/90\u2013110 qualification. No stable Mem activation, merge, release or deployment authority is implied. Repair this concrete defect and refresh affected reviews on the resulting exact head.",
+  "state": "CHANGES_REQUESTED",
+  "html_url": "https://github.com/nowledge-co/hawdb/pull/1059#pullrequestreview-5559483774",
+  "pull_request_url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/1059",
+  "author_association": "MEMBER",
+  "_links": {
+    "html": {
+      "href": "https://github.com/nowledge-co/hawdb/pull/1059#pullrequestreview-5559483774"
+    },
+    "pull_request": {
+      "href": "https://api.github.com/repos/nowledge-co/hawdb/pulls/1059"
+    }
+  },
+  "submitted_at": "2026-10-17T18:54:02Z",
+  "commit_id": "14e852d46b22769196027f3936229cdc1c21bfd0"
+}

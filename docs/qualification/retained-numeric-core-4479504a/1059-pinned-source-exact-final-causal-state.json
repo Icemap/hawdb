@@ -1,0 +1,51 @@
+{
+  "head": "4479504a108302c8e9ff85d8202938d9344dfc2e",
+  "started": 1792263912.472712,
+  "status": "passed",
+  "steps": [
+    {
+      "name": "red",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--test_arg=pinned_source_",
+        "--test_arg=--nocapture",
+        "--nocache_test_results",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-exact-final-red.bep.json"
+      ],
+      "started": 1792263912.54811,
+      "expected_exit": 3,
+      "production_sha256": "d4603aafdc223bc579f58e204f7bc980d51e781aacf5e9bae43fa07eb371f185",
+      "exit": 3,
+      "ended": 1792263942.8512151,
+      "validated_expected_semantic_outcome": true
+    },
+    {
+      "name": "green",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--test_arg=pinned_source_",
+        "--test_arg=--nocapture",
+        "--nocache_test_results",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-exact-final-green.bep.json"
+      ],
+      "started": 1792263942.977115,
+      "expected_exit": 0,
+      "production_sha256": "1b8187b6982fa25079314ecdecfdd0b58efeecb55efc0f13d80a8e8ccc687aa9",
+      "exit": 0,
+      "ended": 1792263951.504359,
+      "validated_expected_semantic_outcome": true
+    }
+  ],
+  "test_sha256": "116d35fd72f8a66c6f8f939de5a6b01eeb41413ef154e4165c854815671dc6f7",
+  "original_production_sha256": "d4603aafdc223bc579f58e204f7bc980d51e781aacf5e9bae43fa07eb371f185",
+  "fixed_production_sha256": "1b8187b6982fa25079314ecdecfdd0b58efeecb55efc0f13d80a8e8ccc687aa9",
+  "ended": 1792263951.5068102
+}

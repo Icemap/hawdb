@@ -1,0 +1,4 @@
+Cargo format check (workspace)...........................................Passed
+Cargo Clippy (workspace, all targets and features).......................Passed
+[feat/retained-numeric-core 4479504a] fix(api): reject irreducible retained working units
+ 2 files changed, 234 insertions(+), 1 deletion(-)

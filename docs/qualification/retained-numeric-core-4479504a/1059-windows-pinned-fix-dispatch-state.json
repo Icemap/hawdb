@@ -1,0 +1,124 @@
+{
+  "status": "dispatched",
+  "engine": "4479504a108302c8e9ff85d8202938d9344dfc2e",
+  "engine_tree": "3fcf5608e290f3eda4e2eabd6428fc7c8f7ef26a",
+  "branch": "qualify/1059-windows-numeric-4479504a",
+  "steps": [
+    {
+      "name": "checkout",
+      "command": [
+        "git",
+        "checkout",
+        "-b",
+        "qualify/1059-windows-numeric-4479504a",
+        "4479504a108302c8e9ff85d8202938d9344dfc2e"
+      ],
+      "started": 1792263935.696382,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-checkout.log",
+      "exit": 0,
+      "ended": 1792263935.8679721
+    },
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792263935.9036841,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-install.log",
+      "exit": 0,
+      "ended": 1792263936.0323899
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792263936.039671,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-fmt.log",
+      "exit": 0,
+      "ended": 1792263943.3304949
+    },
+    {
+      "name": "native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792263943.333445,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-native.log",
+      "exit": 0,
+      "ended": 1792263955.173697
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792263955.191573,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-prek.log",
+      "exit": 0,
+      "ended": 1792263960.890574
+    },
+    {
+      "name": "stage",
+      "command": [
+        "git",
+        "add",
+        "--",
+        ".github/workflows/native-bindings.yml"
+      ],
+      "started": 1792263960.891181,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-stage.log",
+      "exit": 0,
+      "ended": 1792263960.931221
+    },
+    {
+      "name": "commit",
+      "command": [
+        "git",
+        "commit",
+        "-F",
+        "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-commit-message.txt"
+      ],
+      "started": 1792263960.936191,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-commit.log",
+      "exit": 0,
+      "ended": 1792263967.610838
+    },
+    {
+      "name": "push",
+      "command": [
+        "git",
+        "push",
+        "-u",
+        "origin",
+        "qualify/1059-windows-numeric-4479504a"
+      ],
+      "started": 1792263967.694788,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-pinned-fix-push.log",
+      "exit": 0,
+      "ended": 1792263970.172894
+    }
+  ],
+  "started": 1792263935.6184561,
+  "qualification_head": "6206ad91892b1772c7c421a2affe9f29b6dd24c5",
+  "qualification_tree": "61cef00670a9dc8f65f3a9b929129d3eeed4efa1",
+  "before_run_ids": [],
+  "run": 39060992527,
+  "url": "https://github.com/nowledge-co/hawdb/actions/runs/39060992527",
+  "ended": 1792263977.289959
+}

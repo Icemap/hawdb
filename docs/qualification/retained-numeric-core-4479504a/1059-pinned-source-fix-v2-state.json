@@ -1,0 +1,128 @@
+{
+  "status": "passed",
+  "started": 1792263718.532911,
+  "steps": [
+    {
+      "name": "final-green",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--test_arg=pinned_source_",
+        "--test_arg=--nocapture",
+        "--nocache_test_results",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-final-green.bep.json"
+      ],
+      "started": 1792263718.85569,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-final-green.log",
+      "exit": 0,
+      "ended": 1792263744.933078,
+      "test_log": "/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-final-green-test.log"
+    },
+    {
+      "name": "complete-retained",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--test_arg=api::retained_query::tests::",
+        "--test_arg=--nocapture",
+        "--nocache_test_results",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-complete-retained.bep.json"
+      ],
+      "started": 1792263744.935046,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-complete-retained.log",
+      "exit": 0,
+      "ended": 1792263749.595509,
+      "test_log": "/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-complete-retained-test.log"
+    },
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792263749.6021981,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-install.log",
+      "exit": 0,
+      "ended": 1792263749.6564622
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792263749.657177,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-fmt.log",
+      "exit": 0,
+      "ended": 1792263755.451749
+    },
+    {
+      "name": "native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792263755.475788,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-native.log",
+      "exit": 0,
+      "ended": 1792263771.4896262
+    },
+    {
+      "name": "wasm",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "hawdb",
+        "--no-default-features",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--lib",
+        "--test",
+        "in_memory_portable",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792263771.494506,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-wasm.log",
+      "exit": 0,
+      "ended": 1792263772.07989
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792263772.0914822,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-prek.log",
+      "exit": 0,
+      "ended": 1792263780.7548
+    }
+  ],
+  "base_head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+  "source_sha256": {
+    "src/api/retained_query.rs": "1b8187b6982fa25079314ecdecfdd0b58efeecb55efc0f13d80a8e8ccc687aa9",
+    "src/api/retained_query/tests.rs": "116d35fd72f8a66c6f8f939de5a6b01eeb41413ef154e4165c854815671dc6f7"
+  },
+  "ended": 1792263780.759938
+}

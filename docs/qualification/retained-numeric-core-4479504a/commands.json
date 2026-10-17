@@ -1,0 +1,285 @@
+[
+  {
+    "group": "final",
+    "name": "general",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-final-4479504a-general.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "final",
+    "name": "contract",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_execution_request_contract_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-final-4479504a-contract.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "final",
+    "name": "concurrent",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_concurrent_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-final-4479504a-concurrent.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "final",
+    "name": "recovery",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_recovery_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-final-4479504a-recovery.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "final",
+    "name": "analytics-core",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_analytics_core_general_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-final-4479504a-analytics-core.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "final",
+    "name": "analytics-rss",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_analytics_rss_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-final-4479504a-analytics-rss.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "final",
+    "name": "compaction-admission",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_row_page_compaction_admission_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-final-4479504a-compaction-admission.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "final",
+    "name": "portable",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_in_memory_portable_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-final-4479504a-portable.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "final",
+    "name": "foundation",
+    "command": [
+      "bazel",
+      "test",
+      "//crates/core:hawdb_core_tests",
+      "//crates/qos:hawdb_qos_tests",
+      "//crates/executor:hawdb_executor_unit_tests",
+      "//crates/storage:hawdb_storage_tests",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-final-4479504a-foundation.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "final",
+    "name": "mandatory-fuzz",
+    "command": [
+      "bazel",
+      "test",
+      "//crates/fuzz:hawdb_fuzz_tests",
+      "//crates/fuzz:hawdb_fuzz_cli_tests",
+      "//:hawdb_linux_ci_fuzz_smoke_test",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-final-4479504a-mandatory-fuzz.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "strict",
+    "name": "final-green",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--test_arg=pinned_source_",
+      "--test_arg=--nocapture",
+      "--nocache_test_results",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-final-green.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "strict",
+    "name": "complete-retained",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--test_arg=api::retained_query::tests::",
+      "--test_arg=--nocapture",
+      "--nocache_test_results",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-complete-retained.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "strict",
+    "name": "install",
+    "command": [
+      "prek",
+      "install"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "strict",
+    "name": "fmt",
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "strict",
+    "name": "native",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--all-features",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "strict",
+    "name": "wasm",
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "-p",
+      "hawdb",
+      "--no-default-features",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--lib",
+      "--test",
+      "in_memory_portable",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "strict",
+    "name": "prek",
+    "command": [
+      "prek",
+      "run",
+      "--all-files"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "causal",
+    "name": "red",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--test_arg=pinned_source_",
+      "--test_arg=--nocapture",
+      "--nocache_test_results",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-exact-final-red.bep.json"
+    ],
+    "exit": 3
+  },
+  {
+    "group": "causal",
+    "name": "green",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--test_arg=pinned_source_",
+      "--test_arg=--nocapture",
+      "--nocache_test_results",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-exact-final-green.bep.json"
+    ],
+    "exit": 0
+  }
+]

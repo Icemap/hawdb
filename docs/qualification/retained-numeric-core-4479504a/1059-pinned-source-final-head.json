@@ -1,0 +1,10 @@
+{
+  "head": "4479504a108302c8e9ff85d8202938d9344dfc2e",
+  "tree": "3fcf5608e290f3eda4e2eabd6428fc7c8f7ef26a",
+  "parent": "14e852d46b22769196027f3936229cdc1c21bfd0",
+  "source_sha256": {
+    "src/api/retained_query.rs": "1b8187b6982fa25079314ecdecfdd0b58efeecb55efc0f13d80a8e8ccc687aa9",
+    "src/api/retained_query/tests.rs": "116d35fd72f8a66c6f8f939de5a6b01eeb41413ef154e4165c854815671dc6f7"
+  },
+  "checks": "/private/tmp/hawdb-wip-ready-20261015/1059-pinned-source-fix-v2-state.json"
+}

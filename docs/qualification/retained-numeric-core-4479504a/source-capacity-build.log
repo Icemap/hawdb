@@ -1,0 +1,29 @@
+INFO: Invocation ID: f25e4681-ac04-4845-b83d-4aa5c8e17094
+INFO: Reading 'startup' options from /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-core/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'build' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'build' from /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-core/.bazelrc:
+  'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'build' from /Users/hawkingrei/.bazelrc:
+  'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-core/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+WARNING: Build option --compilation_mode has changed, discarding analysis cache (this can be expensive, see https://bazel.build/advanced/performance/iteration-speed).
+Analyzing: target //:hawdb_bench_retained_source_capacity (0 packages loaded, 0 targets configured)
+Analyzing: target //:hawdb_bench_retained_source_capacity (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:hawdb_bench_retained_source_capacity (0 packages loaded, 1707 targets configured).
+[760 / 763] Compiling Rust rlib hawdb (272 files); 1s disk-cache, darwin-sandbox
+[760 / 763] Compiling Rust rlib hawdb (272 files); 11s disk-cache, darwin-sandbox
+[761 / 763] [Prepa] Compiling Rust bin hawdb_bench_retained_source_capacity (1 file)
+[761 / 763] Compiling Rust bin hawdb_bench_retained_source_capacity (1 file); 1s disk-cache, darwin-sandbox
+INFO: Found 1 target...
+Target //:hawdb_bench_retained_source_capacity up-to-date:
+  bazel-bin/hawdb_bench_retained_source_capacity
+INFO: Elapsed time: 24.115s, Critical Path: 23.58s
+INFO: 319 processes: 444 action cache hit, 213 disk cache hit, 104 internal, 2 darwin-sandbox.
+INFO: Build completed successfully, 319 total actions
