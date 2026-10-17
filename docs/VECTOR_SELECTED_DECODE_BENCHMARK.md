@@ -1,18 +1,22 @@
 # Selected Raw-Vector Decoding
 
 Issue #1067 reduces raw-vector preparation before bounded RaBitQ reranking.
-Each touched sidecar is still read, checksummed, decompressed and fully
+Each touched vector frame is still read, checksummed, decompressed and fully
 validated. Only embeddings for selected ordinals are materialized. Unselected
 components use a finite-decimal check for a narrow normalized subset; every
 other representation uses the original float parser. Selected values always
 use the original parser, preserving their exact bits.
+
+Segments whose sorted, unique candidates cover every vector ordinal use the
+full-decoding entry point directly, avoiding per-row membership checks. The
+decoder still validates every row, including ordinal layout and ordering.
 
 The optimization leaves query arithmetic, candidate policy, persistent
 formats, read budgets and cancellation checkpoints unchanged. It does not
 introduce a validation cache or skip malformed unselected rows. The full raw
 scan uses the same validator with every ordinal selected.
 
-## Public Serving-Query Comparison
+## Initial Public Serving-Query Comparison
 
 The control is main `4c32610910cc78771eeb23d729be7107ff769bf6` with the
 public-API profiling helper from #1066 at
@@ -20,8 +24,10 @@ public-API profiling helper from #1066 at
 with the selected decoder. The measured runtime source hashes are retained
 in the [candidate build record](benchmarks/vector_selected_decode_linux_2026_10_18/query-build.json);
 the [original build record](benchmarks/vector_selected_decode_linux_2026_10_18/original-query-build.json)
-identifies the frozen control binary. Subsequent changes to regression tests
-do not change the two measured production source files.
+identifies the frozen control binary. This initial candidate is recorded at
+`1e539b3f056daf9fa88028198d2f8914872db3a9`. Its timings remain evidence for
+that revision; subsequent full-coverage refinement requires fresh query
+measurements, described in the candidate-density qualification below.
 
 Both binaries use pinned Rust 1.97.1, the repository release profile with
 `CARGO_PROFILE_RELEASE_DEBUG=1`, root defaults plus `vector-search`, and an
@@ -191,3 +197,97 @@ Tracked log copies omit trailing empty lines to satisfy repository whitespace
 checks. All records remain unchanged. [Original and recorded log hashes](benchmarks/vector_selected_decode_linux_2026_10_18/log-normalization.json)
 identify that normalization; summary hashes refer to the original logs, which
 remain in the local artifact directories.
+
+## Candidate-Density Qualification
+
+The density probe uses the same immutable 100,000-document/384-dimension
+fixture and requests ten final hits, with candidate limits of 1,024, 50,000
+and 100,000. It sets both `max_vector_candidates` and `rank_window` to that
+limit through ordinary typed options. Each case runs control/candidate/
+candidate/control, with three warmups and ten measured queries per process.
+The two measured blocks retain 20 samples per version and density. Every
+sample is kept; the complete fixture inventory is unchanged before and after.
+
+The probe compares the complete `SearchOutOfCoreOutput` Debug representation
+on every query, plus explicit final ID/score bits. Cross-process comparison
+checks the same complete output and report fields, excluding the process PID.
+Both builds use the same Rust compiler and output type definitions; Debug
+formatting is a developer probe contract, not a stable production serialization
+format. All output validation occurs outside the query timer. Process CPU/RSS
+still include opening, warmups and validation.
+
+The first density run exposed a regression in candidate `1e539b3f`:
+
+| Selected candidates | Original median ms | Initial candidate median ms | Time change |
+| ---: | ---: | ---: | ---: |
+| 1,024 | 1,501.22 | 1,160.31 | -22.71% |
+| 50,000 | 2,016.88 | 1,912.74 | -5.16% |
+| 100,000 | 2,056.60 | 2,300.22 | +11.85% |
+
+All 120 measured queries preserved complete outputs, but sparse gains did not
+justify the all-selected regression. The implementation therefore uses the
+existing full-decoding entry point when a segment's selected count equals
+its entry count. Candidate ordinals have already been sorted and checked for
+duplicates, and the slice contains only ordinals in that segment's range, so
+equal counts prove full coverage. This retains validation and final reranked
+count checks. Required-mode regressions cover both sparse and full segments,
+budget/cancellation/checksum failures, and full-selection score equality with
+the raw-vector backend.
+
+The first run remains available without replacing its measurements:
+
+- [All outputs and times](benchmarks/vector_selected_decode_linux_2026_10_18/density-before-comparison.json)
+- [Per-run and pooled summaries](benchmarks/vector_selected_decode_linux_2026_10_18/density-before-summary.json)
+- [Fixture inventory](benchmarks/vector_selected_decode_linux_2026_10_18/density-fixture-sha256.json)
+- [Control build](benchmarks/vector_selected_decode_linux_2026_10_18/density-original-build.json)
+  and [initial candidate build](benchmarks/vector_selected_decode_linux_2026_10_18/density-before-build.json)
+- [Exact query probe](benchmarks/vector_selected_decode_linux_2026_10_18/query_rerank_qualification.rs)
+  and [comparison driver](benchmarks/vector_selected_decode_linux_2026_10_18/compare_query_density.py)
+
+The refined candidate was rebuilt and frozen, then the complete twelve-process
+matrix was repeated against the same control binary and fixture. All 120 new
+measured queries preserve the complete outputs, including equality with the
+first density campaign. The measured production source hashes are in the
+[refined build record](benchmarks/vector_selected_decode_linux_2026_10_18/density-refined-build.json).
+The two production source hashes still match the final implementation. The
+recorded test-source hash predates a test-only correction: checksum injection
+now targets the frame containing the returned hit rather than the first frame
+in the payload file, which a sparse query may never read. That correction does
+not change either measured binary or its production source.
+
+| Selected candidates | Original median ms | Refined candidate median ms | Time change |
+| ---: | ---: | ---: | ---: |
+| 1,024 | 1,491.06 | 1,169.24 | -21.58% |
+| 50,000 | 2,006.34 | 1,799.39 | -10.31% |
+| 100,000 | 2,047.34 | 2,063.30 | +0.78% |
+
+Full selection retains a small measured overhead; this is not a claim of zero
+cost or a speedup for every density. The observed large regression falls from
+11.85% to 0.78%. The 3-dimensional full-decoding overhead in the matched matrix
+also remains part of the evidence. Per-process RSS ranges from 39.3 to 46.8 MiB
+across these cases and does not show a consistent reduction versus the control.
+The fresh comparison ran after all owned compilation, fuzz, artifact downloads
+and independent artifact hashing ended. Light source edits and remote CI
+polling occurred during the overall run. The host remains shared and cache-warm.
+
+- [All refined outputs and times](benchmarks/vector_selected_decode_linux_2026_10_18/density-refined-comparison.json)
+- [Per-run timings, resource measurements and pooled summaries](benchmarks/vector_selected_decode_linux_2026_10_18/density-refined-summary.json)
+
+To reproduce, place the retained query probe temporarily in
+`examples/query_rerank_qualification.rs` on each clean source revision, build
+with the same release profile, and preserve the binaries separately:
+
+```sh
+CARGO_PROFILE_RELEASE_DEBUG=1 cargo build --locked --release \
+  --example query_rerank_qualification --features vector-search
+python3 docs/benchmarks/vector_selected_decode_linux_2026_10_18/compare_query_density.py \
+  --original /path/to/control-binary \
+  --candidate /path/to/candidate-binary \
+  --fixture /path/to/unchanged-serving-fixture \
+  --output /path/to/new-output-directory
+```
+
+The driver refuses an existing output directory. Remove the temporary example
+after preserving each binary. A preliminary all-selected feasibility probe
+overlapped the earlier artifact download; none of its elapsed times contributes
+to either performance table.

@@ -644,17 +644,22 @@ impl SearchOutOfCoreReader {
                 }
                 raw_segment_scan_count = raw_segment_scan_count.saturating_add(1);
                 let selected_segment = &selected_layer[start_index..end_index];
-                let documents = self.read_vector_segment_selected(
-                    artifact,
-                    segment,
-                    metrics,
-                    selected_segment.len(),
-                    |ordinal| {
-                        selected_segment
-                            .binary_search_by_key(&ordinal, |candidate| candidate.ordinal)
-                            .is_ok()
-                    },
-                )?;
+                let documents = if selected_segment.len() == layout.vectors.entry_count {
+                    // Unique ordinals within this range cover the whole segment.
+                    self.read_vector_segment(artifact, segment, metrics)?
+                } else {
+                    self.read_vector_segment_selected(
+                        artifact,
+                        segment,
+                        metrics,
+                        selected_segment.len(),
+                        |ordinal| {
+                            selected_segment
+                                .binary_search_by_key(&ordinal, |candidate| candidate.ordinal)
+                                .is_ok()
+                        },
+                    )?
+                };
                 for document in documents {
                     metrics.vector_bytes_read = metrics.vector_bytes_read.saturating_add(
                         (document.embedding.len() as u64)

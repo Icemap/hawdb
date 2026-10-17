@@ -275,6 +275,8 @@ fn unmaterialized_embedding_validation_matches_float_parsing() {
 #[test]
 #[cfg(all(feature = "full-text-search", feature = "vector-search"))]
 fn required_rerank_preserves_checksum_budget_and_cancellation_guards() {
+    use std::io::{Seek, SeekFrom};
+
     let path = super::tests::test_dir("selected-vector-read-guards");
     let mut writer = SearchOutOfCoreGenerationWriter::create(
         &path,
@@ -300,82 +302,128 @@ fn required_rerank_preserves_checksum_budget_and_cancellation_guards() {
             .unwrap();
     }
     writer.finish().unwrap();
-    let reader = SearchOutOfCoreReader::open_with_config(
-        &path,
-        SearchOutOfCoreConfig {
-            max_vector_candidates: NonZeroUsize::MIN,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    let query = |execution| {
-        reader.search_with_options_compressed_vector_projection_execution_options(
-            "",
-            Some(&[1.0, 0.5]),
-            SearchMode::Vector,
-            super::tests::options(1, None),
-            CompressedVectorSearchMode::Required,
-            execution,
+    for candidate_limit in [1, 8] {
+        let reader = SearchOutOfCoreReader::open_with_config(
+            &path,
+            SearchOutOfCoreConfig {
+                max_vector_candidates: NonZeroUsize::new(candidate_limit).unwrap(),
+                ..Default::default()
+            },
         )
-    };
-    let initial = query(VectorSearchExecutionOptions::default()).unwrap();
-    let report = initial
-        .result
-        .retrievers
-        .iter()
-        .find(|report| report.name == "vector")
         .unwrap();
-    assert_eq!(
-        report.backend,
-        "hawdb_rabitq_out_of_core_candidate_projection"
-    );
-    assert_eq!(report.reranked_candidate_count, 1);
-    assert_eq!(initial.result.hits.len(), 1);
-    assert_eq!(initial.metrics.vector_bytes_read, 8);
-    assert!(report.fallback_reason_codes.is_empty());
+        let query = |execution| {
+            reader.search_with_options_compressed_vector_projection_execution_options(
+                "",
+                Some(&[1.0, 0.5]),
+                SearchMode::Vector,
+                super::tests::options(1, None),
+                CompressedVectorSearchMode::Required,
+                execution,
+            )
+        };
+        let initial = query(VectorSearchExecutionOptions::default()).unwrap();
+        let report = initial
+            .result
+            .retrievers
+            .iter()
+            .find(|report| report.name == "vector")
+            .unwrap();
+        assert_eq!(
+            report.backend,
+            "hawdb_rabitq_out_of_core_candidate_projection"
+        );
+        assert_eq!(report.reranked_candidate_count, candidate_limit);
+        assert_eq!(initial.result.hits.len(), 1);
+        assert_eq!(
+            initial.metrics.vector_bytes_read,
+            8 * candidate_limit as u64
+        );
+        assert!(report.fallback_reason_codes.is_empty());
 
-    let error = query(VectorSearchExecutionOptions::bounded(
-        NonZeroUsize::MIN,
-        1,
-        None,
-    ))
-    .unwrap_err();
-    assert!(matches!(&error, HawDBError::Storage(_)), "{error}");
-    assert!(
-        error.to_string().contains("budget") || error.to_string().contains("exceed"),
-        "{error}"
-    );
+        if candidate_limit == 8 {
+            let raw = reader
+                .search_with_options_compressed_vector_projection_execution_options(
+                    "",
+                    Some(&[1.0, 0.5]),
+                    SearchMode::Vector,
+                    super::tests::options(1, None),
+                    CompressedVectorSearchMode::Disabled,
+                    VectorSearchExecutionOptions::default(),
+                )
+                .unwrap();
+            assert_eq!(raw.result.hits[0].id, initial.result.hits[0].id);
+            assert_eq!(
+                raw.result.hits[0].vector_score.to_bits(),
+                initial.result.hits[0].vector_score.to_bits()
+            );
+        }
 
-    let cancellation = crate::RuntimeCancellationToken::new();
-    let task_context = crate::RuntimeTaskContext::without_deadline(cancellation.clone());
-    assert!(cancellation.cancel());
-    let error = query(VectorSearchExecutionOptions::bounded(
-        NonZeroUsize::MIN,
-        4 * 1024 * 1024,
-        Some(&task_context),
-    ))
-    .unwrap_err();
-    assert!(error.to_string().contains("cancelled"), "{error}");
-    let repeated = query(VectorSearchExecutionOptions::default()).unwrap();
-    assert_eq!(repeated.result.hits[0].id, initial.result.hits[0].id);
-    assert_eq!(
-        repeated.result.hits[0].vector_score.to_bits(),
-        initial.result.hits[0].vector_score.to_bits()
-    );
+        let error = query(VectorSearchExecutionOptions::bounded(
+            NonZeroUsize::MIN,
+            1,
+            None,
+        ))
+        .unwrap_err();
+        assert!(matches!(&error, HawDBError::Storage(_)), "{error}");
+        assert!(
+            error.to_string().contains("budget") || error.to_string().contains("exceed"),
+            "{error}"
+        );
 
-    let payload = path.join(&reader.manifest.segments[0].vector_payload_file);
-    let mut file = OpenOptions::new().write(true).open(payload).unwrap();
-    file.write_all(b"X").unwrap();
-    file.sync_all().unwrap();
-    drop(file);
-    let error = query(VectorSearchExecutionOptions::default()).unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("vector payload checksum mismatch"),
-        "{error}"
-    );
-    drop(reader);
+        let cancellation = crate::RuntimeCancellationToken::new();
+        let task_context = crate::RuntimeTaskContext::without_deadline(cancellation.clone());
+        assert!(cancellation.cancel());
+        let error = query(VectorSearchExecutionOptions::bounded(
+            NonZeroUsize::MIN,
+            4 * 1024 * 1024,
+            Some(&task_context),
+        ))
+        .unwrap_err();
+        assert!(error.to_string().contains("cancelled"), "{error}");
+        let repeated = query(VectorSearchExecutionOptions::default()).unwrap();
+        assert_eq!(repeated.result.hits[0].id, initial.result.hits[0].id);
+        assert_eq!(
+            repeated.result.hits[0].vector_score.to_bits(),
+            initial.result.hits[0].vector_score.to_bits()
+        );
+
+        assert_eq!(reader.segments.len(), 1);
+        let artifact = &reader.segments[0];
+        assert!(artifact.descriptor.segments.len() > 1);
+        let hit_id = initial.result.hits[0].id.as_str();
+        let segment = artifact
+            .descriptor
+            .segments
+            .iter()
+            .find(|segment| {
+                segment.first_document_id.as_str() <= hit_id
+                    && hit_id <= segment.last_document_id.as_str()
+            })
+            .unwrap();
+        let offset = SearchOutOfCoreReader::artifact_layout_range(artifact, segment.segment_id)
+            .unwrap()
+            .vectors
+            .offset;
+        assert!(offset > 0);
+        let payload = path.join(&reader.manifest.segments[0].vector_payload_file);
+        let original_payload = fs::read(&payload).unwrap();
+        let mut file = OpenOptions::new().write(true).open(&payload).unwrap();
+        // Sparse reranking only reads frames containing selected candidates.
+        file.seek(SeekFrom::Start(offset)).unwrap();
+        file.write_all(&[original_payload[usize::try_from(offset).unwrap()] ^ 0xff])
+            .unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        let error = query(VectorSearchExecutionOptions::default()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("vector payload checksum mismatch"),
+            "{error}"
+        );
+        drop(reader);
+        fs::write(payload, original_payload).unwrap();
+    }
     fs::remove_dir_all(path).unwrap();
 }
 
