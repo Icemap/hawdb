@@ -1123,11 +1123,7 @@ impl GraphStore {
                     let pending_ids = ids
                         .iter()
                         .copied()
-                        .filter(|id| {
-                            pending_nodes
-                                .iter()
-                                .any(|(pending_id, _, _)| pending_id == id)
-                        })
+                        .filter(|id| pending_node_index(&pending_nodes, *id).is_some())
                         .collect::<Vec<_>>();
                     let incident_pending_relationship_ids =
                         pending_relationship_ids_for_nodes(&pending_relationships, &ids);
@@ -2047,12 +2043,10 @@ impl GraphStore {
         id: NodeId,
         assignments: &[NodeSetAssignment],
     ) -> Result<()> {
-        let Some((_, _, properties)) = pending_nodes
-            .iter_mut()
-            .find(|(pending_id, _, _)| *pending_id == id)
-        else {
+        let Some(index) = pending_node_index(pending_nodes, id) else {
             return Ok(());
         };
+        let (_, _, properties) = &mut pending_nodes[index];
         for assignment in assignments {
             let value = evaluate_node_set_value(properties, assignment)?;
             properties.insert(assignment.property.clone(), value.clone());
