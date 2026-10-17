@@ -15,7 +15,7 @@
 use super::*;
 use crate::planner::{ComparisonOp, ProjectionExpression, SetAssignment};
 use crate::schema::PropertyType;
-use crate::store::{DurabilityPolicy, StorageResidencyMode, WalReplayConfig};
+use crate::store::{DurabilityPolicy, GraphMutation, StorageResidencyMode, WalReplayConfig};
 use hawdb_executor::columnar::{NumericLiteral, NumericPredicate};
 use hawdb_executor::numeric::{
     stream_owned_numeric_nodes, stream_owned_typed_numeric_nodes, LendingNumericScan,
@@ -59,12 +59,35 @@ struct Fixture {
     _directory: Directory,
 }
 
+enum NodeSetup {
+    IndividualCommits,
+    OneBatch,
+}
+
 impl Fixture {
+    fn campaign(count: usize, out_of_core: bool) -> Self {
+        Self::with_node_setup(count, out_of_core, false, NodeSetup::OneBatch)
+    }
+
     fn new(count: usize, out_of_core: bool) -> Self {
         Self::with_relationship(count, out_of_core, false)
     }
 
     fn with_relationship(count: usize, out_of_core: bool, relationship: bool) -> Self {
+        Self::with_node_setup(
+            count,
+            out_of_core,
+            relationship,
+            NodeSetup::IndividualCommits,
+        )
+    }
+
+    fn with_node_setup(
+        count: usize,
+        out_of_core: bool,
+        relationship: bool,
+        setup: NodeSetup,
+    ) -> Self {
         let directory = Directory::new();
         let mut catalog = Catalog::default();
         let table = catalog.get_or_create_table(crate::schema::TableKind::Node, "Item");
@@ -85,18 +108,42 @@ impl Fixture {
         )
         .unwrap();
         let values: Vec<_> = (0..count).map(|index| Value::Int(index as i64)).collect();
-        let nodes: Vec<_> = values
-            .iter()
-            .map(|value| {
-                store
-                    .create_node(
-                        &mut catalog,
-                        "Item",
-                        BTreeMap::from([("score".to_string(), value.clone())]),
-                    )
-                    .unwrap()
-            })
-            .collect();
+        // Callback semantics depend on the checkpointed rows, not on one WAL
+        // commit per inserted row. Only the read-only campaign uses batching;
+        // mutation/failure fixtures retain their individual setup commits.
+        let nodes: Vec<_> = match setup {
+            NodeSetup::IndividualCommits => values
+                .iter()
+                .map(|value| {
+                    store
+                        .create_node(
+                            &mut catalog,
+                            "Item",
+                            BTreeMap::from([("score".to_string(), value.clone())]),
+                        )
+                        .unwrap()
+                })
+                .collect(),
+            NodeSetup::OneBatch => store
+                .commit_mutations(
+                    &mut catalog,
+                    values
+                        .iter()
+                        .map(|value| GraphMutation::CreateNode {
+                            label: "Item".to_string(),
+                            properties: BTreeMap::from([("score".to_string(), value.clone())]),
+                        })
+                        .collect(),
+                )
+                .unwrap()
+                .rows
+                .into_iter()
+                .map(|row| match row.get("node_id") {
+                    Some(Value::Int(id)) => NodeId(u64::try_from(*id).unwrap()),
+                    other => panic!("fixture insert did not return a node ID: {other:?}"),
+                })
+                .collect(),
+        };
         if relationship {
             store
                 .create_relationship(&mut catalog, nodes[1], nodes[2], "LINK", BTreeMap::new())
@@ -623,7 +670,13 @@ fn scan_callback_differential_campaign() {
     let mut cases = 0;
     for seed in 0..4 {
         for out_of_core in [false, true] {
-            let fixture = Fixture::new(9 + 8 * seed, out_of_core);
+            let start = std::time::Instant::now();
+            let fixture = Fixture::campaign(9 + 8 * seed, out_of_core);
+            eprintln!(
+                "scan callback fixture seed={seed} out_of_core={out_of_core}: {:?}",
+                start.elapsed()
+            );
+            let scan_start = std::time::Instant::now();
             for path in [Path::Visited, Path::Owned, Path::Typed] {
                 for batch_rows in [1, 3, 4] {
                     for exit in [Exit::Complete, Exit::Stop, Exit::Error, Exit::Cancel] {
@@ -632,6 +685,10 @@ fn scan_callback_differential_campaign() {
                     }
                 }
             }
+            eprintln!(
+                "scan callback cases seed={seed} out_of_core={out_of_core}: {:?}",
+                scan_start.elapsed()
+            );
         }
     }
     assert_eq!(cases, 288);

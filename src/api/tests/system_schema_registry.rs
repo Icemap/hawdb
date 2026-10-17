@@ -63,126 +63,140 @@ fn system_schema_upgrade_crash_child() {
     panic!("system schema crash failpoint {point} did not terminate the child process");
 }
 
-#[test]
-fn application_system_schema_upgrade_crash_recovers_a_consistent_registry_and_schema() {
-    let stages = [
-        ("before_wal_append", Some(1)),
-        ("after_wal_append", None),
-        ("after_wal_sync", Some(2)),
-        ("during_checkpoint_publication", Some(2)),
-        ("after_manifest_publication", Some(2)),
-    ];
+fn assert_application_system_schema_upgrade_crash(stage: &str, required_version: Option<i64>) {
+    let path = unique_test_dir(&format!("system_schema_upgrade_crash_{stage}"));
+    {
+        let mut db = Database::open(&path).unwrap();
+        db.apply_system_schema_registry(&registry_v1()).unwrap();
+        db.query_sql("INSERT INTO content_documents (id, body) VALUES ('doc-1', 'body')")
+            .unwrap();
+        db.checkpoint().unwrap();
+    }
 
-    for (stage, required_version) in stages {
-        let path = unique_test_dir(&format!("system_schema_upgrade_crash_{stage}"));
-        {
-            let mut db = Database::open(&path).unwrap();
-            db.apply_system_schema_registry(&registry_v1()).unwrap();
-            db.query_sql("INSERT INTO content_documents (id, body) VALUES ('doc-1', 'body')")
-                .unwrap();
-            db.checkpoint().unwrap();
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .arg("--exact")
+        .arg("api::tests::system_schema_registry::system_schema_upgrade_crash_child")
+        .arg("--nocapture")
+        .env(SYSTEM_SCHEMA_CRASH_CHILD_ENV, "1")
+        .env(SYSTEM_SCHEMA_CRASH_PATH_ENV, &path)
+        .env("HAWDB_TEST_PROCESS_CRASH_POINT", stage)
+        .status()
+        .unwrap();
+    assert_eq!(
+        status.code(),
+        Some(86),
+        "child did not terminate at {stage}"
+    );
+
+    if stage == "after_wal_sync" {
+        let mut read_only = Database::open_with_config(
+            &path,
+            DatabaseConfig {
+                read_only: true,
+                ..DatabaseConfig::default()
+            },
+        )
+        .unwrap();
+        assert!(matches!(
+            read_only
+                .runtime
+                .get()
+                .unwrap()
+                .store
+                .relational_row_page_recovery_status(),
+            crate::RelationalRowPageRecoveryStatus::Unavailable {
+                recovered_commit_epoch: 4,
+                checkpoint_required: true,
+                ..
+            }
+        ));
+        let error = read_only
+            .query_sql("SELECT kind FROM content_documents WHERE id = 'doc-1'")
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("canonical relational row reader is unavailable"));
+    }
+
+    let mut reopened = Database::open(&path).unwrap();
+    let mut versions = reopened
+        .query_sql(
+            "SELECT version FROM hawdb_schema_migrations WHERE owner = 'nowledge.content_store'",
+        )
+        .unwrap()
+        .rows
+        .into_iter()
+        .map(|row| match row.get("version") {
+            Some(Value::Int(version)) => *version,
+            value => panic!("expected migration version after {stage}, got {value:?}"),
+        })
+        .collect::<Vec<_>>();
+    versions.sort_unstable();
+    let current_version = versions.last().copied().expect("application migration");
+    if let Some(required_version) = required_version {
+        assert_eq!(current_version, required_version, "recovery at {stage}");
+    }
+
+    let kind = reopened
+        .query_sql("SELECT kind FROM content_documents WHERE id = 'doc-1'")
+        .map(|output| output.rows[0]["kind"].clone());
+    let registry = match current_version {
+        1 => {
+            assert_eq!(versions, vec![1]);
+            assert!(kind.is_err(), "version 1 exposed the version 2 column");
+            registry_v1()
         }
-
-        let status = std::process::Command::new(std::env::current_exe().unwrap())
-            .arg("--exact")
-            .arg("api::tests::system_schema_registry::system_schema_upgrade_crash_child")
-            .arg("--nocapture")
-            .env(SYSTEM_SCHEMA_CRASH_CHILD_ENV, "1")
-            .env(SYSTEM_SCHEMA_CRASH_PATH_ENV, &path)
-            .env("HAWDB_TEST_PROCESS_CRASH_POINT", stage)
-            .status()
-            .unwrap();
-        assert_eq!(
-            status.code(),
-            Some(86),
-            "child did not terminate at {stage}"
-        );
-
-        if stage == "after_wal_sync" {
-            let mut read_only = Database::open_with_config(
-                &path,
-                DatabaseConfig {
-                    read_only: true,
-                    ..DatabaseConfig::default()
-                },
-            )
-            .unwrap();
+        2 => {
+            assert_eq!(versions, vec![1, 2]);
+            assert_eq!(kind.unwrap(), Value::String("text".to_string()));
             assert!(matches!(
-                read_only
+                reopened
                     .runtime
                     .get()
                     .unwrap()
                     .store
                     .relational_row_page_recovery_status(),
-                crate::RelationalRowPageRecoveryStatus::Unavailable {
-                    recovered_commit_epoch: 4,
-                    checkpoint_required: true,
+                crate::RelationalRowPageRecoveryStatus::CheckpointReady {
+                    source_commit_epoch: 4,
                     ..
                 }
             ));
-            let error = read_only
-                .query_sql("SELECT kind FROM content_documents WHERE id = 'doc-1'")
-                .unwrap_err();
-            assert!(error
-                .to_string()
-                .contains("canonical relational row reader is unavailable"));
+            registry_v2()
         }
+        version => panic!("unexpected recovered schema version {version} after {stage}"),
+    };
+    let epoch_before_validation = reopened.commit_epoch().unwrap();
+    let validation = reopened.apply_system_schema_registry(&registry).unwrap();
+    assert!(validation.applied_versions.is_empty());
+    assert_eq!(reopened.commit_epoch().unwrap(), epoch_before_validation);
 
-        let mut reopened = Database::open(&path).unwrap();
-        let mut versions = reopened
-            .query_sql(
-                "SELECT version FROM hawdb_schema_migrations WHERE owner = 'nowledge.content_store'",
-            )
-            .unwrap()
-            .rows
-            .into_iter()
-            .map(|row| match row.get("version") {
-                Some(Value::Int(version)) => *version,
-                value => panic!("expected migration version after {stage}, got {value:?}"),
-            })
-            .collect::<Vec<_>>();
-        versions.sort_unstable();
-        let current_version = versions.last().copied().expect("application migration");
-        if let Some(required_version) = required_version {
-            assert_eq!(current_version, required_version, "recovery at {stage}");
-        }
+    drop(reopened);
+    std::fs::remove_dir_all(path).unwrap();
+}
 
-        let kind = reopened
-            .query_sql("SELECT kind FROM content_documents WHERE id = 'doc-1'")
-            .map(|output| output.rows[0]["kind"].clone());
-        let registry = match current_version {
-            1 => {
-                assert_eq!(versions, vec![1]);
-                assert!(kind.is_err(), "version 1 exposed the version 2 column");
-                registry_v1()
-            }
-            2 => {
-                assert_eq!(versions, vec![1, 2]);
-                assert_eq!(kind.unwrap(), Value::String("text".to_string()));
-                assert!(matches!(
-                    reopened
-                        .runtime
-                        .get()
-                        .unwrap()
-                        .store
-                        .relational_row_page_recovery_status(),
-                    crate::RelationalRowPageRecoveryStatus::CheckpointReady {
-                        source_commit_epoch: 4,
-                        ..
-                    }
-                ));
-                registry_v2()
-            }
-            version => panic!("unexpected recovered schema version {version} after {stage}"),
-        };
-        let epoch_before_validation = reopened.commit_epoch().unwrap();
-        let validation = reopened.apply_system_schema_registry(&registry).unwrap();
-        assert!(validation.applied_versions.is_empty());
-        assert_eq!(reopened.commit_epoch().unwrap(), epoch_before_validation);
+#[test]
+fn application_system_schema_upgrade_crash_before_wal_append_recovers_consistently() {
+    assert_application_system_schema_upgrade_crash("before_wal_append", Some(1));
+}
 
-        drop(reopened);
-        std::fs::remove_dir_all(path).unwrap();
-    }
+#[test]
+fn application_system_schema_upgrade_crash_after_wal_append_recovers_consistently() {
+    assert_application_system_schema_upgrade_crash("after_wal_append", None);
+}
+
+#[test]
+fn application_system_schema_upgrade_crash_after_wal_sync_recovers_consistently() {
+    assert_application_system_schema_upgrade_crash("after_wal_sync", Some(2));
+}
+
+#[test]
+fn application_system_schema_upgrade_crash_during_checkpoint_publication_recovers_consistently() {
+    assert_application_system_schema_upgrade_crash("during_checkpoint_publication", Some(2));
+}
+
+#[test]
+fn application_system_schema_upgrade_crash_after_manifest_publication_recovers_consistently() {
+    assert_application_system_schema_upgrade_crash("after_manifest_publication", Some(2));
 }
 
 #[test]
