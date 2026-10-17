@@ -95,6 +95,10 @@ def native_profile_valid(result, layer, required):
     if not required:
         # An instrumented artifact must not be reported as ordinary latency.
         return profile is None
+    return native_counters_valid(profile, layer)
+
+
+def native_counters_valid(profile, layer):
     fields = ("allocation_calls", "allocated_bytes", "deallocation_calls",
               "deallocated_bytes", "reallocation_calls",
               "live_requested_bytes_before", "live_requested_bytes_after",
@@ -104,6 +108,17 @@ def native_profile_valid(result, layer, required):
     return isinstance(profile, dict) and all(
         type(profile.get(key)) is int and profile[key] >= 0 for key in fields
     )
+
+
+def failure_profile_valid(result, layer, required):
+    if result["status"] == "ok":
+        return None
+    profile = result.get("failure_native_profile")
+    if not required:
+        return False if profile is not None else None
+    return (result.get("failure_profile_scope") ==
+            "producer_run_including_setup_warmup_and_cleanup"
+            and native_counters_valid(profile, layer))
 
 
 def qualified_record(result):
@@ -264,6 +279,7 @@ def main():
                             and (case in ("fill", "fill_bulk") or result["write_boundary_ns"] == 0)
                         ) if result["status"] == "ok" else None
                         result["profile_valid"] = native_profile_valid(result, layer, args.native_profiles)
+                        result["failure_profile_valid"] = failure_profile_valid(result, layer, args.native_profiles)
                         report["records"].append(result)
                         save()
                         # Preserve the child's raw outcome even if a rebuild
@@ -296,6 +312,7 @@ def main():
     # A completed experiment may contain useful budget-refusal evidence, but
     # cannot be represented as a successful parity/performance qualification.
     report["profile_failures"] = sum(r["profile_valid"] is False for r in report["records"])
+    report["failure_profile_failures"] = sum(r["failure_profile_valid"] is False for r in report["records"])
     report["phase_timing_failures"] = sum(r["phase_timing_valid"] is False for r in report["records"])
     report["all_paths_succeeded"] = all(qualified_record(r) for r in report["records"])
     save()

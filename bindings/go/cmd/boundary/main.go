@@ -319,11 +319,24 @@ func main() {
 	}
 	lib, err := hawdb.LoadLibrary(os.Args[2])
 	var result map[string]any
+	var nativeRead func(*nativeSnapshot)
+	var failureBefore *nativeSnapshot
 	if err == nil {
-		result, err = run(j, lib, profileReader(os.Args[2]))
+		nativeRead = profileReader(os.Args[2])
+		if nativeRead != nil {
+			failureBefore = new(nativeSnapshot)
+			nativeRead(failureBefore)
+		}
+		result, err = run(j, lib, nativeRead)
 	}
 	if err != nil {
 		result = map[string]any{"status": "error", "layer": "go", "error": err.Error()}
+		if nativeRead != nil {
+			var failureAfter nativeSnapshot
+			nativeRead(&failureAfter)
+			result["failure_native_profile"] = profileDelta(*failureBefore, failureAfter)
+			result["failure_profile_scope"] = "producer_run_including_setup_warmup_and_cleanup"
+		}
 	}
 	result["go_version"] = runtime.Version()
 	result["pointer_bits"] = strconv.IntSize

@@ -30,7 +30,7 @@ def complete_profile(layer):
 
 class DriverTests(unittest.TestCase):
     def matrix(self, native_profiles, supplied_profiles, process_exit=0, read_ns=10,
-               replace_artifact=False, layers="rust,python,go"):
+               replace_artifact=False, layers="rust,python,go", record_status="ok"):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             artifacts = {}
@@ -54,13 +54,18 @@ class DriverTests(unittest.TestCase):
                 layer = pathlib.Path(command[0]).name
                 if replace_artifact:
                     artifacts["rust"].write_bytes(b"changed")
-                return {
-                    "status": "ok", "process_exit": process_exit,
+                result = {
+                    "status": record_status, "process_exit": process_exit,
                     "output_rows": len(job["rows"]), "checksum": job["expected_checksum"],
                     "query_boundary_ns": 10, "write_boundary_ns": 0,
                     "read_boundary_ns": read_ns, "elapsed_ns": 20,
-                    "native_profile": supplied_profiles(layer),
+                    "native_profile": supplied_profiles(layer) if record_status == "ok" else None,
                 }
+                if record_status != "ok":
+                    result.update(error="warmup: query memory budget exceeded",
+                                  failure_native_profile=supplied_profiles(layer),
+                                  failure_profile_scope="producer_run_including_setup_warmup_and_cleanup")
+                return result
 
             with mock.patch.object(sys, "argv", arguments), \
                     mock.patch.object(driver, "source_identity", return_value={"head": "head", "tree": "tree"}), \
@@ -137,6 +142,32 @@ class DriverTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertTrue(report["instrumented"])
         self.assertEqual(report["profile_failures"], 0)
+
+    def test_refusal_profiles_never_supply_successful_latency_samples(self):
+        status, report = self.matrix(True, complete_profile, record_status="error")
+        self.assertEqual(status, 1)
+        self.assertEqual(report["successful_records"], 0)
+        self.assertEqual(report["refused_or_failed_records"], 6)
+        self.assertEqual(report["failure_profile_failures"], 0)
+        self.assertTrue(all(r["failure_profile_valid"] is True for r in report["records"]))
+        self.assertTrue(all(r["profile_valid"] is None for r in report["records"]))
+        self.assertTrue(all(s["median_elapsed_ns"] is None for s in report["summaries"]))
+
+    def test_missing_refusal_counters_remain_unqualified_not_zero(self):
+        status, report = self.matrix(True, lambda _: None, record_status="error")
+        self.assertEqual(status, 1)
+        self.assertEqual(report["failure_profile_failures"], 6)
+        self.assertTrue(all(r["failure_native_profile"] is None for r in report["records"]))
+
+    def test_refusal_profile_requires_its_own_scope_and_complete_counters(self):
+        result = {"status": "error", "failure_native_profile": complete_profile("go"),
+                  "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup"}
+        self.assertTrue(driver.failure_profile_valid(result, "go", True))
+        result["failure_profile_scope"] = "measured_operation"
+        self.assertFalse(driver.failure_profile_valid(result, "go", True))
+        result["failure_profile_scope"] = "producer_run_including_setup_warmup_and_cleanup"
+        result["failure_native_profile"]["allocation_calls"] = False
+        self.assertFalse(driver.failure_profile_valid(result, "go", True))
 
     def test_nonzero_exit_cannot_supply_a_successful_latency_sample(self):
         status, report = self.matrix(False, lambda _: None, process_exit=1)

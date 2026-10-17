@@ -188,6 +188,23 @@ profiles; these do not constitute a complete native engine stack profile.
 Successful instrumented records must include the applicable native counters;
 missing profiles fail qualification even when value parity succeeds. Refusals
 before measurement can have no per-operation profile and still remain failures.
+
+Instrumented producers also emit `failure_native_profile` for a failed producer
+run, using a separate run-start snapshot through setup, warmup and database
+cleanup. `failure_profile_scope` identifies that wider window; it must not be
+compared with the successful measured-operation `native_profile`. JSON job
+loading is outside the run window, and native versus foreign input conversion
+occurs in different host layers. Compare these observations within the same
+producer, not as equivalent cross-language conversion costs. The extra snapshot
+is outside the successful operation timer and has its own observer overhead.
+
+Failure counters are checked separately by `failure_profile_valid`; a missing
+profile remains missing rather than zero. A valid failure profile does not
+qualify a latency sample or change an error into a successful experiment.
+Process RSS still includes the full fixture/runtime, while native counters
+exclude foreign heaps. Startup/input failures and killed processes can remain
+without an in-process failure profile. Historical reports retain their original
+missing fields; these observations do not establish a whole-process memory bound.
 No counters claim payload-copy identity or strict result admission.
 
 `--python-extension` selects a fixed artifact; it does not enable profiling.

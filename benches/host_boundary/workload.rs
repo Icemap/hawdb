@@ -51,6 +51,8 @@ fn value(value: serde_json::Value) -> Value {
 pub struct Observer {
     pub begin: fn(),
     pub finish: fn() -> serde_json::Value,
+    pub begin_failure: fn(),
+    pub finish_failure: fn() -> serde_json::Value,
 }
 
 fn run(job: Job, observer: Option<&Observer>) -> Result<serde_json::Value, String> {
@@ -197,7 +199,24 @@ pub fn main_with_observer(observer: Option<&Observer>) {
     let result = std::fs::read(&path)
         .map_err(|error| error.to_string())
         .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|error| error.to_string()))
-        .and_then(|job| run(job, observer));
+        .map(|job| {
+            if let Some(observer) = observer {
+                (observer.begin_failure)();
+            }
+            match run(job, observer) {
+                Ok(result) => result,
+                Err(error) => {
+                    let profile = observer.map(|observer| (observer.finish_failure)());
+                    let mut result = json!({"status": "error", "layer": "rust", "error": error});
+                    if let Some(profile) = profile {
+                        result["failure_native_profile"] = profile;
+                        result["failure_profile_scope"] =
+                            json!("producer_run_including_setup_warmup_and_cleanup");
+                    }
+                    result
+                }
+            }
+        });
     println!(
         "{}",
         result.unwrap_or_else(|error| json!({"status": "error", "layer": "rust", "error": error}))

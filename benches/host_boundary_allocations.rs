@@ -13,14 +13,27 @@ use native_profile::BoundaryAllocationSnapshot;
 use std::sync::Mutex;
 
 static BEFORE: Mutex<Option<BoundaryAllocationSnapshot>> = Mutex::new(None);
+static FAILURE_BEFORE: Mutex<Option<BoundaryAllocationSnapshot>> = Mutex::new(None);
 
 fn begin() {
     *BEFORE.lock().expect("profile lock") = Some(native_profile::snapshot());
 }
 
 fn finish() -> serde_json::Value {
+    finish_snapshot(&BEFORE)
+}
+
+fn begin_failure() {
+    *FAILURE_BEFORE.lock().expect("profile lock") = Some(native_profile::snapshot());
+}
+
+fn finish_failure() -> serde_json::Value {
+    finish_snapshot(&FAILURE_BEFORE)
+}
+
+fn finish_snapshot(before: &Mutex<Option<BoundaryAllocationSnapshot>>) -> serde_json::Value {
     let after = native_profile::snapshot();
-    let before = BEFORE
+    let before = before
         .lock()
         .expect("profile lock")
         .take()
@@ -39,5 +52,10 @@ fn finish() -> serde_json::Value {
 }
 
 fn main() {
-    workload::main_with_observer(Some(&workload::Observer { begin, finish }));
+    workload::main_with_observer(Some(&workload::Observer {
+        begin,
+        finish,
+        begin_failure,
+        finish_failure,
+    }));
 }

@@ -38,6 +38,7 @@ def native_delta(before, after):
 def run(job):
     db = hawdb.open() if job["backend"] == "memory" else hawdb.open(job["path"])
     phase = "setup"
+    tracing_started = False
     try:
         setup = time.perf_counter_ns()
         db.execute("CREATE INDEX ON :Boundary(id)")
@@ -60,6 +61,7 @@ def run(job):
         if profiling:
             import tracemalloc
             tracemalloc.start()
+            tracing_started = True
             native_before = native._boundary_profile_snapshot()
         started = time.perf_counter_ns()
         if job["case"] == "fill":
@@ -90,6 +92,7 @@ def run(job):
             native_after = native._boundary_profile_snapshot()
             host_current, host_peak = tracemalloc.get_traced_memory()
             tracemalloc.stop()
+            tracing_started = False
             profile = native_delta(native_before, native_after)
             profile["python_traced_current_bytes"] = host_current
             profile["python_traced_peak_bytes"] = host_peak
@@ -107,11 +110,20 @@ def run(job):
         return {"status": "error", "layer": "python", "phase": phase,
                 "error_type": type(error).__name__, "error": str(error)}
     finally:
+        if tracing_started:
+            tracemalloc.stop()
         db.close()
 
 
 if __name__ == "__main__":
     with open(sys.argv[1], encoding="utf-8") as source:
-        result = run(json.load(source))
+        job = json.load(source)
+    failure_before = (native._boundary_profile_snapshot()
+                      if hasattr(native, "_boundary_profile_snapshot") else None)
+    result = run(job)
+    if result["status"] != "ok" and failure_before is not None:
+        result["failure_native_profile"] = native_delta(
+            failure_before, native._boundary_profile_snapshot())
+        result["failure_profile_scope"] = "producer_run_including_setup_warmup_and_cleanup"
     result["peak_rss_bytes"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)
     print(json.dumps(result, ensure_ascii=False))
