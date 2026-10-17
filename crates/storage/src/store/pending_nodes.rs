@@ -23,6 +23,8 @@ mod tests;
 
 type ValuePostings = HashMap<u64, BTreeSet<NodeId>>;
 
+const PENDING_PROPERTY_SCAN_LIMIT: usize = 32;
+
 #[derive(Default)]
 struct PropertyIndexes {
     hashes: RandomState,
@@ -118,6 +120,17 @@ pub(super) enum PendingMatch {
     Exact,
 }
 
+impl PendingMatch {
+    fn matches(
+        self,
+        properties: &BTreeMap<String, Value>,
+        required: &BTreeMap<String, Value>,
+    ) -> bool {
+        (self == Self::Subset || properties.len() == required.len())
+            && properties_contain_all(properties, required)
+    }
+}
+
 #[derive(Default)]
 pub(super) struct PendingNodes {
     // Shared slice access preserves the sorted-ID invariant and prevents untracked writes.
@@ -168,12 +181,15 @@ impl PendingNodes {
         required: &BTreeMap<String, Value>,
         mode: PendingMatch,
     ) -> Option<NodeId> {
-        if required.is_empty() {
+        // Small batches and hot-key batches avoid index setup and maintenance entirely.
+        if required.is_empty()
+            || (self.property_indexes.is_none() && self.nodes.len() <= PENDING_PROPERTY_SCAN_LIMIT)
+        {
             return self
                 .nodes
                 .iter()
                 .find(|(_, node_label, properties)| {
-                    *node_label == label && (mode == PendingMatch::Subset || properties.is_empty())
+                    *node_label == label && mode.matches(properties, required)
                 })
                 .map(|(id, _, _)| *id);
         }
@@ -197,10 +213,7 @@ impl PendingNodes {
             .find_map(|id| {
                 let index = pending_node_index(&self.nodes, *id)?;
                 let (_, node_label, properties) = &self.nodes[index];
-                (*node_label == label
-                    && (mode == PendingMatch::Subset || properties.len() == required.len())
-                    && properties_contain_all(properties, required))
-                .then_some(*id)
+                (*node_label == label && mode.matches(properties, required)).then_some(*id)
             })
     }
 }

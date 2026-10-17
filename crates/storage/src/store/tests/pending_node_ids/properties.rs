@@ -39,12 +39,18 @@ fn connected(source: i64, target: i64) -> GraphMutation {
     })
 }
 
-fn property_batch() -> Vec<GraphMutation> {
+fn property_batch(padding: usize) -> Vec<GraphMutation> {
     let increment = || NodeSetAssignment {
         property: "key".into(),
         value: NodeSetValue::AddInt { amount: 1 },
     };
-    vec![
+    let mut batch: Vec<_> = (0..padding)
+        .map(|_| GraphMutation::CreateNode {
+            label: "Padding".into(),
+            properties: properties([]),
+        })
+        .collect();
+    batch.extend([
         GraphMutation::CreateNode {
             label: "Memory".into(),
             properties: key(100),
@@ -70,7 +76,7 @@ fn property_batch() -> Vec<GraphMutation> {
         merge(5),
         GraphMutation::SetNodeProperty {
             label: "Memory".into(),
-            filter: Some(id_eq(2)),
+            filter: Some(id_eq(2 + padding as u64)),
             property: "key".into(),
             value: Value::Int(8),
         },
@@ -82,7 +88,7 @@ fn property_batch() -> Vec<GraphMutation> {
         merge(8),
         GraphMutation::DeleteNode {
             label: "Memory".into(),
-            filter: Some(id_eq(2)),
+            filter: Some(id_eq(2 + padding as u64)),
             detach: false,
         },
         merge(8),
@@ -109,12 +115,24 @@ fn property_batch() -> Vec<GraphMutation> {
             on_match_assignments: Vec::new(),
             post_merge_assignments: Vec::new(),
         },
-    ]
+    ]);
+    batch
 }
 
-fn assert_property_batch_state(store: &GraphStore, catalog: &Catalog) {
-    assert_eq!(store.node_count_for_label(None), 8);
-    assert!(store.node_owned(NodeId(2)).unwrap().is_none());
+fn assert_property_batch_state(store: &GraphStore, catalog: &Catalog, padding: usize) {
+    assert_eq!(store.node_count_for_label(None), 8 + padding);
+    assert!(store
+        .node_owned(NodeId(2 + padding as u64))
+        .unwrap()
+        .is_none());
+    for id in 1..=padding as u64 {
+        let node = store.node_owned(NodeId(id)).unwrap().unwrap();
+        assert!(node.properties.is_empty());
+        assert_eq!(
+            node.labels,
+            BTreeSet::from([catalog.label_id("Padding").unwrap()])
+        );
+    }
     for (id, value) in [
         (0, 100),
         (1, 100),
@@ -125,7 +143,8 @@ fn assert_property_batch_state(store: &GraphStore, catalog: &Catalog) {
         (7, 10),
         (8, 8),
     ] {
-        let node = store.node_owned(NodeId(id)).unwrap().unwrap();
+        let stored_id = if id == 0 { 0 } else { id + padding as u64 };
+        let node = store.node_owned(NodeId(stored_id)).unwrap().unwrap();
         let mut expected = key(value);
         if id == 0 || id == 5 {
             expected.insert("payload".into(), Value::String("extra".into()));
@@ -145,7 +164,140 @@ fn assert_property_batch_state(store: &GraphStore, catalog: &Catalog) {
             (record.source.0, record.target.0)
         })
         .collect();
-    assert_eq!(endpoints, [(3, 4), (6, 7), (6, 6)]);
+    assert_eq!(
+        endpoints,
+        [(3, 4), (6, 7), (6, 6)]
+            .map(|(source, target)| (source + padding as u64, target + padding as u64))
+    );
+}
+
+fn assert_property_batch(residency_mode: StorageResidencyMode, padding: usize) {
+    let path = unique_test_dir("pending_property_batch");
+    let open = |catalog: &mut Catalog| {
+        GraphStore::open_with_durability_and_replay_config(
+            &path,
+            catalog,
+            DurabilityPolicy::default(),
+            WalReplayConfig {
+                residency_mode,
+                ..WalReplayConfig::default()
+            },
+        )
+        .unwrap()
+    };
+    let mut catalog = Catalog::default();
+    let mut store = open(&mut catalog);
+    store
+        .create_node(
+            &mut catalog,
+            "Memory",
+            properties([
+                ("key", Value::Int(100)),
+                ("payload", Value::String("extra".into())),
+            ]),
+        )
+        .unwrap();
+    store
+        .create_property_index(&mut catalog, "Memory", "key")
+        .unwrap();
+    store.checkpoint(&catalog).unwrap();
+    drop(store);
+    let mut store = open(&mut catalog);
+    let snapshot = store.snapshot();
+    let before = (store.commit_epoch(), store.next_node_id, store.next_rel_id);
+    let error = store
+        .commit_mutations_with_limits(
+            &mut catalog,
+            property_batch(padding),
+            MutationLimits {
+                max_affected_rows: NonZeroUsize::new(18 + padding).unwrap(),
+                ..MutationLimits::default()
+            },
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("max_mutation_affected_rows"));
+    assert_eq!(
+        (store.commit_epoch(), store.next_node_id, store.next_rel_id),
+        before
+    );
+    assert_eq!(store.node_count_for_label(None), 1);
+    assert_eq!(store.relationship_records_owned().count(), 0);
+    assert!(catalog.label_id("Other").is_none());
+    assert!(catalog.label_id("Padding").is_none());
+    assert!(catalog.rel_type_id("LINKS").is_none());
+    drop(store);
+    store = open(&mut catalog);
+    assert_eq!(
+        (store.commit_epoch(), store.next_node_id, store.next_rel_id),
+        before
+    );
+    assert_eq!(store.node_count_for_label(None), 1);
+    assert_eq!(store.relationship_records_owned().count(), 0);
+    assert!(catalog.label_id("Other").is_none());
+    assert!(catalog.label_id("Padding").is_none());
+    assert!(catalog.rel_type_id("LINKS").is_none());
+    let result = store
+        .commit_mutations_with_limits(
+            &mut catalog,
+            property_batch(padding),
+            MutationLimits {
+                max_affected_rows: NonZeroUsize::new(19 + padding).unwrap(),
+                ..MutationLimits::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(result.rows.len(), 19 + padding);
+    for (row, id, created) in [
+        (1, 0, false),
+        (2, 2, true),
+        (3, 2, false),
+        (4, 2, false),
+        (6, 2, false),
+        (8, 2, false),
+        (10, 3, false),
+        (13, 5, true),
+        (15, 5, false),
+        (18, 8, false),
+    ] {
+        let stored_id = if id == 0 { 0 } else { id + padding as i64 };
+        assert_eq!(result.rows[row + padding]["node_id"], Value::Int(stored_id));
+        assert_eq!(result.rows[row + padding]["created"], Value::Bool(created));
+    }
+    for (row, source, target, rel, created) in [
+        (11, 3, 4, 0, true),
+        (12, 3, 4, 0, false),
+        (14, 6, 7, 1, true),
+        (16, 6, 6, 2, true),
+    ] {
+        assert_eq!(
+            result.rows[row + padding]["source_node_id"],
+            Value::Int(source + padding as i64)
+        );
+        assert_eq!(
+            result.rows[row + padding]["target_node_id"],
+            Value::Int(target + padding as i64)
+        );
+        assert_eq!(result.rows[row + padding]["rel_id"], Value::Int(rel));
+        assert_eq!(result.rows[row + padding]["created"], Value::Bool(created));
+    }
+    assert_eq!(snapshot.node_count_for_label(None), 1);
+    assert_eq!(snapshot.relationship_records_owned().count(), 0);
+    assert!(snapshot
+        .node_owned(NodeId(3 + padding as u64))
+        .unwrap()
+        .is_none());
+    drop(snapshot);
+    assert_property_batch_state(&store, &catalog, padding);
+    for checkpoint in [false, true] {
+        if checkpoint {
+            store.checkpoint(&catalog).unwrap();
+        }
+        drop(store);
+        store = open(&mut catalog);
+        assert_property_batch_state(&store, &catalog, padding);
+    }
+    drop(store);
+    fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
@@ -154,119 +306,9 @@ fn pending_property_merges_preserve_precedence_assignments_atomicity_and_recover
         StorageResidencyMode::Materialized,
         StorageResidencyMode::OutOfCore,
     ] {
-        let path = unique_test_dir("pending_property_batch");
-        let open = |catalog: &mut Catalog| {
-            GraphStore::open_with_durability_and_replay_config(
-                &path,
-                catalog,
-                DurabilityPolicy::default(),
-                WalReplayConfig {
-                    residency_mode,
-                    ..WalReplayConfig::default()
-                },
-            )
-            .unwrap()
-        };
-        let mut catalog = Catalog::default();
-        let mut store = open(&mut catalog);
-        store
-            .create_node(
-                &mut catalog,
-                "Memory",
-                properties([
-                    ("key", Value::Int(100)),
-                    ("payload", Value::String("extra".into())),
-                ]),
-            )
-            .unwrap();
-        store
-            .create_property_index(&mut catalog, "Memory", "key")
-            .unwrap();
-        store.checkpoint(&catalog).unwrap();
-        drop(store);
-        let mut store = open(&mut catalog);
-        let snapshot = store.snapshot();
-        let before = (store.commit_epoch(), store.next_node_id, store.next_rel_id);
-        let error = store
-            .commit_mutations_with_limits(
-                &mut catalog,
-                property_batch(),
-                MutationLimits {
-                    max_affected_rows: NonZeroUsize::new(18).unwrap(),
-                    ..MutationLimits::default()
-                },
-            )
-            .unwrap_err();
-        assert!(error.to_string().contains("max_mutation_affected_rows"));
-        assert_eq!(
-            (store.commit_epoch(), store.next_node_id, store.next_rel_id),
-            before
-        );
-        assert_eq!(store.node_count_for_label(None), 1);
-        assert_eq!(store.relationship_records_owned().count(), 0);
-        assert!(catalog.label_id("Other").is_none());
-        assert!(catalog.rel_type_id("LINKS").is_none());
-        drop(store);
-        store = open(&mut catalog);
-        assert_eq!(
-            (store.commit_epoch(), store.next_node_id, store.next_rel_id),
-            before
-        );
-        assert_eq!(store.node_count_for_label(None), 1);
-        assert_eq!(store.relationship_records_owned().count(), 0);
-        assert!(catalog.label_id("Other").is_none());
-        assert!(catalog.rel_type_id("LINKS").is_none());
-        let result = store
-            .commit_mutations_with_limits(
-                &mut catalog,
-                property_batch(),
-                MutationLimits {
-                    max_affected_rows: NonZeroUsize::new(19).unwrap(),
-                    ..MutationLimits::default()
-                },
-            )
-            .unwrap();
-        assert_eq!(result.rows.len(), 19);
-        for (row, id, created) in [
-            (1, 0, false),
-            (2, 2, true),
-            (3, 2, false),
-            (4, 2, false),
-            (6, 2, false),
-            (8, 2, false),
-            (10, 3, false),
-            (13, 5, true),
-            (15, 5, false),
-            (18, 8, false),
-        ] {
-            assert_eq!(result.rows[row]["node_id"], Value::Int(id));
-            assert_eq!(result.rows[row]["created"], Value::Bool(created));
+        // Exercise both bounded scans and active property indexes through the real batch path.
+        for padding in [0, 32] {
+            assert_property_batch(residency_mode, padding);
         }
-        for (row, source, target, rel, created) in [
-            (11, 3, 4, 0, true),
-            (12, 3, 4, 0, false),
-            (14, 6, 7, 1, true),
-            (16, 6, 6, 2, true),
-        ] {
-            assert_eq!(result.rows[row]["source_node_id"], Value::Int(source));
-            assert_eq!(result.rows[row]["target_node_id"], Value::Int(target));
-            assert_eq!(result.rows[row]["rel_id"], Value::Int(rel));
-            assert_eq!(result.rows[row]["created"], Value::Bool(created));
-        }
-        assert_eq!(snapshot.node_count_for_label(None), 1);
-        assert_eq!(snapshot.relationship_records_owned().count(), 0);
-        assert!(snapshot.node_owned(NodeId(3)).unwrap().is_none());
-        drop(snapshot);
-        assert_property_batch_state(&store, &catalog);
-        for checkpoint in [false, true] {
-            if checkpoint {
-                store.checkpoint(&catalog).unwrap();
-            }
-            drop(store);
-            store = open(&mut catalog);
-            assert_property_batch_state(&store, &catalog);
-        }
-        drop(store);
-        fs::remove_dir_all(path).unwrap();
     }
 }

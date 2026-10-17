@@ -110,6 +110,8 @@ fn lazy_indexes_track_assignments_deletions_new_labels_and_empty_postings() {
     pending.remove(NodeId(1));
     assert_matches_scan(&mut pending, LabelId(0), &properties([]));
     assert!(pending.property_indexes.is_none());
+    // Exercise active index maintenance with a small, readable fixture.
+    pending.property_indexes = Some(PropertyIndexes::default());
     assert_eq!(
         pending.find_by_properties(LabelId(0), &key(10), PendingMatch::Subset),
         None
@@ -143,7 +145,10 @@ fn lazy_indexes_track_assignments_deletions_new_labels_and_empty_postings() {
 
 #[test]
 fn fingerprint_collisions_recheck_properties_and_keep_the_lowest_matching_id() {
-    let mut pending = PendingNodes::default();
+    let mut pending = PendingNodes {
+        property_indexes: Some(PropertyIndexes::default()),
+        ..PendingNodes::default()
+    };
     for (id, label, key, extra) in [
         (0, 1, 7, 0),
         (1, 0, 8, 0),
@@ -185,7 +190,10 @@ fn fingerprint_collisions_recheck_properties_and_keep_the_lowest_matching_id() {
 
 #[test]
 fn equal_fingerprints_under_different_properties_are_independently_maintained() {
-    let mut pending = PendingNodes::default();
+    let mut pending = PendingNodes {
+        property_indexes: Some(PropertyIndexes::default()),
+        ..PendingNodes::default()
+    };
     pending.push((
         NodeId(1),
         LabelId(0),
@@ -216,5 +224,37 @@ fn equal_fingerprints_under_different_properties_are_independently_maintained() 
         &mut pending,
         LabelId(0),
         &properties([("a", Value::Int(8)), ("b", Value::Int(7))]),
+    );
+}
+
+#[test]
+fn property_indexes_activate_only_after_the_small_batch_boundary() {
+    let mut pending = PendingNodes::default();
+    for id in 0..=PENDING_PROPERTY_SCAN_LIMIT {
+        pending.push((
+            NodeId(id as u64),
+            LabelId(0),
+            properties([("key", Value::Int(id as i64))]),
+        ));
+        if id == 5 {
+            pending.set_property(id, "key".into(), Value::Int(-1));
+        }
+        assert_matches_scan(
+            &mut pending,
+            LabelId(0),
+            &properties([("key", Value::Int(id as i64))]),
+        );
+        assert_eq!(
+            pending.property_indexes.is_some(),
+            id == PENDING_PROPERTY_SCAN_LIMIT
+        );
+    }
+    assert_eq!(
+        pending.find_by_properties(
+            LabelId(0),
+            &properties([("key", Value::Int(-1))]),
+            PendingMatch::Subset
+        ),
+        Some(NodeId(5))
     );
 }
