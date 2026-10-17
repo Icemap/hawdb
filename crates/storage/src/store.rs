@@ -128,6 +128,9 @@ pub use immutable_root::{
     AdmittedBranchStore, BranchAdmissionError, BranchAdmissionRequest,
     PreparedImmutableRootHandoff, SealedBranchSource,
 };
+#[path = "store/pending_nodes.rs"]
+mod pending_nodes;
+use pending_nodes::{PendingMatch, PendingNodes};
 #[path = "store/relational_index_shadow.rs"]
 mod relational_index_shadow;
 #[path = "store/relational_row_pages.rs"]
@@ -3041,8 +3044,8 @@ fn pending_relationship_ids_for_nodes(
         .collect()
 }
 
-fn remove_pending_node(ops: &mut Vec<WalOp>, pending_nodes: &mut Vec<PendingNode>, id: NodeId) {
-    pending_nodes.retain(|(node_id, _, _)| *node_id != id);
+fn remove_pending_node(ops: &mut Vec<WalOp>, pending_nodes: &mut PendingNodes, id: NodeId) {
+    pending_nodes.remove(id);
     ops.retain(|op| match op {
         WalOp::CreateNode { id: node_id, .. } | WalOp::SetNodeProperty { id: node_id, .. } => {
             *node_id != id

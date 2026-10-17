@@ -17,6 +17,8 @@ use crate::mutation::MatchedRelationshipCreate;
 use crate::predicate::property_filter_matches;
 use crate::store::{pending_node_index, PendingNode};
 
+mod merge_scaling;
+mod properties;
 mod scaling;
 
 fn id_eq(id: u64) -> PropertyFilter {
