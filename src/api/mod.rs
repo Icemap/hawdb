@@ -343,7 +343,7 @@ pub struct DatabaseConfig {
     pub automatic_checkpoint_max_age: std::time::Duration,
     /// Bounded pending-child recovery during a writable project open.
     pub branch_create_recovery_limits: BranchCreateRecoveryLimits,
-    /// Optional host-wide read row ceiling. `Some(0)` (the default) and `None` mean unlimited.
+    /// Optional host-wide read row ceiling. `Some(0)` and `None` (the default) mean unlimited.
     /// Session settings may lower a positive ceiling, but cannot raise it.
     pub max_read_result_rows: Option<usize>,
     pub max_read_result_payload_bytes: Option<usize>,
@@ -415,8 +415,8 @@ pub struct DatabaseConfig {
     pub adaptive_vector_backend_policy: hawdb_optimizer::AdaptiveVectorBackendPolicy,
 }
 
-/// Zero disables the default result row-count limit. Byte budgets remain active.
-pub const DEFAULT_MAX_READ_RESULT_ROWS: usize = 0;
+/// Default host row-count ceiling: no ceiling. Byte budgets remain active.
+pub const DEFAULT_MAX_READ_RESULT_ROWS: Option<usize> = None;
 pub const DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES: usize = 64 * 1024 * 1024;
 
 fn restrictive_query_limit(configured: Option<usize>, requested: Option<usize>) -> Option<usize> {
@@ -561,6 +561,9 @@ fn relational_index_read_mode<
 pub struct SessionConfig {
     /// Maximum result rows; zero means no session row-count limit.
     /// Payload, execution-memory and explicit host ceilings remain enforced.
+    /// A positive ceiling at or above usize::MAX imposes no additional bound:
+    /// no in-process result can exceed platform row capacity. On wasm32 this
+    /// includes values such as 5,000,000,000; positive host ceilings still apply.
     pub max_result_rows: u64,
 }
 
@@ -609,7 +612,7 @@ impl Default for DatabaseConfig {
             read_only: false,
             automatic_checkpoint_max_age: std::time::Duration::from_secs(60),
             branch_create_recovery_limits: BranchCreateRecoveryLimits::default(),
-            max_read_result_rows: Some(DEFAULT_MAX_READ_RESULT_ROWS),
+            max_read_result_rows: DEFAULT_MAX_READ_RESULT_ROWS,
             max_read_result_payload_bytes: Some(DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES),
             execution_memory: executor::ExecutionMemoryConfig::default(),
             mutation_limits: hawdb_storage::mutation::MutationLimits::default(),
@@ -676,7 +679,7 @@ pub(crate) fn system_runtime_snapshot(
 ) -> system_sql::SystemRuntimeSnapshot {
     system_sql::SystemRuntimeSnapshot::new(
         config.read_only,
-        config.max_read_result_rows,
+        config.read_result_row_limit(),
         config.max_read_result_payload_bytes,
         config.storage_residency_mode,
         config.relational_index_mode,
@@ -20440,16 +20443,21 @@ impl<'a> NowledgeGraphAdapter<'a> {
 
 impl DatabaseTransactionRuntime {
     fn from_database(db: &Database) -> Result<Self> {
-        Self::from_database_with_system_variables(db, db.system_variables.clone())
+        Self::from_database_with_system_variables(
+            db,
+            db.system_variables.clone(),
+            SessionConfig::default(),
+        )
     }
 
     fn from_database_with_system_variables(
         db: &Database,
         system_variables: QuerySystemVariables,
+        session_config: SessionConfig,
     ) -> Result<Self> {
         let runtime = db.runtime.get()?;
         Ok(Self {
-            session_config: SessionConfig::default(),
+            session_config,
             optimizer: runtime.optimizer.clone(),
             plan_cache: SharedState::new(PlanCache::new(db.config.max_plan_cache_entries)),
             relational_plan_template_cache: Arc::clone(&runtime.relational_plan_template_cache),
@@ -21615,26 +21623,16 @@ impl DatabaseSession<'_> {
         parameters: &[Value],
     ) -> Result<QueryOutput> {
         if self.graph_transaction.is_none() {
-            if (self.config.max_result_rows != 0
-                || self.db.config.read_result_row_limit().is_some())
-                && matches!(
-                    crate::sql::parse_postgres_sql(sql_text)?,
-                    crate::sql::SqlStatement::Insert(_)
-                        | crate::sql::SqlStatement::Update(_)
-                        | crate::sql::SqlStatement::Delete(_)
-                )
-            {
-                // Validate RETURNING before commit through the same native
-                // transaction path as SQL sessions; never reject after writing.
-                let mut session = self.db.sql_session();
-                session.set_max_result_rows(self.config.max_result_rows);
-                return session
-                    .query(sql_text, parameters)
-                    .map(|result| result.output);
-            }
-            return self
-                .db
-                .query_sql_with_params_bounded(sql_text, parameters, self.row_limit());
+            let row_limit = self.row_limit();
+            return self.db.query_sql_with_params_options_and_system_variables(
+                sql_text,
+                parameters,
+                QueryStreamOptions {
+                    max_rows: row_limit,
+                    max_payload_bytes: self.db.config.max_read_result_payload_bytes,
+                },
+                self.system_variables.clone(),
+            );
         }
         let prepared = self
             .db
@@ -21727,12 +21725,9 @@ impl DatabaseSession<'_> {
                     DatabaseTransactionRuntime::from_database_with_system_variables(
                         self.db,
                         self.system_variables.clone(),
+                        self.config,
                     )?,
                 );
-                self.transaction_runtime
-                    .as_mut()
-                    .expect("new session transaction")
-                    .session_config = self.config;
                 let branch_runtime = self.db.runtime.get()?;
                 self.graph_transaction = Some(
                     branch_runtime
@@ -21750,10 +21745,9 @@ impl DatabaseSession<'_> {
                         "COMMIT requires an active transaction".to_string(),
                     ));
                 };
-                let runtime = self
-                    .transaction_runtime
-                    .take()
-                    .expect("active session transaction");
+                let runtime = self.transaction_runtime.take().ok_or_else(|| {
+                    HawDBError::StorageIntegrity("active session transaction has no runtime".into())
+                })?;
                 let mut mutation_limits = self.db.config.mutation_limits;
                 if let Some(limit) = runtime.read_result_row_limit().and_then(NonZeroUsize::new) {
                     mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);

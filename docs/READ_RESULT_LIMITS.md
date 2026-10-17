@@ -37,6 +37,11 @@ not overflow the execution detector when it computes an extra detection row. Exi
 retain their strict meaning: `Some(0)` admits zero rows, while `None` adds no
 request ceiling. These low-level budgets differ from the session setting.
 
+On a 32-bit host, including wasm32, session values at or above `usize::MAX`
+(such as 5,000,000,000) impose no additional row-count bound: an in-process
+result cannot represent more rows than platform capacity. Positive host
+ceilings and finite payload/memory budgets still apply.
+
 ## Zero-valued limits
 
 | Boundary | Value | Meaning |
@@ -49,7 +54,12 @@ request ceiling. These low-level budgets differ from the session setting.
 ## Host protection and memory
 
 The existing `DatabaseConfig::max_read_result_rows` remains an optional host
-ceiling. Its default is `Some(0)`; both `Some(0)` and `None` mean unlimited.
+ceiling. Its default is `None`; both `Some(0)` and `None` mean unlimited.
+The exported `DEFAULT_MAX_READ_RESULT_ROWS` is an `Option<usize>` with value
+`None`, so it cannot be mistaken for a numeric zero-row request budget.
+This changes the public constant type from usize to Option<usize>; Rust hosts
+that used it as a numeric fallback must update that code when adopting this
+development revision.
 A positive host ceiling cannot be raised or disabled by a session or cursor.
 Session mutation `RETURNING` rows and explicit `COMMIT` summaries apply the same
 host/session minimum as reads, before publishing staged writes. Autocommit,
