@@ -1,0 +1,33 @@
+INFO: Invocation ID: 2aaf1d98-1308-4737-8be0-67499689b470
+INFO: Reading 'startup' options from /private/tmp/hawdb-wip-ready-20261015/split-session-policy/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/split-session-policy/.bazelrc:
+  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/split-session-policy/.bazelrc:
+  'test' options: --local_test_jobs=HOST_CPUS*0.5
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-wip-ready-20261015/split-session-policy/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //:hawdb_execution_request_contract_tests (0 packages loaded, 0 targets configured)
+Analyzing: target //:hawdb_execution_request_contract_tests (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:hawdb_execution_request_contract_tests (0 packages loaded, 4 targets configured).
+[763 / 764] Testing //:hawdb_execution_request_contract_tests; 1s disk-cache, darwin-sandbox
+INFO: Found 1 test target...
+Target //:hawdb_execution_request_contract_tests up-to-date:
+  bazel-bin/hawdb_execution_request_contract_tests
+INFO: Elapsed time: 2.238s, Critical Path: 1.88s
+INFO: 4 processes: 4 action cache hit, 2 internal, 3 darwin-sandbox.
+INFO: Build completed successfully, 4 total actions
+INFO: 
+//:hawdb_execution_request_contract_tests                                PASSED in 1.0s
+
+Executed 1 out of 1 test: 1 test passes.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Build Event Protocol files produced successfully.

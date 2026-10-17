@@ -1,0 +1,30 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_execution_request_contract_tests
+-----------------------------------------------------------------------------
+
+running 21 tests
+test public_execution_request_materializes_a_profiled_result ... ok
+test host_can_implement_external_reads_using_only_the_hawdb_facade ... ok
+test late_payload_failure_withholds_all_rows_and_resources_remain_reusable ... ok
+test public_consumer_error_and_cancellation_stop_delivery_and_allow_retry ... ok
+test stopped_contexts_and_denied_memory_never_call_public_consumers ... ok
+test public_consumer_does_not_receive_rows_before_limit_validation ... ok
+test runtime_view_reports_effective_host_row_ceiling ... ok
+test empty_sql_results_preserve_custom_mutation_limits ... ok
+test sql_session_row_limits_preserve_aggregates_and_rollback_failed_returning ... ok
+test session_host_ceiling_bounds_commit_results_before_publication ... ok
+test zero_host_session_and_request_limits_preserve_their_public_contracts ... ok
+test autocommit_sql_preserves_session_variables_and_validates_before_commit ... ok
+test session_host_ceiling_bounds_cypher_mutations_in_both_transaction_modes ... ok
+test session_result_row_settings_are_isolated_and_inherited_by_transactions ... ok
+test public_request_differential_covers_parameters_limits_and_accounting ... ok
+test session_host_ceiling_bounds_sql_returning_and_rolls_back_caught_errors ... ok
+test unlimited_rows_still_refuse_wide_json_payload_before_delivery ... ok
+test read_only_sql_sessions_inherit_limits_without_altering_database_configuration ... ok
+test public_analytics_identity_output_uses_query_budget_above_retained_state_cap ... ok
+test unlimited_sql_results_cross_the_former_default_boundary_without_hidden_scan_caps ... ok
+test owned_default_and_explicit_row_limits_cross_the_former_boundary has been running for over 60 seconds
+test owned_default_and_explicit_row_limits_cross_the_former_boundary ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 65.32s
+

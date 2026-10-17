@@ -1,0 +1,3 @@
+$ cargo clippy --locked -p hawdb --no-default-features --target wasm32-unknown-unknown --lib --test in_memory_portable -- -D warnings
+    Finished `dev` profile [unoptimized] target(s) in 1.59s
+PASS cargo clippy --locked -p hawdb --no-default-features --target wasm32-unknown-unknown --lib --test in_memory_portable -- -D warnings

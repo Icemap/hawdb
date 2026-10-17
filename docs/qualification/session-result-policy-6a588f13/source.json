@@ -1,0 +1,29 @@
+{
+  "head": "6a588f13857a51250b93073966f202f3a537aee7",
+  "tree": "cfe97429dd6390cf5810db483d42cfdd95c06040",
+  "integrated_main": "a7900428a24a74fe373d05f9cfc1a63cf144bf3b",
+  "changed_files": {
+    "crates/executor/src/limit.rs": "ce600e6f05b8bf08a3322ea9e94c05c6038adc5d54c8b3bf01b694450f9d4651",
+    "crates/executor/src/observer/profile/tests.rs": "665f9c27fd9e3b0ee020310f58694df3c656bf6367964f303e80465c944b4923",
+    "crates/relational/src/query/projection.rs": "7ab11a77c0e4c18d42a81f2e15ca5bce038e8037989f508a574b11bdb7be1f25",
+    "crates/relational/src/query/streaming_projection.rs": "b2a5cba68d708470f996f3b3ea092c8abca8c410b963bc59436bffa4b5d52a66",
+    "docs/READ_RESULT_LIMITS.md": "2329ad8e62e40415beb5f1d5bed1b7fb9b449c774780623ba91dc687a3ca5e5e",
+    "docs/SESSION_RESULT_POLICY_REVIEW.md": "3f1d96ad71630ed86e6f6adc33a5310f25a56a386fae4f6f1c77cfc7591bc3d7",
+    "src/api/explain.rs": "a35227ad0c912002365682dfab44e7ecd4f04d1840345a6e511977b18bc7e222",
+    "src/api/mod.rs": "641e38b63aab9bbfee2c711d4e15bdb73afdbd84a8e1addd387291f9c39bbf02",
+    "src/api/observability.rs": "1c54ba3f9f1032d1970ba3e23ab81b97f247c79dc41e42d3e13a911ff152de97",
+    "src/api/query_request.rs": "ef2f6f132ad3a14293fa3c38587e414f46c5168fdca74857f1c742d930efd5a4",
+    "src/api/query_runtime.rs": "b6c5cd00efa6f650fe19947cf8334f831346058687e81bdec2b6a07aed04814f",
+    "src/api/schema_guidance.rs": "0547f192ebcfda3ff134ff75ea99b06066ab079c3459c49ebeb540a8f3f3bfcb",
+    "src/api/tests/query_execution.rs": "7b9e5e21f3945e6fe73ae5a8a0922c09b5b5a83a2a5ba6afc8979d9c28480dd3",
+    "src/api/tests/query_observability.rs": "92b5c700c999b391da0724b64acb13d67ef78faa4f8256e80630531ba88cd171",
+    "src/api/tests/relational_explain_output/strict_append.rs": "1948ca9d5aa84d3fe12a2eb26173604b9598eebcda02dd753f199c5f1cc86f0a",
+    "src/embedded.rs": "ed92943086c55325b0a76e3845800fd8ea25d7a4c7762a87020567124accb428",
+    "src/embedded_tokio.rs": "d6f13c9a3f509e7a123c66ec73d7180dc0a8d8a7be9ba9aec05c610b12e4cf2b",
+    "src/lib.rs": "e7f4d15da0f9a6c199e84ee31d631ed1e01471917acc3ff8c077fdb80601acdf",
+    "src/nowledge_mem.rs": "aea42a5695f9a49348398405f0224ae16c9337aca1f98ba00d39717857d52ed8",
+    "src/sql_session.rs": "5426562d684745f1a015c6a276fa90e18ca5cffc3528e7260939b14c3786af3f",
+    "tests/execution_request_contract.rs": "e7a6cadf009d4c105f53e5a323a71f49d68d978a99273ce4967e3f6a2b8a268b"
+  },
+  "session_config_definitions": "src/api/mod.rs:561:pub struct SessionConfig {"
+}

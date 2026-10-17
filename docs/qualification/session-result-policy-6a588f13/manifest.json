@@ -1,0 +1,127 @@
+[
+  {
+    "file": "README.md",
+    "bytes": 3469,
+    "sha256": "b0884bc6050d5ebb52e73742613203db9992f6e1805ff7f2d24d5b5d587f5430"
+  },
+  {
+    "file": "append.log",
+    "bytes": 336,
+    "sha256": "98a647ff47173e54ee7e603319a23683904df60f12cfe8739c5bfd85997b8f33"
+  },
+  {
+    "file": "commands.json",
+    "bytes": 1496,
+    "sha256": "f6d587caeabbbb4fef8ae01b7394f05397ce8653fbb71621655c050b7a575b15"
+  },
+  {
+    "file": "console-general.log",
+    "bytes": 2912,
+    "sha256": "673e7a06681281bc80eff71c1086f5c9cd670932fb8cd1ef4283a8601549a65b"
+  },
+  {
+    "file": "console-regression.log",
+    "bytes": 16412,
+    "sha256": "d52da6a3410d429fcd5610bd2f1586c60a6cfe5a169e575dad7bcfd1a0de5ea0"
+  },
+  {
+    "file": "contract.log",
+    "bytes": 2056,
+    "sha256": "c909e342712a123e33f0f9a8721d1650174099632fdd246d5f8e49b63d9a435b"
+  },
+  {
+    "file": "driver.log",
+    "bytes": 302,
+    "sha256": "6653f4a0b841899d693e17c20afcd100035d43f11ede074814de94a1f6eb3fd1"
+  },
+  {
+    "file": "final-guard.patch",
+    "bytes": 6849,
+    "sha256": "05c0ec70c000acdcc2788cc495eead2c938228f22fe54ed57916fb3f8aa0b5e7"
+  },
+  {
+    "file": "focused-custom-limit.log",
+    "bytes": 2407,
+    "sha256": "44b45130d2a85f580b1fc7de39c94764a7209fb822e7ef076245d133389c421b"
+  },
+  {
+    "file": "general.log",
+    "bytes": 176136,
+    "sha256": "ffa04d13641a0d9955037522c9ce8e06771399e493941e744a1f529865832e64"
+  },
+  {
+    "file": "go.log",
+    "bytes": 177,
+    "sha256": "0e9861c5329a43eb57cac94191a97556fd7cc21d4c146160c2f1a7333522c268"
+  },
+  {
+    "file": "initial-test-and-guard.patch",
+    "bytes": 6801,
+    "sha256": "e79037c144abb6b2db9d49eef5fcf86033488170e8540a42a4d62057dcb695e7"
+  },
+  {
+    "file": "intermediate-fixture-failure.log",
+    "bytes": 6619,
+    "sha256": "0cea427902dc81f1886aab386cb9e59cd2370ae4f3c0109ffd3eba14f0be83c8"
+  },
+  {
+    "file": "old-append-local.log",
+    "bytes": 3670,
+    "sha256": "f251da69bfd3dba9fa9e756639e71716421bc6e96a6b663448ad91b23d68d042"
+  },
+  {
+    "file": "old-custom-limit-local.log",
+    "bytes": 3810,
+    "sha256": "de9da711f102d5d7c896b2ff2684d64387dd35680e4b4f870da89e7e07f7a0c9"
+  },
+  {
+    "file": "old-root-ci.log",
+    "bytes": 33536,
+    "sha256": "9ff27611ee4e04db55cfa6816bf71b113b9e6d8cd2e55d1f6e870bf2f995039d"
+  },
+  {
+    "file": "packet.json",
+    "bytes": 1406,
+    "sha256": "1f89956c771957185e83c93640bc492659efa48f29d2628486da30c6b6374532"
+  },
+  {
+    "file": "python.log",
+    "bytes": 1466,
+    "sha256": "39f98f00aeecd9b7097f633f1a25861a6e48854b6f9142a0d7defb34903094b7"
+  },
+  {
+    "file": "registration.json",
+    "bytes": 3784,
+    "sha256": "8ffe0ab2e0bb47260fa65f27ebce5635aef302fe5af18825d7d1e827b7b70828"
+  },
+  {
+    "file": "residency-first.log",
+    "bytes": 665,
+    "sha256": "b821bc8636e17335edb613ff479f039c716105968bec22221c11b431b2afbe74"
+  },
+  {
+    "file": "residency-second.log",
+    "bytes": 669,
+    "sha256": "a6bc420b96dd48f66d39c069e05ac784f2b46df9fbb52ce99d7570c34097f021"
+  },
+  {
+    "file": "source.json",
+    "bytes": 2477,
+    "sha256": "443bc6006e7f82da02a1f67c10b162f643ecd41f56e10f20e875848f0ece93f0"
+  },
+  {
+    "file": "strict-native.log",
+    "bytes": 493,
+    "sha256": "fd3341cabf31692f342b8cd5bead5f2c633f2389f6e1cd148256a027e174562b"
+  },
+  {
+    "file": "strict-wasm.log",
+    "bytes": 331,
+    "sha256": "cc708eb2f0c9781428bdc50ebf03971f0119e71bb53acd3c9265f3af2d86571a"
+  },
+  {
+    "file": "test-events.json",
+    "bytes": 259748,
+    "sha256": "1a1a7cca5cf0b31031f16a5e414cb3c0941906587c8e2c1495c953e2df7ca5b2"
+  }
+]

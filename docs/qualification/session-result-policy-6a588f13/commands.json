@@ -1,0 +1,48 @@
+{
+  "general": {
+    "explicit_user_options": [
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--cache_test_results=0",
+      "--test_output=errors",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-custom-limits-general.bep.json"
+    ],
+    "patterns": [
+      [
+        "//:hawdb_unit_general_tests"
+      ]
+    ]
+  },
+  "regression": {
+    "explicit_user_options": [
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-custom-limits-bindings-fuzz.bep.json"
+    ],
+    "patterns": [
+      [
+        "//:hawdb_execution_request_contract_tests",
+        "//bindings/go:hawdb_go_tests",
+        "//bindings/python:hawdb_python_tests",
+        "//bindings/benchmarks:driver_tests",
+        "//crates/fuzz:hawdb_fuzz_tests",
+        "//crates/fuzz:hawdb_fuzz_cli_tests",
+        "//:hawdb_linux_ci_fuzz_smoke_test"
+      ]
+    ]
+  },
+  "contract_append": {
+    "explicit_user_options": [
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--test_output=errors",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-custom-mutation-final-contract.bep.json"
+    ],
+    "patterns": [
+      [
+        "//:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test",
+        "//:hawdb_execution_request_contract_tests"
+      ]
+    ]
+  }
+}

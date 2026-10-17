@@ -1,0 +1,56 @@
+{
+  "head": "6a588f13857a51250b93073966f202f3a537aee7",
+  "base": "a7900428a24a74fe373d05f9cfc1a63cf144bf3b",
+  "scope_paths": [
+    "BUILD.bazel",
+    "crates/fuzz",
+    "scripts/check-linux-ci-smokes.sh",
+    "src/api/tests/projected_graph_execution",
+    "rust-toolchain.toml",
+    ".bazelrc"
+  ],
+  "all_scope_sources_unchanged_from_main": true,
+  "files": {
+    ".bazelrc": "e8be53595bf7461fa7d1a32cb3af4bec15161da09c135b0059151786356d416b",
+    "BUILD.bazel": "f6c371c82dd064e82f1b60dd0a298d9cbec173843479b8f53485f556bd06f82b",
+    "crates/fuzz/BUILD.bazel": "f0c3976fbf9c534ab97c0841c8b9572cd25c6b6752078aa0b81ebe33f8c5145b",
+    "crates/fuzz/Cargo.toml": "26cf58ed555063860ffbdaf915702093ab2859375c077f8753daeb6d12f88e26",
+    "crates/fuzz/README.md": "55027a082fa3b737aef3aa8665145cdc64de44a4c28253a460123ecb85dae044",
+    "crates/fuzz/src/append_main.rs": "ca972129cc0744ed494b5fa6959a8d0e6bd506261ad7d27fac49870a9a9ddce1",
+    "crates/fuzz/src/append_oracle.rs": "34342a82861d60e94cd3da166dd64be0044a2c3cd841390d0c574d283a8c9f95",
+    "crates/fuzz/src/coverage.rs": "07a3c1886cd2503d85d16e877299f2f58c255ffb88ab5d1b348dcf5958c8abda",
+    "crates/fuzz/src/generator.rs": "37f16ed0839ea536968d6a56ed23ee5d1238a111606c5e4fff10b4c4eef75d32",
+    "crates/fuzz/src/lib.rs": "5be7aecaffb2b949634b36baf784be61303a09081a1f996a7f4ec6aa12d5437a",
+    "crates/fuzz/src/main.rs": "6cebeb53c0686413613e3761f2dc9185f4de6d9d2e579580bb4c94fadf04a600",
+    "crates/fuzz/src/output.rs": "c196cb4039073870f69982d571d24377c9cb26733269be29f6d74e997af5aceb",
+    "crates/fuzz/src/parser_main.rs": "6b7af7c808a5e5483678b2548b19ddb20542f1a6c2697dd93cb53339812ffa27",
+    "crates/fuzz/src/parser_oracle.rs": "35654306198efcd512a0cbba65dbe258d89fd37c09e9b7e87edaa6980ab75de9",
+    "crates/fuzz/src/predicate_rewrite.rs": "06714eb61caa70c191a3141b4de7d8804f8eba10581ec828882895a923f29f9a",
+    "crates/fuzz/src/process_memory_oracle.rs": "2ac18979af7ef77836dd4bdf332a8b549222ef2bb2e2ad0fff6e6d20ac8ce548",
+    "crates/fuzz/src/query_ast.rs": "f19837ef7a02f70c2e51dc180f3f5a6468c68ecb29b863d1059ce627f773535d",
+    "crates/fuzz/src/row_page_oracle.rs": "d49a2a0bdf8c58cdb03e3b0231d8023edf3b3c787c9a0420c29501696b861377",
+    "crates/fuzz/src/sql_oracle.rs": "11b7df3332148cb07341d893293ffa33cf01686515fdb3dd8461876f7c6ca667",
+    "crates/fuzz/src/sql_oracle/generator.rs": "743dbc5bb28b2a0c7b803a37ce64ae3d8b8d62eedb4b8d8d4b15955df425c8fc",
+    "crates/fuzz/src/storage_main.rs": "c52aca90dcf06f5f535e9f976a458179cc816c4989f3f1a48dae45200fa457e5",
+    "crates/fuzz/src/wal_tail_oracle.rs": "2a3454c519c90d8d5ce226ed7a3c47f9fbc1e655ed137b685dea07c6f805d326",
+    "rust-toolchain.toml": "8e390d6a0838315f972690f46ef8bae8b7ecc9ee6c1ed70140ef852869c2482e",
+    "scripts/check-linux-ci-smokes.sh": "fbf4911264cea62e2aea4211f4b6fa4020b9e7b4f10147e96e1f427600804d70",
+    "src/api/tests/projected_graph_execution/differential.rs": "f34614674632926ce6e6e1234fd3f2725de3b5bc41ed1be85aa575cdc3215980",
+    "src/api/tests/projected_graph_execution/review_regressions.rs": "ad450d10caf47ef2b5d1d92cd610dcf91ac93bef18abc0d28c96d5a20bbdd14f",
+    "src/api/tests/projected_graph_execution/streaming_parity.rs": "5a027ff53e5b2810a42b967c2fef5e8100015b2b470439284ac68464d18c0e5f"
+  },
+  "residency_campaigns": {
+    "first_half_seeds": "0..16",
+    "second_half_seeds": "16..32",
+    "total_distinct_seeds": 32,
+    "modes": [
+      "Materialized",
+      "OutOfCore"
+    ],
+    "fixtures": 64,
+    "expected_state_checks_per_half": 992,
+    "timeout_per_target": "eternal (one hour)",
+    "scheduling": "exclusive, separate targets; original libtest exact/ignored/nocapture arguments"
+  },
+  "scope": "Source/configuration audit only. Final terminal test results and raw completed campaign receipts remain required."
+}

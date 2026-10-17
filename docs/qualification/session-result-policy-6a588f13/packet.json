@@ -1,0 +1,25 @@
+{
+  "created_at": "2026-10-17T09:56:09.482790+00:00",
+  "head": "6a588f13857a51250b93073966f202f3a537aee7",
+  "tree": "cfe97429dd6390cf5810db483d42cfdd95c06040",
+  "general": {
+    "passed": 1677,
+    "failed": 0,
+    "ignored": 1,
+    "runtime_seconds": 424.87,
+    "result_cache_disabled": true
+  },
+  "registered_targets": 102,
+  "mandatory_fuzz_targets": 98,
+  "executed": 15,
+  "cached": 87,
+  "contracts": 21,
+  "append_benchmark": "Original four-hit assertion and inputs unchanged; cached on final production inputs",
+  "historical_failures": [
+    "8d4ec67b root:55 targets passed1 failed; append hits8 expected4",
+    "e8c1cfaf custom-limit INSERT refusal advanced epoch4 although epoch3 was required",
+    "First guarded contract run:20 passed1 failed because the new UPDATE fixture lacked required WHERE; only test qualifiers changed afterward"
+  ],
+  "red_test_scope": "Initial red test and final test have identical first INSERT and epoch assertion. Later UPDATE/DELETE acquired WHERE qualifiers after the first red. Final green exercises all three statements. No identical full red-test file claim.",
+  "scope": "Final frozen source correctness and local mandatory fuzz evidence. Original fixtures/seeds/internal concurrency/deadlines preserved. CI, independent approval, Tide landing and PR986 performance/resource acceptance remain separate. No full BEP or client environment published."
+}

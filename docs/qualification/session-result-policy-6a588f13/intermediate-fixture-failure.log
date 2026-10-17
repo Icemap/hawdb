@@ -1,0 +1,88 @@
+INFO: Invocation ID: 493e0868-cb09-4b3b-89d6-45a72f10360d
+INFO: Reading 'startup' options from /private/tmp/hawdb-wip-ready-20261015/split-session-policy/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/split-session-policy/.bazelrc:
+  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/split-session-policy/.bazelrc:
+  'test' options: --local_test_jobs=HOST_CPUS*0.5
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-wip-ready-20261015/split-session-policy/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 2 targets (0 packages loaded, 0 targets configured)
+Analyzing: 2 targets (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed 2 targets (0 packages loaded, 41 targets configured).
+[764 / 798] Compiling Rust rlib hawdb (270 files); 1s disk-cache, darwin-sandbox
+[765 / 798] [Prepa] Compiling Rust rlib hawdb_fuzz (13 files)
+[765 / 798] Compiling Rust bin hawdb_bench_relational_join_execution (1 file); 1s disk-cache, darwin-sandbox ... (16 actions running)
+[769 / 798] Compiling Rust bin hawdb_bench_relational_join_execution (1 file); 2s disk-cache, darwin-sandbox ... (16 actions running)
+[779 / 798] Compiling Rust bin hawdb_cli (3 files); 3s disk-cache, darwin-sandbox ... (14 actions running)
+[791 / 799] Compiling Rust bin hawdb_bench_relational_oltp_mix (1 file); 1s disk-cache, darwin-sandbox ... (7 actions running)
+[796 / 799] Testing //:hawdb_execution_request_contract_tests; 1s disk-cache, darwin-sandbox ... (2 actions running)
+[798 / 799] Testing //:hawdb_execution_request_contract_tests; 2s disk-cache, darwin-sandbox
+[798 / 799] Testing //:hawdb_execution_request_contract_tests; 12s disk-cache, darwin-sandbox
+[798 / 799] Testing //:hawdb_execution_request_contract_tests; 42s disk-cache, darwin-sandbox
+[798 / 799] Testing //:hawdb_execution_request_contract_tests; 79s disk-cache, darwin-sandbox
+FAIL: //:hawdb_execution_request_contract_tests (Exit 101) (see /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_execution_request_contract_tests/test.log)
+INFO: From Testing //:hawdb_execution_request_contract_tests:
+==================== Test output for //:hawdb_execution_request_contract_tests:
+
+running 21 tests
+test public_execution_request_materializes_a_profiled_result ... ok
+test host_can_implement_external_reads_using_only_the_hawdb_facade ... ok
+test public_consumer_does_not_receive_rows_before_limit_validation ... ok
+test public_consumer_error_and_cancellation_stop_delivery_and_allow_retry ... ok
+test runtime_view_reports_effective_host_row_ceiling ... ok
+test late_payload_failure_withholds_all_rows_and_resources_remain_reusable ... ok
+test empty_sql_results_preserve_custom_mutation_limits ... FAILED
+test stopped_contexts_and_denied_memory_never_call_public_consumers ... ok
+test sql_session_row_limits_preserve_aggregates_and_rollback_failed_returning ... ok
+test autocommit_sql_preserves_session_variables_and_validates_before_commit ... ok
+test session_host_ceiling_bounds_cypher_mutations_in_both_transaction_modes ... ok
+test zero_host_session_and_request_limits_preserve_their_public_contracts ... ok
+test session_host_ceiling_bounds_commit_results_before_publication ... ok
+test session_result_row_settings_are_isolated_and_inherited_by_transactions ... ok
+test session_host_ceiling_bounds_sql_returning_and_rolls_back_caught_errors ... ok
+test public_request_differential_covers_parameters_limits_and_accounting ... ok
+test unlimited_rows_still_refuse_wide_json_payload_before_delivery ... ok
+test read_only_sql_sessions_inherit_limits_without_altering_database_configuration ... ok
+test public_analytics_identity_output_uses_query_budget_above_retained_state_cap ... ok
+test unlimited_sql_results_cross_the_former_default_boundary_without_hidden_scan_caps ... ok
+test owned_default_and_explicit_row_limits_cross_the_former_boundary has been running for over 60 seconds
+test owned_default_and_explicit_row_limits_cross_the_former_boundary ... ok
+
+failures:
+
+---- empty_sql_results_preserve_custom_mutation_limits stdout ----
+
+thread 'empty_sql_results_preserve_custom_mutation_limits' (75141934) panicked at tests/execution_request_contract.rs:1317:9:
+semantic error: unbounded relational UPDATE requires an explicit qualified workflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    empty_sql_results_preserve_custom_mutation_limits
+
+test result: FAILED. 20 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 77.80s
+
+================================================================================
+[799 / 800] 1 / 2 tests, 1 failed; Testing //:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test; 1s disk-cache, darwin-sandbox
+[799 / 800] 1 / 2 tests, 1 failed; Testing //:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test; 13s disk-cache, darwin-sandbox
+INFO: Found 2 test targets...
+INFO: Elapsed time: 101.857s, Critical Path: 87.65s
+INFO: 37 processes: 7 action cache hit, 3 internal, 36 darwin-sandbox.
+INFO: Build completed, 1 test FAILED, 37 total actions
+INFO: 
+//:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test       PASSED in 13.5s
+//:hawdb_execution_request_contract_tests                                FAILED in 79.7s
+  /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_execution_request_contract_tests/test.log
+
+Executed 2 out of 2 tests: 1 test passes and 1 fails locally.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Build Event Protocol files produced successfully.
