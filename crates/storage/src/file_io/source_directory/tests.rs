@@ -192,6 +192,7 @@ fn child_symlinks_are_not_followed_and_rejection_closes_capacity() {
     assert_eq!(fixture.project.metrics().open, 0);
 }
 
+#[cfg(not(any(target_os = "linux", target_vendor = "apple", windows)))]
 #[test]
 fn power_loss_context_refuses_before_opening_an_unrecorded_native_handle() {
     let fixture = Fixture::new(8);
@@ -202,7 +203,8 @@ fn power_loss_context_refuses_before_opening_an_unrecorded_native_handle() {
     .unwrap();
     let error = SourceDirectory::capture(&fixture.root, &fixture.project.io_context()).unwrap_err();
     assert_eq!(error.kind(), io::ErrorKind::Unsupported);
-    assert_eq!(fixture.project.metrics().open, 0);
+    // Only the recorder's existing captured root remains; refusal adds none.
+    assert_eq!(fixture.project.metrics().open, 1);
     model.capture().unwrap();
     drop(model);
     let source = fixture.capture(&fixture.root);

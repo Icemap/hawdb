@@ -6,11 +6,14 @@
 child, create a file in that directory, and remove a file entry from it. Existing
 path-based file creation delegates to the same insertion implementation.
 `sync_directory(inode)` already synchronizes the captured directory's entries.
-These are image-engine operations; they are not a native directory recorder.
+Those image-engine operations alone are not a native directory recorder.
+The native bridge and its current qualification boundary are described below.
 
 This is a prerequisite for [source-root custody](SOURCE_ROOT_CUSTODY_DESIGN.md).
-SourceDirectory still refuses a power-loss context before native I/O. Do not
-remove that refusal until the native bridge and its qualification are complete.
+The initial SourceDirectory primitive refused attached recorders. The bridge
+below now binds supported operations to the same ModelCore and held native
+scope; unsupported platforms and unbound/foreign recorder handles still refuse.
+Native Windows execution and broader qualification remain required.
 
 ## Transition argument
 
@@ -24,7 +27,7 @@ redirect a later operation from `d` to `f`.
 Inode identifiers belong to one logical ImageEngine and its cloned candidates.
 They are never reused there. They are not native filesystem IDs, logical source
 incarnation tokens, or transferable authority for another model instance. The
-future native bridge must bind them to the same ModelCore and held native
+native bridge must bind them to the same ModelCore and held native
 handle, not accept a caller-supplied integer as physical authority.
 
 Child names must be exactly one normalized component, with the existing 255-byte
@@ -37,7 +40,7 @@ Creation checks parent/absence, inode limits and operation capacity before
 allocation/publication. Removal checks the directory, entry type and operation
 capacity before changing the namespace. Exclusive `&mut ImageEngine` access and
 checked operation counters prevent a failed admission from publishing a partial
-namespace mutation. The future native recorder must simulate on a candidate,
+namespace mutation. The native recorder must simulate on a candidate,
 perform the actual handle-relative operation under model exclusion, and publish
 that candidate only after native success, as existing ModelCore mutation paths do.
 
@@ -71,7 +74,7 @@ torn/reordered data writes, cross-directory rename halves, same-directory head
 selection, hard links and namespace/resource rejection. No deadlines, seeds,
 durability rules or old assertions were changed.
 
-## Remaining native correspondence
+## Native correspondence requirements and initial limitations
 
 A NativeDirectoryTrace must capture the model inode and actual counted directory
 under the same namespace exclusion. Open/create/unlink must call the real held
@@ -125,9 +128,11 @@ Registration exclusion is released before callbacks, which may open children or
 start another cursor. This cannot enable a newly attached recorder mid-scan:
 `PowerLossModel::attach` requires zero open and reserved project descriptors,
 while this operation retains the counted root and cursor reservation. An
-already attached recorder is refused before cursor open. This relies on the
-same-project domain check and current attachment invariant; changing either
-requires rechecking this argument. Native recorder mapping remains incomplete.
+already attached recorder requires a directory trace bound to that same model
+before cursor admission. The trace and its root remain live across callbacks;
+no engine mutex is held across the callback. This relies on the same-project
+check and attachment invariant; changing either requires rechecking the argument.
+Enumeration alone neither mutates the model nor certifies a complete source.
 
 Primary API contracts:
 
@@ -171,7 +176,8 @@ replacements at both old names, close the parent, then enumerate/read/unlink the
 captured child's payload while preserving both replacements. Denied descriptor,
 file-versus-directory, missing name, foreign-domain and Unix symlink cases check
 resource refunds. Windows runtime behavior still requires CI/native execution.
-The recorder refusal continues to apply to these new child captures.
+Recorder child captures additionally require the held native directory and
+logical inode binding described below; unsupported or unbound captures refuse.
 
 
 ## Windows cursor correction
@@ -218,3 +224,203 @@ mask is widened, and no final assertion, seed, budget or deadline is removed.
 Test-only failure-stage reporting preserves raw error identity/classification.
 These are platform-specific safety checks, not proof that every host namespace
 mutation succeeds or that native GC/source-custody refinement is complete.
+
+## Retained recorder root and persistent replacement refusal
+
+The recorder now retains a counted native root for the lifetime of ModelCore,
+including when only traced files keep that core alive. Its physical key remains
+backed by a live handle; it cannot become another inode's key through reuse while
+that handle remains open. Attachment owns registration exclusion while opening
+this read-only anchor and checking the empty directory. Both the anchor and the
+empty-directory cursor are admitted before opening and close before capacity
+returns on failure. Generic native filenames and existing Unix support remain
+available to the recorder. On Linux, Apple and Windows the emptiness check uses
+an independently admitted cursor reopened from the held directory; other Unix
+platforms retain the counted standard cursor under host namespace exclusion.
+
+Before a pathname operation joins a ModelCore, the named root must still be a
+direct directory with the captured physical identity. Capture checks the root
+before and after namespace verification. A persistent replacement
+fails even if its complete bytes match the model. A rejected open/create/unlink
+must leave both original and foreign data untouched and return its transient
+capacity. The native file handles already bound to a captured logical inode can
+continue their own recorded I/O while the core's anchor remains live.
+
+On Unix, named metadata supplies the same device/inode key as the held handle.
+On Windows a separately admitted temporary directory handle supplies the full
+volume/128-bit identity; truncated metadata IDs are insufficient. The recorder
+therefore consumes one persistent descriptor plus a Windows path-identity audit
+descriptor during these checks. Existing qualification quotas remain unchanged.
+Descriptor-pressure tests subtract this explicit recorder overhead before leaving
+the same one production transient descriptor available; after the model and
+traced files close, the complete descriptor count must still return to zero.
+
+This guard refuses persistent replacement under host namespace exclusion. On
+Linux, Apple and Windows, native snapshot verification now walks through the
+captured root and descendant directory handles as described below. Other Unix
+platforms preserve the legacy path walk with pre/post guards; no handle-relative
+verification claim applies there. Pre/post guards alone do not prove absence of
+transient replacement. The read-only verification capability alone enables no native mutation, GC or
+serving activation. Relative mutations require the separate trace below; GC,
+source pins and serving activation remain open.
+
+The retained-file regression additionally moves the root on Unix while a traced
+WAL handle is open, installs a foreign WAL at the old pathname, and writes and
+synchronizes through the retained file. Only the captured original receives the
+bytes; the foreign WAL stays unchanged. Restoring the original root name allows
+complete native verification and a crash image containing the completed file
+barrier. During replacement, named-root capture still refuses. Windows ancestor
+rename restrictions are qualified separately; this Unix case does not claim
+that the same host rename succeeds on every platform.
+
+
+## Read-only captured-root verification correspondence
+
+Status: implementation argument with targeted native regressions; not a
+mechanized Rust refinement or a complete native recorder qualification. The
+supported native-walk implementations are Linux, Apple and Windows. The
+remaining Unix fallback is explicitly path-based and retains its previous host
+exclusion premise and generic-name behavior.
+
+`PowerLossRoot::visit_tree` treats paths only as image labels. The initial root
+is the counted attachment handle. Each directory cursor is independently
+reopened from a live directory, and each child is opened from that same live
+parent. No descendant open resolves the recorder's root pathname. The native
+interfaces are [openat](https://man7.org/linux/man-pages/man2/open.2.html) and
+[NtCreateFile with RootDirectory](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile).
+No-follow/reparse flags and post-open type checks prohibit traversal through a
+link. Unix also checks the no-follow entry type before opening, so verification
+never opens a FIFO/device just to discover that it is unsupported. The host must
+exclude concurrent child namespace/content mutation throughout verification;
+this is not a concurrent filesystem snapshot algorithm.
+
+The correspondence obligations are:
+
+1. Every pending directory is paired with its live counted handle and one
+   relative image label. Moving its ancestor cannot redirect that handle. The
+   root is not duplicated; temporary files and independently owned descendants
+   close before their descriptor receipts return. Errors and callback unwinds
+   discard the pending work and cannot produce a PowerLossSnapshot.
+2. Every native child decrements a finite remaining-entry count before opening
+   or allocating its label. The bound is the complete expected image's files
+   plus directories, excluding its root. More entries refuse; fewer or different
+   entries fail the final set equality. Every queued native handle also needs
+   admission from the unchanged project FD limit. A wide tree may therefore
+   refuse with a typed descriptor error, rather than exceed that limit.
+3. Native names remain lossless: Unix uses the dirent bytes as OsStr, and
+   Windows decodes native UTF-16 to OsString without replacement characters.
+   The public generated-ASCII SourceDirectory API retains its existing stricter
+   validation. Its Windows enumeration still uses fixed scratch without a
+   per-name heap allocation; generic names are a separate test-support path.
+4. The verifier checks the full expected length, compares all nonempty content
+   in fixed 8192-byte scratch, checks EOF where byte-range locks permit it and
+   checks the final handle length. Empty locked lease files use identity/length
+   without an EOF probe. Scratch size bounds temporary comparison bytes, not
+   image storage, namespace sets, pending-directory labels or native cursor
+   internals. Those are not a complete governed-memory qualification.
+5. Both native-to-model and model-to-native file identity maps remain injective
+   across different inode classes. Recorded hard links share their physical
+   identity; an unrecorded equal-byte hard link merging two modeled classes,
+   or a copied replacement splitting one recorded hard-link class, refuses.
+   These maps compare the current namespace's alias classes; they do not retain
+   a historical native file-identity binding for every modeled inode and cannot
+   certify arbitrary equal-byte replacement of a singleton file or physical
+   inode ABA. The complete visited file/directory sets must equal the image's
+   complete expected namespace before returning success.
+6. Verification runs with the model engine locked and performs only read-only
+   untraced audit I/O. It cannot add namespace/data history or strengthen a
+   durability barrier. Existing before/after observations and crash plans remain
+   driven by actual recorded mutations. A native root identity is still not a
+   logical incarnation, and this walker does not implement NativeDirectoryTrace.
+
+Regressions exercise cold reads after root replacement with a same-length
+foreign tree; Unicode names; Linux non-UTF-8 names (APFS rejects their fixture
+creation); FIFO/link refusal; entry/FD denial; visitor error/unwind cleanup;
+Unicode hard links and a same-length unrecorded byte change beyond the first
+scratch chunk. Existing hard-link, empty locked-file and crash-image guards stay
+selected. Windows must execute its native selection before its runtime behavior
+is qualified; cross-target Clippy is compilation evidence only. Source pins,
+both GC paths, logical incarnation and the full MVCC activation/resource gates
+remain required work.
+
+
+## Native relative-directory trace correspondence
+
+The prototype now pairs a SourceDirectory's counted native handle with a private
+NativeDirectoryTrace containing its ModelCore Arc, logical directory inode and
+observation label. This is implementation plus targeted native evidence, not a
+mechanized Rust refinement or completed power-loss/MVCC qualification. The root
+identity and full native walk remain prerequisites rather than being replaced
+by a successful relative operation.
+
+Initial capture holds recorder-registration exclusion and then model-engine
+exclusion. It resolves a normalized logical directory in that model, opens each
+native component from the recorder's captured root, and returns the logical
+inode and actual native handle together. Intermediate native directories are
+separately admitted and closed before returning their capacity. Capturing the
+project root reopens that same native object; Windows checks the reopened full
+identity. Named-root identity audits borrow the fresh operation's inventory,
+rather than the anchor's old inventory-free context. The retained SourceDirectory
+context strips inventory, and dropping the producer reservation releases unused
+reserved slots while its directory stays open. A retained DescriptorPermit may
+still reference its inactive inventory bookkeeping; this is not a proof of
+complete governed-heap custody. Initial named-root guards remain, so a new pathname capture refuses
+persistent project-root replacement.
+
+A later operation requires the same FD domain and Arc identity as the active
+recorder. Logical inode numbers from two engines are not transferable authority.
+An unbound handle under an active recorder refuses before native I/O. A retained
+bound directory does not consult the replaced root pathname: its logical inode
+and native handle both survive renaming and parent closure. File opens return a
+NativeTrace for the captured logical child, so later reads, seeks, clones,
+writes, truncations and file barriers continue through existing recording paths.
+Observation paths are original-open labels, not namespace lookup authority; a
+modeled rename changes the image's namespace independently of those labels.
+
+For each mutable operation, the engine gate covers complete candidate simulation,
+the Before observation, actual native I/O, successful candidate publication and
+the After observation. A native failure cannot publish the candidate. If native
+success is followed by an audit/observation error, the caller must retain the
+uncertain operation's evidence; a returned error is not proof that native I/O
+was rolled back. This remains a test-support model with the same native
+atomicity/synchronization premises as the existing recorder.
+
+The relative operation correspondence is:
+
+| Native operation | Image operation and refusal boundary |
+| --- | --- |
+| Read regular file / existing lock | `child_inode(d,n)` and file type; no namespace mutation; return NativeTrace bound to that child. |
+| Open child directory | `child_inode(d,n)` and directory type; return an independently retained trace/handle. |
+| Create mutable lock if modeled absent | Admit `create_file_at(d,n)`, then Unix exclusive create or NT FILE_CREATE. A foreign existing entry refuses instead of being adopted. |
+| Open mutable modeled-existing lock | Native writable open without create/truncate. A missing native entry refuses instead of being recreated. |
+| Unlink child file | Admit `remove_file_at(d,n)`, then held-parent native unlink; native failure leaves modeled history unchanged. |
+| Synchronize directory | Simulate `sync_directory(d)` and complete the actual barrier on that held object before publishing it. |
+| Enumerate | Read-only native held-parent cursor; preserve name/row limits and release registration exclusion before reentrant callbacks. |
+
+Unix synchronizes the held read-only directory descriptor, matching the existing
+namespace-barrier path. Windows pre-admits a separate write-capable reopen of
+the same held directory, checks its full native identity, and calls the real
+synchronization API. No pathname fallback or successful no-op is permitted. An
+upgrade admission/native failure cannot advance the model's directory barrier.
+API success still does not independently establish Windows filesystem/device
+namespace durability; the existing platform qualification assumptions apply.
+
+Targeted tests preserve the existing image, hard-link, empty locked-file and
+native-file guards, replacing blanket supported-platform refusal with explicit
+unbound/foreign-model refusal coverage. They exercise independent child custody
+after two modeled renames, reentrant enumeration reads, actual create/unlink
+failures with successful retries, image/FD admission, fresh operation inventory,
+last-file lifetime after model/directory close, and Before/After create/unlink/
+directory-sync cuts. Relative lock-file clones produce distinct lost, complete
+and torn-write images. The project-root replacement test operates only on the
+captured original, preserves the foreign tree, restores the original root name,
+and then audits the complete image; it is not a qualification of durability for
+the external parent directory's host renames.
+
+The existing finite source/root custody models motivate held-root reads,
+relative unlink and lifetime obligations. They do not prove this native bridge,
+exact source pin installation, native producer cooperation, either production
+GC path, historical singleton-file identity/ABA or composition with C-ready/E
+activation. Source pins and both cleanup implementations still need integration.
+Native Windows execution, complete current-source facade/fuzz regressions and
+the original resource/performance/fairness/activation gates remain required.

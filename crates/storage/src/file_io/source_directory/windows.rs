@@ -107,6 +107,20 @@ pub(super) fn open_directory(
     relative_open_kind(root, name, READ_DATA, false, 1)
 }
 
+pub(super) fn sync_directory(root: &std::fs::File, context: &FileOpenContext) -> io::Result<()> {
+    // FlushFileBuffers requires write authority. Upgrade through the held
+    // object itself, without a pathname, and count the temporary before open.
+    let _permit = context.acquire(DescriptorKind::Transient)?;
+    let file = relative_open_kind(root, ChildName(""), READ_DATA | 0x4000_0000, false, 1)?;
+    if crate::native_file_identity::of_file(&file)? != crate::native_file_identity::of_file(root)? {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "directory sync identity changed",
+        ));
+    }
+    file.sync_all()
+}
+
 fn relative_open_kind(
     root: &std::fs::File,
     name: ChildName<'_>,
@@ -118,7 +132,23 @@ fn relative_open_kind(
     for (slot, byte) in encoded.iter_mut().zip(name.0.bytes()) {
         *slot = u16::from(byte);
     }
-    let length = u16::try_from(name.0.len() * 2).expect("validated ASCII name fits native scratch");
+    relative_open_encoded(
+        root,
+        &mut encoded[..name.0.len()],
+        access,
+        if create { 3 } else { 1 },
+        kind,
+    )
+}
+
+fn relative_open_encoded(
+    root: &std::fs::File,
+    encoded: &mut [u16],
+    access: u32,
+    disposition: u32,
+    kind: u32,
+) -> io::Result<std::fs::File> {
+    let length = u16::try_from(encoded.len() * 2).expect("bounded name fits native scratch");
     let mut unicode = UnicodeString {
         length,
         maximum_length: length,
@@ -140,7 +170,7 @@ fn relative_open_kind(
     };
     let mut handle = std::ptr::null_mut();
     // SAFETY: all repr(C) buffers match winternl.h and outlive the synchronous
-    // call. RootDirectory is borrowed live. A validated single ASCII component
+    // call. RootDirectory is borrowed live. A validated single native component
     // cannot escape it; FILE_OPEN_IF is used only for mutable lock controls,
     // neither disposition truncates existing files, and reparse targets
     // are not followed. No callback, security descriptor or EA buffer is passed.
@@ -153,7 +183,7 @@ fn relative_open_kind(
             std::ptr::null(),
             0,
             SHARE_ALL,
-            if create { 3 } else { 1 },
+            disposition,
             kind | SYNCHRONOUS_NONALERT | OPEN_REPARSE_POINT,
             std::ptr::null(),
             0,
@@ -177,8 +207,10 @@ fn relative_open_kind(
     if metadata.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0
         || if kind == NON_DIRECTORY {
             !metadata.is_file()
-        } else {
+        } else if kind == 1 {
             !metadata.is_dir()
+        } else {
+            !metadata.is_file() && !metadata.is_dir()
         }
     {
         return Err(io::Error::new(
@@ -238,6 +270,37 @@ pub(super) fn open_lock_file(
 pub(super) fn visit_children(
     root: &std::fs::File,
     visitor: &mut dyn FnMut(&str) -> io::Result<()>,
+) -> io::Result<()> {
+    visit_native_units(root, &mut |units| {
+        let mut encoded = [0_u8; 255];
+        for (slot, unit) in encoded.iter_mut().zip(units) {
+            if *unit > 127 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "source directory contains a non-ASCII name",
+                ));
+            }
+            *slot = *unit as u8;
+        }
+        let name = std::str::from_utf8(&encoded[..units.len()]).expect("ASCII directory name");
+        visitor(name)
+    })
+}
+
+#[cfg(any(test, feature = "test-support"))]
+pub(super) fn visit_names(
+    root: &std::fs::File,
+    visitor: &mut dyn FnMut(&std::ffi::OsStr) -> io::Result<()>,
+) -> io::Result<()> {
+    use std::os::windows::ffi::OsStringExt;
+    visit_native_units(root, &mut |units| {
+        visitor(&std::ffi::OsString::from_wide(units))
+    })
+}
+
+fn visit_native_units(
+    root: &std::fs::File,
+    visitor: &mut dyn FnMut(&[u16]) -> io::Result<()>,
 ) -> io::Result<()> {
     // A trusted empty NT name reopens the held object itself through
     // RootDirectory. FILE_DIRECTORY_FILE selects a directory and creates an
@@ -309,22 +372,77 @@ pub(super) fn visit_children(
                 "unsupported native directory record",
             ));
         }
-        let mut name = [0_u8; 255];
+        let mut name = [0_u16; 255];
         for (slot, unit) in name.iter_mut().zip(bytes[12..12 + length].chunks_exact(2)) {
-            let value = u16::from_ne_bytes([unit[0], unit[1]]);
-            if value > 127 {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "source directory contains a non-ASCII name",
-                ));
-            }
-            *slot = value as u8;
+            *slot = u16::from_ne_bytes([unit[0], unit[1]]);
         }
-        let name = std::str::from_utf8(&name[..length / 2]).expect("ASCII directory name");
-        if !matches!(name, "." | "..") {
+        let name = &name[..length / 2];
+        if !matches!(name, [46] | [46, 46]) {
             visitor(name)?;
         }
     }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+pub(super) fn open_recorded_child(
+    root: &std::fs::File,
+    name: &std::ffi::OsStr,
+) -> io::Result<std::fs::File> {
+    use std::os::windows::ffi::OsStrExt;
+    let mut encoded = [0_u16; 255];
+    let mut length = 0;
+    for unit in name.encode_wide() {
+        if length == encoded.len() || matches!(unit, 0 | 47 | 58 | 92) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid native child name",
+            ));
+        }
+        encoded[length] = unit;
+        length += 1;
+    }
+    if length == 0 || matches!(&encoded[..length], [46] | [46, 46]) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid native child name",
+        ));
+    }
+    // Neither DIRECTORY_FILE nor NON_DIRECTORY_FILE: open an existing entry
+    // without following reparses, then require a regular file or directory.
+    relative_open_encoded(root, &mut encoded[..length], READ_DATA, 1, 0)
+}
+
+#[cfg(any(test, feature = "test-support"))]
+pub(super) fn reopen_directory(root: &std::fs::File) -> io::Result<std::fs::File> {
+    let file = relative_open_kind(root, ChildName(""), READ_DATA, false, 1)?;
+    if crate::native_file_identity::of_file(&file)? != crate::native_file_identity::of_file(root)? {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "reopened directory identity changed",
+        ));
+    }
+    Ok(file)
+}
+
+#[cfg(any(test, feature = "test-support"))]
+pub(super) fn open_recorded_lock(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+    create_new: bool,
+) -> io::Result<std::fs::File> {
+    let mut encoded = [0_u16; 255];
+    for (slot, byte) in encoded.iter_mut().zip(name.0.bytes()) {
+        *slot = u16::from(byte);
+    }
+    // FILE_CREATE refuses a foreign existing name; FILE_OPEN cannot recreate a
+    // missing recorded entry. Neither disposition truncates an existing file.
+    relative_open_encoded(
+        root,
+        &mut encoded[..name.0.len()],
+        READ_DATA | 2,
+        if create_new { 2 } else { 1 },
+        NON_DIRECTORY,
+    )
 }
 
 fn report_cursor_error(stage: &str, error: io::Error) -> io::Error {

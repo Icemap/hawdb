@@ -48,9 +48,23 @@ mod platform {
     ) -> io::Result<std::fs::File> {
         Err(unsupported())
     }
+    #[cfg(any(test, feature = "test-support"))]
+    pub(super) fn open_recorded_lock(
+        _root: &std::fs::File,
+        _name: ChildName<'_>,
+        _create_new: bool,
+    ) -> io::Result<std::fs::File> {
+        Err(unsupported())
+    }
     pub(super) fn visit_children(
         _root: &std::fs::File,
         _visitor: &mut dyn FnMut(&str) -> io::Result<()>,
+    ) -> io::Result<()> {
+        Err(unsupported())
+    }
+    pub(super) fn sync_directory(
+        _root: &std::fs::File,
+        _context: &FileOpenContext,
     ) -> io::Result<()> {
         Err(unsupported())
     }
@@ -61,6 +75,11 @@ mod platform {
         )
     }
 }
+
+#[cfg(any(test, feature = "test-support"))]
+mod power_loss_root;
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) use power_loss_root::PowerLossRoot;
 
 /// Physical identity copied while a counted directory handle is live. A
 /// registry must retain that handle while using the key; this is not a logical
@@ -78,22 +97,40 @@ pub enum SourceDirectoryLockMode {
 /// host paths. Native handles and their descriptor receipts stay together.
 ///
 /// Capture and every method require the caller's I/O admission. This type does
-/// not take publication ownership, register reader pins, synchronize deletion,
-/// or authorize a complete source watermark. Power-loss harness contexts refuse
-/// until directory-relative operations have a modeled namespace implementation.
+/// not take publication ownership, register reader pins, exclude concurrent
+/// deletion, or authorize a complete source watermark. Recorder contexts bind
+/// the held directory and returned files to logical inodes on Linux, Apple and
+/// Windows; unsupported platforms and unbound recorder handles refuse.
 #[derive(Debug)]
 pub struct SourceDirectory {
     root: File,
     context: FileOpenContext,
     identity: SourceDirectoryIdentity,
+    #[cfg(any(test, feature = "test-support"))]
+    trace: Option<Box<crate::power_loss::NativeDirectoryTrace>>,
 }
 
 impl SourceDirectory {
     /// Use an existing project context; no new registry/domain is created.
     pub fn capture(path: &Path, context: &FileOpenContext) -> io::Result<Self> {
-        let _native = native_scope(context)?;
+        let native = native_scope(context)?;
         let permit = context.acquire(DescriptorKind::Transient)?;
+        #[cfg(any(test, feature = "test-support"))]
+        let (inner, trace) = match native._guard.upgrade() {
+            Some(core) => {
+                let (inner, trace) =
+                    crate::power_loss::NativeDirectoryTrace::capture(core, path, context)?;
+                (inner, Some(Box::new(trace)))
+            }
+            None => (
+                platform::open_root(path).map_err(|error| context.map_open_error(error))?,
+                None,
+            ),
+        };
+        #[cfg(not(any(test, feature = "test-support")))]
         let inner = platform::open_root(path).map_err(|error| context.map_open_error(error))?;
+        #[cfg(not(any(test, feature = "test-support")))]
+        let _ = native;
         if !inner.metadata()?.is_dir() {
             return Err(io::Error::new(
                 io::ErrorKind::NotADirectory,
@@ -107,6 +144,8 @@ impl SourceDirectory {
             // Keep the project domain, not a producer's reservation inventory.
             // Future operations supply their own fresh reserved capacity.
             context: context.without_inventory(),
+            #[cfg(any(test, feature = "test-support"))]
+            trace,
         })
     }
 
@@ -143,18 +182,50 @@ impl SourceDirectory {
             ));
         }
         let _native = native_scope(context)?;
+        self.require_scope(&_native)?;
         let permit = context.acquire(DescriptorKind::OwnershipLock)?;
-        let inner = self
-            .root
-            .with_native(|root| platform::open_lock_file(root, name, mode))
-            .map_err(|error| context.map_open_error(error))?;
+        let open = || {
+            self.root
+                .with_native(|root| platform::open_lock_file(root, name, mode))
+                .map_err(|error| context.map_open_error(error))
+        };
+        #[cfg(any(test, feature = "test-support"))]
+        let (inner, trace) = match self.trace.as_deref() {
+            Some(trace) => {
+                let (inner, trace) = match mode {
+                    SourceDirectoryLockMode::ReadExisting => {
+                        trace.open_child(Path::new(name.0), open)?
+                    }
+                    SourceDirectoryLockMode::ReadWriteCreate => {
+                        trace.open_lock(Path::new(name.0), |create_new| {
+                            self.root
+                                .with_native(|root| {
+                                    platform::open_recorded_lock(root, name, create_new)
+                                })
+                                .map_err(|error| context.map_open_error(error))
+                        })?
+                    }
+                };
+                (inner, Some(Box::new(trace)))
+            }
+            None => (open()?, None),
+        };
+        #[cfg(not(any(test, feature = "test-support")))]
+        let inner = open()?;
         if !inner.metadata()?.is_file() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "source lock is not a regular file",
             ));
         }
-        Ok(counted(inner, permit))
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            Ok(counted_traced(inner, permit, trace))
+        }
+        #[cfg(not(any(test, feature = "test-support")))]
+        {
+            Ok(counted(inner, permit))
+        }
     }
 
     /// Opens one regular file without following a child symlink/reparse point.
@@ -166,18 +237,37 @@ impl SourceDirectory {
         self.require_context(context)?;
         let name = ChildName::new(name)?;
         let _native = native_scope(context)?;
+        self.require_scope(&_native)?;
         let permit = context.acquire(DescriptorKind::Transient)?;
-        let inner = self
-            .root
-            .with_native(|root| platform::open_child(root, name))
-            .map_err(|error| context.map_open_error(error))?;
+        let open = || {
+            self.root
+                .with_native(|root| platform::open_child(root, name))
+                .map_err(|error| context.map_open_error(error))
+        };
+        #[cfg(any(test, feature = "test-support"))]
+        let (inner, trace) = match self.trace.as_deref() {
+            Some(trace) => {
+                let (inner, trace) = trace.open_child(Path::new(name.0), open)?;
+                (inner, Some(Box::new(trace)))
+            }
+            None => (open()?, None),
+        };
+        #[cfg(not(any(test, feature = "test-support")))]
+        let inner = open()?;
         if !inner.metadata()?.is_file() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "source child is not a regular file",
             ));
         }
-        Ok(counted(inner, permit))
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            Ok(counted_traced(inner, permit, trace))
+        }
+        #[cfg(not(any(test, feature = "test-support")))]
+        {
+            Ok(counted(inner, permit))
+        }
     }
 
     /// Capture one child directory without resolving the parent pathname.
@@ -188,11 +278,23 @@ impl SourceDirectory {
         self.require_context(context)?;
         let name = ChildName::new(name)?;
         let _native = native_scope(context)?;
+        self.require_scope(&_native)?;
         let permit = context.acquire(DescriptorKind::Transient)?;
-        let inner = self
-            .root
-            .with_native(|root| platform::open_directory(root, name))
-            .map_err(|error| context.map_open_error(error))?;
+        let open = || {
+            self.root
+                .with_native(|root| platform::open_directory(root, name))
+                .map_err(|error| context.map_open_error(error))
+        };
+        #[cfg(any(test, feature = "test-support"))]
+        let (inner, trace) = match self.trace.as_deref() {
+            Some(trace) => {
+                let (inner, trace) = trace.open_directory(Path::new(name.0), open)?;
+                (inner, Some(Box::new(trace)))
+            }
+            None => (open()?, None),
+        };
+        #[cfg(not(any(test, feature = "test-support")))]
+        let inner = open()?;
         if !inner.metadata()?.is_dir() {
             return Err(io::Error::new(
                 io::ErrorKind::NotADirectory,
@@ -204,6 +306,8 @@ impl SourceDirectory {
             root: counted(inner, permit),
             context: context.without_inventory(),
             identity,
+            #[cfg(any(test, feature = "test-support"))]
+            trace,
         })
     }
 
@@ -215,9 +319,36 @@ impl SourceDirectory {
         self.require_context(context)?;
         let name = ChildName::new(name)?;
         let _native = native_scope(context)?;
-        self.root
-            .with_native(|root| platform::remove_child(root, name, context))
-            .map_err(|error| context.map_open_error(error))
+        self.require_scope(&_native)?;
+        let native = || {
+            self.root
+                .with_native(|root| platform::remove_child(root, name, context))
+                .map_err(|error| context.map_open_error(error))
+        };
+        #[cfg(any(test, feature = "test-support"))]
+        if let Some(trace) = self.trace.as_deref() {
+            return trace.remove_child(Path::new(name.0), native);
+        }
+        native()
+    }
+
+    /// Persist this captured directory's direct entries. Windows admits a
+    /// separate write-capable handle to the same native directory; failures
+    /// propagate and cannot substitute for a successful namespace barrier.
+    pub fn sync(&self, context: &FileOpenContext) -> io::Result<()> {
+        self.require_context(context)?;
+        let scope = native_scope(context)?;
+        self.require_scope(&scope)?;
+        let native = || {
+            self.root
+                .with_native(|root| platform::sync_directory(root, context))
+                .map_err(|error| context.map_open_error(error))
+        };
+        #[cfg(any(test, feature = "test-support"))]
+        if let Some(trace) = self.trace.as_deref() {
+            return trace.sync(native);
+        }
+        native()
     }
 
     /// Visit generated artifact names through a fresh native directory cursor.
@@ -238,6 +369,7 @@ impl SourceDirectory {
         // exclusion before invoking user callbacks, which may perform I/O.
         let _permit = {
             let _native = native_scope(context)?;
+            self.require_scope(&_native)?;
             context.acquire(DescriptorKind::Transient)?
         };
         let mut remaining = maximum_entries;
@@ -266,6 +398,38 @@ impl SourceDirectory {
                 "source directory operation requires its project context",
             ))
         }
+    }
+
+    fn require_scope(&self, scope: &NativeScope<'_>) -> io::Result<()> {
+        #[cfg(any(test, feature = "test-support"))]
+        match (scope._guard.upgrade(), self.trace.as_deref()) {
+            (None, None) => {}
+            (Some(core), Some(trace)) if trace.belongs_to(&core) => {}
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "source directory is not bound to this native recorder",
+                ))
+            }
+        }
+        #[cfg(not(any(test, feature = "test-support")))]
+        let _ = scope;
+        Ok(())
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+fn counted_traced(
+    inner: std::fs::File,
+    permit: DescriptorPermit,
+    trace: Option<Box<crate::power_loss::NativeTrace>>,
+) -> File {
+    File {
+        backing: FileBacking::Native(NativeFile {
+            inner,
+            permit,
+            trace,
+        }),
     }
 }
 
@@ -320,12 +484,6 @@ fn native_scope(context: &FileOpenContext) -> io::Result<NativeScope<'_>> {
             .power_loss
             .lock()
             .map_err(|_| io::Error::other("power-loss context poisoned"))?;
-        if guard.upgrade().is_some() {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "directory-relative source I/O has no power-loss harness mapping",
-            ));
-        }
         Ok(NativeScope { _guard: guard })
     }
     #[cfg(not(any(test, feature = "test-support")))]
@@ -339,3 +497,6 @@ fn native_scope(context: &FileOpenContext) -> io::Result<NativeScope<'_>> {
 
 #[cfg(all(test, any(unix, windows)))]
 mod tests;
+
+#[cfg(all(test, any(target_os = "linux", target_vendor = "apple", windows)))]
+mod recording_tests;

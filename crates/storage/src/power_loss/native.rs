@@ -27,6 +27,19 @@ pub(crate) struct NativeTrace {
 }
 
 impl NativeTrace {
+    pub(super) fn from_directory(
+        core: Arc<ModelCore>,
+        inode: InodeId,
+        opened_path: PathBuf,
+    ) -> Self {
+        Self {
+            core,
+            inode,
+            opened_path,
+            append: false,
+        }
+    }
+
     pub(crate) fn open(
         core: Arc<ModelCore>,
         path: &Path,

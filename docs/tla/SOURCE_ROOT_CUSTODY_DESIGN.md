@@ -110,12 +110,13 @@ No reader, publication or cleanup path uses this prototype yet. Existing
 path-based behavior is therefore unchanged. Do not expose governed serving or
 infer the finite model's native refinement from this API alone.
 
-Power-loss recording has no directory-relative namespace mapping yet. Such
-contexts explicitly refuse the new primitive before any native operation;
-test-support registration exclusion prevents recording from being enabled
-mid-operation. This is an uncompleted qualification boundary, not modeled
-directory I/O or a durability result. Native contexts still need the complete
-capture/GC recovery proof before this primitive can support activation.
+The initial prototype refused attached recorders because it had no relative
+namespace mapping. A private NativeDirectoryTrace now binds the held directory
+and returned files to the same ModelCore; supported operations and remaining
+qualification are recorded in [the native correspondence](RELATIVE_DIRECTORY_IMAGE_DESIGN.md).
+Unbound/foreign recorder handles and unsupported platforms still refuse before
+native I/O. Complete capture/GC recovery, native platform qualification and the
+original activation gates remain required; the new bridge is not their proof.
 
 Thirteen Unix native guards (eleven portable-to-Windows plus symlink/FIFO guards)
 are written for cold open after root replacement, root-relative deletion that
@@ -193,4 +194,6 @@ fairness, RSS, I/O and group-fsync qualification remain open.
 
 The image-engine prerequisite now has captured-directory operations and pure
 model guards; see [the correspondence and remaining native gaps](RELATIVE_DIRECTORY_IMAGE_DESIGN.md).
-Native directory recording remains unsupported until that bridge is qualified.
+The native directory bridge remains subject to its recorded platform/full-data
+qualification gates; it does not establish either production GC path or authorize
+activation.

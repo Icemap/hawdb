@@ -88,8 +88,10 @@ two models with SourceRootCustody and actual GC remains required.
 
 The native SourceDirectory primitive supplies counted relative opens, lock-file
 opens and cached physical identity; it does not implement this registry or any
-reader/GC registration. Native power-loss contexts currently refuse because
-relative namespace recording is absent. Full source incarnation, exact artifact
+reader/GC registration. Supported native power-loss contexts now have a private
+relative-directory trace; [its implementation and qualification limits](RELATIVE_DIRECTORY_IMAGE_DESIGN.md)
+remain separate from these finite models. Unbound/foreign contexts still refuse.
+Full source incarnation, exact artifact
 pins on both cleanup paths, complete C-ready/E activation, managed registry
 capacity, actual Mem adoption and writer/fairness/resource/power-loss gates
 remain open. These models do not authorize governed serving or stable release.
@@ -133,8 +135,8 @@ The new `.search-source-process.lock` is a cooperating-process protocol. Existin
 ordinary producers/cleanup do not yet acquire it, and a hostile replacement of
 its namespace entry is not covered. No interoperability, incarnation or GC safety
 is inferred from holding this file. Read-only lock acquisition/upgrades,
-source-relative enumeration/publication and power-loss namespace recording
-remain required. Do not activate governed serving until these paths and original
+complete source-relative publication/GC integration and native power-loss bridge
+qualification remain required. Do not activate governed serving until these paths and original
 qualification gates are complete.
 
 

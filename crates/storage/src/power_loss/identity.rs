@@ -17,7 +17,7 @@ use std::io;
 
 pub(super) use crate::native_file_identity::{of_file, NativeIdentity};
 
-pub(super) fn require_direct_entry(metadata: &Metadata) -> io::Result<()> {
+pub(crate) fn require_direct_entry(metadata: &Metadata) -> io::Result<()> {
     if metadata.file_type().is_symlink() {
         return Err(super::invalid(
             "symlinks are outside the captured fault model",

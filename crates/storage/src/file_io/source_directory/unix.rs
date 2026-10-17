@@ -18,6 +18,48 @@ fn name_bytes(name: ChildName<'_>) -> [u8; 256] {
     bytes
 }
 
+#[cfg(all(
+    any(test, feature = "test-support"),
+    any(target_os = "linux", target_vendor = "apple")
+))]
+pub(super) fn reopen_directory(root: &std::fs::File) -> io::Result<std::fs::File> {
+    open_directory(root, ChildName("."))
+}
+
+pub(super) fn sync_directory(root: &std::fs::File, _context: &FileOpenContext) -> io::Result<()> {
+    root.sync_all()
+}
+
+#[cfg(any(test, feature = "test-support"))]
+pub(super) fn open_recorded_lock(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+    create_new: bool,
+) -> io::Result<std::fs::File> {
+    let bytes = name_bytes(name);
+    let create = if create_new {
+        libc::O_CREAT | libc::O_EXCL
+    } else {
+        0
+    };
+    // SAFETY: live parent, validated terminated component and ordinary mode.
+    // Exclusive creation cannot adopt a foreign entry; existing opens cannot
+    // recreate an entry missing from the recorded native namespace.
+    let fd = unsafe {
+        libc::openat(
+            root.as_raw_fd(),
+            bytes.as_ptr().cast(),
+            libc::O_RDWR | create | libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_NONBLOCK,
+            0o600,
+        )
+    };
+    if fd == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: one fresh owned descriptor from successful openat.
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
 pub(super) fn open_child(root: &std::fs::File, name: ChildName<'_>) -> io::Result<std::fs::File> {
     let bytes = name_bytes(name);
     // SAFETY: root is borrowed live; validated ASCII name is NUL-terminated in
@@ -112,6 +154,23 @@ pub(super) fn visit_children(
     root: &std::fs::File,
     visitor: &mut dyn FnMut(&str) -> io::Result<()>,
 ) -> io::Result<()> {
+    visit_names(root, &mut |name| {
+        let name = name.to_str().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "source directory contains a non-UTF-8 name",
+            )
+        })?;
+        visitor(name)
+    })
+}
+
+#[cfg(any(target_os = "linux", target_vendor = "apple"))]
+pub(super) fn visit_names(
+    root: &std::fs::File,
+    visitor: &mut dyn FnMut(&std::ffi::OsStr) -> io::Result<()>,
+) -> io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
     // SAFETY: borrowed directory and static NUL-terminated relative component.
     let fd = unsafe {
         libc::openat(
@@ -170,14 +229,69 @@ pub(super) fn visit_children(
         if matches!(name.to_bytes(), b"." | b"..") {
             continue;
         }
-        let name = name.to_str().map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "source directory contains a non-UTF-8 name",
-            )
-        })?;
-        visitor(name)?;
+        visitor(std::ffi::OsStr::from_bytes(name.to_bytes()))?;
     }
+}
+
+#[cfg(all(
+    any(test, feature = "test-support"),
+    any(target_os = "linux", target_vendor = "apple")
+))]
+pub(super) fn open_recorded_child(
+    root: &std::fs::File,
+    name: &std::ffi::OsStr,
+) -> io::Result<std::fs::File> {
+    use std::os::unix::ffi::OsStrExt;
+    let name = name.as_bytes();
+    if name.is_empty()
+        || name.len() > 255
+        || matches!(name, b"." | b"..")
+        || name.iter().any(|byte| matches!(byte, 0 | b'/'))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid native child name",
+        ));
+    }
+    let mut encoded = [0_u8; 256];
+    encoded[..name.len()].copy_from_slice(name);
+    let mut metadata = std::mem::MaybeUninit::<libc::stat>::uninit();
+    // SAFETY: live parent, validated terminated component, valid stat output.
+    // Do not open devices or FIFOs merely to discover their type.
+    let result = unsafe {
+        libc::fstatat(
+            root.as_raw_fd(),
+            encoded.as_ptr().cast(),
+            metadata.as_mut_ptr(),
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    };
+    if result == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: successful fstatat initialized the entire stat record.
+    let kind = unsafe { metadata.assume_init() }.st_mode & libc::S_IFMT;
+    if kind != libc::S_IFREG && kind != libc::S_IFDIR {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "captured project contains a nonregular file",
+        ));
+    }
+    // SAFETY: counted live parent, validated single native component in
+    // NUL-terminated scratch. NONBLOCK rejects blocking FIFO opens; NOFOLLOW
+    // rejects links. The caller validates regular-file/directory metadata.
+    let fd = unsafe {
+        libc::openat(
+            root.as_raw_fd(),
+            encoded.as_ptr().cast(),
+            libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_NONBLOCK,
+        )
+    };
+    if fd == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: one fresh owned descriptor from successful openat.
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
 }
 
 #[cfg(not(any(target_os = "linux", target_vendor = "apple")))]

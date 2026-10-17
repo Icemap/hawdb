@@ -476,16 +476,26 @@ fn retry_covers_existing_unsynchronized_component_ancestry() {
     // An earlier interrupted attempt may leave these names visible but unsynced.
     hawdb_storage::file_io::create_dir_all(&root).unwrap();
     let project = fixture.model.project().clone();
-    with_reserved_descriptors(&project, project.metrics().limit, || {
+    let recorder_root = project.metrics().open;
+    assert_eq!(recorder_root, 1);
+    with_reserved_descriptors(&project, project.metrics().limit - recorder_root, || {
         assert!(SearchOutOfCoreGenerationWriter::create(&root, Default::default()).is_err());
     });
 
-    // Root barriers precede the spool and use just one transient descriptor.
-    with_reserved_descriptors(&project, project.metrics().limit - 1, || {
-        let writer = SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap();
-        assert_eq!(project.metrics().open, 1);
-        drop(writer);
-    });
+    // Preserve one production transient descriptor. The recorder additionally
+    // retains its root; Windows checks a named root's full ID through one
+    // temporary counted handle. These audit handles use the unchanged quota.
+    let identity_audit = usize::from(cfg!(windows));
+    with_reserved_descriptors(
+        &project,
+        project.metrics().limit - recorder_root - identity_audit - 1,
+        || {
+            let writer =
+                SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap();
+            assert_eq!(project.metrics().open, recorder_root + 1);
+            drop(writer);
+        },
+    );
 
     let mut writer = SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap();
     writer.push(document(0)).unwrap();
@@ -495,9 +505,11 @@ fn retry_covers_existing_unsynchronized_component_ancestry() {
     let reader = SearchOutOfCoreReader::open(image.join("interrupted/search")).unwrap();
     assert_eq!(reader.generation(), generation);
     assert_eq!(reader.document_count(), 1);
-    assert_eq!(project.metrics().open, 0);
+    assert_eq!(project.metrics().open, recorder_root);
     assert_eq!(project.metrics().reserved, 0);
     assert!(project.metrics().high_water <= project.metrics().limit);
+    drop(fixture);
+    assert_eq!(project.metrics().open, 0);
 }
 
 #[test]
