@@ -234,6 +234,7 @@ fn out_of_core_text_seed_corpus_merge_peak_stays_within_the_shared_root() {
                 &terms,
                 policy.max_term_bytes(),
                 QueryContext {
+                    execution: None,
                     memory: &account,
                     task: &task,
                 },

@@ -10,6 +10,7 @@ STORAGE_MODELS = [
     "HawDBAutomaticCheckpoint",
     "HawDBAutomaticHandoffWake",
     "HawDBBoundedMorselMerge",
+    "HawDBBorrowedQueryCursor",
     "HawDBBranchLifecycle",
     "HawDBCheckpointCleanupHeadroom",
     "HawDBColumnGroupManifest",

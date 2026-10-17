@@ -37,6 +37,22 @@ pub struct AdmittedFileRead<'a> {
 }
 
 impl AdmittedFileRead<'_> {
+    /// One bounded positioned read without exposing or cloning the native file.
+    pub fn read_at(&mut self, buffer: &mut [u8], offset: u64) -> io::Result<usize> {
+        self.control.checkpoint()?;
+        let length = self
+            .length
+            .saturating_sub(offset)
+            .min(buffer.len() as u64)
+            .min(8192) as usize;
+        if length == 0 {
+            return Ok(0);
+        }
+        self.file.with_native(|native| {
+            crate::io::read_native_at_once(native, &mut buffer[..length], offset)
+        })
+    }
+
     pub fn metadata(&mut self) -> io::Result<Metadata> {
         self.control.checkpoint()?;
         self.file.metadata()
@@ -45,18 +61,7 @@ impl AdmittedFileRead<'_> {
 
 impl Read for AdmittedFileRead<'_> {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
-        self.control.checkpoint()?;
-        // The selected snapshot is bounded by its opening length. Callers can
-        // recheck metadata to reject length drift after consuming that snapshot.
-        let length = (self.length - self.offset)
-            .min(buffer.len() as u64)
-            .min(8192) as usize;
-        if length == 0 {
-            return Ok(0);
-        }
-        let read = self.file.with_native(|native| {
-            crate::io::read_native_at_once(native, &mut buffer[..length], self.offset)
-        })?;
+        let read = self.read_at(buffer, self.offset)?;
         self.offset += read as u64;
         Ok(read)
     }

@@ -255,15 +255,32 @@ impl<'execution> ReadAdmission<'execution> {
         use hawdb_storage::file_io::File;
         self.require_read_limit(expected_len, maximum)?;
         let _native = self.scratch(checked_add(native_path::bytes(path)?, 4096)?)?;
-        let _io = self
-            .io()
-            .map_err(|e| HawDBError::Execution(e.to_string()))?;
-        let file = File::open(path)?;
+        let file = {
+            let _io = self
+                .io()
+                .map_err(|e| HawDBError::Execution(e.to_string()))?;
+            File::open(path)?
+        };
         #[cfg(test)]
         if let Some(callback) = AFTER_FILE_OPEN.with(|slot| slot.replace(None)) {
             callback();
         }
         crate::build_control::checkpoint(self.task)?;
+        let value = self.with_read_scope(&file, expected_len, maximum, operation)?;
+        Ok((file, value))
+    }
+
+    pub(crate) fn with_read_scope<T>(
+        &self,
+        file: &hawdb_storage::file_io::File,
+        expected_len: u64,
+        maximum: u64,
+        operation: impl FnOnce(&mut hawdb_storage::file_io::AdmittedFileRead<'_>) -> Result<T>,
+    ) -> Result<T> {
+        self.require_read_limit(expected_len, maximum)?;
+        let _io = self
+            .io()
+            .map_err(|error| HawDBError::Execution(error.to_string()))?;
         let mut control = FileReadControl {
             admission: self,
             expected_len,
@@ -290,7 +307,7 @@ impl<'execution> ReadAdmission<'execution> {
         if let Some(error) = control.error.take() {
             return Err(error);
         }
-        Ok((file, result?.0?))
+        result?.0
     }
 }
 

@@ -103,6 +103,26 @@ The ordinary reader entry continues to use the existing ungoverned path.
 
 ## Remaining required construction work
 
+The next visibility implementation adds an admitted mutation-run decoder. Its
+preflight and decoding use the same borrowed construction admission; each shared
+term-file payload owns its retained query/host receipts. Stored terms require a
+fresh serving context that borrows execution, including after their parent run
+and producer close. Term-range CRCs are recorded during streaming decode and
+checked against independent raw-file traversal in canonical, pretty and escaped
+JSON fixtures with multiple arrays. Canonical body checksum serialization keeps
+the original typed admission error instead of reporting storage corruption.
+
+The execution protocol is described in
+[borrowed query cursor safety](../tla/BORROWED_QUERY_CURSOR_PROOF.md). Its finite
+model and three negative controls do not establish a complete governed closure.
+`validate_targets` still creates a legacy default task, uses the legacy document
+probe and reads hydration input through the ordinary range path. Those operations
+must be connected to the same constructor admission before exposing an admitted
+root factory. Root/visibility collection and closure-validation set capacity also
+remain unconnected. The new tests exercise native files, with project owners
+explicitly closed for final heap reclamation; managed cache/registry ownership
+remains a separate unresolved requirement.
+
 1. **Complete cold-path qualification.** The scoped primitive and Search
    bound-file integration exist, but must be qualified together over an actual
    complete managed Search artifact closure, with governor refusal and

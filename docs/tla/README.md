@@ -2232,3 +2232,11 @@ cover eviction of active leases, premature identity publication, an uncharged
 native open and a construction pin retained after mapped-reader return. See
 [the proof and qualification boundary](ADMITTED_NATIVE_LEASE_PROOF.md); cache heap
 ownership, root/GC authority, cumulative work and complete MVCC remain open.
+
+
+`HawDBBorrowedQueryCursor` checks serving execution independently of a retained
+immutable view's producer. Its two-query graph has 234 distinct states. Three
+controls reject task-only cursor creation, permit release before cursor close,
+and cancelled I/O delivery. See [the protocol and source correspondence](BORROWED_QUERY_CURSOR_PROOF.md).
+This finite safety model does not prove full closure admission, pairing of task
+and permit, native cancellation latency, GC or MVCC activation.
