@@ -761,6 +761,10 @@ impl Database {
             }
             let (rows, execution_profile) = if is_mutation {
                 query_runtime_checkpoint(task_context)?;
+                let mut mutation_limits = self.config.mutation_limits;
+                if let Some(limit) = output_limits.max_rows.and_then(NonZeroUsize::new) {
+                    mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
+                }
                 (
                     {
                         let mut branch_runtime_access = self.runtime.get_mut()?;
@@ -769,7 +773,7 @@ impl Database {
                             &optimized.physical_plan,
                             &mut branch_runtime.catalog,
                             &mut branch_runtime.store,
-                            self.config.mutation_limits,
+                            mutation_limits,
                             task_context,
                         )
                     }?
@@ -784,7 +788,7 @@ impl Database {
                 )
                 .with_output_limits(
                     restrictive_query_limit(
-                        self.config.max_read_result_rows,
+                        self.config.read_result_row_limit(),
                         output_limits.max_rows,
                     ),
                     restrictive_query_limit(
@@ -887,7 +891,7 @@ impl Database {
                 )
                 .with_output_limits(
                     restrictive_query_limit(
-                        self.config.max_read_result_rows,
+                        self.config.read_result_row_limit(),
                         options.output_limits.max_rows,
                     ),
                     restrictive_query_limit(

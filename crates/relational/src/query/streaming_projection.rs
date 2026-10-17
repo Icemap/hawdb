@@ -55,7 +55,13 @@ pub(super) fn execute_ordered_index_projection<'a>(
         })
         .transpose()?
         .unwrap_or(usize::MAX);
-    let mut output = Vec::with_capacity(requested.min(limits.max_output_rows));
+    // An output ceiling is not an allocation hint: unlimited reads must not
+    // reserve usize::MAX rows before visiting their first row.
+    let mut output = Vec::with_capacity(
+        requested
+            .min(limits.max_output_rows)
+            .min(pipeline.batch_rows),
+    );
     let mut payload_bytes = 0usize;
     let mut locator_batch = AccountedRelationalLocatorBatch::new(
         execution_memory.batch_rows.get(),
@@ -205,10 +211,12 @@ pub(super) fn execute_streaming_projection<'a>(
         })
         .transpose()?
         .unwrap_or(usize::MAX);
-    let capacity = requested.min(limits.max_output_rows);
+    let capacity = requested
+        .min(limits.max_output_rows)
+        .min(pipeline.batch_rows);
     // An unjoined primary-key lookup can return at most one row. Keep the
     // configured output limits below, but avoid reserving their full budget
-    // for every point read. Joined plans retain their existing capacity.
+    // for every point read. Joined plans reserve an initial batch.
     let capacity = if joins.is_empty()
         && tree_execution.is_none_or(|execution| execution.tree.root.relation_count() == 1)
         && matches!(base_access, RelationalBaseAccess::PrimaryKey(_))
@@ -312,7 +320,9 @@ pub(super) fn execute_borrowed_streaming_full_scan(
         .unwrap_or(usize::MAX);
     let mut output = QueryRowsBuilder::with_schema(
         projection.schema().clone(),
-        requested.min(limits.max_output_rows),
+        requested
+            .min(limits.max_output_rows)
+            .min(pipeline.batch_rows),
     );
     let mut output_rows = 0usize;
     let mut payload_bytes = 0usize;

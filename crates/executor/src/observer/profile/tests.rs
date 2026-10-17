@@ -134,9 +134,9 @@ fn plan() -> PhysicalPlan {
 fn initial_profile(max_rows: Option<usize>) -> ReadExecutionProfile<ScanPruningReport> {
     ReadExecutionProfile {
         max_rows,
-        detection_row_cap: max_rows.map(|rows| rows + 1),
+        detection_row_cap: max_rows.and_then(|rows| rows.checked_add(1)),
         row_limit_enforced_before_output: max_rows.is_some(),
-        operator_row_cap_enabled: max_rows.is_some(),
+        operator_row_cap_enabled: max_rows.is_some_and(|rows| rows < usize::MAX),
         operator_cardinality_profiles: Vec::new(),
         blocking_operator_kinds: vec!["DistinctExec".into(), "SortExec".into()],
         scan_pruning_reports: Vec::new(),
@@ -148,19 +148,21 @@ fn initial_profile(max_rows: Option<usize>) -> ReadExecutionProfile<ScanPruningR
 }
 
 #[test]
-fn initial_profile_preserves_all_defaults_and_overflow_errors() {
+fn initial_profile_preserves_defaults_and_the_maximum_representable_ceiling() {
     let plan = plan();
-    for max_rows in [None, Some(0), Some(1), Some(usize::MAX - 1)] {
+    for max_rows in [
+        None,
+        Some(0),
+        Some(1),
+        Some(usize::MAX - 1),
+        Some(usize::MAX),
+    ] {
         assert_eq!(
             read_execution_profile(&plan, max_rows).unwrap(),
             initial_profile(max_rows)
         );
     }
-    assert_eq!(
-        execution_error(read_execution_profile(&plan, Some(usize::MAX)).unwrap_err()),
-        "read query row limit is too large"
-    );
-    assert!(ExecutionProfileBuilder::start(&plan, Some(usize::MAX)).is_err());
+    assert!(ExecutionProfileBuilder::start(&plan, Some(usize::MAX)).is_ok());
 }
 
 fn events(observer: &QueryExecutionObserver, plan: &PhysicalPlan, rows: usize) {

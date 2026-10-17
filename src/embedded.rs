@@ -460,7 +460,7 @@ impl HawDBEmbedded {
                 &execution_task_context,
             )
         } else {
-            let max_rows = self.database.config().max_read_result_rows;
+            let max_rows = self.database.config().read_result_row_limit();
             let max_payload_bytes = usize::try_from(request.result_bytes).unwrap_or(usize::MAX);
             self.database
                 .begin_read_transaction_with_shared_plan_cache()?

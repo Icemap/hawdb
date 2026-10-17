@@ -16,8 +16,8 @@
 
 use crate::value::Value;
 use crate::{
-    Database, DatabaseReadTransaction, DatabaseTransaction, HawDBError, Result, SqlStatementResult,
-    TransactionCommitResult,
+    Database, DatabaseReadTransaction, DatabaseTransaction, HawDBError, Result, SessionConfig,
+    SqlStatementResult, TransactionCommitResult,
 };
 use hawdb_core::RuntimeTaskContext;
 
@@ -30,6 +30,7 @@ use hawdb_core::RuntimeTaskContext;
 /// staged writes. Commit failures retain the native uncertain-outcome contract.
 #[derive(Debug)]
 pub struct SqlSession<'a> {
+    config: SessionConfig,
     database: &'a mut Database,
     task_context: Option<RuntimeTaskContext>,
 }
@@ -37,9 +38,20 @@ pub struct SqlSession<'a> {
 impl<'a> SqlSession<'a> {
     pub fn new(database: &'a mut Database) -> Self {
         Self {
+            config: SessionConfig::default(),
             database,
             task_context: None,
         }
+    }
+
+    pub fn config(&self) -> &SessionConfig {
+        &self.config
+    }
+
+    /// Sets the row-count policy for subsequent transactions in this session.
+    /// Zero disables the session ceiling; positive host ceilings still apply.
+    pub fn set_max_result_rows(&mut self, max_result_rows: u64) {
+        self.config.max_result_rows = max_result_rows;
     }
 
     /// Supplies the existing cooperative cancellation/deadline and admission
@@ -115,20 +127,22 @@ impl<'a> SqlSession<'a> {
 
     fn begin_transaction(&mut self) -> Result<SessionTransaction<'_>> {
         if self.database.config().read_only {
-            let transaction = match &self.task_context {
+            let mut transaction = match &self.task_context {
                 Some(context) => self.database.begin_read_transaction_with_context(context),
                 None => self.database.begin_read_transaction(),
             }?;
+            transaction.apply_session_config(self.config);
             return Ok(SessionTransaction {
                 reader: Some(transaction),
                 writer: None,
                 task_context: self.task_context.clone(),
             });
         }
-        let transaction = match &self.task_context {
+        let mut transaction = match &self.task_context {
             Some(context) => self.database.begin_transaction_with_context(context),
             None => self.database.begin_transaction(),
         }?;
+        transaction.apply_session_config(self.config);
         Ok(SessionTransaction {
             writer: Some(transaction),
             reader: None,
