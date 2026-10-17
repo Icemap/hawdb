@@ -1,238 +1,229 @@
-name: Native Bindings
-
+name: Pinned Engine Resource Qualification
 on:
   workflow_dispatch:
     inputs:
-      boundary_comparison:
-        description: "Run the manual Linux ordinary-boundary comparison instead of binding tests"
+      kind:
+        type: choice
+        options: [numeric, ordinary, resources, retained]
+        default: resources
+      rows:
+        type: string
+        default: "1000"
+      backend:
+        type: choice
+        options: [memory, file]
+        default: memory
+      configuration:
+        type: choice
+        options: [default, large]
+        default: default
+      instrumented:
         type: boolean
         default: false
-      benchmark_sizes:
-        description: "Comma-separated row counts; default is the complete three-size matrix"
+      case:
         type: string
-        default: "1000,100000,1000000"
-      benchmark_cases:
-        description: "Comma-separated workload cases"
+        default: select
+      layer:
         type: string
-        default: "select,point,fill,fill_bulk,wide"
-      benchmark_samples:
-        description: "Measured iterations, in addition to one discarded iteration"
+        default: rust
+      samples:
         type: string
-        default: "3"
-      benchmark_layers:
-        description: "Comma-separated language layers; select a shard without changing its workload"
-        type: string
-        default: "rust,python,go"
-      benchmark_backends:
-        description: "Comma-separated storage backends"
-        type: string
-        default: "memory,file"
-  pull_request:
-    paths:
-      - "src/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "scripts/cargo-test-required.sh"
-      - "bindings/ffi/**"
-      - "bindings/go/**"
-      - "MODULE.bazel"
-      - "BUILD.bazel"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/native-bindings.yml"
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "scripts/cargo-test-required.sh"
-      - "bindings/ffi/**"
-      - "bindings/go/**"
-      - "MODULE.bazel"
-      - "BUILD.bazel"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/native-bindings.yml"
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.boundary_comparison }}-${{ inputs.benchmark_sizes }}-${{ inputs.benchmark_cases }}-${{ inputs.benchmark_layers }}-${{ inputs.benchmark_backends }}-${{ inputs.benchmark_samples }}
-  cancel-in-progress: true
-
+        default: "31"
+permissions:
+  contents: read
 jobs:
-  bazel:
-    if: github.event_name != 'workflow_dispatch' || !inputs.boundary_comparison
-    name: Bazel native bindings (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-latest]
-        include:
-          - os: ubuntu-24.04
-            library: libhawdb_ffi.so
-          - os: macos-latest
-            library: libhawdb_ffi.dylib
-    env:
-      USE_BAZEL_VERSION: "9.3.0"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
-        with:
-          bazelisk-cache: true
-          repository-cache: true
-
-      - name: Build the C ABI libraries and Go package
-        run: bazel build //bindings/ffi:hawdb_ffi //bindings/ffi:hawdb_ffi_static //bindings/go:hawdb
-
-      - name: Test Go against the Bazel-built C ABI
-        run: bazel test --test_output=errors --test_arg=-test.v //bindings/go:hawdb_go_tests
-
-      - name: Test the retained C ABI contract
-        run: bazel test --test_output=errors //bindings/ffi:hawdb_ffi_tests
-
-      - name: Install Go for the race detector
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: bindings/go/go.mod
-          cache-dependency-path: bindings/go/go.sum
-
-      - name: Check retained read and close concurrency with the race detector
-        working-directory: bindings/go
-        env:
-          HAWDB_LIBRARY: ${{ github.workspace }}/bazel-bin/bindings/ffi/${{ matrix.library }}
-          # The race runtime needs cgo; the production package stays purego.
-          CGO_ENABLED: "1"
-        # The Go test cache does not qualify the newly built dynamic library.
-        run: go test -race -count=1 -run '^TestRetained' ./...
-
-  windows-native-contracts:
-    if: github.event_name != 'workflow_dispatch' || !inputs.boundary_comparison
-    name: Windows native contracts
-    runs-on: windows-2025
-    timeout-minutes: 120
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 2
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-        with:
-          components: clippy
-
-      - name: Record tested source and toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p windows-native-results
-          git log -1 --format='%H%n%T%n%P' > windows-native-results/source.txt
-          rustc --version --verbose > windows-native-results/toolchain.txt
-
-      - name: Run strict native Windows Clippy
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
-            2>&1 | tee windows-native-results/clippy.txt
-
-      - name: Build and test the retained Windows C ABI
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo build --locked --manifest-path bindings/ffi/Cargo.toml --lib
-          bash scripts/cargo-test-required.sh --locked --manifest-path bindings/ffi/Cargo.toml --lib retained:: -- --nocapture \
-            2>&1 | tee windows-native-results/retained-ffi.txt
-
-      - name: Install Go for Windows numeric bindings
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: bindings/go/go.mod
-          cache-dependency-path: bindings/go/go.sum
-
-      - name: Test Go against the Windows C ABI
-        shell: bash
-        working-directory: bindings/go
-        run: |
-          set -euo pipefail
-          HAWDB_LIBRARY="$GITHUB_WORKSPACE/bindings/ffi/target/debug/hawdb_ffi.dll" \
-            go test -count=1 -v ./... 2>&1 | tee ../../windows-native-results/go.txt
-
-      - name: Test retained indexed node ownership and task controls
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --features tokio-runtime \
-            --lib api::retained_query::node::tests -- --nocapture \
-            2>&1 | tee windows-native-results/retained-node.txt
-
-      - name: Test abandonment GC power-loss cuts
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::tests::power_loss::branch_abandonment::abandonment_gc_cuts_preserve_quarantine_and_live_branches \
-            -- --exact --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/abandonment.txt
-
-      - name: Preserve Windows validation evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: windows-native-contracts-${{ github.sha }}
-          path: windows-native-results
-          if-no-files-found: error
-
-  boundary-comparison:
-    if: github.event_name == 'workflow_dispatch' && inputs.boundary_comparison
-    name: Manual ordinary-boundary comparison (Linux)
+  retained:
+    if: inputs.kind == 'retained'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - configuration: default
+            rows: 1000
+            backend: memory
+          - configuration: default
+            rows: 1000
+            backend: file
+          - configuration: default
+            rows: 100000
+            backend: memory
+          - configuration: default
+            rows: 100000
+            backend: file
+          - configuration: default
+            rows: 1000000
+            backend: memory
+          - configuration: default
+            rows: 1000000
+            backend: file
+          - configuration: large
+            rows: 1000000
+            backend: memory
+          - configuration: large
+            rows: 1000000
+            backend: file
+          - configuration: large
+            rows: 1000001
+            backend: memory
+          - configuration: large
+            rows: 1000001
+            backend: file
     env:
       USE_BAZEL_VERSION: "9.3.0"
-      BENCHMARK_SIZES: ${{ inputs.benchmark_sizes }}
-      BENCHMARK_CASES: ${{ inputs.benchmark_cases }}
-      BENCHMARK_SAMPLES: ${{ inputs.benchmark_samples }}
-      BENCHMARK_LAYERS: ${{ inputs.benchmark_layers }}
-      BENCHMARK_BACKENDS: ${{ inputs.benchmark_backends }}
     steps:
-      - name: Checkout the candidate
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
-      - name: Install Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
           bazelisk-cache: true
           repository-cache: true
-
-      - name: Install Go for provenance
-        uses: actions/setup-go@v7
+      - uses: actions/setup-python@v6
         with:
-          go-version-file: bindings/go/go.mod
-          cache-dependency-path: bindings/go/go.sum
-
-      - name: Compare frozen ordinary producers with unchanged defaults
+          python-version: "3.14"
+      - name: Install explicit Arrow consumer
+        run: python -m pip install pyarrow==26.0.0
+      - name: Build Python producer before measurement
         run: |
-          python3 -B bindings/benchmarks/compare.py \
-            --output "$RUNNER_TEMP/hawdb-boundary-comparison" \
-            --sizes "$BENCHMARK_SIZES" --cases "$BENCHMARK_CASES" \
-            --layers "$BENCHMARK_LAYERS" --backends "$BENCHMARK_BACKENDS" \
-            --samples "$BENCHMARK_SAMPLES"
-
-      - name: Preserve complete or partial evidence, including failed outcomes
+          bazel build -c opt //bindings/python:hawdb
+      - name: Run unchanged numeric delivery controls
+        env:
+          QUAL_CONFIGURATION: ${{ matrix.configuration }}
+          QUAL_ROWS: ${{ matrix.rows }}
+          QUAL_BACKEND: ${{ matrix.backend }}
+        run: python -B qualification/retained/run.py --output "$RUNNER_TEMP/retained-evidence"
+      - name: Preserve all outcomes including refusals
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ordinary-boundary-comparison-${{ github.sha }}
-          path: ${{ runner.temp }}/hawdb-boundary-comparison/evidence
+          name: session-retained-${{ matrix.configuration }}-${{ matrix.rows }}-${{ matrix.backend }}-${{ github.sha }}
+          path: ${{ runner.temp }}/retained-evidence
+          if-no-files-found: error
+
+  resource-plan:
+    if: inputs.kind != 'retained'
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - id: plan
+        env:
+          QUAL_SELECTION: ${{ toJSON(inputs) }}
+        run: |
+          python - <<'PY_MATRIX'
+          import itertools, json, os
+          selection=json.loads(os.environ['QUAL_SELECTION'])
+          groups=[]
+          def numeric(configuration,rows,backend,instrumented):
+              return dict(kind='numeric',configuration=configuration,rows=str(rows),backend=backend,instrumented=instrumented,samples='31',case='select',layer='python')
+          def ordinary(rows,case,layer,backend):
+              return dict(kind='ordinary',configuration='default',rows=str(rows),backend=backend,instrumented=True,samples='3',case=case,layer=layer)
+          if selection['kind']=='resources':
+              for configuration,sizes in [('default',[1000,100000,1000000]),('large',[1000000,1000001])]:
+                  for rows,backend,instrumented in itertools.product(sizes,['memory','file'],[False,True]):
+                      groups.append(numeric(configuration,rows,backend,instrumented))
+              for rows,case,layer,backend in itertools.product([1000,100000,1000000],['fill_bulk','select','wide','point','fill'],['rust','python','go'],['memory','file']):
+                  groups.append(ordinary(rows,case,layer,backend))
+              first=groups.pop(20);groups.insert(2,first)
+              assert len(groups)==110
+          else:
+              item=dict(selection);item.pop('boundary_comparison',None)
+              item['instrumented']=str(item['instrumented']).lower()=='true'
+              groups=[item]
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('matrix='+json.dumps({'include':groups})+'\n')
+          PY_MATRIX
+
+  resources:
+    if: inputs.kind != 'retained'
+    needs: resource-plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.resource-plan.outputs.matrix) }}
+    env:
+      USE_BAZEL_VERSION: "9.3.0"
+      QUAL_KIND: ${{ matrix.kind }}
+      QUAL_ROWS: ${{ matrix.rows }}
+      QUAL_BACKEND: ${{ matrix.backend }}
+      QUAL_CONFIGURATION: ${{ matrix.configuration }}
+      QUAL_INSTRUMENTED: ${{ matrix.instrumented }}
+      QUAL_CASE: ${{ matrix.case }}
+      QUAL_LAYER: ${{ matrix.layer }}
+      QUAL_SAMPLES: ${{ matrix.samples }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Preserve immutable resource source before long measurements
+        run: |
+          python - <<'PY_SOURCE'
+          import json, os, pathlib, subprocess
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          campaign = json.loads(pathlib.Path("qualification/resources/campaign.json").read_text())
+          engine = campaign["engine"]
+          assert len(engine) == 40 and all(c in "0123456789abcdef" for c in engine)
+          assert git("rev-parse", engine + "^{tree}") == campaign["engine_tree"]
+          assert git("diff", "--name-only", engine, "HEAD").splitlines() == campaign["overlay_files"]
+          assert git("merge-base", engine, "HEAD") == engine
+          assert not git("status", "--porcelain")
+          receipt = {"engine": engine, "engine_tree": git("rev-parse", engine + "^{tree}"),
+                     "source": git("rev-parse", "HEAD"), "tree": git("rev-parse", "HEAD^{tree}"),
+                     "overlay": git("diff", "--name-only", engine, "HEAD").splitlines(),
+                     "requested": {key: value for key, value in os.environ.items() if key.startswith("QUAL_")},
+                     "scope": "Source/request receipt only; preserve runtime budget, producer and outcome evidence separately."}
+          pathlib.Path(os.environ["RUNNER_TEMP"], "resource-source.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          PY_SOURCE
+      - uses: actions/upload-artifact@v7
+        with:
+          name: resource-source-${{ matrix.kind }}-${{ matrix.rows }}-${{ matrix.backend }}-${{ matrix.configuration }}-${{ matrix.instrumented }}-${{ matrix.case }}-${{ matrix.layer }}-${{ github.sha }}
+          path: ${{ runner.temp }}/resource-source.json
+          if-no-files-found: error
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-go@v7
+        if: matrix.kind == 'ordinary'
+        with:
+          go-version-file: bindings/go/go.mod
+          cache-dependency-path: bindings/go/go.sum
+      - name: Install pinned Arrow consumer
+        if: matrix.kind == 'numeric'
+        run: python -m pip install pyarrow==26.0.0
+      - name: Collect unchanged ordinary native and foreign profiles
+        if: matrix.kind == 'ordinary'
+        run: |
+          engine=$(python -c 'import json; print(json.load(open("qualification/resources/campaign.json"))["engine"])')
+          git worktree add --detach "$RUNNER_TEMP/ordinary-engine" "$engine"
+          python -B qualification/resources/run.py \
+            --root "$RUNNER_TEMP/ordinary-engine" --engine "$engine" \
+            --baseline-spec qualification/resources/baseline-source.json \
+            --output "$RUNNER_TEMP/resource-qualification" \
+            --sizes "$QUAL_ROWS" --cases "$QUAL_CASE" --layers "$QUAL_LAYER" \
+            --backends "$QUAL_BACKEND" --samples "$QUAL_SAMPLES"
+      - name: Collect per-mode whole-process RSS and observed tails
+        if: matrix.kind == 'numeric'
+        run: |
+          flags=()
+          if [[ "$QUAL_INSTRUMENTED" == true ]]; then flags+=(--instrumented); fi
+          python -B qualification/resources/numeric_driver.py \
+            --output "$RUNNER_TEMP/resource-qualification" \
+            --rows "$QUAL_ROWS" --backend "$QUAL_BACKEND" \
+            --configuration "$QUAL_CONFIGURATION" --samples "$QUAL_SAMPLES" "${flags[@]}"
+      - name: Preserve complete and adverse observations
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: resources-${{ matrix.kind }}-${{ matrix.rows }}-${{ matrix.backend }}-${{ matrix.configuration }}-${{ matrix.instrumented }}-${{ matrix.case }}-${{ matrix.layer }}-${{ github.sha }}
+          path: ${{ runner.temp }}/resource-qualification
           if-no-files-found: error

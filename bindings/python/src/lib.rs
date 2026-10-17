@@ -81,6 +81,10 @@ fn _hawdb(module: &Bound<'_, PyModule>) -> PyResult<()> {
 
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     module.add_class::<Database>()?;
+    module.add_function(wrap_pyfunction!(
+        database::_open_large_result_qualification,
+        module
+    )?)?;
     #[cfg(feature = "boundary-profiling")]
     module.add_function(wrap_pyfunction!(_boundary_profile_snapshot, module)?)?;
     module.add_class::<QueryResult>()?;

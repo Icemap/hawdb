@@ -1,0 +1,19 @@
+{
+  "engine": "6881bbcc9809a6195d1bab38fb489aa3684c20fc",
+  "engine_tree": "fa0f7dc7db07b83aa20fff1f87d3f1ea6e58b8e5",
+  "overlay_files": [
+    ".github/workflows/native-bindings.yml",
+    "bindings/python/src/database.rs",
+    "bindings/python/src/lib.rs",
+    "qualification/resources/baseline-source.json",
+    "qualification/resources/campaign.json",
+    "qualification/resources/numeric.py",
+    "qualification/resources/numeric_driver.py",
+    "qualification/resources/run.py",
+    "qualification/retained/configured.py",
+    "qualification/retained/run.py",
+    "src/embedded.rs"
+  ],
+  "numeric_adapter_sha256": "8084dc739a6fa09d83ea61a7ba89d360f6ec65b6868eb493cb7201b047b87af7",
+  "scope": "Proposed full composition; final-head source/build-input equivalence is required. Numeric-only typed configuration/probes are declared; ordinary groups check out the untouched engine separately. Original 90 ordinary +110 resource +10 retained controls remain unchanged."
+}
