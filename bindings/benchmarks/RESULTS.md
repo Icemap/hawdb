@@ -5,7 +5,7 @@ and the first two stages of the [interchange proposal](../../docs/specs/ZERO_COP
 They do not complete its representative large-size baseline, qualify ordinary
 latency, or establish a strict zero-copy capability. The reproducible commands
 and measurement boundaries are in [README.md](README.md); the recorded native
-allocation observations and refusal results are in [observations.json](observations.json).
+allocation observations and refusal results are in [observations.json](evidence/README.md#historical-boundary-observations).
 
 ## Environment and source identity
 

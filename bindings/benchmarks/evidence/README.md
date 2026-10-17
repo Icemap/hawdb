@@ -41,3 +41,21 @@ the raw historical reports out of main history.
 | <a id="rust-source-capacity-controls-20261011"></a>rust_source_capacity_controls_20261011.json | 104,462 | `b418614f86195182c510eb9411ab2081cac5de231bd9e299259588fa151dab9a` |
 | <a id="shared-admission-template-controls-20261011"></a>shared_admission_template_controls_20261011.json | 3,992,935 | `b84f70d0a13c190681f7b2f4239fd47d5094182706198cd8ff462c70dd759518` |
 | <a id="source-capacity-controls-20261011"></a>source_capacity_controls_20261011.json | 277,346 | `84c733c9c3a9f9c1793ed2fd5fc52a5654ce8f620b5fbd3d67a03fcb36200528` |
+
+## Historical boundary observations
+
+Five additional historical reports formerly stored in the benchmark root are
+[archived here](https://github.com/nowledge-co/hawdb/actions/runs/38993437170/artifacts/12086206371). Every uncompressed report was downloaded and
+byte/hash verified before removal. Source `254f1cf3`; their bytes also match
+feature head `cf8effd4`. This preserves refusals and adverse observations, not
+final-source qualification. Retention is 90 days; download and preserve required
+artifacts before expiry. Squash merging is still required to exclude removed
+reports from main history.
+
+| Report | Bytes | SHA-256 |
+| --- | ---: | --- |
+| current-numeric-observations.json | 73284 | `7b829bb3a309deb3063e3a0efd1ab87cdde2400729ccaf3d1ce2b3cb6d04f8c3` |
+| observations.json | 38652 | `932134f2b31f0980048268cb24a2365a3e296be0141a99fcf3a95f3b3b375594` |
+| owned-point-observations.json | 470919 | `e6b39353eb4769965d3213a65f70004246467fef0651d1d205252e99a0fcd335` |
+| phase-timing-observations.json | 108021 | `15176595d777d17bb92d85baadf93d82eca09aa24fbf19bd9294bd8d4ac6834b` |
+| retained-observations.json | 243391 | `dc46c473b2c2eda5d023dd434890b22a67f9b1849386b4e9f49a413d18935d7a` |

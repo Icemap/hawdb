@@ -12,7 +12,7 @@ The path and correctness obligations are in
 
 All four terminal reports, binary hashes, source identities, individual samples,
 errors and checksums are preserved in
-[owned-point-observations.json](owned-point-observations.json). The ordinary
+[owned-point-observations.json](evidence/README.md#historical-boundary-observations). The ordinary
 before and after matrices each contain 120 successful records: five cases,
 three languages, two backends, one discarded iteration and three measured
 iterations. Both independent allocation/profile matrices contain 12 successful
@@ -88,7 +88,7 @@ while preserving their sum and every original call. The verification read is
 small relative to the multi-second difference; its presence does not explain
 that regression. Older samples cannot retroactively recover the two phases.
 
-The separate [phase-timing-observations.json](phase-timing-observations.json)
+The separate [phase-timing-observations.json](evidence/README.md#historical-boundary-observations)
 records a wiring-only N=8 check of all five cases, three languages and both
 backends. All 60 records pass ordered parity and validate that the split timers
 sum to the original total. It ran alongside fuzz verification and establishes

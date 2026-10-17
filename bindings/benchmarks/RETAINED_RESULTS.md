@@ -4,7 +4,7 @@ This experiment advances [PR #986](https://github.com/nowledge-co/hawdb/pull/986
 and references [#976](https://github.com/nowledge-co/hawdb/issues/976) and
 [#987](https://github.com/nowledge-co/hawdb/issues/987). Both issues remain open.
 The complete samples, failures, source identity and artifact hashes are in
-[retained-observations.json](retained-observations.json).
+[retained-observations.json](evidence/README.md#historical-boundary-observations).
 
 ## Driver failure reporting
 
@@ -78,7 +78,7 @@ configuration and `-c opt`. Native artifacts, Python package/extension and the
 unchanged numeric consumer were copied to an independent directory. Source
 identity and the selected native producer/consumer-script SHA-256 values are
 checked before/after every group; any mismatch refuses qualification.
-[Current raw observations](current-numeric-observations.json) retain all samples,
+[Current raw observations](evidence/README.md#historical-boundary-observations) retain all samples,
 commands, artifact hashes and filtered compiler-load snapshots.
 
 CPython 3.14.6/PyArrow 26.0.0 ran the identical fixture, warmups, seven rotated
