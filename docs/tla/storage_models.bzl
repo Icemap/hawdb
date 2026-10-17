@@ -104,6 +104,7 @@ STORAGE_MODELS = [
     "HawDBSearchStageCleanup",
     "HawDBSearchCleanupPublication",
     "HawDBSearchUnorderedMutations",
+    "HawDBSharedReaderCapacity",
     "HawDBSourceSegmentPublication",
     "HawDBSparseRelationalActivation",
     "HawDBSparseRelationalLiveCommit",

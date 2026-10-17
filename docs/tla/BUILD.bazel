@@ -415,3 +415,22 @@ tla_check(
         "DeleteUncertain",
     ]
 ]
+
+# Retained reader capacity must outlive every shared allocation it covers.
+[
+    tla_check(
+        name = "HawDBSharedReaderCapacity" + control + "_check",
+        module = "HawDBSharedReaderCapacity.tla",
+        config = "mutants/HawDBSharedReaderCapacity" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "RefundBeforeBlock",
+        "DetachClone",
+        "KeepExecutionPermit",
+        "RefundBeforeLedger",
+    ]
+]

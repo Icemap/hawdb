@@ -304,3 +304,6 @@ impl GovernedSearchGenerationUpdate {
         result
     }
 }
+
+#[cfg(feature = "vector-search")]
+mod reader;

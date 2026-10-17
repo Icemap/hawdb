@@ -2213,3 +2213,13 @@ association. See [the source argument and finite-proof limits](CONSUMER_MUTATION
 revocation on later synchronization failure and retention of uncertain output.
 Four negative controls exercise stale paths, failed-owner reuse, early native
 release and uncertain cleanup. See [the relocation source argument and limits](CONSUMER_DIRECTORY_RELOCATION_PROOF.md).
+
+## Shared reader retained capacity
+
+`HawDBSharedReaderCapacity` separates concurrent final-reference extraction,
+payload destruction, query refund, account-reference drop and host refund. The
+producer can close while readers retain memory; retained custody holds no active
+execution permit. Four controls reject early backing/ledger refunds, uncharged
+clone allocation and execution-slot retention. See the [source correspondence,
+conditional termination argument and finite-model limits](SHARED_READER_CAPACITY_PROOF.md).
+This does not certify complete governed reader construction or MVCC activation.

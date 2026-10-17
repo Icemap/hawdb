@@ -137,8 +137,9 @@ lexical reader, optional vector projection and three payload handles inside one
 owner; they borrow its children. A future segment capacity owner must be the
 last field of these contents, rather than a field of the outer reader. Otherwise
 an escaped segment clone could outlive the wrapper that refunded its metadata.
-`Shared` frees its Arc allocation before dropping its extracted contents; it
-exposes neither weak references nor raw Arcs. This representation is implemented;
+Search's `Shared` alias now reuses the internal `hawdb_core::SharedAllocation`
+primitive, also used by vector projection. It frees its Arc allocation before
+dropping extracted contents and exposes neither weak references nor raw Arcs. This representation is implemented;
 a segment retained-memory owner and a fully admitted reader constructor are not.
 
 The required resource invariant is:
@@ -195,6 +196,76 @@ bytes live after result destruction while the extra admission was already zero.
 The repaired regression exercises both ordinary drop and caller unwind, including
 unchanged active-head bytes. This proves that bounded join's observed lifetime
 boundary; it does not establish the still-unimplemented retained-governor reader.
+
+### Vector payload verification before mapping
+
+The native vector opener now verifies the held file before creating its mmap.
+`artifact/stream_verify.rs` reads each validated contiguous segment as its ID,
+scale, offset and code columns, using one 8 KiB buffer. It does not allocate a
+segment-sized buffer or scan mapped payload pages to establish integrity.
+
+The loop argument maintains consumed-prefix segment/aggregate CRCs, the last
+observed ID, and the least pending `(row, field)` header violation. Choosing the
+least pair preserves the mapped verifier's row order even though columns arrive
+separately. A segment checksum failure precedes that segment's header errors;
+the aggregate checksum follows every valid segment. Complete success therefore
+retains both checksum layers, global ID ordering, finite/nonnegative scales and
+finite offsets. Only that success reaches the map call. The validated manifest
+and payload/footer boundary are premises; this is a source argument rather than
+a mechanized Rust refinement theorem.
+
+An independent mapped-verifier oracle compares both supported bit widths across
+valid data, signed zero, checksum failures and deliberately conflicting header
+errors. A short-read source verifies the 8 KiB request bound, one initial seek
+and exact consumption of the payload before the footer. The pre-fix native
+corruption regression reached the map hook before failing checksum validation.
+
+This bounds the payload verification buffer, not all opening or serving memory.
+Manifest parsing/ownership, same-governor handoff, cancellation/I/O admission,
+query-time mapped-page residency and native file-root/GC custody remain separate
+obligations. It does not establish a complete governed reader or C-ready.
+
+### Vector metadata admission and retained ownership
+
+`FileProjection<Memory>` now shares its complete immutable path, manifest and
+mapping, with two concrete, non-cloneable capacity owners as the last fields.
+Clones increment the shared reference count without copying metadata or admitting
+new backing. `SharedAllocation` frees the control allocation before dropping
+contents, and contents free all payloads before either capacity owner. Writer
+completion supplies the final display path at construction; it no longer mutates
+a shared projection after opening the temporary file.
+
+The internal admitted constructor consumes an already admitted immutable file.
+Its display path is metadata, not file-binding authority. All footer, manifest,
+payload and map operations use that same handle. Path/allocation capacity precedes
+the path copy; encoded capacity precedes the manifest Vec. A borrowed JSON pass
+counts containers and the largest token. The fixed schema has one vector of
+struct records: final capacity/string bounds are retained; vector-growth overlap,
+escaped-token scratch and diagnostics stay transient. Both map and sequence
+record encodings count, including data refused by later validation. I/O guards
+span each physical read; interrupted reads recheck cancellation before retrying.
+
+The governed generation writer implements this bridge using its existing build
+ledger, task and governor. Successful receipts own `QueryMemoryLease` followed
+by `RuntimeRetainedMemory`, with conservative coverage for the three fixed ledger
+accounts. They contain no execution permit. This currently charges that fixed
+metadata allowance per receipt; a full reader can amortize it only while preserving
+shared ledger lifetime. Allocation-tracked native tests check encoded/record
+refusal before large allocation, complete refunds, allocation-free clones, fresh
+query admission after producer closure, and concurrent final-clone disposal.
+The [retained-capacity protocol model](SHARED_READER_CAPACITY_PROOF.md) checks
+separate query refund/account destruction, shared producer/reader ledger
+lifetimes and four negative controls. It assumes the Arc extraction contract
+and symbolic capacity bounds; it is not a Rust or allocator refinement proof.
+Returned diagnostic objects use the existing error API and do not carry retained
+admission. Their lifetime after an operation ends is outside this component.
+
+This implements the vector component, not the complete governed reader. Ordinary
+reader opening still uses the unaccounted legacy entry until descriptor, layout,
+lexical, visibility and root ownership are all integrated. Neither the generic
+admission interface nor its receipts grant source completeness, native cleanup,
+C-ready or activation authority. All original mapped-page residency, physical
+I/O/RSS, actual Mem, incarnation/receipt/recovery and writer/fairness gates remain.
 
 ## Durable metadata and retry contract to implement
 
