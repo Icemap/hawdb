@@ -1,0 +1,18 @@
+{
+  "boundary": {
+    "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/0f3d3b48dff56cd2c85bdd6c29d10539/execroot/_main/bazel-out/darwin_arm64-opt-ST-2c5af747e1f8/bin/bindings/go/cmd/boundary/boundary_/boundary",
+    "sha256": "b659df83bd9b2a2573fe9aef589773749aac82e68258e036248cb2f1d1b30a85"
+  },
+  "boundary_profile": {
+    "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/0f3d3b48dff56cd2c85bdd6c29d10539/execroot/_main/bazel-out/darwin_arm64-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+    "sha256": "b30af7bb454d5fbc2713dda3541dbe70421d6bfe85300345b7b4cbe3a9b4afcb"
+  },
+  "hawdb_ffi_boundary_profile": {
+    "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/0f3d3b48dff56cd2c85bdd6c29d10539/execroot/_main/bazel-out/darwin_arm64-opt/bin/bindings/ffi/libhawdb_ffi_boundary_profile.dylib",
+    "sha256": "344fd004a7ba62ae94139e107652b69e9e6321a7643f43f8c462ab7f8bb52c74"
+  },
+  "hawdb_ffi": {
+    "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/0f3d3b48dff56cd2c85bdd6c29d10539/execroot/_main/bazel-out/darwin_arm64-opt/bin/bindings/ffi/libhawdb_ffi.dylib",
+    "sha256": "5daead6202e308d988c6d3022e8f62d8f4e5d59056ed615c8271fbaa4228d7e0"
+  }
+}

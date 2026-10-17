@@ -1,0 +1,40 @@
+INFO: Invocation ID: 8df84abf-3560-4131-8a43-23c78c60c650
+INFO: Reading 'startup' options from /private/tmp/hawdb-wip-ready-20261015/go-host-profile-main/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'build' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'build' from /private/tmp/hawdb-wip-ready-20261015/go-host-profile-main/.bazelrc:
+  'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'build' from /Users/hawkingrei/.bazelrc:
+  'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-wip-ready-20261015/go-host-profile-main/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Loading: 0 packages loaded
+    currently loading: bindings/go/cmd/boundary
+Analyzing: 4 targets (5 packages loaded, 6 targets configured)
+Analyzing: 4 targets (5 packages loaded, 7 targets configured)
+
+Analyzing: 4 targets (65 packages loaded, 14 targets configured)
+
+Analyzing: 4 targets (116 packages loaded, 13265 targets configured)
+
+Analyzing: 4 targets (117 packages loaded, 13271 targets configured)
+
+Analyzing: 4 targets (123 packages loaded, 13415 targets configured)
+[22 / 34] GoCompilePkg external/gazelle++go_deps+com_github_ebitengine_purego/internal/strings/strings.a; 0s disk-cache, darwin-sandbox ... (4 actions, 1 running)
+Analyzing: 4 targets (123 packages loaded, 13415 targets configured)
+[28 / 34] GoLink bindings/go/cmd/boundary/boundary_/boundary; 0s disk-cache, darwin-sandbox ... (2 actions, 1 running)
+INFO: Analyzed 4 targets (352 packages loaded, 22033 targets configured).
+[218 / 795] [Prepa] Creating symlink external/rules_rust++rust+rust_macos_aarch64__aarch64-apple-darwin__stable_tools/rust_toolchain/lib/rustlib/aarch64-apple-darwin/bin/rust-lld ... (2 actions, 0 running)
+[792 / 795] Compiling Rust rlib hawdb (270 files); 0s disk-cache, darwin-sandbox
+[792 / 795] Compiling Rust rlib hawdb (270 files); 11s disk-cache, darwin-sandbox
+[793 / 795] [Prepa] Compiling Rust cdylib hawdb_ffi_boundary_profile v0.9.0 (3 files) ... (2 actions, 0 running)
+INFO: Found 4 targets...
+INFO: Elapsed time: 25.101s, Critical Path: 15.21s
+INFO: 795 processes: 429 disk cache hit, 353 internal, 13 darwin-sandbox.
+INFO: Build completed successfully, 795 total actions
+INFO: 
+INFO: Build Event Protocol files produced successfully.

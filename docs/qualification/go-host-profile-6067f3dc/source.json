@@ -1,0 +1,21 @@
+{
+  "head": "6067f3dce6238f5f37e6341e6627589ac34eb52e",
+  "tree": "e8b3975646c80f4a46cc326cffa7e2a2e1ca80ac",
+  "base_main": "a7900428a24a74fe373d05f9cfc1a63cf144bf3b",
+  "changed_files": {
+    "bindings/benchmarks/README.md": "686a99c2f03ce743470fd6e4856851905c75f307400fbb1899535472819125e8",
+    "bindings/benchmarks/run.py": "5d4f8a55c5b196f44230e4f9db7398809e49b45a1589b2151426ab94fa4253be",
+    "bindings/benchmarks/test_run.py": "ea9434f8b8f08faf575750f7070b08075a6046f9e8555163fb3a75b1623ab212",
+    "bindings/go/BUILD.bazel": "14f54319a9f85bed4625e77d3af4ed46256c46a8085750adfa4540becc732751",
+    "bindings/go/README.md": "1c02f6faf8739299743a648120c86e0bc8fa537c02c1f7d85eb700dc0e251ba9",
+    "bindings/go/boundary_profile_disabled.go": "8937ea7c30d9cad846f2d84dbb5a626ddcfc41c77057cf2b42b5c5224a6c5380",
+    "bindings/go/boundary_profile_enabled.go": "4f2c774033a60b915d7caf63e43f44e72485a26e827b68473a10c86723b0a959",
+    "bindings/go/boundary_profile_test.go": "4352e3c9a6dd9f733b8f96d75276d5e12c2cb623affe4f78b793c6a74357b1b1",
+    "bindings/go/cmd/boundary/BUILD.bazel": "39db0df5b810ba8972e40bca92623d6c3edf480db3133a2788eb065c172f28c1",
+    "bindings/go/cmd/boundary/host_profile_disabled.go": "e38f0a829ddf10e49257a9997dac416dab6d42713a7d7250a177a0b38bea0c32",
+    "bindings/go/cmd/boundary/host_profile_enabled.go": "083819ad8f6785ae19e6d4031e7959cee0a8a166eb6a2186e532a10301dc1a54",
+    "bindings/go/cmd/boundary/main.go": "33f6bf14e2545b2ee70da7b690ff1c2ffd60c380468390f53d546071639bb09b",
+    "bindings/go/hawdb.go": "44ae0d60861a5e6077dd8ef92eb0e1031d8cf519eebe86574e1c5951304ebdff"
+  },
+  "rust_engine_and_fuzz_inputs_unchanged": true
+}

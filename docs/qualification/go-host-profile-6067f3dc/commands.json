@@ -1,0 +1,18 @@
+{
+  "test_explicit_user_options": [
+    "--repo_env=CARGO_BAZEL_ISOLATED=false",
+    "--repo_env=CARGO_NET_OFFLINE=true",
+    "--test_output=errors",
+    "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/go-host-profile-tests.bep.json"
+  ],
+  "test_patterns": [
+    [
+      "//bindings/go:hawdb_go_tests",
+      "//bindings/go:hawdb_go_boundary_profile_tests",
+      "//bindings/benchmarks:driver_tests",
+      "//crates/fuzz:hawdb_fuzz_tests",
+      "//crates/fuzz:hawdb_fuzz_cli_tests",
+      "//:hawdb_linux_ci_fuzz_smoke_test"
+    ]
+  ]
+}

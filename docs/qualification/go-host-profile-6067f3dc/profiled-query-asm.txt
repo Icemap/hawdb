@@ -1,0 +1,469 @@
+TEXT github.com/nowledge-co/hawdb/bindings/go.(*DB).query(SB) bindings/go/hawdb.go
+  hawdb.go:186				0x100131790		f9400b90		MOVD 16(R28), R16									
+  hawdb.go:186				0x100131794		d10403f1		SUB $256, RSP, R17									
+  hawdb.go:186				0x100131798		eb10023f		CMP R16, R17										
+  hawdb.go:186				0x10013179c		54003889		BLS 452(PC)										
+  hawdb.go:186				0x1001317a0		d10603f4		SUB $384, RSP, R20									
+  hawdb.go:186				0x1001317a4		a93ffa9d		STP (R29, R30), -8(R20)									
+  hawdb.go:186				0x1001317a8		9100029f		MOVD R20, RSP										
+  hawdb.go:186				0x1001317ac		d10023fd		SUB $8, RSP, R29									
+  hawdb.go:186				0x1001317b0		f900cfe2		MOVD R2, 408(RSP)									
+  hawdb.go:186				0x1001317b4		f900d7e4		MOVD R4, 424(RSP)									
+  hawdb.go:186				0x1001317b8		f900dbe5		MOVD R5, 432(RSP)									
+  hawdb.go:186				0x1001317bc		f900bbff		MOVD ZR, 368(RSP)									
+  hawdb.go:186				0x1001317c0		39011fff		MOVB ZR, 71(RSP)									
+  hawdb.go:186				0x1001317c4		f9005fff		MOVD ZR, 184(RSP)									
+  hawdb.go:186				0x1001317c8		a90affff		STP (ZR, ZR), 168(RSP)									
+  hawdb.go:187				0x1001317cc		3980001b		MOVB (R0), R27										
+  type.go:94				0x1001317d0		91016006		ADD $88, R0, R6										
+  type.go:94				0x1001317d4		d0000d7b		ADRP 1761280(PC), R27									
+  type.go:94				0x1001317d8		396a2b67		MOVBU 2698(R27), R7									
+  type.go:94				0x1001317dc		360000a7		TBZ $0, R7, 5(PC)									
+  type.go:94				0x1001317e0		b24003e7		ORR $1, ZR, R7										
+  type.go:94				0x1001317e4		b8e700c8		?											
+  type.go:94				0x1001317e8		8b070108		ADD R7, R8, R8										
+  type.go:94				0x1001317ec		14000006		JMP 6(PC)										
+  type.go:94				0x1001317f0		b24003e7		ORR $1, ZR, R7										
+  type.go:94				0x1001317f4		885ffcc8		LDAXRW (R6), R8										
+  type.go:94				0x1001317f8		8b070108		ADD R7, R8, R8										
+  type.go:94				0x1001317fc		881bfcc8		STLXRW R8, (R6), R27									
+  type.go:94				0x100131800		b5ffffbb		CBNZ R27, -3(PC)									
+  type.go:94				0x100131804		f900c7e0		MOVD R0, 392(RSP)									
+  type.go:94				0x100131808		390643e1		MOVB R1, 400(RSP)									
+  type.go:94				0x10013180c		f900dbe5		MOVD R5, 432(RSP)									
+  type.go:94				0x100131810		f900d7e4		MOVD R4, 424(RSP)									
+  type.go:94				0x100131814		f900d3e3		MOVD R3, 416(RSP)									
+  type.go:94				0x100131818		f900cfe2		MOVD R2, 408(RSP)									
+  rwmutex.go:72				0x10013181c		36f80168		TBZ $31, R8, 11(PC)									
+  rwmutex.go:74				0x100131820		91015000		ADD $84, R0, R0										
+  rwmutex.go:74				0x100131824		aa1f03e1		MOVD ZR, R1										
+  rwmutex.go:74				0x100131828		aa1f03e2		MOVD ZR, R2										
+  rwmutex.go:74				0x10013182c		97fd18a1		CALL sync.runtime_SemacquireRWMutexR(SB)						
+  hawdb.go:188				0x100131830		f940c7e0		MOVD 392(RSP), R0									
+  ffi.go:108				0x100131834		394643e1		MOVBU 400(RSP), R1									
+  hawdb.go:211				0x100131838		f940cfe2		MOVD 408(RSP), R2									
+  ffi.go:108				0x10013183c		f940d3e3		MOVD 416(RSP), R3									
+  hawdb.go:197				0x100131840		f940d7e4		MOVD 424(RSP), R4									
+  hawdb.go:198				0x100131844		f940dbe5		MOVD 432(RSP), R5									
+  hawdb.go:188				0x100131848		91012006		ADD $72, R0, R6										
+  hawdb.go:188				0x10013184c		b0000007		ADRP 4096(PC), R7									
+  hawdb.go:188				0x100131850		9125c0e7		ADD $2416, R7, R7									
+  hawdb.go:188				0x100131854		a9101be7		STP (R7, R6), 256(RSP)									
+  hawdb.go:188				0x100131858		910403e6		ADD $256, RSP, R6									
+  hawdb.go:188				0x10013185c		f900bbe6		MOVD R6, 368(RSP)									
+  hawdb.go:188				0x100131860		b24003e6		ORR $1, ZR, R6										
+  hawdb.go:188				0x100131864		39011fe6		MOVB R6, 71(RSP)									
+  hawdb.go:189				0x100131868		39418006		MOVBU 96(R0), R6									
+  hawdb.go:189				0x10013186c		37002726		TBNZ $0, R6, 313(PC)									
+  hawdb.go:194				0x100131870		97fdeeec		CALL time.Now(SB)									
+  hawdb.go:197				0x100131874		f940d7e3		MOVD 424(RSP), R3									
+  hawdb.go:197				0x100131878		b5000083		CBNZ R3, 4(PC)										
+  hawdb.go:211				0x10013187c		aa1f03e3		MOVD ZR, R3										
+  hawdb.go:211				0x100131880		aa1f03e4		MOVD ZR, R4										
+  hawdb.go:197				0x100131884		14000024		JMP 36(PC)										
+  hawdb.go:194				0x100131888		f900a3e2		MOVD R2, 320(RSP)									
+  hawdb.go:194				0x10013188c		f9004fe1		MOVD R1, 152(RSP)									
+  hawdb.go:194				0x100131890		f9004be0		MOVD R0, 144(RSP)									
+  hawdb.go:198				0x100131894		aa0303e0		MOVD R3, R0										
+  hawdb.go:198				0x100131898		f940dbe1		MOVD 432(RSP), R1									
+  hawdb.go:198				0x10013189c		94000191		CALL github.com/nowledge-co/hawdb/bindings/go.prepareValue(SB)				
+  v2_encode.go:186			0x1001318a0		b0000b42		ADRP 1478656(PC), R2									
+  v2_encode.go:186			0x1001318a4		9123a042		ADD $2280, R2, R2									
+  v2_encode.go:186			0x1001318a8		90000bc3		ADRP 1540096(PC), R3									
+  v2_encode.go:186			0x1001318ac		91210063		ADD $2112, R3, R3									
+  v2_encode.go:186			0x1001318b0		a9110fe2		STP (R2, R3), 272(RSP)									
+  v2_encode.go:186			0x1001318b4		910443e2		ADD $272, RSP, R2									
+  v2_encode.go:186			0x1001318b8		b24003e3		ORR $1, ZR, R3										
+  v2_encode.go:186			0x1001318bc		aa0303e4		MOVD R3, R4										
+  v2_encode.go:186			0x1001318c0		97feb2c8		CALL encoding/json/v2.Marshal(SB)							
+  hawdb.go:199				0x1001318c4		b5001e23		CBNZ R3, 241(PC)									
+  hawdb.go:207				0x1001318c8		f100103f		CMP $4, R1										
+  hawdb.go:207				0x1001318cc		540000c1		BNE 6(PC)										
+  hawdb.go:207				0x1001318d0		b9400006		MOVWU (R0), R6										
+  hawdb.go:207				0x1001318d4		d28eadc7		MOVD $30062, R7										
+  hawdb.go:207				0x1001318d8		f2ad8d87		MOVK $(27756<<16), R7									
+  hawdb.go:207				0x1001318dc		6b0700df		CMPW R7, R6										
+  hawdb.go:207				0x1001318e0		540000c0		BEQ 6(PC)										
+  hawdb.go:208				0x1001318e4		aa0103e2		MOVD R1, R2										
+  hawdb.go:208				0x1001318e8		aa0003e1		MOVD R0, R1										
+  hawdb.go:208				0x1001318ec		aa1f03e0		MOVD ZR, R0										
+  hawdb.go:208				0x1001318f0		97fcb0a0		CALL runtime.slicebytetostring(SB)							
+  hawdb.go:208				0x1001318f4		14000003		JMP 3(PC)										
+  hawdb.go:208				0x1001318f8		aa1f03e1		MOVD ZR, R1										
+  hawdb.go:208				0x1001318fc		aa1f03e0		MOVD ZR, R0										
+  boundary_profile_enabled.go:63	0x100131900		f940a3e2		MOVD 320(RSP), R2									
+  hawdb.go:211				0x100131904		aa0103e3		MOVD R1, R3										
+  hawdb.go:211				0x100131908		aa0003e4		MOVD R0, R4										
+  boundary_profile_enabled.go:63	0x10013190c		f9404be0		MOVD 144(RSP), R0									
+  boundary_profile_enabled.go:63	0x100131910		f9404fe1		MOVD 152(RSP), R1									
+  hawdb.go:211				0x100131914		f90067e4		MOVD R4, 200(RSP)									
+  hawdb.go:211				0x100131918		f9002fe3		MOVD R3, 88(RSP)									
+  boundary_profile_enabled.go:63	0x10013191c		f940c7e6		MOVD 392(RSP), R6									
+  boundary_profile_enabled.go:63	0x100131920		910020c7		ADD $8, R6, R7										
+  hawdb.go:215				0x100131924		d503201f		NOOP											
+  boundary_profile_enabled.go:63	0x100131928		aa0003e3		MOVD R0, R3										
+  boundary_profile_enabled.go:63	0x10013192c		aa0103e4		MOVD R1, R4										
+  boundary_profile_enabled.go:63	0x100131930		aa0203e5		MOVD R2, R5										
+  boundary_profile_enabled.go:63	0x100131934		aa0603e0		MOVD R6, R0										
+  boundary_profile_enabled.go:63	0x100131938		aa0003e1		MOVD R0, R1										
+  boundary_profile_enabled.go:63	0x10013193c		aa0703e2		MOVD R7, R2										
+  boundary_profile_enabled.go:63	0x100131940		97fffc0c		CALL github.com/nowledge-co/hawdb/bindings/go.(*boundaryProfileState).record(SB)	
+  hawdb.go:216				0x100131944		97fdeeb7		CALL time.Now(SB)									
+  hawdb.go:216				0x100131948		f9004be0		MOVD R0, 144(RSP)									
+  hawdb.go:216				0x10013194c		f9004fe1		MOVD R1, 152(RSP)									
+  hawdb.go:216				0x100131950		f900a3e2		MOVD R2, 320(RSP)									
+  hawdb.go:218				0x100131954		b27c03e0		ORR $16, ZR, R0										
+  hawdb.go:218				0x100131958		f0000aa1		ADRP 1404928(PC), R1									
+  hawdb.go:218				0x10013195c		913e2021		ADD $3976, R1, R1									
+  hawdb.go:218				0x100131960		b24003e2		ORR $1, ZR, R2										
+  hawdb.go:218				0x100131964		97fba27f		CALL runtime.mallocgcSmallScanNoHeaderSC2(SB)						
+  hawdb.go:218				0x100131968		f900afe0		MOVD R0, 344(RSP)									
+  hawdb.go:218				0x10013196c		b27c03e0		ORR $16, ZR, R0										
+  hawdb.go:218				0x100131970		f0000aa1		ADRP 1404928(PC), R1									
+  hawdb.go:218				0x100131974		913e2021		ADD $3976, R1, R1									
+  hawdb.go:218				0x100131978		b24003e2		ORR $1, ZR, R2										
+  hawdb.go:218				0x10013197c		97fba279		CALL runtime.mallocgcSmallScanNoHeaderSC2(SB)						
+  hawdb.go:218				0x100131980		f900b7e0		MOVD R0, 360(RSP)									
+  ffi.go:108				0x100131984		f940d3e6		MOVD 416(RSP), R6									
+  ffi.go:108				0x100131988		f10000df		CMP $0, R6										
+  hawdb.go:211				0x10013198c		9a9f10c2		CSEL NE, R6, ZR, R2									
+  hawdb.go:211				0x100131990		f940cfe6		MOVD 408(RSP), R6									
+  hawdb.go:211				0x100131994		9a9f10c1		CSEL NE, R6, ZR, R1									
+  ffi.go:108				0x100131998		f9402fe6		MOVD 88(RSP), R6									
+  ffi.go:108				0x10013199c		f10000df		CMP $0, R6										
+  hawdb.go:212				0x1001319a0		9a9f10c4		CSEL NE, R6, ZR, R4									
+  hawdb.go:212				0x1001319a4		f94067e6		MOVD 200(RSP), R6									
+  hawdb.go:212				0x1001319a8		9a9f10c3		CSEL NE, R6, ZR, R3									
+  ffi.go:108				0x1001319ac		394643e5		MOVBU 400(RSP), R5									
+  ffi.go:108				0x1001319b0		36000145		TBZ $0, R5, 10(PC)									
+  hawdb.go:221				0x1001319b4		f940c7e7		MOVD 392(RSP), R7									
+  hawdb.go:221				0x1001319b8		a943a0e7		LDP 56(R7), (R7, R8)									
+  hawdb.go:221				0x1001319bc		f9400cfa		MOVD 24(R7), R26									
+  hawdb.go:221				0x1001319c0		f9400347		MOVD (R26), R7										
+  hawdb.go:221				0x1001319c4		f940afe5		MOVD 344(RSP), R5									
+  hawdb.go:221				0x1001319c8		aa0003e6		MOVD R0, R6										
+  hawdb.go:221				0x1001319cc		aa0803e0		MOVD R8, R0										
+  hawdb.go:221				0x1001319d0		d63f00e0		CALL (R7)										
+  hawdb.go:221				0x1001319d4		14000009		JMP 9(PC)										
+  hawdb.go:223				0x1001319d8		f940c7e7		MOVD 392(RSP), R7									
+  hawdb.go:223				0x1001319dc		a943a0e7		LDP 56(R7), (R7, R8)									
+  hawdb.go:223				0x1001319e0		f94008fa		MOVD 16(R7), R26									
+  hawdb.go:223				0x1001319e4		f9400347		MOVD (R26), R7										
+  hawdb.go:223				0x1001319e8		f940afe5		MOVD 344(RSP), R5									
+  hawdb.go:223				0x1001319ec		aa0003e6		MOVD R0, R6										
+  hawdb.go:223				0x1001319f0		aa0803e0		MOVD R8, R0										
+  hawdb.go:223				0x1001319f4		d63f00e0		CALL (R7)										
+  hawdb.go:225				0x1001319f8		39011be0		MOVB R0, 70(RSP)									
+  boundary_profile_enabled.go:67	0x1001319fc		f940c7e0		MOVD 392(RSP), R0									
+  boundary_profile_enabled.go:67	0x100131a00		91004001		ADD $16, R0, R1										
+  boundary_profile_enabled.go:67	0x100131a04		91006002		ADD $24, R0, R2										
+  hawdb.go:227				0x100131a08		d503201f		NOOP											
+  boundary_profile_enabled.go:67	0x100131a0c		f9404be3		MOVD 144(RSP), R3									
+  boundary_profile_enabled.go:67	0x100131a10		f9404fe4		MOVD 152(RSP), R4									
+  boundary_profile_enabled.go:67	0x100131a14		f940a3e5		MOVD 320(RSP), R5									
+  boundary_profile_enabled.go:67	0x100131a18		97fffbd6		CALL github.com/nowledge-co/hawdb/bindings/go.(*boundaryProfileState).record(SB)	
+  hawdb.go:228				0x100131a1c		97fdee81		CALL time.Now(SB)									
+  hawdb.go:228				0x100131a20		f9004be0		MOVD R0, 144(RSP)									
+  hawdb.go:228				0x100131a24		f9004fe1		MOVD R1, 152(RSP)									
+  hawdb.go:228				0x100131a28		f900a3e2		MOVD R2, 320(RSP)									
+  hawdb.go:230				0x100131a2c		39411be3		MOVBU 70(RSP), R3									
+  hawdb.go:230				0x100131a30		36000c03		TBZ $0, R3, 96(PC)									
+  hawdb.go:240				0x100131a34		b27c07e0		ORR $48, ZR, R0										
+  hawdb.go:240				0x100131a38		90000ac1		ADRP 1409024(PC), R1									
+  hawdb.go:240				0x100131a3c		91006021		ADD $24, R1, R1										
+  hawdb.go:240				0x100131a40		b24003e2		ORR $1, ZR, R2										
+  hawdb.go:240				0x100131a44		97fba4e7		CALL runtime.mallocgcSmallScanNoHeaderSC5(SB)						
+  hawdb.go:240				0x100131a48		f900b3e0		MOVD R0, 352(RSP)									
+  hawdb.go:241				0x100131a4c		f940c7e3		MOVD 392(RSP), R3									
+  hawdb.go:241				0x100131a50		f9401c60		MOVD 56(R3), R0										
+  hawdb.go:241				0x100131a54		f940afe1		MOVD 344(RSP), R1									
+  hawdb.go:241				0x100131a58		97fffd42		CALL github.com/nowledge-co/hawdb/bindings/go.(*Library).takeBytes(SB)			
+  hawdb.go:241				0x100131a5c		f9003fe1		MOVD R1, 120(RSP)									
+  hawdb.go:241				0x100131a60		f90043e2		MOVD R2, 128(RSP)									
+  hawdb.go:241				0x100131a64		f90077e0		MOVD R0, 232(RSP)									
+  reader.go:159				0x100131a68		d2800500		MOVD $40, R0										
+  reader.go:159				0x100131a6c		f0000ac1		ADRP 1421312(PC), R1									
+  reader.go:159				0x100131a70		91308021		ADD $3104, R1, R1									
+  reader.go:159				0x100131a74		b24003e2		ORR $1, ZR, R2										
+  reader.go:159				0x100131a78		97fba4da		CALL runtime.mallocgcSmallScanNoHeaderSC5(SB)						
+  reader.go:159				0x100131a7c		f9403fe3		MOVD 120(RSP), R3									
+  reader.go:159				0x100131a80		f94043e4		MOVD 128(RSP), R4									
+  reader.go:159				0x100131a84		a9009003		STP (R3, R4), 8(R0)									
+  reader.go:159				0x100131a88		d0000d7b		ADRP 1761280(PC), R27									
+  reader.go:159				0x100131a8c		b94d7363		MOVWU 3440(R27), R3									
+  reader.go:159				0x100131a90		35000063		CBNZW R3, 3(PC)										
+  reader.go:159				0x100131a94		f94077e2		MOVD 232(RSP), R2									
+  reader.go:159				0x100131a98		14000004		JMP 4(PC)										
+  reader.go:159				0x100131a9c		97fd2c95		CALL runtime.gcWriteBarrier1(SB)							
+  reader.go:159				0x100131aa0		f94077e2		MOVD 232(RSP), R2									
+  reader.go:159				0x100131aa4		f9000322		MOVD R2, (R25)										
+  reader.go:159				0x100131aa8		f9000002		MOVD R2, (R0)										
+  reader.go:159				0x100131aac		92800002		MOVD $-1, R2										
+  reader.go:159				0x100131ab0		a901881f		STP (ZR, R2), 24(R0)									
+  hawdb.go:241				0x100131ab4		aa0003e1		MOVD R0, R1										
+  hawdb.go:241				0x100131ab8		b0000b40		ADRP 1478656(PC), R0									
+  hawdb.go:241				0x100131abc		91282000		ADD $2568, R0, R0									
+  hawdb.go:241				0x100131ac0		97ff6a2c		CALL encoding/json.NewDecoder(SB)							
+  hawdb.go:241				0x100131ac4		f90073e0		MOVD R0, 224(RSP)									
+  hawdb.go:242				0x100131ac8		97ff6a72		CALL encoding/json.(*Decoder).UseNumber(SB)						
+  hawdb.go:243				0x100131acc		f94073e0		MOVD 224(RSP), R0									
+  hawdb.go:243				0x100131ad0		f0000981		ADRP 1257472(PC), R1									
+  hawdb.go:243				0x100131ad4		912d6021		ADD $2904, R1, R1									
+  hawdb.go:243				0x100131ad8		f940b3e2		MOVD 352(RSP), R2									
+  hawdb.go:243				0x100131adc		97ff6aa5		CALL encoding/json.(*Decoder).Decode(SB)						
+  hawdb.go:243				0x100131ae0		b5000080		CBNZ R0, 4(PC)										
+  hawdb.go:249				0x100131ae4		f940b3e6		MOVD 352(RSP), R6									
+  hawdb.go:249				0x100131ae8		a941a0c7		LDP 24(R6), (R7, R8)									
+  hawdb.go:249				0x100131aec		140000b1		JMP 177(PC)										
+  hawdb.go:243				0x100131af0		f9006be1		MOVD R1, 208(RSP)									
+  hawdb.go:243				0x100131af4		f90037e0		MOVD R0, 104(RSP)									
+  boundary_profile_enabled.go:71	0x100131af8		f940c7e0		MOVD 392(RSP), R0									
+  boundary_profile_enabled.go:71	0x100131afc		91008001		ADD $32, R0, R1										
+  boundary_profile_enabled.go:71	0x100131b00		9100a002		ADD $40, R0, R2										
+  hawdb.go:245				0x100131b04		d503201f		NOOP											
+  boundary_profile_enabled.go:71	0x100131b08		f9404be3		MOVD 144(RSP), R3									
+  boundary_profile_enabled.go:71	0x100131b0c		f9404fe4		MOVD 152(RSP), R4									
+  boundary_profile_enabled.go:71	0x100131b10		f940a3e5		MOVD 320(RSP), R5									
+  boundary_profile_enabled.go:71	0x100131b14		97fffb97		CALL github.com/nowledge-co/hawdb/bindings/go.(*boundaryProfileState).record(SB)	
+  hawdb.go:247				0x100131b18		a914ffff		STP (ZR, ZR), 328(RSP)									
+  hawdb.go:247				0x100131b1c		f94037e0		MOVD 104(RSP), R0									
+  hawdb.go:247				0x100131b20		b4000040		CBZ R0, 2(PC)										
+  hawdb.go:247				0x100131b24		f9400400		MOVD 8(R0), R0										
+  hawdb.go:247				0x100131b28		f9406be5		MOVD 208(RSP), R5									
+  hawdb.go:247				0x100131b2c		a91497e0		STP (R0, R5), 328(RSP)									
+  errors.go:26				0x100131b30		90000060		ADRP 49152(PC), R0									
+  errors.go:26				0x100131b34		910d5c00		ADD $855, R0, R0									
+  errors.go:26				0x100131b38		b27b03e1		ORR $32, ZR, R1										
+  errors.go:26				0x100131b3c		910523e2		ADD $328, RSP, R2									
+  errors.go:26				0x100131b40		b24003e3		ORR $1, ZR, R3										
+  errors.go:26				0x100131b44		aa0303e4		MOVD R3, R4										
+  errors.go:26				0x100131b48		97fe0ee2		CALL fmt.errorf(SB)									
+  errors.go:26				0x100131b4c		b50001c0		CBNZ R0, 14(PC)										
+  errors.go:31				0x100131b50		d503201f		NOOP											
+  errors.go:65				0x100131b54		b27c03e0		ORR $16, ZR, R0										
+  errors.go:65				0x100131b58		f0000a81		ADRP 1388544(PC), R1									
+  errors.go:65				0x100131b5c		913e4021		ADD $3984, R1, R1									
+  errors.go:65				0x100131b60		b24003e2		ORR $1, ZR, R2										
+  errors.go:65				0x100131b64		97fba1ff		CALL runtime.mallocgcSmallScanNoHeaderSC2(SB)						
+  errors.go:65				0x100131b68		90000063		ADRP 49152(PC), R3									
+  errors.go:65				0x100131b6c		910d5c63		ADD $855, R3, R3									
+  errors.go:65				0x100131b70		b27b03e4		ORR $32, ZR, R4										
+  errors.go:65				0x100131b74		a9001003		STP (R3, R4), (R0)									
+  hawdb.go:247				0x100131b78		aa0003e1		MOVD R0, R1										
+  hawdb.go:247				0x100131b7c		b0000b40		ADRP 1478656(PC), R0									
+  hawdb.go:247				0x100131b80		91232000		ADD $2248, R0, R0									
+  hawdb.go:247				0x100131b84		f9005fff		MOVD ZR, 184(RSP)									
+  hawdb.go:247				0x100131b88		a90a87e0		STP (R0, R1), 168(RSP)									
+  hawdb.go:247				0x100131b8c		39011fff		MOVB ZR, 71(RSP)									
+  hawdb.go:247				0x100131b90		f940bbfa		MOVD 368(RSP), R26									
+  hawdb.go:247				0x100131b94		f9400340		MOVD (R26), R0										
+  hawdb.go:247				0x100131b98		d63f0000		CALL (R0)										
+  hawdb.go:247				0x100131b9c		a94a8be1		LDP 168(RSP), (R1, R2)									
+  hawdb.go:247				0x100131ba0		f9405fe0		MOVD 184(RSP), R0									
+  hawdb.go:247				0x100131ba4		a97ffbfd		LDP -8(RSP), (R29, R30)									
+  hawdb.go:247				0x100131ba8		910603ff		ADD $384, RSP, RSP									
+  hawdb.go:247				0x100131bac		d65f03c0		RET											
+  hawdb.go:231				0x100131bb0		f940c7e2		MOVD 392(RSP), R2									
+  hawdb.go:231				0x100131bb4		f9401c40		MOVD 56(R2), R0										
+  boundary_profile_enabled.go:71	0x100131bb8		91008043		ADD $32, R2, R3										
+  boundary_profile_enabled.go:71	0x100131bbc		f9009fe3		MOVD R3, 312(RSP)									
+  boundary_profile_enabled.go:71	0x100131bc0		9100a042		ADD $40, R2, R2										
+  boundary_profile_enabled.go:71	0x100131bc4		f9009be2		MOVD R2, 304(RSP)									
+  hawdb.go:231				0x100131bc8		f940b7e1		MOVD 360(RSP), R1									
+  hawdb.go:231				0x100131bcc		97fffd45		CALL github.com/nowledge-co/hawdb/bindings/go.(*Library).takeErr(SB)			
+  hawdb.go:231				0x100131bd0		f9003be0		MOVD R0, 112(RSP)									
+  hawdb.go:231				0x100131bd4		f9006fe1		MOVD R1, 216(RSP)									
+  hawdb.go:233				0x100131bd8		d503201f		NOOP											
+  boundary_profile_enabled.go:71	0x100131bdc		f940c7e0		MOVD 392(RSP), R0									
+  boundary_profile_enabled.go:71	0x100131be0		f9409fe1		MOVD 312(RSP), R1									
+  boundary_profile_enabled.go:71	0x100131be4		f9409be2		MOVD 304(RSP), R2									
+  boundary_profile_enabled.go:71	0x100131be8		f9404be3		MOVD 144(RSP), R3									
+  boundary_profile_enabled.go:71	0x100131bec		f9404fe4		MOVD 152(RSP), R4									
+  boundary_profile_enabled.go:71	0x100131bf0		f940a3e5		MOVD 320(RSP), R5									
+  boundary_profile_enabled.go:71	0x100131bf4		97fffb5f		CALL github.com/nowledge-co/hawdb/bindings/go.(*boundaryProfileState).record(SB)	
+  hawdb.go:235				0x100131bf8		f9403be0		MOVD 112(RSP), R0									
+  hawdb.go:235				0x100131bfc		b40001a0		CBZ R0, 13(PC)										
+  hawdb.go:236				0x100131c00		f9005fff		MOVD ZR, 184(RSP)									
+  hawdb.go:236				0x100131c04		f9406fe1		MOVD 216(RSP), R1									
+  hawdb.go:236				0x100131c08		a90a87e0		STP (R0, R1), 168(RSP)									
+  hawdb.go:236				0x100131c0c		39011fff		MOVB ZR, 71(RSP)									
+  hawdb.go:236				0x100131c10		f940bbfa		MOVD 368(RSP), R26									
+  hawdb.go:236				0x100131c14		f9400340		MOVD (R26), R0										
+  hawdb.go:236				0x100131c18		d63f0000		CALL (R0)										
+  hawdb.go:236				0x100131c1c		a94a8be1		LDP 168(RSP), (R1, R2)									
+  hawdb.go:236				0x100131c20		f9405fe0		MOVD 184(RSP), R0									
+  hawdb.go:236				0x100131c24		a97ffbfd		LDP -8(RSP), (R29, R30)									
+  hawdb.go:236				0x100131c28		910603ff		ADD $384, RSP, RSP									
+  hawdb.go:236				0x100131c2c		d65f03c0		RET											
+  errors.go:65				0x100131c30		b27c03e0		ORR $16, ZR, R0										
+  errors.go:65				0x100131c34		f0000a81		ADRP 1388544(PC), R1									
+  errors.go:65				0x100131c38		913e4021		ADD $3984, R1, R1									
+  errors.go:65				0x100131c3c		b24003e2		ORR $1, ZR, R2										
+  errors.go:65				0x100131c40		97fba1c8		CALL runtime.mallocgcSmallScanNoHeaderSC2(SB)						
+  errors.go:65				0x100131c44		90000043		ADRP 32768(PC), R3									
+  errors.go:65				0x100131c48		91279c63		ADD $2535, R3, R3									
+  errors.go:65				0x100131c4c		d2800264		MOVD $19, R4										
+  errors.go:65				0x100131c50		a9001003		STP (R3, R4), (R0)									
+  hawdb.go:238				0x100131c54		f9005fff		MOVD ZR, 184(RSP)									
+  hawdb.go:238				0x100131c58		b0000b43		ADRP 1478656(PC), R3									
+  hawdb.go:238				0x100131c5c		91232063		ADD $2248, R3, R3									
+  hawdb.go:238				0x100131c60		a90a83e3		STP (R3, R0), 168(RSP)									
+  hawdb.go:238				0x100131c64		39011fff		MOVB ZR, 71(RSP)									
+  hawdb.go:238				0x100131c68		f940bbfa		MOVD 368(RSP), R26									
+  hawdb.go:238				0x100131c6c		f9400343		MOVD (R26), R3										
+  hawdb.go:238				0x100131c70		d63f0060		CALL (R3)										
+  hawdb.go:238				0x100131c74		a94a8be1		LDP 168(RSP), (R1, R2)									
+  hawdb.go:238				0x100131c78		f9405fe0		MOVD 184(RSP), R0									
+  hawdb.go:238				0x100131c7c		a97ffbfd		LDP -8(RSP), (R29, R30)									
+  hawdb.go:238				0x100131c80		910603ff		ADD $384, RSP, RSP									
+  hawdb.go:238				0x100131c84		d65f03c0		RET											
+  v2_encode.go:186			0x100131c88		f90053e4		MOVD R4, 160(RSP)									
+  v2_encode.go:186			0x100131c8c		f90027e3		MOVD R3, 72(RSP)									
+  boundary_profile_enabled.go:63	0x100131c90		f940c7e1		MOVD 392(RSP), R1									
+  boundary_profile_enabled.go:63	0x100131c94		91002022		ADD $8, R1, R2										
+  hawdb.go:201				0x100131c98		d503201f		NOOP											
+  boundary_profile_enabled.go:63	0x100131c9c		aa0103e0		MOVD R1, R0										
+  boundary_profile_enabled.go:63	0x100131ca0		f9404be3		MOVD 144(RSP), R3									
+  boundary_profile_enabled.go:63	0x100131ca4		f9404fe4		MOVD 152(RSP), R4									
+  boundary_profile_enabled.go:63	0x100131ca8		f940a3e5		MOVD 320(RSP), R5									
+  boundary_profile_enabled.go:63	0x100131cac		97fffb31		CALL github.com/nowledge-co/hawdb/bindings/go.(*boundaryProfileState).record(SB)	
+  hawdb.go:203				0x100131cb0		a90f7fff		STP (ZR, ZR), 240(RSP)									
+  hawdb.go:203				0x100131cb4		f94027e0		MOVD 72(RSP), R0									
+  hawdb.go:203				0x100131cb8		b4000060		CBZ R0, 3(PC)										
+  hawdb.go:203				0x100131cbc		f9400403		MOVD 8(R0), R3										
+  hawdb.go:203				0x100131cc0		14000002		JMP 2(PC)										
+  hawdb.go:203				0x100131cc4		aa0003e3		MOVD R0, R3										
+  hawdb.go:203				0x100131cc8		f94053e5		MOVD 160(RSP), R5									
+  hawdb.go:203				0x100131ccc		a90f17e3		STP (R3, R5), 240(RSP)									
+  errors.go:26				0x100131cd0		b0000060		ADRP 53248(PC), R0									
+  errors.go:26				0x100131cd4		911d4000		ADD $1872, R0, R0									
+  errors.go:26				0x100131cd8		d2800481		MOVD $36, R1										
+  errors.go:26				0x100131cdc		9103c3e2		ADD $240, RSP, R2									
+  errors.go:26				0x100131ce0		b24003e3		ORR $1, ZR, R3										
+  errors.go:26				0x100131ce4		aa0303e4		MOVD R3, R4										
+  errors.go:26				0x100131ce8		97fe0e7a		CALL fmt.errorf(SB)									
+  errors.go:26				0x100131cec		b50001c0		CBNZ R0, 14(PC)										
+  errors.go:31				0x100131cf0		d503201f		NOOP											
+  errors.go:65				0x100131cf4		b27c03e0		ORR $16, ZR, R0										
+  errors.go:65				0x100131cf8		f0000a81		ADRP 1388544(PC), R1									
+  errors.go:65				0x100131cfc		913e4021		ADD $3984, R1, R1									
+  errors.go:65				0x100131d00		b24003e2		ORR $1, ZR, R2										
+  errors.go:65				0x100131d04		97fba197		CALL runtime.mallocgcSmallScanNoHeaderSC2(SB)						
+  errors.go:65				0x100131d08		b0000063		ADRP 53248(PC), R3									
+  errors.go:65				0x100131d0c		911d4063		ADD $1872, R3, R3									
+  errors.go:65				0x100131d10		d2800484		MOVD $36, R4										
+  errors.go:65				0x100131d14		a9001003		STP (R3, R4), (R0)									
+  hawdb.go:203				0x100131d18		aa0003e1		MOVD R0, R1										
+  hawdb.go:203				0x100131d1c		b0000b40		ADRP 1478656(PC), R0									
+  hawdb.go:203				0x100131d20		91232000		ADD $2248, R0, R0									
+  hawdb.go:203				0x100131d24		f9005fff		MOVD ZR, 184(RSP)									
+  hawdb.go:203				0x100131d28		a90a87e0		STP (R0, R1), 168(RSP)									
+  hawdb.go:203				0x100131d2c		39011fff		MOVB ZR, 71(RSP)									
+  hawdb.go:203				0x100131d30		f940bbfa		MOVD 368(RSP), R26									
+  hawdb.go:203				0x100131d34		f9400340		MOVD (R26), R0										
+  hawdb.go:203				0x100131d38		d63f0000		CALL (R0)										
+  hawdb.go:203				0x100131d3c		a94a8be1		LDP 168(RSP), (R1, R2)									
+  hawdb.go:203				0x100131d40		f9405fe0		MOVD 184(RSP), R0									
+  hawdb.go:203				0x100131d44		a97ffbfd		LDP -8(RSP), (R29, R30)									
+  hawdb.go:203				0x100131d48		910603ff		ADD $384, RSP, RSP									
+  hawdb.go:203				0x100131d4c		d65f03c0		RET											
+  hawdb.go:190				0x100131d50		b27b03e0		ORR $32, ZR, R0										
+  hawdb.go:190				0x100131d54		f0000aa1		ADRP 1404928(PC), R1									
+  hawdb.go:190				0x100131d58		913be021		ADD $3832, R1, R1									
+  hawdb.go:190				0x100131d5c		b24003e2		ORR $1, ZR, R2										
+  hawdb.go:190				0x100131d60		97fba34c		CALL runtime.mallocgcSmallScanNoHeaderSC4(SB)						
+  hawdb.go:190				0x100131d64		d0000043		ADRP 40960(PC), R3									
+  hawdb.go:190				0x100131d68		910e5c63		ADD $919, R3, R3									
+  hawdb.go:190				0x100131d6c		d2800324		MOVD $25, R4										
+  hawdb.go:190				0x100131d70		a9011003		STP (R3, R4), 16(R0)									
+  hawdb.go:190				0x100131d74		f9005fff		MOVD ZR, 184(RSP)									
+  hawdb.go:190				0x100131d78		b0000b43		ADRP 1478656(PC), R3									
+  hawdb.go:190				0x100131d7c		91342063		ADD $3336, R3, R3									
+  hawdb.go:190				0x100131d80		a90a83e3		STP (R3, R0), 168(RSP)									
+  hawdb.go:190				0x100131d84		39011fff		MOVB ZR, 71(RSP)									
+  hawdb.go:190				0x100131d88		f940bbfa		MOVD 368(RSP), R26									
+  hawdb.go:190				0x100131d8c		f9400343		MOVD (R26), R3										
+  hawdb.go:190				0x100131d90		d63f0060		CALL (R3)										
+  hawdb.go:190				0x100131d94		a94a8be1		LDP 168(RSP), (R1, R2)									
+  hawdb.go:190				0x100131d98		f9405fe0		MOVD 184(RSP), R0									
+  hawdb.go:190				0x100131d9c		a97ffbfd		LDP -8(RSP), (R29, R30)									
+  hawdb.go:190				0x100131da0		910603ff		ADD $384, RSP, RSP									
+  hawdb.go:190				0x100131da4		d65f03c0		RET											
+  hawdb.go:249				0x100131da8		910060e7		ADD $24, R7, R7										
+  hawdb.go:249				0x100131dac		d1000508		SUB $1, R8, R8										
+  hawdb.go:249				0x100131db0		f100011f		CMP $0, R8										
+  hawdb.go:249				0x100131db4		5400046d		BLE 35(PC)										
+  hawdb.go:249				0x100131db8		f90047e8		MOVD R8, 136(RSP)									
+  hawdb.go:249				0x100131dbc		f90097e7		MOVD R7, 296(RSP)									
+  hawdb.go:249				0x100131dc0		a94028e9		LDP (R7), (R9, R10)									
+  hawdb.go:249				0x100131dc4		f90063e9		MOVD R9, 192(RSP)									
+  hawdb.go:249				0x100131dc8		f9002bea		MOVD R10, 80(RSP)									
+  hawdb.go:250				0x100131dcc		aa0903eb		MOVD R9, R11										
+  hawdb.go:250				0x100131dd0		aa1f03e0		MOVD ZR, R0										
+  hawdb.go:250				0x100131dd4		1400000a		JMP 10(PC)										
+  hawdb.go:251				0x100131dd8		f9000481		MOVD R1, 8(R4)										
+  hawdb.go:250				0x100131ddc		f94093ec		MOVD 288(RSP), R12									
+  hawdb.go:250				0x100131de0		91004189		ADD $16, R12, R9									
+  hawdb.go:250				0x100131de4		91000460		ADD $1, R3, R0										
+  hawdb.go:257				0x100131de8		f940b3e6		MOVD 352(RSP), R6									
+  hawdb.go:249				0x100131dec		f94097e7		MOVD 296(RSP), R7									
+  hawdb.go:249				0x100131df0		f94047e8		MOVD 136(RSP), R8									
+  hawdb.go:250				0x100131df4		f9402bea		MOVD 80(RSP), R10									
+  hawdb.go:251				0x100131df8		aa0203eb		MOVD R2, R11										
+  hawdb.go:250				0x100131dfc		eb0a001f		CMP R10, R0										
+  hawdb.go:250				0x100131e00		54fffd4a		BGE -22(PC)										
+  hawdb.go:250				0x100131e04		f90033e0		MOVD R0, 96(RSP)									
+  hawdb.go:250				0x100131e08		f90093e9		MOVD R9, 288(RSP)									
+  hawdb.go:250				0x100131e0c		a9400520		LDP (R9), (R0, R1)									
+  hawdb.go:251				0x100131e10		9400011c		CALL github.com/nowledge-co/hawdb/bindings/go.normalizeValue(SB)			
+  hawdb.go:251				0x100131e14		f94063e2		MOVD 192(RSP), R2									
+  hawdb.go:251				0x100131e18		f94033e3		MOVD 96(RSP), R3									
+  hawdb.go:251				0x100131e1c		8b031044		ADD R3<<4, R2, R4									
+  hawdb.go:251				0x100131e20		f9000080		MOVD R0, (R4)										
+  hawdb.go:251				0x100131e24		d0000d7b		ADRP 1761280(PC), R27									
+  hawdb.go:251				0x100131e28		b94d7365		MOVWU 3440(R27), R5									
+  hawdb.go:251				0x100131e2c		34fffd65		CBZW R5, -21(PC)									
+  hawdb.go:251				0x100131e30		f9400486		MOVD 8(R4), R6										
+  hawdb.go:251				0x100131e34		97fd2bb3		CALL runtime.gcWriteBarrier2(SB)							
+  hawdb.go:251				0x100131e38		a9001b21		STP (R1, R6), (R25)									
+  hawdb.go:251				0x100131e3c		17ffffe7		JMP -25(PC)										
+  boundary_profile_enabled.go:71	0x100131e40		f940c7e0		MOVD 392(RSP), R0									
+  boundary_profile_enabled.go:71	0x100131e44		91008001		ADD $32, R0, R1										
+  boundary_profile_enabled.go:71	0x100131e48		9100a002		ADD $40, R0, R2										
+  hawdb.go:255				0x100131e4c		d503201f		NOOP											
+  boundary_profile_enabled.go:71	0x100131e50		f9404be3		MOVD 144(RSP), R3									
+  boundary_profile_enabled.go:71	0x100131e54		f9404fe4		MOVD 152(RSP), R4									
+  boundary_profile_enabled.go:71	0x100131e58		f940a3e5		MOVD 320(RSP), R5									
+  boundary_profile_enabled.go:71	0x100131e5c		97fffac5		CALL github.com/nowledge-co/hawdb/bindings/go.(*boundaryProfileState).record(SB)	
+  hawdb.go:257				0x100131e60		f940b3e6		MOVD 352(RSP), R6									
+  hawdb.go:257				0x100131e64		f9005fe6		MOVD R6, 184(RSP)									
+  hawdb.go:257				0x100131e68		a90affff		STP (ZR, ZR), 168(RSP)									
+  hawdb.go:257				0x100131e6c		39011fff		MOVB ZR, 71(RSP)									
+  hawdb.go:257				0x100131e70		f940bbfa		MOVD 368(RSP), R26									
+  hawdb.go:257				0x100131e74		f9400346		MOVD (R26), R6										
+  hawdb.go:257				0x100131e78		d63f00c0		CALL (R6)										
+  hawdb.go:257				0x100131e7c		a94a8be1		LDP 168(RSP), (R1, R2)									
+  hawdb.go:257				0x100131e80		f9405fe0		MOVD 184(RSP), R0									
+  hawdb.go:257				0x100131e84		a97ffbfd		LDP -8(RSP), (R29, R30)									
+  hawdb.go:257				0x100131e88		910603ff		ADD $384, RSP, RSP									
+  hawdb.go:257				0x100131e8c		d65f03c0		RET											
+  hawdb.go:257				0x100131e90		97fc3a64		CALL runtime.deferreturn(SB)								
+  hawdb.go:257				0x100131e94		f9405fe0		MOVD 184(RSP), R0									
+  hawdb.go:257				0x100131e98		f94057e1		MOVD 168(RSP), R1									
+  hawdb.go:257				0x100131e9c		f9405be2		MOVD 176(RSP), R2									
+  hawdb.go:257				0x100131ea0		a97ffbfd		LDP -8(RSP), (R29, R30)									
+  hawdb.go:257				0x100131ea4		910603ff		ADD $384, RSP, RSP									
+  hawdb.go:257				0x100131ea8		d65f03c0		RET											
+  hawdb.go:186				0x100131eac		f90007e0		MOVD R0, 8(RSP)										
+  hawdb.go:186				0x100131eb0		390043e1		MOVB R1, 16(RSP)									
+  hawdb.go:186				0x100131eb4		a9018fe2		STP (R2, R3), 24(RSP)									
+  hawdb.go:186				0x100131eb8		a90297e4		STP (R4, R5), 40(RSP)									
+  hawdb.go:186				0x100131ebc		aa1e03e3		MOVD R30, R3										
+  hawdb.go:186				0x100131ec0		97fd23bc		CALL runtime.morestack_noctxt.abi0(SB)							
+  hawdb.go:186				0x100131ec4		f94007e0		MOVD 8(RSP), R0										
+  hawdb.go:186				0x100131ec8		394043e1		MOVBU 16(RSP), R1									
+  hawdb.go:186				0x100131ecc		a9418fe2		LDP 24(RSP), (R2, R3)									
+  hawdb.go:186				0x100131ed0		a94297e4		LDP 40(RSP), (R4, R5)									
+  hawdb.go:186				0x100131ed4		17fffe2f		JMP github.com/nowledge-co/hawdb/bindings/go.(*DB).query(SB)				
+  hawdb.go:186				0x100131ed8		00000000		?											
+  hawdb.go:186				0x100131edc		00000000		?											

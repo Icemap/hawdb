@@ -1,0 +1,15 @@
+{
+  "scope": "Windows/amd64 CGO-disabled tagged test/producer compilation only; no runtime execution",
+  "artifacts": {
+    "tests": {
+      "sha256": "82d5862a04f80605b1602eda9d5d0f14d9b82adce54c6d2b811f40e93f6bbbd2",
+      "bytes": 6046208,
+      "build_info": "/private/tmp/hawdb-wip-ready-20261015/go-host-profile-windows.test.exe: go1.27.2\n\tpath\tgithub.com/nowledge-co/hawdb/bindings/go.test\n\tmod\tgithub.com/nowledge-co/hawdb/bindings/go\t(devel)\t\n\tdep\tgithub.com/ebitengine/purego\tv0.11.1\th1:2zpWRSQNVKN4eKsKO9eM1ILDgWfYMY9GwqRmK6XeQ/0=\n\tbuild\t-buildmode=exe\n\tbuild\t-compiler=gc\n\tbuild\t-tags=hawdb_boundary_profile\n\tbuild\tCGO_ENABLED=0\n\tbuild\tGOARCH=amd64\n\tbuild\tGOOS=windows\n\tbuild\tGOAMD64=v1\n"
+    },
+    "producer": {
+      "sha256": "8ac7e81337d856a5fc7a8b765dfa0ba4dd6a8d6f8e656771c4b13d9381eea958",
+      "bytes": 4666368,
+      "build_info": "/private/tmp/hawdb-wip-ready-20261015/go-host-profile-windows.exe: go1.27.2\n\tpath\tgithub.com/nowledge-co/hawdb/bindings/go/cmd/boundary\n\tmod\tgithub.com/nowledge-co/hawdb/bindings/go\t(devel)\t\n\tdep\tgithub.com/ebitengine/purego\tv0.11.1\th1:2zpWRSQNVKN4eKsKO9eM1ILDgWfYMY9GwqRmK6XeQ/0=\n\tbuild\t-buildmode=exe\n\tbuild\t-compiler=gc\n\tbuild\t-tags=hawdb_boundary_profile\n\tbuild\tCGO_ENABLED=0\n\tbuild\tGOARCH=amd64\n\tbuild\tGOOS=windows\n\tbuild\tGOAMD64=v1\n\tbuild\tvcs=git\n\tbuild\tvcs.revision=a7900428a24a74fe373d05f9cfc1a63cf144bf3b\n\tbuild\tvcs.time=2026-10-17T08:03:43Z\n\tbuild\tvcs.modified=true\n"
+    }
+  }
+}

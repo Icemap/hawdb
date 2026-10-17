@@ -1,0 +1,3414 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 114736ec..2fea05f6 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -324,3 +324,7 @@ harness = false
+ [[bench]]
+ name = "graph_analytics"
+ harness = false
++
++[[bench]]
++name = "host_boundary_allocations"
++harness = false
+diff --git a/benches/host_boundary.rs b/benches/host_boundary.rs
+new file mode 100644
+index 00000000..058cb323
+--- /dev/null
++++ b/benches/host_boundary.rs
+@@ -0,0 +1,9 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++
++#[path = "host_boundary/workload.rs"]
++mod workload;
++
++fn main() {
++    workload::main_with_observer(None);
++}
+diff --git a/benches/host_boundary/checksum.rs b/benches/host_boundary/checksum.rs
+new file mode 100644
+index 00000000..588eb8fb
+--- /dev/null
++++ b/benches/host_boundary/checksum.rs
+@@ -0,0 +1,89 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++
++use hawdb::Value;
++
++/// Canonical FNV-1a over schema plus ordered rows. Type tags, little-endian
++/// lengths and IEEE float bits make precision/type loss observable. It is a
++/// parity oracle, not a security hash and not the benchmark's query timer.
++pub(super) struct Checksum(u64);
++
++impl Checksum {
++    pub(super) fn new(columns: &[String]) -> Self {
++        let mut result = Self(0xcbf29ce484222325);
++        result.bytes(b"HDBBOUND1");
++        result.length(columns.len());
++        for column in columns {
++            result.value(&Value::String(column.clone()));
++        }
++        result
++    }
++
++    fn bytes(&mut self, bytes: &[u8]) {
++        for byte in bytes {
++            self.0 = (self.0 ^ u64::from(*byte)).wrapping_mul(0x100000001b3);
++        }
++    }
++
++    fn length(&mut self, length: usize) {
++        self.bytes(&(length as u64).to_le_bytes());
++    }
++
++    fn value(&mut self, value: &Value) {
++        match value {
++            Value::Null => self.bytes(&[0]),
++            Value::Bool(value) => self.bytes(&[1, u8::from(*value)]),
++            Value::Int(value) => {
++                self.bytes(&[2]);
++                self.bytes(&value.to_le_bytes());
++            }
++            Value::Float(value) => {
++                self.bytes(&[3]);
++                self.bytes(&value.to_bits().to_le_bytes());
++            }
++            Value::String(value) => {
++                self.bytes(&[4]);
++                self.length(value.len());
++                self.bytes(value.as_bytes());
++            }
++            Value::Binary(value) => {
++                self.bytes(&[5]);
++                self.length(value.len());
++                self.bytes(value);
++            }
++            Value::Uuid(value) => {
++                self.bytes(&[6]);
++                self.bytes(value.as_bytes());
++            }
++            Value::List(values) => {
++                self.bytes(&[7]);
++                self.length(values.len());
++                for value in values {
++                    self.value(value);
++                }
++            }
++            Value::Map(values) => {
++                self.bytes(&[8]);
++                self.length(values.len());
++                for (key, value) in values {
++                    self.bytes(&[4]);
++                    self.length(key.len());
++                    self.bytes(key.as_bytes());
++                    self.value(value);
++                }
++            }
++        }
++    }
++
++    pub(super) fn row(&mut self, values: &[Value]) {
++        self.bytes(&[0xff]);
++        self.length(values.len());
++        for value in values {
++            self.value(value);
++        }
++    }
++
++    pub(super) fn hex(&self) -> String {
++        format!("{:016x}", self.0)
++    }
++}
+diff --git a/benches/host_boundary/workload.rs b/benches/host_boundary/workload.rs
+new file mode 100644
+index 00000000..2d7eb564
+--- /dev/null
++++ b/benches/host_boundary/workload.rs
+@@ -0,0 +1,224 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++
++//! Engine-only half of the cross-language boundary benchmark. Inputs, statements,
++//! consumer work and checksums are shared with Python/Go by the matrix driver.
++//! This binary is a local qualification tool, not a production control plane.
++
++use hawdb::{HawDBEmbedded, Value};
++use serde::Deserialize;
++use serde_json::json;
++use std::collections::BTreeMap;
++use std::time::Instant;
++
++#[path = "checksum.rs"]
++mod checksum;
++
++#[derive(Deserialize)]
++struct Job {
++    case: String,
++    backend: String,
++    path: String,
++    rows: Vec<BTreeMap<String, serde_json::Value>>,
++    insert_single: String,
++    insert_bulk: String,
++    scan: String,
++    point: String,
++    columns: Vec<String>,
++}
++
++fn value(value: serde_json::Value) -> Value {
++    match value {
++        serde_json::Value::Null => Value::Null,
++        serde_json::Value::Bool(value) => Value::Bool(value),
++        serde_json::Value::Number(value) => value
++            .as_i64()
++            .map(Value::Int)
++            .unwrap_or_else(|| Value::Float(value.as_f64().expect("finite fixture float"))),
++        serde_json::Value::String(value) => Value::String(value),
++        serde_json::Value::Array(items) => {
++            Value::List(items.into_iter().map(self::value).collect())
++        }
++        serde_json::Value::Object(items) => Value::Map(
++            items
++                .into_iter()
++                .map(|(key, item)| (key, self::value(item)))
++                .collect(),
++        ),
++    }
++}
++
++pub struct Observer {
++    pub begin: fn(),
++    pub finish: fn() -> serde_json::Value,
++    pub begin_failure: fn(),
++    pub finish_failure: fn() -> serde_json::Value,
++}
++
++fn run(job: Job, observer: Option<&Observer>) -> Result<serde_json::Value, String> {
++    let input_rows: Vec<_> = job
++        .rows
++        .into_iter()
++        .map(|row| {
++            row.into_iter()
++                .map(|(key, item)| (key, value(item)))
++                .collect::<BTreeMap<_, _>>()
++        })
++        .collect();
++    let mut database = match job.backend.as_str() {
++        "memory" => HawDBEmbedded::open_in_memory(),
++        "file" => HawDBEmbedded::open(&job.path).map_err(|error| error.to_string())?,
++        _ => return Err("unknown backend".into()),
++    };
++    let setup = Instant::now();
++    database
++        .query_admitted("CREATE INDEX ON :Boundary(id)")
++        .map_err(|error| format!("setup: {error}"))?;
++    if matches!(job.case.as_str(), "select" | "point" | "wide") {
++        for rows in input_rows.chunks(512) {
++            let params = BTreeMap::from([(
++                "rows".into(),
++                Value::List(rows.iter().cloned().map(Value::Map).collect()),
++            )]);
++            database
++                .query_with_params_admitted(&job.insert_bulk, &params)
++                .map_err(|error| format!("setup: {error}"))?;
++        }
++    }
++    let setup_ns = setup.elapsed().as_nanos();
++    // Warm the same read shape in this process/database, rather than relying
++    // on the driver's discarded process to warm this handle's plan cache.
++    if matches!(job.case.as_str(), "select" | "point" | "wide") {
++        let calls = if job.case == "point" {
++            input_rows.len()
++        } else {
++            1
++        };
++        for row in input_rows.iter().take(calls) {
++            let params = if job.case == "point" {
++                BTreeMap::from([("id".into(), row["id"].clone())])
++            } else {
++                BTreeMap::new()
++            };
++            let output = database
++                .query_with_params_admitted(
++                    if job.case == "point" {
++                        &job.point
++                    } else {
++                        &job.scan
++                    },
++                    &params,
++                )
++                .map_err(|error| format!("warmup: {error}"))?;
++            std::hint::black_box(output);
++        }
++    }
++    let mut query_ns = 0u128;
++    let mut consume_ns = 0u128;
++    let mut rows_seen = 0usize;
++    let mut payload_bytes = 0usize;
++    let mut hash = checksum::Checksum::new(&job.columns);
++    if let Some(observer) = observer {
++        (observer.begin)();
++    }
++    let started = Instant::now();
++    if job.case == "fill" {
++        for row in &input_rows {
++            let called = Instant::now();
++            database
++                .query_with_params_admitted(&job.insert_single, row)
++                .map_err(|error| format!("execute: {error}"))?;
++            query_ns += called.elapsed().as_nanos();
++        }
++    } else if job.case == "fill_bulk" {
++        let params = BTreeMap::from([(
++            "rows".into(),
++            Value::List(input_rows.iter().cloned().map(Value::Map).collect()),
++        )]);
++        let called = Instant::now();
++        database
++            .query_with_params_admitted(&job.insert_bulk, &params)
++            .map_err(|error| format!("execute: {error}"))?;
++        query_ns += called.elapsed().as_nanos();
++    }
++    let write_ns = query_ns;
++    let calls = if job.case == "point" {
++        input_rows.len()
++    } else {
++        1
++    };
++    for row in input_rows.iter().take(calls) {
++        let params = if job.case == "point" {
++            BTreeMap::from([("id".into(), row["id"].clone())])
++        } else {
++            BTreeMap::new()
++        };
++        let called = Instant::now();
++        let output = database
++            .query_with_params_admitted(
++                if job.case == "point" {
++                    &job.point
++                } else {
++                    &job.scan
++                },
++                &params,
++            )
++            .map_err(|error| format!("execute: {error}"))?;
++        query_ns += called.elapsed().as_nanos();
++        if output.schema().columns() != job.columns {
++            return Err("consumer: result schema mismatch".into());
++        }
++        payload_bytes += output.payload_bytes();
++        let consumed = Instant::now();
++        for values in output.value_rows() {
++            hash.row(values);
++            rows_seen += 1;
++        }
++        consume_ns += consumed.elapsed().as_nanos();
++    }
++    let elapsed_ns = started.elapsed().as_nanos();
++    let native_profile = observer.map(|observer| (observer.finish)());
++    Ok(json!({
++        "status": "ok", "layer": "rust", "case": job.case, "backend": job.backend,
++        "input_rows": input_rows.len(), "output_rows": rows_seen,
++        "values": rows_seen * job.columns.len(), "checksum": hash.hex(),
++        "setup_ns": setup_ns, "query_boundary_ns": query_ns,
++        "write_boundary_ns": write_ns, "read_boundary_ns": query_ns - write_ns,
++        "consumer_ns": consume_ns, "elapsed_ns": elapsed_ns,
++        "native_profile": native_profile,
++        "engine_payload_bytes": payload_bytes,
++        "durability": "SyncOnEveryWrite", "prefetch": 0,
++    }))
++}
++
++pub fn main_with_observer(observer: Option<&Observer>) {
++    let Some(path) = std::env::args().nth(1) else {
++        eprintln!("Usage: host_boundary JOB.json (see bindings/benchmarks/run.py)");
++        return;
++    };
++    let result = std::fs::read(&path)
++        .map_err(|error| error.to_string())
++        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|error| error.to_string()))
++        .map(|job| {
++            if let Some(observer) = observer {
++                (observer.begin_failure)();
++            }
++            match run(job, observer) {
++                Ok(result) => result,
++                Err(error) => {
++                    let profile = observer.map(|observer| (observer.finish_failure)());
++                    let mut result = json!({"status": "error", "layer": "rust", "error": error});
++                    if let Some(profile) = profile {
++                        result["failure_native_profile"] = profile;
++                        result["failure_profile_scope"] =
++                            json!("producer_run_including_setup_warmup_and_cleanup");
++                    }
++                    result
++                }
++            }
++        });
++    println!(
++        "{}",
++        result.unwrap_or_else(|error| json!({"status": "error", "layer": "rust", "error": error}))
++    );
++}
+diff --git a/benches/host_boundary_allocations.rs b/benches/host_boundary_allocations.rs
+new file mode 100644
+index 00000000..080b295c
+--- /dev/null
++++ b/benches/host_boundary_allocations.rs
+@@ -0,0 +1,61 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++
++//! Instrumented lower bound. Compare allocations with foreign profiling builds;
++//! use the ordinary host_boundary binary for uninstrumented release latency.
++
++#[path = "../bindings/benchmarks/native_alloc.rs"]
++mod native_profile;
++#[path = "host_boundary/workload.rs"]
++mod workload;
++
++use native_profile::BoundaryAllocationSnapshot;
++use std::sync::Mutex;
++
++static BEFORE: Mutex<Option<BoundaryAllocationSnapshot>> = Mutex::new(None);
++static FAILURE_BEFORE: Mutex<Option<BoundaryAllocationSnapshot>> = Mutex::new(None);
++
++fn begin() {
++    *BEFORE.lock().expect("profile lock") = Some(native_profile::snapshot());
++}
++
++fn finish() -> serde_json::Value {
++    finish_snapshot(&BEFORE)
++}
++
++fn begin_failure() {
++    *FAILURE_BEFORE.lock().expect("profile lock") = Some(native_profile::snapshot());
++}
++
++fn finish_failure() -> serde_json::Value {
++    finish_snapshot(&FAILURE_BEFORE)
++}
++
++fn finish_snapshot(before: &Mutex<Option<BoundaryAllocationSnapshot>>) -> serde_json::Value {
++    let after = native_profile::snapshot();
++    let before = before
++        .lock()
++        .expect("profile lock")
++        .take()
++        .expect("profile start");
++    serde_json::json!({
++        "allocation_calls": after.allocation_calls - before.allocation_calls,
++        "allocated_bytes": after.allocated_bytes - before.allocated_bytes,
++        "deallocation_calls": after.deallocation_calls - before.deallocation_calls,
++        "deallocated_bytes": after.deallocated_bytes - before.deallocated_bytes,
++        "reallocation_calls": after.reallocation_calls - before.reallocation_calls,
++        "live_requested_bytes_before": before.live_requested_bytes,
++        "live_requested_bytes_after": after.live_requested_bytes,
++        "process_peak_requested_bytes": after.process_peak_requested_bytes,
++        "scope": "Rust global allocator requests; foreign heaps/rounding/non-Rust workspace excluded",
++    })
++}
++
++fn main() {
++    workload::main_with_observer(Some(&workload::Observer {
++        begin,
++        finish,
++        begin_failure,
++        finish_failure,
++    }));
++}
+diff --git a/benchmarks.bzl b/benchmarks.bzl
+index 8044d7e4..1ed010fa 100644
+--- a/benchmarks.bzl
++++ b/benchmarks.bzl
+@@ -38,6 +38,8 @@ HAWDB_MANUAL_BENCHMARKS = [
+     "concurrent_snapshot_reads",
+     "concurrent_writers",
+     "graph_analytics",
++    "host_boundary",
++    "host_boundary_allocations",
+ ]
+ 
+ def _release_benchmark_transition_impl(_settings, _attr):
+@@ -90,13 +92,18 @@ def hawdb_benchmark_binaries(crate_features):
+         "//crates/vector-projection:hawdb_vector_projection",
+     ]
+     for benchmark in HAWDB_BENCHMARKS + HAWDB_MANUAL_BENCHMARKS:
++        shared_srcs = [
++            "benches/host_boundary/workload.rs",
++            "benches/host_boundary/checksum.rs",
++            "//bindings/benchmarks:native_alloc.rs",
++        ] if benchmark == "host_boundary_allocations" else []
+         rust_binary(
+             name = "hawdb_bench_%s" % benchmark,
+             crate_root = "benches/%s.rs" % benchmark,
+             crate_features = crate_features,
+             srcs = ["benches/%s.rs" % benchmark] + native.glob([
+                 "benches/%s/**/*.rs" % benchmark,
+-            ], allow_empty = True),
++            ], allow_empty = True) + shared_srcs,
+             edition = "2024",
+             tags = ["manual"] if benchmark in HAWDB_MANUAL_BENCHMARKS else [],
+             aliases = aliases(
+diff --git a/bindings/benchmarks/BUILD.bazel b/bindings/benchmarks/BUILD.bazel
+new file mode 100644
+index 00000000..cf8b5e22
+--- /dev/null
++++ b/bindings/benchmarks/BUILD.bazel
+@@ -0,0 +1,7 @@
++load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
++package(default_visibility = ["//visibility:public"])
++py_library(name = "checksum", srcs = ["checksum.py"], imports = ["."])
++py_binary(name = "python_boundary", srcs = ["python_boundary.py"], deps = [":checksum", "//bindings/python:hawdb"], tags = ["manual"])
++py_test(name = "driver_tests", srcs = ["compare.py", "run.py", "test_run.py"], main = "test_run.py", deps = [":checksum"], tags = ["manual"])
++
++exports_files(["native_alloc.rs", "native_profile.rs"])
+diff --git a/bindings/benchmarks/README.md b/bindings/benchmarks/README.md
+new file mode 100644
+index 00000000..48407dc1
+--- /dev/null
++++ b/bindings/benchmarks/README.md
+@@ -0,0 +1,119 @@
++# Ordinary host boundary qualification
++
++These developer tools support [#976](https://github.com/nowledge-co/hawdb/issues/976).
++They measure the existing owned Rust, Python and pure-Go APIs using the same
++fixed-seed fixtures, parameterized Cypher, schema checks and ordered typed checksum.
++They are reusable local tools; CLI arguments are not a production control plane.
++
++```console
++bazel build -c opt //:hawdb_bench_host_boundary \
++  //bindings/benchmarks:python_boundary //bindings/go/cmd/boundary \
++  //bindings/ffi:hawdb_ffi
++python3 -B bindings/benchmarks/run.py --output /tmp/hawdb-boundary
++bazel test //bindings/benchmarks:driver_tests
++```
++
++Stage the intended source first. The driver records HEAD, index tree and actual
++producer hashes, and rejects unstaged changes and non-ignored untracked files.
++Keep reports outside the checkout. Do not edit or rebuild during measurement.
++
++The complete matrix uses 1,000, 100,000 and 1,000,000 rows, memory and file stores,
++and all five cases: select, point, fill, fill_bulk and wide. It retains one
++fresh-process discarded iteration and three measured iterations. Read workloads
++seed in 512-row batches and warm the same query in the same database before
++measurement. Point performs one lookup per input row in warmup and measurement;
++fill commits one statement per row. Persistent writes retain SyncOnEveryWrite.
++No limits or durability defaults are overridden. Refusal is a recorded failed
++outcome, never a successful partial result or a latency comparison.
++
++A small wiring check can use --sizes 3 --samples 1. It is not performance evidence.
++The wide fixture includes Unicode, embedded NUL, lists, maps, booleans and NULLs.
++Schema, ordered rows, type-aware checksum and phase timing must agree. Supported
++fixtures do not prove every possible numeric, binary or UUID conversion.
++
++query_boundary_ns includes parameter conversion, engine execution and result
++conversion. For fill/fill_bulk it includes the verification read; the separately
++reported write_boundary_ns and read_boundary_ns sum to it. consumer_ns measures
++the host checksum. elapsed_ns includes that checksum and is not isolated crossing
++cost. Process wall time and peak RSS also include parsing, fixture setup, warmup,
++cleanup and the runtime. They are not query-only resource charges.
++
++## Optional resource observers
++
++```console
++bazel build -c opt //:hawdb_bench_host_boundary_allocations \
++  //bindings/ffi:hawdb_ffi_boundary_profile //bindings/python:_hawdb_boundary_profile
++```
++
++Pass the matching explicit artifacts and --native-profiles to run.py. Ordinary
++builds do not install the allocator observer. Keep instrumented observations
++separate from ordinary latency. Native counters count Rust allocator requests;
++they exclude allocator rounding, foreign heaps and non-Rust workspace. Python
++tracemalloc and Go heap counters cover their own runtimes, not the entire process.
++Native parameter/engine/result timers do not include all host-side conversion.
++
++On structured producer errors, failure_native_profile uses the distinct scope
++producer_run_including_setup_warmup_and_cleanup. This wider window includes
++setup, warmup and database cleanup. It is not comparable to a successful
++measured-operation profile. Missing counters stay missing, never zero. Invalid
++profiles or wrong scope fail validation. An error with valid resource observations
++still fails the experiment and contributes no successful latency median. Startup,
++process termination or failures before the observer can run may lack counters.
++RSS includes runtime and fixture costs; no whole-process memory bound is claimed.
++
++Go/C in-memory opening is an additive facade wrapper. Go treats the optional
++symbol as unavailable on older libraries while preserving persistent opening.
++The wrapper does not use a temporary persistent database for a memory workload.
++
++## Immutable comparisons
++
++compare.py builds both revisions before running either matrix, freezes producer
++artifacts and Python runfiles, and verifies them before and after measurement.
++Its historical baseline adapter is qualified only for the full immutable revision
++3cdb2610ba8b984676b80ba22df64821787886d3. Its manifest records the exact adapter,
++source, producer, runtime and selection hashes. Report ratios are baseline-first
++ratios of medians, not alternating paired controls. A completed or green collection
++is not proof of performance improvement, tail latency, or complete resource bounds.
++Final acceptance still requires the requested complete workload and baseline scope.
++
++All targets are manual developer tools. This change adds no workflow or fuzz CI
++lane, retained/Arrow/node-view API, engine optimization, row-limit policy, durable
++format change or stable Mem integration. No benchmark results are claimed here.
++
++### Go host JSON conversion observations
++
++The native FFI phase timers do not include Go parameter preparation/JSON encoding
++or Go result copying/JSON decoding/normalization. Build the separate manual
++producer to observe those costs through the same ordinary binding query path:
++
++```console
++bazel build -c opt //bindings/go/cmd/boundary:boundary_profile
++```
++
++Use this producer with `run.py --native-profiles --go-host-profiles` and the
++matching explicit instrumented Rust, Python and FFI artifacts described above.
++Without an explicit `--go`, the driver selects the profile producer when
++`--go-host-profiles` is set. The ordinary target uses compile-time-false guards,
++a zero-sized state and no timing/counter observer. The tagged artifact must not
++be submitted as ordinary latency: the driver refuses unexpected host profiles.
++
++`go_host_profile` reports parameter conversion, complete native-call and result
++conversion wall times and call counts over the measured query loop only. Native
++phase times nest inside `ffi_call_ns`; do not add the two. Lock acquisition,
++host result consumption and fixture/input construction remain outside these
++three phases. The existing outer query and consumer timers cover their stated
++scopes separately. Counts must match all measured calls for the chosen workload;
++missing, saturated, malformed or incomplete host counters cannot qualify samples.
++Timing is instrumented observation, not an ordinary-latency result or a foreign
++heap/whole-process memory bound. Snapshot formatting occurs after the existing
++Go allocation observation window; that window otherwise retains its original
++checksum/native-profile bookkeeping scope.
++
++A failure after opening the database retains `failure_go_host_profile` over
++query calls in setup, warmup, measured execution and cleanup, sampled after
++Close. Close itself is not a query-conversion phase. Failures before a database
++exists have no host snapshot. These errors remain errors and never enter
++successful timing medians. Historical reports without host observers remain
++missing; they are not retroactively completed. Before/after snapshots qualify
++serial producers only; independently read atomic counters are not a coherent
++per-operation snapshot for concurrent callers.
+diff --git a/bindings/benchmarks/checksum.py b/bindings/benchmarks/checksum.py
+new file mode 100644
+index 00000000..7ec7d722
+--- /dev/null
++++ b/bindings/benchmarks/checksum.py
+@@ -0,0 +1,63 @@
++# Copyright 2026 Nowledge
++# SPDX-License-Identifier: Apache-2.0
++
++"""Type-sensitive cross-language result oracle (HDBBOUND1)."""
++
++import struct
++
++
++class Checksum:
++    def __init__(self, columns):
++        self.state = 0xCBF29CE484222325
++        self.bytes(b"HDBBOUND1")
++        self.length(len(columns))
++        for column in columns:
++            self.value(column)
++
++    def bytes(self, data):
++        for byte in data:
++            self.state = ((self.state ^ byte) * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
++
++    def length(self, length):
++        self.bytes(struct.pack("<Q", length))
++
++    def value(self, value):
++        if value is None:
++            self.bytes(b"\x00")
++        elif isinstance(value, bool):
++            self.bytes(bytes([1, int(value)]))
++        elif isinstance(value, int):
++            self.bytes(b"\x02" + struct.pack("<q", value))
++        elif isinstance(value, float):
++            self.bytes(b"\x03" + struct.pack("<d", value))
++        elif isinstance(value, str):
++            data = value.encode("utf-8")
++            self.bytes(b"\x04")
++            self.length(len(data))
++            self.bytes(data)
++        elif isinstance(value, bytes):
++            self.bytes(b"\x05")
++            self.length(len(value))
++            self.bytes(value)
++        elif isinstance(value, list):
++            self.bytes(b"\x07")
++            self.length(len(value))
++            for item in value:
++                self.value(item)
++        elif isinstance(value, dict):
++            self.bytes(b"\x08")
++            self.length(len(value))
++            for key in sorted(value):
++                self.value(key)
++                self.value(value[key])
++        else:
++            raise TypeError("unexpected result type: " + type(value).__name__)
++
++    def row(self, values):
++        self.bytes(b"\xff")
++        self.length(len(values))
++        for value in values:
++            self.value(value)
++
++    def hex(self):
++        return "%016x" % self.state
+diff --git a/bindings/benchmarks/compare.py b/bindings/benchmarks/compare.py
+new file mode 100644
+index 00000000..ad3329a2
+--- /dev/null
++++ b/bindings/benchmarks/compare.py
+@@ -0,0 +1,327 @@
++# Copyright 2026 Nowledge
++# SPDX-License-Identifier: Apache-2.0
++
++"""Build and compare two immutable ordinary-boundary producers on one host."""
++
++import argparse
++import hashlib
++import itertools
++import json
++import os
++import pathlib
++import platform
++import re
++import shutil
++import statistics
++import subprocess
++import sys
++
++import run as matrix
++
++ROOT = pathlib.Path(__file__).resolve().parents[2]
++BASELINE = "3cdb2610ba8b984676b80ba22df64821787886d3"
++TARGETS = (
++    "//:hawdb_bench_host_boundary", "//bindings/benchmarks:python_boundary",
++    "//bindings/go/cmd/boundary", "//bindings/ffi:hawdb_ffi",
++)
++HARNESS = (
++    "benches/host_boundary.rs", "benches/host_boundary/workload.rs",
++    "benches/host_boundary/checksum.rs", "bindings/benchmarks/run.py",
++    "bindings/benchmarks/checksum.py", "bindings/benchmarks/python_boundary.py",
++    "bindings/go/cmd/boundary/BUILD.bazel", "bindings/go/cmd/boundary/main.go",
++    "bindings/go/cmd/boundary/profile_unix.go", "bindings/go/cmd/boundary/profile_windows.go",
++)
++BASELINE_BUILD = '''load("@rules_python//python:defs.bzl", "py_binary", "py_library")
++package(default_visibility = ["//visibility:public"])
++py_library(name = "checksum", srcs = ["checksum.py"], imports = ["."])
++py_binary(name = "python_boundary", srcs = ["python_boundary.py"],
++          deps = [":checksum", "//bindings/python:hawdb"], tags = ["manual"])
++'''
++
++
++def command(arguments, cwd):
++    return subprocess.check_output(arguments, cwd=cwd, text=True).strip()
++
++
++def sha256(path):
++    return hashlib.sha256(path.read_bytes()).hexdigest()
++
++
++def runfiles_identity(directory):
++    entries = []
++    for path in sorted(directory.rglob("*")):
++        relative = path.relative_to(directory).as_posix()
++        if path.is_symlink():
++            if not path.resolve(strict=True).is_relative_to(directory.resolve()):
++                raise RuntimeError("frozen runfile points outside its tree: " + relative)
++            entries.append((relative, "link", os.readlink(path)))
++        elif path.is_file():
++            entries.append((relative, "file", sha256(path), path.stat().st_mode & 0o777))
++        else:
++            entries.append((relative, "directory"))
++    digest = hashlib.sha256(json.dumps(entries, separators=(",", ":")).encode()).hexdigest()
++    return {"path": str(directory), "sha256": digest, "entries": len(entries)}
++
++
++def manifest_entry(logical, physical):
++    def escape(value):
++        return value.replace("\\", "\\b").replace("\n", "\\n")
++    # Bazel escapes spaces in logical names only; physical paths may contain
++    # spaces because the manifest reader splits once at the first separator.
++    escaped = escape(logical).replace(" ", "\\s"), escape(physical)
++    prefix = " " if escaped != (logical, physical) else ""
++    return prefix + escaped[0] + " " + escaped[1] + "\n"
++
++
++def freeze_python_launcher(original, target):
++    source = pathlib.Path(str(original) + ".runfiles")
++    destination = pathlib.Path(str(target) + ".runfiles")
++    source_manifest = pathlib.Path(str(original) + ".runfiles_manifest")
++    manifest_before = sha256(source_manifest)
++    links = []
++
++    def ignore(directory, names):
++        skipped = []
++        for name in names:
++            path = pathlib.Path(directory) / name
++            if name == "__pycache__" or name.endswith(".pyc") or path == source / "MANIFEST":
++                skipped.append(name)
++            elif path.is_symlink():
++                link = os.readlink(path)
++                endpoint = pathlib.Path(os.path.abspath(path.parent / link))
++                if not os.path.isabs(link) and endpoint.is_relative_to(source) and endpoint.exists():
++                    # Keep the venv interpreter linked to the frozen runtime;
++                    # copying it into the venv breaks its library search path.
++                    links.append((path.relative_to(source), link))
++                    skipped.append(name)
++        return skipped
++
++    shutil.copy2(original, target)
++    # Absolute/out-of-tree Bazel links must become independent content.
++    shutil.copytree(source, destination, ignore=ignore)
++    for relative, link in links:
++        (destination / relative).symlink_to(link)
++    contents = "".join(manifest_entry(path.relative_to(destination).as_posix(), str(path))
++                       for path in sorted(destination.rglob("*")))
++    (destination / "MANIFEST").write_text(contents)
++    pathlib.Path(str(target) + ".runfiles_manifest").write_text(contents)
++    if sha256(source_manifest) != manifest_before:
++        raise RuntimeError("Python runfiles manifest changed while freezing")
++    return runfiles_identity(destination)
++
++
++def require_producer(producer):
++    for name, artifact in producer.items():
++        if sha256(pathlib.Path(artifact["path"])) != artifact["sha256"]:
++            raise RuntimeError("frozen producer changed: " + name)
++    python = producer["python"]
++    if runfiles_identity(pathlib.Path(python["runfiles"]["path"])) != python["runfiles"]:
++        raise RuntimeError("frozen Python runfiles changed")
++    manifest = pathlib.Path(python["path"] + ".runfiles_manifest")
++    if sha256(manifest) != python["runfiles_manifest_sha256"]:
++        raise RuntimeError("frozen Python runfiles manifest changed")
++
++
++def validate_revision(revision):
++    if not re.fullmatch(r"[0-9a-f]{40}", revision):
++        raise ValueError("baseline must be a full immutable Git SHA")
++    if revision != BASELINE:
++        raise ValueError("baseline adapters are qualified only for " + BASELINE)
++
++
++def require_source(repository, expected):
++    subprocess.run(["git", "diff", "--quiet"], cwd=repository, check=True)
++    if command(["git", "ls-files", "--others", "--exclude-standard"], repository):
++        raise RuntimeError("source contains untracked files")
++    actual = {"head": command(["git", "rev-parse", "HEAD"], repository),
++              "tree": command(["git", "write-tree"], repository)}
++    if any(actual[key] != expected[key] for key in actual):
++        raise RuntimeError("source changed during comparison")
++
++
++def prepare_baseline(destination, revision):
++    validate_revision(revision)
++    subprocess.run(["git", "merge-base", "--is-ancestor", revision, "HEAD"], cwd=ROOT, check=True)
++    subprocess.run(["git", "clone", "--shared", "--no-checkout", str(ROOT), str(destination)], check=True)
++    subprocess.run(["git", "checkout", "--detach", revision], cwd=destination, check=True)
++    adapter = ROOT / "bindings/benchmarks/main-baseline-adapters.json"
++    specification = json.loads(adapter.read_text())
++    if specification["baseline"] != revision:
++        raise ValueError("adapter specification does not match the baseline")
++    patch = destination.parent / "baseline-adapters.patch"
++    patch.write_text("".join(specification["patch_lines"]))
++    subprocess.run(["git", "apply", "--check", str(patch)], cwd=destination, check=True)
++    subprocess.run(["git", "apply", str(patch)], cwd=destination, check=True)
++    for relative in HARNESS:
++        target = destination / relative
++        target.parent.mkdir(parents=True, exist_ok=True)
++        shutil.copyfile(ROOT / relative, target)
++    (destination / "bindings/benchmarks/BUILD.bazel").write_text(BASELINE_BUILD)
++    subprocess.run(["git", "add", "--all"], cwd=destination, check=True)
++    return {"head": command(["git", "rev-parse", "HEAD"], destination),
++            "tree": command(["git", "write-tree"], destination),
++            "adapter_patch_sha256": sha256(patch), "adapter_spec_sha256": sha256(adapter),
++            "adaptations": ["Identical ordinary harness and manual targets.",
++                            "Identical untimed in-memory opening adapter."]}
++
++
++def build_producer(repository, directory):
++    directory.mkdir()
++    with (directory / "build.log").open("w") as log:
++        subprocess.run(["bazel", "build", "-c", "opt", *TARGETS], cwd=repository,
++                       stdout=log, stderr=subprocess.STDOUT, check=True)
++    suffix = ".dylib" if sys.platform == "darwin" else ".so"
++    paths = {"rust": repository / "bazel-bin/hawdb_bench_host_boundary",
++             "python": repository / "bazel-bin/bindings/benchmarks/python_boundary",
++             "library": repository / ("bazel-bin/bindings/ffi/libhawdb_ffi" + suffix),
++             "python_extension": repository / "bazel-bin/bindings/python/python/hawdb/_hawdb.so"}
++    paths["go"] = repository / command(
++        ["bazel", "cquery", "-c", "opt", "//bindings/go/cmd/boundary", "--output=files"], repository)
++    frozen = {}
++    for name, original in paths.items():
++        original = original.resolve(strict=True)
++        before = sha256(original)
++        target = directory / original.name
++        runfiles = None
++        if name == "python":
++            runfiles = freeze_python_launcher(original, target)
++        else:
++            shutil.copy2(original, target)
++        if sha256(original) != before or sha256(target) != before:
++            raise RuntimeError("producer changed while freezing " + name)
++        frozen[name] = {"path": str(target), "source": str(original), "sha256": before}
++        if runfiles is not None:
++            frozen[name].update(runfiles=runfiles, runfiles_manifest_sha256=sha256(
++                pathlib.Path(str(target) + ".runfiles_manifest")))
++    (directory / "manifest.json").write_text(json.dumps(frozen, indent=2) + "\n")
++    return frozen
++
++
++def selection_keys(selection):
++    return set(itertools.product(selection.get("layers", []), selection.get("cases", []),
++                                 selection.get("sizes", []), selection.get("backends", [])))
++
++
++def summarize(before, after, expected_keys):
++    summaries = []
++    keys = set(expected_keys)
++    observed = {(r["layer"], r["case"], r["size"], r["backend"])
++                for report in (before, after) for r in report["records"]}
++    scope_matches = (observed <= keys
++                     and all(selection_keys(report) == keys for report in (before, after)))
++    # Enumerate the requested matrix, not only groups that survived execution.
++    for key in sorted(keys):
++        records = [[r for r in report["records"]
++                    if (r["layer"], r["case"], r["size"], r["backend"]) == key]
++                   for report in (before, after)]
++        groups = [[r for r in group if r["discarded"] is False] for group in records]
++        warmups = [[r for r in group if r["discarded"] is True] for group in records]
++        expected = before["samples"]
++        complete = (scope_matches and before["terminal"] is True and after["terminal"] is True
++                    and type(expected) is int and expected > 0 and expected == after["samples"]
++                    and all(report.get("discarded_iterations") == 1 for report in (before, after))
++                    and all(len(group) == expected
++                            and {r["iteration"] for r in group} == set(range(1, expected + 1))
++                            for group in groups)
++                    and all(len(group) == 1 and group[0]["iteration"] == 0 for group in warmups)
++                    and all(len(group) == expected + 1
++                            and all(type(r["iteration"]) is int and matrix.qualified_record(r)
++                                    for r in group) for group in records))
++        item = dict(zip(("layer", "case", "size", "backend"), key))
++        item.update(qualified=complete, before_samples=len(groups[0]), after_samples=len(groups[1]))
++        if complete:
++            for metric in ("elapsed_ns", "query_boundary_ns", "write_boundary_ns", "read_boundary_ns"):
++                medians = [statistics.median(r[metric] for r in group) for group in groups]
++                item[metric + "_median_speedup"] = medians[0] / medians[1] if medians[1] else None
++        summaries.append(item)
++    return summaries
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--output", type=pathlib.Path, required=True)
++    parser.add_argument("--baseline", default=BASELINE)
++    parser.add_argument("--sizes", default="1000,100000,1000000")
++    parser.add_argument("--cases", default=",".join(matrix.CASES))
++    parser.add_argument("--backends", default="memory,file")
++    parser.add_argument("--layers", default="rust,python,go")
++    parser.add_argument("--samples", type=int, default=3)
++    args = parser.parse_args()
++    validate_revision(args.baseline)
++    if (args.samples < 1 or any(int(size) < 1 for size in args.sizes.split(","))
++            or set(args.cases.split(",")) - set(matrix.CASES)
++            or set(args.backends.split(",")) - {"memory", "file"}):
++        parser.error("positive sizes/samples and known cases/backends are required")
++    layers = args.layers.split(",")
++    if set(layers) - {"rust", "python", "go"} or len(set(layers)) != len(layers):
++        parser.error("known, distinct layers are required")
++    output = args.output.resolve()
++    output.mkdir(parents=True, exist_ok=False)
++    evidence = output / "evidence"
++    evidence.mkdir()
++    source = matrix.source_identity()
++    baseline_repository = output / "baseline"
++    baseline_source = prepare_baseline(baseline_repository, args.baseline)
++    sources = {"baseline": baseline_source, "candidate": source}
++    producers = {}
++    # Finish all compilation before measuring either version. Never compare
++    # ordinary latency against an allocation-instrumented artifact.
++    for name, repository in (("baseline", baseline_repository), ("candidate", ROOT)):
++        require_source(repository, sources[name])
++        print(name, "building optimized producer", flush=True)
++        producers[name] = build_producer(repository, evidence / (name + "-producer"))
++        require_source(repository, sources[name])
++    identity = {"sources": sources, "producers": producers, "platform": platform.platform(),
++                "matrix_selection": {"sizes": args.sizes, "cases": args.cases,
++                                     "layers": layers, "backends": args.backends,
++                                     "samples": args.samples},
++                "build": "default Bazel configuration, -c opt", "defaults_changed": False,
++                "ordering": "baseline then candidate; ratios of medians, not alternated pairs",
++                "measurement_limits": ["Process RSS includes fixture/setup/host runtime.",
++                                       "A shard does not establish complete matrix coverage.",
++                                       "Ordinary APIs do not use Arrow or retained cursors.",
++                                       "Python launcher, package and runtime are copied independently; runfiles hashes are checked before and after each producer matrix.",
++                                       "Any refusal/failure prevents a group speedup claim."]}
++    for producer in producers.values():
++        require_producer(producer)
++    (evidence / "manifest.json").write_text(json.dumps(identity, indent=2) + "\n")
++    shutil.copyfile(ROOT / "bindings/benchmarks/main-baseline-adapters.json", evidence / "baseline-adapters.json")
++    statuses = {}
++    reports = {}
++    for name, repository in (("baseline", baseline_repository), ("candidate", ROOT)):
++        require_source(repository, sources[name])
++        producer = producers[name]
++        require_producer(producer)
++        arguments = [sys.executable, "-B", str(repository / "bindings/benchmarks/run.py"),
++                     "--output", str(evidence / name), "--sizes", args.sizes, "--cases", args.cases,
++                     "--backends", args.backends, "--layers", args.layers,
++                     "--samples", str(args.samples)]
++        for flag in ("rust", "python", "go", "library", "python_extension"):
++            arguments += ["--" + flag.replace("_", "-"), producer[flag]["path"]]
++        with (evidence / (name + "-driver.log")).open("w") as log:
++            statuses[name] = subprocess.run(arguments, cwd=repository, stdout=log, stderr=subprocess.STDOUT).returncode
++        report_path = evidence / name / "report.json"
++        if report_path.exists():
++            reports[name] = json.loads(report_path.read_text())
++            if reports[name]["source"] != {key: sources[name][key] for key in ("head", "tree")}:
++                raise RuntimeError("matrix source does not match the frozen producer")
++        require_source(repository, sources[name])
++        require_producer(producer)
++        print(name, "driver exit", statuses[name], flush=True)
++    identity["driver_exits"] = statuses
++    if len(reports) == 2:
++        requested = selection_keys({"sizes": [int(size) for size in args.sizes.split(",")],
++                                    "cases": args.cases.split(","), "layers": layers,
++                                    "backends": args.backends.split(",")})
++        identity["groups"] = summarize(reports["baseline"], reports["candidate"], requested)
++    identity["all_paths_succeeded"] = (
++        len(reports) == 2 and all(status == 0 for status in statuses.values())
++        and all(report.get("terminal") and report.get("all_paths_succeeded") for report in reports.values())
++        and bool(identity.get("groups")) and all(group["qualified"] for group in identity["groups"])
++    )
++    (evidence / "comparison.json").write_text(json.dumps(identity, indent=2) + "\n")
++    raise SystemExit(0 if identity["all_paths_succeeded"] else 1)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/bindings/benchmarks/native_alloc.rs b/bindings/benchmarks/native_alloc.rs
+new file mode 100644
+index 00000000..1da399fb
+--- /dev/null
++++ b/bindings/benchmarks/native_alloc.rs
+@@ -0,0 +1,101 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++
++//! Local boundary qualification instrumentation, enabled only in explicitly
++//! named profiling builds. Counts Rust allocator requests across every native
++//! thread; it neither changes admission nor proves a total process-memory bound.
++//! Non-Rust allocations, allocator rounding and foreign heaps need separate
++//! measurements. Instrumented timings are separate from ordinary release runs.
++
++use std::alloc::{GlobalAlloc, Layout, System};
++use std::sync::atomic::{AtomicU64, Ordering};
++
++#[derive(Clone, Copy, Debug, Default)]
++#[repr(C)]
++pub struct BoundaryAllocationSnapshot {
++    pub allocation_calls: u64,
++    pub allocated_bytes: u64,
++    pub deallocation_calls: u64,
++    pub deallocated_bytes: u64,
++    pub reallocation_calls: u64,
++    pub live_requested_bytes: u64,
++    pub process_peak_requested_bytes: u64,
++}
++
++static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
++static ALLOCATED: AtomicU64 = AtomicU64::new(0);
++static DEALLOCATIONS: AtomicU64 = AtomicU64::new(0);
++static DEALLOCATED: AtomicU64 = AtomicU64::new(0);
++static REALLOCATIONS: AtomicU64 = AtomicU64::new(0);
++static LIVE: AtomicU64 = AtomicU64::new(0);
++static PEAK: AtomicU64 = AtomicU64::new(0);
++
++fn allocated(size: usize) {
++    let size = size as u64;
++    ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
++    ALLOCATED.fetch_add(size, Ordering::Relaxed);
++    let live = LIVE.fetch_add(size, Ordering::Relaxed).saturating_add(size);
++    PEAK.fetch_max(live, Ordering::Relaxed);
++}
++
++fn deallocated(size: usize) {
++    DEALLOCATIONS.fetch_add(1, Ordering::Relaxed);
++    DEALLOCATED.fetch_add(size as u64, Ordering::Relaxed);
++    LIVE.fetch_sub(size as u64, Ordering::Relaxed);
++}
++
++struct CountingAllocator;
++
++// All raw memory operations preserve System's allocator contract. Counters
++// never allocate, take locks, format strings, or call back into the allocator.
++unsafe impl GlobalAlloc for CountingAllocator {
++    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
++        let pointer = unsafe { System.alloc(layout) };
++        if !pointer.is_null() {
++            allocated(layout.size());
++        }
++        pointer
++    }
++
++    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
++        let pointer = unsafe { System.alloc_zeroed(layout) };
++        if !pointer.is_null() {
++            allocated(layout.size());
++        }
++        pointer
++    }
++
++    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
++        unsafe { System.dealloc(pointer, layout) };
++        deallocated(layout.size());
++    }
++
++    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
++        let next = unsafe { System.realloc(pointer, layout, new_size) };
++        if !next.is_null() {
++            REALLOCATIONS.fetch_add(1, Ordering::Relaxed);
++            // Record a successful resize as one allocation/free pair. Count
++            // requested traffic, not an unproven claim that realloc copied.
++            deallocated(layout.size());
++            allocated(new_size);
++        }
++        next
++    }
++}
++
++#[global_allocator]
++static ALLOCATOR: CountingAllocator = CountingAllocator;
++
++/// Counters are monotonic except live bytes. A snapshot during concurrent work
++/// is an observation, not an atomic cross-field snapshot or a memory ledger.
++pub fn snapshot() -> BoundaryAllocationSnapshot {
++    BoundaryAllocationSnapshot {
++        allocation_calls: ALLOCATIONS.load(Ordering::Relaxed),
++        allocated_bytes: ALLOCATED.load(Ordering::Relaxed),
++        deallocation_calls: DEALLOCATIONS.load(Ordering::Relaxed),
++        deallocated_bytes: DEALLOCATED.load(Ordering::Relaxed),
++        reallocation_calls: REALLOCATIONS.load(Ordering::Relaxed),
++        live_requested_bytes: LIVE.load(Ordering::Relaxed),
++        process_peak_requested_bytes: PEAK.load(Ordering::Relaxed),
++    }
++}
+diff --git a/bindings/benchmarks/native_profile.rs b/bindings/benchmarks/native_profile.rs
+new file mode 100644
+index 00000000..b6f375e4
+--- /dev/null
++++ b/bindings/benchmarks/native_profile.rs
+@@ -0,0 +1,76 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++
++//! Developer-only conversion timings plus Rust allocation observations.
++#[path = "native_alloc.rs"]
++mod allocation;
++
++use std::sync::atomic::{AtomicU64, Ordering};
++use std::time::Instant;
++
++#[derive(Clone, Copy, Debug, Default)]
++#[repr(C)]
++pub struct BoundaryProfileSnapshot {
++    pub allocation_calls: u64,
++    pub allocated_bytes: u64,
++    pub deallocation_calls: u64,
++    pub deallocated_bytes: u64,
++    pub reallocation_calls: u64,
++    pub live_requested_bytes: u64,
++    pub process_peak_requested_bytes: u64,
++    pub parameter_conversion_ns: u64,
++    pub engine_call_ns: u64,
++    pub result_conversion_ns: u64,
++}
++
++static PARAMETERS_NS: AtomicU64 = AtomicU64::new(0);
++static ENGINE_NS: AtomicU64 = AtomicU64::new(0);
++static RESULTS_NS: AtomicU64 = AtomicU64::new(0);
++
++pub fn snapshot() -> BoundaryProfileSnapshot {
++    let native = allocation::snapshot();
++    BoundaryProfileSnapshot {
++        allocation_calls: native.allocation_calls,
++        allocated_bytes: native.allocated_bytes,
++        deallocation_calls: native.deallocation_calls,
++        deallocated_bytes: native.deallocated_bytes,
++        reallocation_calls: native.reallocation_calls,
++        live_requested_bytes: native.live_requested_bytes,
++        process_peak_requested_bytes: native.process_peak_requested_bytes,
++        parameter_conversion_ns: PARAMETERS_NS.load(Ordering::Relaxed),
++        engine_call_ns: ENGINE_NS.load(Ordering::Relaxed),
++        result_conversion_ns: RESULTS_NS.load(Ordering::Relaxed),
++    }
++}
++
++pub enum Phase {
++    Parameters,
++    Engine,
++    Results,
++}
++
++pub struct PhaseTimer {
++    phase: Phase,
++    started: Instant,
++}
++
++impl PhaseTimer {
++    pub fn start(phase: Phase) -> Self {
++        Self {
++            phase,
++            started: Instant::now(),
++        }
++    }
++}
++
++impl Drop for PhaseTimer {
++    fn drop(&mut self) {
++        let elapsed = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
++        let counter = match self.phase {
++            Phase::Parameters => &PARAMETERS_NS,
++            Phase::Engine => &ENGINE_NS,
++            Phase::Results => &RESULTS_NS,
++        };
++        counter.fetch_add(elapsed, Ordering::Relaxed);
++    }
++}
+diff --git a/bindings/benchmarks/python_boundary.py b/bindings/benchmarks/python_boundary.py
+new file mode 100644
+index 00000000..1ce8bc35
+--- /dev/null
++++ b/bindings/benchmarks/python_boundary.py
+@@ -0,0 +1,129 @@
++# Copyright 2026 Nowledge
++# SPDX-License-Identifier: Apache-2.0
++
++"""Ordinary eager-dict Python baseline; no engine/binding behavior overrides."""
++
++import json
++import resource
++import sys
++import time
++import importlib.util
++from importlib.machinery import ExtensionFileLoader
++
++# The driver passes the hashed ordinary or instrumented extension explicitly.
++# This replacement is local to the benchmark process.
++if len(sys.argv) == 3:
++    loader = ExtensionFileLoader("hawdb._hawdb", sys.argv[2])
++    spec = importlib.util.spec_from_file_location("hawdb._hawdb", sys.argv[2], loader=loader)
++    native = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(native)
++    sys.modules["hawdb._hawdb"] = native
++
++import hawdb
++from checksum import Checksum
++
++from hawdb import _hawdb as native
++
++
++def native_delta(before, after):
++    result = {key: after[key] - before[key] for key in before
++              if key not in ("live_requested_bytes", "process_peak_requested_bytes")}
++    result["live_requested_bytes_before"] = before["live_requested_bytes"]
++    result["live_requested_bytes_after"] = after["live_requested_bytes"]
++    result["process_peak_requested_bytes"] = after["process_peak_requested_bytes"]
++    result["scope"] = "Rust allocator requests, excluding foreign heap/rounding/non-Rust workspace"
++    return result
++
++
++def run(job):
++    db = hawdb.open() if job["backend"] == "memory" else hawdb.open(job["path"])
++    phase = "setup"
++    tracing_started = False
++    try:
++        setup = time.perf_counter_ns()
++        db.execute("CREATE INDEX ON :Boundary(id)")
++        if job["case"] in ("select", "point", "wide"):
++            for offset in range(0, len(job["rows"]), 512):
++                db.execute(job["insert_bulk"], {"rows": job["rows"][offset : offset + 512]})
++        setup_ns = time.perf_counter_ns() - setup
++        phase = "warmup"
++        if job["case"] in ("select", "point", "wide"):
++            calls = len(job["rows"]) if job["case"] == "point" else 1
++            for row in job["rows"][:calls]:
++                output = db.execute(job["point"], {"id": row["id"]}) if job["case"] == "point" else db.execute(job["scan"])
++                # Existing result conversion is eager; merely retaining/dropping
++                # it warms the complete same binding/query path.
++                del output
++        query_ns = consume_ns = rows_seen = 0
++        checksum = Checksum(job["columns"])
++        phase = "execute"
++        profiling = hasattr(native, "_boundary_profile_snapshot")
++        if profiling:
++            import tracemalloc
++            tracemalloc.start()
++            tracing_started = True
++            native_before = native._boundary_profile_snapshot()
++        started = time.perf_counter_ns()
++        if job["case"] == "fill":
++            for row in job["rows"]:
++                called = time.perf_counter_ns()
++                db.execute(job["insert_single"], row)
++                query_ns += time.perf_counter_ns() - called
++        elif job["case"] == "fill_bulk":
++            called = time.perf_counter_ns()
++            db.execute(job["insert_bulk"], {"rows": job["rows"]})
++            query_ns += time.perf_counter_ns() - called
++        write_ns = query_ns
++        calls = len(job["rows"]) if job["case"] == "point" else 1
++        for row in job["rows"][:calls]:
++            called = time.perf_counter_ns()
++            output = db.execute(job["point"], {"id": row["id"]}) if job["case"] == "point" else db.execute(job["scan"])
++            query_ns += time.perf_counter_ns() - called
++            if output.columns != job["columns"]:
++                raise ValueError("result schema mismatch")
++            consumed = time.perf_counter_ns()
++            for result in output:
++                checksum.row([result[column] for column in job["columns"]])
++                rows_seen += 1
++            consume_ns += time.perf_counter_ns() - consumed
++        elapsed_ns = time.perf_counter_ns() - started
++        profile = None
++        if profiling:
++            native_after = native._boundary_profile_snapshot()
++            host_current, host_peak = tracemalloc.get_traced_memory()
++            tracemalloc.stop()
++            tracing_started = False
++            profile = native_delta(native_before, native_after)
++            profile["python_traced_current_bytes"] = host_current
++            profile["python_traced_peak_bytes"] = host_peak
++        return {
++            "status": "ok", "layer": "python", "case": job["case"], "backend": job["backend"],
++            "input_rows": len(job["rows"]), "output_rows": rows_seen,
++            "values": rows_seen * len(job["columns"]), "checksum": checksum.hex(),
++            "setup_ns": setup_ns, "query_boundary_ns": query_ns,
++            "write_boundary_ns": write_ns, "read_boundary_ns": query_ns - write_ns,
++            "consumer_ns": consume_ns, "elapsed_ns": elapsed_ns,
++            "native_profile": profile,
++            "durability": "SyncOnEveryWrite", "prefetch": 0,
++        }
++    except Exception as error:
++        return {"status": "error", "layer": "python", "phase": phase,
++                "error_type": type(error).__name__, "error": str(error)}
++    finally:
++        if tracing_started:
++            tracemalloc.stop()
++        db.close()
++
++
++if __name__ == "__main__":
++    with open(sys.argv[1], encoding="utf-8") as source:
++        job = json.load(source)
++    failure_before = (native._boundary_profile_snapshot()
++                      if hasattr(native, "_boundary_profile_snapshot") else None)
++    result = run(job)
++    if result["status"] != "ok" and failure_before is not None:
++        result["failure_native_profile"] = native_delta(
++            failure_before, native._boundary_profile_snapshot())
++        result["failure_profile_scope"] = "producer_run_including_setup_warmup_and_cleanup"
++    result["peak_rss_bytes"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)
++    print(json.dumps(result, ensure_ascii=False))
+diff --git a/bindings/benchmarks/run.py b/bindings/benchmarks/run.py
+new file mode 100644
+index 00000000..79f92e41
+--- /dev/null
++++ b/bindings/benchmarks/run.py
+@@ -0,0 +1,371 @@
++# Copyright 2026 Nowledge
++# SPDX-License-Identifier: Apache-2.0
++
++"""Reproducible local Rust/Python/purego boundary matrix; never changes budgets.
++
++Build all native dependencies with the same Bazel optimization mode first:
++  bazel build -c opt //:hawdb_bench_host_boundary \
++    //bindings/benchmarks:python_boundary //bindings/go/cmd/boundary \
++    //bindings/ffi:hawdb_ffi
++"""
++
++import argparse
++import hashlib
++import json
++import os
++import pathlib
++import platform
++import re
++import statistics
++import subprocess
++import sys
++import time
++
++from checksum import Checksum
++
++ROOT = pathlib.Path(__file__).resolve().parents[2]
++CASES = ("select", "point", "fill", "fill_bulk", "wide")
++SEED = 0x5EED
++
++
++def dataset(count, wide):
++    state = SEED
++    for index in range(count):
++        state = (1664525 * state + 1013904223) & 0xFFFFFFFF
++        row = {"id": index, "score": (state >> 8) + 0.5,
++               "title": "mem-%08x-知识\x00🙂" % index}
++        if wide:
++            for column in range(3, 20):
++                kind = column % 7
++                row["c%02d" % column] = (
++                    -(state % 100000), (state % 10000) + 0.25,
++                    "thread-%d-界" % (index % 37), [index, None, "内容", True],
++                    {"id": index, "nested": ["\x00", False, {"标题": "value"}]},
++                    index % 2 == 0, None,
++                )[kind]
++        yield row
++
++
++def fixture(count, case):
++    rows = list(dataset(count, case == "wide"))
++    columns = sorted(rows[0])
++    properties = ", ".join("%s: row.%s" % (column, column) for column in columns)
++    projection = ", ".join("n.%s AS %s" % (column, column) for column in columns)
++    checksum = Checksum(columns)
++    for row in rows:
++        checksum.row([row[column] for column in columns])
++    return {
++        "case": case, "rows": rows, "columns": columns,
++        "insert_single": "CREATE (:Boundary {%s})" % ", ".join("%s: $%s" % (column, column) for column in columns),
++        "insert_bulk": "UNWIND $rows AS row CREATE (:Boundary {%s})" % properties,
++        "scan": "MATCH (n:Boundary) RETURN %s ORDER BY id" % projection,
++        "point": "MATCH (n:Boundary {id: $id}) RETURN %s" % projection,
++        "expected_checksum": checksum.hex(), "seed": SEED,
++    }
++
++
++def command_text(*args):
++    return subprocess.check_output(args, cwd=ROOT, text=True).strip()
++
++
++def source_identity():
++    # Staging is done by the caller before qualification. Detect modifications
++    # rather than silently giving evidence to whatever is compiled later.
++    if subprocess.run(["git", "diff", "--quiet"], cwd=ROOT).returncode:
++        raise RuntimeError("stage the final source before running the matrix")
++    if command_text("git", "ls-files", "--others", "--exclude-standard"):
++        raise RuntimeError("stage or remove untracked files before running the matrix")
++    return {"head": command_text("git", "rev-parse", "HEAD"),
++            "tree": command_text("git", "write-tree")}
++
++
++def artifact_identity(paths):
++    return {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
++
++
++def require_artifact_identity(paths, expected):
++    if artifact_identity(paths) != expected:
++        raise RuntimeError("benchmark artifacts changed during qualification")
++
++
++def native_profile_valid(result, layer, required):
++    if result["status"] != "ok":
++        return None
++    profile = result.get("native_profile")
++    if not required:
++        # An instrumented artifact must not be reported as ordinary latency.
++        return profile is None
++    return native_counters_valid(profile, layer)
++
++
++def native_counters_valid(profile, layer):
++    fields = ("allocation_calls", "allocated_bytes", "deallocation_calls",
++              "deallocated_bytes", "reallocation_calls",
++              "live_requested_bytes_before", "live_requested_bytes_after",
++              "process_peak_requested_bytes")
++    if layer != "rust":
++        fields += ("parameter_conversion_ns", "engine_call_ns", "result_conversion_ns")
++    return isinstance(profile, dict) and all(
++        type(profile.get(key)) is int and profile[key] >= 0 for key in fields
++    )
++
++
++def failure_profile_valid(result, layer, required):
++    if result["status"] == "ok":
++        return None
++    profile = result.get("failure_native_profile")
++    if not required:
++        return False if profile is not None else None
++    return (result.get("failure_profile_scope") ==
++            "producer_run_including_setup_warmup_and_cleanup"
++            and native_counters_valid(profile, layer))
++
++
++def go_host_counters_valid(profile):
++    fields = ("parameter_conversion_ns", "parameter_conversion_calls", "ffi_call_ns",
++              "ffi_calls", "result_conversion_ns", "result_conversion_calls")
++    return (isinstance(profile, dict) and profile.get("valid") is True
++            and profile.get("scope") == "go_query_parameter_native_call_result_phases"
++            and all(type(profile.get(key)) is int and 0 <= profile[key] < 2**64 for key in fields)
++            and profile["result_conversion_calls"] == profile["ffi_calls"]
++            and profile["ffi_calls"] <= profile["parameter_conversion_calls"])
++
++
++def go_host_profile_valid(result, required):
++    if result["status"] != "ok":
++        return None
++    profile = result.get("go_host_profile")
++    if result["layer"] != "go" or not required:
++        return profile is None
++    if not go_host_counters_valid(profile):
++        return False
++    count, case = result.get("size"), result.get("case")
++    if type(count) is not int or count < 1 or case not in CASES:
++        return False
++    calls = count + 1 if case == "fill" else 2 if case == "fill_bulk" else count if case == "point" else 1
++    return all(profile[key] == calls for key in (
++        "parameter_conversion_calls", "ffi_calls", "result_conversion_calls"))
++
++
++def failure_go_host_profile_valid(result, required):
++    if result["status"] == "ok":
++        return None
++    profile = result.get("failure_go_host_profile")
++    if result["layer"] != "go" or not required:
++        return False if profile is not None else None
++    return (result.get("failure_go_host_profile_scope") ==
++            "db_query_calls_including_setup_warmup_and_cleanup"
++            and go_host_counters_valid(profile))
++
++
++def qualified_record(result):
++    return (result["status"] == "ok" and result["parity"]
++            and result["process_exit"] == 0 and result["profile_valid"] is True
++            and result["phase_timing_valid"] is True
++            and result.get("go_host_profile_valid", True) is True)
++
++
++def run_child(command, artifact):
++    started = time.monotonic()
++    timer = ["/usr/bin/time", "-l"] if sys.platform == "darwin" else ["/usr/bin/time", "-v"]
++    with artifact.with_suffix(".stdout").open("w") as stdout, artifact.with_suffix(".stderr").open("w") as stderr:
++        environment = os.environ.copy()
++        runfiles = pathlib.Path(command[0] + ".runfiles")
++        if runfiles.is_dir():
++            for key in ("RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES", "PYTHONPATH", "PYTHONHOME"):
++                environment.pop(key, None)
++            environment.update(RUNFILES_DIR=str(runfiles), PYTHONDONTWRITEBYTECODE="1")
++        process = subprocess.Popen(timer + command, cwd=ROOT, stdout=stdout, stderr=stderr,
++                                   env=environment)
++        return_code = process.wait()
++    lines = artifact.with_suffix(".stdout").read_text().splitlines()
++    try:
++        result = json.loads(lines[-1])
++    except (ValueError, IndexError):
++        result = {"status": "process_error", "error": "missing result JSON"}
++    native = artifact.with_suffix(".stderr").read_text()
++    peak = re.search(r"(\d+)\s+maximum resident set size", native) if sys.platform == "darwin" else re.search(r"Maximum resident set size \(kbytes\):\s*(\d+)", native)
++    result.update({"process_exit": return_code, "process_seconds": time.monotonic() - started,
++                   "command": command, "stdout": str(artifact.with_suffix(".stdout")),
++                   "stderr": str(artifact.with_suffix(".stderr")),
++                   "process_peak_rss_bytes": int(peak[1]) * (1 if sys.platform == "darwin" else 1024) if peak else None})
++    return result
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--output", type=pathlib.Path, required=True)
++    parser.add_argument("--sizes", default="1000,100000,1000000")
++    parser.add_argument("--cases", default=",".join(CASES))
++    parser.add_argument("--backends", default="memory,file")
++    parser.add_argument("--layers", default="rust,python,go")
++    parser.add_argument("--samples", type=int, default=3)
++    parser.add_argument("--rust", type=pathlib.Path, default=ROOT / "bazel-bin/hawdb_bench_host_boundary")
++    parser.add_argument("--python", type=pathlib.Path, default=ROOT / "bazel-bin/bindings/benchmarks/python_boundary")
++    parser.add_argument("--go", type=pathlib.Path)
++    parser.add_argument("--library", type=pathlib.Path)
++    parser.add_argument("--python-extension", type=pathlib.Path)
++    parser.add_argument("--native-profiles", action="store_true",
++                        help="require native counters from all three instrumented artifacts")
++    parser.add_argument("--cpu-profiles", action="store_true")
++    parser.add_argument("--go-host-profiles", action="store_true",
++                        help="require compile-tagged Go JSON/FFI phase counters with --native-profiles")
++    args = parser.parse_args()
++    sizes = [int(size) for size in args.sizes.split(",")]
++    cases = args.cases.split(",")
++    backends = args.backends.split(",")
++    layers = args.layers.split(",")
++    if args.samples < 1 or any(size < 1 for size in sizes) or set(cases) - set(CASES) or set(backends) - {"memory", "file"}:
++        parser.error("positive sizes/samples and known cases/backends are required")
++    if set(layers) - {"rust", "python", "go"} or len(set(layers)) != len(layers):
++        parser.error("known, distinct layers are required")
++    if args.native_profiles and args.python_extension is None:
++        parser.error("--native-profiles requires an explicit instrumented --python-extension")
++    if args.go_host_profiles and (not args.native_profiles or "go" not in layers):
++        parser.error("--go-host-profiles requires --native-profiles and the go layer")
++    args.output.mkdir(parents=True, exist_ok=False)
++    identity = source_identity()
++    if args.go is None:
++        # rules_go applies a pure-Go configuration transition, so its binary
++        # does not necessarily live under the root bazel-bin symlink.
++        target = "//bindings/go/cmd/boundary:boundary_profile" if args.go_host_profiles else "//bindings/go/cmd/boundary"
++        args.go = ROOT / command_text("bazel", "cquery", "-c", "opt", target, "--output=files")
++    library = args.library or ROOT / "bazel-bin/bindings/ffi" / ("libhawdb_ffi.dylib" if sys.platform == "darwin" else "libhawdb_ffi.so")
++    args.rust, args.python, args.go, library = (path.resolve() for path in (args.rust, args.python, args.go, library))
++    # Freeze the extension as well: another Bazel configuration can retarget
++    # bazel-bin between jobs, but every job must load the hashed artifact.
++    if args.python_extension is None:
++        args.python_extension = pathlib.Path(str(args.python) + ".runfiles") / "_main/bindings/python/python/hawdb/_hawdb.so"
++    args.python_extension = args.python_extension.resolve()
++    if not args.python_extension.is_file():
++        parser.error("build the matching Python extension or pass --python-extension: " + str(args.python_extension))
++    commands = {"rust": [str(args.rust)], "python": [str(args.python)], "go": [str(args.go)]}
++    commands = {layer: commands[layer] for layer in layers}
++    for path in (args.rust, args.python, args.go, library):
++        if not path.is_file():
++            parser.error("build the matching benchmark first: " + str(path))
++    artifact_paths = (args.rust, args.python, args.go, library, args.python_extension)
++    artifacts = artifact_identity(artifact_paths)
++    report = {
++        "source": identity, "spec": "ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md",
++        "seed": SEED, "sizes": sizes, "cases": cases, "backends": backends,
++        "layers": layers,
++        "samples": args.samples, "discarded_iterations": 1,
++        "os": platform.platform(), "machine": platform.machine(),
++        "cpu": command_text("sysctl", "-n", "machdep.cpu.brand_string") if sys.platform == "darwin" else platform.processor(),
++        "rust": command_text("rustc", "--version"), "go": command_text("go", "version"),
++        "build": "Bazel opt, all three engine dependencies compiled together",
++        "defaults_changed": False, "strict_zero_copy": False, "terminal": False,
++        "instrumented": args.native_profiles or args.cpu_profiles or args.go_host_profiles,
++        "go_host_profiles": args.go_host_profiles,
++        "native_profiles": args.native_profiles, "go_cpu_profiles": args.cpu_profiles,
++        "binaries": {layer: {"path": command[0], "sha256": artifacts[command[0]]} for layer, command in commands.items()},
++        "library_sha256": artifacts[str(library)],
++        "python_extension_path": str(args.python_extension),
++        "python_extension_sha256": artifacts[str(args.python_extension)],
++        "records": [], "summaries": [],
++        "measurement_limits": [
++            "A selected layer/backend shard qualifies only its recorded groups; full-matrix acceptance requires complete coverage across shards.",
++            "Process peak RSS includes runtime, fixture, setup and query; it is not a query-only allocation ledger.",
++            "Allocator observations count Rust requests; Go/Python heaps and non-Rust workspace are separate." if args.native_profiles else "Go allocation counts exclude the native engine; run the separately instrumented matrix for native/Python profiles.",
++            "Each iteration opens its own store; seeded read runs measure a warm store, not cold artifact reads.",
++            "Write cases include a final verification query in query_boundary_ns; write_boundary_ns and read_boundary_ns separate the phases without removing calls.",
++            "The query timer excludes the identical checksum algorithm; consumer time is reported separately.",
++        ],
++    }
++    destination = args.output / "report.json"
++    def save():
++        destination.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
++    def check_artifacts():
++        try:
++            require_artifact_identity(artifact_paths, artifacts)
++        except (OSError, RuntimeError) as error:
++            report["qualification_error"] = str(error)
++            save()
++            raise
++    save()
++    parity_failures = 0
++    for count in sizes:
++        for case in cases:
++            data = fixture(count, case)
++            for backend in backends:
++                for iteration in range(args.samples + 1):
++                    # Rotate the layer order deterministically to avoid always
++                    # giving one binding the first/cold CPU scheduling position.
++                    layers = list(commands)
++                    offset = iteration % len(layers)
++                    for layer in layers[offset:] + layers[:offset]:
++                        if source_identity() != identity:
++                            raise RuntimeError("source changed during qualification")
++                        check_artifacts()
++                        stem = "%s-%s-%d-%s-%d" % (layer, case, count, backend, iteration)
++                        job_path = args.output / (stem + ".job.json")
++                        job = dict(data, backend=backend, path=str(args.output / (stem + ".db")))
++                        if args.cpu_profiles and layer == "go":
++                            job["cpu_profile_path"] = str(args.output / (stem + ".cpu.pprof"))
++                        job_path.write_text(json.dumps(job, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
++                        command = commands[layer] + [str(job_path)] + ([str(library)] if layer == "go" else [])
++                        if layer == "python":
++                            command.append(str(args.python_extension))
++                        result = run_child(command, args.output / stem)
++                        result.update({"layer": layer, "case": case, "size": count, "backend": backend, "iteration": iteration,
++                                       "discarded": iteration == 0, "fixture_sha256": hashlib.sha256(job_path.read_bytes()).hexdigest(),
++                                       "expected_checksum": data["expected_checksum"]})
++                        if result["status"] == "ok":
++                            result["parity"] = result.get("checksum") == data["expected_checksum"] and result.get("output_rows") == count
++                            parity_failures += not result["parity"]
++                        else:
++                            result["parity"] = None
++                        timings = ("query_boundary_ns", "write_boundary_ns", "read_boundary_ns")
++                        result["phase_timing_valid"] = (
++                            all(type(result.get(key)) is int and result[key] >= 0 for key in timings)
++                            and result["query_boundary_ns"] == result["write_boundary_ns"] + result["read_boundary_ns"]
++                            and (case in ("fill", "fill_bulk") or result["write_boundary_ns"] == 0)
++                        ) if result["status"] == "ok" else None
++                        result["profile_valid"] = native_profile_valid(result, layer, args.native_profiles)
++                        result["failure_profile_valid"] = failure_profile_valid(result, layer, args.native_profiles)
++                        result["go_host_profile_valid"] = go_host_profile_valid(result, args.go_host_profiles)
++                        result["failure_go_host_profile_valid"] = failure_go_host_profile_valid(result, args.go_host_profiles)
++                        report["records"].append(result)
++                        save()
++                        # Preserve the child's raw outcome even if a rebuild
++                        # happened during it. Such a report remains nonterminal.
++                        check_artifacts()
++                        print(stem, result["status"], result["parity"], flush=True)
++                        job_path.unlink()  # retain hashes/inputs recipe, not many identical giant fixtures
++                        if backend == "file":
++                            import shutil
++                            shutil.rmtree(job["path"], ignore_errors=False) if pathlib.Path(job["path"]).exists() else None
++                for layer in commands:
++                    records = [r for r in report["records"] if r["case"] == case and r["size"] == count and r["backend"] == backend and r["layer"] == layer and not r["discarded"]]
++                    valid = [r for r in records if qualified_record(r)]
++                    report["summaries"].append({"layer": layer, "case": case, "size": count, "backend": backend,
++                        "successful_samples": len(valid), "failed_samples": len(records) - len(valid),
++                        "median_query_boundary_ns": statistics.median(r["query_boundary_ns"] for r in valid) if valid else None,
++                        "median_write_boundary_ns": statistics.median(r["write_boundary_ns"] for r in valid) if valid else None,
++                        "median_read_boundary_ns": statistics.median(r["read_boundary_ns"] for r in valid) if valid else None,
++                        "median_elapsed_ns": statistics.median(r["elapsed_ns"] for r in valid) if valid else None})
++                save()
++            del data
++    if source_identity() != identity:
++        raise RuntimeError("source changed before completion")
++    check_artifacts()
++    report.update(terminal=True, parity_failures=parity_failures,
++                  value_parity_records=sum(r["status"] == "ok" and r["parity"] for r in report["records"]),
++                  successful_records=sum(qualified_record(r) for r in report["records"]),
++                  refused_or_failed_records=sum(r["status"] != "ok" for r in report["records"]))
++    save()
++    # A completed experiment may contain useful budget-refusal evidence, but
++    # cannot be represented as a successful parity/performance qualification.
++    report["profile_failures"] = sum(r["profile_valid"] is False for r in report["records"])
++    report["failure_profile_failures"] = sum(r["failure_profile_valid"] is False for r in report["records"])
++    report["go_host_profile_failures"] = sum(r["go_host_profile_valid"] is False for r in report["records"])
++    report["failure_go_host_profile_failures"] = sum(r["failure_go_host_profile_valid"] is False for r in report["records"])
++    report["phase_timing_failures"] = sum(r["phase_timing_valid"] is False for r in report["records"])
++    report["all_paths_succeeded"] = all(qualified_record(r) for r in report["records"])
++    save()
++    return int(not report["all_paths_succeeded"])
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/bindings/benchmarks/test_run.py b/bindings/benchmarks/test_run.py
+new file mode 100644
+index 00000000..84a48835
+--- /dev/null
++++ b/bindings/benchmarks/test_run.py
+@@ -0,0 +1,425 @@
++# Copyright 2026 Nowledge
++# SPDX-License-Identifier: Apache-2.0
++
++"""Qualification failures must survive artifact selection and reporting."""
++
++import contextlib
++import io
++import json
++import os
++import pathlib
++import sys
++import tempfile
++import unittest
++from unittest import mock
++
++import run as driver
++import compare
++
++
++def complete_profile(layer):
++    profile = dict.fromkeys((
++        "allocation_calls", "allocated_bytes", "deallocation_calls",
++        "deallocated_bytes", "reallocation_calls", "live_requested_bytes_before",
++        "live_requested_bytes_after", "process_peak_requested_bytes",
++    ), 0)
++    if layer != "rust":
++        profile.update(parameter_conversion_ns=0, engine_call_ns=0, result_conversion_ns=0)
++    return profile
++
++
++def complete_go_host_profile(calls=1):
++    return {"parameter_conversion_ns": 0, "parameter_conversion_calls": calls,
++            "ffi_call_ns": 0, "ffi_calls": calls, "result_conversion_ns": 0,
++            "result_conversion_calls": calls, "valid": True,
++            "scope": "go_query_parameter_native_call_result_phases"}
++
++
++class DriverTests(unittest.TestCase):
++    def matrix(self, native_profiles, supplied_profiles, process_exit=0, read_ns=10,
++               replace_artifact=False, layers="rust,python,go", record_status="ok",
++               go_host_profiles=False, supplied_host_profiles=None):
++        with tempfile.TemporaryDirectory() as temporary:
++            root = pathlib.Path(temporary)
++            artifacts = {}
++            for name in ("rust", "python", "go", "library", "python-extension"):
++                path = root / name
++                path.write_bytes(name.encode())
++                artifacts[name] = path
++            output = root / "result"
++            arguments = ["run.py", "--output", str(output), "--sizes", "2",
++                         "--cases", "select", "--backends", "memory", "--samples", "1",
++                         "--layers", layers]
++            for name, path in artifacts.items():
++                arguments.extend(("--" + name, str(path)))
++            if native_profiles:
++                arguments.append("--native-profiles")
++            if go_host_profiles:
++                arguments.append("--go-host-profiles")
++            commands = []
++
++            def child(command, artifact):
++                commands.append(command)
++                job = json.loads(pathlib.Path(command[1]).read_text())
++                layer = pathlib.Path(command[0]).name
++                if replace_artifact:
++                    artifacts["rust"].write_bytes(b"changed")
++                result = {
++                    "status": record_status, "process_exit": process_exit,
++                    "output_rows": len(job["rows"]), "checksum": job["expected_checksum"],
++                    "query_boundary_ns": 10, "write_boundary_ns": 0,
++                    "read_boundary_ns": read_ns, "elapsed_ns": 20,
++                    "native_profile": supplied_profiles(layer) if record_status == "ok" else None,
++                }
++                if supplied_host_profiles is not None and layer == "go":
++                    result["go_host_profile" if record_status == "ok" else "failure_go_host_profile"] = supplied_host_profiles()
++                    if record_status != "ok":
++                        result["failure_go_host_profile_scope"] = "db_query_calls_including_setup_warmup_and_cleanup"
++                if record_status != "ok":
++                    result.update(error="warmup: query memory budget exceeded",
++                                  failure_native_profile=supplied_profiles(layer),
++                                  failure_profile_scope="producer_run_including_setup_warmup_and_cleanup")
++                return result
++
++            with mock.patch.object(sys, "argv", arguments), \
++                    mock.patch.object(driver, "source_identity", return_value={"head": "head", "tree": "tree"}), \
++                    mock.patch.object(driver, "command_text", return_value="test-runtime"), \
++                    mock.patch.object(driver, "run_child", side_effect=child), \
++                    contextlib.redirect_stdout(io.StringIO()):
++                if replace_artifact:
++                    with self.assertRaisesRegex(RuntimeError, "artifacts changed"):
++                        driver.main()
++                    status = 1
++                else:
++                    status = driver.main()
++            report = json.loads((output / "report.json").read_text())
++            if replace_artifact:
++                self.assertEqual(len(report["records"]), 1)
++                self.assertFalse(report["terminal"])
++                return status, report
++            for command in commands:
++                if pathlib.Path(command[0]).name == "python":
++                    self.assertEqual(command[2], str(artifacts["python-extension"].resolve()))
++            self.assertEqual(len(report["records"]), 2 * len(layers.split(",")))
++            self.assertTrue(report["terminal"])
++            return status, report
++
++    def test_go_host_profile_requires_complete_measured_calls(self):
++        status, report = self.matrix(True, complete_profile, go_host_profiles=True,
++                                     supplied_host_profiles=complete_go_host_profile)
++        self.assertEqual(status, 0)
++        self.assertTrue(report["instrumented"])
++        self.assertTrue(report["go_host_profiles"])
++        self.assertTrue(all(r["go_host_profile_valid"] for r in report["records"]))
++        for value in (None, True, -1, 2**64):
++            with self.subTest(value=value):
++                def invalid():
++                    return dict(complete_go_host_profile(), result_conversion_ns=value)
++                status, report = self.matrix(True, complete_profile, layers="go",
++                                             go_host_profiles=True, supplied_host_profiles=invalid)
++                self.assertEqual(status, 1)
++                self.assertEqual(report["go_host_profile_failures"], 2)
++                self.assertIsNone(report["summaries"][0]["median_query_boundary_ns"])
++        status, report = self.matrix(True, complete_profile, layers="go", go_host_profiles=True,
++                                     supplied_host_profiles=lambda: complete_go_host_profile(0))
++        self.assertEqual(status, 1)
++        self.assertEqual(report["successful_records"], 0)
++
++    def test_go_host_profile_cannot_be_reported_as_plain(self):
++        status, report = self.matrix(False, lambda _: None, layers="go",
++                                     supplied_host_profiles=complete_go_host_profile)
++        self.assertEqual(status, 1)
++        self.assertEqual(report["go_host_profile_failures"], 2)
++
++    def test_go_host_failure_profiles_never_qualify_latency(self):
++        status, report = self.matrix(True, complete_profile, layers="go", record_status="error",
++                                     go_host_profiles=True, supplied_host_profiles=complete_go_host_profile)
++        self.assertEqual(status, 1)
++        self.assertEqual(report["successful_records"], 0)
++        self.assertTrue(all(r["failure_go_host_profile_valid"] for r in report["records"]))
++        self.assertIsNone(report["summaries"][0]["median_query_boundary_ns"])
++
++    def test_language_shard_preserves_samples_and_fixture(self):
++        status, report = self.matrix(False, lambda _: None, layers="go")
++        self.assertEqual(status, 0)
++        self.assertEqual(report["layers"], ["go"])
++        self.assertEqual(report["samples"], 1)
++        self.assertEqual(report["discarded_iterations"], 1)
++        self.assertEqual({r["layer"] for r in report["records"]}, {"go"})
++        self.assertEqual([r["iteration"] for r in report["records"]], [0, 1])
++        self.assertEqual([r["discarded"] for r in report["records"]], [True, False])
++        self.assertTrue(all(r["parity"] for r in report["records"]))
++        self.assertEqual(len(report["summaries"]), 1)
++
++    def test_invalid_or_duplicate_layers_refuse_before_execution(self):
++        for layers in ("", "rust,rust", "unknown"):
++            with self.subTest(layers=layers), \
++                    mock.patch.object(sys, "argv", ["run.py", "--output", "unused", "--layers", layers]), \
++                    mock.patch.object(driver, "run_child") as child, \
++                    contextlib.redirect_stderr(io.StringIO()):
++                with self.assertRaises(SystemExit) as exit_status:
++                    driver.main()
++                self.assertEqual(exit_status.exception.code, 2)
++                child.assert_not_called()
++
++    def test_fixed_ordinary_extension_is_not_instrumentation(self):
++        status, report = self.matrix(False, lambda _: None)
++        self.assertEqual(status, 0)
++        self.assertFalse(report["instrumented"])
++        self.assertTrue(report["all_paths_succeeded"])
++        self.assertIsNotNone(report["python_extension_sha256"])
++
++    def test_missing_counters_fail_even_with_matching_rows(self):
++        status, report = self.matrix(True, lambda _: None)
++        self.assertEqual(status, 1)
++        self.assertEqual(report["parity_failures"], 0)
++        self.assertEqual(report["profile_failures"], 6)
++        self.assertEqual(report["successful_records"], 0)
++        self.assertEqual(report["value_parity_records"], 6)
++        self.assertFalse(report["all_paths_succeeded"])
++        self.assertTrue(all(summary["successful_samples"] == 0 for summary in report["summaries"]))
++
++    def test_unexpected_instrumentation_fails_ordinary_latency(self):
++        status, report = self.matrix(False, complete_profile)
++        self.assertEqual(status, 1)
++        self.assertFalse(report["instrumented"])
++        self.assertEqual(report["profile_failures"], 6)
++        self.assertFalse(report["all_paths_succeeded"])
++
++    def test_complete_instrumented_matrix_passes(self):
++        status, report = self.matrix(True, complete_profile)
++        self.assertEqual(status, 0)
++        self.assertTrue(report["instrumented"])
++        self.assertEqual(report["profile_failures"], 0)
++
++    def test_refusal_profiles_never_supply_successful_latency_samples(self):
++        status, report = self.matrix(True, complete_profile, record_status="error")
++        self.assertEqual(status, 1)
++        self.assertEqual(report["successful_records"], 0)
++        self.assertEqual(report["refused_or_failed_records"], 6)
++        self.assertEqual(report["failure_profile_failures"], 0)
++        self.assertTrue(all(r["failure_profile_valid"] is True for r in report["records"]))
++        self.assertTrue(all(r["profile_valid"] is None for r in report["records"]))
++        self.assertTrue(all(s["median_elapsed_ns"] is None for s in report["summaries"]))
++
++    def test_missing_refusal_counters_remain_unqualified_not_zero(self):
++        status, report = self.matrix(True, lambda _: None, record_status="error")
++        self.assertEqual(status, 1)
++        self.assertEqual(report["failure_profile_failures"], 6)
++        self.assertTrue(all(r["failure_native_profile"] is None for r in report["records"]))
++
++    def test_refusal_profile_requires_its_own_scope_and_complete_counters(self):
++        result = {"status": "error", "failure_native_profile": complete_profile("go"),
++                  "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup"}
++        self.assertTrue(driver.failure_profile_valid(result, "go", True))
++        result["failure_profile_scope"] = "measured_operation"
++        self.assertFalse(driver.failure_profile_valid(result, "go", True))
++        result["failure_profile_scope"] = "producer_run_including_setup_warmup_and_cleanup"
++        result["failure_native_profile"]["allocation_calls"] = False
++        self.assertFalse(driver.failure_profile_valid(result, "go", True))
++
++    def test_nonzero_exit_cannot_supply_a_successful_latency_sample(self):
++        status, report = self.matrix(False, lambda _: None, process_exit=1)
++        self.assertEqual(status, 1)
++        self.assertEqual(report["successful_records"], 0)
++        self.assertTrue(all(summary["successful_samples"] == 0 for summary in report["summaries"]))
++
++    def test_unbalanced_phases_cannot_supply_a_successful_latency_sample(self):
++        status, report = self.matrix(False, lambda _: None, read_ns=11)
++        self.assertEqual(status, 1)
++        self.assertEqual(report["phase_timing_failures"], 6)
++        self.assertEqual(report["successful_records"], 0)
++
++    def test_conversion_fields_and_counter_types_are_required(self):
++        result = {"status": "ok", "native_profile": complete_profile("rust")}
++        self.assertTrue(driver.native_profile_valid(result, "rust", True))
++        self.assertFalse(driver.native_profile_valid(result, "python", True))
++        result["native_profile"]["allocation_calls"] = False
++        self.assertFalse(driver.native_profile_valid(result, "rust", True))
++
++    def test_mid_child_artifact_replacement_preserves_raw_outcome(self):
++        status, report = self.matrix(False, lambda _: None, replace_artifact=True)
++        self.assertEqual(status, 1)
++        self.assertIn("artifacts changed", report["qualification_error"])
++        self.assertEqual(report["records"][0]["process_exit"], 0)
++        self.assertTrue(report["records"][0]["parity"])
++
++    def test_same_length_artifact_replacement_aborts_qualification(self):
++        with tempfile.TemporaryDirectory() as temporary:
++            path = pathlib.Path(temporary) / "engine"
++            path.write_bytes(b"before")
++            identity = driver.artifact_identity((path,))
++            path.write_bytes(b"after!")
++            with self.assertRaisesRegex(RuntimeError, "artifacts changed"):
++                driver.require_artifact_identity((path,), identity)
++
++
++class ComparisonTests(unittest.TestCase):
++    keys = {("python", "point", 1000, "file")}
++
++    def report(self, elapsed=20):
++        return {"samples": 2, "terminal": True, "discarded_iterations": 1,
++                "layers": ["python"], "cases": ["point"], "sizes": [1000], "backends": ["file"],
++                "records": [
++            {"layer": "python", "case": "point", "size": 1000, "backend": "file",
++             "iteration": iteration, "discarded": iteration == 0, "status": "ok",
++             "process_exit": 0, "parity": True, "profile_valid": True,
++             "phase_timing_valid": True, "elapsed_ns": elapsed,
++             "query_boundary_ns": elapsed, "write_boundary_ns": 0, "read_boundary_ns": elapsed}
++            for iteration in (0, 1, 2)
++        ]}
++
++    def test_complete_groups_compare_independent_read_and_write_phases(self):
++        group = compare.summarize(self.report(), self.report(10), self.keys)[0]
++        self.assertTrue(group["qualified"])
++        self.assertEqual(group["read_boundary_ns_median_speedup"], 2)
++        self.assertIsNone(group["write_boundary_ns_median_speedup"])
++
++    def test_one_refusal_prevents_median_speedup_claim(self):
++        after = self.report(10)
++        after["records"][1].update(status="error", parity=None, process_exit=1)
++        group = compare.summarize(self.report(), after, self.keys)[0]
++        self.assertFalse(group["qualified"])
++        self.assertNotIn("elapsed_ns_median_speedup", group)
++
++    def test_missing_sample_or_nonterminal_report_cannot_qualify(self):
++        for kind in ("missing", "nonterminal"):
++            with self.subTest(kind=kind):
++                after = self.report()
++                if kind == "missing":
++                    after["records"].pop()
++                else:
++                    after["terminal"] = False
++                self.assertFalse(compare.summarize(self.report(), after, self.keys)[0]["qualified"])
++
++    def test_failed_parity_cannot_qualify_even_with_zero_exit(self):
++        after = self.report()
++        after["records"][0]["parity"] = False
++        self.assertFalse(compare.summarize(self.report(), after, self.keys)[0]["qualified"])
++
++    def test_group_missing_from_both_reports_still_blocks_full_matrix(self):
++        before, after = self.report(), self.report(10)
++        for report in (before, after):
++            report["cases"].append("select")
++        requested = self.keys | {("python", "select", 1000, "file")}
++        groups = compare.summarize(before, after, requested)
++        self.assertEqual(len(groups), 2)
++        missing = next(group for group in groups if group["case"] == "select")
++        self.assertFalse(missing["qualified"])
++        self.assertEqual((missing["before_samples"], missing["after_samples"]), (0, 0))
++        self.assertNotIn("elapsed_ns_median_speedup", missing)
++        self.assertFalse(all(group["qualified"] for group in groups))
++
++    def test_duplicate_or_shifted_iterations_cannot_replace_a_sample(self):
++        for iterations in ((1, 1), (2, 3), (True, 2)):
++            with self.subTest(iterations=iterations):
++                after = self.report(10)
++                for record, iteration in zip(after["records"][1:], iterations):
++                    record["iteration"] = iteration
++                group = compare.summarize(self.report(), after, self.keys)[0]
++                self.assertFalse(group["qualified"])
++                self.assertNotIn("elapsed_ns_median_speedup", group)
++
++    def test_missing_failed_or_duplicate_warmup_cannot_qualify(self):
++        for kind in ("missing", "failed", "duplicate"):
++            with self.subTest(kind=kind):
++                after = self.report(10)
++                if kind == "missing":
++                    after["records"].pop(0)
++                elif kind == "failed":
++                    after["records"][0]["parity"] = False
++                else:
++                    after["records"].append(after["records"][0].copy())
++                self.assertFalse(compare.summarize(self.report(), after, self.keys)[0]["qualified"])
++
++    def test_selection_mismatch_or_unrequested_record_cannot_qualify(self):
++        for kind in ("selection", "record"):
++            with self.subTest(kind=kind):
++                after = self.report(10)
++                if kind == "selection":
++                    after["sizes"] = [100000]
++                else:
++                    after["records"].append(dict(after["records"][1], case="select"))
++                self.assertFalse(compare.summarize(self.report(), after, self.keys)[0]["qualified"])
++
++    def test_baseline_adapter_refuses_unqualified_or_mutable_revision(self):
++        compare.validate_revision(compare.BASELINE)
++        for revision in ("main", "69d526a2", "f" * 40):
++            with self.subTest(revision=revision):
++                with self.assertRaises(ValueError):
++                    compare.validate_revision(revision)
++
++
++class ProducerFreezeTests(unittest.TestCase):
++    def producer(self, root):
++        repository = root / "repository"
++        launcher = repository / "bazel-bin/bindings/benchmarks/python_boundary"
++        launcher.parent.mkdir(parents=True)
++        launcher.write_text(
++            "#!/usr/bin/env python3\n"
++            "import json, os, sys\n"
++            "sys.path.insert(0, os.environ['RUNFILES_DIR'])\n"
++            "import wrapper\n"
++            "print(json.dumps({'status': 'ok', 'version': wrapper.VERSION}))\n")
++        launcher.chmod(0o755)
++        runfiles = pathlib.Path(str(launcher) + ".runfiles")
++        runfiles.mkdir()
++        wrapper = repository / "wrapper.py"
++        wrapper.write_text("VERSION = 'baseline'\n")
++        (runfiles / "wrapper.py").symlink_to(wrapper)
++        (runfiles / "runtime").mkdir()
++        (runfiles / "runtime/python").write_text("frozen interpreter\n")
++        (runfiles / "venv").mkdir()
++        (runfiles / "venv/python").symlink_to("../runtime/python")
++        (runfiles / "data with space.txt").write_text("manifest path control\n")
++        (runfiles / "__pycache__").mkdir()
++        (runfiles / "__pycache__/wrapper.pyc").write_bytes(b"stale bytecode")
++        manifest = pathlib.Path(str(launcher) + ".runfiles_manifest")
++        manifest.write_text("wrapper.py " + str(wrapper) + "\n")
++        (runfiles / "MANIFEST").symlink_to(manifest)
++        suffix = ".dylib" if sys.platform == "darwin" else ".so"
++        for relative in ("hawdb_bench_host_boundary", "boundary",
++                         "bindings/ffi/libhawdb_ffi" + suffix,
++                         "bindings/python/python/hawdb/_hawdb.so"):
++            path = repository / "bazel-bin" / relative
++            path.parent.mkdir(parents=True, exist_ok=True)
++            path.write_bytes(b"native producer")
++        with mock.patch.object(compare.subprocess, "run"), \
++                mock.patch.object(compare, "command", return_value="bazel-bin/boundary"):
++            frozen = compare.build_producer(repository, root / "frozen producer")
++        return frozen, launcher, wrapper
++
++    def test_rebuilding_shared_output_cannot_replace_frozen_package(self):
++        with tempfile.TemporaryDirectory() as temporary:
++            root = pathlib.Path(temporary)
++            producer, launcher, wrapper = self.producer(root)
++            wrapper.write_text("VERSION = 'candidate'\n")
++            launcher.write_text("raise RuntimeError('replaced launcher')\n")
++            compare.require_producer(producer)
++            python = producer["python"]
++            runfiles = pathlib.Path(python["runfiles"]["path"])
++            self.assertNotEqual(python["path"], str(launcher))
++            self.assertFalse((runfiles / "wrapper.py").is_symlink())
++            self.assertEqual(os.readlink(runfiles / "venv/python"), "../runtime/python")
++            self.assertFalse((runfiles / "__pycache__").exists())
++            manifest = (runfiles / "MANIFEST").read_text()
++            self.assertIn(" data\\swith\\sspace.txt " + str(runfiles / "data with space.txt"), manifest)
++            self.assertIn("wrapper.py " + str(runfiles / "wrapper.py"), manifest)
++            self.assertNotIn(str(wrapper), manifest)
++            with mock.patch.dict(os.environ, {"RUNFILES_DIR": str(launcher) + ".runfiles"}):
++                result = driver.run_child([python["path"]], root / "frozen-import")
++            self.assertEqual(result["process_exit"], 0)
++            self.assertEqual(result["version"], "baseline")
++            compare.require_producer(producer)
++
++    def test_changed_frozen_package_prevents_qualification(self):
++        with tempfile.TemporaryDirectory() as temporary:
++            producer, _, _ = self.producer(pathlib.Path(temporary))
++            runfiles = pathlib.Path(producer["python"]["runfiles"]["path"])
++            (runfiles / "wrapper.py").write_text("VERSION = 'changed'\n")
++            with self.assertRaisesRegex(RuntimeError, "Python runfiles changed"):
++                compare.require_producer(producer)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/bindings/ffi/BUILD.bazel b/bindings/ffi/BUILD.bazel
+index b8fa6743..ef316780 100644
+--- a/bindings/ffi/BUILD.bazel
++++ b/bindings/ffi/BUILD.bazel
+@@ -16,6 +16,11 @@ rust_shared_library(
+     crate_name = "hawdb_ffi",
+     crate_root = "src/lib.rs",
+     edition = "2024",
++    # Match main's macOS 27 workaround for malformed stripped LINKEDIT data.
++    rustc_flags = select({
++        "@platforms//os:macos": ["-Cstrip=none"],
++        "//conditions:default": [],
++    }),
+     version = "0.6.0",
+     deps = _FFI_DEPS,
+ )
+@@ -29,3 +34,20 @@ rust_static_library(
+     version = "0.6.0",
+     deps = _FFI_DEPS,
+ )
++
++# Local profiling only; not a replacement library or a default/CI dependency.
++rust_shared_library(
++    name = "hawdb_ffi_boundary_profile",
++    srcs = glob(["src/**/*.rs"]) + ["//bindings/benchmarks:native_alloc.rs", "//bindings/benchmarks:native_profile.rs"],
++    crate_name = "hawdb_ffi_boundary_profile",
++    crate_root = "src/lib.rs",
++    crate_features = ["boundary-profiling"],
++    edition = "2024",
++    rustc_flags = select({
++        "@platforms//os:macos": ["-Cstrip=none"],
++        "//conditions:default": [],
++    }),
++    version = "0.9.0",
++    deps = _FFI_DEPS,
++    tags = ["manual"],
++)
+diff --git a/bindings/ffi/src/lib.rs b/bindings/ffi/src/lib.rs
+index 93c321c4..9f76ec9b 100644
+--- a/bindings/ffi/src/lib.rs
++++ b/bindings/ffi/src/lib.rs
+@@ -31,6 +31,13 @@
+ //! database handle usable. Passing NULL for an out parameter discards that
+ //! output.
+ 
++#[cfg(feature = "boundary-profiling")]
++#[path = "../../benchmarks/native_profile.rs"]
++mod boundary_profile;
++#[cfg(feature = "boundary-profiling")]
++pub use boundary_profile::BoundaryProfileSnapshot;
++
++
+ use std::collections::BTreeMap;
+ use std::ffi::{c_char, CString};
+ use std::panic::{catch_unwind, AssertUnwindSafe};
+@@ -46,6 +53,15 @@ use hawdb::{
+ };
+ use serde_json::json;
+ 
++
++#[cfg(feature = "boundary-profiling")]
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn hawdb_boundary_profile_snapshot(out: *mut BoundaryProfileSnapshot) {
++    if !out.is_null() {
++        unsafe { out.write(boundary_profile::snapshot()) };
++    }
++}
++
+ /// An open HawDB database handle. Opaque to C callers.
+ pub struct HawdbDatabase {
+     inner: Mutex<HawDBEmbedded>,
+@@ -368,6 +384,26 @@ unsafe fn hawdb_open_inner(
+     })))
+ }
+ 
++/// Open an independent in-memory database using the embedded facade defaults.
++/// Close the returned handle with [`hawdb_close`]. Errors use the same output
++/// convention as [`hawdb_open`]; this does not create a temporary on-disk store.
++///
++/// # Safety
++/// `err_out` must be NULL or point to writable [`HawdbBuffer`] storage.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn hawdb_open_in_memory(err_out: *mut HawdbBuffer) -> *mut HawdbDatabase {
++    unsafe { clear_buffer(err_out) };
++    match catch_unwind(AssertUnwindSafe(HawDBEmbedded::open_in_memory)) {
++        Ok(database) => Box::into_raw(Box::new(HawdbDatabase {
++            inner: Mutex::new(database),
++        })),
++        Err(_) => {
++            unsafe { set_error(err_out, FfiError::panic()) };
++            ptr::null_mut()
++        }
++    }
++}
++
+ /// Close a database handle and release its resources.
+ ///
+ /// # Safety
+@@ -482,6 +518,8 @@ unsafe fn query_impl(
+         let text = read_str(text, "statement")?;
+         if sql {
+             let params = parse_sql_params(params_json)?;
++            #[cfg(feature = "boundary-profiling")]
++            let _engine = boundary_profile::PhaseTimer::start(boundary_profile::Phase::Engine);
+             database
+                 .inner
+                 .lock()
+@@ -494,6 +532,8 @@ unsafe fn query_impl(
+                 })
+         } else {
+             let params = parse_cypher_params(params_json)?;
++            #[cfg(feature = "boundary-profiling")]
++            let _engine = boundary_profile::PhaseTimer::start(boundary_profile::Phase::Engine);
+             database
+                 .inner
+                 .lock()
+@@ -504,6 +544,8 @@ unsafe fn query_impl(
+     }));
+     match result {
+         Ok(Ok(output)) => {
++            #[cfg(feature = "boundary-profiling")]
++            let _conversion = boundary_profile::PhaseTimer::start(boundary_profile::Phase::Results);
+             unsafe { set_buffer(result_out, output_to_json(&output)) };
+             true
+         }
+@@ -519,6 +561,8 @@ unsafe fn query_impl(
+ }
+ 
+ unsafe fn parse_cypher_params(params_json: FfiStr) -> Result<BTreeMap<String, Value>, FfiError> {
++    #[cfg(feature = "boundary-profiling")]
++    let _conversion = boundary_profile::PhaseTimer::start(boundary_profile::Phase::Parameters);
+     let Some(text) = unsafe { read_opt_str(params_json, "params_json") }? else {
+         return Ok(BTreeMap::new());
+     };
+@@ -535,6 +579,8 @@ unsafe fn parse_cypher_params(params_json: FfiStr) -> Result<BTreeMap<String, Va
+ }
+ 
+ unsafe fn parse_sql_params(params_json: FfiStr) -> Result<Vec<Value>, FfiError> {
++    #[cfg(feature = "boundary-profiling")]
++    let _conversion = boundary_profile::PhaseTimer::start(boundary_profile::Phase::Parameters);
+     let Some(text) = unsafe { read_opt_str(params_json, "params_json") }? else {
+         return Ok(Vec::new());
+     };
+diff --git a/bindings/go/BUILD.bazel b/bindings/go/BUILD.bazel
+index 9f60e800..87d31194 100644
+--- a/bindings/go/BUILD.bazel
++++ b/bindings/go/BUILD.bazel
+@@ -5,6 +5,8 @@ package(default_visibility = ["//visibility:public"])
+ go_library(
+     name = "hawdb",
+     srcs = [
++        "boundary_profile_disabled.go",
++        "boundary_profile_enabled.go",
+         "ffi.go",
+         "hawdb.go",
+         "lib_unix.go",
+@@ -14,6 +16,17 @@ go_library(
+     deps = ["@com_github_ebitengine_purego//:purego"],
+ )
+ 
++go_test(
++    name = "hawdb_go_boundary_profile_tests",
++    size = "small",
++    srcs = ["boundary_profile_test.go"],
++    args = ["-test.v"],
++    embed = [":hawdb"],
++    gotags = ["hawdb_boundary_profile"],
++    pure = "on",
++    tags = ["manual"],
++)
++
+ go_test(
+     name = "hawdb_go_tests",
+     size = "small",
+diff --git a/bindings/go/README.md b/bindings/go/README.md
+new file mode 100644
+index 00000000..e7e75e08
+--- /dev/null
++++ b/bindings/go/README.md
+@@ -0,0 +1,9 @@
++# Go boundary profiling
++
++Developer builds with the explicit `hawdb_boundary_profile` Go build tag expose
++`DB.BoundaryProfile()` for cumulative host parameter/JSON, native-call and result
++copy/free/JSON/normalization timers. Ordinary builds compile out these observers
++and do not expose the profiling API. See the manual [boundary qualification
++instructions](../benchmarks/README.md#go-host-json-conversion-observations) for
++scope, saturation, failure and snapshot limitations. This tag is a local
++qualification facility, not a production configuration plane.
+diff --git a/bindings/go/boundary_profile_disabled.go b/bindings/go/boundary_profile_disabled.go
+new file mode 100644
+index 00000000..c51deecd
+--- /dev/null
++++ b/bindings/go/boundary_profile_disabled.go
+@@ -0,0 +1,16 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++//go:build !hawdb_boundary_profile
++
++package hawdb
++
++import "time"
++
++const boundaryProfiling = false
++
++// Zero-sized in ordinary builds; constant-false guards remove all observers.
++type boundaryProfileState struct{}
++
++func (*boundaryProfileState) recordParameter(time.Time) {}
++func (*boundaryProfileState) recordFFI(time.Time)       {}
++func (*boundaryProfileState) recordResult(time.Time)    {}
+diff --git a/bindings/go/boundary_profile_enabled.go b/bindings/go/boundary_profile_enabled.go
+new file mode 100644
+index 00000000..156f5833
+--- /dev/null
++++ b/bindings/go/boundary_profile_enabled.go
+@@ -0,0 +1,84 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++//go:build hawdb_boundary_profile
++
++package hawdb
++
++import (
++	"math"
++	"sync/atomic"
++	"time"
++)
++
++const boundaryProfiling = true
++
++// BoundaryProfile contains cumulative host-side wall times for developer
++// qualification builds using hawdb_boundary_profile. Parameter conversion
++// includes prepareValue and JSON encoding; result conversion includes native
++// buffer copying/freeing, JSON decoding and normalization (or error decoding).
++// FFICallNS includes the entire native call; native profile phases nest inside
++// it and must not be added to it. Lock acquisition and result consumption are
++// outside these phases. Snapshots read counters independently; use serial
++// queries and before/after differences for operation-level measurements.
++type BoundaryProfile struct {
++	ParameterConversionNS    uint64 `json:"parameter_conversion_ns"`
++	ParameterConversionCalls uint64 `json:"parameter_conversion_calls"`
++	FFICallNS                uint64 `json:"ffi_call_ns"`
++	FFICalls                 uint64 `json:"ffi_calls"`
++	ResultConversionNS       uint64 `json:"result_conversion_ns"`
++	ResultConversionCalls    uint64 `json:"result_conversion_calls"`
++	Saturated                bool   `json:"saturated"`
++}
++
++type boundaryProfileState struct {
++	parameterNS    atomic.Uint64
++	parameterCalls atomic.Uint64
++	ffiNS          atomic.Uint64
++	ffiCalls       atomic.Uint64
++	resultNS       atomic.Uint64
++	resultCalls    atomic.Uint64
++	saturated      atomic.Bool
++}
++
++func (p *boundaryProfileState) add(counter *atomic.Uint64, value uint64) {
++	for {
++		before := counter.Load()
++		after := before + value
++		if value > math.MaxUint64-before {
++			after = math.MaxUint64
++			p.saturated.Store(true)
++		}
++		if counter.CompareAndSwap(before, after) {
++			return
++		}
++	}
++}
++
++func (p *boundaryProfileState) record(ns, calls *atomic.Uint64, started time.Time) {
++	p.add(ns, uint64(max(time.Since(started).Nanoseconds(), 0)))
++	p.add(calls, 1)
++}
++
++func (p *boundaryProfileState) recordParameter(started time.Time) {
++	p.record(&p.parameterNS, &p.parameterCalls, started)
++}
++
++func (p *boundaryProfileState) recordFFI(started time.Time) {
++	p.record(&p.ffiNS, &p.ffiCalls, started)
++}
++
++func (p *boundaryProfileState) recordResult(started time.Time) {
++	p.record(&p.resultNS, &p.resultCalls, started)
++}
++
++// BoundaryProfile returns host-side counters, including failed query phases.
++// It remains readable after Close. Saturated profiles cannot qualify timing.
++func (db *DB) BoundaryProfile() BoundaryProfile {
++	p := &db.boundaryProfile
++	return BoundaryProfile{
++		ParameterConversionNS: p.parameterNS.Load(), ParameterConversionCalls: p.parameterCalls.Load(),
++		FFICallNS: p.ffiNS.Load(), FFICalls: p.ffiCalls.Load(),
++		ResultConversionNS: p.resultNS.Load(), ResultConversionCalls: p.resultCalls.Load(),
++		Saturated: p.saturated.Load(),
++	}
++}
+diff --git a/bindings/go/boundary_profile_test.go b/bindings/go/boundary_profile_test.go
+new file mode 100644
+index 00000000..bde0c827
+--- /dev/null
++++ b/bindings/go/boundary_profile_test.go
+@@ -0,0 +1,142 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++//go:build hawdb_boundary_profile
++
++package hawdb
++
++import (
++	"bytes"
++	"math"
++	"strings"
++	"sync"
++	"sync/atomic"
++	"testing"
++	"time"
++	"unsafe"
++)
++
++// A Go callback stands in for the C ABI so conversion, errors and ownership can
++// be checked independently of database execution or an installed native library.
++func profileFixture(wire string, success bool) (*DB, *atomic.Uint64) {
++	data := []byte(wire)
++	freed := new(atomic.Uint64)
++	call := func(_ unsafe.Pointer, _ *byte, _ uintptr, _ *byte, _ uintptr, result, failure *ffiBuffer) bool {
++		target := result
++		if !success {
++			target = failure
++		}
++		*target = ffiBuffer{ptr: unsafe.SliceData(data), len: uintptr(len(data))}
++		return success
++	}
++	return &DB{lib: &Library{query: call, querySQL: call,
++		bufferFree: func(buffer *ffiBuffer) { freed.Add(1); *buffer = ffiBuffer{} },
++		close:      func(unsafe.Pointer) {},
++	}}, freed
++}
++
++func TestBoundaryProfileConversionsAndBufferRelease(t *testing.T) {
++	db, freed := profileFixture(`{"columns":["value"],"rows":[[{"$binary":"AAE="}]]}`, true)
++	original := db.lib.query
++	db.lib.query = func(ptr unsafe.Pointer, text *byte, textLen uintptr, params *byte, paramsLen uintptr, result, failure *ffiBuffer) bool {
++		encoded := unsafe.Slice(params, paramsLen)
++		if !bytes.Contains(encoded, []byte(`"$binary":"AAE="`)) {
++			t.Errorf("tagged parameter missing: %s", encoded)
++		}
++		time.Sleep(2 * time.Millisecond)
++		return original(ptr, text, textLen, params, paramsLen, result, failure)
++	}
++	result, err := db.Query("RETURN $value", map[string]any{"value": []byte{0, 1}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !bytes.Equal(result.Rows[0][0].([]byte), []byte{0, 1}) {
++		t.Fatal(result)
++	}
++	p := db.BoundaryProfile()
++	if p.ParameterConversionCalls != 1 || p.FFICalls != 1 || p.ResultConversionCalls != 1 || p.Saturated {
++		t.Fatal(p)
++	}
++	if p.FFICallNS < uint64(2*time.Millisecond) {
++		t.Fatalf("native call interval was omitted: %+v", p)
++	}
++	if freed.Load() != 1 {
++		t.Fatalf("native result not released: %d", freed.Load())
++	}
++	db.Close()
++	if db.BoundaryProfile() != p {
++		t.Fatal("close changed query counters")
++	}
++	if _, err := db.Query("closed", nil); err == nil {
++		t.Fatal("closed handle accepted")
++	}
++	if db.BoundaryProfile() != p {
++		t.Fatal("closed rejection counted conversion work")
++	}
++}
++
++func TestBoundaryProfileParameterFailureDoesNotCountNativeWork(t *testing.T) {
++	db, _ := profileFixture(`{"columns":[],"rows":[]}`, true)
++	_, err := db.Query("RETURN $bad", map[string]any{"bad": make(chan int)})
++	if err == nil || !strings.Contains(err.Error(), "marshal parameters") {
++		t.Fatal(err)
++	}
++	p := db.BoundaryProfile()
++	if p.ParameterConversionCalls != 1 || p.FFICalls != 0 || p.ResultConversionCalls != 0 {
++		t.Fatal(p)
++	}
++}
++
++func TestBoundaryProfileErrorAndMalformedOutput(t *testing.T) {
++	for _, tc := range []struct {
++		wire      string
++		success   bool
++		errorText string
++	}{
++		{`{"kind":"admission","message":"refused"}`, false, "admission: refused"},
++		{`{`, true, "malformed result JSON"},
++	} {
++		db, freed := profileFixture(tc.wire, tc.success)
++		_, err := db.QuerySQL("SELECT 1")
++		if err == nil || !strings.Contains(err.Error(), tc.errorText) {
++			t.Fatalf("%q: %v", tc.wire, err)
++		}
++		p := db.BoundaryProfile()
++		if p.ParameterConversionCalls != 1 || p.FFICalls != 1 || p.ResultConversionCalls != 1 || p.Saturated {
++			t.Fatal(p)
++		}
++		if freed.Load() != 1 {
++			t.Fatal("failure buffer was not released")
++		}
++	}
++}
++
++func TestBoundaryProfileConcurrentQueries(t *testing.T) {
++	db, freed := profileFixture(`{"columns":["value"],"rows":[[1]]}`, true)
++	var wg sync.WaitGroup
++	for range 8 {
++		wg.Go(func() {
++			for range 10 {
++				if _, err := db.Query("RETURN 1", nil); err != nil {
++					t.Error(err)
++				}
++			}
++		})
++	}
++	wg.Wait()
++	p := db.BoundaryProfile()
++	if p.ParameterConversionCalls != 80 || p.FFICalls != 80 || p.ResultConversionCalls != 80 || freed.Load() != 80 {
++		t.Fatal(p, freed.Load())
++	}
++}
++
++func TestBoundaryProfileOverflowSaturates(t *testing.T) {
++	db := new(DB)
++	p := &db.boundaryProfile
++	p.parameterNS.Store(math.MaxUint64 - 1)
++	p.add(&p.parameterNS, 2)
++	p.add(&p.parameterNS, 10)
++	snapshot := db.BoundaryProfile()
++	if snapshot.ParameterConversionNS != math.MaxUint64 || !snapshot.Saturated {
++		t.Fatal(snapshot)
++	}
++}
+diff --git a/bindings/go/cmd/boundary/BUILD.bazel b/bindings/go/cmd/boundary/BUILD.bazel
+new file mode 100644
+index 00000000..48d1325c
+--- /dev/null
++++ b/bindings/go/cmd/boundary/BUILD.bazel
+@@ -0,0 +1,22 @@
++load("@rules_go//go:def.bzl", "go_binary")
++
++go_binary(
++    name = "boundary",
++    srcs = ["main.go", "host_profile_disabled.go", "host_profile_enabled.go", "profile_unix.go", "profile_windows.go"],
++    importpath = "github.com/nowledge-co/hawdb/bindings/go/cmd/boundary",
++    pure = "on",
++    tags = ["manual"],
++    deps = ["//bindings/go:hawdb", "@com_github_ebitengine_purego//:purego"],
++    visibility = ["//visibility:public"],
++)
++
++go_binary(
++    name = "boundary_profile",
++    srcs = ["main.go", "host_profile_disabled.go", "host_profile_enabled.go", "profile_unix.go", "profile_windows.go"],
++    importpath = "github.com/nowledge-co/hawdb/bindings/go/cmd/boundary",
++    gotags = ["hawdb_boundary_profile"],
++    pure = "on",
++    tags = ["manual"],
++    deps = ["//bindings/go:hawdb", "@com_github_ebitengine_purego//:purego"],
++    visibility = ["//visibility:public"],
++)
+diff --git a/bindings/go/cmd/boundary/host_profile_disabled.go b/bindings/go/cmd/boundary/host_profile_disabled.go
+new file mode 100644
+index 00000000..da0df45b
+--- /dev/null
++++ b/bindings/go/cmd/boundary/host_profile_disabled.go
+@@ -0,0 +1,11 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++//go:build !hawdb_boundary_profile
++
++package main
++
++import hawdb "github.com/nowledge-co/hawdb/bindings/go"
++
++const hostProfiling = false
++
++func hostProfileReader(*hawdb.DB) func() hostSnapshot { return nil }
+diff --git a/bindings/go/cmd/boundary/host_profile_enabled.go b/bindings/go/cmd/boundary/host_profile_enabled.go
+new file mode 100644
+index 00000000..3f1fd3dc
+--- /dev/null
++++ b/bindings/go/cmd/boundary/host_profile_enabled.go
+@@ -0,0 +1,20 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++//go:build hawdb_boundary_profile
++
++package main
++
++import hawdb "github.com/nowledge-co/hawdb/bindings/go"
++
++const hostProfiling = true
++
++func hostProfileReader(db *hawdb.DB) func() hostSnapshot {
++	return func() hostSnapshot {
++		p := db.BoundaryProfile()
++		return hostSnapshot{
++			values: [6]uint64{p.ParameterConversionNS, p.ParameterConversionCalls,
++				p.FFICallNS, p.FFICalls, p.ResultConversionNS, p.ResultConversionCalls},
++			saturated: p.Saturated,
++		}
++	}
++}
+diff --git a/bindings/go/cmd/boundary/main.go b/bindings/go/cmd/boundary/main.go
+new file mode 100644
+index 00000000..f2e965fe
+--- /dev/null
++++ b/bindings/go/cmd/boundary/main.go
+@@ -0,0 +1,397 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++
++// Local benchmark wrapper around the ordinary purego binding.
++package main
++
++import (
++	"encoding/binary"
++	"encoding/json"
++	"fmt"
++	"math"
++	"os"
++	"runtime"
++	"runtime/pprof"
++	"sort"
++	"strconv"
++	"time"
++
++	"github.com/ebitengine/purego"
++	hawdb "github.com/nowledge-co/hawdb/bindings/go"
++)
++
++type job struct {
++	Case         string           `json:"case"`
++	Backend      string           `json:"backend"`
++	Path         string           `json:"path"`
++	Rows         []map[string]any `json:"rows"`
++	InsertSingle string           `json:"insert_single"`
++	InsertBulk   string           `json:"insert_bulk"`
++	Scan         string           `json:"scan"`
++	Point        string           `json:"point"`
++	Columns      []string         `json:"columns"`
++	CPUProfile   string           `json:"cpu_profile_path"`
++}
++
++type nativeSnapshot struct {
++	AllocationCalls           uint64
++	AllocatedBytes            uint64
++	DeallocationCalls         uint64
++	DeallocatedBytes          uint64
++	ReallocationCalls         uint64
++	LiveRequestedBytes        uint64
++	ProcessPeakRequestedBytes uint64
++	ParameterConversionNS     uint64
++	EngineCallNS              uint64
++	ResultConversionNS        uint64
++}
++
++type hostSnapshot struct {
++	values    [6]uint64
++	saturated bool
++}
++
++func hostProfileDelta(before, after hostSnapshot) map[string]any {
++	fields := [6]string{"parameter_conversion_ns", "parameter_conversion_calls",
++		"ffi_call_ns", "ffi_calls", "result_conversion_ns", "result_conversion_calls"}
++	result := map[string]any{"valid": !before.saturated && !after.saturated,
++		"scope":        "go_query_parameter_native_call_result_phases",
++		"scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns"}
++	for i, field := range fields {
++		if after.values[i] < before.values[i] {
++			result["valid"] = false
++			result[field] = nil
++		} else {
++			result[field] = after.values[i] - before.values[i]
++		}
++	}
++	return result
++}
++
++func profileReader(path string) func(*nativeSnapshot) {
++	handle, err := loadProfileLibrary(path)
++	if err != nil {
++		return nil
++	}
++	symbol, err := lookupProfileSymbol(handle, "hawdb_boundary_profile_snapshot")
++	if err != nil {
++		return nil
++	}
++	var read func(*nativeSnapshot)
++	purego.RegisterFunc(&read, symbol)
++	return read
++}
++
++func profileDelta(before, after nativeSnapshot) map[string]any {
++	return map[string]any{
++		"allocation_calls":             after.AllocationCalls - before.AllocationCalls,
++		"allocated_bytes":              after.AllocatedBytes - before.AllocatedBytes,
++		"deallocation_calls":           after.DeallocationCalls - before.DeallocationCalls,
++		"deallocated_bytes":            after.DeallocatedBytes - before.DeallocatedBytes,
++		"reallocation_calls":           after.ReallocationCalls - before.ReallocationCalls,
++		"live_requested_bytes_before":  before.LiveRequestedBytes,
++		"live_requested_bytes_after":   after.LiveRequestedBytes,
++		"process_peak_requested_bytes": after.ProcessPeakRequestedBytes,
++		"parameter_conversion_ns":      after.ParameterConversionNS - before.ParameterConversionNS,
++		"engine_call_ns":               after.EngineCallNS - before.EngineCallNS,
++		"result_conversion_ns":         after.ResultConversionNS - before.ResultConversionNS,
++		"scope":                        "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded",
++	}
++}
++
++func input(value any) any {
++	switch value := value.(type) {
++	case json.Number:
++		if integer, err := value.Int64(); err == nil {
++			return integer
++		}
++		float, err := value.Float64()
++		if err != nil {
++			panic(err)
++		}
++		return float
++	case []any:
++		for i := range value {
++			value[i] = input(value[i])
++		}
++		return value
++	case map[string]any:
++		for key := range value {
++			value[key] = input(value[key])
++		}
++		return value
++	default:
++		return value
++	}
++}
++
++type checksum uint64
++
++func (c *checksum) bytes(data []byte) {
++	for _, b := range data {
++		*c = checksum((uint64(*c) ^ uint64(b)) * 0x100000001b3)
++	}
++}
++func (c *checksum) length(n uint64) {
++	var b [8]byte
++	binary.LittleEndian.PutUint64(b[:], n)
++	c.bytes(b[:])
++}
++func (c *checksum) value(value any) {
++	switch value := value.(type) {
++	case nil:
++		c.bytes([]byte{0})
++	case bool:
++		b := byte(0)
++		if value {
++			b = 1
++		}
++		c.bytes([]byte{1, b})
++	case int64:
++		c.bytes([]byte{2})
++		c.length(uint64(value))
++	case float64:
++		c.bytes([]byte{3})
++		c.length(math.Float64bits(value))
++	case string:
++		c.bytes([]byte{4})
++		c.length(uint64(len(value)))
++		c.bytes([]byte(value))
++	case []byte:
++		c.bytes([]byte{5})
++		c.length(uint64(len(value)))
++		c.bytes(value)
++	case []any:
++		c.bytes([]byte{7})
++		c.length(uint64(len(value)))
++		for _, item := range value {
++			c.value(item)
++		}
++	case map[string]any:
++		c.bytes([]byte{8})
++		c.length(uint64(len(value)))
++		keys := make([]string, 0, len(value))
++		for key := range value {
++			keys = append(keys, key)
++		}
++		sort.Strings(keys)
++		for _, key := range keys {
++			c.value(key)
++			c.value(value[key])
++		}
++	default:
++		panic(fmt.Sprintf("unexpected result type %T", value))
++	}
++}
++
++func run(j job, lib *hawdb.Library, nativeRead func(*nativeSnapshot)) (report map[string]any, runErr error) {
++	var db *hawdb.DB
++	var err error
++	if j.Backend == "memory" {
++		db, err = lib.OpenInMemory()
++	} else if j.Backend == "file" {
++		db, err = lib.Open(j.Path)
++	} else {
++		return nil, fmt.Errorf("unknown backend")
++	}
++	if err != nil {
++		return nil, err
++	}
++	var hostRead func() hostSnapshot
++	if hostProfiling {
++		hostRead = hostProfileReader(db)
++		failureBefore := hostRead()
++		defer func() {
++			if runErr != nil {
++				if report == nil {
++					report = make(map[string]any)
++				}
++				report["failure_go_host_profile"] = hostProfileDelta(failureBefore, hostRead())
++				report["failure_go_host_profile_scope"] = "db_query_calls_including_setup_warmup_and_cleanup"
++			}
++		}()
++	}
++	// Close executes before the optional failure snapshot above.
++	defer db.Close()
++	setup := time.Now()
++	if err := db.Exec("CREATE INDEX ON :Boundary(id)", nil); err != nil {
++		return nil, fmt.Errorf("setup: %w", err)
++	}
++	if j.Case == "select" || j.Case == "point" || j.Case == "wide" {
++		for start := 0; start < len(j.Rows); start += 512 {
++			end := start + 512
++			if end > len(j.Rows) {
++				end = len(j.Rows)
++			}
++			if err := db.Exec(j.InsertBulk, map[string]any{"rows": j.Rows[start:end]}); err != nil {
++				return nil, fmt.Errorf("setup: %w", err)
++			}
++		}
++	}
++	setupNS := time.Since(setup).Nanoseconds()
++	if j.Case == "select" || j.Case == "point" || j.Case == "wide" {
++		calls := 1
++		if j.Case == "point" {
++			calls = len(j.Rows)
++		}
++		for i := 0; i < calls; i++ {
++			text := j.Scan
++			var params map[string]any
++			if j.Case == "point" {
++				text = j.Point
++				params = map[string]any{"id": j.Rows[i]["id"]}
++			}
++			if _, err := db.Query(text, params); err != nil {
++				return nil, fmt.Errorf("warmup: %w", err)
++			}
++		}
++	}
++	var before, after runtime.MemStats
++	if j.CPUProfile != "" {
++		file, err := os.Create(j.CPUProfile)
++		if err != nil {
++			return nil, err
++		}
++		defer file.Close()
++		if err := pprof.StartCPUProfile(file); err != nil {
++			return nil, err
++		}
++		defer pprof.StopCPUProfile()
++	}
++	runtime.ReadMemStats(&before)
++	c := checksum(0xcbf29ce484222325)
++	c.bytes([]byte("HDBBOUND1"))
++	c.length(uint64(len(j.Columns)))
++	for _, column := range j.Columns {
++		c.value(column)
++	}
++	var nativeBefore, nativeAfter nativeSnapshot
++	if nativeRead != nil {
++		nativeRead(&nativeBefore)
++	}
++	var hostBefore, hostAfter hostSnapshot
++	if hostProfiling {
++		hostBefore = hostRead()
++	}
++	var queryNS, consumeNS int64
++	rowsSeen := 0
++	started := time.Now()
++	if j.Case == "fill" {
++		for _, row := range j.Rows {
++			called := time.Now()
++			err := db.Exec(j.InsertSingle, row)
++			queryNS += time.Since(called).Nanoseconds()
++			if err != nil {
++				return nil, fmt.Errorf("execute: %w", err)
++			}
++		}
++	} else if j.Case == "fill_bulk" {
++		called := time.Now()
++		err := db.Exec(j.InsertBulk, map[string]any{"rows": j.Rows})
++		queryNS += time.Since(called).Nanoseconds()
++		if err != nil {
++			return nil, fmt.Errorf("execute: %w", err)
++		}
++	}
++	writeNS := queryNS
++	calls := 1
++	if j.Case == "point" {
++		calls = len(j.Rows)
++	}
++	for i := 0; i < calls; i++ {
++		text := j.Scan
++		var params map[string]any
++		if j.Case == "point" {
++			text = j.Point
++			params = map[string]any{"id": j.Rows[i]["id"]}
++		}
++		called := time.Now()
++		output, err := db.Query(text, params)
++		queryNS += time.Since(called).Nanoseconds()
++		if err != nil {
++			return nil, fmt.Errorf("execute: %w", err)
++		}
++		if len(output.Columns) != len(j.Columns) {
++			return nil, fmt.Errorf("consumer: schema mismatch")
++		}
++		for k := range j.Columns {
++			if output.Columns[k] != j.Columns[k] {
++				return nil, fmt.Errorf("consumer: schema mismatch")
++			}
++		}
++		consumed := time.Now()
++		for _, values := range output.Rows {
++			c.bytes([]byte{0xff})
++			c.length(uint64(len(values)))
++			for _, value := range values {
++				c.value(value)
++			}
++			rowsSeen++
++		}
++		consumeNS += time.Since(consumed).Nanoseconds()
++	}
++	elapsedNS := time.Since(started).Nanoseconds()
++	var profile map[string]any
++	if nativeRead != nil {
++		nativeRead(&nativeAfter)
++		profile = profileDelta(nativeBefore, nativeAfter)
++	}
++	if hostProfiling {
++		hostAfter = hostRead()
++	}
++	runtime.ReadMemStats(&after)
++	report = map[string]any{"status": "ok", "layer": "go", "case": j.Case, "backend": j.Backend, "input_rows": len(j.Rows), "output_rows": rowsSeen, "values": rowsSeen * len(j.Columns), "checksum": fmt.Sprintf("%016x", uint64(c)), "setup_ns": setupNS, "query_boundary_ns": queryNS, "write_boundary_ns": writeNS, "read_boundary_ns": queryNS - writeNS, "consumer_ns": consumeNS, "elapsed_ns": elapsedNS, "go_allocations": after.Mallocs - before.Mallocs, "go_allocated_bytes": after.TotalAlloc - before.TotalAlloc, "native_profile": profile, "cpu_profile": j.CPUProfile, "durability": "SyncOnEveryWrite", "cgo_enabled": false}
++	if hostProfiling {
++		report["go_host_profile"] = hostProfileDelta(hostBefore, hostAfter)
++	}
++	return report, nil
++}
++
++func main() {
++	if len(os.Args) != 3 {
++		panic("Usage: boundary JOB.json LIBHAWDB_FFI")
++	}
++	file, err := os.Open(os.Args[1])
++	if err != nil {
++		panic(err)
++	}
++	defer file.Close()
++	decoder := json.NewDecoder(file)
++	decoder.UseNumber()
++	var j job
++	if err := decoder.Decode(&j); err != nil {
++		panic(err)
++	}
++	for _, row := range j.Rows {
++		input(row)
++	}
++	lib, err := hawdb.LoadLibrary(os.Args[2])
++	var result map[string]any
++	var nativeRead func(*nativeSnapshot)
++	var failureBefore *nativeSnapshot
++	if err == nil {
++		nativeRead = profileReader(os.Args[2])
++		if nativeRead != nil {
++			failureBefore = new(nativeSnapshot)
++			nativeRead(failureBefore)
++		}
++		result, err = run(j, lib, nativeRead)
++	}
++	if err != nil {
++		if result == nil {
++			result = make(map[string]any)
++		}
++		result["status"], result["layer"], result["error"] = "error", "go", err.Error()
++		if nativeRead != nil {
++			var failureAfter nativeSnapshot
++			nativeRead(&failureAfter)
++			result["failure_native_profile"] = profileDelta(*failureBefore, failureAfter)
++			result["failure_profile_scope"] = "producer_run_including_setup_warmup_and_cleanup"
++		}
++	}
++	result["go_version"] = runtime.Version()
++	result["pointer_bits"] = strconv.IntSize
++	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
++		panic(err)
++	}
++}
+diff --git a/bindings/go/cmd/boundary/profile_unix.go b/bindings/go/cmd/boundary/profile_unix.go
+new file mode 100644
+index 00000000..f6a05546
+--- /dev/null
++++ b/bindings/go/cmd/boundary/profile_unix.go
+@@ -0,0 +1,14 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++//go:build !windows
++
++package main
++
++import "github.com/ebitengine/purego"
++
++func loadProfileLibrary(path string) (uintptr, error) {
++	return purego.Dlopen(path, purego.RTLD_LAZY|purego.RTLD_GLOBAL)
++}
++func lookupProfileSymbol(handle uintptr, name string) (uintptr, error) {
++	return purego.Dlsym(handle, name)
++}
+diff --git a/bindings/go/cmd/boundary/profile_windows.go b/bindings/go/cmd/boundary/profile_windows.go
+new file mode 100644
+index 00000000..94b448f3
+--- /dev/null
++++ b/bindings/go/cmd/boundary/profile_windows.go
+@@ -0,0 +1,15 @@
++// Copyright 2026 Nowledge
++// SPDX-License-Identifier: Apache-2.0
++//go:build windows
++
++package main
++
++import "syscall"
++
++func loadProfileLibrary(path string) (uintptr, error) {
++	handle, err := syscall.LoadLibrary(path)
++	return uintptr(handle), err
++}
++func lookupProfileSymbol(handle uintptr, name string) (uintptr, error) {
++	return syscall.GetProcAddress(syscall.Handle(handle), name)
++}
+diff --git a/bindings/go/ffi.go b/bindings/go/ffi.go
+index d3c17e03..a75ecd8e 100644
+--- a/bindings/go/ffi.go
++++ b/bindings/go/ffi.go
+@@ -45,6 +45,7 @@ type Library struct {
+ 	querySQL   func(db unsafe.Pointer, text *byte, textLen uintptr, params *byte, paramsLen uintptr, result, errOut *ffiBuffer) bool
+ 	bufferFree func(buffer *ffiBuffer)
+ 	version    func(out *ffiBuffer)
++	openMemory func(errOut *ffiBuffer) unsafe.Pointer
+ }
+ 
+ // LoadLibrary loads libhawdb_ffi from path. Missing libraries and
+@@ -62,6 +63,10 @@ func LoadLibrary(path string) (*Library, error) {
+ 	purego.RegisterLibFunc(&lib.querySQL, handle, "hawdb_query_sql")
+ 	purego.RegisterLibFunc(&lib.bufferFree, handle, "hawdb_buffer_free")
+ 	purego.RegisterLibFunc(&lib.version, handle, "hawdb_version")
++	// Additive capability: older libraries remain usable for persistent stores.
++	if symbol, err := lookupSharedSymbol(handle, "hawdb_open_in_memory"); err == nil {
++		purego.RegisterFunc(&lib.openMemory, symbol)
++	}
+ 	return lib, nil
+ }
+ 
+diff --git a/bindings/go/hawdb.go b/bindings/go/hawdb.go
+index c8f9e79f..4906ba97 100644
+--- a/bindings/go/hawdb.go
++++ b/bindings/go/hawdb.go
+@@ -30,15 +30,17 @@ import (
+ 	"fmt"
+ 	"runtime"
+ 	"sync"
++	"time"
+ 	"unsafe"
+ )
+ 
+ // DB is an open HawDB database.
+ type DB struct {
+-	lib    *Library
+-	ptr    unsafe.Pointer
+-	mu     sync.RWMutex
+-	closed bool
++	boundaryProfile boundaryProfileState
++	lib             *Library
++	ptr             unsafe.Pointer
++	mu              sync.RWMutex
++	closed          bool
+ }
+ 
+ // Error is the error type returned by this package. Kind carries the
+@@ -85,6 +87,34 @@ func (r *Result) Dicts() []map[string]any {
+ 	return out
+ }
+ 
++// OpenInMemory opens an independent in-memory database on the default library.
++func OpenInMemory() (*DB, error) {
++	lib, err := defaultLibrary()
++	if err != nil {
++		return nil, err
++	}
++	return lib.OpenInMemory()
++}
++
++// OpenInMemory uses the engine's normal in-memory configuration. Older shared
++// libraries report an unavailable capability; they never substitute a file.
++func (lib *Library) OpenInMemory() (*DB, error) {
++	if lib.openMemory == nil {
++		return nil, &Error{Kind: "capability_unavailable", Message: "hawdb_open_in_memory is unavailable"}
++	}
++	var errBuf ffiBuffer
++	ptr := lib.openMemory(&errBuf)
++	if ptr == nil {
++		if err := lib.takeErr(&errBuf); err != nil {
++			return nil, err
++		}
++		return nil, errors.New("hawdb: in-memory open failed")
++	}
++	db := &DB{lib: lib, ptr: ptr}
++	runtime.SetFinalizer(db, (*DB).Close)
++	return db, nil
++}
++
+ // Open opens a HawDB database at path on the default library, creating it
+ // if needed. Pass an OpenOptions to override defaults, e.g.
+ // Open(path, &OpenOptions{ReadOnly: true}).
+@@ -159,10 +189,17 @@ func (db *DB) query(sql bool, text string, params any) (*Result, error) {
+ 	if db.closed {
+ 		return nil, &Error{Message: "hawdb: database is closed"}
+ 	}
++	var parameterStarted time.Time
++	if boundaryProfiling {
++		parameterStarted = time.Now()
++	}
+ 	var paramsJSON string
+ 	if params != nil {
+ 		data, err := json.Marshal(prepareValue(params))
+ 		if err != nil {
++			if boundaryProfiling {
++				db.boundaryProfile.recordParameter(parameterStarted)
++			}
+ 			return nil, fmt.Errorf("hawdb: cannot marshal parameters: %w", err)
+ 		}
+ 		// A nil map or slice marshals to "null", not an object or array:
+@@ -173,6 +210,11 @@ func (db *DB) query(sql bool, text string, params any) (*Result, error) {
+ 	}
+ 	textPtr, textLen := strArg(text)
+ 	paramsPtr, paramsLen := strArg(paramsJSON)
++	var ffiStarted time.Time
++	if boundaryProfiling {
++		db.boundaryProfile.recordParameter(parameterStarted)
++		ffiStarted = time.Now()
++	}
+ 	var resultBuf, errBuf ffiBuffer
+ 	var ok bool
+ 	if sql {
+@@ -180,8 +222,17 @@ func (db *DB) query(sql bool, text string, params any) (*Result, error) {
+ 	} else {
+ 		ok = db.lib.query(db.ptr, textPtr, textLen, paramsPtr, paramsLen, &resultBuf, &errBuf)
+ 	}
++	var resultStarted time.Time
++	if boundaryProfiling {
++		db.boundaryProfile.recordFFI(ffiStarted)
++		resultStarted = time.Now()
++	}
+ 	if !ok {
+-		if err := db.lib.takeErr(&errBuf); err != nil {
++		err := db.lib.takeErr(&errBuf)
++		if boundaryProfiling {
++			db.boundaryProfile.recordResult(resultStarted)
++		}
++		if err != nil {
+ 			return nil, err
+ 		}
+ 		return nil, errors.New("hawdb: query failed")
+@@ -190,6 +241,9 @@ func (db *DB) query(sql bool, text string, params any) (*Result, error) {
+ 	decoder := json.NewDecoder(bytes.NewReader(db.lib.takeBytes(&resultBuf)))
+ 	decoder.UseNumber()
+ 	if err := decoder.Decode(&result); err != nil {
++		if boundaryProfiling {
++			db.boundaryProfile.recordResult(resultStarted)
++		}
+ 		return nil, fmt.Errorf("hawdb: malformed result JSON: %w", err)
+ 	}
+ 	for _, row := range result.Rows {
+@@ -197,6 +251,9 @@ func (db *DB) query(sql bool, text string, params any) (*Result, error) {
+ 			row[i] = normalizeValue(value)
+ 		}
+ 	}
++	if boundaryProfiling {
++		db.boundaryProfile.recordResult(resultStarted)
++	}
+ 	return &result, nil
+ }
+ 
+diff --git a/bindings/go/lib_unix.go b/bindings/go/lib_unix.go
+index f722398d..8e095684 100644
+--- a/bindings/go/lib_unix.go
++++ b/bindings/go/lib_unix.go
+@@ -35,3 +35,7 @@ func loadSharedLibrary(path string) (uintptr, error) {
+ 	// frame returning into unmapped code.
+ 	return purego.Dlopen(path, purego.RTLD_LAZY|purego.RTLD_GLOBAL)
+ }
++
++func lookupSharedSymbol(handle uintptr, name string) (uintptr, error) {
++	return purego.Dlsym(handle, name)
++}
+diff --git a/bindings/go/lib_windows.go b/bindings/go/lib_windows.go
+index e9ebea69..7437f2f8 100644
+--- a/bindings/go/lib_windows.go
++++ b/bindings/go/lib_windows.go
+@@ -29,3 +29,7 @@ func loadSharedLibrary(path string) (uintptr, error) {
+ 	}
+ 	return uintptr(handle), nil
+ }
++
++func lookupSharedSymbol(handle uintptr, name string) (uintptr, error) {
++	return syscall.GetProcAddress(syscall.Handle(handle), name)
++}
+diff --git a/bindings/python/BUILD.bazel b/bindings/python/BUILD.bazel
+index 29c0f856..3ecaddcb 100644
+--- a/bindings/python/BUILD.bazel
++++ b/bindings/python/BUILD.bazel
+@@ -105,3 +105,33 @@ compile_pip_requirements(
+     requirements_in = "requirements.in",
+     requirements_txt = "requirements.txt",
+ )
++
++# Local profiling extension: loaded explicitly by the benchmark, never default.
++rust_shared_library(
++    name = "_hawdb_boundary_profile",
++    srcs = glob(["src/**/*.rs"]) + ["//bindings/benchmarks:native_alloc.rs", "//bindings/benchmarks:native_profile.rs"],
++    crate_features = ["abi3", "boundary-profiling"],
++    crate_name = "_hawdb_boundary_profile",
++    crate_root = "src/lib.rs",
++    edition = "2024",
++    # Python supplies its symbols when importing an extension on macOS.
++    rustc_flags = select({
++        "@platforms//os:macos": [
++            # Rust 1.97.1 stripping misaligns Mach-O's LINKEDIT string pool.
++            "-Cstrip=none",
++            "-C",
++            "link-arg=-undefined",
++            "-C",
++            "link-arg=dynamic_lookup",
++            "-C",
++            "link-arg=-Wl,-no_fixup_chains",
++        ],
++        "//conditions:default": [],
++    }),
++    tags = ["manual"],
++    version = "0.9.0",
++    deps = [
++        "//:hawdb",
++        "@python_crates//:pyo3",
++    ],
++)
+diff --git a/bindings/python/Cargo.toml b/bindings/python/Cargo.toml
+index 526e7c83..686cf59e 100644
+--- a/bindings/python/Cargo.toml
++++ b/bindings/python/Cargo.toml
+@@ -28,6 +28,7 @@ version = "0.6.0"
+ [workspace]
+ 
+ [features]
++boundary-profiling = []
+ # Default profile: the engine's own default feature set (full-text, vector,
+ # analytics, background maintenance, tokio runtime).
+ default = ["hawdb/default"]
+diff --git a/bindings/python/src/database.rs b/bindings/python/src/database.rs
+index fd1ee9ec..0cb4faa9 100644
+--- a/bindings/python/src/database.rs
++++ b/bindings/python/src/database.rs
+@@ -119,17 +119,28 @@ impl Database {
+         cypher: &str,
+         params: Option<&Bound<'_, PyDict>>,
+     ) -> PyResult<QueryResult> {
++        #[cfg(feature = "boundary-profiling")]
++        let conversion =
++            crate::boundary_profile::PhaseTimer::start(crate::boundary_profile::Phase::Parameters);
+         let params = match params {
+             Some(dict) => py_dict_to_params(dict)?,
+             None => Default::default(),
+         };
++        #[cfg(feature = "boundary-profiling")]
++        drop(conversion);
+         let database = self.required()?;
++        #[cfg(feature = "boundary-profiling")]
++        let engine =
++            crate::boundary_profile::PhaseTimer::start(crate::boundary_profile::Phase::Engine);
+         let output = py
+             .detach(|| database.query_with_params_admitted(cypher, &params))
+             .map_err(|error| format_embedded_error(&error))?;
++        #[cfg(feature = "boundary-profiling")]
++        drop(engine);
+         QueryResult::from_output(py, output)
+     }
+ 
++
+     /// Runs one SQL statement and returns the materialized result.
+     ///
+     /// `params` is an optional list of positional parameters with the same
+@@ -235,6 +246,8 @@ pub struct QueryResult {
+ 
+ impl QueryResult {
+     fn from_output(py: Python<'_>, output: QueryOutput) -> PyResult<Self> {
++        #[cfg(feature = "boundary-profiling")]
++        let _conversion = crate::boundary_profile::PhaseTimer::start(crate::boundary_profile::Phase::Results);
+         let columns = output.schema().columns().to_vec();
+         let mut rows = Vec::new();
+         for row in output.value_rows() {
+diff --git a/bindings/python/src/lib.rs b/bindings/python/src/lib.rs
+index 994351de..9c535696 100644
+--- a/bindings/python/src/lib.rs
++++ b/bindings/python/src/lib.rs
+@@ -16,12 +16,43 @@ mod database;
+ mod errors;
+ mod value;
+ 
++#[cfg(feature = "boundary-profiling")]
++#[path = "../../benchmarks/native_profile.rs"]
++mod boundary_profile;
++
++
+ use pyo3::prelude::*;
+ use pyo3::types::PyDict;
+ 
+ pub use database::{open, Database, QueryResult, ReadTransaction, Transaction};
+ pub use errors::register_exceptions;
+ 
++/// Private local-qualification hook, absent from ordinary/default/lite builds.
++#[cfg(feature = "boundary-profiling")]
++#[pyfunction]
++fn _boundary_profile_snapshot(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
++    let snapshot = boundary_profile::snapshot();
++    let result = PyDict::new(py);
++    for (key, value) in [
++        ("allocation_calls", snapshot.allocation_calls),
++        ("allocated_bytes", snapshot.allocated_bytes),
++        ("deallocation_calls", snapshot.deallocation_calls),
++        ("deallocated_bytes", snapshot.deallocated_bytes),
++        ("reallocation_calls", snapshot.reallocation_calls),
++        ("live_requested_bytes", snapshot.live_requested_bytes),
++        (
++            "process_peak_requested_bytes",
++            snapshot.process_peak_requested_bytes,
++        ),
++        ("parameter_conversion_ns", snapshot.parameter_conversion_ns),
++        ("engine_call_ns", snapshot.engine_call_ns),
++        ("result_conversion_ns", snapshot.result_conversion_ns),
++    ] {
++        result.set_item(key, value)?;
++    }
++    Ok(result)
++}
++
+ /// Report the engine capabilities compiled into this extension.
+ ///
+ /// Returns a read-only mapping of capability name to availability. Hosts
+@@ -50,6 +81,8 @@ fn _hawdb(module: &Bound<'_, PyModule>) -> PyResult<()> {
+ 
+     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
+     module.add_class::<Database>()?;
++    #[cfg(feature = "boundary-profiling")]
++    module.add_function(wrap_pyfunction!(_boundary_profile_snapshot, module)?)?;
+     module.add_class::<QueryResult>()?;
+     module.add_class::<Transaction>()?;
+     module.add_class::<ReadTransaction>()?;

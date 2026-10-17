@@ -1,0 +1,132 @@
+[
+  {
+    "file": "README.md",
+    "bytes": 4004,
+    "sha256": "d6acd5caf928c3e85cb8840679ca44b271ca5b26603babd51ceeefc013350368"
+  },
+  {
+    "file": "artifacts.json",
+    "bytes": 1259,
+    "sha256": "69e847f86d5e0fb9ecfcd35845d737f9bb17d6dff9ba6d8e63e36d77b4fc43a4"
+  },
+  {
+    "file": "baseline-adapters.patch",
+    "bytes": 144120,
+    "sha256": "8dd4d5317635ba2ebb79971cea3cc3d118cd66504f587262c07859880e08e871"
+  },
+  {
+    "file": "baseline-build-console.log",
+    "bytes": 1768,
+    "sha256": "539df4846f67757d76dce10165b710d21feaccbaa1dcec080b86197f6ad2ef86"
+  },
+  {
+    "file": "baseline-controls.json",
+    "bytes": 47332,
+    "sha256": "dcf6cb2e370701e00d82eeab11b5363675e09ca73a587cbd9fd66175cc7128d6"
+  },
+  {
+    "file": "baseline-source.json",
+    "bytes": 2943,
+    "sha256": "210ec24bed5e6b67b4e31edf94ee10afdae03d8731851ccc473d7015a947a62e"
+  },
+  {
+    "file": "build-console.log",
+    "bytes": 2833,
+    "sha256": "4ef2f3aace3d39bb243d3b046f006f32db06c24012865ede09e4c619550f283d"
+  },
+  {
+    "file": "candidate-controls.json",
+    "bytes": 47270,
+    "sha256": "a268de9e4417950222f4cae21309e14f0434d2cc728effc6816fde9e850328fd"
+  },
+  {
+    "file": "commands.json",
+    "bytes": 556,
+    "sha256": "b17ca0ea18cf53ce51413f33665283f505c71d706966ddf2b8268824bcfe6739"
+  },
+  {
+    "file": "driver.log",
+    "bytes": 305,
+    "sha256": "5b821caec5737af52c6f6e567a63ecbecdf57d5e65559695037fb6c4414cf4a4"
+  },
+  {
+    "file": "go-profile.log",
+    "bytes": 778,
+    "sha256": "7797d6f4632645121bf0994abd3b801c83497b4bcc358310722ba224b7a2206a"
+  },
+  {
+    "file": "go-race.log",
+    "bytes": 717,
+    "sha256": "ee16bb85fdb092d6275369a0e432728fafd674434f5d9f76091d20b0e7459389"
+  },
+  {
+    "file": "go.log",
+    "bytes": 177,
+    "sha256": "0e9861c5329a43eb57cac94191a97556fd7cc21d4c146160c2f1a7333522c268"
+  },
+  {
+    "file": "initial-invalid-target.log",
+    "bytes": 2270,
+    "sha256": "d331b1753ccb7c5aed826eae916ddf106a0ba1fa549c4ac39945f72b0b5a1107"
+  },
+  {
+    "file": "initial-linkedit-controls.json",
+    "bytes": 17081,
+    "sha256": "123c391f6e212ca4ad16e3442c4fdfb7a644d7f3e2e0712f1b9cec52c49af628"
+  },
+  {
+    "file": "object-code.json",
+    "bytes": 555,
+    "sha256": "c3e794acaab851218460cf7610d7c4e98e118814b617e89d56534827de67593c"
+  },
+  {
+    "file": "ordinary-query-asm.txt",
+    "bytes": 24666,
+    "sha256": "50b917f87692c1652eb34b471d4c7a1f4473fd9b6b38b64b93f7c67720629a96"
+  },
+  {
+    "file": "packet.json",
+    "bytes": 1401,
+    "sha256": "2c768f546c40142d707b027c159a18493ca2b801452690d843779c5437dcf9e3"
+  },
+  {
+    "file": "profiled-query-asm.txt",
+    "bytes": 33142,
+    "sha256": "e78269ef25ff37bfc4df5299e0c6f5bdca68faf94743ad674c141dc639e7dab0"
+  },
+  {
+    "file": "shared-go-audit.json",
+    "bytes": 1818,
+    "sha256": "01136a92121e7b8baccc2b5fa593f4c30e862500c6c8a2809c594c4bfe184fa3"
+  },
+  {
+    "file": "shared-go-controls.json",
+    "bytes": 47435,
+    "sha256": "50a337f46153f5739d87a78f40661811c5ec51773b3836d23bdac0c45d235e3b"
+  },
+  {
+    "file": "source.json",
+    "bytes": 1662,
+    "sha256": "81608b876868f2f518f677c297dd29ce8351f1d0c0407be33be092d681d53460"
+  },
+  {
+    "file": "strict-native.log",
+    "bytes": 367,
+    "sha256": "71b98e5444e52464c72b993c306b03af99e8463f8f1e4254c4f96139ea0cf43a"
+  },
+  {
+    "file": "test-events.json",
+    "bytes": 314261,
+    "sha256": "e05bfffee293614ecf4768fde985febd4aef7568c0a31c7b2a781862d732a93b"
+  },
+  {
+    "file": "tests-console.log",
+    "bytes": 12787,
+    "sha256": "38eced50b2ece7b5d49396a56a2b3527bbb5a83581519df2aa5e9eb9afed54bc"
+  },
+  {
+    "file": "windows-compile.json",
+    "bytes": 1527,
+    "sha256": "63195d04314e58eeaef22e99442000850dedca2b12c0fb63da862f564cc5ade4"
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-10-17T10:42:10.207214+00:00",
+  "head": "6067f3dce6238f5f37e6341e6627589ac34eb52e",
+  "tree": "e8b3975646c80f4a46cc326cffa7e2a2e1ca80ac",
+  "registered_targets": 101,
+  "executed": 3,
+  "cached_unchanged_engine_fuzz": 98,
+  "driver_cases": 28,
+  "go_profile_and_mock_race_cases": 5,
+  "candidate_controls": 13,
+  "baseline_controls": 13,
+  "shared_exact_go_binary_controls": 13,
+  "baseline_engine": "3cdb2610ba8b984676b80ba22df64821787886d3",
+  "baseline_overlay_tree": "4a235b06362ae6306a300e45d5974495c1229c2b",
+  "historical_failures": [
+    "Initial build command used nonexistent hawdb_ffi_profile; corrected to existing hawdb_ffi_boundary_profile. Zero initial build processes.",
+    "Initial disassembly verifier expected wrapper names; compiler inlines wrappers into shared record. Ordinary observer removal and tagged timers checked in actual disassembly.",
+    "Initial baseline ordinary dylib failed Mac LINKEDIT load before DB open; match main Mac strip flag. Initial10 successful profile controls and failed plain attempt retained."
+  ],
+  "scope": "Functional collection plumbing and source-qualified unchanged-engine local fuzz only. No timing speedup, RSS/heap bound, full representative performance acceptance, Windows Go runtime or PR986 final-source qualification is claimed. Original v1/v2 baselines remain frozen; full BEP/client environment excluded."
+}

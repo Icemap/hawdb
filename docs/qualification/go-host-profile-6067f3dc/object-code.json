@@ -1,0 +1,15 @@
+{
+  "artifacts": {
+    "boundary": {
+      "time_now_calls": 0,
+      "profile_record_calls": 0,
+      "asm_sha256": "50b917f87692c1652eb34b471d4c7a1f4473fd9b6b38b64b93f7c67720629a96"
+    },
+    "boundary_profile": {
+      "time_now_calls": 3,
+      "profile_record_calls": 6,
+      "asm_sha256": "e78269ef25ff37bfc4df5299e0c6f5bdca68faf94743ad674c141dc639e7dab0"
+    }
+  },
+  "scope": "Actual optimized DB.query disassembly; ordinary compiled guards contain no observer calls. Tagged wrappers inline into the shared record function; no latency claim."
+}

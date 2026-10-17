@@ -1,0 +1,13 @@
+=== RUN   TestBoundaryProfileConversionsAndBufferRelease
+--- PASS: TestBoundaryProfileConversionsAndBufferRelease (0.00s)
+=== RUN   TestBoundaryProfileParameterFailureDoesNotCountNativeWork
+--- PASS: TestBoundaryProfileParameterFailureDoesNotCountNativeWork (0.00s)
+=== RUN   TestBoundaryProfileErrorAndMalformedOutput
+--- PASS: TestBoundaryProfileErrorAndMalformedOutput (0.00s)
+=== RUN   TestBoundaryProfileConcurrentQueries
+--- PASS: TestBoundaryProfileConcurrentQueries (0.00s)
+=== RUN   TestBoundaryProfileOverflowSaturates
+--- PASS: TestBoundaryProfileOverflowSaturates (0.00s)
+PASS
+ok  	github.com/nowledge-co/hawdb/bindings/go	1.327s
+?   	github.com/nowledge-co/hawdb/bindings/go/cmd/boundary	[no test files]

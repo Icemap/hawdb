@@ -1,0 +1,28 @@
+{
+  "baseline_engine": "3cdb2610ba8b984676b80ba22df64821787886d3",
+  "baseline_tree": "4a235b06362ae6306a300e45d5974495c1229c2b",
+  "producer_source": "6067f3dce6238f5f37e6341e6627589ac34eb52e",
+  "candidate_tree": "e8b3975646c80f4a46cc326cffa7e2a2e1ca80ac",
+  "shared_go_artifacts": {
+    "boundary": {
+      "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/0f3d3b48dff56cd2c85bdd6c29d10539/execroot/_main/bazel-out/darwin_arm64-opt-ST-2c5af747e1f8/bin/bindings/go/cmd/boundary/boundary_/boundary",
+      "sha256": "b659df83bd9b2a2573fe9aef589773749aac82e68258e036248cb2f1d1b30a85"
+    },
+    "boundary_profile": {
+      "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/0f3d3b48dff56cd2c85bdd6c29d10539/execroot/_main/bazel-out/darwin_arm64-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+      "sha256": "b30af7bb454d5fbc2713dda3541dbe70421d6bfe85300345b7b4cbe3a9b4afcb"
+    }
+  },
+  "matched_controls": 13,
+  "preserved_production_objects": {
+    "src": "ce024609e6324a11d45a3a57698d1784ba2b3d60",
+    "crates": "ffd97223bacdfb2087519ab3afe6d6491a3d4fa7",
+    "Cargo.lock": "b7c7c6d58d922557751d8fae41b468f29a55ef10",
+    "rust-toolchain.toml": "3caff2a7c8054117b0c69401d38fbb47ba2241a2",
+    ".bazelrc": "5039906d5a3c6ff9c0e37951f7fcaa06c0b445c0",
+    "BUILD.bazel": "d895b131c917d78605da220a323f6d9f04ea4c35"
+  },
+  "baseline_receipt_sha256": "7b77f1c476ad39d97a6f1fdf5ef94fdd98b20eec4d44c6feca7fda187e1f9cda",
+  "candidate_receipt_sha256": "97ae0b88ab695d3c1a43b321ec094f47364a55f51a0bd426e16d5d51f3ac2911",
+  "scope": "Same exact Go executable bytes separately load old3c and current-main FFI libraries. All13 functional collection outcomes/call counts match. No performance/resource acceptance or final PR986 qualification is implied."
+}
