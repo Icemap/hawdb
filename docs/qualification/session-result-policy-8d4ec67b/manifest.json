@@ -1,0 +1,82 @@
+[
+  {
+    "file": "README.md",
+    "bytes": 1599,
+    "sha256": "af4752f09b140f344375ff0cc04ea395115ffad8db3889ddbb522fcff095d9ab"
+  },
+  {
+    "file": "commands.json",
+    "bytes": 1559,
+    "sha256": "59b104f5b1007649a1a141301eb316d1ae52f4da2df9e72cd3d3d5b1cea258b5"
+  },
+  {
+    "file": "console.log",
+    "bytes": 22621,
+    "sha256": "8542867738e258fa1c4f27770b4602f73d85bed99822258afd3a9ce735250210"
+  },
+  {
+    "file": "contract.log",
+    "bytes": 1994,
+    "sha256": "dd18b577a561175ea4b69c7eb052ee4bfb2e6962457b28b33d43934290877947"
+  },
+  {
+    "file": "driver.log",
+    "bytes": 302,
+    "sha256": "6653f4a0b841899d693e17c20afcd100035d43f11ede074814de94a1f6eb3fd1"
+  },
+  {
+    "file": "general.log",
+    "bytes": 176252,
+    "sha256": "ddb7feb5045f082109671556ae46a0ea427f5e21426e4541e30a6f2bdfacc7a3"
+  },
+  {
+    "file": "go.log",
+    "bytes": 177,
+    "sha256": "0e9861c5329a43eb57cac94191a97556fd7cc21d4c146160c2f1a7333522c268"
+  },
+  {
+    "file": "old-policy-9e80-general.log",
+    "bytes": 179721,
+    "sha256": "d87988359aefe01abb31b32578a4e5c64e61a32920943c601d4c42f34d7ff278"
+  },
+  {
+    "file": "packet.json",
+    "bytes": 3961,
+    "sha256": "f4e36d5fd0c35118f6e17721581d3d75a54e92bb057806103371948560890e7b"
+  },
+  {
+    "file": "python.log",
+    "bytes": 1466,
+    "sha256": "03048abf30d2778cd8b5694aab17fb4a2718a091cbc39295f60aaf1c025bb466"
+  },
+  {
+    "file": "receipt.json",
+    "bytes": 3602,
+    "sha256": "38ff49000b907fd4f4f46e5969256f802be8c712a807900843bcec843d3ee547"
+  },
+  {
+    "file": "residency-first.log",
+    "bytes": 665,
+    "sha256": "2511bae2ae1a309df6fbac0dcdae23c61c83d6dc22d1390a81cdd9908815b30d"
+  },
+  {
+    "file": "residency-second.log",
+    "bytes": 669,
+    "sha256": "75ab2fa7fb75c1a05c308842399b6f19b8b38b8582f9adc723fe20ee1c0fe8f7"
+  },
+  {
+    "file": "strict-native.log",
+    "bytes": 5331,
+    "sha256": "8b0377c5eaeed87ec84e3f6c1783ea7b1bd4d2cc5362a8e66a1d23fb095d76f3"
+  },
+  {
+    "file": "strict-wasm.log",
+    "bytes": 4414,
+    "sha256": "b10d71ad2cdac8034044e6fdad7467f492d1bfdb24880de200131df2812a169b"
+  },
+  {
+    "file": "test-results.json",
+    "bytes": 187057,
+    "sha256": "c5ed879764e1e1c3e7a128d3549dd31c3516c5a4ba704567c27916577cb3e4dc"
+  }
+]

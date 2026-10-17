@@ -1,0 +1,51 @@
+RUN cargo fmt --all -- --check
+PASS cargo fmt --all -- --check
+RUN cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+    Checking hawdb-plan-core v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/plan-core)
+    Checking hawdb-cgroup v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/cgroup)
+    Checking hawdb-core v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/core)
+    Checking hawdb-cascades v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/cascades)
+    Checking hawdb-integrity v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/integrity)
+    Checking hawdb-sql-syntax v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/sql-syntax)
+    Checking hawdb-query v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/query)
+    Checking hawdb-route-ownership v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/route-ownership)
+    Checking hawdb-optimizer-vector v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/optimizer-vector)
+    Checking hawdb-optimizer-predicate v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/optimizer-predicate)
+    Checking hawdb-ddl v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/ddl)
+    Checking hawdb-expression v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/expression)
+    Checking hawdb-qos v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/qos)
+    Checking hawdb-analytics v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/analytics)
+    Checking hawdb-evidence v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/evidence)
+    Checking hawdb-fuzz-contracts v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/fuzz-contracts)
+    Checking hawdb-cypher v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/cypher)
+    Checking hawdb-optimizer-relational v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/optimizer-relational)
+    Checking hawdb-telemetry v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/telemetry)
+    Checking hawdb-plan-cypher v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/plan-cypher)
+    Checking hawdb-storage v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/storage)
+    Checking hawdb-optimizer-graph v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/optimizer-graph)
+    Checking hawdb-plan-cache v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/plan-cache)
+    Checking hawdb-sql v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/sql)
+    Checking hawdb-optimizer v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/optimizer)
+    Checking hawdb-query-policy v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/query-policy)
+    Checking hawdb-executor v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/executor)
+    Checking hawdb-vector-projection v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/vector-projection)
+    Checking hawdb-runtime-tokio v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/runtime-tokio)
+    Checking hawdb-search v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/search)
+    Checking hawdb-system-sql v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/system-sql)
+    Checking hawdb-artifact v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/artifact)
+    Checking hawdb-resource-profile v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/resource-profile)
+    Checking hawdb-compat v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/compat)
+    Checking hawdb-relational v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/relational)
+    Checking hawdb-explain v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/explain)
+    Checking hawdb-nowledge-contracts v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/nowledge-contracts)
+    Checking hawdb-bootstrap v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/bootstrap)
+    Checking hawdb-readiness v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/readiness)
+    Checking hawdb v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy)
+    Checking hawdb-qualification v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/qualification)
+    Checking hawdb-fuzz v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-session-policy/crates/fuzz)
+    Finished `dev` profile [unoptimized] target(s) in 48.23s
+PASS cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+RUN prek run --all-files
+Cargo format check (workspace)...........................................Passed
+Cargo Clippy (workspace, all targets and features).......................Passed
+PASS prek run --all-files

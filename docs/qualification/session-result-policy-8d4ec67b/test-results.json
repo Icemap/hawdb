@@ -1,0 +1,4730 @@
+[
+  {
+    "label": "//:hawdb_concurrent_key_range_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_concurrent_key_range_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224939008",
+      "lastStopTimeMillis": "1792224940715",
+      "totalRunDurationMillis": "1707",
+      "runCount": 1,
+      "totalRunDuration": "1.707s",
+      "firstStartTime": "2026-10-17T08:15:39.008Z",
+      "lastStopTime": "2026-10-17T08:15:40.715Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_concurrent_key_range_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_concurrent_key_range_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1707",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224939008",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "1.707s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "1.707s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:39.008Z",
+      "testAttemptDuration": "1.707s"
+    }
+  },
+  {
+    "label": "//:hawdb_execution_request_contract_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_execution_request_contract_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224926196",
+      "lastStopTimeMillis": "1792225019111",
+      "totalRunDurationMillis": "92915",
+      "runCount": 1,
+      "totalRunDuration": "92.915s",
+      "firstStartTime": "2026-10-17T08:15:26.196Z",
+      "lastStopTime": "2026-10-17T08:16:59.111Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_execution_request_contract_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_execution_request_contract_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "92915",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224926196",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "92.915s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "92.915s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:26.196Z",
+      "testAttemptDuration": "92.915s"
+    }
+  },
+  {
+    "label": "//:hawdb_graph_projection_residency_fuzz_first_half_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_graph_projection_residency_fuzz_first_half_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792225652600",
+      "lastStopTimeMillis": "1792225893585",
+      "totalRunDurationMillis": "240985",
+      "runCount": 1,
+      "totalRunDuration": "240.985s",
+      "firstStartTime": "2026-10-17T08:27:32.600Z",
+      "lastStopTime": "2026-10-17T08:31:33.585Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_graph_projection_residency_fuzz_first_half_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_graph_projection_residency_fuzz_first_half_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "240985",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792225652600",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "240.985s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "240.985s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:27:32.600Z",
+      "testAttemptDuration": "240.985s"
+    }
+  },
+  {
+    "label": "//:hawdb_graph_projection_residency_fuzz_second_half_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_graph_projection_residency_fuzz_second_half_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792225244861",
+      "lastStopTimeMillis": "1792225652496",
+      "totalRunDurationMillis": "407635",
+      "runCount": 1,
+      "totalRunDuration": "407.635s",
+      "firstStartTime": "2026-10-17T08:20:44.861Z",
+      "lastStopTime": "2026-10-17T08:27:32.496Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_graph_projection_residency_fuzz_second_half_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_graph_projection_residency_fuzz_second_half_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "407635",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792225244861",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "407.635s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "407.635s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:20:44.861Z",
+      "testAttemptDuration": "407.635s"
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_fuzz_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_linux_ci_fuzz_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224926043",
+      "lastStopTimeMillis": "1792225244067",
+      "totalRunDurationMillis": "318024",
+      "runCount": 1,
+      "totalRunDuration": "318.024s",
+      "firstStartTime": "2026-10-17T08:15:26.043Z",
+      "lastStopTime": "2026-10-17T08:20:44.067Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_linux_ci_fuzz_smoke_test/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_linux_ci_fuzz_smoke_test/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "318024",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224926043",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "318.024s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "318.024s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:26.043Z",
+      "testAttemptDuration": "318.024s"
+    }
+  },
+  {
+    "label": "//:hawdb_scan_callback_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_scan_callback_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224938485",
+      "lastStopTimeMillis": "1792224959269",
+      "totalRunDurationMillis": "20784",
+      "runCount": 1,
+      "totalRunDuration": "20.784s",
+      "firstStartTime": "2026-10-17T08:15:38.485Z",
+      "lastStopTime": "2026-10-17T08:15:59.269Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_scan_callback_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_scan_callback_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "20784",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224938485",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "20.784s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "20.784s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:38.485Z",
+      "testAttemptDuration": "20.784s"
+    }
+  },
+  {
+    "label": "//bindings/benchmarks:driver_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/bindings/benchmarks/driver_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792224907848",
+      "lastStopTimeMillis": "1792224909423",
+      "totalRunDurationMillis": "1575",
+      "runCount": 1,
+      "totalRunDuration": "1.575s",
+      "firstStartTime": "2026-10-17T08:15:07.848Z",
+      "lastStopTime": "2026-10-17T08:15:09.423Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/bindings/benchmarks/driver_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/bindings/benchmarks/driver_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1575",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224907848",
+      "executionInfo": {
+        "strategy": "disk cache hit",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0.012s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "0s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "0.022s"
+        },
+        "cachedRemotely": true
+      },
+      "testAttemptStart": "2026-10-17T08:15:07.848Z",
+      "testAttemptDuration": "1.575s"
+    }
+  },
+  {
+    "label": "//bindings/go:hawdb_go_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild-ST-c6976e42449f/testlogs/bindings/go/hawdb_go_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224926235",
+      "lastStopTimeMillis": "1792224968571",
+      "totalRunDurationMillis": "42336",
+      "runCount": 1,
+      "totalRunDuration": "42.336s",
+      "firstStartTime": "2026-10-17T08:15:26.235Z",
+      "lastStopTime": "2026-10-17T08:16:08.571Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild-ST-c6976e42449f/testlogs/bindings/go/hawdb_go_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild-ST-c6976e42449f/testlogs/bindings/go/hawdb_go_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "42336",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224926235",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "42.336s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "42.336s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:26.235Z",
+      "testAttemptDuration": "42.336s"
+    }
+  },
+  {
+    "label": "//bindings/python:hawdb_python_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/bindings/python/hawdb_python_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224927575",
+      "lastStopTimeMillis": "1792225204696",
+      "totalRunDurationMillis": "277121",
+      "runCount": 1,
+      "totalRunDuration": "277.121s",
+      "firstStartTime": "2026-10-17T08:15:27.575Z",
+      "lastStopTime": "2026-10-17T08:20:04.696Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/bindings/python/hawdb_python_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/bindings/python/hawdb_python_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "277121",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224927575",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "277.121s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "277.121s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:27.575Z",
+      "testAttemptDuration": "277.121s"
+    }
+  },
+  {
+    "label": "//crates/compat:hawdb_compat_contract_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/compat/hawdb_compat_contract_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792200297425",
+      "lastStopTimeMillis": "1792200298111",
+      "totalRunDurationMillis": "686",
+      "runCount": 1,
+      "totalRunDuration": "0.686s",
+      "firstStartTime": "2026-10-17T01:24:57.425Z",
+      "lastStopTime": "2026-10-17T01:24:58.111Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/compat/hawdb_compat_contract_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/compat/hawdb_compat_contract_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "686",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792200297425",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:24:57.425Z",
+      "testAttemptDuration": "0.686s"
+    }
+  },
+  {
+    "label": "//crates/cypher:hawdb_cypher_backtracking_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/cypher/hawdb_cypher_backtracking_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199170520",
+      "lastStopTimeMillis": "1792199171509",
+      "totalRunDurationMillis": "989",
+      "runCount": 1,
+      "totalRunDuration": "0.989s",
+      "firstStartTime": "2026-10-17T01:06:10.520Z",
+      "lastStopTime": "2026-10-17T01:06:11.509Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/cypher/hawdb_cypher_backtracking_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/cypher/hawdb_cypher_backtracking_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "989",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199170520",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:10.520Z",
+      "testAttemptDuration": "0.989s"
+    }
+  },
+  {
+    "label": "//crates/evidence:hawdb_inventory_health_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/evidence/hawdb_inventory_health_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199168768",
+      "lastStopTimeMillis": "1792199171083",
+      "totalRunDurationMillis": "2315",
+      "runCount": 1,
+      "totalRunDuration": "2.315s",
+      "firstStartTime": "2026-10-17T01:06:08.768Z",
+      "lastStopTime": "2026-10-17T01:06:11.083Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/evidence/hawdb_inventory_health_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/evidence/hawdb_inventory_health_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2315",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199168768",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:08.768Z",
+      "testAttemptDuration": "2.315s"
+    }
+  },
+  {
+    "label": "//crates/evidence:hawdb_resource_profile_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/evidence/hawdb_resource_profile_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199168768",
+      "lastStopTimeMillis": "1792199169619",
+      "totalRunDurationMillis": "851",
+      "runCount": 1,
+      "totalRunDuration": "0.851s",
+      "firstStartTime": "2026-10-17T01:06:08.768Z",
+      "lastStopTime": "2026-10-17T01:06:09.619Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/evidence/hawdb_resource_profile_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/evidence/hawdb_resource_profile_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "851",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199168768",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:08.768Z",
+      "testAttemptDuration": "0.851s"
+    }
+  },
+  {
+    "label": "//crates/evidence:hawdb_source_inventory_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/evidence/hawdb_source_inventory_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199168770",
+      "lastStopTimeMillis": "1792199169323",
+      "totalRunDurationMillis": "553",
+      "runCount": 1,
+      "totalRunDuration": "0.553s",
+      "firstStartTime": "2026-10-17T01:06:08.770Z",
+      "lastStopTime": "2026-10-17T01:06:09.323Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/evidence/hawdb_source_inventory_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/evidence/hawdb_source_inventory_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "553",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199168770",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:08.770Z",
+      "testAttemptDuration": "0.553s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_batch_dispatch_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_batch_dispatch_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199336233",
+      "lastStopTimeMillis": "1792199337129",
+      "totalRunDurationMillis": "896",
+      "runCount": 1,
+      "totalRunDuration": "0.896s",
+      "firstStartTime": "2026-10-17T01:08:56.233Z",
+      "lastStopTime": "2026-10-17T01:08:57.129Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_batch_dispatch_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_batch_dispatch_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "896",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199336233",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:56.233Z",
+      "testAttemptDuration": "0.896s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_execution_lifecycle_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_execution_lifecycle_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199302322",
+      "lastStopTimeMillis": "1792199303091",
+      "totalRunDurationMillis": "769",
+      "runCount": 1,
+      "totalRunDuration": "0.769s",
+      "firstStartTime": "2026-10-17T01:08:22.322Z",
+      "lastStopTime": "2026-10-17T01:08:23.091Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_execution_lifecycle_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_execution_lifecycle_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "769",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199302322",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:22.322Z",
+      "testAttemptDuration": "0.769s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_execution_report_value_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_execution_report_value_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199276324",
+      "lastStopTimeMillis": "1792199278413",
+      "totalRunDurationMillis": "2089",
+      "runCount": 1,
+      "totalRunDuration": "2.089s",
+      "firstStartTime": "2026-10-17T01:07:56.324Z",
+      "lastStopTime": "2026-10-17T01:07:58.413Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_execution_report_value_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_execution_report_value_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2089",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199276324",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:07:56.324Z",
+      "testAttemptDuration": "2.089s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_graph_algorithm_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_graph_algorithm_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199331946",
+      "lastStopTimeMillis": "1792199334178",
+      "totalRunDurationMillis": "2232",
+      "runCount": 1,
+      "totalRunDuration": "2.232s",
+      "firstStartTime": "2026-10-17T01:08:51.946Z",
+      "lastStopTime": "2026-10-17T01:08:54.178Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_graph_algorithm_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_graph_algorithm_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2232",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199331946",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:51.946Z",
+      "testAttemptDuration": "2.232s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_graph_hash_join_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_graph_hash_join_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199382303",
+      "lastStopTimeMillis": "1792199399494",
+      "totalRunDurationMillis": "17191",
+      "runCount": 1,
+      "totalRunDuration": "17.191s",
+      "firstStartTime": "2026-10-17T01:09:42.303Z",
+      "lastStopTime": "2026-10-17T01:09:59.494Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_graph_hash_join_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_graph_hash_join_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "17191",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199382303",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:09:42.303Z",
+      "testAttemptDuration": "17.191s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_morsel_oracle_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_morsel_oracle_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199710430",
+      "lastStopTimeMillis": "1792199711010",
+      "totalRunDurationMillis": "580",
+      "runCount": 1,
+      "totalRunDuration": "0.580s",
+      "firstStartTime": "2026-10-17T01:15:10.430Z",
+      "lastStopTime": "2026-10-17T01:15:11.010Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_morsel_oracle_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_morsel_oracle_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "580",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199710430",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:15:10.430Z",
+      "testAttemptDuration": "0.580s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_mutation_lowering_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_mutation_lowering_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199336114",
+      "lastStopTimeMillis": "1792199336927",
+      "totalRunDurationMillis": "813",
+      "runCount": 1,
+      "totalRunDuration": "0.813s",
+      "firstStartTime": "2026-10-17T01:08:56.114Z",
+      "lastStopTime": "2026-10-17T01:08:56.927Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_mutation_lowering_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_mutation_lowering_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "813",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199336114",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:56.114Z",
+      "testAttemptDuration": "0.813s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_mutation_preflight_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_mutation_preflight_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199335458",
+      "lastStopTimeMillis": "1792199337006",
+      "totalRunDurationMillis": "1548",
+      "runCount": 1,
+      "totalRunDuration": "1.548s",
+      "firstStartTime": "2026-10-17T01:08:55.458Z",
+      "lastStopTime": "2026-10-17T01:08:57.006Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_mutation_preflight_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_mutation_preflight_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1548",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199335458",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:55.458Z",
+      "testAttemptDuration": "1.548s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_numeric_execution_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_numeric_execution_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199336139",
+      "lastStopTimeMillis": "1792199337323",
+      "totalRunDurationMillis": "1184",
+      "runCount": 1,
+      "totalRunDuration": "1.184s",
+      "firstStartTime": "2026-10-17T01:08:56.139Z",
+      "lastStopTime": "2026-10-17T01:08:57.323Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_numeric_execution_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_numeric_execution_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1184",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199336139",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:56.139Z",
+      "testAttemptDuration": "1.184s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_query_observer_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_query_observer_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199387730",
+      "lastStopTimeMillis": "1792199388589",
+      "totalRunDurationMillis": "859",
+      "runCount": 1,
+      "totalRunDuration": "0.859s",
+      "firstStartTime": "2026-10-17T01:09:47.730Z",
+      "lastStopTime": "2026-10-17T01:09:48.589Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_query_observer_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_query_observer_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "859",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199387730",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:09:47.730Z",
+      "testAttemptDuration": "0.859s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_result_delivery_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_result_delivery_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199279140",
+      "lastStopTimeMillis": "1792199280472",
+      "totalRunDurationMillis": "1332",
+      "runCount": 1,
+      "totalRunDuration": "1.332s",
+      "firstStartTime": "2026-10-17T01:07:59.140Z",
+      "lastStopTime": "2026-10-17T01:08:00.472Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_result_delivery_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_result_delivery_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1332",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199279140",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:07:59.140Z",
+      "testAttemptDuration": "1.332s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_sort_merge_account_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_sort_merge_account_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199277030",
+      "lastStopTimeMillis": "1792199279218",
+      "totalRunDurationMillis": "2188",
+      "runCount": 1,
+      "totalRunDuration": "2.188s",
+      "firstStartTime": "2026-10-17T01:07:57.030Z",
+      "lastStopTime": "2026-10-17T01:07:59.218Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_sort_merge_account_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_sort_merge_account_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2188",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199277030",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:07:57.030Z",
+      "testAttemptDuration": "2.188s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_spill_compaction_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_spill_compaction_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199402420",
+      "lastStopTimeMillis": "1792199416492",
+      "totalRunDurationMillis": "14072",
+      "runCount": 1,
+      "totalRunDuration": "14.072s",
+      "firstStartTime": "2026-10-17T01:10:02.420Z",
+      "lastStopTime": "2026-10-17T01:10:16.492Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_spill_compaction_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_spill_compaction_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "14072",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199402420",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:02.420Z",
+      "testAttemptDuration": "14.072s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_transform_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_transform_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199335322",
+      "lastStopTimeMillis": "1792199336974",
+      "totalRunDurationMillis": "1652",
+      "runCount": 1,
+      "totalRunDuration": "1.652s",
+      "firstStartTime": "2026-10-17T01:08:55.322Z",
+      "lastStopTime": "2026-10-17T01:08:56.974Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_transform_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_transform_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1652",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199335322",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:55.322Z",
+      "testAttemptDuration": "1.652s"
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_vector_seed_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_vector_seed_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199276993",
+      "lastStopTimeMillis": "1792199278279",
+      "totalRunDurationMillis": "1286",
+      "runCount": 1,
+      "totalRunDuration": "1.286s",
+      "firstStartTime": "2026-10-17T01:07:56.993Z",
+      "lastStopTime": "2026-10-17T01:07:58.279Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_vector_seed_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/executor/hawdb_vector_seed_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1286",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199276993",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:07:56.993Z",
+      "testAttemptDuration": "1.286s"
+    }
+  },
+  {
+    "label": "//crates/fuzz:hawdb_append_fuzz_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_append_fuzz_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224924565",
+      "lastStopTimeMillis": "1792224967075",
+      "totalRunDurationMillis": "42510",
+      "runCount": 1,
+      "totalRunDuration": "42.510s",
+      "firstStartTime": "2026-10-17T08:15:24.565Z",
+      "lastStopTime": "2026-10-17T08:16:07.075Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_append_fuzz_cli_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_append_fuzz_cli_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "42510",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224924565",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "42.510s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "42.510s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:24.565Z",
+      "testAttemptDuration": "42.510s"
+    }
+  },
+  {
+    "label": "//crates/fuzz:hawdb_fuzz_append_replay_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_append_replay_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224927459",
+      "lastStopTimeMillis": "1792224987615",
+      "totalRunDurationMillis": "60156",
+      "runCount": 1,
+      "totalRunDuration": "60.156s",
+      "firstStartTime": "2026-10-17T08:15:27.459Z",
+      "lastStopTime": "2026-10-17T08:16:27.615Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_append_replay_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_append_replay_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "60156",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224927459",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "60.156s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "60.156s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:27.459Z",
+      "testAttemptDuration": "60.156s"
+    }
+  },
+  {
+    "label": "//crates/fuzz:hawdb_fuzz_append_seed_7_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_append_seed_7_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224927546",
+      "lastStopTimeMillis": "1792224990834",
+      "totalRunDurationMillis": "63288",
+      "runCount": 1,
+      "totalRunDuration": "63.288s",
+      "firstStartTime": "2026-10-17T08:15:27.546Z",
+      "lastStopTime": "2026-10-17T08:16:30.834Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_append_seed_7_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_append_seed_7_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "63288",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224927546",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "63.288s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "63.288s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:27.546Z",
+      "testAttemptDuration": "63.288s"
+    }
+  },
+  {
+    "label": "//crates/fuzz:hawdb_fuzz_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224924577",
+      "lastStopTimeMillis": "1792224924754",
+      "totalRunDurationMillis": "177",
+      "runCount": 1,
+      "totalRunDuration": "0.177s",
+      "firstStartTime": "2026-10-17T08:15:24.577Z",
+      "lastStopTime": "2026-10-17T08:15:24.754Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_cli_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_cli_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "177",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224924577",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "0.177s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "0.177s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:24.577Z",
+      "testAttemptDuration": "0.177s"
+    }
+  },
+  {
+    "label": "//crates/fuzz:hawdb_fuzz_fast_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_fast_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224927781",
+      "lastStopTimeMillis": "1792225191789",
+      "totalRunDurationMillis": "264008",
+      "runCount": 1,
+      "totalRunDuration": "264.008s",
+      "firstStartTime": "2026-10-17T08:15:27.781Z",
+      "lastStopTime": "2026-10-17T08:19:51.789Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_fast_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_fast_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "264008",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224927781",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "264.008s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "264.008s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:27.781Z",
+      "testAttemptDuration": "264.008s"
+    }
+  },
+  {
+    "label": "//crates/fuzz:hawdb_fuzz_relational_join_rewrite_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_relational_join_rewrite_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224924774",
+      "lastStopTimeMillis": "1792224931388",
+      "totalRunDurationMillis": "6614",
+      "runCount": 1,
+      "totalRunDuration": "6.614s",
+      "firstStartTime": "2026-10-17T08:15:24.774Z",
+      "lastStopTime": "2026-10-17T08:15:31.388Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_relational_join_rewrite_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_fuzz_relational_join_rewrite_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "6614",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224924774",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "6.614s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "6.614s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:24.774Z",
+      "testAttemptDuration": "6.614s"
+    }
+  },
+  {
+    "label": "//crates/fuzz:hawdb_parser_fuzz_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_parser_fuzz_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224923606",
+      "lastStopTimeMillis": "1792224926810",
+      "totalRunDurationMillis": "3204",
+      "runCount": 1,
+      "totalRunDuration": "3.204s",
+      "firstStartTime": "2026-10-17T08:15:23.606Z",
+      "lastStopTime": "2026-10-17T08:15:26.810Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_parser_fuzz_cli_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_parser_fuzz_cli_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "3204",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224923606",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "3.204s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "3.204s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:23.606Z",
+      "testAttemptDuration": "3.204s"
+    }
+  },
+  {
+    "label": "//crates/fuzz:hawdb_storage_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_storage_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224924250",
+      "lastStopTimeMillis": "1792224988758",
+      "totalRunDurationMillis": "64508",
+      "runCount": 1,
+      "totalRunDuration": "64.508s",
+      "firstStartTime": "2026-10-17T08:15:24.250Z",
+      "lastStopTime": "2026-10-17T08:16:28.758Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_storage_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/fuzz/hawdb_storage_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "64508",
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792224924250",
+      "executionInfo": {
+        "strategy": "darwin-sandbox",
+        "timingBreakdown": {
+          "child": [
+            {
+              "name": "parseTime",
+              "time": "0s"
+            },
+            {
+              "name": "fetchTime",
+              "time": "0s"
+            },
+            {
+              "name": "queueTime",
+              "time": "0s"
+            },
+            {
+              "name": "uploadTime",
+              "time": "0s"
+            },
+            {
+              "name": "setupTime",
+              "time": "0s"
+            },
+            {
+              "name": "executionWallTime",
+              "time": "64.508s"
+            },
+            {
+              "name": "processOutputsTime",
+              "time": "0s"
+            },
+            {
+              "name": "networkTime",
+              "time": "0s"
+            }
+          ],
+          "name": "totalTime",
+          "time": "64.508s"
+        }
+      },
+      "testAttemptStart": "2026-10-17T08:15:24.250Z",
+      "testAttemptDuration": "64.508s"
+    }
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_candidate_fingerprint_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199331004",
+      "lastStopTimeMillis": "1792199331720",
+      "totalRunDurationMillis": "716",
+      "runCount": 1,
+      "totalRunDuration": "0.716s",
+      "firstStartTime": "2026-10-17T01:08:51.004Z",
+      "lastStopTime": "2026-10-17T01:08:51.720Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_candidate_fingerprint_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_candidate_fingerprint_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "716",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199331004",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:51.004Z",
+      "testAttemptDuration": "0.716s"
+    }
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_cardinality_defaults_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_cardinality_defaults_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199274122",
+      "lastStopTimeMillis": "1792199275449",
+      "totalRunDurationMillis": "1327",
+      "runCount": 1,
+      "totalRunDuration": "1.327s",
+      "firstStartTime": "2026-10-17T01:07:54.122Z",
+      "lastStopTime": "2026-10-17T01:07:55.449Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_cardinality_defaults_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_cardinality_defaults_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1327",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199274122",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:07:54.122Z",
+      "testAttemptDuration": "1.327s"
+    }
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_cardinality_metadata_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199177787",
+      "lastStopTimeMillis": "1792199178965",
+      "totalRunDurationMillis": "1178",
+      "runCount": 1,
+      "totalRunDuration": "1.178s",
+      "firstStartTime": "2026-10-17T01:06:17.787Z",
+      "lastStopTime": "2026-10-17T01:06:18.965Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_cardinality_metadata_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_cardinality_metadata_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1178",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199177787",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:17.787Z",
+      "testAttemptDuration": "1.178s"
+    }
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_ddl_command_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199275546",
+      "lastStopTimeMillis": "1792199276230",
+      "totalRunDurationMillis": "684",
+      "runCount": 1,
+      "totalRunDuration": "0.684s",
+      "firstStartTime": "2026-10-17T01:07:55.546Z",
+      "lastStopTime": "2026-10-17T01:07:56.230Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_ddl_command_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_ddl_command_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "684",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199275546",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:07:55.546Z",
+      "testAttemptDuration": "0.684s"
+    }
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_full_text_cost_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_full_text_cost_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199309614",
+      "lastStopTimeMillis": "1792199310215",
+      "totalRunDurationMillis": "601",
+      "runCount": 1,
+      "totalRunDuration": "0.601s",
+      "firstStartTime": "2026-10-17T01:08:29.614Z",
+      "lastStopTime": "2026-10-17T01:08:30.215Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_full_text_cost_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_full_text_cost_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "601",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199309614",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:29.614Z",
+      "testAttemptDuration": "0.601s"
+    }
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_trace_cost_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_trace_cost_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199177213",
+      "lastStopTimeMillis": "1792199177772",
+      "totalRunDurationMillis": "559",
+      "runCount": 1,
+      "totalRunDuration": "0.559s",
+      "firstStartTime": "2026-10-17T01:06:17.213Z",
+      "lastStopTime": "2026-10-17T01:06:17.772Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_trace_cost_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_trace_cost_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "559",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199177213",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:17.213Z",
+      "testAttemptDuration": "0.559s"
+    }
+  },
+  {
+    "label": "//crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-relational/hawdb_optimizer_access_cost_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199170518",
+      "lastStopTimeMillis": "1792199173632",
+      "totalRunDurationMillis": "3114",
+      "runCount": 1,
+      "totalRunDuration": "3.114s",
+      "firstStartTime": "2026-10-17T01:06:10.518Z",
+      "lastStopTime": "2026-10-17T01:06:13.632Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-relational/hawdb_optimizer_access_cost_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/optimizer-relational/hawdb_optimizer_access_cost_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "3114",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199170518",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:10.518Z",
+      "testAttemptDuration": "3.114s"
+    }
+  },
+  {
+    "label": "//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/plan-cypher/hawdb_plan_cypher_explain_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199176663",
+      "lastStopTimeMillis": "1792199177196",
+      "totalRunDurationMillis": "533",
+      "runCount": 1,
+      "totalRunDuration": "0.533s",
+      "firstStartTime": "2026-10-17T01:06:16.663Z",
+      "lastStopTime": "2026-10-17T01:06:17.196Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/plan-cypher/hawdb_plan_cypher_explain_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/plan-cypher/hawdb_plan_cypher_explain_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "533",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199176663",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:16.663Z",
+      "testAttemptDuration": "0.533s"
+    }
+  },
+  {
+    "label": "//crates/readiness:hawdb_graph_route_readiness_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_graph_route_readiness_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199413098",
+      "lastStopTimeMillis": "1792199452838",
+      "totalRunDurationMillis": "39740",
+      "runCount": 1,
+      "totalRunDuration": "39.740s",
+      "firstStartTime": "2026-10-17T01:10:13.098Z",
+      "lastStopTime": "2026-10-17T01:10:52.838Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_graph_route_readiness_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_graph_route_readiness_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "39740",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199413098",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:13.098Z",
+      "testAttemptDuration": "39.740s"
+    }
+  },
+  {
+    "label": "//crates/readiness:hawdb_integration_bundle_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_integration_bundle_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792200299308",
+      "lastStopTimeMillis": "1792200338962",
+      "totalRunDurationMillis": "39654",
+      "runCount": 1,
+      "totalRunDuration": "39.654s",
+      "firstStartTime": "2026-10-17T01:24:59.308Z",
+      "lastStopTime": "2026-10-17T01:25:38.962Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_integration_bundle_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_integration_bundle_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "39654",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792200299308",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:24:59.308Z",
+      "testAttemptDuration": "39.654s"
+    }
+  },
+  {
+    "label": "//crates/readiness:hawdb_replacement_summary_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_replacement_summary_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199413998",
+      "lastStopTimeMillis": "1792199484863",
+      "totalRunDurationMillis": "70865",
+      "runCount": 1,
+      "totalRunDuration": "70.865s",
+      "firstStartTime": "2026-10-17T01:10:13.998Z",
+      "lastStopTime": "2026-10-17T01:11:24.863Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_replacement_summary_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_replacement_summary_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "70865",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199413998",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:13.998Z",
+      "testAttemptDuration": "70.865s"
+    }
+  },
+  {
+    "label": "//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_source_mutation_readiness_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199431208",
+      "lastStopTimeMillis": "1792199437096",
+      "totalRunDurationMillis": "5888",
+      "runCount": 1,
+      "totalRunDuration": "5.888s",
+      "firstStartTime": "2026-10-17T01:10:31.208Z",
+      "lastStopTime": "2026-10-17T01:10:37.096Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_source_mutation_readiness_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/readiness/hawdb_source_mutation_readiness_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "5888",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199431208",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:31.208Z",
+      "testAttemptDuration": "5.888s"
+    }
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_aggregate_state_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_aggregate_state_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199682273",
+      "lastStopTimeMillis": "1792199691561",
+      "totalRunDurationMillis": "9288",
+      "runCount": 1,
+      "totalRunDuration": "9.288s",
+      "firstStartTime": "2026-10-17T01:14:42.273Z",
+      "lastStopTime": "2026-10-17T01:14:51.561Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_aggregate_state_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_aggregate_state_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "9288",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199682273",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:14:42.273Z",
+      "testAttemptDuration": "9.288s"
+    }
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_columnar_aggregate_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199446131",
+      "lastStopTimeMillis": "1792199451496",
+      "totalRunDurationMillis": "5365",
+      "runCount": 1,
+      "totalRunDuration": "5.365s",
+      "firstStartTime": "2026-10-17T01:10:46.131Z",
+      "lastStopTime": "2026-10-17T01:10:51.496Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_columnar_aggregate_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_columnar_aggregate_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "5365",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199446131",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:46.131Z",
+      "testAttemptDuration": "5.365s"
+    }
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_explain_report_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_explain_report_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199488256",
+      "lastStopTimeMillis": "1792199493334",
+      "totalRunDurationMillis": "5078",
+      "runCount": 1,
+      "totalRunDuration": "5.078s",
+      "firstStartTime": "2026-10-17T01:11:28.256Z",
+      "lastStopTime": "2026-10-17T01:11:33.334Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_explain_report_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_explain_report_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "5078",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199488256",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:11:28.256Z",
+      "testAttemptDuration": "5.078s"
+    }
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_field_plan_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_field_plan_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199484206",
+      "lastStopTimeMillis": "1792199486920",
+      "totalRunDurationMillis": "2714",
+      "runCount": 1,
+      "totalRunDuration": "2.714s",
+      "firstStartTime": "2026-10-17T01:11:24.206Z",
+      "lastStopTime": "2026-10-17T01:11:26.920Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_field_plan_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_field_plan_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2714",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199484206",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:11:24.206Z",
+      "testAttemptDuration": "2.714s"
+    }
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_index_runtime_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_index_runtime_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199486274",
+      "lastStopTimeMillis": "1792199514448",
+      "totalRunDurationMillis": "28174",
+      "runCount": 1,
+      "totalRunDuration": "28.174s",
+      "firstStartTime": "2026-10-17T01:11:26.274Z",
+      "lastStopTime": "2026-10-17T01:11:54.448Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_index_runtime_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_index_runtime_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "28174",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199486274",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:11:26.274Z",
+      "testAttemptDuration": "28.174s"
+    }
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_physical_plan_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_physical_plan_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199634696",
+      "lastStopTimeMillis": "1792199638971",
+      "totalRunDurationMillis": "4275",
+      "runCount": 1,
+      "totalRunDuration": "4.275s",
+      "firstStartTime": "2026-10-17T01:13:54.696Z",
+      "lastStopTime": "2026-10-17T01:13:58.971Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_physical_plan_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_physical_plan_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "4275",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199634696",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:13:54.696Z",
+      "testAttemptDuration": "4.275s"
+    }
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_qualification_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_qualification_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792200239651",
+      "lastStopTimeMillis": "1792200242187",
+      "totalRunDurationMillis": "2536",
+      "runCount": 1,
+      "totalRunDuration": "2.536s",
+      "firstStartTime": "2026-10-17T01:23:59.651Z",
+      "lastStopTime": "2026-10-17T01:24:02.187Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_qualification_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_qualification_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2536",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792200239651",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:23:59.651Z",
+      "testAttemptDuration": "2.536s"
+    }
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_row_runtime_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_row_runtime_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199447216",
+      "lastStopTimeMillis": "1792199466653",
+      "totalRunDurationMillis": "19437",
+      "runCount": 1,
+      "totalRunDuration": "19.437s",
+      "firstStartTime": "2026-10-17T01:10:47.216Z",
+      "lastStopTime": "2026-10-17T01:11:06.653Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_row_runtime_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_row_runtime_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "19437",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199447216",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:47.216Z",
+      "testAttemptDuration": "19.437s"
+    }
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_statement_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_statement_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199432073",
+      "lastStopTimeMillis": "1792199433264",
+      "totalRunDurationMillis": "1191",
+      "runCount": 1,
+      "totalRunDuration": "1.191s",
+      "firstStartTime": "2026-10-17T01:10:32.073Z",
+      "lastStopTime": "2026-10-17T01:10:33.264Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_statement_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/relational/hawdb_relational_statement_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1191",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199432073",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:32.073Z",
+      "testAttemptDuration": "1.191s"
+    }
+  },
+  {
+    "label": "//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/route-ownership/hawdb_graph_route_ownership_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199168734",
+      "lastStopTimeMillis": "1792199173947",
+      "totalRunDurationMillis": "5213",
+      "runCount": 1,
+      "totalRunDuration": "5.213s",
+      "firstStartTime": "2026-10-17T01:06:08.734Z",
+      "lastStopTime": "2026-10-17T01:06:13.947Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/route-ownership/hawdb_graph_route_ownership_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/route-ownership/hawdb_graph_route_ownership_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "5213",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199168734",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:08.734Z",
+      "testAttemptDuration": "5.213s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_block_encoding_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_block_encoding_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199653117",
+      "lastStopTimeMillis": "1792199656065",
+      "totalRunDurationMillis": "2948",
+      "runCount": 1,
+      "totalRunDuration": "2.948s",
+      "firstStartTime": "2026-10-17T01:14:13.117Z",
+      "lastStopTime": "2026-10-17T01:14:16.065Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_block_encoding_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_block_encoding_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2948",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199653117",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:14:13.117Z",
+      "testAttemptDuration": "2.948s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_bounded_file_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_bounded_file_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199650910",
+      "lastStopTimeMillis": "1792199652375",
+      "totalRunDurationMillis": "1465",
+      "runCount": 1,
+      "totalRunDuration": "1.465s",
+      "firstStartTime": "2026-10-17T01:14:10.910Z",
+      "lastStopTime": "2026-10-17T01:14:12.375Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_bounded_file_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_bounded_file_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1465",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199650910",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:14:10.910Z",
+      "testAttemptDuration": "1.465s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_candidate_evidence_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_candidate_evidence_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792200246317",
+      "lastStopTimeMillis": "1792200247837",
+      "totalRunDurationMillis": "1520",
+      "runCount": 1,
+      "totalRunDuration": "1.520s",
+      "firstStartTime": "2026-10-17T01:24:06.317Z",
+      "lastStopTime": "2026-10-17T01:24:07.837Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_candidate_evidence_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_candidate_evidence_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1520",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792200246317",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:24:06.317Z",
+      "testAttemptDuration": "1.520s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_compression_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_compression_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792200243208",
+      "lastStopTimeMillis": "1792200244848",
+      "totalRunDurationMillis": "1640",
+      "runCount": 1,
+      "totalRunDuration": "1.640s",
+      "firstStartTime": "2026-10-17T01:24:03.208Z",
+      "lastStopTime": "2026-10-17T01:24:04.848Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_compression_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_compression_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1640",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792200243208",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:24:03.208Z",
+      "testAttemptDuration": "1.640s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_concurrent_read_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_concurrent_read_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199678057",
+      "lastStopTimeMillis": "1792199679918",
+      "totalRunDurationMillis": "1861",
+      "runCount": 1,
+      "totalRunDuration": "1.861s",
+      "firstStartTime": "2026-10-17T01:14:38.057Z",
+      "lastStopTime": "2026-10-17T01:14:39.918Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_concurrent_read_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_concurrent_read_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1861",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199678057",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:14:38.057Z",
+      "testAttemptDuration": "1.861s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_document_analysis_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_document_analysis_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199715930",
+      "lastStopTimeMillis": "1792199721900",
+      "totalRunDurationMillis": "5970",
+      "runCount": 1,
+      "totalRunDuration": "5.970s",
+      "firstStartTime": "2026-10-17T01:15:15.930Z",
+      "lastStopTime": "2026-10-17T01:15:21.900Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_document_analysis_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_document_analysis_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "5970",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199715930",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:15:15.930Z",
+      "testAttemptDuration": "5.970s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_document_frequency_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_document_frequency_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199918633",
+      "lastStopTimeMillis": "1792199926831",
+      "totalRunDurationMillis": "8198",
+      "runCount": 1,
+      "totalRunDuration": "8.198s",
+      "firstStartTime": "2026-10-17T01:18:38.633Z",
+      "lastStopTime": "2026-10-17T01:18:46.831Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_document_frequency_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_document_frequency_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "8198",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199918633",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:18:38.633Z",
+      "testAttemptDuration": "8.198s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_hex_decoding_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_hex_decoding_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199444686",
+      "lastStopTimeMillis": "1792199446421",
+      "totalRunDurationMillis": "1735",
+      "runCount": 1,
+      "totalRunDuration": "1.735s",
+      "firstStartTime": "2026-10-17T01:10:44.686Z",
+      "lastStopTime": "2026-10-17T01:10:46.421Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_hex_decoding_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_hex_decoding_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1735",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199444686",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:44.686Z",
+      "testAttemptDuration": "1.735s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_hydration_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_hydration_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199403521",
+      "lastStopTimeMillis": "1792199404602",
+      "totalRunDurationMillis": "1081",
+      "runCount": 1,
+      "totalRunDuration": "1.081s",
+      "firstStartTime": "2026-10-17T01:10:03.521Z",
+      "lastStopTime": "2026-10-17T01:10:04.602Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_hydration_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_hydration_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1081",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199403521",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:03.521Z",
+      "testAttemptDuration": "1.081s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_lexical_spill_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_lexical_spill_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199658437",
+      "lastStopTimeMillis": "1792199706748",
+      "totalRunDurationMillis": "48311",
+      "runCount": 1,
+      "totalRunDuration": "48.311s",
+      "firstStartTime": "2026-10-17T01:14:18.437Z",
+      "lastStopTime": "2026-10-17T01:15:06.748Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_lexical_spill_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_lexical_spill_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "48311",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199658437",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:14:18.437Z",
+      "testAttemptDuration": "48.311s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_manifest_budget_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_manifest_budget_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199404260",
+      "lastStopTimeMillis": "1792199439922",
+      "totalRunDurationMillis": "35662",
+      "runCount": 1,
+      "totalRunDuration": "35.662s",
+      "firstStartTime": "2026-10-17T01:10:04.260Z",
+      "lastStopTime": "2026-10-17T01:10:39.922Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_manifest_budget_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_manifest_budget_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "35662",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199404260",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:04.260Z",
+      "testAttemptDuration": "35.662s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_manifest_encoding_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_manifest_encoding_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199482879",
+      "lastStopTimeMillis": "1792199484140",
+      "totalRunDurationMillis": "1261",
+      "runCount": 1,
+      "totalRunDuration": "1.261s",
+      "firstStartTime": "2026-10-17T01:11:22.879Z",
+      "lastStopTime": "2026-10-17T01:11:24.140Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_manifest_encoding_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_manifest_encoding_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1261",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199482879",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:11:22.879Z",
+      "testAttemptDuration": "1.261s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_mini_delta_snapshot_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199648729",
+      "lastStopTimeMillis": "1792199651101",
+      "totalRunDurationMillis": "2372",
+      "runCount": 1,
+      "totalRunDuration": "2.372s",
+      "firstStartTime": "2026-10-17T01:14:08.729Z",
+      "lastStopTime": "2026-10-17T01:14:11.101Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_mini_delta_snapshot_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_mini_delta_snapshot_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2372",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199648729",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:14:08.729Z",
+      "testAttemptDuration": "2.372s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_projection_evidence_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_projection_evidence_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199646091",
+      "lastStopTimeMillis": "1792199720355",
+      "totalRunDurationMillis": "74264",
+      "runCount": 1,
+      "totalRunDuration": "74.264s",
+      "firstStartTime": "2026-10-17T01:14:06.091Z",
+      "lastStopTime": "2026-10-17T01:15:20.355Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_projection_evidence_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_projection_evidence_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "74264",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199646091",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:14:06.091Z",
+      "testAttemptDuration": "74.264s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_spool_decoding_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_spool_decoding_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792200251057",
+      "lastStopTimeMillis": "1792200259741",
+      "totalRunDurationMillis": "8684",
+      "runCount": 1,
+      "totalRunDuration": "8.684s",
+      "firstStartTime": "2026-10-17T01:24:11.057Z",
+      "lastStopTime": "2026-10-17T01:24:19.741Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_spool_decoding_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_spool_decoding_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "8684",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792200251057",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:24:11.057Z",
+      "testAttemptDuration": "8.684s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_spool_encoding_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_spool_encoding_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199679429",
+      "lastStopTimeMillis": "1792199681256",
+      "totalRunDurationMillis": "1827",
+      "runCount": 1,
+      "totalRunDuration": "1.827s",
+      "firstStartTime": "2026-10-17T01:14:39.429Z",
+      "lastStopTime": "2026-10-17T01:14:41.256Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_spool_encoding_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_spool_encoding_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1827",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199679429",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:14:39.429Z",
+      "testAttemptDuration": "1.827s"
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_term_policy_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_term_policy_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199412607",
+      "lastStopTimeMillis": "1792199427066",
+      "totalRunDurationMillis": "14459",
+      "runCount": 1,
+      "totalRunDuration": "14.459s",
+      "firstStartTime": "2026-10-17T01:10:12.607Z",
+      "lastStopTime": "2026-10-17T01:10:27.066Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_term_policy_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/search/hawdb_search_term_policy_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "14459",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199412607",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:12.607Z",
+      "testAttemptDuration": "14.459s"
+    }
+  },
+  {
+    "label": "//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql-syntax/hawdb_sql_alias_boundary_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199168589",
+      "lastStopTimeMillis": "1792199169181",
+      "totalRunDurationMillis": "592",
+      "runCount": 1,
+      "totalRunDuration": "0.592s",
+      "firstStartTime": "2026-10-17T01:06:08.589Z",
+      "lastStopTime": "2026-10-17T01:06:09.181Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql-syntax/hawdb_sql_alias_boundary_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql-syntax/hawdb_sql_alias_boundary_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "592",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199168589",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:08.589Z",
+      "testAttemptDuration": "0.592s"
+    }
+  },
+  {
+    "label": "//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql/hawdb_sql_clause_diagnostics_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199179866",
+      "lastStopTimeMillis": "1792199181060",
+      "totalRunDurationMillis": "1194",
+      "runCount": 1,
+      "totalRunDuration": "1.194s",
+      "firstStartTime": "2026-10-17T01:06:19.866Z",
+      "lastStopTime": "2026-10-17T01:06:21.060Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql/hawdb_sql_clause_diagnostics_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql/hawdb_sql_clause_diagnostics_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1194",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199179866",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:19.866Z",
+      "testAttemptDuration": "1.194s"
+    }
+  },
+  {
+    "label": "//crates/sql:hawdb_sql_create_binding_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql/hawdb_sql_create_binding_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199274389",
+      "lastStopTimeMillis": "1792199275156",
+      "totalRunDurationMillis": "767",
+      "runCount": 1,
+      "totalRunDuration": "0.767s",
+      "firstStartTime": "2026-10-17T01:07:54.389Z",
+      "lastStopTime": "2026-10-17T01:07:55.156Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql/hawdb_sql_create_binding_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql/hawdb_sql_create_binding_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "767",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199274389",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:07:54.389Z",
+      "testAttemptDuration": "0.767s"
+    }
+  },
+  {
+    "label": "//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql/hawdb_sql_frontend_corpus_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199179047",
+      "lastStopTimeMillis": "1792199179779",
+      "totalRunDurationMillis": "732",
+      "runCount": 1,
+      "totalRunDuration": "0.732s",
+      "firstStartTime": "2026-10-17T01:06:19.047Z",
+      "lastStopTime": "2026-10-17T01:06:19.779Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql/hawdb_sql_frontend_corpus_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/sql/hawdb_sql_frontend_corpus_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "732",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199179047",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:06:19.047Z",
+      "testAttemptDuration": "0.732s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_append_reader_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_append_reader_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199297473",
+      "lastStopTimeMillis": "1792199302899",
+      "totalRunDurationMillis": "5426",
+      "runCount": 1,
+      "totalRunDuration": "5.426s",
+      "firstStartTime": "2026-10-17T01:08:17.473Z",
+      "lastStopTime": "2026-10-17T01:08:22.899Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_append_reader_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_append_reader_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "5426",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199297473",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:17.473Z",
+      "testAttemptDuration": "5.426s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_artifact_binding_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_artifact_binding_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199288608",
+      "lastStopTimeMillis": "1792199289940",
+      "totalRunDurationMillis": "1332",
+      "runCount": 1,
+      "totalRunDuration": "1.332s",
+      "firstStartTime": "2026-10-17T01:08:08.608Z",
+      "lastStopTime": "2026-10-17T01:08:09.940Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_artifact_binding_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_artifact_binding_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1332",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199288608",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:08.608Z",
+      "testAttemptDuration": "1.332s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_backup_hex_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_backup_hex_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199299331",
+      "lastStopTimeMillis": "1792199300427",
+      "totalRunDurationMillis": "1096",
+      "runCount": 1,
+      "totalRunDuration": "1.096s",
+      "firstStartTime": "2026-10-17T01:08:19.331Z",
+      "lastStopTime": "2026-10-17T01:08:20.427Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_backup_hex_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_backup_hex_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1096",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199299331",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:19.331Z",
+      "testAttemptDuration": "1.096s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_checkpoint_wal_verbatim_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199290307",
+      "lastStopTimeMillis": "1792199293324",
+      "totalRunDurationMillis": "3017",
+      "runCount": 1,
+      "totalRunDuration": "3.017s",
+      "firstStartTime": "2026-10-17T01:08:10.307Z",
+      "lastStopTime": "2026-10-17T01:08:13.324Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_checkpoint_wal_verbatim_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_checkpoint_wal_verbatim_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "3017",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199290307",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:10.307Z",
+      "testAttemptDuration": "3.017s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_durable_envelope_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_durable_envelope_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199296570",
+      "lastStopTimeMillis": "1792199300797",
+      "totalRunDurationMillis": "4227",
+      "runCount": 1,
+      "totalRunDuration": "4.227s",
+      "firstStartTime": "2026-10-17T01:08:16.570Z",
+      "lastStopTime": "2026-10-17T01:08:20.797Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_durable_envelope_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_durable_envelope_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "4227",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199296570",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:16.570Z",
+      "testAttemptDuration": "4.227s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_durable_manifest_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_durable_manifest_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199436006",
+      "lastStopTimeMillis": "1792199440294",
+      "totalRunDurationMillis": "4288",
+      "runCount": 1,
+      "totalRunDuration": "4.288s",
+      "firstStartTime": "2026-10-17T01:10:36.006Z",
+      "lastStopTime": "2026-10-17T01:10:40.294Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_durable_manifest_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_durable_manifest_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "4288",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199436006",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:36.006Z",
+      "testAttemptDuration": "4.288s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_file_lock_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_file_lock_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199287085",
+      "lastStopTimeMillis": "1792199288541",
+      "totalRunDurationMillis": "1456",
+      "runCount": 1,
+      "totalRunDuration": "1.456s",
+      "firstStartTime": "2026-10-17T01:08:07.085Z",
+      "lastStopTime": "2026-10-17T01:08:08.541Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_file_lock_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_file_lock_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1456",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199287085",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:07.085Z",
+      "testAttemptDuration": "1.456s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_graph_constraints_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_graph_constraints_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199283974",
+      "lastStopTimeMillis": "1792199285484",
+      "totalRunDurationMillis": "1510",
+      "runCount": 1,
+      "totalRunDuration": "1.510s",
+      "firstStartTime": "2026-10-17T01:08:03.974Z",
+      "lastStopTime": "2026-10-17T01:08:05.484Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_graph_constraints_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_graph_constraints_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1510",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199283974",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:03.974Z",
+      "testAttemptDuration": "1.510s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_graph_overlay_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_graph_overlay_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199291784",
+      "lastStopTimeMillis": "1792199299052",
+      "totalRunDurationMillis": "7268",
+      "runCount": 1,
+      "totalRunDuration": "7.268s",
+      "firstStartTime": "2026-10-17T01:08:11.784Z",
+      "lastStopTime": "2026-10-17T01:08:19.052Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_graph_overlay_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_graph_overlay_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "7268",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199291784",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:11.784Z",
+      "testAttemptDuration": "7.268s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_positioned_read_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_positioned_read_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199280473",
+      "lastStopTimeMillis": "1792199281831",
+      "totalRunDurationMillis": "1358",
+      "runCount": 1,
+      "totalRunDuration": "1.358s",
+      "firstStartTime": "2026-10-17T01:08:00.473Z",
+      "lastStopTime": "2026-10-17T01:08:01.831Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_positioned_read_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_positioned_read_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1358",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199280473",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:00.473Z",
+      "testAttemptDuration": "1.358s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_projected_artifact_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_projected_artifact_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199293106",
+      "lastStopTimeMillis": "1792199315417",
+      "totalRunDurationMillis": "22311",
+      "runCount": 1,
+      "totalRunDuration": "22.311s",
+      "firstStartTime": "2026-10-17T01:08:13.106Z",
+      "lastStopTime": "2026-10-17T01:08:35.417Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_projected_artifact_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_projected_artifact_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "22311",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199293106",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:13.106Z",
+      "testAttemptDuration": "22.311s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_property_projection_hex_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199443272",
+      "lastStopTimeMillis": "1792199445431",
+      "totalRunDurationMillis": "2159",
+      "runCount": 1,
+      "totalRunDuration": "2.159s",
+      "firstStartTime": "2026-10-17T01:10:43.272Z",
+      "lastStopTime": "2026-10-17T01:10:45.431Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_property_projection_hex_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_property_projection_hex_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2159",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199443272",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:43.272Z",
+      "testAttemptDuration": "2.159s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_relational_index_view_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_relational_index_view_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199297018",
+      "lastStopTimeMillis": "1792199343181",
+      "totalRunDurationMillis": "46163",
+      "runCount": 1,
+      "totalRunDuration": "46.163s",
+      "firstStartTime": "2026-10-17T01:08:17.018Z",
+      "lastStopTime": "2026-10-17T01:09:03.181Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_relational_index_view_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_relational_index_view_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "46163",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199297018",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:17.018Z",
+      "testAttemptDuration": "46.163s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_relational_row_workspace_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199418739",
+      "lastStopTimeMillis": "1792199439975",
+      "totalRunDurationMillis": "21236",
+      "runCount": 1,
+      "totalRunDuration": "21.236s",
+      "firstStartTime": "2026-10-17T01:10:18.739Z",
+      "lastStopTime": "2026-10-17T01:10:39.975Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_relational_row_workspace_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_relational_row_workspace_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "21236",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199418739",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:18.739Z",
+      "testAttemptDuration": "21.236s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_set_value_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_set_value_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199282678",
+      "lastStopTimeMillis": "1792199284420",
+      "totalRunDurationMillis": "1742",
+      "runCount": 1,
+      "totalRunDuration": "1.742s",
+      "firstStartTime": "2026-10-17T01:08:02.678Z",
+      "lastStopTime": "2026-10-17T01:08:04.420Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_set_value_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_set_value_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1742",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199282678",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:02.678Z",
+      "testAttemptDuration": "1.742s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_shadow_metadata_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199285373",
+      "lastStopTimeMillis": "1792199287063",
+      "totalRunDurationMillis": "1690",
+      "runCount": 1,
+      "totalRunDuration": "1.690s",
+      "firstStartTime": "2026-10-17T01:08:05.373Z",
+      "lastStopTime": "2026-10-17T01:08:07.063Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_shadow_metadata_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_shadow_metadata_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1690",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199285373",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:05.373Z",
+      "testAttemptDuration": "1.690s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_sharded_cache_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_sharded_cache_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199405585",
+      "lastStopTimeMillis": "1792199407630",
+      "totalRunDurationMillis": "2045",
+      "runCount": 1,
+      "totalRunDuration": "2.045s",
+      "firstStartTime": "2026-10-17T01:10:05.585Z",
+      "lastStopTime": "2026-10-17T01:10:07.630Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_sharded_cache_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_sharded_cache_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2045",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199405585",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:05.585Z",
+      "testAttemptDuration": "2.045s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_source_scan_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_source_scan_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199299058",
+      "lastStopTimeMillis": "1792199313752",
+      "totalRunDurationMillis": "14694",
+      "runCount": 1,
+      "totalRunDuration": "14.694s",
+      "firstStartTime": "2026-10-17T01:08:19.058Z",
+      "lastStopTime": "2026-10-17T01:08:33.752Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_source_scan_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_source_scan_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "14694",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199299058",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:19.058Z",
+      "testAttemptDuration": "14.694s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_statistics_refresh_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199411086",
+      "lastStopTimeMillis": "1792199413077",
+      "totalRunDurationMillis": "1991",
+      "runCount": 1,
+      "totalRunDuration": "1.991s",
+      "firstStartTime": "2026-10-17T01:10:11.086Z",
+      "lastStopTime": "2026-10-17T01:10:13.077Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_statistics_refresh_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_statistics_refresh_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1991",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199411086",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:11.086Z",
+      "testAttemptDuration": "1.991s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_text_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_text_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199404900",
+      "lastStopTimeMillis": "1792199406223",
+      "totalRunDurationMillis": "1323",
+      "runCount": 1,
+      "totalRunDuration": "1.323s",
+      "firstStartTime": "2026-10-17T01:10:04.900Z",
+      "lastStopTime": "2026-10-17T01:10:06.223Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_text_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_text_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "1323",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199404900",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:04.900Z",
+      "testAttemptDuration": "1.323s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_transaction_compaction_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199289438",
+      "lastStopTimeMillis": "1792199295647",
+      "totalRunDurationMillis": "6209",
+      "runCount": 1,
+      "totalRunDuration": "6.209s",
+      "firstStartTime": "2026-10-17T01:08:09.438Z",
+      "lastStopTime": "2026-10-17T01:08:15.647Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_transaction_compaction_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_transaction_compaction_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "6209",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199289438",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:08:09.438Z",
+      "testAttemptDuration": "6.209s"
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_transaction_locks_fuzz_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_transaction_locks_fuzz_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "totalNumCached": 1,
+      "firstStartTimeMillis": "1792199439641",
+      "lastStopTimeMillis": "1792199442275",
+      "totalRunDurationMillis": "2634",
+      "runCount": 1,
+      "totalRunDuration": "2.634s",
+      "firstStartTime": "2026-10-17T01:10:39.641Z",
+      "lastStopTime": "2026-10-17T01:10:42.275Z",
+      "attemptCount": 1
+    },
+    "result": {
+      "testActionOutput": [
+        {
+          "name": "test.log",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_transaction_locks_fuzz_tests/test.log"
+        },
+        {
+          "name": "test.xml",
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/83166bfeb605648d2c00847553628617/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/crates/storage/hawdb_storage_transaction_locks_fuzz_tests/test.xml"
+        }
+      ],
+      "testAttemptDurationMillis": "2634",
+      "cachedLocally": true,
+      "status": "PASSED",
+      "testAttemptStartMillisEpoch": "1792199439641",
+      "executionInfo": {},
+      "testAttemptStart": "2026-10-17T01:10:39.641Z",
+      "testAttemptDuration": "2.634s"
+    }
+  }
+]

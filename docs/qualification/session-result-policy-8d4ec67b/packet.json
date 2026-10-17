@@ -1,0 +1,60 @@
+{
+  "published_at": "2026-10-17T08:35:28.671491+00:00",
+  "pr": 1050,
+  "engine_head": "8d4ec67bf4de0c53e31b4a634972d69eb4040d08",
+  "engine_tree": "24145dc00d4687f7da06ac0a17ef308a61a99c17",
+  "actual_main": "a7900428a24a74fe373d05f9cfc1a63cf144bf3b",
+  "source_sha256": {
+    "crates/executor/src/limit.rs": "ce600e6f05b8bf08a3322ea9e94c05c6038adc5d54c8b3bf01b694450f9d4651",
+    "crates/executor/src/observer/profile/tests.rs": "665f9c27fd9e3b0ee020310f58694df3c656bf6367964f303e80465c944b4923",
+    "crates/relational/src/query/projection.rs": "7ab11a77c0e4c18d42a81f2e15ca5bce038e8037989f508a574b11bdb7be1f25",
+    "crates/relational/src/query/streaming_projection.rs": "b2a5cba68d708470f996f3b3ea092c8abca8c410b963bc59436bffa4b5d52a66",
+    "docs/READ_RESULT_LIMITS.md": "2329ad8e62e40415beb5f1d5bed1b7fb9b449c774780623ba91dc687a3ca5e5e",
+    "docs/SESSION_RESULT_POLICY_REVIEW.md": "2851a55905c48c6698c11173087d8f7c0bfd1da149ddd5e56a96b64dc79c1592",
+    "src/api/explain.rs": "a35227ad0c912002365682dfab44e7ecd4f04d1840345a6e511977b18bc7e222",
+    "src/api/mod.rs": "641e38b63aab9bbfee2c711d4e15bdb73afdbd84a8e1addd387291f9c39bbf02",
+    "src/api/observability.rs": "f5b6dc2b4194bcd154df6a22cfb8977da831a24015b9b09b5404e42ee9fa1c9d",
+    "src/api/query_request.rs": "ef2f6f132ad3a14293fa3c38587e414f46c5168fdca74857f1c742d930efd5a4",
+    "src/api/query_runtime.rs": "b6c5cd00efa6f650fe19947cf8334f831346058687e81bdec2b6a07aed04814f",
+    "src/api/schema_guidance.rs": "0547f192ebcfda3ff134ff75ea99b06066ab079c3459c49ebeb540a8f3f3bfcb",
+    "src/api/tests/query_execution.rs": "7b9e5e21f3945e6fe73ae5a8a0922c09b5b5a83a2a5ba6afc8979d9c28480dd3",
+    "src/api/tests/query_observability.rs": "92b5c700c999b391da0724b64acb13d67ef78faa4f8256e80630531ba88cd171",
+    "src/api/tests/relational_explain_output/strict_append.rs": "1948ca9d5aa84d3fe12a2eb26173604b9598eebcda02dd753f199c5f1cc86f0a",
+    "src/embedded.rs": "ed92943086c55325b0a76e3845800fd8ea25d7a4c7762a87020567124accb428",
+    "src/embedded_tokio.rs": "d6f13c9a3f509e7a123c66ec73d7180dc0a8d8a7be9ba9aec05c610b12e4cf2b",
+    "src/lib.rs": "e7f4d15da0f9a6c199e84ee31d631ed1e01471917acc3ff8c077fdb80601acdf",
+    "src/nowledge_mem.rs": "aea42a5695f9a49348398405f0224ae16c9337aca1f98ba00d39717857d52ed8",
+    "src/sql_session.rs": "5426562d684745f1a015c6a276fa90e18ca5cffc3528e7260939b14c3786af3f",
+    "tests/execution_request_contract.rs": "69dbfef240e93cbd936b01fe480d6f4c8f6ccd0f2e72874bb2d38e980126e9a2"
+  },
+  "general": {
+    "passed": 1677,
+    "failed": 0,
+    "ignored": 1,
+    "filtered": 322,
+    "runtime_seconds": 479.48
+  },
+  "registered_and_fuzz": {
+    "targets": 102,
+    "passed": 102,
+    "executed": 16,
+    "cached": 86,
+    "mandatory_fuzz": 98
+  },
+  "old_general": {
+    "head": "9e80afcb14cadf6d9789eeddfa1a6ec5d638a436",
+    "passed": 1670,
+    "failed": 4,
+    "ignored": 1,
+    "runtime_seconds": 532.36,
+    "log_sha256": "d87988359aefe01abb31b32578a4e5c64e61a32920943c601d4c42f34d7ff278"
+  },
+  "scope": [
+    "Full general ran uncached on a frozen prospective tree verified identical to the actual main merge. Final branch commit has exactly the same full tree.",
+    "The102-target invocation ran on that frozen actual merge tree before commit; exact source, selected logs and complete test-result projection are retained.",
+    "Native1.97.1 formatting/strict workspace Clippy/prek and minimal-browser-WASM strict Clippy pass; automatic merge-commit hooks also pass.",
+    "Old failed complete general remains failed historical evidence; no isolated pass waived it. Initial dependency/setup failures remain locally archived and did not start tests.",
+    "Full BEP client environment is excluded; test-results.json projects only test events. No benchmark/performance/resource, stable Mem release, independent approval or merge qualification for PR986.",
+    "The qualification branch adds documentation/evidence only and is not a production branch or PR base."
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "observed_at": "2026-10-17T08:32:46.491673+00:00",
+  "actual_main": "a7900428a24a74fe373d05f9cfc1a63cf144bf3b",
+  "policy_premerge_head": "9e80afcb14cadf6d9789eeddfa1a6ec5d638a436",
+  "tested_tree": "24145dc00d4687f7da06ac0a17ef308a61a99c17",
+  "head_at_receipt": "9e80afcb14cadf6d9789eeddfa1a6ec5d638a436",
+  "targets": 102,
+  "passed": 102,
+  "mandatory_fuzz_targets": 98,
+  "executed": 16,
+  "cached": 86,
+  "general": {
+    "observed_at": "2026-10-17T08:12:21.967350+00:00",
+    "actual_main": "a7900428a24a74fe373d05f9cfc1a63cf144bf3b",
+    "tested_tree": "24145dc00d4687f7da06ac0a17ef308a61a99c17",
+    "actual_merge_tree_identical": true,
+    "suite": {
+      "passed": 1677,
+      "failed": 0,
+      "ignored": 1,
+      "filtered": 322,
+      "runtime_seconds": 479.48
+    },
+    "all_four_previous_pressure_failures_pass": true,
+    "test_summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/c59e217499203a7c25165b7513fecee4/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_unit_general_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792224144049",
+      "lastStopTimeMillis": "1792224629161",
+      "totalRunDurationMillis": "485112",
+      "runCount": 1,
+      "totalRunDuration": "485.112s",
+      "firstStartTime": "2026-10-17T08:02:24.049Z",
+      "lastStopTime": "2026-10-17T08:10:29.161Z",
+      "attemptCount": 1
+    },
+    "raw_test_log_sha256": "ddb7feb5045f082109671556ae46a0ea427f5e21426e4541e30a6f2bdfacc7a3",
+    "bep_sha256": "05a102c25a27524addc347b81d7288f9e1b5f32e4573b80be2180f7e2193a0da",
+    "scope": "Uncached full general suite on frozen prospective tree verified byte-identical to actual main merge staged in PR1050. Final commit/CI remain separate; earlier dependency-preparation failures and old failed general partitions retained. Original test cases/concurrency/deadlines unchanged."
+  },
+  "selected_logs": [
+    {
+      "label": "//:hawdb_graph_projection_residency_fuzz_first_half_tests",
+      "file": "residency-first.log",
+      "sha256": "2511bae2ae1a309df6fbac0dcdae23c61c83d6dc22d1390a81cdd9908815b30d"
+    },
+    {
+      "label": "//:hawdb_graph_projection_residency_fuzz_second_half_tests",
+      "file": "residency-second.log",
+      "sha256": "75ab2fa7fb75c1a05c308842399b6f19b8b38b8582f9adc723fe20ee1c0fe8f7"
+    },
+    {
+      "label": "//:hawdb_execution_request_contract_tests",
+      "file": "contract.log",
+      "sha256": "dd18b577a561175ea4b69c7eb052ee4bfb2e6962457b28b33d43934290877947"
+    },
+    {
+      "label": "//bindings/go:hawdb_go_tests",
+      "file": "go.log",
+      "sha256": "0e9861c5329a43eb57cac94191a97556fd7cc21d4c146160c2f1a7333522c268"
+    },
+    {
+      "label": "//bindings/python:hawdb_python_tests",
+      "file": "python.log",
+      "sha256": "03048abf30d2778cd8b5694aab17fb4a2718a091cbc39295f60aaf1c025bb466"
+    },
+    {
+      "label": "//bindings/benchmarks:driver_tests",
+      "file": "driver.log",
+      "sha256": "6653f4a0b841899d693e17c20afcd100035d43f11ede074814de94a1f6eb3fd1"
+    }
+  ],
+  "bep_sha256": "547bc3449746f2c639bc52ed71526d0d1687974751278051de3271e2176a4ad0",
+  "scope": "Frozen final source, same tree as actual-main integration. Cache hits apply only to identical Bazel inputs. All original cases, internal concurrency, seeds and deadlines retained. This is correctness/fuzz evidence, not PR986 performance/resource qualification. Full BEP with client environment remains private; public projection contains only test results."
+}

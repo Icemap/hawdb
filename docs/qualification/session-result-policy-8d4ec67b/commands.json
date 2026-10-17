@@ -1,0 +1,35 @@
+{
+  "general": {
+    "command": "bazel test",
+    "patterns": [
+      "//:hawdb_unit_general_tests"
+    ],
+    "explicit_options": [
+      "--cache_test_results=0",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_HOME=/private/tmp/hawdb-wip-ready-20261015/policy-main-integration-preview-warm-cargo-home",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/policy-main-integration-preview-general-offline-expanded-fresh.bep.json"
+    ],
+    "provenance": "Actual BEP explicit option/pattern projection, not generated client environment or an exact original-order transcript."
+  },
+  "registered_and_fuzz": {
+    "command": "bazel test",
+    "patterns": [
+      "//:hawdb_execution_request_contract_tests",
+      "//bindings/go:hawdb_go_tests",
+      "//bindings/python:hawdb_python_tests",
+      "//bindings/benchmarks:driver_tests",
+      "//crates/fuzz:hawdb_fuzz_tests",
+      "//crates/fuzz:hawdb_fuzz_cli_tests",
+      "//:hawdb_linux_ci_fuzz_smoke_test"
+    ],
+    "explicit_options": [
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_HOME=/private/tmp/hawdb-wip-ready-20261015/policy-main-integration-preview-warm-cargo-home",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1050-main-a790-regression-fuzz-registered.bep.json"
+    ],
+    "provenance": "Actual BEP explicit option/pattern projection, not generated client environment or an exact original-order transcript."
+  }
+}
