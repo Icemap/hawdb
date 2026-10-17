@@ -1,0 +1,27 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_general_tests
+-----------------------------------------------------------------------------
+
+running 5 tests
+test api::automatic_checkpoint::tests::headroom::capacity_wait::releasing_old_owners_preserves_available_write_capacity ... ok
+
+thread 'api::automatic_checkpoint::tests::headroom::capacity_wait::releasing_old_owners_fences_capacity_growth_until_cleanup_finishes' (73609422) panicked at src/api/automatic_checkpoint/tests/headroom/capacity_wait.rs:184:22:
+called `Result::unwrap()` on an `Err` value: Timeout
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test api::automatic_checkpoint::tests::headroom::capacity_wait::releasing_old_owners_fences_capacity_growth_until_cleanup_finishes ... FAILED
+
+thread 'api::automatic_checkpoint::tests::headroom::capacity_wait::critical_release_wait_returns_busy_without_resetting_its_deadline' (73609420) panicked at src/api/automatic_checkpoint/tests/headroom/capacity_wait.rs:47:5:
+assertion failed: matches!(control.lock_frontend(),
+    Err(HawDBError::BranchBusy { resource: "automatic checkpoint capacity" }))
+test api::automatic_checkpoint::tests::headroom::capacity_wait::critical_release_wait_returns_busy_without_resetting_its_deadline ... FAILED
+test api::automatic_checkpoint::tests::headroom::capacity_wait::parked_preparation_rejects_no_data_and_a_busy_writer_can_retry_after_checkpoint ... ok
+test api::automatic_checkpoint::tests::headroom::capacity_wait::critical_preparation_wait_returns_busy_without_resetting_its_deadline ... ok
+
+failures:
+
+failures:
+    api::automatic_checkpoint::tests::headroom::capacity_wait::critical_release_wait_returns_busy_without_resetting_its_deadline
+    api::automatic_checkpoint::tests::headroom::capacity_wait::releasing_old_owners_fences_capacity_growth_until_cleanup_finishes
+
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 1994 filtered out; finished in 16.92s
+

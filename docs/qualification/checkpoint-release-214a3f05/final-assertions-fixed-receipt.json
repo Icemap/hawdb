@@ -1,0 +1,85 @@
+{
+  "before": {
+    "head": "214a3f0594b58ee89c58c20c6c98d39c1e25047d",
+    "status": "",
+    "assertion_sha256": "2fbff543f0d36e37d66a39c3e427ca968126a6e3f0758b95d98fd7eec0abefda",
+    "production_sha256": "2650807e939f8ef796a765c5b5476711732ead3a72b90732246382eafd17a573"
+  },
+  "after": {
+    "head": "214a3f0594b58ee89c58c20c6c98d39c1e25047d",
+    "status": "",
+    "assertion_sha256": "2fbff543f0d36e37d66a39c3e427ca968126a6e3f0758b95d98fd7eec0abefda",
+    "production_sha256": "2650807e939f8ef796a765c5b5476711732ead3a72b90732246382eafd17a573"
+  },
+  "source_identity_unchanged": true,
+  "source_head": "214a3f0594b58ee89c58c20c6c98d39c1e25047d",
+  "source_tree": "bd853e37078983ac711db5c1e76e724d3fc2eebb",
+  "assertion_file_sha256": "2fbff543f0d36e37d66a39c3e427ca968126a6e3f0758b95d98fd7eec0abefda",
+  "production_file_sha256": "2650807e939f8ef796a765c5b5476711732ead3a72b90732246382eafd17a573",
+  "exit": 0,
+  "wrapper_seconds": 22.243991708,
+  "command": [
+    "caffeinate",
+    "-i",
+    "env",
+    "CARGO_BAZEL_ISOLATED=false",
+    "CARGO_NET_OFFLINE=true",
+    "bazel",
+    "test",
+    "--repo_env=CARGO_BAZEL_ISOLATED=false",
+    "--repo_env=CARGO_NET_OFFLINE=true",
+    "//:hawdb_unit_general_tests",
+    "--test_arg=api::automatic_checkpoint::tests::headroom::capacity_wait::",
+    "--test_arg=--nocapture",
+    "--nocache_test_results",
+    "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1051-final-assertions-fixed-green-verified.bep.json"
+  ],
+  "summary": {
+    "id": {
+      "testSummary": {
+        "label": "//:hawdb_unit_general_tests",
+        "configuration": {
+          "id": "9665963ca03b590132e920ecb6abbe82ed5827cfc0282c7b2cd4cfe3c249f9ed"
+        }
+      }
+    },
+    "testSummary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/945ffc8a2e00897bc33004581e9f14fa/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_unit_general_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792211692325",
+      "lastStopTimeMillis": "1792211713992",
+      "totalRunDurationMillis": "21667",
+      "runCount": 1,
+      "totalRunDuration": "21.667s",
+      "firstStartTime": "2026-10-17T04:34:52.325Z",
+      "lastStopTime": "2026-10-17T04:35:13.992Z",
+      "attemptCount": 1
+    }
+  },
+  "suite": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1994 filtered out; finished in 13.89s",
+  "test_log_sha256": "dfc24ecd1b72e72075e7f0f7fa7bc88b7cdd7f646239f47515c1e60f25ee9d6a",
+  "bep_sha256": "93a08870776f9db7f8f0ea1f29b45323bf79d0c4e4fcf010c2e1f7ae43323659",
+  "binary_sha256": "470cbbf21b7ebdc9cb0eb5ee95c59ea18b6c3240ee510bdc1a43de02dba519bd",
+  "scope": "Before/after clean exact final engine identity, unchanged final assertions. Existing target filtered to all five capacity_wait tests; original budgets/deadlines/default concurrency.",
+  "actual_command_projection": [
+    {
+      "user_supplied_bazel_args": [
+        "test",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "//:hawdb_unit_general_tests",
+        "--test_arg=api::automatic_checkpoint::tests::headroom::capacity_wait::",
+        "--test_arg=--nocapture",
+        "--nocache_test_results",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1051-final-assertions-fixed-green-verified.bep.json"
+      ],
+      "full_unstructured_record_sha256": "c469c5193961d71a22d82d0624865ccd8ec5b25e7c8b1400ea206bce12a6b125",
+      "projection": "Generated Bazel client environment/cwd/timings omitted; full original BEP retained locally with the recorded digest."
+    }
+  ]
+}

@@ -7,13 +7,29 @@
     "bytes": 26171,
     "sha256": "e18353f7f0158eb9e0b65bd1ebe99bd2fb8eabab2f17d61759361236ce8773b3"
   },
+  "final-assertions-fixed-receipt.json": {
+    "bytes": 3714,
+    "sha256": "15119b1da69423042b2cd43abdf7b32b4906b53634ffe43440b1c8ebda65a85e"
+  },
+  "final-assertions-fixed.log": {
+    "bytes": 982,
+    "sha256": "dfc24ecd1b72e72075e7f0f7fa7bc88b7cdd7f646239f47515c1e60f25ee9d6a"
+  },
+  "final-assertions-old-receipt.json": {
+    "bytes": 2830,
+    "sha256": "209a8478ecdba034e26f550c6218a1f9f496a58553bfdb55831daabffaddecb8"
+  },
+  "final-assertions-old.log": {
+    "bytes": 1990,
+    "sha256": "86cbb56a4e8093d8ae5a922e6ee37bfac1efbb00465b719e4271f3cdbb9135f3"
+  },
   "final-capacity-wait-assertions.rs.txt": {
     "bytes": 6314,
     "sha256": "2fbff543f0d36e37d66a39c3e427ca968126a6e3f0758b95d98fd7eec0abefda"
   },
   "final-command-line.json": {
-    "bytes": 8321,
-    "sha256": "48fdaba59a8668b940855276d6db2d4d46d437f049fcb44c1420871b84799a33"
+    "bytes": 516,
+    "sha256": "ff14b9afc068e67be8bf13eeaa40c931088a76f00526dbce924b843119910b7b"
   },
   "final-fixed-general-green.log": {
     "bytes": 175985,
@@ -27,9 +43,13 @@
     "bytes": 14910,
     "sha256": "6899c0b823db18170324a52ee4071b986565c965882725594759822915497d83"
   },
+  "old-production-final-assertions.patch": {
+    "bytes": 4470,
+    "sha256": "1dce637f99bb8d326810cee686ae0fa9d97b7afebde75695b23436d73e8b43fc"
+  },
   "packet.json": {
-    "bytes": 16544,
-    "sha256": "1a26e96aaccb72b9262a88017525c6a414aa9537f723a75c20b571869bbf3322"
+    "bytes": 19144,
+    "sha256": "df32300ac04c381ae243e366008171d9125fca499d297a8bdaaa167545502443"
   },
   "policy-predecessor-red.log": {
     "bytes": 22740,

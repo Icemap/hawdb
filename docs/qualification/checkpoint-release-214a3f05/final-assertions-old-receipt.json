@@ -1,0 +1,58 @@
+{
+  "source_tree": "19cc3c63e198f0d395e5d865e42a6739da041748",
+  "old_production_head": "b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44",
+  "assertion_file_sha256": "2fbff543f0d36e37d66a39c3e427ca968126a6e3f0758b95d98fd7eec0abefda",
+  "production_file_sha256": "54ffd6a057cdc81bb9773b7316dde968b2766a8fb55157f9d69ccebe89195b1f",
+  "summary": {
+    "id": {
+      "testSummary": {
+        "label": "//:hawdb_unit_general_tests",
+        "configuration": {
+          "id": "9665963ca03b590132e920ecb6abbe82ed5827cfc0282c7b2cd4cfe3c249f9ed"
+        }
+      }
+    },
+    "testSummary": {
+      "totalRunCount": 1,
+      "failed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/bfa70c5c883827e57274f8c3bd6fccfa/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_unit_general_tests/test.log"
+        }
+      ],
+      "overallStatus": "FAILED",
+      "firstStartTimeMillis": "1792211405698",
+      "lastStopTimeMillis": "1792211432822",
+      "totalRunDurationMillis": "27124",
+      "runCount": 1,
+      "totalRunDuration": "27.124s",
+      "firstStartTime": "2026-10-17T04:30:05.698Z",
+      "lastStopTime": "2026-10-17T04:30:32.822Z",
+      "attemptCount": 1
+    }
+  },
+  "suite": "test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 1994 filtered out; finished in 16.92s",
+  "failed_tests": [
+    "api::automatic_checkpoint::tests::headroom::capacity_wait::releasing_old_owners_fences_capacity_growth_until_cleanup_finishes",
+    "api::automatic_checkpoint::tests::headroom::capacity_wait::critical_release_wait_returns_busy_without_resetting_its_deadline"
+  ],
+  "test_log_sha256": "86cbb56a4e8093d8ae5a922e6ee37bfac1efbb00465b719e4271f3cdbb9135f3",
+  "bep_sha256": "68d68c5f4307c7eb55507686877960d0ba4c7353aa3357b4f935e5433880ff59",
+  "binary_sha256": "eab965f4bc51953a7121735c9da35bb1b6b68d44f159a4a94c631119d65fc544",
+  "scope": "Final assertions unchanged, old production unchanged. Existing registered target filtered to the five final capacity tests; all budgets/deadlines/default concurrency unchanged.",
+  "actual_command_projection": [
+    {
+      "user_supplied_bazel_args": [
+        "test",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "//:hawdb_unit_general_tests",
+        "--test_arg=api::automatic_checkpoint::tests::headroom::capacity_wait::",
+        "--test_arg=--nocapture",
+        "--nocache_test_results",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/pr1051-final-assertions-old-red.bep.json"
+      ],
+      "full_unstructured_record_sha256": "87137b0b0bcd9b9449bd063e146fdc13c1cf071bc4024e2ec326a07abf176d35",
+      "projection": "Generated Bazel client environment/cwd/timings omitted; full original BEP retained locally with the recorded digest."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_general_tests
+-----------------------------------------------------------------------------
+
+running 5 tests
+test api::automatic_checkpoint::tests::headroom::capacity_wait::releasing_old_owners_preserves_available_write_capacity ... ok
+test api::automatic_checkpoint::tests::headroom::capacity_wait::releasing_old_owners_fences_capacity_growth_until_cleanup_finishes ... ok
+test api::automatic_checkpoint::tests::headroom::capacity_wait::parked_preparation_rejects_no_data_and_a_busy_writer_can_retry_after_checkpoint ... ok
+test api::automatic_checkpoint::tests::headroom::capacity_wait::critical_preparation_wait_returns_busy_without_resetting_its_deadline ... ok
+test api::automatic_checkpoint::tests::headroom::capacity_wait::critical_release_wait_returns_busy_without_resetting_its_deadline ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1994 filtered out; finished in 13.89s
+

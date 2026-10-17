@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "pr": 1051,
   "issue": "ref #207",
   "old_engine": "b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44",
@@ -18,7 +18,7 @@
     "path": "src/api/automatic_checkpoint/tests/headroom/capacity_wait.rs",
     "old_file_sha256": "ec3347e485ce43668efc769aa46b0ff4b5c6eedd614b3a29987f0c74b9a68eff",
     "fixed_file_sha256": "2fbff543f0d36e37d66a39c3e427ca968126a6e3f0758b95d98fd7eec0abefda",
-    "baseline_execution": "The three newly added final boundary/expiry cases were not in the historical baseline group. Do not claim a RED run of all five final capacity cases. The original regression assertions mapped below are byte-identical old/fixed and did run RED/GREEN."
+    "baseline_execution": "The historical 82-case baseline group predates the three added capacity cases. A new focused RED/GREEN run now executes the complete unchanged final five-test file against old production and exact final engine; see final_assertions_redgreen."
   },
   "regressions": [
     {
@@ -156,5 +156,51 @@
     "policy-predecessor-red.log",
     "first-fixed-group-adverse.log"
   ],
-  "interpretation": "The original four storage-pressure assertions are identical on old and fixed production, fail in the historical baseline group and pass in final complete local/Linux general suites. Keep the fifth baseline manual-owner failure and all four first-fix bounded-wait failures explicit. These observations do not independently isolate concurrent host invocations as their cause. Isolated earlier passes do not waive group failures. No #986 p99/RSS/performance qualification, new test run or CI lane is claimed by publishing this packet."
+  "interpretation": "Historical four storage-pressure regressions and separate manual-owner failure remain recorded, alongside all adverse policy/first-fix groups. Focused same-assertion RED/GREEN now demonstrates old production 3 pass/2 fail and exact fixed engine 5 pass, with three healthy controls and two Releasing-specific behavioral failures. Before/after exact fixed source identity is verified. Generated Bazel client metadata differs and is excluded from the public command projection, while actual user test options match. This does not establish the cause of historical host-contention/timeouts or qualify #986 p99/RSS/performance gates.",
+  "final_assertions_redgreen": {
+    "old_engine": "b3f00e6d7a7e55e8ac3435d6f01514c9af70bf44",
+    "old_with_final_test_file_tree": "19cc3c63e198f0d395e5d865e42a6739da041748",
+    "fixed_engine": "214a3f0594b58ee89c58c20c6c98d39c1e25047d",
+    "identical_assertion_file_sha256": "2fbff543f0d36e37d66a39c3e427ca968126a6e3f0758b95d98fd7eec0abefda",
+    "only_source_difference_between_old_with_final_tests_and_fixed": [
+      "src/api/automatic_checkpoint.rs"
+    ],
+    "overlay_patch": "old-production-final-assertions.patch",
+    "old_log": "final-assertions-old.log",
+    "old_receipt": "final-assertions-old-receipt.json",
+    "old_suite": "test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 1994 filtered out; finished in 16.92s",
+    "fixed_log": "final-assertions-fixed.log",
+    "fixed_receipt": "final-assertions-fixed-receipt.json",
+    "fixed_suite": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1994 filtered out; finished in 13.89s",
+    "fixed_identity_checked_before_and_after": true,
+    "user_specified_options_identical_except_bep_output_path": true,
+    "cases": [
+      {
+        "name": "api::automatic_checkpoint::tests::headroom::capacity_wait::critical_preparation_wait_returns_busy_without_resetting_its_deadline",
+        "old": "PASSED",
+        "fixed": "PASSED"
+      },
+      {
+        "name": "api::automatic_checkpoint::tests::headroom::capacity_wait::critical_release_wait_returns_busy_without_resetting_its_deadline",
+        "old": "FAILED",
+        "fixed": "PASSED"
+      },
+      {
+        "name": "api::automatic_checkpoint::tests::headroom::capacity_wait::parked_preparation_rejects_no_data_and_a_busy_writer_can_retry_after_checkpoint",
+        "old": "PASSED",
+        "fixed": "PASSED"
+      },
+      {
+        "name": "api::automatic_checkpoint::tests::headroom::capacity_wait::releasing_old_owners_fences_capacity_growth_until_cleanup_finishes",
+        "old": "FAILED",
+        "fixed": "PASSED"
+      },
+      {
+        "name": "api::automatic_checkpoint::tests::headroom::capacity_wait::releasing_old_owners_preserves_available_write_capacity",
+        "old": "PASSED",
+        "fixed": "PASSED"
+      }
+    ],
+    "scope": "Only the existing registered general target filtered to all five final capacity assertions. No test/fixture/budget/default concurrency/deadline changes or new CI lane. Old implementation remains untouched; only its final test file was transplanted. The comparison differs in exactly one production file."
+  }
 }
