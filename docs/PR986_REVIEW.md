@@ -5,7 +5,50 @@ Issue Number: ref #987, ref #976
 This records the bounded review fixes and remaining decisions. It does not
 constitute independent approval of the retained implementation.
 
-## Follow-up on 9bdea658
+## Current delivery state
+
+The policy and ordinary-tooling prerequisites have landed on main:
+
+| Delivery | Actual main commit |
+| --- | --- |
+| #1050 session result policy and native SQL RETURNING payload guard | a1012720decca3844864c910360057a5c71dddd8 |
+| #1051 checkpoint-release capacity and retry boundaries | a7900428 |
+| #1052 reusable ordinary qualification and optional profiling tools | 1f2cad50 |
+| #1055 Go host conversion/call/free observation | 020f1746 |
+
+Merge 3793274a integrates actual main a1012720 and resolves its five conflicts.
+There is one canonical SessionConfig and one effective native SQL RETURNING
+payload guard. Retained-specific cursor, Arrow, ownership and reporting
+extensions remain in this branch. Commit af1d4bb5 corrects a stale default-value
+test assertion and adds independent None/Some(0)/Some(100000) memory/file
+controls. Its complete execution-request contract passes 32/32, with no failed,
+ignored or filtered tests, in 122.97 seconds. These are source-qualified
+results, not a claim that every remaining acceptance gate has passed.
+
+The first retained cut is [#1059](https://github.com/nowledge-co/hawdb/pull/1059),
+directly against main: storage COW/source capacity, executor numeric ownership,
+shared admission and the Rust numeric cursor. At 14e852d4, its complete core,
+QoS, executor and storage targets pass; storage reports 1,912 passed and 30
+existing ignored cases. Its nine CI checks pass. The initial combined local
+root invocation has three timeouts plus incomplete targets and reported
+checkpoint/concurrency failures. A complete unchanged general-partition replay
+passes 1,711 tests, with one existing ignore, in 438.13 seconds. The failed run
+remains recorded; neither that pass nor CI success establishes its cause or
+waives the remaining local checks. The PR description tracks complete main
+comparisons, other root partitions, mandatory fuzz and direct Windows numeric
+qualification. No independent approval or readiness is implied here.
+
+After that cut actually lands, the next main-based deliveries cover retained
+numeric foreign bindings and Arrow. Keep #986 as the final indexed-node-view
+and full-qualification delivery; merging prerequisites alone does not complete
+this PR. Its original 90-group ordinary and 110-group resource matrices,
+explicit-large/default-refusal controls, allocation/conversion costs,
+whole-operation RSS, tail latency and exception paths remain required on the
+final source. Preserve the original 3cdb2610 baseline and the additional
+integrated-main a1012720 control separately. Independent review and genuine
+maintainer/Tide approval remain required.
+
+## Historical follow-up on 9bdea658
 
 The Linux native-binding job
 [117272297239](https://github.com/nowledge-co/hawdb/actions/runs/38990715330/job/117272297239)
@@ -18,15 +61,16 @@ now uses three u64 words, keeping the short-buffer and misalignment contracts
 separate. The dedicated misalignment regression still requires no writes.
 No production alignment check or output-clearing rule is weakened.
 
-[#1050](https://github.com/nowledge-co/hawdb/pull/1050) must land first. After
-merging main forward, verify one SessionConfig definition and no independent
-session-policy delta against main. That integration has not happened yet.
-The requested retained-core, bindings, Arrow and node-view split remains open.
-Its prerequisite checkpoint-release fix is separately proposed in
-[#1051](https://github.com/nowledge-co/hawdb/pull/1051). On 214a3f05, the full
-local general partition and all 98 mandatory fuzz targets pass, as do native
-Linux/macOS/Windows and all five Prow checks. Independent maintainer approval
-and main landing remain pending; these checks do not waive #986 qualification.
+At this review snapshot, #1050 and the checkpoint-release fix #1051 were
+prerequisites. They have since received independent approval and landed on
+actual main, as listed above. The #1050 approved source af2de01b and actual main
+a1012720 have the identical tree a0f5fcc0750a3a4c5f35925a16d4d07b481000e6.
+Its complete 30-case contract, full general partition and 103 registered local
+targets pass, including all 98 mandatory fuzz targets. The immutable
+[policy packet](https://github.com/nowledge-co/hawdb/blob/bf0c202781f6a1d7919c8c2a76be7a786f0feff5/docs/qualification/session-returning-af2de01b/packet.json)
+retains its failed counterfactuals, RED/GREEN tests and final-source evidence.
+These bounded approvals do not approve the retained delivery or its resource
+and performance gates.
 
 The benchmark harness is reusable local developer qualification code, also
 called by the optional comparison workflow. `run.py`, `python_boundary.py`,
@@ -41,11 +85,12 @@ control planes or default CI workloads. Keeping a reproducible qualification
 path on main is useful, but does not make all historical observations or the
 whole harness an inseparable part of the retained-core delivery.
 
-The proposed scope for the split is:
+Ordinary tooling is now landed through #1052/#1055. The remaining delivery
+boundaries are:
 
 | Developer tooling | Delivery boundary |
 | --- | --- |
-| `checksum.py`, `run.py`, `compare.py`, `main-baseline-adapters.json`, `python_boundary.py`, `test_run.py`, and Rust/Go ordinary drivers | Reusable ordinary qualification, delivered with the applicable host boundary or in a separate main-based qualification PR; not required to ship the retained Rust core. |
+| `checksum.py`, `run.py`, `compare.py`, `main-baseline-adapters.json`, `python_boundary.py`, `test_run.py`, and Rust/Go ordinary drivers | Reusable ordinary qualification landed through #1052; its observation additions landed through #1055. Retained Rust core delivery does not require the foreign consumer harness. |
 | `native_alloc.rs`, `native_profile.rs` and their profiling build targets | Shared opt-in allocation/resource observation, kept with their Rust/FFI/Python consumers. FFI/Python imports are guarded by `boundary-profiling`; ordinary builds do not install this observer. |
 | `retained_write_control.py` | Numeric retained binding qualification. |
 | `retained_boundary.py` and `test_retained_boundary.py` | Numeric/Arrow consumer qualification; the current driver includes both modes and must not introduce Arrow into the first Rust-only core cut. |
@@ -55,17 +100,17 @@ The proposed scope for the split is:
 The five Python executable/test targets in this benchmark BUILD are manual.
 The ordinary Rust allocation bench and optional FFI/Python profiling targets
 also consume the shared observer source, so removing it requires handling
-those build inputs together. This source audit supports keeping reproducible
-developer qualification on main; it is not an implemented split or maintainer
-approval of the current benchmark tree.
+those build inputs together. The ordinary portion has landed independently. This source audit supports
+keeping reproducible developer qualification on main; it does not approve the
+remaining retained/Arrow/node harness or qualify its measurements.
 
 ## Review findings
 
 | Finding | Current disposition |
 | --- | --- |
 | Raw benchmark JSON in Git | Removed 30 raw reports (27,019,916 bytes) from the final tree after verifying uploaded artifact bytes: the original 25 evidence files plus five historical benchmark-root observations. The compact [index](../bindings/benchmarks/evidence/README.md) preserves original hashes and sources. Branch history is retained; squash merging is required to exclude the raw reports from main history. |
-| Separate session policy from retained bindings | The #1046 policy is extracted into #1050 directly against main. Its final owned/session contract target passes 20 tests and mandatory fuzz passes 98/98; full general verification still requires the #1051 prerequisite and final main integration. The independent PR must land before its changes disappear from this PR's main-based diff. Remaining retained/bindings scope still requires independent review and implementation of the requested split. |
-| Three meanings of zero | Public session and host settings normalize zero to unlimited at their explicit conversion helpers. Low-level request Some(0) remains a strict zero-row budget; language LIMIT 0 returns no rows. The independent policy adds a regression that exercises these boundaries together. The C retained request exposes batch_rows, not a session max_result_rows field. An internal RowLimit enum remains an optional refactor. |
+| Separate session policy from retained bindings | The #1046 policy landed through #1050 as actual main a1012720, integrated in 3793274a. Canonical settings/defaults and the native SQL payload guard come from main, with one definition each; this branch keeps retained-specific extensions. Final policy source af2de01b has 30 passing contracts, a passing full general partition and 103/103 registered targets, including 98/98 mandatory fuzz. Remaining retained/bindings cuts and their independent review remain open. |
+| Three meanings of zero | Public session and host settings normalize zero to unlimited at their explicit conversion helpers. Low-level request Some(0) remains a strict zero-row budget; language LIMIT 0 returns no rows. The landed policy has a regression exercising these boundaries together. Host default None and explicit Some(0) are unlimited; SessionConfig::max_result_rows defaults to numeric zero. The C retained request exposes batch_rows, not a session max_result_rows field. An internal RowLimit enum remains an optional refactor. |
 | import_label stale name key | b0cdac83 removes the previous name mapping only when it still maps to that label ID. Tests preserve snapshots, exercise overwritten name mappings, and verify that only the retained symbol survives replacement. The capacity fixture uses public import with a preallocated string, without manual map removal. |
 | Label retention expect | Capacity is computed by a private helper from the already borrowed Label. Admission no longer performs a second lookup or expects that lookup to succeed. Missing-ID and permit-refusal regressions remain selected. |
 | FFI alignment and borrowed release | Aligned access is checked before dereferencing retained request/database pointers or writing outputs. Borrowed columns return owner_id=0; releasing that sentinel returns InvalidHandle and preserves the real batch. Both numeric and node query entry points are covered. Descriptor layouts and ABI version are unchanged. |
@@ -74,6 +119,20 @@ approval of the current benchmark tree.
 | PR description history | The prior body, comments and merge resolution patch are archived with byte verification. The PR body now describes the current implementation, source-qualified validation and remaining gates. |
 
 ## Main merge conflict resolutions
+
+Latest integration 3793274a merges actual main a1012720 after #1050 landed.
+The five conflicted files are docs/READ_RESULT_LIMITS.md, src/api/mod.rs,
+src/api/observability.rs, src/api/query_runtime.rs and
+tests/execution_request_contract.rs. Resolution retains main's canonical
+session/default/host/admitted SQL guards and preserves the retained/Arrow
+ownership extensions. Two clean-text duplicate statements were removed.
+Pinned formatting, strict native/minimal-WASM Clippy, prek and hooks pass on
+that tree. Its focused native RETURNING check passes nine tests/54 controls;
+its complete contract has one stale representation assertion failure, preserved
+separately from the corrected complete 32-case GREEN at af1d4bb5. No second
+SessionConfig or payload helper is introduced.
+
+### Historical resolution inventory
 
 The historical merge e33baaea has parents feature5d072971 and mainb3f00e6d.
 The [verified review archive](https://github.com/nowledge-co/hawdb/actions/runs/38989949570/artifacts/12085055265) contains the
@@ -119,7 +178,7 @@ guards. b0cdac83 separately fixes the stale import key identified during review.
 The source patch preserves the concrete resolution context and test changes;
 this inventory does not claim that the unread implementation has been reviewed.
 
-## Sanitizer validation
+## Historical sanitizer validation
 
 Code implementation: b0cdac833deba26f0181e8c33c9de060a5589fbc, identical to the
 six-file patch tested on 254f1cf3 before commit. Host: aarch64-apple-darwin.
