@@ -2075,6 +2075,15 @@ impl GraphStore {
                 .search_projection_graph_changes
                 .last()
                 .map(|change| change.mutation_id()),
+            newest_projection_mutation_id: self
+                .search_projection_graph_changes
+                .iter()
+                .filter(|change| {
+                    change.operation_count() != 0
+                        || change.relational_primary_key_changes.requires_rebuild()
+                })
+                .last()
+                .map(|change| change.mutation_id()),
             first_rebuild_required_mutation_id: self
                 .search_projection_graph_changes
                 .iter()

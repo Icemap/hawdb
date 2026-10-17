@@ -474,3 +474,39 @@ tla_check(
     )
     for control in ["KeepCaptureIo", "KeepBodyIo"]
 ]
+
+[
+    tla_check(
+        name = "HawDBProjectionFreshness" + control + "_check",
+        module = "HawDBProjectionFreshness.tla",
+        config = "mutants/HawDBProjectionFreshness" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["CountOwnerOnly", "IgnoreFloor"]
+]
+
+[
+    tla_check(
+        name = "HawDBSourceRootCustody" + control + "_check",
+        module = "HawDBSourceRootCustody.tla",
+        config = "mutants/HawDBSourceRootCustody" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "DropOnParent",
+        "ReleaseDuringRead",
+        "IgnoreOncePins",
+        "IgnoreRetryPins",
+        "PathForUnlink",
+        "PathForRead",
+        "RetainBusy",
+        "PinWholeManifest",
+        "UnlockBeforePin",
+    ]
+]

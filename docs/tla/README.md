@@ -2255,3 +2255,10 @@ ownership. [Its conditional construction argument](ROOT_READER_CONSTRUCTION_PROO
 describes destruction and independent-child lifetimes, the public-conversion
 fence and native evidence. It is not a new model-checking result or a certificate
 of cold managed cache/registry ownership, source/GC custody or C-ready readiness.
+
+Projection freshness over shared native owner history is specified in
+[PROJECTION_FRESHNESS_PROOF.md](PROJECTION_FRESHNESS_PROOF.md).
+
+The proposed source-root reader/GC protocol and its required native refinement
+are recorded in [SOURCE_ROOT_CUSTODY_DESIGN.md](SOURCE_ROOT_CUSTODY_DESIGN.md).
+The finite model does not certify the current native cleanup implementation.

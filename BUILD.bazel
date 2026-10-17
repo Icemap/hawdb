@@ -340,7 +340,11 @@ rust_test(
         timeout = "eternal" if partition in ["concurrent", "analytics_rss"] else "long",
         # Dense identity and RSS fixtures must not compete with other test
         # executables in this invocation. External contention remains possible.
-        tags = ["exclusive"] if partition == "analytics_rss" else [],
+        tags = ["exclusive"] if partition in ["analytics_rss", "automatic_checkpoint"] else [],
+        # Keep the original per-case deadlines and all explicit concurrency.
+        # Independent deadline-controlled owners must not compete with the
+        # general partition's durable schema/recovery workloads or each other.
+        env = {"RUST_TEST_THREADS": "1"} if partition == "automatic_checkpoint" else {},
         srcs = ["scripts/run-root-unit-partition.sh"],
         args = [
             "$(rootpath :hawdb_unit_test_binary)",
@@ -350,7 +354,7 @@ rust_test(
         ],
         data = [":hawdb_unit_test_binary"],
     )
-    for partition in ["general", "concurrent", "analytics_core_general", "analytics_rss", "recovery"]
+    for partition in ["general", "automatic_checkpoint", "concurrent", "analytics_core_general", "analytics_rss", "recovery"]
 ]
 
 # Identity admission now shares the RSS fixture and its isolated measured child.
@@ -387,6 +391,7 @@ test_suite(
     name = "hawdb_unit_fast_tests",
     tests = [
         ":hawdb_unit_general_tests",
+        ":hawdb_unit_automatic_checkpoint_tests",
         ":hawdb_unit_concurrent_tests",
         ":hawdb_unit_analytics_tests",
         ":hawdb_unit_recovery_tests",
