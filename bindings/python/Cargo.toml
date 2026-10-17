@@ -28,6 +28,7 @@ version = "0.9.0"
 [workspace]
 
 [features]
+boundary-profiling = []
 # Default profile: the engine's own default feature set (full-text, vector,
 # analytics, background maintenance, tokio runtime).
 default = ["hawdb/default"]
