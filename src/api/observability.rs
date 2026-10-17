@@ -266,7 +266,7 @@ impl Database {
     }
 
     pub fn query_sql(&mut self, sql_text: &str) -> Result<QueryOutput> {
-        self.query_sql_bounded(sql_text, self.config.max_read_result_rows)
+        self.query_sql_bounded(sql_text, self.config.read_result_row_limit())
     }
 
     pub fn query_sql_with_params(
@@ -274,7 +274,11 @@ impl Database {
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<QueryOutput> {
-        self.query_sql_with_params_bounded(sql_text, parameters, self.config.max_read_result_rows)
+        self.query_sql_with_params_bounded(
+            sql_text,
+            parameters,
+            self.config.read_result_row_limit(),
+        )
     }
 
     pub fn query_sql_bounded(
@@ -309,12 +313,27 @@ impl Database {
         parameters: &[Value],
         options: QueryStreamOptions,
     ) -> Result<QueryOutput> {
+        self.query_sql_with_params_options_and_system_variables(
+            sql_text,
+            parameters,
+            options,
+            self.system_variables.clone(),
+        )
+    }
+
+    pub(super) fn query_sql_with_params_options_and_system_variables(
+        &mut self,
+        sql_text: &str,
+        parameters: &[Value],
+        options: QueryStreamOptions,
+        system_variables: super::QuerySystemVariables,
+    ) -> Result<QueryOutput> {
         if let Some(runtime) = self.runtime.peek() {
             runtime.store.ensure_usable()?;
         }
         let started = hawdb_core::time::Instant::now();
         let max_rows =
-            super::restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+            super::restrictive_query_limit(self.config.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = super::restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
@@ -344,9 +363,12 @@ impl Database {
             sql_text,
             parameters,
             prepared,
-            max_rows,
-            max_payload_bytes,
+            QueryStreamOptions {
+                max_rows,
+                max_payload_bytes,
+            },
             started,
+            system_variables,
         )
     }
 
@@ -364,9 +386,12 @@ impl Database {
             sql_text,
             parameters,
             prepared,
-            self.config.max_read_result_rows,
-            self.config.max_read_result_payload_bytes,
+            QueryStreamOptions {
+                max_rows: self.config.read_result_row_limit(),
+                max_payload_bytes: self.config.max_read_result_payload_bytes,
+            },
             started,
+            self.system_variables.clone(),
         )
     }
 
@@ -375,10 +400,14 @@ impl Database {
         sql_text: &str,
         parameters: &[Value],
         prepared: crate::relational_sql::PreparedRelationalSql,
-        max_rows: Option<usize>,
-        max_payload_bytes: Option<usize>,
+        options: QueryStreamOptions,
         started: hawdb_core::time::Instant,
+        system_variables: super::QuerySystemVariables,
     ) -> Result<QueryOutput> {
+        let QueryStreamOptions {
+            max_rows,
+            max_payload_bytes,
+        } = options;
         let statement_kind = sql_statement_kind(prepared.statement());
         let query_result = (|| {
             if let SqlStatement::Branch(statement) = prepared.statement() {
@@ -399,6 +428,79 @@ impl Database {
                     "hawdb_schema_migrations is read-only outside system schema upgrade"
                         .to_string(),
                 ));
+            }
+            // RowPage DML without RETURNING has a statically empty result, so
+            // even an explicit zero-row/zero-byte budget needs no preview.
+            // Keep its native single-pass commit instead of hydrating sparse
+            // rows twice (once for a provisional result and once at commit).
+            // Strict append tables can return generated keys without RETURNING
+            // and must still validate their provisional result before commit.
+            let empty_result_table = match prepared.statement() {
+                SqlStatement::Insert(insert) if insert.returning.is_empty() => Some(&insert.table),
+                SqlStatement::Update(update) => Some(&update.table),
+                SqlStatement::Delete(delete) => Some(&delete.table),
+                _ => None,
+            };
+            let has_empty_rowpage_result = match empty_result_table {
+                Some(table) => self
+                    .runtime
+                    .get()?
+                    .store
+                    .relational_state()
+                    .table_schema(&table.name)
+                    .is_some(),
+                None => false,
+            };
+            // The native entry uses storage's default mutation limits. A
+            // custom mutation ceiling needs the transaction's pre-commit
+            // outcome validation even when its result is empty.
+            let can_commit_empty_result = has_empty_rowpage_result
+                && self.config.mutation_limits
+                    == hawdb_storage::mutation::MutationLimits::default();
+            if !can_commit_empty_result
+                && matches!(
+                    prepared.statement(),
+                    SqlStatement::Insert(_) | SqlStatement::Update(_) | SqlStatement::Delete(_)
+                )
+            {
+                // Validate result-bearing DML before publication, regardless
+                // of whether a ceiling exists.
+                let mut transaction = self.begin_transaction()?;
+                transaction.runtime.system_variables = system_variables;
+                transaction.runtime.config.max_read_result_rows = max_rows;
+                transaction.runtime.config.max_read_result_payload_bytes = max_payload_bytes;
+                let result = super::execute_database_transaction_prepared_sql(
+                    &transaction.runtime,
+                    &mut transaction.state,
+                    sql_text,
+                    prepared,
+                    parameters,
+                    super::DatabaseTransactionSqlOptions {
+                        allow_system_schema_registry_write: false,
+                        allow_locking_select: false,
+                        task_context: None,
+                    },
+                )?;
+                // Explicit request Some(0) remains strict, unlike host Some(0).
+                if let Some(limit) = max_rows
+                    && result.output.rows.len() > limit
+                {
+                    return Err(HawDBError::read_budget_exceeded(
+                        crate::ReadBudgetResource::Rows,
+                        limit,
+                        "SQL mutation result exceeds the effective row ceiling",
+                    ));
+                }
+                if let Some(limit) = max_payload_bytes
+                    && result.output.payload_bytes() > limit
+                {
+                    return Err(HawDBError::read_budget_exceeded(
+                        crate::ReadBudgetResource::PayloadBytes,
+                        limit,
+                        "SQL mutation result exceeds the effective payload ceiling",
+                    ));
+                }
+                return transaction.commit();
             }
             if matches!(
                 prepared.statement(),

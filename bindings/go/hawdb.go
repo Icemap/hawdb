@@ -30,15 +30,17 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"time"
 	"unsafe"
 )
 
 // DB is an open HawDB database.
 type DB struct {
-	lib    *Library
-	ptr    unsafe.Pointer
-	mu     sync.RWMutex
-	closed bool
+	boundaryProfile boundaryProfileState
+	lib             *Library
+	ptr             unsafe.Pointer
+	mu              sync.RWMutex
+	closed          bool
 }
 
 // Error is the error type returned by this package. Kind carries the
@@ -187,10 +189,17 @@ func (db *DB) query(sql bool, text string, params any) (*Result, error) {
 	if db.closed {
 		return nil, &Error{Message: "hawdb: database is closed"}
 	}
+	var parameterStarted time.Time
+	if boundaryProfiling {
+		parameterStarted = time.Now()
+	}
 	var paramsJSON string
 	if params != nil {
 		data, err := json.Marshal(prepareValue(params))
 		if err != nil {
+			if boundaryProfiling {
+				db.boundaryProfile.recordParameter(parameterStarted)
+			}
 			return nil, fmt.Errorf("hawdb: cannot marshal parameters: %w", err)
 		}
 		// A nil map or slice marshals to "null", not an object or array:
@@ -201,6 +210,11 @@ func (db *DB) query(sql bool, text string, params any) (*Result, error) {
 	}
 	textPtr, textLen := strArg(text)
 	paramsPtr, paramsLen := strArg(paramsJSON)
+	var ffiStarted time.Time
+	if boundaryProfiling {
+		db.boundaryProfile.recordParameter(parameterStarted)
+		ffiStarted = time.Now()
+	}
 	var resultBuf, errBuf ffiBuffer
 	var ok bool
 	if sql {
@@ -208,8 +222,17 @@ func (db *DB) query(sql bool, text string, params any) (*Result, error) {
 	} else {
 		ok = db.lib.query(db.ptr, textPtr, textLen, paramsPtr, paramsLen, &resultBuf, &errBuf)
 	}
+	var resultStarted time.Time
+	if boundaryProfiling {
+		db.boundaryProfile.recordFFI(ffiStarted)
+		resultStarted = time.Now()
+	}
 	if !ok {
-		if err := db.lib.takeErr(&errBuf); err != nil {
+		err := db.lib.takeErr(&errBuf)
+		if boundaryProfiling {
+			db.boundaryProfile.recordResult(resultStarted)
+		}
+		if err != nil {
 			return nil, err
 		}
 		return nil, errors.New("hawdb: query failed")
@@ -218,12 +241,18 @@ func (db *DB) query(sql bool, text string, params any) (*Result, error) {
 	decoder := json.NewDecoder(bytes.NewReader(db.lib.takeBytes(&resultBuf)))
 	decoder.UseNumber()
 	if err := decoder.Decode(&result); err != nil {
+		if boundaryProfiling {
+			db.boundaryProfile.recordResult(resultStarted)
+		}
 		return nil, fmt.Errorf("hawdb: malformed result JSON: %w", err)
 	}
 	for _, row := range result.Rows {
 		for i, value := range row {
 			row[i] = normalizeValue(value)
 		}
+	}
+	if boundaryProfiling {
+		db.boundaryProfile.recordResult(resultStarted)
 	}
 	return &result, nil
 }

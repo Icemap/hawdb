@@ -968,11 +968,11 @@ mod tests {
         }
         database.config.max_read_result_rows = (!payload).then_some(0);
         database.config.max_read_result_payload_bytes = payload.then_some(1);
-        let expected = if payload {
-            (crate::ReadBudgetResource::PayloadBytes, 1)
-        } else {
-            (crate::ReadBudgetResource::Rows, 0)
-        };
+        if !payload {
+            assert_eq!(database.session().query(&cypher).unwrap().rows.len(), 1);
+            return;
+        }
+        let expected = (crate::ReadBudgetResource::PayloadBytes, 1);
         assert!(
             matches!(database.session().query(&cypher), Err(HawDBError::ReadBudgetExceeded(cause))
                 if (cause.resource, cause.limit) == expected),
@@ -981,7 +981,7 @@ mod tests {
     }
 
     #[test]
-    fn session_explain_respects_final_report_rows() {
+    fn session_explain_zero_row_setting_is_unlimited() {
         assert_session_explain_report_limit(false, false);
     }
 
@@ -991,7 +991,7 @@ mod tests {
     }
 
     #[test]
-    fn session_explain_analyze_respects_final_report_rows() {
+    fn session_explain_analyze_zero_row_setting_is_unlimited() {
         assert_session_explain_report_limit(true, false);
     }
 

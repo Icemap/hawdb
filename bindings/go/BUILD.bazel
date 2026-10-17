@@ -5,6 +5,8 @@ package(default_visibility = ["//visibility:public"])
 go_library(
     name = "hawdb",
     srcs = [
+        "boundary_profile_disabled.go",
+        "boundary_profile_enabled.go",
         "ffi.go",
         "hawdb.go",
         "lib_unix.go",
@@ -12,6 +14,17 @@ go_library(
     ],
     importpath = "github.com/nowledge-co/hawdb/bindings/go",
     deps = ["@com_github_ebitengine_purego//:purego"],
+)
+
+go_test(
+    name = "hawdb_go_boundary_profile_tests",
+    size = "small",
+    srcs = ["boundary_profile_test.go"],
+    args = ["-test.v"],
+    embed = [":hawdb"],
+    gotags = ["hawdb_boundary_profile"],
+    pure = "on",
+    tags = ["manual"],
 )
 
 go_test(

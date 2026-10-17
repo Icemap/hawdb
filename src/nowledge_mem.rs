@@ -2056,6 +2056,86 @@ struct SearchProjectionExternalReadOperator<'a> {
 }
 
 impl crate::executor::ExternalReadOperator for SearchProjectionExternalReadOperator<'_> {
+    fn execute_text_seed(
+        &mut self,
+        request: crate::executor::TextSeedExecutionRequest<'_>,
+    ) -> Result<crate::executor::TextSeedExecutionOutput> {
+        request.resources.checkpoint()?;
+        let mut output = crate::executor::TextSeedExecutionOutput::new(
+            request.result_account,
+            request.resources.result,
+        )?;
+        if let (Some(projection), None) = (self.projection, self.out_of_core_projection) {
+            let default_task = RuntimeTaskContext::default();
+            let task = request.resources.task_context.unwrap_or(&default_task);
+            let scored = projection.index().text_seed_scores_with_context(
+                request.query_text,
+                request.metadata_filters,
+                request.resources.result.max_rows,
+                request.working_account,
+                task,
+            )?;
+            let ranked_bytes = scored
+                .scores()
+                .len()
+                .checked_mul(std::mem::size_of::<(&String, &f64)>())
+                .ok_or_else(|| HawDBError::Execution("text seed rank size overflow".into()))?;
+            let _ranked_memory = request.working_account.reserve(ranked_bytes)?;
+            let mut ranked = scored.scores().iter().collect::<Vec<_>>();
+            ranked.sort_unstable_by(|(left_id, left_score), (right_id, right_score)| {
+                right_score
+                    .total_cmp(left_score)
+                    .then_with(|| left_id.cmp(right_id))
+            });
+            for (id, score) in ranked {
+                request.resources.checkpoint()?;
+                let document = projection.index().document(id).ok_or_else(|| {
+                    HawDBError::Storage(format!("text seed document {id} is missing"))
+                })?;
+                output.push(
+                    id,
+                    document.metadata.get("external_id").map(String::as_str),
+                    *score,
+                )?;
+            }
+            return Ok(output);
+        }
+        if let (None, Some(projection)) = (self.projection, self.out_of_core_projection) {
+            let default_task = RuntimeTaskContext::default();
+            let task = request.resources.task_context.unwrap_or(&default_task);
+            let scored = projection.reader().text_seed_scores_with_metadata_filters(
+                request.query_text,
+                request.metadata_filters,
+                request.resources.result.max_rows,
+                request.working_account,
+                task,
+            )?;
+            let ranked_bytes = scored
+                .scores()
+                .len()
+                .checked_mul(std::mem::size_of::<(&String, &f64)>())
+                .ok_or_else(|| HawDBError::Execution("text seed rank size overflow".into()))?;
+            let _ranked_memory = request.working_account.reserve(ranked_bytes)?;
+            let mut ranked = scored.scores().iter().collect::<Vec<_>>();
+            ranked.sort_unstable_by(|(left_id, left_score), (right_id, right_score)| {
+                right_score
+                    .total_cmp(left_score)
+                    .then_with(|| left_id.cmp(right_id))
+            });
+            for (id, score) in ranked {
+                request.resources.checkpoint()?;
+                output.push(id, scored.external_id(id), *score)?;
+            }
+            return Ok(output);
+        }
+        if self.projection.is_some() {
+            return Err(HawDBError::Storage(
+                "nowledge mem search projection ownership is ambiguous".to_string(),
+            ));
+        }
+        Err(missing_search_projection_error())
+    }
+
     fn execute_vector_seed(
         &mut self,
         request: crate::executor::VectorSeedExecutionRequest<'_>,
@@ -3034,12 +3114,8 @@ impl NowledgeMemEmbeddedStoreHandle {
             .graph
             .database()
             .config()
-            .max_read_result_rows
-            .ok_or_else(|| {
-                HawDBError::Execution(
-                    "bounded read snapshot requires max_read_result_rows".to_string(),
-                )
-            })?;
+            .read_result_row_limit()
+            .unwrap_or(usize::MAX);
         if budget.max_rows > configured_rows {
             return Err(HawDBError::Execution(format!(
                 "bounded read snapshot row budget {} exceeds configured limit {configured_rows}",
@@ -3760,11 +3836,7 @@ impl NowledgeMemEmbeddedStoreHandle {
         published.snapshot.ensure_usable()?;
         let config = published.snapshot.config();
         if let Some(max_rows) = max_rows {
-            let configured_rows = config.max_read_result_rows.ok_or_else(|| {
-                HawDBError::Execution(
-                    "bounded read snapshot requires max_read_result_rows".to_string(),
-                )
-            })?;
+            let configured_rows = config.read_result_row_limit().unwrap_or(usize::MAX);
             if max_rows > configured_rows {
                 return Err(HawDBError::Execution(format!(
                     "bounded read snapshot row budget {max_rows} exceeds configured limit {configured_rows}"
