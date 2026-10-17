@@ -119,14 +119,24 @@ impl Database {
         cypher: &str,
         params: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<QueryResult> {
+        #[cfg(feature = "boundary-profiling")]
+        let conversion =
+            crate::boundary_profile::PhaseTimer::start(crate::boundary_profile::Phase::Parameters);
         let params = match params {
             Some(dict) => py_dict_to_params(dict)?,
             None => Default::default(),
         };
+        #[cfg(feature = "boundary-profiling")]
+        drop(conversion);
         let database = self.required()?;
+        #[cfg(feature = "boundary-profiling")]
+        let engine =
+            crate::boundary_profile::PhaseTimer::start(crate::boundary_profile::Phase::Engine);
         let output = py
             .detach(|| database.query_with_params_admitted(cypher, &params))
             .map_err(|error| format_embedded_error(&error))?;
+        #[cfg(feature = "boundary-profiling")]
+        drop(engine);
         QueryResult::from_output(py, output)
     }
 
@@ -235,6 +245,9 @@ pub struct QueryResult {
 
 impl QueryResult {
     fn from_output(py: Python<'_>, output: QueryOutput) -> PyResult<Self> {
+        #[cfg(feature = "boundary-profiling")]
+        let _conversion =
+            crate::boundary_profile::PhaseTimer::start(crate::boundary_profile::Phase::Results);
         let columns = output.schema().columns().to_vec();
         let mut rows = Vec::new();
         for row in output.value_rows() {

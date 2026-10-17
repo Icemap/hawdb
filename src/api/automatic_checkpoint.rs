@@ -397,12 +397,15 @@ impl Control {
                 capacity_work_progress = work_progress;
                 capacity_deadline = None;
             }
-            let capacity_remaining = if matches!(
+            // Releasing old COW owners runs off the writer gate. Discarding
+            // an abandoned preparation can also overlap incoming writes;
+            // only writers with room may bypass either resource cleanup.
+            let waits_for_capacity = matches!(
                 state.phase,
                 Phase::Preparing | Phase::Discarding | Phase::Releasing
             ) && !state.sync_group_active
-                && preparation_needs_capacity(&state)
-            {
+                && preparation_needs_capacity(&state);
+            let capacity_remaining = if waits_for_capacity {
                 let deadline = capacity_deadline
                     .get_or_insert_with(|| Instant::now() + PREPARATION_CAPACITY_WAIT_LIMIT);
                 let remaining = deadline.saturating_duration_since(Instant::now());
@@ -429,11 +432,7 @@ impl Control {
             let must_fence = state.phase == Phase::Finalizing
                 || (self.publication_requested.load(Ordering::Acquire) && !state.sync_group_active)
                 || (state.phase == Phase::Draining && !state.sync_group_active)
-                || (matches!(
-                    state.phase,
-                    Phase::Preparing | Phase::Discarding | Phase::Releasing
-                ) && !state.sync_group_active
-                    && preparation_needs_capacity(&state))
+                || waits_for_capacity
                 || (state.phase == Phase::Retiring
                     && !state.sync_group_active
                     && (state.retired.is_none()

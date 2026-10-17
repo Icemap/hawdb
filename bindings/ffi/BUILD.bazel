@@ -16,6 +16,11 @@ rust_shared_library(
     crate_name = "hawdb_ffi",
     crate_root = "src/lib.rs",
     edition = "2024",
+    # Pinned Rust stripping misaligns Mach-O LINKEDIT on macOS 27.
+    rustc_flags = select({
+        "@platforms//os:macos": ["-Cstrip=none"],
+        "//conditions:default": [],
+    }),
     version = "0.9.0",
     deps = _FFI_DEPS,
 )
@@ -28,4 +33,21 @@ rust_static_library(
     edition = "2024",
     version = "0.9.0",
     deps = _FFI_DEPS,
+)
+
+# Local profiling only; not a replacement library or a default/CI dependency.
+rust_shared_library(
+    name = "hawdb_ffi_boundary_profile",
+    srcs = glob(["src/**/*.rs"]) + ["//bindings/benchmarks:native_alloc.rs", "//bindings/benchmarks:native_profile.rs"],
+    crate_name = "hawdb_ffi_boundary_profile",
+    crate_root = "src/lib.rs",
+    crate_features = ["boundary-profiling"],
+    edition = "2024",
+    rustc_flags = select({
+        "@platforms//os:macos": ["-Cstrip=none"],
+        "//conditions:default": [],
+    }),
+    version = "0.9.0",
+    deps = _FFI_DEPS,
+    tags = ["manual"],
 )
