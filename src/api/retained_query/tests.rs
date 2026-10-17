@@ -138,6 +138,198 @@ fn unrequested_source_capacity_refuses_before_pinning_and_rolls_back_admission()
     assert_eq!(governor.retained_result_snapshot().view_handles, 0);
 }
 
+fn measured_first_batch_charges(adapter_bytes: usize) -> (usize, usize, usize) {
+    let db = fixture_with_unrequested_payload(128 * 1024);
+    let mut cursor = db
+        .query_with_params_retained(
+            QUERY,
+            &BTreeMap::from([("min".into(), Value::Int(0))]),
+            RetainedQueryOptions {
+                batch_rows: nz(1),
+                ..options()
+            },
+        )
+        .unwrap();
+    let control = cursor.shared._memory.bytes();
+    let source = cursor.profile().source_pinned_capacity_bytes;
+    let before = cursor.ledger.snapshot().used_bytes;
+    assert_eq!(before, control + source);
+    assert_eq!(
+        cursor.governor.snapshot().admitted_memory_bytes,
+        before as u64
+    );
+    let batch = cursor
+        .next_batch_with_metadata(adapter_bytes)
+        .unwrap()
+        .unwrap();
+    assert_eq!(scores(&batch), vec![0]);
+    let output = cursor.ledger.snapshot().used_bytes - before;
+    assert_eq!(
+        cursor.governor.snapshot().admitted_memory_bytes,
+        (before + output) as u64
+    );
+    assert!(output > 0 && source >= output);
+    (control, source, output)
+}
+
+fn check_pinned_source_boundary(query_ceiling: bool, result_ceiling: bool, adapter_bytes: usize) {
+    // Measure the real admitted one-row allocation, rather than hard-coding
+    // platform-dependent owner/handle layouts or duplicating the sizing formula.
+    // Adapter metadata makes two output charges larger than the cursor control,
+    // so even the tight runtime boundary still admits opening's overlap.
+    let (control, source, output) = measured_first_batch_charges(adapter_bytes);
+    if !query_ceiling && !result_ceiling {
+        assert!(2 * output > control);
+    }
+    for snapshot in [false, true] {
+        for fits in [false, true] {
+            let mut db = fixture_with_unrequested_payload(128 * 1024);
+            let unit_allowance = output - usize::from(!fits);
+            db.config.execution_memory.query_memory_bytes = nz(if query_ceiling {
+                control + source + unit_allowance
+            } else {
+                64 * 1024 * 1024
+            });
+            let runtime_limit = if query_ceiling || result_ceiling {
+                64 * 1024 * 1024
+            } else {
+                control + source + 2 * output - usize::from(!fits)
+            };
+            let result_limit = if result_ceiling {
+                control + unit_allowance
+            } else {
+                32 * 1024 * 1024
+            };
+            let governor =
+                governor_with_result_ceiling(128, runtime_limit as u64, result_limit as u64);
+            db.set_runtime_governor(governor.clone());
+            let parameters = BTreeMap::from([("min".into(), Value::Int(0))]);
+            // Demand three rows: admission must shrink to the single row that
+            // fits, including when only the runtime ceiling is restrictive.
+            let options = options();
+            let mut cursor = if snapshot {
+                db.begin_read_transaction().unwrap().into_retained_query(
+                    QUERY,
+                    &parameters,
+                    options,
+                )
+            } else {
+                db.query_with_params_retained(QUERY, &parameters, options)
+            }
+            .unwrap();
+            assert_eq!(cursor.shared._memory.bytes(), control);
+            assert_eq!(cursor.profile().source_pinned_capacity_bytes, source);
+            assert_eq!(cursor.outstanding_batches(), 0);
+            assert_eq!(cursor.profile().visited_rows, 0);
+            if fits {
+                let first = cursor
+                    .next_batch_with_metadata(adapter_bytes)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(scores(&first), vec![0]);
+                let pressure = cursor.next_batch_with_metadata(adapter_bytes).unwrap_err();
+                assert!(pressure.is_retryable(), "{pressure:?}");
+                assert_eq!(cursor.status(), RetainedQueryStatus::Open);
+                assert_eq!(cursor.profile().visited_rows, 1);
+                assert_eq!(cursor.profile().source_pinned_capacity_bytes, source);
+                drop(first);
+                let mut actual = vec![0];
+                while let Some(batch) = cursor.next_batch_with_metadata(adapter_bytes).unwrap() {
+                    actual.extend(scores(&batch));
+                }
+                assert_eq!(actual, (0..9).collect::<Vec<_>>());
+                assert_eq!(cursor.status(), RetainedQueryStatus::Completed);
+            } else {
+                let error = cursor.next_batch_with_metadata(adapter_bytes).unwrap_err();
+                assert_eq!(error, RetainedQueryError::WorkingUnitTooLarge);
+                assert!(!error.is_retryable());
+                for _ in 0..2 {
+                    assert_eq!(
+                        cursor.next_batch_with_metadata(adapter_bytes).unwrap_err(),
+                        error
+                    );
+                }
+                assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
+                assert_eq!(cursor.profile().visited_rows, 0);
+                assert_eq!(cursor.profile().emitted_rows, 0);
+                assert_eq!(cursor.profile().backpressure_events, 0);
+                assert_eq!(cursor.outstanding_batches(), 0);
+                assert_eq!(cursor.ledger.snapshot().used_bytes, control);
+                assert_eq!(governor.snapshot().admitted_memory_bytes, control as u64);
+            }
+            assert_eq!(cursor.profile().source_pinned_capacity_bytes, 0);
+            assert_eq!(cursor.profile().source_pinned_rows, 0);
+            assert_eq!(cursor.profile().source_pinned_pages, 0);
+            drop(cursor);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+            assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+            assert_eq!(governor.retained_result_snapshot().buffer_owners, 0);
+            assert_eq!(governor.retained_result_snapshot().view_handles, 0);
+        }
+    }
+}
+
+#[test]
+fn pinned_source_query_boundary_is_terminal_and_neighboring_budget_progresses() {
+    for adapter_bytes in [0, 4096] {
+        check_pinned_source_boundary(true, false, adapter_bytes);
+    }
+}
+
+#[test]
+fn pinned_source_runtime_boundary_is_terminal_and_neighboring_budget_progresses() {
+    check_pinned_source_boundary(false, false, 4096);
+}
+
+#[test]
+fn pinned_source_is_separate_from_the_result_ceiling_and_held_views_are_retryable() {
+    for adapter_bytes in [0, 4096] {
+        check_pinned_source_boundary(false, true, adapter_bytes);
+    }
+}
+
+#[test]
+fn pinned_source_temporary_shared_work_remains_retryable_without_advancing() {
+    let adapter_bytes = 4096;
+    let (control, source, output) = measured_first_batch_charges(adapter_bytes);
+    let mut db = fixture_with_unrequested_payload(128 * 1024);
+    let governor = governor_with_result_ceiling(
+        128,
+        (control + source + 4 * output) as u64,
+        32 * 1024 * 1024,
+    );
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(
+            QUERY,
+            &BTreeMap::from([("min".into(), Value::Int(0))]),
+            options(),
+        )
+        .unwrap();
+    let other_work = governor
+        .try_admit(
+            RuntimeWorkRequest::foreground_query((2 * output + 1) as u64, 0).with_blocking(false),
+        )
+        .unwrap();
+    let pressure = cursor.next_batch_with_metadata(adapter_bytes).unwrap_err();
+    assert!(pressure.is_retryable(), "{pressure:?}");
+    assert_eq!(cursor.status(), RetainedQueryStatus::Open);
+    assert_eq!(cursor.outstanding_batches(), 0);
+    assert_eq!(cursor.profile().visited_rows, 0);
+    assert_eq!(cursor.profile().source_pinned_capacity_bytes, source);
+    drop(other_work);
+    let mut actual = Vec::new();
+    while let Some(batch) = cursor.next_batch_with_metadata(adapter_bytes).unwrap() {
+        actual.extend(scores(&batch));
+    }
+    assert_eq!(actual, (0..9).collect::<Vec<_>>());
+    assert_eq!(cursor.status(), RetainedQueryStatus::Completed);
+    assert_eq!(cursor.profile().source_pinned_capacity_bytes, 0);
+    drop(cursor);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
 #[test]
 fn source_capacity_charge_survives_database_close_and_ends_without_revoking_views() {
     let db = fixture_with_unrequested_payload(128 * 1024);
