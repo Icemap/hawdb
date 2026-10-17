@@ -96,19 +96,34 @@ One publication attempt has these states:
    base projection generation and receipt/cursor prerequisites. Establish or
    verify the graph durability barrier covering the captured source epoch.
    Rejection changes neither active output nor durable watermark.
-5. **Committed**: retain that authority, or an equivalent dependency exclusion,
-   across every visible publication/checkpoint step. Install a selector binding
-   the complete durable artifact closure and its exact covered watermark. Complete
-   the required file/directory barriers before reporting the new view as visible.
-6. **Visible/acknowledged**: attach the complete published reader and return its
-   durable receipt. Release preparation ownership. Once committed, cancellation
-   cannot turn the attempt into a reported rollback. A lost response is recovered
-   by the operation/generation identity and durable selector, not by recomputing
-   whether an earlier callback returned success.
+5. **Selected/pending durability**: retain source publication authority through
+   the validated selector/read-view exchange. Select the complete preinstalled
+   artifact closure, exact covered watermark and operation receipt together;
+   source and dependency durability must already cover this selection. The
+   proposed consumer protocol may release SourceOwner after this linearization
+   point while an owned pending-durability token retains target operation/root
+   exclusion through the head barrier. Later source writes do not invalidate the
+   earlier selection. Process-local visibility before that barrier is distinct
+   from an acknowledged durable publication. An uncertain head result retains
+   its possible roots and operation custody; it is not a rollback certificate.
+6. **Durable/acknowledged**: complete the required head file/directory barriers,
+   then return the durable receipt for that operation. Complete read-view exchange
+   belongs at selection, not in a later completion callback that could overwrite
+   a newer binding. Release preparation ownership outside SourceOwner. Once the
+   durability barrier completes, cancellation cannot turn the attempt into a
+   reported rollback. A lost response is recovered by the retained operation
+   identity/receipt and durable selector, not by recomputing whether an earlier
+   callback returned success.
 
-Expensive data preparation belongs outside publication ownership. The eventual
-short section may still include unavoidable durability latency; measure it rather
-than assuming an atomic pointer swap makes it free. Do not expose a public
+The current source-validated native publication wrapper still holds SourceOwner
+through artifact installation and head synchronization. The shorter consumer lifecycle above is
+specified and modeled in the [installed-activation design](../tla/CONSUMER_INSTALLED_ACTIVATION_DESIGN.md),
+not implemented by the preparation-only operation token. Its off-owner barrier
+must retain target custody, atomic view/receipt selection and fail-closed recovery.
+
+Expensive data preparation belongs outside publication ownership. Measure source
+fence hold time, target operation hold time and durability latency separately;
+an atomic pointer swap does not make the complete publication free. Do not expose a public
 `validate() -> bool` followed by an arbitrary later mutation callback: that API
 would leave the validation-to-publication race open.
 

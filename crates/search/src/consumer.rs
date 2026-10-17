@@ -23,7 +23,9 @@ use std::io::Read;
 use std::path::Path;
 
 mod control;
+mod operation;
 pub(crate) use control::require_unregistered_directory;
+pub use operation::ConsumerPreparationLease;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerBinding {
@@ -82,7 +84,8 @@ pub struct CheckpointReceipt {
 #[derive(Debug)]
 pub struct ConsumerProjection {
     index: SearchIndex,
-    _lease: SearchProjectionPublishLease,
+    authority: std::sync::Arc<operation::Authority>,
+    pending_mutation: bool,
 }
 
 impl ConsumerProjection {
@@ -123,7 +126,8 @@ impl ConsumerProjection {
         index.consumer_binding = Some(binding);
         let mut owner = Self {
             index,
-            _lease: lease,
+            authority: operation::Authority::new(lease),
+            pending_mutation: true,
         };
         owner.checkpoint()?;
         Ok(owner)
@@ -138,7 +142,8 @@ impl ConsumerProjection {
         let index = SearchIndex::open_under_lease(root, true)?;
         let owner = Self {
             index,
-            _lease: lease,
+            authority: operation::Authority::new(lease),
+            pending_mutation: false,
         };
         let receipt = owner.read_receipt()?;
         *owner
@@ -171,6 +176,8 @@ impl ConsumerProjection {
     }
 
     pub fn apply<T>(&mut self, apply: impl FnOnce(&mut SearchIndex) -> Result<T>) -> Result<T> {
+        let _operation = self.authority.acquire()?;
+        self.pending_mutation = true;
         self.index.consumer_owned_mutation = true;
         let scope = MutationScope(&mut self.index);
         apply(scope.0)
@@ -181,19 +188,25 @@ impl ConsumerProjection {
     }
 
     pub fn checkpoint(&mut self) -> Result<CheckpointReceipt> {
+        let _operation = self.authority.acquire()?;
         if !self.index.consumer_binding_valid {
             return Err(invalid("untracked projection mutation"));
         }
+        self.pending_mutation = true;
         self.index
             .consumer_binding
             .as_mut()
             .expect("bound consumer")
             .checkpoint_uuid = hawdb_core::uuidv7::generate_uuidv7()?;
         self.index.checkpoint_with_lease(true)?;
+        self.pending_mutation = false;
         Ok(self.receipt())
     }
 
     pub fn publish_directory(&mut self, destination: &Path) -> Result<()> {
+        let _operation = self.authority.acquire()?;
+        let pending_mutation = self.pending_mutation;
+        self.pending_mutation = true;
         fs::create_dir(destination)?;
         let source = self.index.path.as_ref().expect("persistent consumer");
         if let Err(error) = fs::rename(source, destination) {
@@ -209,6 +222,7 @@ impl ConsumerProjection {
         self.index.validate_registered_artifacts()?;
         #[cfg(feature = "vector-search")]
         self.index.load_registered_rabitq_projection()?;
+        self.pending_mutation = pending_mutation;
         Ok(())
     }
 
@@ -569,6 +583,137 @@ mod tests {
             ConsumerProjection::open(&root),
             Err(HawDBError::StorageIntegrity(_))
         ));
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn preparation_excludes_mutations_before_any_side_effect() {
+        let root = directory();
+        let destination = root.with_extension("moved");
+        let mut owner = ConsumerProjection::initialize(&root, binding(), 0, |_| Ok(())).unwrap();
+        let receipt = owner.receipt();
+        let snapshot = fs::read(root.join(SEARCH_SNAPSHOT_FILE)).unwrap();
+        let operation = owner.reserve_preparation().unwrap();
+        assert!(matches!(
+            owner.reserve_preparation(),
+            Err(HawDBError::ProjectionBusy)
+        ));
+        let called = std::cell::Cell::new(false);
+        assert!(matches!(
+            owner.apply(|_| {
+                called.set(true);
+                Ok(())
+            }),
+            Err(HawDBError::ProjectionBusy)
+        ));
+        assert!(!called.get());
+        assert!(matches!(
+            owner.checkpoint(),
+            Err(HawDBError::ProjectionBusy)
+        ));
+        assert!(matches!(
+            owner.publish_directory(&destination),
+            Err(HawDBError::ProjectionBusy)
+        ));
+        assert!(!destination.exists());
+        assert_eq!(owner.binding(), &receipt.binding);
+        assert_eq!(owner.receipt(), receipt);
+        assert_eq!(fs::read(root.join(SEARCH_SNAPSHOT_FILE)).unwrap(), snapshot);
+        assert!(!owner.has_pending_mutation());
+        drop(operation);
+        owner.apply(|_| Ok(())).unwrap();
+        assert!(owner.has_pending_mutation());
+        owner.checkpoint().unwrap();
+        drop(owner.reserve_preparation().unwrap());
+        drop(owner);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn preparation_retains_native_root_exclusion_after_owner_closes() {
+        let root = directory();
+        let mut owner = ConsumerProjection::initialize(&root, binding(), 0, |_| Ok(())).unwrap();
+        let operation = owner.reserve_preparation().unwrap();
+        drop(owner);
+        assert!(ConsumerProjection::open(&root).is_err());
+        let deferred = SearchIndex {
+            path: Some(root.clone()),
+            ..SearchIndex::default()
+        }
+        .retry_projection_cleanup(Default::default());
+        assert!(deferred.retry_required);
+        assert_eq!(deferred.scanned_entries, 0);
+        assert_eq!(deferred.delete_attempts, 0);
+        std::thread::spawn(move || drop(operation)).join().unwrap();
+        let owner = ConsumerProjection::open(&root).unwrap();
+        assert_eq!(owner.receipt().source_epoch, 0);
+        drop(owner);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn preparation_refuses_same_epoch_mutation_and_failed_callbacks_until_checkpoint() {
+        let root = directory();
+        let mut owner = ConsumerProjection::initialize(&root, binding(), 0, |_| Ok(())).unwrap();
+        owner
+            .apply(|index| {
+                index.upsert(crate::SearchDocument {
+                    id: "same-epoch".into(),
+                    title: String::new(),
+                    content: "changed".into(),
+                    embedding: None,
+                    metadata: Default::default(),
+                })
+            })
+            .unwrap();
+        // Epoch-only freshness misses this actual resident mutation.
+        assert!(
+            !owner
+                .index()
+                .projection_freshness()
+                .has_uncheckpointed_changes
+        );
+        assert!(owner.reserve_preparation().is_err());
+        owner.checkpoint().unwrap();
+        drop(owner.reserve_preparation().unwrap());
+        assert!(owner
+            .apply::<()>(|_| Err(HawDBError::Execution("refused callback".into())))
+            .is_err());
+        assert!(owner.reserve_preparation().is_err());
+        owner.checkpoint().unwrap();
+        drop(owner.reserve_preparation().unwrap());
+        drop(owner);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn preparation_rejection_and_unwind_release_the_operation_slot() {
+        let root = directory();
+        let mut owner = ConsumerProjection::initialize(&root, binding(), 0, |_| Ok(())).unwrap();
+        let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _operation = owner.reserve_preparation().unwrap();
+            panic!("cancel preparation");
+        }));
+        assert!(failed.is_err());
+        assert!(owner.binding_is_valid());
+        drop(owner.reserve_preparation().unwrap());
+        // Force the real snapshot publication to fail after checkpoint_uuid
+        // changes, while preserving the previous complete snapshot for repair.
+        let snapshot = root.join(SEARCH_SNAPSHOT_FILE);
+        let previous = root.join("previous-snapshot");
+        fs::rename(&snapshot, &previous).unwrap();
+        fs::create_dir(&snapshot).unwrap();
+        assert!(owner.checkpoint().is_err());
+        assert_eq!(owner.index().source_graph_commit_epoch, Some(0));
+        assert!(owner.has_pending_mutation());
+        assert!(owner.reserve_preparation().is_err());
+        owner.require_operation_available().unwrap();
+        fs::remove_dir(&snapshot).unwrap();
+        fs::rename(&previous, &snapshot).unwrap();
+        // Restoring the old file cannot certify this in-memory checkpoint.
+        assert!(owner.reserve_preparation().is_err());
+        owner.checkpoint().unwrap();
+        drop(owner.reserve_preparation().unwrap());
+        drop(owner);
         fs::remove_dir_all(root).unwrap();
     }
 }

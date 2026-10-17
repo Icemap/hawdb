@@ -18,6 +18,8 @@ STORAGE_MODELS = [
     "HawDBConcurrentSnapshots",
     "HawDBConstrainedInsertIntent",
     "HawDBConstraintPreservingUpdate",
+    "HawDBConsumerInstalledActivation",
+    "HawDBConsumerReceiptLedger",
     "HawDBContentSourceOwnershipMove",
     "HawDBContentSourceReplacement",
     "HawDBContentSpaceMergeOwnership",

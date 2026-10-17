@@ -325,3 +325,56 @@ tla_check(
         "StandaloneWitness",
     ]
 ]
+
+[
+    tla_check(
+        name = "HawDBConsumerInstalledActivation" + control + "_check",
+        module = "HawDBConsumerInstalledActivation.tla",
+        config = "mutants/HawDBConsumerInstalledActivation" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "BypassOperation",
+        "ForgetIncarnation",
+        "SeparateReceipt",
+        "SkipDataSync",
+        "SkipSourceSync",
+        "ReleaseSlotEarly",
+        "DropHeavyUnderFence",
+        "DecodeManifestUnderFence",
+        "TrustDirtyCheckpoint",
+        "AckBeforeHeadSync",
+        "ReclaimUnknown",
+        "RecoverAsEmpty",
+        "DropSourceFence",
+        "LostResponseWitness",
+        "UnrelatedWitness",
+        "ReopenWitness",
+        "BarrierWriterWitness",
+    ]
+]
+
+[
+    tla_check(
+        name = "HawDBConsumerReceiptLedger" + control + "_check",
+        module = "HawDBConsumerReceiptLedger.tla",
+        config = "mutants/HawDBConsumerReceiptLedger" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "ForgetPriorReceipt",
+        "EvictOnFull",
+        "GcBeforeRetireSync",
+        "ReuseRetiredId",
+        "ForgetAllocatorOnCrash",
+        "ForgetRetireFloor",
+        "LateRetryWitness",
+        "RetireAndContinueWitness",
+    ]
+]
