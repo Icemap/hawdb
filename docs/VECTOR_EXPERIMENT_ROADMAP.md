@@ -37,11 +37,12 @@ its existing disabled/preferred/required behavior. Its
 streams the generation into a `ProjectionWriter`; it does not use `DeltaBuffer`
 or make checkpoint publication incremental across generations.
 
-RaBitQ defaults to **1-bit**; 4-bit is opt-in. An exhaustive quantized scan is
-not exact raw-vector scoring. HNSW's retained raw vectors are an implementation
-choice, not proof that quantized traversal cannot work or that HNSW wins on
-every workload. The current HNSW API has no candidate filter; post-filtering
-an overfetched ANN result cannot substitute for the eligibility boundary.
+RaBitQ defaults to **4-bit**; 1-bit is an explicit control. An exhaustive
+quantized scan is not exact raw-vector scoring. HNSW's retained raw vectors
+are an implementation choice, not proof that quantized traversal cannot work
+or that HNSW wins on every workload. The current HNSW API has no candidate
+filter; post-filtering an overfetched ANN result cannot substitute for the
+eligibility boundary.
 
 ## Delivery sequence and exit conditions
 
@@ -51,10 +52,11 @@ Input: a named active Mem replacement workload, the existing RaBitQ/raw-scan
 baseline, and its memory/latency/recall acceptance thresholds. The retained
 synthetic benches are development comparisons only. Their smoke outputs and
 advisor fixture agreement do not establish production quality or calibrated
-thresholds for the current 1-bit default.
+thresholds for the current 4-bit default.
 
 - [ ] Measure the same representative corpus and held-out queries with raw
-  cosine truth, default 1-bit RaBitQ plus rerank, and the proposed alternative.
+  cosine truth, default 4-bit RaBitQ plus rerank, an explicit 1-bit control, and
+  the proposed alternative.
   Report candidate recall separately from final reranked recall, stable ties,
   P50/P95/P99, build time, admitted memory, measured peak/steady RSS, and bytes
   read/written. Identify source revision, configuration, and dataset.

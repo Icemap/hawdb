@@ -876,6 +876,17 @@ rust_test(
 
 hawdb_benchmark_binaries(_HAWDB_DEFAULT_FEATURES)
 
+# Manual full-query profiling fixture; never run the corpus build in CI smoke.
+rust_binary(
+    name = "hawdb_rabitq_query_profile",
+    crate_root = "examples/rabitq_query_profile.rs",
+    srcs = ["examples/rabitq_query_profile.rs"],
+    edition = "2024",
+    aliases = aliases(normal = True, proc_macro = True),
+    deps = all_crate_deps(normal = True) + [":hawdb"],
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)
+
 rust_test(
     name = "hawdb_wal_group_commit_recovery_tests",
     crate_root = "tests/wal_group_commit_recovery.rs",
