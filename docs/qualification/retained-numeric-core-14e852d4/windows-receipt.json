@@ -1,0 +1,131 @@
+{
+  "status": "passed",
+  "engine_head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+  "engine_tree": "e85554b29bffc04eb0173cfe39606a935c503d46",
+  "qualification_head": "79f16a553575517a48714253d1bb958390b819e4",
+  "qualification_tree": "9f945b81715220ecaabdb4826e8d46abaae97c5c",
+  "run_id": 39057847682,
+  "url": "https://github.com/nowledge-co/hawdb/actions/runs/39057847682",
+  "job_id": 117469421751,
+  "artifact_id": 12110651226,
+  "artifact_zip_sha256": "62c5c57794ab49b02dcba945a3cfcbe9bf0b3f32640ed3fb59f682c1a1c5a62f",
+  "artifact_api_digest": "sha256:62c5c57794ab49b02dcba945a3cfcbe9bf0b3f32640ed3fb59f682c1a1c5a62f",
+  "source_guard": "Exact qualificationcheckoutSHA/tree/parent, onlyworkflowfilechanged; Windows/localpatchentirecontentmatchesaftervalidatedGitindexabbreviationsareexpandedtoknownfullblobIDs andlineendingsnormalized.",
+  "patch_normalization": {
+    "old_blob": "85619b833485bdc3e7397903e2068e1295ee1878",
+    "new_blob": "74eb5138cccb85fffdffcecb03791f931806ef52",
+    "local_abbreviations": [
+      [
+        "85619b83",
+        "74eb5138"
+      ]
+    ],
+    "windows_abbreviations": [
+      [
+        "85619b8",
+        "74eb513"
+      ]
+    ],
+    "canonical_patch_sha256": "9868077a2e41ed6d0d7fae7b7c010b44fd95dd83c6fee8f75aa126349d81e62f"
+  },
+  "initial_verification_failure": "Preserved in1059-windows-initial-artifact-verification-failure.json: localindex8hexvsWindows7hex. No hunk or production-source difference.",
+  "results": [
+    {
+      "file": "root-numeric.txt",
+      "passed": 28,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 2062,
+      "seconds": 0.11
+    },
+    {
+      "file": "executor-numeric.txt",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 447,
+      "seconds": 0.0
+    },
+    {
+      "file": "retained-admission.txt",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 116,
+      "seconds": 0.0
+    },
+    {
+      "file": "cow-ownership.txt",
+      "passed": 33,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 1893,
+      "seconds": 0.3
+    },
+    {
+      "file": "source-ownership.txt",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 1914,
+      "seconds": 3.94
+    }
+  ],
+  "files": [
+    {
+      "file": "cow-ownership.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-verified/cow-ownership.txt",
+      "bytes": 4351,
+      "sha256": "bb2d5dda19b9bdec5e7d5ebcd601a39118a7f943feddd8673da71cac1760b7d2"
+    },
+    {
+      "file": "engine.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-verified/engine.txt",
+      "bytes": 295,
+      "sha256": "6a21d3263c1d2cef51cd40500dbbbccaffb41d3c34499a487659eb0e531482e3"
+    },
+    {
+      "file": "executor-numeric.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-verified/executor-numeric.txt",
+      "bytes": 2433,
+      "sha256": "c77019d98a77834b1febd3c1d797b9686e1f4dec37cdee445384fe685ba9a382"
+    },
+    {
+      "file": "retained-admission.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-verified/retained-admission.txt",
+      "bytes": 3223,
+      "sha256": "630314faccf97568bfbe64070ed9e3cea1726089b35d2f80954ecc49ccbd5d48"
+    },
+    {
+      "file": "root-numeric.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-verified/root-numeric.txt",
+      "bytes": 16639,
+      "sha256": "efd7c149cd22433f8a30fb24919c153f54fec7993f8b78a0d247ce4bdf5274e6"
+    },
+    {
+      "file": "source-ownership.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-verified/source-ownership.txt",
+      "bytes": 2213,
+      "sha256": "1dd4237c341e33afbf6d8db4f0e7a6b2d8078d5c05a99a79dac79b9bcfa5c81d"
+    },
+    {
+      "file": "source.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-verified/source.txt",
+      "bytes": 123,
+      "sha256": "0b6f4cbcb4cf278f3af726a5d404346923683911e36eb681b5ca88d4a8017183"
+    },
+    {
+      "file": "toolchain.txt",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-verified/toolchain.txt",
+      "bytes": 194,
+      "sha256": "7fad09dd8c16d49de37932475436003b5b1763c1015c5ce081ad7692db368ca3"
+    },
+    {
+      "file": "workflow-only.patch",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/1059-windows-verified/workflow-only.patch",
+      "bytes": 6636,
+      "sha256": "022ad5479ab235cf58335f32ee9306e9a31ac2aa0c5bbc95ce0094f6de41a3da"
+    }
+  ],
+  "scope": "Five targeted Windows Rust ownership/admission selections onexactcore14e; not foreignretained/Arrow/node/fullperformanceacceptance."
+}

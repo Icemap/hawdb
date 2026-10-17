@@ -1,0 +1,210 @@
+[
+  {
+    "group": "priority",
+    "name": "core-general",
+    "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-priority-v2-core-general.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "priority",
+    "name": "main-general",
+    "head": "a1012720decca3844864c910360057a5c71dddd8",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-priority-v2-main-general.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "priority",
+    "name": "core-contract",
+    "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_execution_request_contract_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-priority-v2-core-contract.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "priority",
+    "name": "main-contract",
+    "head": "a1012720decca3844864c910360057a5c71dddd8",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_execution_request_contract_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-priority-v2-main-contract.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "priority",
+    "name": "mandatory-fuzz",
+    "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+    "command": [
+      "bazel",
+      "test",
+      "//crates/fuzz:hawdb_fuzz_tests",
+      "//crates/fuzz:hawdb_fuzz_cli_tests",
+      "//:hawdb_linux_ci_fuzz_smoke_test",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-priority-v2-mandatory-fuzz.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "remaining",
+    "name": "recovery",
+    "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_recovery_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-remaining-recovery.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "remaining",
+    "name": "concurrent",
+    "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_concurrent_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-remaining-concurrent.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "remaining",
+    "name": "isolated-rss",
+    "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_analytics_rss_tests",
+      "--nocache_test_results",
+      "--test_arg=--nocapture",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/1059-remaining-isolated-rss.bep.json"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "remaining",
+    "name": "windows-qualification-install",
+    "head": null,
+    "command": [
+      "prek",
+      "install"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "remaining",
+    "name": "windows-qualification-fmt",
+    "head": null,
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "remaining",
+    "name": "windows-qualification-native",
+    "head": null,
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--all-features",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "remaining",
+    "name": "windows-qualification-prek",
+    "head": null,
+    "command": [
+      "prek",
+      "run",
+      "--all-files"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "remaining",
+    "name": "windows-push",
+    "head": null,
+    "command": [
+      "git",
+      "push",
+      "-u",
+      "origin",
+      "qualify/1059-windows-numeric-14e"
+    ],
+    "exit": 0
+  },
+  {
+    "group": "remaining",
+    "name": "windows-dispatch",
+    "head": null,
+    "command": [
+      "gh",
+      "workflow",
+      "run",
+      "native-bindings.yml",
+      "--repo",
+      "nowledge-co/hawdb",
+      "--ref",
+      "qualify/1059-windows-numeric-14e"
+    ],
+    "exit": 0
+  }
+]

@@ -1,0 +1,44 @@
+{
+  "started": 1792257738.665406,
+  "reason": "Three completed root targets TIMEOUT and multiple checkpoint/concurrency failures reported. Deliberately stop incomplete local qualification to prioritize unchanged-source/actual-main failure diagnosis. Not an observation-timeout restart. Keep completed results and incomplete inventory; no remote CI or performance collector is stopped.",
+  "owned_python_runners": [
+    {
+      "pid": 84652,
+      "ppid": 70099,
+      "command": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "pid": 92535,
+      "ppid": 70099,
+      "command": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "pid": 98896,
+      "ppid": 70099,
+      "command": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "pid": 2150,
+      "ppid": 70099,
+      "command": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "pid": 3456,
+      "ppid": 70099,
+      "command": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python"
+    }
+  ],
+  "active_bazel_client": {
+    "pid": 96542,
+    "ppid": 84652,
+    "command": "/Users/hawkingrei/Library/Caches/bazelisk/downloads/sha256/f29ca3f3bf577eb1619aeeed401b64a10901c8da8031aaa4add54a4ad0e99e3a/bin/bazel"
+  },
+  "downstream_verified_terminal": 1792257793.448674,
+  "primary_runner_verified_terminal": 1792257793.585939,
+  "bazel_cancel_signal": {
+    "pid": 96542,
+    "signal": "SIGINT",
+    "at": 1792257793.602941
+  },
+  "bazel_client_terminal": true
+}

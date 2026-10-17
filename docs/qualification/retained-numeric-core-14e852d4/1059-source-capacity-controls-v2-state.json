@@ -1,0 +1,114 @@
+{
+  "status": "passed",
+  "started": 1792260144.293386,
+  "results": [
+    {
+      "backend": "memory",
+      "command": [
+        "/private/tmp/hawdb-wip-ready-20261015/1059-source-capacity-producer/hawdb_bench_retained_source_capacity",
+        "1000",
+        "-"
+      ],
+      "process_exit": 0,
+      "stdout_sha256": "69da7520f2b72654de54fbe8b78266cc6fa7571325c5968de04338acb7f39bfc",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "observation": {
+        "backend": "memory",
+        "checksums": [
+          499500,
+          499500,
+          499500,
+          499500
+        ],
+        "creation_ns": [
+          1233292,
+          56958,
+          46583,
+          76459
+        ],
+        "durability": "SyncOnEveryWrite",
+        "final_buffer_owners": 0,
+        "final_retained_bytes": 0,
+        "final_view_handles": 0,
+        "maximum_live_cursors": 1,
+        "prefetch": 0,
+        "preflight_rows": [
+          1000,
+          0,
+          0,
+          0
+        ],
+        "rows": 1000,
+        "scope": "Four precreated snapshots with one live cursor at a time. Setup and full ordered consumption outside creation timers. No Arrow API or whole-query memory claim.",
+        "snapshots": 4,
+        "source_capacity_bytes": [
+          1070752,
+          1070752,
+          1070752,
+          1070752
+        ],
+        "status": "ok"
+      },
+      "result": "passed"
+    },
+    {
+      "backend": "file",
+      "command": [
+        "/private/tmp/hawdb-wip-ready-20261015/1059-source-capacity-producer/hawdb_bench_retained_source_capacity",
+        "1000",
+        "/private/tmp/hawdb-wip-ready-20261015/1059-source-capacity-controls-v2/file.db"
+      ],
+      "process_exit": 0,
+      "stdout_sha256": "4a73634b8da37ed7f6dd24b56b3db4365b4702b5e1c3e2e07bc87147ae2ec681",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "observation": {
+        "backend": "file",
+        "checksums": [
+          499500,
+          499500,
+          499500,
+          499500
+        ],
+        "creation_ns": [
+          615500,
+          60667,
+          51458,
+          46125
+        ],
+        "durability": "SyncOnEveryWrite",
+        "final_buffer_owners": 0,
+        "final_retained_bytes": 0,
+        "final_view_handles": 0,
+        "maximum_live_cursors": 1,
+        "prefetch": 0,
+        "preflight_rows": [
+          1000,
+          0,
+          0,
+          0
+        ],
+        "rows": 1000,
+        "scope": "Four precreated snapshots with one live cursor at a time. Setup and full ordered consumption outside creation timers. No Arrow API or whole-query memory claim.",
+        "snapshots": 4,
+        "source_capacity_bytes": [
+          1070752,
+          1070752,
+          1070752,
+          1070752
+        ],
+        "status": "ok"
+      },
+      "result": "passed"
+    }
+  ],
+  "scope": "Two1000row source-capacity controls memory/file, four precreated snapshots and one livecursor. Invoked serially after priority correctness/Go controls, no full performance or whole-operation memory-bound claim.",
+  "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+  "tree": "e85554b29bffc04eb0173cfe39606a935c503d46",
+  "producer": {
+    "source": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a67551ebf8b3193f5991231a3657d0bb/execroot/_main/bazel-out/darwin_arm64-opt/bin/hawdb_bench_retained_source_capacity",
+    "path": "/private/tmp/hawdb-wip-ready-20261015/1059-source-capacity-producer/hawdb_bench_retained_source_capacity",
+    "sha256": "bee3465dcd3fc4c0cbf982eaec431af9f2848fefafa3b866b2f783c198f72d3b",
+    "bytes": 32712192
+  },
+  "ended": 1792260145.9938529
+}

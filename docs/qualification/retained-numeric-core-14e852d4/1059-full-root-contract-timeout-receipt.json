@@ -1,0 +1,23 @@
+{
+  "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+  "tree": "e85554b29bffc04eb0173cfe39606a935c503d46",
+  "target": "//:hawdb_execution_request_contract_tests",
+  "status": "TIMEOUT",
+  "deadline_seconds": 300,
+  "total_cases": 30,
+  "reported_completed": 21,
+  "reported_still_running": [
+    "native_sql_returning_payload_delete_callback",
+    "native_sql_returning_payload_delete_direct",
+    "native_sql_returning_payload_delete_session",
+    "native_sql_returning_payload_insert_callback",
+    "native_sql_returning_payload_insert_direct",
+    "native_sql_returning_payload_insert_session",
+    "native_sql_returning_payload_update_callback",
+    "native_sql_returning_payload_update_direct",
+    "native_sql_returning_payload_update_session"
+  ],
+  "log": "/private/tmp/hawdb-wip-ready-20261015/1059-full-root-contract-timeout.log",
+  "log_sha256": "205d9a0a7adc8ea5b4884ae036a005e7e771f90d3020595ef032226eba93f73d",
+  "context": "Concurrent invocation with original full root-fast partitions and portable target, same worktree, no other own DB suite. Preserve this failed gate. No assertion failure reported, no cause attribution yet. Full standalone core and actual-main counterfactual planned after active serial suites/controls terminate."
+}

@@ -1,0 +1,93 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_analytics_core_general_tests
+-----------------------------------------------------------------------------
+
+running 62 tests
+test api::graph_analytics::tests::staging_selects_the_highest_level_independently_of_row_order ... ok
+test analytics::tests::embedded_store_projects_through_the_storage_neutral_analytics_source ... ok
+test api::tests::graph_analytics::runtime_admission_larger_caller_reservation_keeps_the_configured_budget ... ok
+test api::tests::graph_analytics::runtime_admission_query_and_staging_share_the_caller_budget ... ok
+test api::tests::graph_analytics::runtime_admission_busy_cpu_rejects_both_phases_without_revoking_foreground_work ... ok
+test api::tests::graph_analytics::runtime_admission_busy_background_slot_rejects_preparation ... ok
+test api::tests::graph_analytics::runtime_admission_busy_background_io_rejects_both_phases_without_revoking_existing_work ... ok
+test api::tests::graph_analytics::runtime_admission_rejects_staging_larger_than_the_complete_caller_budget ... ok
+test api::tests::graph_analytics::runtime_admission_failure_and_parent_controls_do_not_leak_resources ... ok
+test api::tests::graph_analytics::constraint_failure_rolls_back_all_staged_scores_and_metadata ... ok
+test api::tests::graph_analytics::runtime_admission_busy_blocking_pool_rejects_both_phases_without_revoking_foreground_work ... ok
+test api::tests::graph_analytics::background_admission_covers_staging_and_publication ... ok
+test api::tests::graph_analytics::changed_source_different_database_cancellation_and_budgets_keep_old_results ... ok
+test api::tests::graph_analytics::runtime_admission_retained_results_release_slots_and_bound_multiple_preparations ... ok
+test api::tests::graph_analytics::complete_analytics_publish_atomically_and_preserve_old_readers_and_retry_outcomes ... ok
+test api::tests::graph_analytics::louvain_publication_writes_only_the_highest_level_per_original_node ... ok
+test api::tests::graph_analytics::publication_identity_filters_old_values_after_projection_redefinition ... ok
+test api::tests::graph_analytics::runtime_admission_retained_results_remain_charged_to_the_shared_process_policy ... ok
+test api::tests::graph_analytics::runtime_admission_publication_checks_the_complete_caller_budget_before_mutation ... ok
+test api::tests::graph_analytics::typed_analytics_binds_nondefault_options_like_ordinary_calls ... ok
+test api::tests::graph_analytics::typed_analytics_rejects_invalid_options_before_staging ... ok
+test api::tests::pagerank::pagerank_lookup_business_logic_uses_parameterized_queries ... ok
+test api::tests::pagerank::pagerank_lookup_queries_use_query_runtime_plan_cache ... ok
+test api::tests::pagerank::pagerank_score_batch_rejects_invalid_score_before_wal ... ok
+test api::tests::pagerank::pagerank_read_queries_keep_user_values_in_parameters ... ok
+test api::tests::pagerank::pagerank_plan_reads_use_parameterized_queries_on_one_snapshot ... ok
+test api::tests::pagerank::pagerank_plan_queries_use_query_runtime_plan_cache ... ok
+test api::tests::pagerank::updates_and_clears_pagerank_scores_for_nowledge_shapes ... ok
+test api::tests::projected_graph_artifacts::derived_artifact_job_reports_unknown_projected_graph_failure ... ok
+test api::tests::projected_graph_artifacts::read_transaction_projects_snapshot_graph ... ok
+test api::tests::projected_graph_artifacts::projects_graph_for_page_rank ... ok
+test api::tests::projected_graph_artifacts::scheduled_background_derived_artifact_job_releases_budget_on_execution_error ... ok
+test api::tests::projected_graph_artifacts::background_derived_artifact_job_uses_qos_admission ... ok
+test api::tests::projected_graph_artifacts::scheduled_background_derived_artifact_job_defers_when_scheduler_is_full ... ok
+test api::tests::projected_graph_artifacts::projected_graph_definition_replays_from_wal ... ok
+test api::tests::graph_analytics::runtime_admission_busy_publication_preserves_values_epochs_and_wal_in_both_residencies has been running for over 60 seconds
+test api::tests::graph_analytics::score_and_community_provenance_recover_together_under_both_durability_policies has been running for over 60 seconds
+test api::tests::graph_analytics::torn_later_tail_preserves_complete_analytics_publication has been running for over 60 seconds
+test api::tests::pagerank::typed_pagerank_score_batch_persists_as_one_wal_batch_and_replays has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::background_derived_artifact_job_runs_when_qos_admits has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::checkpoint_writes_projected_graph_artifacts has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::corrupt_projected_graph_artifacts_do_not_block_recovery has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::derived_artifact_job_rebuilds_projected_graphs has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::derived_artifact_rebuild_reports_projected_graph_refresh has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::projected_graph_definition_survives_checkpoint has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::projected_graph_status_reports_artifact_reuse_state has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::read_only_open_ignores_corrupt_projected_graph_artifact_without_cleanup has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::scheduled_background_derived_artifact_job_tracks_running_budget has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::derived_artifact_job_rebuilds_projected_graphs ... ok
+test api::tests::projected_graph_execution::differential::projected_graph_residency_differential_campaign ... ignored, explicit local graph projection residency campaign
+test api::tests::projected_graph_execution::differential::projected_graph_residency_differential_campaign_first_half ... ignored, explicit local graph projection residency campaign, seeds 0..16
+test api::tests::projected_graph_execution::differential::projected_graph_residency_differential_campaign_second_half ... ignored, explicit local graph projection residency campaign, seeds 16..32
+test api::tests::pagerank::typed_pagerank_score_batch_persists_as_one_wal_batch_and_replays ... ok
+test api::tests::projected_graph_artifacts::derived_artifact_rebuild_reports_projected_graph_refresh ... ok
+test api::tests::projected_graph_artifacts::background_derived_artifact_job_runs_when_qos_admits ... ok
+test api::tests::projected_graph_artifacts::storage_owned_projected_artifact_preserves_structural_corruption_fallback has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::checkpoint_writes_projected_graph_artifacts ... ok
+test api::tests::projected_graph_artifacts::read_only_open_ignores_corrupt_projected_graph_artifact_without_cleanup ... ok
+test api::tests::projected_graph_execution::differential::projected_graph_registration_and_admission_include_canonical_edges has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::scheduled_background_derived_artifact_job_tracks_running_budget ... ok
+test api::tests::graph_analytics::torn_later_tail_preserves_complete_analytics_publication ... ok
+test api::tests::projected_graph_artifacts::projected_graph_definition_survives_checkpoint ... ok
+test api::tests::projected_graph_artifacts::corrupt_projected_graph_artifacts_do_not_block_recovery ... ok
+test api::tests::projected_graph_execution::differential::projected_graph_relationship_corruption_fails_without_partial_results has been running for over 60 seconds
+test api::tests::projected_graph_execution::differential::projected_graph_residency_differential_smoke has been running for over 60 seconds
+test api::tests::projected_graph_execution::mem_projection_predicates_survive_checkpoint_and_filter_analytics_inputs has been running for over 60 seconds
+test api::tests::projected_graph_execution::projected_graph_admission_rejections_preserve_definition_epoch_and_wal has been running for over 60 seconds
+test api::tests::projected_graph_artifacts::projected_graph_status_reports_artifact_reuse_state ... ok
+test api::tests::projected_graph_execution::projected_graph_queries_preserve_residency_reopen_and_read_only_wal_boundaries has been running for over 60 seconds
+test api::tests::projection_generations::durable_database_exposes_projection_generations_across_reopen ... ok
+test api::tests::projected_graph_execution::review_regressions::mem_algorithm_iteration_and_final_phase_contracts_survive_both_residencies has been running for over 60 seconds
+test api::tests::projected_graph_execution::streaming_parity::projected_graph_streaming_predicate_options_identity_parity_survives_both_residencies has been running for over 60 seconds
+test api::tests::projection_generations::projection_relational_reads_pin_one_published_generation_for_postgres_sql has been running for over 60 seconds
+test api::tests::projected_graph_execution::mem_projection_predicates_survive_checkpoint_and_filter_analytics_inputs ... ok
+test api::tests::projected_graph_execution::projected_graph_admission_rejections_preserve_definition_epoch_and_wal ... ok
+test api::tests::projection_generations::projection_relational_reads_pin_one_published_generation_for_postgres_sql ... ok
+test api::tests::graph_analytics::score_and_community_provenance_recover_together_under_both_durability_policies ... ok
+test api::tests::graph_analytics::runtime_admission_busy_publication_preserves_values_epochs_and_wal_in_both_residencies ... ok
+test api::tests::projected_graph_execution::projected_graph_queries_preserve_residency_reopen_and_read_only_wal_boundaries ... ok
+test api::tests::projected_graph_execution::differential::projected_graph_registration_and_admission_include_canonical_edges ... ok
+test api::tests::projected_graph_execution::review_regressions::mem_algorithm_iteration_and_final_phase_contracts_survive_both_residencies ... ok
+test api::tests::projected_graph_execution::differential::projected_graph_relationship_corruption_fails_without_partial_results ... ok
+test api::tests::projected_graph_execution::streaming_parity::projected_graph_streaming_predicate_options_identity_parity_survives_both_residencies ... ok
+test api::tests::projected_graph_artifacts::storage_owned_projected_artifact_preserves_structural_corruption_fallback ... ok
+test api::tests::projected_graph_execution::differential::projected_graph_residency_differential_smoke ... ok
+
+test result: ok. 59 passed; 0 failed; 3 ignored; 0 measured; 1972 filtered out; finished in 847.16s
+

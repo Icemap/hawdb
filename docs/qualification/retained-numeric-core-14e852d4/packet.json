@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-10-17T18:34:19.326555+00:00",
+  "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+  "tree": "e85554b29bffc04eb0173cfe39606a935c503d46",
+  "base": "a1012720decca3844864c910360057a5c71dddd8",
+  "issue": 987,
+  "pr": 1059,
+  "scope": "Storage/COW source capacity, executor numeric ownership, shared admission and root Rust numeric cursor. Correctness/source-capacity evidence; not full original986 latency/resource acceptance.",
+  "original_combined_root": "3 passed,3 TIMEOUT,2 incomplete after deliberate failure-diagnosis stop. Partial checkpoint/concurrency failures retained. Later complete target passes do not erase or by themselves explain that run.",
+  "whole_targets": "Foundation4, complete general/core+main, complete30casecontracts/core+main, required98fuzz, recovery/concurrent/isolatedRSS verified from terminal BEP summaries.",
+  "windows": "Direct rootnumeric/executor/QoS/COW/source ownership tests on workflow-only qualification branch, immutable engine14e verified by guard. See windows-receipt and original source/toolchain/log files.",
+  "source_capacity": "1000rows memory/file;4precreatedsnapshots1livecursor;1070752sourcebytes;preflight[1000,0,0,0];orderedchecksums;finalretainedbytes/owners/handles0. Not whole-operation memory or latency comparison.",
+  "go_plumbing": "39three-rowcontrols use identical af1Go executables acrossoriginal3c/maina101/candidateaf1. Separate986collection plumbing; no foreignretained API claim for this Rust-only cut.",
+  "remaining": [
+    "Independent reviewer and maintainer approval/actual1059mainlanding",
+    "Latermainbasedforeignnumeric/Arrowcuts; finalindexednode/fullqualification delivery remains986",
+    "Final986original90ordinary/110resource/explicitlarge/defaultrefusal/alloc/conversion/wholeRSS/tail/exception qualification and genuineapproval/actual986merge"
+  ]
+}

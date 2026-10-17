@@ -1,0 +1,7 @@
+commit 14e852d46b22769196027f3936229cdc1c21bfd0
+Author:     Weizhen Wang <hawking.rei@gmail.com>
+AuthorDate: Sun Oct 18 00:42:26 2026 +0800
+Commit:     Weizhen Wang <hawking.rei@gmail.com>
+CommitDate: Sun Oct 18 00:42:26 2026 +0800
+
+    feat(api): add admitted retained numeric cursor ownership

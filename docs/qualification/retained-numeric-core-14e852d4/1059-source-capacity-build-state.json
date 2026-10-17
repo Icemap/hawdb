@@ -1,0 +1,25 @@
+{
+  "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+  "tree": "e85554b29bffc04eb0173cfe39606a935c503d46",
+  "status": "built_and_frozen",
+  "started": 1792256961.6094131,
+  "scope": "Unmodified source-capacity benchmark optimized build, not runtime qualification or full performance acceptance.",
+  "command": [
+    "bazel",
+    "build",
+    "-c",
+    "opt",
+    "//:hawdb_bench_retained_source_capacity",
+    "--repo_env=CARGO_BAZEL_ISOLATED=false",
+    "--repo_env=CARGO_NET_OFFLINE=true"
+  ],
+  "exit": 0,
+  "build_ended": 1792257175.880503,
+  "ended": 1792257182.164051,
+  "producer": {
+    "source": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a67551ebf8b3193f5991231a3657d0bb/execroot/_main/bazel-out/darwin_arm64-opt/bin/hawdb_bench_retained_source_capacity",
+    "path": "/private/tmp/hawdb-wip-ready-20261015/1059-source-capacity-producer/hawdb_bench_retained_source_capacity",
+    "sha256": "bee3465dcd3fc4c0cbf982eaec431af9f2848fefafa3b866b2f783c198f72d3b",
+    "bytes": 32712192
+  }
+}

@@ -1,0 +1,4 @@
+    Checking hawdb v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-core)
+    Checking hawdb-qualification v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-core/crates/qualification)
+    Checking hawdb-fuzz v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/split-retained-numeric-core/crates/fuzz)
+    Finished `dev` profile [unoptimized] target(s) in 14.82s

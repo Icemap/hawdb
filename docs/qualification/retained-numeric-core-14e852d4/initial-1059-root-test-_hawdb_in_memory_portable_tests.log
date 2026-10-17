@@ -1,0 +1,15 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_in_memory_portable_tests
+-----------------------------------------------------------------------------
+
+running 7 tests
+test segment_read_waves_keep_order_and_budget_on_the_serial_backend ... ok
+test database_instance_identity_is_stable_and_distinguishes_equal_state ... ok
+test fromless_select_evaluates_once_and_rejects_column_references ... ok
+test expired_deadline_returns_an_error_without_poisoning_the_database ... ok
+test result_budget_returns_an_error_instead_of_partial_rows ... ok
+test browser_clock_and_randomness_generate_distinct_uuidv7_values ... ok
+test writes_parameters_traversal_and_error_recovery_share_one_database ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+

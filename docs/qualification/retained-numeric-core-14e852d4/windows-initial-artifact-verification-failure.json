@@ -1,0 +1,76 @@
+{
+  "status": "artifact_patch_comparison_failed",
+  "run_id": 39057847682,
+  "qualification_head": "79f16a553575517a48714253d1bb958390b819e4",
+  "engine_head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+  "started": 1792261567.785193,
+  "read_errors": 0,
+  "last_verified": 1792261828.1995509,
+  "workflow_status": "completed",
+  "workflow_conclusion": "success",
+  "url": "https://github.com/nowledge-co/hawdb/actions/runs/39057847682",
+  "job_id": 117469421751,
+  "job_steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Checkout frozen qualification source",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Install pinned Rust",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Verify exact production source and record toolchain",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Test root Rust numeric ownership and session limits",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Test executor numeric ownership",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Test shared retained admission",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Test COW capacity and checkpoint ownership",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Test materialized source lifetime and admission",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Preserve complete native qualification evidence",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Post Checkout frozen qualification source",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "verification_error": "Workflowpatchbytesdifferentafterline-endingnormalization;runtimeworkflowSUCCESS/sourceSHA/tree/parentmatched. Investigating exact difference before qualifying."
+}

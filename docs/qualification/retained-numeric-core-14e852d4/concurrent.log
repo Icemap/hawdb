@@ -1,0 +1,140 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_concurrent_tests
+-----------------------------------------------------------------------------
+
+running 116 tests
+test api::concurrent::coordinator::group_commit_tests::adaptive_fsync_window_uses_completed_bucket_average_lower_envelope ... ok
+test api::concurrent::coordinator::group_commit_tests::adaptive_delay_uses_bounded_fallback_before_the_completed_sample_floor ... ok
+test api::concurrent::coordinator::group_commit_tests::adaptive_delay_falls_back_after_the_recent_window_expires ... ok
+test api::concurrent::coordinator::group_commit_tests::adaptive_delay_is_derived_from_the_completed_baseline ... ok
+test api::concurrent::coordinator::group_commit_tests::adaptive_delay_matrix_tracks_fast_and_slow_fsync_baselines ... ok
+test api::concurrent::key_range_tests::key_range_differential_campaign ... ignored, explicit local differential campaign
+test api::concurrent::coordinator::group_commit_tests::liveness_check_distinguishes_completed_and_orphaned_requests ... ok
+test api::concurrent::coordinator::group_commit_tests::queued_admission_outlives_consumed_callback_and_result_delivery ... ok
+
+thread 'api::concurrent::coordinator::group_commit_tests::panicking_group_commit_task_completes_followers_and_releases_leader' (78405279) panicked at src/api/concurrent/coordinator.rs:1352:65:
+commit task panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test api::concurrent::key_range_tests::conjunctive_key_ranges_preserve_intersections_and_safe_fallbacks ... ok
+test api::concurrent::coordinator::group_commit_tests::consumed_group_commit_task_completes_the_group_and_releases_leader ... ok
+test api::concurrent::coordinator::lock_wait_tests::lock_wait_queue_detects_a_cycle_through_older_queue_priority ... ok
+
+thread 'api::concurrent::publication::tests::committed_read_publication_rejects_new_and_late_reads_after_writer_panic' (78405291) panicked at src/api/concurrent/publication.rs:550:17:
+writer panic after mutation
+test api::concurrent::coordinator::group_commit_tests::panicking_group_commit_task_completes_followers_and_releases_leader ... ok
+test api::concurrent::coordinator::lock_wait_tests::lock_wait_queue_stops_optimistic_arrivals_from_bypassing_older_owner ... ok
+test api::concurrent::key_range_tests::unknown_or_branch_still_requires_a_table_lock ... ok
+test api::concurrent::publication::tests::published_primary_key_reads_keep_row_and_payload_limits ... ok
+test api::concurrent::key_range_tests::conjunctive_range_locks_retain_phantom_protection ... ok
+test api::concurrent::key_range_tests::conjunctive_content_updates_keep_disjoint_keys_concurrent ... ok
+test api::concurrent::tests::append_explain_analyze_takes_a_shared_database_lock ... ok
+test api::concurrent::publication::tests::reader_pressure_excludes_only_the_idle_internal_publication ... ok
+test api::concurrent::publication::tests::committed_read_publication_rejects_new_and_late_reads_after_writer_panic ... ok
+test api::concurrent::tests::intersects_adjacent_half_open_ranges_correctly ... ok
+test api::concurrent::tests::branch_lifecycle_lock_requests_are_exclusive_while_inspection_is_shared ... ok
+test api::tests::concurrent_transactions::admission::admitted_transaction_large_waiter_keeps_priority_until_both_transactions_retire ... ok
+test api::tests::concurrent_transactions::admission::admitted_transaction_context_survives_refresh_and_stops_statements ... ok
+test api::tests::concurrent_transactions::admission::admitted_transaction_read_result_budget_is_propagated_to_both_languages ... ok
+test api::concurrent::key_range_tests::key_range_differential_smoke ... ok
+test api::tests::concurrent_transactions::admission::admitted_transaction_rejects_wrong_kind_and_cancelled_context_without_leaking ... ok
+test api::tests::concurrent_transactions::append_mvcc::append_mvcc_schema_barrier_rejects_both_stale_commit_directions ... ok
+test api::tests::concurrent_transactions::admission::admitted_transaction_reuses_one_permit_and_refunds_every_retirement ... ok
+test api::tests::concurrent_transactions::autocommit_explain_of_a_mutation_remains_non_mutating ... ok
+test api::tests::concurrent_transactions::append_mvcc::append_mvcc_table_write_and_graph_write_preserve_each_other_in_both_orders ... ok
+test api::tests::concurrent_transactions::bigint_arithmetic_update_uses_the_existing_point_lock_contract ... ok
+test api::concurrent::coordinator::lock_wait_tests::lock_wait_queue_timeout_wakes_successor_without_owner_retirement ... ok
+test api::tests::concurrent_transactions::concurrent_writer_pin_refreshes_with_first_pessimistic_statement ... ok
+test api::tests::concurrent_transactions::concurrent_writer_pin_retires_on_every_transaction_exit ... ok
+test api::concurrent::tests::concurrent_append_transaction_uses_the_shared_commit_sequencer ... ok
+test api::tests::concurrent_transactions::conflicting_primary_key_point_lock_times_out_and_aborts_the_waiter ... ok
+test api::tests::concurrent_transactions::crash_recovery::concurrent_crash_child ... ok
+test api::tests::concurrent_transactions::admission::admitted_transaction_cancellation_while_queued_prevents_publication_and_refunds ... ok
+test api::tests::concurrent_transactions::database_without_lock_manager_rejects_locking_selects ... ok
+test api::tests::concurrent_transactions::append_mvcc::append_mvcc_mixed_table_write_conflict_publishes_no_partial_rows ... ok
+test api::tests::concurrent_transactions::delete_cascade_blocks_a_concurrent_child_insert_before_publication ... ok
+test api::tests::concurrent_transactions::disjoint_graph_node_updates_can_stage_concurrently ... ok
+test api::tests::concurrent_transactions::disjoint_primary_key_point_locks_allow_both_pessimistic_writers_to_commit ... ok
+test api::tests::concurrent_transactions::disjoint_update_upserts_use_point_locks_when_the_conflict_targets_are_absent ... ok
+test api::tests::concurrent_transactions::dropped_pessimistic_transaction_releases_the_database_lock ... ok
+test api::tests::concurrent_transactions::failed_graph_statement_restores_workspace_and_statement_locks ... ok
+test api::tests::concurrent_transactions::exact_parent_delete_conflicts_with_foreign_key_validation_on_a_unique_key ... ok
+test api::tests::concurrent_transactions::for_update_point_lock_blocks_exact_update_until_owner_finishes ... ok
+test api::tests::concurrent_transactions::generated_order_retries_after_optimistic_conflict_and_matches_pessimistic_commit ... ok
+test api::concurrent::publication::tests::committed_read_publication_stays_invalid_after_unfinished_group ... ok
+test api::tests::concurrent_transactions::graph_deadlock_aborts_victim_and_releases_its_first_node_lock ... ok
+test api::tests::concurrent_transactions::graph_lock_derivation_rejects_a_changed_snapshot ... ok
+test api::tests::concurrent_transactions::graph_create_allocation_lock_prevents_duplicate_physical_ids ... ok
+test api::tests::concurrent_transactions::graph_lock_failure_restores_the_failed_statement_only ... ok
+test api::tests::concurrent_transactions::graph_unique_property_updates_serialize_by_constraint_subject ... ok
+test api::tests::concurrent_transactions::non_primary_key_mutation_falls_back_to_a_table_lock ... ok
+test api::tests::concurrent_transactions::optimistic_conflict_noop_commits_converge_to_inserted_and_conflict_results ... ok
+test api::tests::concurrent_transactions::optimistic_group_admission_waits_for_pessimistic_owner_and_retires_on_timeout ... ok
+test api::concurrent::coordinator::checkpoint_read_tests::selected_checkpoint_does_not_make_cached_reads_wait_for_the_writer ... ok
+test api::tests::concurrent_transactions::concurrent_database_checkpoint_publishes_an_immutable_cut ... ok
+test api::tests::concurrent_transactions::concurrent_transaction_publishes_graph_relational_and_append_writes_in_one_wal_epoch ... ok
+test api::tests::concurrent_transactions::optimistic_transaction_reads_its_private_workspace ... ok
+test api::tests::concurrent_transactions::optimistic_transaction_rejects_locking_selects ... ok
+test api::tests::concurrent_transactions::optimistic_transactions_commit_disjoint_graph_updates_from_one_snapshot ... ok
+test api::tests::concurrent_transactions::optimistic_transactions_prepare_in_parallel_and_reject_the_conflicting_committer ... ok
+test api::tests::concurrent_transactions::ordinary_snapshot_select_does_not_block_an_exact_update ... ok
+test api::tests::concurrent_transactions::admission::admitted_conflict_retry_escalates_before_recurring_hot_writers ... ok
+test api::tests::concurrent_transactions::pessimistic_transaction_blocks_other_writers_with_a_bounded_wait ... ok
+test api::tests::concurrent_transactions::pessimistic_transaction_keeps_uncommitted_data_invisible_to_snapshot_readers ... ok
+test api::tests::concurrent_transactions::point_lock_upgrade_cycle_selects_one_deadlock_victim ... ok
+test api::tests::concurrent_transactions::generated_order_recovers_after_an_uncertain_group_sync ... ok
+test api::tests::concurrent_transactions::read_observation::failed_cypher_snapshot_read_returns_while_writer_is_active ... ok
+test api::tests::concurrent_transactions::read_observation::failed_sql_snapshot_read_returns_while_writer_is_active ... ok
+test api::tests::concurrent_transactions::read_observation::new_cypher_read_does_not_wait_for_writer ... ok
+test api::tests::concurrent_transactions::read_observation::new_sql_read_does_not_wait_for_writer ... ok
+test api::tests::concurrent_transactions::optimistic_group_admission_batches_disjoint_writes_and_rejects_overlap ... ok
+test api::tests::concurrent_transactions::read_observation::successful_cypher_snapshot_read_returns_while_writer_is_active ... ok
+test api::tests::concurrent_transactions::read_observation::successful_sql_snapshot_read_returns_while_writer_is_active ... ok
+test api::tests::concurrent_transactions::read_only_autocommit_statements_overlap_after_snapshot_acquisition ... ok
+test api::concurrent::publication::tests::committed_read_publication_waits_for_group_durability ... ok
+test api::tests::concurrent_transactions::pessimistic_group_commit_preserves_inserted_and_conflict_results ... ok
+test api::concurrent::publication::tests::group_completion::completed_group_wakes_automatic_checkpoint_without_another_frontend_access ... ok
+test api::tests::concurrent_transactions::relational_mvcc::relational_mvcc_insert_constraints_are_precise_and_predicates_keep_barriers ... ok
+test api::tests::concurrent_transactions::relational_mvcc::relational_mvcc_parent_deletion_keeps_both_barrier_directions_for_child_inserts ... ok
+test api::tests::concurrent_transactions::optimistic_tombstone_conflict_survives_checkpoint_cleanup ... ok
+test api::tests::concurrent_transactions::relationship_creation_conflicts_with_endpoint_delete_guard ... ok
+test api::tests::concurrent_transactions::repeated_covered_point_read_keeps_its_snapshot_after_a_disjoint_commit ... ok
+test api::tests::concurrent_transactions::same_key_update_upserts_remain_bounded_by_the_conflict_target_lock ... ok
+test api::tests::concurrent_transactions::shared_primary_key_range_blocks_phantoms_but_not_the_excluded_boundary ... ok
+test api::tests::concurrent_transactions::snapshot_autocommit_read_does_not_hold_the_writer_gate ... ok
+test api::tests::concurrent_transactions::snapshot_autocommit_reads_remain_observable ... ok
+test api::tests::concurrent_transactions::uuidv7_defaults_preserve_staged_ids_across_concurrent_commit_modes ... ok
+test api::concurrent::publication::tests::committed_read_publication_refreshes_physical_generations ... ok
+test api::tests::concurrent_transactions::concurrent_writer_pins_canonical_generation_until_rollback ... ok
+test api::tests::concurrent_transactions::wal_group_commit_requires_performance_and_recovery_evidence ... ok
+test api::tests::concurrent_transactions::admission::admitted_large_transaction_completes_under_recurring_small_transactions ... ok
+test api::tests::concurrent_transactions::wal_group_commit_skips_the_coalescing_window_without_contention ... ok
+test api::tests::concurrent_transactions::wal_group_commit_assigns_generated_order_in_serial_commit_order ... ok
+test api::tests::concurrent_transactions::writer_pin_moves_with_the_queued_commit_workspace ... ok
+test api::transaction_locks::tests::facade_preserves_storage_lock_type_identity ... ok
+test api::tests::concurrent_transactions::admission::admitted_group_failure_preserves_conflicts_and_recovers_only_complete_serial_prefixes ... ok
+test api::concurrent::publication::tests::branch_ddl_and_data_publish_as_one_view_to_concurrent_snapshot_readers ... ok
+test api::tests::concurrent_transactions::wal_group_commit_shares_one_sync_without_changing_record_order ... ok
+test api::tests::concurrent_transactions::wal_group_sync_failure_rejects_commit_and_poisons_until_reopen ... ok
+test api::tests::concurrent_transactions::append_mvcc::append_mvcc_table_identity_preserves_disjoint_commits_conflicts_checkpoint_and_reopen has been running for over 60 seconds
+test api::tests::concurrent_transactions::wal_group_commit_publishes_schema_row_checkpoint_after_group_sync ... ok
+test api::tests::concurrent_transactions::append_mvcc::append_mvcc_table_identity_preserves_disjoint_commits_conflicts_checkpoint_and_reopen ... ok
+test api::tests::concurrent_transactions::crash_recovery::subprocess_concurrent_crash_recovers_mixed_transactions_as_serial_prefixes has been running for over 60 seconds
+test api::tests::concurrent_transactions::optimistic_mvcc_reopen_preserves_both_database_barrier_directions has been running for over 60 seconds
+test api::tests::concurrent_transactions::optimistic_mvcc_reopen_preserves_disjoint_commits_and_same_key_conflicts has been running for over 60 seconds
+test api::tests::concurrent_transactions::optimistic_mvcc_reopen_preserves_disjoint_commits_and_same_key_conflicts ... ok
+test api::tests::concurrent_transactions::read_observation::autocommit_sql_keeps_its_schema_and_generation_after_publication_replacement ... ok
+test api::tests::concurrent_transactions::read_observation::read_snapshot_descendants_keep_graph_and_sql_views_across_checkpoint has been running for over 60 seconds
+test api::tests::concurrent_transactions::read_observation::read_snapshot_descendants_keep_graph_and_sql_views_across_checkpoint ... ok
+test api::tests::concurrent_transactions::relational_mvcc::relational_mvcc_constrained_inserts_validate_unique_values_without_serializing_foreign_keys has been running for over 60 seconds
+test api::tests::concurrent_transactions::relational_mvcc::relational_mvcc_constraint_preserving_updates_keep_disjoint_rows_and_barriers has been running for over 60 seconds
+test api::tests::concurrent_transactions::relational_mvcc::relational_mvcc_explicit_keys_commit_disjoint_rows_and_reject_same_key_before_wal has been running for over 60 seconds
+test api::tests::concurrent_transactions::relational_mvcc::relational_mvcc_primary_key_predicates_preserve_replay_and_absent_intents has been running for over 60 seconds
+test api::tests::concurrent_transactions::optimistic_mvcc_reopen_preserves_both_database_barrier_directions ... ok
+test api::tests::concurrent_transactions::relational_mvcc::relational_mvcc_explicit_keys_commit_disjoint_rows_and_reject_same_key_before_wal ... ok
+test api::tests::concurrent_transactions::relational_mvcc::relational_mvcc_primary_key_predicates_preserve_replay_and_absent_intents ... ok
+test api::tests::concurrent_transactions::relational_mvcc::relational_mvcc_constrained_inserts_validate_unique_values_without_serializing_foreign_keys ... ok
+test api::tests::concurrent_transactions::crash_recovery::subprocess_concurrent_crash_recovers_mixed_transactions_as_serial_prefixes ... ok
+test api::tests::concurrent_transactions::relational_mvcc::relational_mvcc_constraint_preserving_updates_keep_disjoint_rows_and_barriers ... ok
+
+test result: ok. 115 passed; 0 failed; 1 ignored; 0 measured; 1918 filtered out; finished in 576.33s
+

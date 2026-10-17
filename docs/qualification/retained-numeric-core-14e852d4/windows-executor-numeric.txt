@@ -1,0 +1,37 @@
+[1m[92m   Compiling[0m proc-macro2 v1.0.106
+[1m[92m   Compiling[0m quote v1.0.46
+[1m[92m   Compiling[0m windows-sys v0.61.2
+[1m[92m   Compiling[0m syn v2.0.118
+[1m[92m   Compiling[0m syn v3.0.3
+[1m[92m   Compiling[0m serde_derive v1.0.229
+[1m[92m   Compiling[0m windows-interface v0.59.3
+[1m[92m   Compiling[0m windows-implement v0.60.2
+[1m[92m   Compiling[0m windows-core v0.62.2
+[1m[92m   Compiling[0m windows-numerics v0.3.1
+[1m[92m   Compiling[0m windows-future v0.3.2
+[1m[92m   Compiling[0m windows-collections v0.3.2
+[1m[92m   Compiling[0m serde v1.0.229
+[1m[92m   Compiling[0m windows v0.62.2
+[1m[92m   Compiling[0m sysinfo v0.39.6
+[1m[92m   Compiling[0m hawdb-qos v0.9.0 (D:\a\hawdb\hawdb\crates\qos)
+[1m[92m   Compiling[0m hawdb-telemetry v0.9.0 (D:\a\hawdb\hawdb\crates\telemetry)
+[1m[92m   Compiling[0m hawdb-storage v0.9.0 (D:\a\hawdb\hawdb\crates\storage)
+[1m[92m   Compiling[0m hawdb-executor v0.9.0 (D:\a\hawdb\hawdb\crates\executor)
+[1m[92m    Finished[0m `test` profile [unoptimized] target(s) in 1m 27s
+[1m[92m     Running[0m unittests src\lib.rs (target\debug\deps\hawdb_executor-96f7f1dd4e27dce6.exe)
+
+running 11 tests
+test numeric::retained::tests::aggregate_byte_pressure_refuses_before_production_and_release_allows_retry ... ok
+test numeric::retained::tests::exact_ledger_budget_seals_without_a_second_charge_and_retain_failure_rolls_back ... ok
+test numeric::retained::tests::empty_all_null_and_integer_extremes_keep_the_declared_type ... ok
+test numeric::retained::tests::floating_point_bits_survive_source_and_governor_handle_destruction ... ok
+test numeric::retained::tests::fresh_producers_get_distinct_allocation_identities ... ok
+test numeric::retained::tests::handle_pressure_is_typed_and_retry_does_not_invalidate_existing_views ... ok
+test numeric::retained::tests::numeric_type_mismatch_does_not_advance_retained_buffers ... ok
+test numeric::retained::tests::producer_errors_cannot_seal_a_partial_result_and_release_all_charges ... ok
+test numeric::retained::tests::seal_and_retain_preserve_every_allocation_and_sparse_selection ... ok
+test numeric::retained::tests::unsupported_type_and_size_overflow_do_not_charge_the_owner ... ok
+test numeric::retained::tests::nullable_masks_cover_word_boundaries_and_all_valid_needs_no_mask ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 447 filtered out; finished in 0.00s
+

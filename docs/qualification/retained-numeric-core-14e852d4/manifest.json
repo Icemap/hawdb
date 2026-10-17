@@ -1,0 +1,302 @@
+[
+  {
+    "file": "1059-14e-current-ci-checks.json",
+    "bytes": 1981,
+    "sha256": "420fca2b5e79372bca8efd12db86034332b0dcccbfa93839a4a0ad5efd1f204c"
+  },
+  {
+    "file": "1059-core-general-isolated-green-receipt.json",
+    "bytes": 974,
+    "sha256": "28227e5e1d2700e073a412d99a65bbab6ddf0ca6d9052d6f7addba759834b5cd"
+  },
+  {
+    "file": "1059-deliberate-failure-diagnosis-stop.json",
+    "bytes": 1893,
+    "sha256": "e8fe06fe5feb575c01dd000c2ae93397fffb9368bfa6febcf28dad591d5a3935"
+  },
+  {
+    "file": "1059-first-checkpoint-case-paired-receipt.json",
+    "bytes": 958,
+    "sha256": "d80e1c462cd508239f6c7ff53a1688eb7b4432ec74aaacbbdb884b6b02710446"
+  },
+  {
+    "file": "1059-foundation-test-crates_core_hawdb_core_tests.log",
+    "bytes": 5080,
+    "sha256": "360a59b8530a2b199c6cffadb09a2d59160fb38a92c8f10e8de37344a67a0808"
+  },
+  {
+    "file": "1059-foundation-test-crates_executor_hawdb_executor_unit_tests.log",
+    "bytes": 43784,
+    "sha256": "791b607d670b6775391feb90548d5046df2d364d23cc8b01c19dbe0c638e71b4"
+  },
+  {
+    "file": "1059-foundation-test-crates_qos_hawdb_qos_tests.log",
+    "bytes": 11582,
+    "sha256": "3696c2324bb731b5449ad36fca9657918bebe09a670e38f466a3034958445293"
+  },
+  {
+    "file": "1059-foundation-test-crates_storage_hawdb_storage_tests.log",
+    "bytes": 222695,
+    "sha256": "df359e5ba6616915b7d0e3c0e54bbf3eefe77957911d5d4a8e7787454380f77e"
+  },
+  {
+    "file": "1059-full-contract-isolated-paired-green-receipt.json",
+    "bytes": 998,
+    "sha256": "e52a1660d1c7bd42d01f733a0e0818bb94e5e4a0938933d2eab8fe7ff2ec9270"
+  },
+  {
+    "file": "1059-full-root-contract-timeout-receipt.json",
+    "bytes": 1258,
+    "sha256": "49cbca6834534ffe4b09e45dc73af0cb92c8eb9803215dada618afda70b59639"
+  },
+  {
+    "file": "1059-main-general-isolated-green-receipt.json",
+    "bytes": 644,
+    "sha256": "7e88a2b92e7144a814fcf1c02a2878fa7ced389cc64ee651bb8c017a861e19dd"
+  },
+  {
+    "file": "1059-priority-v2-core-contract-test-_hawdb_execution_request_contract_tests.log",
+    "bytes": 3334,
+    "sha256": "c375d3ccb2c85840b49ab0c0ae9a1c732bb0c4ac648049e2fe2955fefd29cdbd"
+  },
+  {
+    "file": "1059-priority-v2-core-general-test-_hawdb_unit_general_tests.log",
+    "bytes": 181675,
+    "sha256": "57a0e22ab82f170cb0df996823bb11d683f1061b8c13d1331675146dc48b01a7"
+  },
+  {
+    "file": "1059-priority-v2-main-contract-test-_hawdb_execution_request_contract_tests.log",
+    "bytes": 3334,
+    "sha256": "1ee8235fd3c57d607e56234eaf472f042bed7b9b982aba4556d623d9a2b69fe2"
+  },
+  {
+    "file": "1059-priority-v2-main-general-test-_hawdb_unit_general_tests.log",
+    "bytes": 178660,
+    "sha256": "7098d67a246b39e381a03c10af754c81ba1f762180310f91a8b50914952a830a"
+  },
+  {
+    "file": "1059-priority-v2-mandatory-fuzz-test-_hawdb_graph_projection_residency_fuzz_first_half_tests.log",
+    "bytes": 665,
+    "sha256": "62b7733eca89279df1c7768adc99cbb9e637c064205af3a93e82315633630ca9"
+  },
+  {
+    "file": "1059-priority-v2-mandatory-fuzz-test-_hawdb_graph_projection_residency_fuzz_second_half_tests.log",
+    "bytes": 669,
+    "sha256": "545b60a42cc768dd2f3798e7fa11846bd1628b66b68d6135535cf2b0d85a8fdf"
+  },
+  {
+    "file": "1059-source-capacity-build-state.json",
+    "bytes": 1015,
+    "sha256": "38f8650a42bdf4e1349fb0c008f496d0ad4aefc73e7b064c699104059e09f50d"
+  },
+  {
+    "file": "1059-source-capacity-controls-v2-state.json",
+    "bytes": 3707,
+    "sha256": "fa3f5a04bdc174e3651ba241f898d22a171cbb237ec74342aac2b1d25e64f552"
+  },
+  {
+    "file": "af1-shared-go-three-engine-controls-v2-state.json",
+    "bytes": 86362,
+    "sha256": "720acd3caf249d866a1a9074b4d50fbbb3c7c6da184549a22f8437678463bfe1"
+  },
+  {
+    "file": "commands.json",
+    "bytes": 5291,
+    "sha256": "f79c2c05b66d3142f9276be45ae7e3efb2e455d851e51b1b0d1c97198612c851"
+  },
+  {
+    "file": "concurrent.log",
+    "bytes": 15963,
+    "sha256": "9744ad601436ad5085df7bb6f78883e30f966b2d13c9a7fe215a93ff3303fd8e"
+  },
+  {
+    "file": "core.patch",
+    "bytes": 289389,
+    "sha256": "2e26ebc7560c2e3a9075b2aca045040148fa331def24a1d4f1a7381de7d3267b"
+  },
+  {
+    "file": "initial-1059-incomplete-root-hawdb_unit_analytics_core_general_tests.log",
+    "bytes": 10751,
+    "sha256": "1dff503244f9f1fd4f670bfa51848c6e7dbb230a2f0a29cad89e74f66c0a6ee5"
+  },
+  {
+    "file": "initial-1059-incomplete-root-hawdb_unit_concurrent_tests.log",
+    "bytes": 18076,
+    "sha256": "d0a8c2fb90086977151b6ca2037839ede38ea768ae637d1e7869c19a918c6ac0"
+  },
+  {
+    "file": "initial-1059-incomplete-root-hawdb_unit_general_tests.log",
+    "bytes": 147526,
+    "sha256": "3e7243476d8b8de7ddf7032aed1d82fec47375738ebfd7500c4e947d2891bf53"
+  },
+  {
+    "file": "initial-1059-incomplete-root-hawdb_unit_recovery_tests.log",
+    "bytes": 26701,
+    "sha256": "a14d51c6c906d845e865291b40e2c282078d225665077dd01ebf455c05641385"
+  },
+  {
+    "file": "initial-1059-root-test-_hawdb_execution_request_contract_tests.log",
+    "bytes": 2780,
+    "sha256": "205d9a0a7adc8ea5b4884ae036a005e7e771f90d3020595ef032226eba93f73d"
+  },
+  {
+    "file": "initial-1059-root-test-_hawdb_in_memory_portable_tests.log",
+    "bytes": 812,
+    "sha256": "d12ed793718f2fab24f3c65f34c85b6ba5d4070677bd7aa948f4861b4d186082"
+  },
+  {
+    "file": "initial-1059-root-test-_hawdb_unit_analytics_core_general_tests.log",
+    "bytes": 10751,
+    "sha256": "1dff503244f9f1fd4f670bfa51848c6e7dbb230a2f0a29cad89e74f66c0a6ee5"
+  },
+  {
+    "file": "initial-1059-root-test-_hawdb_unit_general_tests.log",
+    "bytes": 147526,
+    "sha256": "3e7243476d8b8de7ddf7032aed1d82fec47375738ebfd7500c4e947d2891bf53"
+  },
+  {
+    "file": "initial-1059-root-test-_hawdb_unit_recovery_tests.log",
+    "bytes": 26701,
+    "sha256": "a14d51c6c906d845e865291b40e2c282078d225665077dd01ebf455c05641385"
+  },
+  {
+    "file": "initial-1059-root-test-_hawdb_unit_row_page_compaction_admission_tests.log",
+    "bytes": 1124,
+    "sha256": "7c7380fd3ca5780bc0912918a332bfedd0162ed206b0bdcaaea4bc330094f733"
+  },
+  {
+    "file": "isolated-rss.log",
+    "bytes": 1230,
+    "sha256": "b54a639fca8a6078ddd973eefd80bdd1e771ae04ce527731ef381600faaf2e7d"
+  },
+  {
+    "file": "packet.json",
+    "bytes": 1862,
+    "sha256": "42746aa0e7345f44a107cdba45307a3611904deed98a554567be8a32dd2e60d4"
+  },
+  {
+    "file": "recovery.log",
+    "bytes": 16294,
+    "sha256": "84e4daf25174ea1b482b522b8e516fe200ca86df1dfcdd9471738a50fb6f06c1"
+  },
+  {
+    "file": "retained-numeric-core-commit.log",
+    "bytes": 1036,
+    "sha256": "dcbd80152258a389308cd7efe6199798764b892948cfb9257621e7de866870f8"
+  },
+  {
+    "file": "retained-numeric-core-extraction-receipt.json",
+    "bytes": 7285,
+    "sha256": "78fe6918cffc5384950ed4701acc83237cb1b010b3fb99274e91c3d8b3aecaf9"
+  },
+  {
+    "file": "retained-numeric-core-strict-fmt.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "file": "retained-numeric-core-strict-native.log",
+    "bytes": 395,
+    "sha256": "d5d0f94443c2661760f994f21a68d80a495103c7fd37c3ff1e5f90048adade0c"
+  },
+  {
+    "file": "retained-numeric-core-strict-prek.log",
+    "bytes": 160,
+    "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
+  },
+  {
+    "file": "retained-numeric-core-strict-state.json",
+    "bytes": 101618,
+    "sha256": "ee270209e553203538a7cacb79082fc0bf90953e4e7c01a6d5d1ea65fb6d5e6d"
+  },
+  {
+    "file": "retained-numeric-core-strict-wasm.log",
+    "bytes": 7757,
+    "sha256": "150485776d4d4808310552f75f48bf2fa2a51a62d86d503ac48d70dd8a381a67"
+  },
+  {
+    "file": "selected-checkpoint-core.log",
+    "bytes": 426,
+    "sha256": "b20f95576ed931b4098ac06a0117d069e07308c002cb6554ad57c0eb927ac5b3"
+  },
+  {
+    "file": "selected-checkpoint-main.log",
+    "bytes": 426,
+    "sha256": "1cbb2a62987eb740dab00bcf1629b560371e6bfe8209104416cd3467f671b699"
+  },
+  {
+    "file": "source-capacity-file.json",
+    "bytes": 542,
+    "sha256": "4a73634b8da37ed7f6dd24b56b3db4365b4702b5e1c3e2e07bc87147ae2ec681"
+  },
+  {
+    "file": "source-capacity-memory.json",
+    "bytes": 545,
+    "sha256": "69da7520f2b72654de54fbe8b78266cc6fa7571325c5968de04338acb7f39bfc"
+  },
+  {
+    "file": "source.json",
+    "bytes": 5370,
+    "sha256": "df8cf166ca102a82877b4383c267c88daab8eb52894b524ce08b8d033d2d7cff"
+  },
+  {
+    "file": "test-events.json",
+    "bytes": 35248,
+    "sha256": "05338b983a57e6572b8932f7a50eebadeab72b079e58376e11ac036a328abe3e"
+  },
+  {
+    "file": "windows-cow-ownership.txt",
+    "bytes": 4351,
+    "sha256": "bb2d5dda19b9bdec5e7d5ebcd601a39118a7f943feddd8673da71cac1760b7d2"
+  },
+  {
+    "file": "windows-engine.txt",
+    "bytes": 295,
+    "sha256": "6a21d3263c1d2cef51cd40500dbbbccaffb41d3c34499a487659eb0e531482e3"
+  },
+  {
+    "file": "windows-executor-numeric.txt",
+    "bytes": 2433,
+    "sha256": "c77019d98a77834b1febd3c1d797b9686e1f4dec37cdee445384fe685ba9a382"
+  },
+  {
+    "file": "windows-initial-artifact-verification-failure.json",
+    "bytes": 2171,
+    "sha256": "92fef09fec3f2f442bb99465b53959e9ff4a4e9c48a1cbde30c251cf04981c27"
+  },
+  {
+    "file": "windows-receipt.json",
+    "bytes": 4637,
+    "sha256": "32c2c8930a3adc25db8152e5b8675f86bc7c957f71fe9c03d5021481b3db49c8"
+  },
+  {
+    "file": "windows-retained-admission.txt",
+    "bytes": 3223,
+    "sha256": "630314faccf97568bfbe64070ed9e3cea1726089b35d2f80954ecc49ccbd5d48"
+  },
+  {
+    "file": "windows-root-numeric.txt",
+    "bytes": 16639,
+    "sha256": "efd7c149cd22433f8a30fb24919c153f54fec7993f8b78a0d247ce4bdf5274e6"
+  },
+  {
+    "file": "windows-source-ownership.txt",
+    "bytes": 2213,
+    "sha256": "1dd4237c341e33afbf6d8db4f0e7a6b2d8078d5c05a99a79dac79b9bcfa5c81d"
+  },
+  {
+    "file": "windows-source.txt",
+    "bytes": 123,
+    "sha256": "0b6f4cbcb4cf278f3af726a5d404346923683911e36eb681b5ca88d4a8017183"
+  },
+  {
+    "file": "windows-toolchain.txt",
+    "bytes": 194,
+    "sha256": "7fad09dd8c16d49de37932475436003b5b1763c1015c5ce081ad7692db368ca3"
+  },
+  {
+    "file": "windows-workflow-only.patch",
+    "bytes": 6636,
+    "sha256": "022ad5479ab235cf58335f32ee9306e9a31ac2aa0c5bbc95ce0094f6de41a3da"
+  }
+]

@@ -1,0 +1,16 @@
+Cargo format check (workspace)...........................................Passed
+Cargo Clippy (workspace, all targets and features).......................Passed
+[feat/retained-numeric-core 14e852d4] feat(api): add admitted retained numeric cursor ownership
+ 44 files changed, 6217 insertions(+), 146 deletions(-)
+ create mode 100644 benches/retained_source_capacity.rs
+ create mode 100644 crates/executor/src/numeric/retained.rs
+ create mode 100644 crates/executor/src/numeric/retained/tests.rs
+ create mode 100644 crates/qos/src/runtime/retained_result.rs
+ create mode 100644 crates/qos/src/runtime/retained_result/tests.rs
+ create mode 100644 crates/storage/src/cow/node_map.rs
+ create mode 100644 crates/storage/src/cow/retained_capacity.rs
+ create mode 100644 crates/storage/src/cow/retained_scan_tests.rs
+ create mode 100644 crates/storage/src/store/graph_read/retained_scan_tests.rs
+ create mode 100644 docs/RETAINED_NUMERIC_CORE.md
+ create mode 100644 src/api/retained_query.rs
+ create mode 100644 src/api/retained_query/tests.rs

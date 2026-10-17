@@ -1,0 +1,25 @@
+{
+  "scope": "Complete unchanged30casecore/maincontractdiagnosticsalone, original300sdeadline/internaltestconcurrency/defaults/durability; --nocaptureoutputonly. Preserve initialcombinedrootcontract301.7sTIMEOUT separately. No causal or latency claim.",
+  "results": [
+    {
+      "engine": "core",
+      "passed": 30,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 0,
+      "seconds": 81.23,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-priority-v2-core-contract-test-_hawdb_execution_request_contract_tests.log",
+      "sha256": "c375d3ccb2c85840b49ab0c0ae9a1c732bb0c4ac648049e2fe2955fefd29cdbd"
+    },
+    {
+      "engine": "main",
+      "passed": 30,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 0,
+      "seconds": 83.12,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/1059-priority-v2-main-contract-test-_hawdb_execution_request_contract_tests.log",
+      "sha256": "1ee8235fd3c57d607e56234eaf472f042bed7b9b982aba4556d623d9a2b69fe2"
+    }
+  ]
+}

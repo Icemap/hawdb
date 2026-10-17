@@ -1,0 +1,37 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_analytics_rss_tests
+-----------------------------------------------------------------------------
+
+running 2 tests
+test api::tests::graph_analytics::rss_child ... ok
+dense analytics fixture setup: 54.00904975s
+test api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process has been running for over 60 seconds
+dense analytics identity checks: 37.272468792s
+persistent-analytics-rss [
+  {
+    "adjacency_bytes_read": 1441280,
+    "algorithm": "page_rank",
+    "baseline_rss": 65961984,
+    "blocking_budget": 98304,
+    "nodes": 128,
+    "peak_rss": 75563008,
+    "query_peak": 62616,
+    "relationships": 16256,
+    "wall_nanos": 33396107291
+  },
+  {
+    "adjacency_bytes_read": 7206400,
+    "algorithm": "louvain",
+    "baseline_rss": 65961984,
+    "blocking_budget": 98304,
+    "nodes": 128,
+    "peak_rss": 76955648,
+    "query_peak": 90788,
+    "relationships": 16256,
+    "wall_nanos": 164493095250
+  }
+]
+test api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2032 filtered out; finished in 292.00s
+

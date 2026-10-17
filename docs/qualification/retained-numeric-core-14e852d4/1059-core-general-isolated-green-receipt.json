@@ -1,0 +1,19 @@
+{
+  "head": "14e852d46b22769196027f3936229cdc1c21bfd0",
+  "tree": "e85554b29bffc04eb0173cfe39606a935c503d46",
+  "target": "//:hawdb_unit_general_tests",
+  "passed": 1711,
+  "failed": 0,
+  "ignored": 1,
+  "filtered_out": 322,
+  "seconds": 438.13,
+  "source_changes_since_failed_attempt": false,
+  "diagnostic_output_flag": "--nocapture",
+  "deadline_seconds": 900,
+  "internal_concurrency_changed": false,
+  "test_log": "/private/tmp/hawdb-wip-ready-20261015/1059-priority-v2-core-general-test-_hawdb_unit_general_tests.log",
+  "test_log_sha256": "57a0e22ab82f170cb0df996823bb11d683f1061b8c13d1331675146dc48b01a7",
+  "previous_reported_failed_case_count": 44,
+  "previous_failed_case_names_present_in_complete_output": 44,
+  "scope": "Complete registered general partition alone, all original cases and selection. Other root partitions/contract/initial failed concurrent invocation remain separately qualified and unresolved; this pass alone does not establish the cause."
+}
