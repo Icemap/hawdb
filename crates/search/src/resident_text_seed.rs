@@ -284,7 +284,7 @@ fn admitted_filter_match(
     Ok(search_document_matches_predicates(document, predicates))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "full-text-search"))]
 mod tests {
     use super::*;
     use hawdb_executor::{QueryMemoryClass, QueryMemoryLedger};
