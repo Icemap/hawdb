@@ -358,6 +358,108 @@ fn out_of_core_text_seed_retains_pinned_generation_across_replacement_and_delete
 }
 
 #[test]
+fn active_out_of_core_text_seed_keeps_its_generation_during_publication() {
+    let root = OwnedRoot::new("active-publication");
+    let row = |id: &str, body: &str, space: &str| crate::SearchProjectionRow {
+        kind: crate::SearchProjectionKind::Memory,
+        external_id: id.into(),
+        title: id.into(),
+        body: body.into(),
+        embedding: None,
+        source_id: None,
+        metadata: BTreeMap::from([("space_id".into(), space.into())]),
+    };
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&root.0, Default::default()).unwrap();
+    writer
+        .push(row("a", "sharedterm", "old").into_document())
+        .unwrap();
+    writer
+        .push(row("b", "sharedterm", "old").into_document())
+        .unwrap();
+    writer.finish().unwrap();
+
+    let pinned = SearchOutOfCoreReader::open(&root.0).unwrap();
+    let budget = NonZeroUsize::new(64 * 1024 * 1024).unwrap();
+    let ledger = QueryMemoryLedger::new(budget);
+    let account = ledger.account(QueryMemoryClass::ExternalRead, "active text seed", budget);
+    let task = crate::RuntimeTaskContext::default();
+    let filters = BTreeMap::from([("space_id".into(), "old".into())]);
+    let (candidate_tx, candidate_rx) = std::sync::mpsc::channel();
+    let (published_tx, published_rx) = std::sync::mpsc::channel();
+    std::thread::scope(|scope| {
+        let query_reader = &pinned;
+        let query_account = &account;
+        let query_task = &task;
+        let query_filters = &filters;
+        let query = scope.spawn(move || {
+            let mut paused = false;
+            let output = query_reader.text_seed_scores_with_metadata_filters_and_observer(
+                "sharedterm",
+                query_filters,
+                2,
+                query_account,
+                query_task,
+                |_| {
+                    if !paused {
+                        paused = true;
+                        candidate_tx.send(()).unwrap();
+                        published_rx
+                            .recv_timeout(std::time::Duration::from_secs(30))
+                            .unwrap();
+                    }
+                    Ok(())
+                },
+            )?;
+            let ids = output.scores().keys().cloned().collect::<Vec<_>>();
+            assert_eq!(output.external_id("memory:a"), Some("a"));
+            assert_eq!(output.external_id("memory:b"), Some("b"));
+            Ok::<_, crate::HawDBError>(ids)
+        });
+        candidate_rx
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .unwrap();
+        SearchOutOfCoreGenerationWriter::prepare_delta(
+            &pinned,
+            crate::SearchProjectionDelta {
+                upserts: vec![row("a", "freshterm", "new")],
+                deletes: vec!["memory:b".into()],
+                ..Default::default()
+            },
+            Default::default(),
+        )
+        .unwrap()
+        .finish()
+        .unwrap();
+        let current = SearchOutOfCoreReader::open(&root.0).unwrap();
+        assert_ne!(pinned.generation(), current.generation());
+        published_tx.send(()).unwrap();
+        assert_eq!(query.join().unwrap().unwrap(), vec!["memory:a", "memory:b"]);
+        assert!(current
+            .text_seed_scores_with_metadata_filters("sharedterm", &filters, 2, &account, &task)
+            .unwrap()
+            .scores()
+            .is_empty());
+        assert_eq!(
+            current
+                .text_seed_scores_with_metadata_filters(
+                    "freshterm",
+                    &BTreeMap::from([("space_id".into(), "new".into())]),
+                    2,
+                    &account,
+                    &task,
+                )
+                .unwrap()
+                .scores()
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec!["memory:a"]
+        );
+    });
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
 fn out_of_core_text_seed_corpus_merge_peak_stays_within_the_shared_root() {
     use crate::lexical_projection::{
         AccountedCorpusStatistics, LexicalCorpusStatistics, QueryContext,

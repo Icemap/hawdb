@@ -2038,6 +2038,19 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
     database
         .query("CREATE (:Memory {id: 'team', space_id: 'team'})")
         .unwrap();
+    let parameters = BTreeMap::from([
+        ("text".into(), Value::String("graph".into())),
+        ("space_id".into(), Value::String("team".into())),
+    ]);
+    let query = "CALL text_search($text, topK := 1) YIELD id, score \
+                 MATCH (m:Memory) WHERE m.space_id = $space_id \
+                 RETURN m.id AS id, score";
+    let plan = database
+        .explain_query_with_params(query, &parameters)
+        .unwrap()
+        .to_string();
+    assert!(plan.contains("TextSeedScan"));
+    assert!(plan.contains("top_k=1"));
     let graph = NowledgeMemGraph::from_database_with_runtime_governor(
         database,
         NowledgeMemGraphMode::ShadowReadOnly,
@@ -2051,10 +2064,6 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
             Default::default(),
         ))
         .unwrap();
-    let parameters = BTreeMap::from([
-        ("text".into(), Value::String("graph".into())),
-        ("space_id".into(), Value::String("team".into())),
-    ]);
     handle
         .with_bounded_read_snapshot(
             NowledgeMemReadSnapshotBudget {
@@ -2062,18 +2071,23 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
                 max_payload_bytes: 4096,
             },
             |snapshot| {
-                let result = snapshot.query_cypher(
-                    "CALL text_search($text, topK := 1) YIELD id, score \
-                     MATCH (m:Memory) WHERE m.space_id = $space_id \
-                     RETURN m.id AS id, score",
-                    &parameters,
-                    1,
-                )?;
-                assert_eq!(result.rows.len(), 1);
+                let result = snapshot.query_cypher_profiled(query, &parameters, 1)?;
+                assert_eq!(result.output.rows.len(), 1);
                 assert_eq!(
-                    result.rows[0].get("id"),
+                    result.output.rows[0].get("id"),
                     Some(&Value::String("team".into()))
                 );
+                assert!(result
+                    .execution_profile
+                    .operator_cardinality_profiles
+                    .iter()
+                    .any(|profile| {
+                        profile.operator.as_str() == "TextSeedScan"
+                            && profile.actual_rows == Some(1)
+                    }));
+                let memory = &result.execution_profile.pipeline_memory_report;
+                assert!(memory.query_memory_peak_bytes > 0);
+                assert!(memory.query_memory_peak_bytes <= memory.query_memory_budget_bytes);
                 Ok(())
             },
         )

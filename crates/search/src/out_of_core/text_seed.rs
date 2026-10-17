@@ -194,6 +194,25 @@ impl SearchOutOfCoreReader {
         memory: &QueryMemoryAccount,
         task: &crate::RuntimeTaskContext,
     ) -> Result<SearchTextSeedOutput> {
+        self.text_seed_scores_with_metadata_filters_and_observer(
+            query_text,
+            metadata_filters,
+            max_candidates,
+            memory,
+            task,
+            |_| Ok(()),
+        )
+    }
+
+    pub(super) fn text_seed_scores_with_metadata_filters_and_observer(
+        &self,
+        query_text: &str,
+        metadata_filters: &BTreeMap<String, String>,
+        max_candidates: usize,
+        memory: &QueryMemoryAccount,
+        task: &crate::RuntimeTaskContext,
+        mut observe_candidate: impl FnMut(&str) -> Result<()>,
+    ) -> Result<SearchTextSeedOutput> {
         let filter_bytes = metadata_filters
             .iter()
             .try_fold(0usize, |total, (key, value)| {
@@ -211,6 +230,7 @@ impl SearchOutOfCoreReader {
         let mut metadata = AdmittedMetadataLookup::new(self, memory, task);
         let mut output =
             self.text_seed_scores_with_context(query_text, max_candidates, memory, task, |id| {
+                observe_candidate(id)?;
                 metadata.matches(id, &predicates)
             })?;
         let mut external_ids_memory = memory.reserve(0)?;
