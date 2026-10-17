@@ -5,6 +5,39 @@ Issue Number: ref #987, ref #976
 This records the bounded review fixes and remaining decisions. It does not
 constitute independent approval of the retained implementation.
 
+## Follow-up on 9bdea658
+
+The Linux native-binding job
+[117272297239](https://github.com/nowledge-co/hawdb/actions/runs/38990715330/job/117272297239)
+failed in `//bindings/ffi:hawdb_ffi_tests`: 16 passed and
+`descriptor_versions_sizes_flags_and_handles_refuse_with_empty_outputs` failed.
+Its short-output fixture was a `[u8; 24]`, which does not guarantee the
+descriptor's alignment. The new alignment guard correctly refused before
+writing, while the test expected its first 16 bytes to be zeroed. The fixture
+now uses three u64 words, keeping the short-buffer and misalignment contracts
+separate. The dedicated misalignment regression still requires no writes.
+No production alignment check or output-clearing rule is weakened.
+
+[#1050](https://github.com/nowledge-co/hawdb/pull/1050) must land first. After
+merging main forward, verify one SessionConfig definition and no independent
+session-policy delta against main. That integration has not happened yet.
+The requested retained-core, bindings, Arrow and node-view split remains open.
+
+The benchmark harness is reusable local developer qualification code, also
+called by the optional comparison workflow. `run.py`, `python_boundary.py`,
+`checksum.py` and the Rust/Go host-boundary drivers share typed fixtures and
+checksums; `compare.py` validates two immutable revisions. `retained_boundary.py`
+and the two write controls exercise explicit retained lifetimes and ordinary
+write controls outside that workflow. `native_alloc.rs` and `native_profile.rs`
+support separately instrumented developer producers; driver tests validate
+refusal, source identity and report completeness. These tools are documented
+for local invocation and their Bazel targets are manual, rather than production
+control planes or default CI workloads. Keeping a reproducible qualification
+path on main is useful, but does not make all historical observations or the
+whole harness an inseparable part of the retained-core delivery. Their scope
+must be assigned during the remaining split review; no blanket approval to
+land the current benchmark tree is claimed here.
+
 ## Review findings
 
 | Finding | Current disposition |

@@ -468,7 +468,9 @@ fn descriptor_versions_sizes_flags_and_handles_refuse_with_empty_outputs() {
         },
         HAWDB_RETAINED_INVALID_ARGUMENT
     );
-    let mut short = [0xa5u8; 24];
+    // Keep this short-buffer check aligned; misaligned outputs are rejected
+    // before any write and have a separate regression above.
+    let mut short = [0xa5a5_a5a5_a5a5_a5a5u64; 3];
     assert_eq!(
         unsafe {
             hawdb_retained_query(
@@ -481,8 +483,8 @@ fn descriptor_versions_sizes_flags_and_handles_refuse_with_empty_outputs() {
         },
         HAWDB_RETAINED_INVALID_ARGUMENT
     );
-    assert_eq!(&short[..16], &[0u8; 16]);
-    assert_eq!(&short[16..], &[0xa5u8; 8]);
+    assert_eq!(&short[..2], &[0u64; 2]);
+    assert_eq!(short[2], 0xa5a5_a5a5_a5a5_a5a5);
     let cursor = cursor(db, QUERY, r#"{"min":2}"#);
     assert_eq!(
         hawdb_retained_release(cursor.owner_namespace ^ 1, cursor.owner_id),
