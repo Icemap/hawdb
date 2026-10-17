@@ -98,6 +98,7 @@ STORAGE_MODELS = [
     "HawDBSearchPreparedPublication",
     "HawDBSearchSortQuantum",
     "HawDBSearchStageCleanup",
+    "HawDBSearchCleanupPublication",
     "HawDBSearchUnorderedMutations",
     "HawDBSourceSegmentPublication",
     "HawDBSparseRelationalActivation",

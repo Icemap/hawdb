@@ -353,3 +353,91 @@ fn damaged_selector_replacement_rechecks_exact_bytes_before_installation() {
         fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[cfg(feature = "vector-search")]
+#[test]
+fn stale_cleanup_preserves_the_current_vector_generation() {
+    let root = test_dir("stale_cleanup_current_vectors");
+    let stale = crate::SearchIndex::open(&root).unwrap();
+    stale.checkpoint().unwrap();
+    let mut writer = SearchOutOfCoreGenerationWriter::create(
+        &root,
+        SearchOutOfCoreGenerationBuildOptions {
+            embedding_manifest: Some(SearchEmbeddingManifest {
+                model: "test-model".into(),
+                version: Some("v1".into()),
+                dimension: 2,
+            }),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    writer.push(document(0)).unwrap();
+    let report = writer.finish().unwrap();
+    assert!(report.rabitq_artifact_bytes > 0);
+    let artifact = root.join(format!("search_rabitq.{}.hawdb", report.generation));
+    assert!(artifact.exists());
+    let cleanup = stale.retry_projection_cleanup(Default::default());
+    assert!(
+        artifact.exists(),
+        "stale cleanup removed current vector artifact: {cleanup:?}"
+    );
+    let reader = SearchOutOfCoreReader::open(&root).unwrap();
+    assert_eq!(reader.generation(), report.generation);
+    assert_eq!(reader.document_count(), 1);
+    drop(reader);
+    drop(stale);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn cleanup_defers_without_touching_artifacts_while_publication_owns_the_root() {
+    let root = test_dir("cleanup_publication_exclusion");
+    let index = crate::SearchIndex::open(&root).unwrap();
+    assert!(
+        !index.projection_cleanup_report().retry_required,
+        "open already owns publication authority"
+    );
+    index.checkpoint().unwrap();
+    let artifact = root.join("search_rabitq.777.hawdb");
+    fs::write(&artifact, b"unselected candidate artifact").unwrap();
+    let lease = crate::out_of_core::SearchProjectionPublishLease::acquire(&root).unwrap();
+    let cleanup = index.retry_projection_cleanup(Default::default());
+    assert!(artifact.exists());
+    assert_eq!(cleanup.scanned_entries, 0);
+    assert_eq!(cleanup.delete_attempts, 0);
+    assert!(cleanup.retry_required);
+    assert_eq!(
+        cleanup
+            .failure_kinds
+            .get("publication_exclusion_unavailable"),
+        Some(&1)
+    );
+    drop(lease);
+    let cleanup = index.retry_projection_cleanup(Default::default());
+    assert!(!artifact.exists());
+    assert!(!cleanup.retry_required);
+    drop(index);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(feature = "vector-search")]
+#[test]
+fn stale_cleanup_preserves_a_peers_standalone_resident_vectors() {
+    let root = test_dir("stale_cleanup_resident_vectors");
+    let stale = crate::SearchIndex::open(&root).unwrap();
+    stale.checkpoint().unwrap();
+    let mut peer = crate::SearchIndex::open(&root).unwrap();
+    peer.upsert(document(0)).unwrap();
+    peer.checkpoint().unwrap();
+    let artifact = root.join("search_rabitq.1.hawdb");
+    assert!(artifact.exists());
+    stale.retry_projection_cleanup(Default::default());
+    assert!(artifact.exists());
+    drop(peer);
+    let reopened = crate::SearchIndex::open(&root).unwrap();
+    assert!(reopened.rabitq_projection().is_some());
+    drop(reopened);
+    drop(stale);
+    fs::remove_dir_all(root).unwrap();
+}

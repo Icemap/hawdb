@@ -301,3 +301,27 @@ tla_check(
         "UpgradeWitness",
     ]
 ]
+
+[
+    tla_check(
+        name = "HawDBSearchCleanupPublication" + control + "_check",
+        module = "HawDBSearchCleanupPublication.tla",
+        config = "mutants/HawDBSearchCleanupPublication" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in [
+        "SkipExclusion",
+        "UseStaleHint",
+        "ForgetReferences",
+        "ReleaseEarly",
+        "StaleSafeCleanupWitness",
+        "DeferralWitness",
+        "OldCallerAndSweep",
+        "IgnoreUnknownClosure",
+        "TrustStaleResident",
+        "StandaloneWitness",
+    ]
+]

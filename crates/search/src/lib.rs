@@ -1524,7 +1524,7 @@ impl SearchIndex {
         } else {
             index.load_rabitq_projection()?;
         }
-        index.retry_projection_cleanup(SearchProjectionCleanupOptions::default());
+        index.retry_projection_cleanup_under_publication(SearchProjectionCleanupOptions::default());
         Ok(index)
     }
 
@@ -2483,29 +2483,79 @@ impl SearchIndex {
         let Some(path) = &self.path else {
             return self.projection_cleanup_report();
         };
+        if self.consumer_owned_mutation
+            && self.consumer_binding_valid
+            && self.consumer_binding.is_some()
+        {
+            return self.retry_projection_cleanup_under_publication(options);
+        }
+        let Ok(_publication) = out_of_core::SearchProjectionPublishLease::acquire_for_cleanup(path)
+        else {
+            return self
+                .cleanup_state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .defer_for_publication(options);
+        };
+        self.retry_projection_cleanup_under_publication(options)
+    }
+
+    // Caller retains the same root's publication authority through discovery
+    // and sweep. Checkpoint already owns that authority and must not reacquire.
+    fn retry_projection_cleanup_under_publication(
+        &self,
+        options: SearchProjectionCleanupOptions,
+    ) -> SearchProjectionCleanupReport {
+        let Some(path) = &self.path else {
+            return self.projection_cleanup_report();
+        };
         let (published, out_of_core_discovery_failed) =
             match out_of_core::published_artifact_generations(path, &self.analyzer_lexicon) {
                 Ok(generations) => (generations, false),
                 Err(_) => (None, true),
             };
+        #[cfg(feature = "vector-search")]
+        let resident_rabitq = self
+            .rabitq_projection()
+            .map(|projection| projection.manifest().identity.generation);
+        #[cfg(not(feature = "vector-search"))]
+        let resident_rabitq = None;
+        let resident_remove_all = self
+            .documents
+            .values()
+            .all(|document| document.embedding.is_none());
+        // A peer's published references override stale resident hints. Resident
+        // checkpoints also write standalone RaBitQ files, outside the manifest;
+        // an empty manifest reference set does not prove those files obsolete.
+        let lexical = published
+            .as_ref()
+            .and_then(|current| current.lexical_generations.last().copied())
+            .or_else(|| {
+                self.lexical_projection
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .as_ref()
+                    .map(|projection| projection.generation())
+            });
+        let published_rabitq = published
+            .as_ref()
+            .and_then(|current| current.rabitq_generations.last().copied());
+        // Standalone resident hints are usable only for the current published
+        // snapshot. A stale handle cannot authorize removal of a peer's files.
+        let resident_matches_published = published.is_none()
+            || out_of_core::validate_resident_snapshot_identity(self, path).is_ok();
+        let rabitq = published_rabitq.or_else(|| {
+            resident_matches_published
+                .then_some(resident_rabitq)
+                .flatten()
+        });
+        let rabitq_remove_all =
+            published_rabitq.is_none() && resident_matches_published && resident_remove_all;
         let generations = SearchProjectionGenerations {
-            lexical: self
-                .lexical_projection
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .as_ref()
-                .map(|projection| projection.generation()),
+            lexical,
             out_of_core: published.as_ref().map(|value| value.active_generation),
-            #[cfg(feature = "vector-search")]
-            rabitq: self
-                .rabitq_projection()
-                .map(|projection| projection.manifest().identity.generation),
-            #[cfg(not(feature = "vector-search"))]
-            rabitq: None,
-            rabitq_remove_all: self
-                .documents
-                .values()
-                .all(|document| document.embedding.is_none()),
+            rabitq,
+            rabitq_remove_all,
             out_of_core_discovery_failed,
             retained_lexical: published
                 .as_ref()
@@ -2568,7 +2618,9 @@ impl SearchIndex {
                 .durable_source_graph_commit_epoch
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()) = self.source_graph_commit_epoch;
-            self.retry_projection_cleanup(SearchProjectionCleanupOptions::default());
+            self.retry_projection_cleanup_under_publication(
+                SearchProjectionCleanupOptions::default(),
+            );
             if let Some(binding) = &self.consumer_binding {
                 *self
                     .consumer_receipt

@@ -599,3 +599,43 @@ See [the source-shape argument and finite model](../tla/SCOPED_GRAPH_READ_PROOF.
 This is neither a closed mapping contract nor complete C..E custody. Native
 source identity/schema continuity, reverse fanout, producer/vector contracts,
 stage completion, incremental final artifacts and activation remain required.
+
+
+## Consumer-bound activation and recovery prerequisites (not implemented)
+
+The current registered consumer is a resident SearchIndex lifecycle, not a
+standalone immutable-manifest writer. SearchIndex::open_under_lease loads the
+resident snapshot, checks its identity against the published immutable manifest,
+then validates registered lexical/descriptor and standalone vector artifacts.
+ConsumerProjection::read_receipt hashes the resident checkpoint; registry
+acknowledgement binds that completed receipt. Generic prepared publication does
+not update that resident snapshot or receipt. Its rejection of registered roots
+must remain: bypassing it would pair a new immutable E manifest with an old D
+resident checkpoint and fail reopening, rather than implement MVCC activation.
+
+A consumer-bound native session therefore needs a durable generation-backed
+read view and an atomic selector/receipt contract carrying binding/incarnation,
+source E, operation identity and its complete artifact closure. An immutable
+precomputed manifest must be selected through bounded metadata; decoding and
+rewriting the full active manifest under SourceOwner is not short activation.
+Serializing or rehydrating a complete resident E snapshot after E capture also
+fails the incremental post-E requirement. Complete source mapping and vectors
+remain separate authorities; a metadata selector is not their proof.
+
+ConsumerProjection's lifetime publication lease prevents external writers, but
+sharing that lease does not exclude its own apply/checkpoint/directory-publication
+operations once preparation escapes SourceOwner. Admission needs one exclusive
+operation custody path, with fast typed deferral for competing internal writes,
+maintenance and cleanup. A completed receipt must be distinguished from dirty
+or failed legacy checkpoints: checkpoint_uuid changes before fallible checkpoint
+I/O, while an earlier receipt may remain. Do not mint preparation authority from
+an arbitrary in-memory binding. Activation must revalidate source/binding/base
+under the fence and return heavy candidate/retired-reader custody on both success
+and rejection for disposal outside that fence. A consuming error path that drops
+full artifacts under SourceOwner does not satisfy this requirement.
+
+These are source-backed design requirements, not delivered activation APIs or a
+new finite-model completion claim. The [cleanup/publication proof](../tla/SEARCH_CLEANUP_PUBLICATION_PROOF.md)
+addresses a prerequisite race only. Native closed C-ready/E custody, incremental
+artifacts, consumer recovery/receipts, actual Mem adoption and all original gates
+remain required.

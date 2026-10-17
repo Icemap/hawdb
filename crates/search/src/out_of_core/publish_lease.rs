@@ -44,6 +44,14 @@ impl SearchProjectionPublishLease {
         Self::acquire_lock_with_context(root, &memory, &task)
     }
 
+    // Cleanup may inspect registered roots, but must share publication exclusion
+    // while discovering the current closure and deleting unreferenced files.
+    pub(crate) fn acquire_for_cleanup(root: &Path) -> Result<Self> {
+        let task = RuntimeTaskContext::default();
+        let memory = BuildMemory::new(&task)?;
+        Self::acquire_lock_with_context(root, &memory, &task)
+    }
+
     pub(crate) fn acquire_with_context(
         root: &Path,
         memory: &BuildMemory,

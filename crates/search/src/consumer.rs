@@ -391,6 +391,33 @@ mod tests {
         root
     }
     #[test]
+    fn cleanup_reuses_consumer_authority_only_inside_owned_mutation() {
+        let root = directory();
+        let mut owner = ConsumerProjection::initialize(&root, binding(), 0, |_| Ok(())).unwrap();
+        assert!(!owner.index().projection_cleanup_report().retry_required);
+        let artifact = root.join("search_rabitq.777.hawdb");
+        fs::write(&artifact, b"unreferenced artifact").unwrap();
+        let deferred = owner.index().retry_projection_cleanup(Default::default());
+        assert!(deferred.retry_required);
+        assert_eq!(deferred.delete_attempts, 0);
+        assert!(artifact.exists());
+        owner
+            .apply(|index| {
+                let cleaned = index.retry_projection_cleanup(Default::default());
+                assert!(!cleaned.retry_required);
+                assert!(!artifact.exists());
+                Ok(())
+            })
+            .unwrap();
+        assert!(owner.binding_is_valid());
+        drop(owner);
+        let owner = ConsumerProjection::open(&root).unwrap();
+        assert!(!owner.index().projection_cleanup_report().retry_required);
+        drop(owner);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn ordinary_mutation_and_infallible_setters_cannot_publish_an_owned_index() {
         let root = directory();
         let mut owner = ConsumerProjection::initialize(&root, binding(), 0, |_| Ok(())).unwrap();
