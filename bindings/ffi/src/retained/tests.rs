@@ -8,6 +8,76 @@ use std::collections::BTreeMap;
 const QUERY: &str = "MATCH (n:Item) WHERE n.score >= $min RETURN n.score AS score, id(n) AS identity, n.score AS again";
 
 #[test]
+fn misaligned_retained_inputs_and_outputs_refuse_before_typed_access() {
+    let db = fixture(DatabaseConfig::default());
+    let request = request(QUERY, r#"{"min":2}"#);
+    let storage = [0u64; 32];
+    let misaligned_request = unsafe {
+        storage
+            .as_ptr()
+            .cast::<u8>()
+            .add(1)
+            .cast::<HawdbRetainedQueryV1>()
+    };
+    for node in [false, true] {
+        let query = if node {
+            hawdb_retained_node_query
+        } else {
+            hawdb_retained_query
+        };
+        let mut out = HawdbRetainedCursorV1::default();
+        assert_eq!(
+            unsafe {
+                query(
+                    db,
+                    misaligned_request,
+                    size::<HawdbRetainedQueryV1>(),
+                    &mut out,
+                    size::<HawdbRetainedCursorV1>(),
+                )
+            },
+            HAWDB_RETAINED_INVALID_ARGUMENT
+        );
+        assert_eq!(out.owner_id, 0);
+        let misaligned_db = unsafe { db.cast::<u8>().add(1).cast::<HawdbDatabase>() };
+        assert_eq!(
+            unsafe {
+                query(
+                    misaligned_db,
+                    &request,
+                    size::<HawdbRetainedQueryV1>(),
+                    &mut out,
+                    size::<HawdbRetainedCursorV1>(),
+                )
+            },
+            HAWDB_RETAINED_INVALID_ARGUMENT
+        );
+        let mut output_storage = [u64::MAX; 16];
+        let misaligned_out = unsafe {
+            output_storage
+                .as_mut_ptr()
+                .cast::<u8>()
+                .add(1)
+                .cast::<HawdbRetainedCursorV1>()
+        };
+        assert_eq!(
+            unsafe {
+                query(
+                    db,
+                    &request,
+                    size::<HawdbRetainedQueryV1>(),
+                    misaligned_out,
+                    size::<HawdbRetainedCursorV1>(),
+                )
+            },
+            HAWDB_RETAINED_INVALID_ARGUMENT
+        );
+        assert_eq!(output_storage, [u64::MAX; 16]);
+    }
+    unsafe { super::super::hawdb_close(db) };
+}
+
+#[test]
 fn closed_cursor_refuses_pull_without_recording_a_terminal_failure() {
     let db = fixture(DatabaseConfig::default());
     let cursor = cursor(db, QUERY, r#"{"min":2}"#);
@@ -682,6 +752,11 @@ fn handles_are_shared_across_cursors_and_borrowing_needs_no_additional_owner() {
     assert_eq!(
         borrowed.flags,
         HAWDB_RETAINED_READ_ONLY | HAWDB_RETAINED_BORROWED
+    );
+    assert_eq!(borrowed.owner_id, 0);
+    assert_eq!(
+        hawdb_retained_release(borrowed.owner_namespace, borrowed.owner_id),
+        HAWDB_RETAINED_INVALID_HANDLE
     );
     assert_eq!(selected_scores(borrowed), vec![2]);
     assert_eq!(governor.retained_result_snapshot(), before);

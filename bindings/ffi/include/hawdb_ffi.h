@@ -452,7 +452,7 @@ uint32_t hawdb_retained_column(uint64_t owner_namespace,
  * # Safety
  * out must be aligned/writable for out_size bytes. The supplied batch must
  * remain live throughout every pointer read. A BORROWED descriptor must not be
- * released independently; its owner_id refers to the existing batch.
+ * released independently; its owner_id is zero, a non-owning sentinel.
  */
 uint32_t hawdb_retained_column_borrow(uint64_t owner_namespace,
                                       uint64_t owner_id,

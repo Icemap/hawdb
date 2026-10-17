@@ -410,13 +410,15 @@ impl Catalog {
     pub fn retained_label_name_capacity_bytes(&self, id: LabelId) -> crate::Result<Option<usize>> {
         self.labels
             .get(id.0 as usize)
-            .map(|label| {
-                std::mem::size_of::<Label>()
-                    .checked_add(2 * std::mem::size_of::<usize>())
-                    .and_then(|bytes| bytes.checked_add(label.name.capacity()))
-                    .ok_or_else(|| crate::HawDBError::Execution("label capacity overflow".into()))
-            })
+            .map(|label| Self::label_name_capacity_bytes(label))
             .transpose()
+    }
+
+    fn label_name_capacity_bytes(label: &Label) -> crate::Result<usize> {
+        std::mem::size_of::<Label>()
+            .checked_add(2 * std::mem::size_of::<usize>())
+            .and_then(|bytes| bytes.checked_add(label.name.capacity()))
+            .ok_or_else(|| crate::HawDBError::Execution("label capacity overflow".into()))
     }
 
     /// Reserve a label's complete name capacity before retaining its immutable
@@ -434,9 +436,7 @@ impl Catalog {
         let Some(label) = self.labels.get(id.0 as usize) else {
             return Ok(None);
         };
-        let bytes = self
-            .retained_label_name_capacity_bytes(id)?
-            .expect("borrowed label exists");
+        let bytes = Self::label_name_capacity_bytes(label)?;
         let allocation = allocate(bytes)?;
         if allocation.bytes() < bytes {
             return Err(crate::HawDBError::Execution(
@@ -1084,6 +1084,10 @@ impl Catalog {
                 name: String::new(),
             }));
         }
+        let previous = self.labels[index].name.as_str();
+        if self.labels_by_name.get(previous).copied() == Some(id) {
+            self.labels_by_name.remove(previous);
+        }
         self.labels_by_name.remove(name.as_str());
         let label = Arc::new(Label { id, name });
         self.labels_by_name
@@ -1135,16 +1139,11 @@ mod tests {
     #[test]
     fn retained_label_name_preserves_source_and_snapshot_without_catalog_pin() {
         let mut catalog = Catalog::default();
-        let id = catalog.get_or_create_label("original");
+        let id = LabelId(0);
+        let mut name = String::with_capacity(16 * 1024);
+        name.push_str("original");
+        catalog.import_label(id, name);
         let other = catalog.get_or_create_label("unrelated");
-        catalog.labels_by_name.remove("original");
-        Arc::get_mut(&mut catalog.labels[id.0 as usize])
-            .unwrap()
-            .name
-            .reserve(16 * 1024);
-        catalog
-            .labels_by_name
-            .insert(LabelNameKey(Arc::clone(&catalog.labels[id.0 as usize])), id);
         let capacity = catalog.labels[id.0 as usize].name.capacity();
         let snapshot = catalog.clone();
         assert_eq!(
@@ -1178,6 +1177,13 @@ mod tests {
             .unwrap();
         catalog.import_label(id, "replacement".into());
         assert_eq!(catalog.label_name(id), Some("replacement"));
+        assert_eq!(catalog.label_id("original"), None);
+        assert_eq!(catalog.label_id("replacement"), Some(id));
+        assert_eq!(
+            original.strong_count(),
+            1,
+            "only the retained name survives"
+        );
         drop(catalog);
         assert_eq!(unrelated.strong_count(), 0);
         assert_eq!(source.id(), id);
@@ -1185,6 +1191,25 @@ mod tests {
         assert_eq!(source.name().as_ptr() as usize, address);
         drop(source);
         assert_eq!(original.strong_count(), 0);
+    }
+
+    #[test]
+    fn import_label_removes_only_its_own_previous_name_mapping() {
+        let mut catalog = Catalog::default();
+        let original = catalog.get_or_create_label("original");
+        let snapshot = catalog.clone();
+        catalog.import_label(original, "replacement".into());
+        assert_eq!(catalog.label_id("original"), None);
+        assert_eq!(snapshot.label_id("original"), Some(original));
+        assert_eq!(snapshot.label_id("replacement"), None);
+        let renamed = catalog.get_or_create_label("original");
+        assert_ne!(renamed, original);
+        catalog.import_label(original, "original".into());
+        assert_eq!(catalog.label_id("original"), Some(original));
+        catalog.import_label(renamed, "third".into());
+        assert_eq!(catalog.label_id("original"), Some(original));
+        assert_eq!(catalog.label_id("replacement"), None);
+        assert_eq!(catalog.label_id("third"), Some(renamed));
     }
 
     #[test]

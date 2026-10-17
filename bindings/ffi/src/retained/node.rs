@@ -216,7 +216,9 @@ pub unsafe extern "C" fn hawdb_retained_node_query(
     unsafe {
         output(out, out_size, || {
             if db.is_null()
+                || !db.is_aligned()
                 || request.is_null()
+                || !request.is_aligned()
                 || (request_size as usize) < std::mem::size_of::<HawdbRetainedQueryV1>()
             {
                 return Err(HAWDB_RETAINED_INVALID_ARGUMENT);

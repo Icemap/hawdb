@@ -316,7 +316,7 @@ unsafe fn output<T: Default>(
     operation: impl FnOnce() -> Result<T>,
 ) -> u32 {
     caught(|| {
-        if out.is_null() {
+        if out.is_null() || !out.is_aligned() {
             return Err(HAWDB_RETAINED_INVALID_ARGUMENT);
         }
         let written = (out_size as usize).min(std::mem::size_of::<T>());
@@ -463,7 +463,9 @@ pub unsafe extern "C" fn hawdb_retained_query(
     unsafe {
         output(out, out_size, || {
             if db.is_null()
+                || !db.is_aligned()
                 || request.is_null()
+                || !request.is_aligned()
                 || (request_size as usize) < std::mem::size_of::<HawdbRetainedQueryV1>()
             {
                 return Err(HAWDB_RETAINED_INVALID_ARGUMENT);
@@ -684,7 +686,7 @@ pub unsafe extern "C" fn hawdb_retained_column(
 /// # Safety
 /// out must be aligned/writable for out_size bytes. The supplied batch must
 /// remain live throughout every pointer read. A BORROWED descriptor must not be
-/// released independently; its owner_id refers to the existing batch.
+/// released independently; its owner_id is zero, a non-owning sentinel.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn hawdb_retained_column_borrow(
     owner_namespace: u64,
@@ -700,7 +702,7 @@ pub unsafe extern "C" fn hawdb_retained_column_borrow(
                 return Err(HAWDB_RETAINED_INVALID_HANDLE);
             };
             let index = usize::try_from(column).map_err(|_| HAWDB_RETAINED_INVALID_COLUMN)?;
-            let mut descriptor = column_descriptor(batch, index, owner_id)?;
+            let mut descriptor = column_descriptor(batch, index, 0)?;
             descriptor.flags |= HAWDB_RETAINED_BORROWED;
             Ok(descriptor)
         })

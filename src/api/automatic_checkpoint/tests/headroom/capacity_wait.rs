@@ -2,12 +2,28 @@ use super::*;
 
 #[test]
 fn critical_preparation_wait_returns_busy_without_resetting_its_deadline() {
+    assert_critical_wait_returns_busy(Phase::Preparing);
+}
+
+#[test]
+fn critical_release_wait_returns_busy_without_resetting_its_deadline() {
+    assert_critical_wait_returns_busy(Phase::Releasing);
+}
+
+fn capacity_boundary(limit: u64) -> u64 {
+    let defer = (u128::from(limit)
+        * u128::from(hawdb_storage::pressure::STORAGE_PRESSURE_DEFER_RATIO_PER_MILLION)
+        / 1_000_000) as u64;
+    defer.saturating_sub(limit / 10)
+}
+
+fn assert_critical_wait_returns_busy(phase: Phase) {
     let fixture = Fixture::new();
     let (db, _suspension, _) = seeded(&fixture);
     let control = Arc::new(Control::default());
     {
         let mut state = control.lock().unwrap();
-        state.phase = Phase::Preparing;
+        state.phase = phase;
         let mut debt = db
             .runtime
             .peek()
@@ -15,7 +31,7 @@ fn critical_preparation_wait_returns_busy_without_resetting_its_deadline() {
             .store
             .checkpoint_debt_snapshot()
             .unwrap();
-        debt.delta_bytes = debt.max_delta_bytes.unwrap() * 85 / 100;
+        debt.delta_bytes = capacity_boundary(debt.max_delta_bytes.unwrap());
         state.debt = Some(debt);
         assert!(preparation_needs_capacity(&state));
     }
@@ -38,8 +54,11 @@ fn critical_preparation_wait_returns_busy_without_resetting_its_deadline() {
     notifier.join().unwrap();
     assert!(elapsed >= PREPARATION_CAPACITY_WAIT_LIMIT);
     assert!(elapsed < PREPARATION_CAPACITY_WAIT_LIMIT * 2);
-    assert_eq!(control.lock().unwrap().phase, Phase::Preparing);
+    assert_eq!(control.lock().unwrap().phase, phase);
     control.ensure_healthy().unwrap();
+    control.lock().unwrap().phase = Phase::Idle;
+    control.notify_all();
+    assert_eq!(control.lock_frontend().unwrap().phase, Phase::Idle);
 }
 
 #[test]
@@ -134,14 +153,18 @@ fn releasing_control(delta_bytes: u64) -> Arc<Control> {
 
 #[test]
 fn releasing_old_owners_preserves_available_write_capacity() {
-    let control = releasing_control(16 * 1024 * 70 / 100);
+    let boundary = capacity_boundary(16 * 1024);
+    assert!(boundary > 0);
+    let control = releasing_control(boundary - 1);
+    assert!(!preparation_needs_capacity(&control.lock().unwrap()));
     let state = control.lock_frontend().unwrap();
     assert_eq!(state.phase, Phase::Releasing);
 }
 
 #[test]
 fn releasing_old_owners_fences_capacity_growth_until_cleanup_finishes() {
-    let control = releasing_control(16 * 1024 * 85 / 100);
+    let control = releasing_control(capacity_boundary(16 * 1024));
+    assert!(preparation_needs_capacity(&control.lock().unwrap()));
     let (waiting, observed) = mpsc::channel();
     control.lock().unwrap().frontend_wait_probe = Some(waiting);
     let (finished, completion) = mpsc::channel();
