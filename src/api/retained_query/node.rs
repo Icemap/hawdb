@@ -129,10 +129,7 @@ impl RetainedNodeView {
     /// shared with the original row; the caller owns any extra allocation.
     pub fn try_retain_with_metadata(&self, adapter_bytes: usize) -> Result<Self> {
         self.source.node.node()?;
-        let metadata = std::mem::size_of::<Self>()
-            .checked_add(self.source.adapter_metadata_bytes)
-            .and_then(|bytes| bytes.checked_add(adapter_bytes))
-            .ok_or(RetainedQueryError::SizeOverflow)?;
+        let metadata = self.view_metadata_bytes(adapter_bytes)?;
         let runtime = self.runtime.try_retain(metadata as u64)?;
         let memory = self
             .source
@@ -143,6 +140,14 @@ impl RetainedNodeView {
             _view_memory: Some(memory),
             runtime,
         })
+    }
+
+    fn view_metadata_bytes(&self, adapter_bytes: usize) -> Result<usize> {
+        let metadata = std::mem::size_of::<Self>()
+            .checked_add(self.source.adapter_metadata_bytes)
+            .and_then(|bytes| bytes.checked_add(adapter_bytes))
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        Ok(metadata)
     }
 }
 
@@ -199,6 +204,7 @@ pub struct RetainedNodeCursor {
     profile: RetainedQueryProfile,
     terminal_error: Option<RetainedQueryError>,
     payload_bytes: usize,
+    governor: RuntimeGovernor,
     // Foreign cursor wrappers may outlive observation/source completion.
     _adapter_control: Option<(QueryMemoryLease, RuntimeRetainedMemory)>,
 }
@@ -286,7 +292,7 @@ impl RetainedNodeCursor {
             completion.complete();
             return Ok(None);
         }
-        let result = self.view.as_ref().expect("source checked").try_retain();
+        let result = self.retain_first_delivery();
         match result {
             Ok(view) => {
                 self.delivered = true;
@@ -306,11 +312,37 @@ impl RetainedNodeCursor {
         }
     }
 
+    fn retain_first_delivery(&self) -> Result<RetainedNodeView> {
+        let view = self.view.as_ref().expect("source checked");
+        let delivery_bytes = u64::try_from(view.view_metadata_bytes(0)?)
+            .ok()
+            .and_then(|bytes| bytes.checked_add(RuntimeRetainedResult::handle_overhead_bytes()))
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        // The cursor must keep its original node owner until delivery/EOF.
+        // Releasing unrelated views can help only when this irreducible owner
+        // plus the first delivered handle fits the complete result ceiling.
+        let required = view
+            .runtime
+            .capacity_bytes()
+            .checked_add(RuntimeRetainedResult::owner_overhead_bytes())
+            .and_then(|bytes| bytes.checked_add(view.runtime.handle_bytes()))
+            .and_then(|bytes| bytes.checked_add(delivery_bytes))
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        if required > self.governor.retained_result_snapshot().budget_bytes {
+            return Err(RetainedQueryError::WorkingUnitTooLarge);
+        }
+        view.try_retain()
+    }
+
     fn fail(&mut self, error: RetainedQueryError) -> RetainedQueryError {
         self.status = RetainedQueryStatus::Failed;
         self.terminal_error = Some(error.clone());
         if let Some(view) = self.view.take() {
             view.source.status.store(2, Ordering::Release);
+        }
+        if !self.delivered {
+            self.profile.source_pinned_rows = 0;
+            self.profile.source_pinned_capacity_bytes = 0;
         }
         self.health.take();
         if let Some(observation) = self.observation.take() {
@@ -780,6 +812,7 @@ impl RetainedNodeCursor {
             profile,
             terminal_error: None,
             payload_bytes,
+            governor: governor.clone(),
             _adapter_control: adapter_control,
         })
     }
@@ -972,6 +1005,144 @@ mod tests {
 
     fn params() -> BTreeMap<String, Value> {
         BTreeMap::from([("key".into(), Value::Int(37))])
+    }
+
+    fn first_node_delivery_charges() -> (u64, u64) {
+        let (db, governor) = fixture(8);
+        let mut probe = db
+            .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap();
+        let owner_bytes = governor.retained_result_snapshot().retained_bytes;
+        let view = probe.next_node().unwrap().unwrap();
+        let delivery_bytes = governor.retained_result_snapshot().retained_bytes - owner_bytes;
+        assert!(owner_bytes > delivery_bytes && delivery_bytes > 0);
+        drop((probe, view, db));
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        (owner_bytes, delivery_bytes)
+    }
+
+    #[test]
+    fn first_node_view_needs_room_beyond_the_cursors_irreducible_owner() {
+        let (owner_bytes, delivery_bytes) = first_node_delivery_charges();
+
+        for fits in [false, true] {
+            let (mut db, _) = fixture(8);
+            let governor = RuntimeGovernor::new(
+                RuntimeGovernorConfig {
+                    memory_budget_bytes: Some(64 * 1024 * 1024),
+                    result_budget_bytes: owner_bytes + delivery_bytes - u64::from(!fits),
+                    retained_result_handle_limit: NonZeroUsize::new(8).unwrap(),
+                    ..RuntimeGovernorConfig::shared_host()
+                },
+                RuntimeResourceSnapshot::from_parts(
+                    crate::RuntimeResourceBudget::from_limits(
+                        NonZeroUsize::new(4).unwrap(),
+                        None,
+                        None,
+                    ),
+                    crate::RuntimeMemorySnapshot::from_limits(
+                        Some(1 << 30),
+                        Some(1 << 30),
+                        None,
+                        None,
+                        None,
+                    ),
+                ),
+                IoConcurrencyBudget::new(2, 1),
+            );
+            db.set_runtime_governor(governor.clone());
+            let mut cursor = db
+                .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+                .unwrap();
+            assert_eq!(
+                governor.retained_result_snapshot().retained_bytes,
+                owner_bytes
+            );
+            assert_eq!(cursor.profile().visited_rows, 0);
+            if fits {
+                let first = cursor.next_node().unwrap().unwrap();
+                assert!(first.try_retain().unwrap_err().is_retryable());
+                cursor.close();
+                let retained = first.try_retain().unwrap();
+                assert!(matches!(
+                    retained.field("score").unwrap(),
+                    Some(RetainedNodeField::Value(Value::Int(37)))
+                ));
+                drop((first, retained));
+            } else {
+                let error = cursor.next_node().unwrap_err();
+                assert_eq!(error, RetainedQueryError::WorkingUnitTooLarge);
+                assert!(!error.is_retryable());
+                for _ in 0..2 {
+                    assert_eq!(cursor.next_node().unwrap_err(), error);
+                }
+                assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
+                assert_eq!(cursor.profile().visited_rows, 0);
+                assert_eq!(cursor.profile().emitted_rows, 0);
+                assert_eq!(cursor.profile().source_pinned_rows, 0);
+                assert_eq!(cursor.profile().source_pinned_capacity_bytes, 0);
+                assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+                assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+            }
+            drop(cursor);
+            assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+            assert_eq!(governor.retained_result_snapshot().view_handles, 0);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+    }
+
+    #[test]
+    fn first_node_view_recovers_when_another_cursor_releases_its_owner() {
+        let (owner_bytes, delivery_bytes) = first_node_delivery_charges();
+        let (mut db, _) = fixture(8);
+        let governor = RuntimeGovernor::new(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(64 * 1024 * 1024),
+                result_budget_bytes: 2 * owner_bytes + delivery_bytes - 1,
+                retained_result_handle_limit: NonZeroUsize::new(8).unwrap(),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            RuntimeResourceSnapshot::from_parts(
+                crate::RuntimeResourceBudget::from_limits(
+                    NonZeroUsize::new(4).unwrap(),
+                    None,
+                    None,
+                ),
+                crate::RuntimeMemorySnapshot::from_limits(
+                    Some(1 << 30),
+                    Some(1 << 30),
+                    None,
+                    None,
+                    None,
+                ),
+            ),
+            IoConcurrencyBudget::new(2, 1),
+        );
+        db.set_runtime_governor(governor.clone());
+        let mut first = db
+            .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap();
+        let mut other = db
+            .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap();
+        assert_eq!(
+            governor.retained_result_snapshot().retained_bytes,
+            2 * owner_bytes
+        );
+        assert!(first.next_node().unwrap_err().is_retryable());
+        assert_eq!(first.status(), RetainedQueryStatus::Open);
+        assert_eq!(first.profile().visited_rows, 0);
+        assert_eq!(first.profile().source_pinned_rows, 1);
+        other.close();
+        let view = first.next_node().unwrap().unwrap();
+        assert!(matches!(
+            view.field("score").unwrap(),
+            Some(RetainedNodeField::Value(Value::Int(37)))
+        ));
+        assert!(first.next_node().unwrap().is_none());
+        drop((first, other, view));
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 
     #[test]

@@ -836,6 +836,30 @@ impl RetainedQueryCursor {
     }
     fn admitted_rows(&self, adapter_metadata_bytes: usize) -> Result<NonZeroUsize> {
         let snapshot = self.governor.retained_result_snapshot();
+        let runtime = self.governor.snapshot();
+        // These query leases have matching runtime reservations. Neither can
+        // be released while this open cursor still needs to inspect its source.
+        let irreducible = self
+            .shared
+            ._memory
+            .bytes()
+            .checked_add(
+                self.source
+                    .as_ref()
+                    .map_or(0, |source| source._memory.bytes()),
+            )
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        let irreducible_runtime =
+            u64::try_from(irreducible).map_err(|_| RetainedQueryError::SizeOverflow)?;
+        let runtime_capacity = self.governor.process_memory_policy_snapshot().map_or(
+            runtime.limits.memory_capacity_bytes,
+            |policy| {
+                runtime
+                    .limits
+                    .memory_capacity_bytes
+                    .min(policy.resident_limit_bytes)
+            },
+        );
         let available = self
             .options
             .batch_bytes
@@ -846,6 +870,18 @@ impl RetainedQueryCursor {
                     snapshot
                         .budget_bytes
                         .saturating_sub(snapshot.retained_bytes),
+                )
+                .unwrap_or(usize::MAX),
+            )
+            .min(
+                // Construction's work permit overlaps the new retained owner
+                // until handoff. Shared work and held views remain temporary.
+                usize::try_from(
+                    runtime
+                        .limits
+                        .memory_budget_bytes
+                        .saturating_sub(runtime.admitted_memory_bytes)
+                        / 2,
                 )
                 .unwrap_or(usize::MAX),
             );
@@ -869,16 +905,21 @@ impl RetainedQueryCursor {
                 self.ledger
                     .snapshot()
                     .budget_bytes
-                    .saturating_sub(self.shared._memory.bytes()),
+                    .saturating_sub(irreducible),
             )
             .min(
                 usize::try_from(snapshot.budget_bytes)
                     .unwrap_or(usize::MAX)
                     .saturating_sub(self.shared._memory.bytes()),
+            )
+            .min(
+                usize::try_from(runtime_capacity.saturating_sub(irreducible_runtime) / 2)
+                    .unwrap_or(usize::MAX),
             );
         if required_one > complete_allowance {
             return Err(RetainedQueryError::WorkingUnitTooLarge);
         }
+        let available = available.min(complete_allowance);
         let mut lower = 0;
         let mut upper = self.options.batch_rows.get().min(u32::MAX as usize);
         while lower < upper {
