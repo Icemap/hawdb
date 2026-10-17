@@ -336,7 +336,7 @@ fn database_config_defaults_to_unlimited_rows_and_bounded_payload() {
 
     assert_eq!(
         config.max_read_result_rows,
-        Some(crate::DEFAULT_MAX_READ_RESULT_ROWS)
+        crate::DEFAULT_MAX_READ_RESULT_ROWS
     );
     assert_eq!(
         config.max_read_result_payload_bytes,

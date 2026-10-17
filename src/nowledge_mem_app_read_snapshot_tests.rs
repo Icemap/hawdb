@@ -176,6 +176,330 @@ fn bounded_read_snapshot_coordinates_search_graph_and_relational_queries() {
 }
 
 #[test]
+fn bounded_read_snapshot_uses_its_pinned_projection_for_text_seeds() {
+    let handle = app_read_handle();
+    handle
+        .with_bounded_read_snapshot(
+            NowledgeMemReadSnapshotBudget {
+                max_rows: 4,
+                max_payload_bytes: 4096,
+            },
+            |snapshot| {
+                let text = snapshot.query_cypher(
+                    "CALL text_search($text, topK := 2) YIELD id, score \
+                     RETURN id, score ORDER BY id",
+                    &BTreeMap::from([("text".to_string(), Value::String("candidate".to_string()))]),
+                    2,
+                )?;
+                assert_eq!(text.rows.len(), 2);
+                assert!(text.rows.iter().all(
+                    |row| matches!(row.get("score"), Some(Value::Float(score)) if *score > 0.0)
+                ));
+
+                let graph = snapshot.query_cypher(
+                    "MATCH (m:Memory) WHERE m.id = $id RETURN m.title AS title LIMIT 1",
+                    &BTreeMap::from([("id".to_string(), Value::String("nearest".to_string()))]),
+                    1,
+                )?;
+                let relational = snapshot.query_sql(
+                    "SELECT content FROM thread_messages WHERE content_message_id = $1 LIMIT 1",
+                    &[Value::String("message-1".to_string())],
+                    1,
+                )?;
+                assert_eq!(graph.rows.len(), 1);
+                assert_eq!(relational.rows.len(), 1);
+                assert_eq!(snapshot.report().output_rows, 4);
+                Ok(())
+            },
+        )
+        .unwrap();
+}
+
+#[test]
+fn resident_and_out_of_core_text_seeds_return_the_same_document_identities() {
+    let root = SnapshotTestRoot::new();
+    let search_path = root.0.join("search");
+    let mut writer =
+        crate::SearchOutOfCoreGenerationWriter::create(&search_path, Default::default()).unwrap();
+    let mut resident = SearchIndex::in_memory();
+    for external_id in ["first", "second"] {
+        let row = SearchProjectionRow {
+            kind: SearchProjectionKind::Memory,
+            external_id: external_id.into(),
+            title: "shared text".into(),
+            body: "same document".into(),
+            embedding: None,
+            source_id: None,
+            metadata: BTreeMap::new(),
+        };
+        resident.upsert_projection_row(row.clone()).unwrap();
+        writer.push(row.into_document()).unwrap();
+    }
+    writer.finish().unwrap();
+
+    let graph = || {
+        let mut database = Database::new_with_config(DatabaseConfig {
+            max_read_result_rows: Some(16),
+            max_read_result_payload_bytes: Some(16 * 1024),
+            ..Default::default()
+        });
+        database.query("CREATE (:Memory {id: 'first'})").unwrap();
+        database.query("CREATE (:Memory {id: 'second'})").unwrap();
+        NowledgeMemGraph::from_database_with_runtime_governor(
+            database,
+            NowledgeMemGraphMode::ShadowReadOnly,
+            snapshot_governor(),
+        )
+    };
+    let resident_handle = NowledgeMemEmbeddedStoreHandle::new(NowledgeMemEmbeddedStore::new(
+        graph(),
+        Some(NowledgeMemSearchProjection::from_index(resident)),
+    ))
+    .unwrap();
+    let out_of_core_handle =
+        NowledgeMemEmbeddedStoreHandle::new(NowledgeMemEmbeddedStore::new_with_out_of_core_search(
+            graph(),
+            super::NowledgeMemOutOfCoreSearchProjection::open(&search_path).unwrap(),
+            Default::default(),
+        ))
+        .unwrap();
+    let query = |handle: &NowledgeMemEmbeddedStoreHandle| {
+        handle
+            .with_bounded_read_snapshot(
+                NowledgeMemReadSnapshotBudget {
+                    max_rows: 2,
+                    max_payload_bytes: 4096,
+                },
+                |snapshot| {
+                    snapshot
+                        .query_cypher(
+                            "CALL text_search($text, topK := 2) YIELD id, score \
+                             MATCH (m:Memory) RETURN id, m.id AS external_id ORDER BY id",
+                            &BTreeMap::from([("text".into(), Value::String("shared".into()))]),
+                            2,
+                        )
+                        .map(|result| result.rows)
+                },
+            )
+            .unwrap()
+    };
+    let resident_rows = query(&resident_handle);
+    assert_eq!(resident_rows.len(), 2);
+    assert_eq!(
+        resident_rows[0]["external_id"],
+        Value::String("first".into())
+    );
+    assert_eq!(
+        resident_rows[1]["external_id"],
+        Value::String("second".into())
+    );
+    assert_eq!(query(&out_of_core_handle), resident_rows);
+}
+
+#[test]
+fn bounded_text_seed_snapshot_retains_its_projection_during_a_writer_update() {
+    let handle = app_read_handle();
+    let writer_handle = handle.clone();
+    let (start_tx, start_rx) = std::sync::mpsc::channel();
+    let (attempt_tx, attempt_rx) = std::sync::mpsc::channel();
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    let writer = std::thread::spawn(move || {
+        if start_rx.recv().is_err() {
+            return;
+        }
+        let blocked = matches!(
+            writer_handle.inner.try_write(),
+            Err(std::sync::TryLockError::WouldBlock)
+        );
+        attempt_tx.send(blocked).unwrap();
+        let result = (|| {
+            let mut store = writer_handle.write_store()?;
+            store
+                .graph_mut()
+                .database_mut()
+                .query("MATCH (m:Memory {id: 'nearest'}) SET m.title = 'Updated memory'")?;
+            store.graph_mut().database_mut().query_sql(
+                "UPDATE thread_messages SET content = 'Updated payload' \
+                 WHERE content_message_id = 'message-1'",
+            )?;
+            store
+                .search_projection_mut()
+                .unwrap()
+                .index_mut()
+                .upsert_projection_row(SearchProjectionRow {
+                    kind: SearchProjectionKind::Memory,
+                    external_id: "nearest".into(),
+                    title: "Updated memory".into(),
+                    body: "Updated search candidate".into(),
+                    embedding: Some(vec![1.0, 0.0]),
+                    source_id: None,
+                    metadata: BTreeMap::from([("space_id".into(), "default".into())]),
+                })?;
+            crate::Result::Ok(())
+        })();
+        done_tx.send(result).unwrap();
+    });
+    let read = |snapshot: &mut super::NowledgeMemReadSnapshot<'_>| -> crate::Result<_> {
+        let text = snapshot.query_cypher(
+            "CALL text_search($text, topK := 2) YIELD id, score RETURN id ORDER BY id",
+            &BTreeMap::from([("text".into(), Value::String("candidate".into()))]),
+            2,
+        )?;
+        let graph = snapshot.query_cypher(
+            "MATCH (m:Memory {id: 'nearest'}) RETURN m.title AS title LIMIT 1",
+            &BTreeMap::new(),
+            1,
+        )?;
+        let sql = snapshot.query_sql(
+            "SELECT content FROM thread_messages WHERE content_message_id = 'message-1' LIMIT 1",
+            &[],
+            1,
+        )?;
+        Ok((text, graph, sql))
+    };
+    let result = handle.with_bounded_read_snapshot(
+        NowledgeMemReadSnapshotBudget {
+            max_rows: 8,
+            max_payload_bytes: 4096,
+        },
+        |snapshot| {
+            let before = read(snapshot)?;
+            let epoch = snapshot.commit_epoch();
+            start_tx.send(()).unwrap();
+            assert!(attempt_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap());
+            assert_eq!(read(snapshot)?, before);
+            assert_eq!(snapshot.commit_epoch(), epoch);
+            Ok(epoch)
+        },
+    );
+    drop(start_tx);
+    done_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap()
+        .unwrap();
+    writer.join().unwrap();
+    let epoch = result.unwrap();
+    handle
+        .with_bounded_read_snapshot(
+            NowledgeMemReadSnapshotBudget {
+                max_rows: 3,
+                max_payload_bytes: 4096,
+            },
+            |snapshot| {
+                let text = snapshot.query_cypher(
+                    "CALL text_search($text, topK := 1) YIELD id RETURN id",
+                    &BTreeMap::from([("text".into(), Value::String("updated".into()))]),
+                    1,
+                )?;
+                let graph = snapshot.query_cypher(
+                    "MATCH (m:Memory {id: 'nearest'}) RETURN m.title AS title LIMIT 1",
+                    &BTreeMap::new(),
+                    1,
+                )?;
+                let sql = snapshot.query_sql(
+                    "SELECT content FROM thread_messages WHERE content_message_id = 'message-1' LIMIT 1",
+                    &[],
+                    1,
+                )?;
+                assert_eq!(text.rows.len(), 1);
+                assert_eq!(graph.rows[0]["title"], Value::String("Updated memory".into()));
+                assert_eq!(sql.rows[0]["content"], Value::String("Updated payload".into()));
+                assert!(snapshot.commit_epoch() > epoch);
+                Ok(())
+            },
+        )
+        .unwrap();
+}
+
+#[test]
+fn bounded_read_snapshot_filters_text_seeds_before_top_k() {
+    let handle = app_read_handle();
+    handle
+        .write_store()
+        .unwrap()
+        .graph_mut()
+        .database_mut()
+        .query("CREATE (:Memory {id: 'farther', space_id: 'other', title: 'Farther memory'})")
+        .unwrap();
+    let unfiltered = handle
+        .search_candidates(&super::NowledgeMemSearchCandidateRequest::text(
+            "candidate",
+            1,
+        ))
+        .unwrap();
+    let excluded_space = if unfiltered.hits[0].external_id.as_deref() == Some("nearest") {
+        "other"
+    } else {
+        "default"
+    };
+    let expected = handle
+        .search_candidates(
+            &super::NowledgeMemSearchCandidateRequest::text("candidate", 1).with_metadata_filters(
+                BTreeMap::from([("space_id".into(), excluded_space.into())]),
+            ),
+        )
+        .unwrap();
+    assert_eq!(expected.hits.len(), 1);
+    assert_ne!(expected.hits[0].id, unfiltered.hits[0].id);
+    let parameters = BTreeMap::from([
+        ("text".into(), Value::String("candidate".into())),
+        ("space_id".into(), Value::String(excluded_space.into())),
+    ]);
+    handle
+        .with_bounded_read_snapshot(
+            NowledgeMemReadSnapshotBudget {
+                max_rows: 1,
+                max_payload_bytes: 4096,
+            },
+            |snapshot| {
+                let result = snapshot.query_cypher(
+                    "CALL text_search($text, topK := 1) YIELD id, score \
+                     MATCH (m:Memory) WHERE m.space_id = $space_id \
+                     RETURN m.id AS id, score",
+                    &parameters,
+                    1,
+                )?;
+                assert_eq!(result.rows.len(), 1);
+                assert_eq!(
+                    result.rows[0].get("id"),
+                    Some(&Value::String(
+                        expected.hits[0].external_id.clone().unwrap()
+                    ))
+                );
+                Ok(())
+            },
+        )
+        .unwrap();
+}
+
+#[test]
+fn graph_only_snapshot_refuses_text_seeds_without_a_pinned_projection() {
+    let handle = app_read_handle();
+    handle
+        .with_bounded_graph_read_snapshot(
+            NowledgeMemReadSnapshotBudget {
+                max_rows: 1,
+                max_payload_bytes: 4096,
+            },
+            |snapshot| {
+                let error = snapshot
+                    .query_cypher(
+                        "CALL text_search($text, topK := 1) YIELD id, score RETURN id",
+                        &BTreeMap::from([("text".into(), Value::String("candidate".into()))]),
+                        1,
+                    )
+                    .unwrap_err();
+                assert!(matches!(error, crate::HawDBError::Storage(ref message)
+                    if message == "nowledge mem search projection is not configured"));
+                Ok(())
+            },
+        )
+        .unwrap();
+}
+
+#[test]
 fn bounded_graph_read_snapshot_exposes_profiled_query_memory_evidence() {
     let handle = app_read_handle();
     let context = RuntimeTaskContext::default();
@@ -1703,6 +2027,12 @@ fn bounded_read_snapshot_projection_scan_uses_out_of_core_pin_and_releases_admis
     let mut observed = Vec::new();
     let report = handle
         .with_bounded_read_snapshot(budget, |snapshot| {
+            let text = snapshot.query_cypher(
+                "CALL text_search($text, topK := 1) YIELD id, score RETURN id, score",
+                &BTreeMap::from([("text".into(), Value::String("persistent projection".into()))]),
+                1,
+            )?;
+            assert_eq!(text.rows.len(), 1);
             snapshot.visit_search_projection(4096, |document| {
                 observed.push(document.clone());
                 Ok(())
@@ -1750,6 +2080,126 @@ fn bounded_read_snapshot_projection_scan_uses_out_of_core_pin_and_releases_admis
     assert_eq!(runtime.admitted_memory_bytes, 0);
     assert_eq!(runtime.active_foreground_io_slots, 0);
     drop(handle);
+}
+
+#[test]
+fn bounded_out_of_core_text_seed_filters_before_top_k() {
+    let root = SnapshotTestRoot::new();
+    let search_path = root.0.join("search");
+    let mut writer =
+        crate::SearchOutOfCoreGenerationWriter::create(&search_path, Default::default()).unwrap();
+    for (id, space, title) in [
+        ("other", "other", "graph graph graph graph graph"),
+        ("team", "team", "graph"),
+    ] {
+        writer
+            .push(
+                SearchProjectionRow {
+                    kind: SearchProjectionKind::Memory,
+                    external_id: id.into(),
+                    title: title.into(),
+                    body: "storage".into(),
+                    embedding: None,
+                    source_id: None,
+                    metadata: BTreeMap::from([("space_id".into(), space.into())]),
+                }
+                .into_document(),
+            )
+            .unwrap();
+    }
+    writer.finish().unwrap();
+    let mut database = Database::new_with_config(DatabaseConfig {
+        max_read_result_rows: Some(16),
+        max_read_result_payload_bytes: Some(16 * 1024),
+        ..Default::default()
+    });
+    database
+        .query("CREATE (:Memory {id: 'other', space_id: 'other'})")
+        .unwrap();
+    database
+        .query("CREATE (:Memory {id: 'team', space_id: 'team'})")
+        .unwrap();
+    let parameters = BTreeMap::from([
+        ("text".into(), Value::String("graph".into())),
+        ("space_id".into(), Value::String("team".into())),
+    ]);
+    let query = "CALL text_search($text, topK := 1) YIELD id, score \
+                 MATCH (m:Memory) WHERE m.space_id = $space_id \
+                 RETURN m.id AS id, score";
+    let plan = database
+        .explain_query_with_params(query, &parameters)
+        .unwrap()
+        .to_string();
+    assert!(plan.contains("TextSeedScan"));
+    assert!(plan.contains("top_k=1"));
+    let pinned_reader = crate::SearchOutOfCoreReader::open(&search_path).unwrap();
+    let graph = NowledgeMemGraph::from_database_with_runtime_governor(
+        database,
+        NowledgeMemGraphMode::ShadowReadOnly,
+        snapshot_governor(),
+    );
+    let projection = super::NowledgeMemOutOfCoreSearchProjection::open(&search_path).unwrap();
+    let handle =
+        NowledgeMemEmbeddedStoreHandle::new(NowledgeMemEmbeddedStore::new_with_out_of_core_search(
+            graph,
+            projection,
+            Default::default(),
+        ))
+        .unwrap();
+    handle
+        .with_bounded_read_snapshot(
+            NowledgeMemReadSnapshotBudget {
+                max_rows: 2,
+                max_payload_bytes: 8192,
+            },
+            |snapshot| {
+                let result = snapshot.query_cypher_profiled(query, &parameters, 1)?;
+                assert_eq!(result.output.rows.len(), 1);
+                assert_eq!(
+                    result.output.rows[0].get("id"),
+                    Some(&Value::String("team".into()))
+                );
+                assert!(result
+                    .execution_profile
+                    .operator_cardinality_profiles
+                    .iter()
+                    .any(|profile| {
+                        profile.operator.as_str() == "TextSeedScan"
+                            && profile.actual_rows == Some(1)
+                    }));
+                let memory = &result.execution_profile.pipeline_memory_report;
+                assert!(memory.query_memory_peak_bytes > 0);
+                assert!(memory.query_memory_peak_bytes <= memory.query_memory_budget_bytes);
+                crate::SearchOutOfCoreGenerationWriter::prepare_delta(
+                    &pinned_reader,
+                    crate::SearchProjectionDelta {
+                        upserts: vec![SearchProjectionRow {
+                            kind: SearchProjectionKind::Memory,
+                            external_id: "team".into(),
+                            title: "replacement".into(),
+                            body: "storage".into(),
+                            embedding: None,
+                            source_id: None,
+                            metadata: BTreeMap::from([("space_id".into(), "team".into())]),
+                        }],
+                        deletes: vec!["memory:other".into()],
+                        ..Default::default()
+                    },
+                    Default::default(),
+                )?
+                .finish()?;
+                let after_publication = snapshot.query_cypher(query, &parameters, 1)?;
+                assert_eq!(
+                    after_publication.rows[0].get("id"),
+                    Some(&Value::String("team".into()))
+                );
+                assert_eq!(snapshot.report().output_rows, 2);
+                Ok(())
+            },
+        )
+        .unwrap();
+    let current_reader = crate::SearchOutOfCoreReader::open(&search_path).unwrap();
+    assert_ne!(pinned_reader.generation(), current_reader.generation());
 }
 
 #[test]

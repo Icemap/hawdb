@@ -322,13 +322,15 @@ struct IdentityDirectory(std::path::PathBuf);
 
 impl IdentityDirectory {
     fn new() -> Self {
+        static NEXT_DIRECTORY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
-            "hawdb-public-identity-output-{}-{}",
+            "hawdb-public-identity-output-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos(),
+            NEXT_DIRECTORY.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         ));
         std::fs::create_dir(&path).unwrap();
         Self(path)
@@ -967,6 +969,116 @@ fn session_result_row_settings_are_isolated_and_inherited_by_transactions() {
 }
 
 #[test]
+fn zero_host_session_and_request_limits_preserve_their_public_contracts() {
+    let mut database = hawdb::Database::new();
+    assert_eq!(database.config().max_read_result_rows, None);
+    assert_eq!(database.config().read_result_row_limit(), None);
+    database.query("CREATE NODE TABLE ZeroLimit").unwrap();
+    database.query("CREATE (:ZeroLimit)").unwrap();
+    let mut session = database.session();
+    assert_eq!(session.config().max_result_rows, 0);
+    assert_eq!(
+        session
+            .query("MATCH (n:ZeroLimit) RETURN id(n) AS id")
+            .unwrap()
+            .rows
+            .len(),
+        1
+    );
+    assert!(session
+        .query("MATCH (n:ZeroLimit) RETURN id(n) AS id LIMIT 0")
+        .unwrap()
+        .rows
+        .is_empty());
+
+    let parameters = BTreeMap::from([("payload".into(), Value::Int(1))]);
+    let (plan, mut catalog, mut store) = projected_fixture(1, &parameters);
+    let memory = ExecutionMemoryConfig::default();
+    let mut external = NoExternalReadOperator;
+    let mut delivered = 0;
+    let error = execute_with_request_consumer(
+        ExecutionRequest::new(&plan, &parameters, &memory).with_output_limits(Some(0), None),
+        ExecutionResources::new(&mut catalog, &mut store, &mut external),
+        &mut |_| {
+            delivered += 1;
+            Ok(())
+        },
+    )
+    .unwrap_err();
+    assert!(matches!(error, hawdb::HawDBError::ReadBudgetExceeded(cause)
+        if cause.resource == hawdb::ReadBudgetResource::Rows && cause.limit == 0));
+    assert_eq!(delivered, 0);
+}
+
+#[test]
+fn owned_default_and_explicit_row_limits_cross_the_former_boundary() {
+    use hawdb::{
+        DatabaseConfig, EmbeddedQueryError, HawDBEmbedded, HawDBError, ReadBudgetResource,
+    };
+
+    let cap = 100_000;
+    let directory = IdentityDirectory::new();
+    for (persistent, bounded) in [(false, false), (true, false), (false, true), (true, true)] {
+        let config = DatabaseConfig {
+            max_read_result_rows: Some(if bounded { cap } else { 0 }),
+            ..DatabaseConfig::default()
+        };
+        let path = directory.0.join(format!("owned-{bounded}"));
+        let mut engine = if persistent {
+            let mut options = hawdb::HawDBEmbeddedOpenOptions::new(&path);
+            options.config = config;
+            HawDBEmbedded::open_with_options(options).unwrap()
+        } else {
+            HawDBEmbedded::open_in_memory_with_config(config)
+        };
+        engine.query_admitted("CREATE NODE TABLE RowLimit").unwrap();
+        engine
+            .query_admitted("CREATE PROPERTY ON NODE TABLE RowLimit(score) TYPE INT")
+            .unwrap();
+        for start in (0..=cap).step_by(512) {
+            let values = (start..(start + 512).min(cap + 1))
+                .map(|score| {
+                    Value::Map(BTreeMap::from([("score".into(), Value::Int(score as i64))]))
+                })
+                .collect();
+            engine
+                .query_with_params_admitted(
+                    "UNWIND $scores AS row CREATE (:RowLimit {score: row.score})",
+                    &BTreeMap::from([("scores".into(), Value::List(values))]),
+                )
+                .unwrap();
+        }
+        let epoch = engine.database().commit_epoch().unwrap();
+        for count in [cap - 1, cap, cap + 1] {
+            let result = engine.query_with_params_admitted(
+                "MATCH (n:RowLimit) WHERE n.score < $count RETURN n.score AS score",
+                &BTreeMap::from([("count".into(), Value::Int(count as i64))]),
+            );
+            if bounded && count > cap {
+                assert!(
+                    matches!(result.unwrap_err(), EmbeddedQueryError::Database(HawDBError::ReadBudgetExceeded(cause))
+                    if cause.resource == ReadBudgetResource::Rows && cause.limit == cap)
+                );
+            } else {
+                let output = result.unwrap();
+                assert_eq!(output.rows.len(), count);
+                for (index, row) in output.rows.iter().enumerate() {
+                    assert_eq!(row.get("score"), Some(&Value::Int(index as i64)));
+                }
+            }
+            assert_eq!(engine.database().commit_epoch().unwrap(), epoch);
+        }
+        let total = engine
+            .query_admitted("MATCH (n:RowLimit) WHERE n.score >= 0 RETURN count(n) AS total")
+            .unwrap();
+        assert_eq!(
+            total.rows[0].get("total"),
+            Some(&Value::Int((cap + 1) as i64))
+        );
+    }
+}
+
+#[test]
 fn sql_session_row_limits_preserve_aggregates_and_rollback_failed_returning() {
     use hawdb::Database;
 
@@ -1211,7 +1323,7 @@ fn read_only_sql_sessions_inherit_limits_without_altering_database_configuration
             2
         );
     }
-    assert_eq!(db.config().max_read_result_rows, Some(0));
+    assert_eq!(db.config().max_read_result_rows, None);
     assert!(db.config().read_only);
 }
 
@@ -1369,4 +1481,432 @@ fn session_host_ceiling_bounds_sql_returning_and_rolls_back_caught_errors() {
                 .is_empty());
         }
     }
+}
+
+#[test]
+fn runtime_view_reports_effective_host_row_ceiling() {
+    for configured in [None, Some(0), Some(2)] {
+        let mut database = hawdb::Database::new_with_config(hawdb::DatabaseConfig {
+            max_read_result_rows: configured,
+            ..hawdb::DatabaseConfig::default()
+        });
+        let expected = configured
+            .filter(|rows| *rows != 0)
+            .map_or(Value::Null, |rows| Value::Int(rows as i64));
+        let sql = "SELECT max_read_result_rows FROM system.runtime_status";
+        assert_eq!(
+            database.query_sql(sql).unwrap().rows[0]["max_read_result_rows"],
+            expected
+        );
+        assert_eq!(
+            database.session().query_sql(sql).unwrap().rows[0]["max_read_result_rows"],
+            expected
+        );
+        assert_eq!(
+            database
+                .begin_read_transaction()
+                .unwrap()
+                .query_sql(sql)
+                .unwrap()
+                .rows[0]["max_read_result_rows"],
+            expected
+        );
+        assert_eq!(
+            database.sql_session().query(sql, &[]).unwrap().output.rows[0]["max_read_result_rows"],
+            expected
+        );
+    }
+}
+
+#[test]
+fn autocommit_sql_preserves_session_variables_and_validates_before_commit() {
+    for ceiling in [0, 4] {
+        let mut database = hawdb::Database::new();
+        database
+            .query_sql("CREATE TABLE session_dml (id BIGINT PRIMARY KEY, body TEXT)")
+            .unwrap();
+        // These RowPage statements have empty results by AST shape, even
+        // though they mutate data. Strict zero budgets must allow the native
+        // commit while result-bearing statements below still fail atomically.
+        for sql in [
+            "INSERT INTO session_dml (id, body) VALUES (99, 'empty result')",
+            "UPDATE session_dml SET body = 'changed' WHERE id = 99",
+            "DELETE FROM session_dml WHERE id = 99",
+        ] {
+            let epoch = database.commit_epoch().unwrap();
+            let output = database
+                .query_sql_with_params_options(
+                    sql,
+                    &[],
+                    hawdb::QueryStreamOptions {
+                        max_rows: Some(0),
+                        max_payload_bytes: Some(0),
+                    },
+                )
+                .unwrap();
+            assert!(output.rows.is_empty());
+            assert!(database.commit_epoch().unwrap() > epoch);
+        }
+        {
+            let mut session = database.session();
+            session
+                .query("SET system.work_priority = 'background'")
+                .unwrap();
+            session
+                .query("SET system.work_class = 'analytics'")
+                .unwrap();
+            session
+                .query("SET system.estimated_operations = 64")
+                .unwrap();
+            session.set_max_result_rows(ceiling);
+            let variables = session.system_variables().clone();
+            let work = session.query_work_request();
+            let inserted = session
+                .query_sql_with_params(
+                    "INSERT INTO session_dml (id, body) VALUES (1, $1), (2, $1) RETURNING id, body",
+                    &[Value::String("original".into())],
+                )
+                .unwrap();
+            assert_eq!(inserted.rows.len(), 2);
+            session
+                .query_sql("UPDATE session_dml SET body = 'updated' WHERE id = 1")
+                .unwrap();
+            session
+                .query_sql("DELETE FROM session_dml WHERE id = 2")
+                .unwrap();
+            assert_eq!(
+                session
+                    .query_sql("SELECT body FROM session_dml WHERE id = 1")
+                    .unwrap()
+                    .rows[0]["body"],
+                Value::String("updated".into())
+            );
+            assert_eq!(session.system_variables(), &variables);
+            assert_eq!(session.query_work_request(), work);
+            session.set_max_result_rows(1);
+            let failure = session
+                .query_sql(
+                    "INSERT INTO session_dml (id, body) VALUES (3, 'a'), (4, 'b') RETURNING id",
+                )
+                .unwrap_err();
+            assert!(
+                matches!(failure, hawdb::HawDBError::ReadBudgetExceeded(cause) if cause.resource == hawdb::ReadBudgetResource::Rows && cause.limit == 1)
+            );
+            assert_eq!(session.system_variables(), &variables);
+        }
+        let epoch = database.commit_epoch().unwrap();
+        let failure = database
+            .query_sql_bounded(
+                "INSERT INTO session_dml (id, body) VALUES (5, 'c') RETURNING id",
+                Some(0),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(failure, hawdb::HawDBError::ReadBudgetExceeded(cause) if cause.resource == hawdb::ReadBudgetResource::Rows && cause.limit == 0)
+        );
+        let failure = database
+            .query_sql_with_params_options(
+                "INSERT INTO session_dml (id, body) VALUES (6, $1) RETURNING body",
+                &[Value::String("x".repeat(4096))],
+                hawdb::QueryStreamOptions {
+                    max_rows: None,
+                    max_payload_bytes: Some(128),
+                },
+            )
+            .unwrap_err();
+        assert!(
+            matches!(failure, hawdb::HawDBError::ReadBudgetExceeded(cause) if cause.resource == hawdb::ReadBudgetResource::PayloadBytes && cause.limit == 128)
+        );
+        assert_eq!(database.commit_epoch().unwrap(), epoch);
+        assert_eq!(
+            database
+                .query_sql("SELECT COUNT(*) AS total FROM session_dml")
+                .unwrap()
+                .rows[0]["total"],
+            Value::Int(1)
+        );
+    }
+}
+
+#[test]
+fn empty_sql_results_preserve_custom_mutation_limits() {
+    let mut config = hawdb::DatabaseConfig::default();
+    config.mutation_limits.max_affected_rows = std::num::NonZeroUsize::new(1).unwrap();
+    let mut database = hawdb::Database::new_with_config(config);
+    database
+        .query_sql("CREATE TABLE bounded_writes (id BIGINT PRIMARY KEY, body TEXT)")
+        .unwrap();
+    for id in [1, 2] {
+        database
+            .query_sql_with_params(
+                "INSERT INTO bounded_writes (id, body) VALUES ($1, 'original')",
+                &[Value::Int(id)],
+            )
+            .unwrap();
+    }
+    for sql in [
+        "INSERT INTO bounded_writes (id, body) VALUES (3, 'new'), (4, 'new')",
+        "UPDATE bounded_writes SET body = 'changed' WHERE body = 'original'",
+        "DELETE FROM bounded_writes WHERE body = 'original'",
+    ] {
+        let epoch = database.commit_epoch().unwrap();
+        let error = database.query_sql(sql).unwrap_err();
+        assert!(error.to_string().contains("max_affected_rows 1"), "{error}");
+        assert_eq!(database.commit_epoch().unwrap(), epoch, "{sql}");
+        let output = database
+            .query_sql("SELECT id, body FROM bounded_writes ORDER BY id")
+            .unwrap();
+        assert_eq!(output.rows.len(), 2, "{sql}");
+        for (row, id) in output.rows.iter().zip([1, 2]) {
+            assert_eq!(row["id"], Value::Int(id));
+            assert_eq!(row["body"], Value::String("original".into()));
+        }
+    }
+}
+
+fn native_sql_returning_payload_control(route: &str, mutation: &str) {
+    for (ceiling, admitted) in [0, 1, 4096]
+        .into_iter()
+        .flat_map(|ceiling| [false, true].map(|admitted| (ceiling, admitted)))
+    {
+        let allowed = ceiling == 4096 && mutation == "insert";
+        let directory = IdentityDirectory::new();
+        let path = directory.0.join("returning-payload");
+        let mut database = hawdb::Database::open(&path).unwrap();
+        database
+            .query_sql("CREATE TABLE payload_writes (id BIGINT PRIMARY KEY, body TEXT)")
+            .unwrap();
+        database
+            .query_sql("INSERT INTO payload_writes (id, body) VALUES (1, 'original'), (2, 'other')")
+            .unwrap();
+        let epoch = database.commit_epoch().unwrap();
+        drop(database);
+        let mut database = hawdb::Database::open_with_config(
+            &path,
+            hawdb::DatabaseConfig {
+                max_read_result_payload_bytes: Some(if admitted { 8192 } else { ceiling }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let context = if admitted {
+            hawdb::RuntimeTaskContext::default().with_memory_reservation(
+                hawdb::RuntimeMemoryReservation::new(
+                    256 * 1024 * 1024,
+                    u64::try_from(ceiling).unwrap(),
+                ),
+            )
+        } else {
+            hawdb::RuntimeTaskContext::default()
+        };
+        let sql = match mutation {
+            "insert" => {
+                "INSERT INTO payload_writes (id, body) VALUES (3, 'new') RETURNING id, body"
+            }
+            "update" => {
+                "UPDATE payload_writes SET body = 'changed' WHERE id = 1 RETURNING id, body"
+            }
+            "delete" => "DELETE FROM payload_writes WHERE id = 1 RETURNING id, body",
+            _ => unreachable!(),
+        };
+        let result = match route {
+            "session" => database
+                .sql_session()
+                .with_task_context(&context)
+                .query(sql, &[])
+                .map(|_| ()),
+            "direct" => {
+                let mut transaction = database.begin_transaction_with_context(&context).unwrap();
+                let result = transaction.query_sql(sql).map(|_| ());
+                // A rejected statement must not remain staged and publish on
+                // a later explicit commit of the otherwise empty transaction.
+                transaction.commit().unwrap();
+                result
+            }
+            "callback" => database
+                .sql_session()
+                .with_task_context(&context)
+                .transaction(|transaction| {
+                    if !allowed {
+                        transaction.query(
+                            "INSERT INTO payload_writes (id, body) VALUES (9, 'prior')",
+                            &[],
+                        )?;
+                    }
+                    let result = transaction.query(sql, &[]);
+                    if allowed {
+                        result?;
+                    }
+                    // A caught refusal must still roll back the preceding write.
+                    Ok(())
+                }),
+            _ => unreachable!(),
+        };
+        let observed_epoch = database.commit_epoch().unwrap();
+        drop(database);
+        // Reopen through an ordinary, unrestricted reader so the result cap
+        // under test cannot mask incomplete stored-row verification.
+        let mut reopened = hawdb::Database::open(&path).unwrap();
+        let rows = reopened
+            .query_sql("SELECT id, body FROM payload_writes ORDER BY id")
+            .unwrap();
+        let stored = rows
+            .rows
+            .iter()
+            .map(|row| (row["id"].clone(), row["body"].clone()))
+            .collect::<Vec<_>>();
+        let mut expected = vec![
+            (Value::Int(1), Value::String("original".into())),
+            (Value::Int(2), Value::String("other".into())),
+        ];
+        if allowed {
+            result.unwrap();
+            match mutation {
+                "insert" => expected.push((Value::Int(3), Value::String("new".into()))),
+                "update" => expected[0].1 = Value::String("changed".into()),
+                "delete" => {
+                    expected.remove(0);
+                }
+                _ => unreachable!(),
+            }
+            assert!(observed_epoch > epoch, "{route}/{mutation}/{ceiling}");
+        } else {
+            if mutation == "insert" {
+                assert!(
+                matches!(result, Err(hawdb::HawDBError::ReadBudgetExceeded(ref cause))
+                    if cause.resource == hawdb::ReadBudgetResource::PayloadBytes && cause.limit == ceiling),
+                "{route}/{mutation}/{ceiling}: result={result:?}, epochs={epoch}->{observed_epoch}, stored={stored:?}"
+            );
+            } else {
+                // UPDATE/DELETE RETURNING are outside the current SQL
+                // fragment. Preserve their fail-closed semantic refusal;
+                // do not add new SQL capability to repair a result budget.
+                assert!(
+                    matches!(result, Err(hawdb::HawDBError::Semantic(ref message))
+                    if message.contains("unsupported PostgreSQL")),
+                    "{route}/{mutation}/{ceiling}: {result:?}"
+                );
+            }
+            assert_eq!(observed_epoch, epoch, "{route}/{mutation}/{ceiling}");
+        }
+        assert_eq!(stored, expected, "{route}/{mutation}/{ceiling}");
+        assert_eq!(reopened.commit_epoch().unwrap(), observed_epoch);
+    }
+}
+
+macro_rules! native_sql_returning_payload_regression {
+    ($name:ident, $route:literal, $mutation:literal) => {
+        #[test]
+        fn $name() {
+            native_sql_returning_payload_control($route, $mutation);
+        }
+    };
+}
+
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_insert_session,
+    "session",
+    "insert"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_update_session,
+    "session",
+    "update"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_delete_session,
+    "session",
+    "delete"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_insert_direct,
+    "direct",
+    "insert"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_update_direct,
+    "direct",
+    "update"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_delete_direct,
+    "direct",
+    "delete"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_insert_callback,
+    "callback",
+    "insert"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_update_callback,
+    "callback",
+    "update"
+);
+native_sql_returning_payload_regression!(
+    native_sql_returning_payload_delete_callback,
+    "callback",
+    "delete"
+);
+
+#[test]
+fn unlimited_rows_still_refuse_wide_json_payload_before_delivery() {
+    let payload_limit = 4096;
+    let mut database = hawdb::Database::new_with_config(hawdb::DatabaseConfig {
+        max_read_result_payload_bytes: Some(payload_limit),
+        execution_memory: ExecutionMemoryConfig {
+            query_memory_bytes: std::num::NonZeroUsize::new(256 * 1024).unwrap(),
+            batch_rows: std::num::NonZeroUsize::new(1).unwrap(),
+            batch_payload_bytes: std::num::NonZeroUsize::new(64 * 1024).unwrap(),
+            blocking_operator_bytes: std::num::NonZeroUsize::new(64 * 1024).unwrap(),
+            ..ExecutionMemoryConfig::default()
+        },
+        ..hawdb::DatabaseConfig::default()
+    });
+    assert_eq!(database.config().read_result_row_limit(), None);
+    database.query("CREATE NODE TABLE WideLimit").unwrap();
+    database
+        .query_with_params(
+            "UNWIND $ids AS id CREATE (:WideLimit)",
+            &BTreeMap::from([(
+                "ids".into(),
+                Value::List((0..1000).map(Value::Int).collect()),
+            )]),
+        )
+        .unwrap();
+    let mut snapshot = database.begin_read_transaction().unwrap();
+    let epoch = snapshot.commit_epoch();
+    // Full output would exceed the 256 KiB tracked query budget by orders
+    // of magnitude. A typed payload refusal must win before accumulating it;
+    // this tests the engine boundary, not a whole-process RSS bound.
+    let fields = (0..20)
+        .map(|index| format!("$wide AS field{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let query = format!("MATCH (n:WideLimit) RETURN {fields}");
+    let parameters = BTreeMap::from([("wide".into(), Value::String("\"\\\n界".repeat(128)))]);
+    let mut delivered = 0;
+    let failure = snapshot
+        .query_with_params_streaming(
+            &query,
+            &parameters,
+            hawdb::QueryStreamOptions::default(),
+            |_| {
+                delivered += 1;
+                Ok(())
+            },
+        )
+        .unwrap_err();
+    assert!(
+        matches!(failure, hawdb::HawDBError::ReadBudgetExceeded(cause) if cause.resource == hawdb::ReadBudgetResource::PayloadBytes && cause.limit == payload_limit)
+    );
+    assert_eq!(delivered, 0);
+    assert_eq!(database.commit_epoch().unwrap(), epoch);
+    assert_eq!(
+        snapshot
+            .query("MATCH (n:WideLimit) RETURN count(n) AS total")
+            .unwrap()
+            .rows[0]["total"],
+        Value::Int(1000)
+    );
 }

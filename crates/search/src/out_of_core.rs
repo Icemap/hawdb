@@ -2419,6 +2419,34 @@ impl SearchOutOfCoreReader {
         segment: &SearchSegmentDescriptorEntry,
         metrics: &mut SearchOutOfCoreMetrics,
     ) -> Result<Vec<SearchMetadataDocument>> {
+        self.read_metadata_segment_with(
+            artifact,
+            segment,
+            metrics,
+            decode_search_snapshot_text_bounded,
+        )
+    }
+
+    fn read_metadata_segment_admitted(
+        &self,
+        artifact: &SearchOutOfCoreSegmentReader,
+        segment: &SearchSegmentDescriptorEntry,
+        metrics: &mut SearchOutOfCoreMetrics,
+        memory: &hawdb_executor::QueryMemoryAccount,
+        task: &crate::RuntimeTaskContext,
+    ) -> Result<Vec<SearchMetadataDocument>> {
+        self.read_metadata_segment_with(artifact, segment, metrics, |payload, limit| {
+            crate::decode_search_snapshot_text_admitted(payload, limit, memory, task)
+        })
+    }
+
+    fn read_metadata_segment_with(
+        &self,
+        artifact: &SearchOutOfCoreSegmentReader,
+        segment: &SearchSegmentDescriptorEntry,
+        metrics: &mut SearchOutOfCoreMetrics,
+        decode: impl FnOnce(&[u8], u64) -> Result<String>,
+    ) -> Result<Vec<SearchMetadataDocument>> {
         let range = Self::artifact_layout_range(artifact, segment.segment_id)?.metadata;
         let payload = read_out_of_core_payload_range(
             &artifact.metadata_payload,
@@ -2430,10 +2458,7 @@ impl SearchOutOfCoreReader {
         metrics.metadata_segment_bytes_read = metrics
             .metadata_segment_bytes_read
             .saturating_add(range.length);
-        let text = decode_search_snapshot_text_bounded(
-            &payload,
-            self.config.max_uncompressed_segment_bytes.get(),
-        )?;
+        let text = decode(&payload, self.config.max_uncompressed_segment_bytes.get())?;
         metrics.peak_metadata_segment_bytes =
             metrics.peak_metadata_segment_bytes.max(text.len() as u64);
         let documents = decode_metadata_segment(&text, segment, range.entry_count)?;

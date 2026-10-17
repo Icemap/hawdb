@@ -762,6 +762,8 @@ impl Database {
             let (rows, execution_profile) = if is_mutation {
                 query_runtime_checkpoint(task_context)?;
                 let mut mutation_limits = self.config.mutation_limits;
+                // Graph mutation payloads use MutationLimits, checked by the
+                // executor preflight and storage tracker before publication.
                 if let Some(limit) = output_limits.max_rows.and_then(NonZeroUsize::new) {
                     mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
                 }
