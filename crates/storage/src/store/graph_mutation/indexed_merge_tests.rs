@@ -413,94 +413,108 @@ fn cold_store(path: &std::path::Path, catalog: &mut Catalog) -> GraphStore {
 
 #[test]
 fn indexed_cold_merge_preserves_minimum_id_across_base_and_delta() {
-    let path = test_dir();
-    let mut catalog = Catalog::default();
-    let mut store = cold_store(&path, &mut catalog);
-    store
-        .create_property_index(&mut catalog, "Item", "key")
-        .unwrap();
-    let first = store
-        .create_node(&mut catalog, "Item", properties(Value::Int(2), 1))
-        .unwrap();
-    let second = store
-        .create_node(&mut catalog, "Item", properties(Value::Int(1), 1))
-        .unwrap();
-    let third = store
-        .create_node(&mut catalog, "Item", properties(Value::Int(1), 1))
-        .unwrap();
-    store
-        .create_node(&mut catalog, "Item", properties(Value::Int(1), 0))
-        .unwrap();
-    store.checkpoint(&catalog).unwrap();
-    assert!(store.canonical_base_out_of_core);
-    assert!(store.nodes.is_empty());
-    let snapshot = store.snapshot();
-    store
-        .set_node_properties_by_ids(
-            &mut catalog,
-            &[first],
-            &[NodeSetAssignment {
-                property: "key".into(),
-                value: NodeSetValue::Value(Value::Int(1)),
-            }],
-        )
-        .unwrap();
-    let label = catalog.label_id("Item").unwrap();
-    let predicate = properties(Value::Int(1), 1);
-    let before = store.storage_residency_report().graph_index_reads;
-    assert_eq!(
+    for skew in [false, true] {
+        let path = test_dir();
+        let mut catalog = Catalog::default();
+        let mut store = cold_store(&path, &mut catalog);
         store
-            .find_node_by_label_and_properties(&catalog, label, &predicate)
-            .unwrap(),
-        Some(first)
-    );
-    let reads = store
-        .storage_residency_report()
-        .graph_index_reads
-        .delta_since(before);
-    assert_eq!(
-        reads.operation_count(PersistentGraphIndexClass::NodeEquality),
-        1
-    );
-    assert_eq!(reads.property_candidates_returned, 3);
-    assert_eq!(
-        snapshot
-            .find_node_by_label_and_properties(&catalog, label, &predicate)
-            .unwrap(),
-        Some(second)
-    );
-    for (deleted, expected) in [(first, second), (second, third)] {
+            .create_property_index(&mut catalog, "Item", "key")
+            .unwrap();
+        let first = store
+            .create_node(&mut catalog, "Item", properties(Value::Int(2), 1))
+            .unwrap();
+        let second = store
+            .create_node(&mut catalog, "Item", properties(Value::Int(1), 1))
+            .unwrap();
+        let third = store
+            .create_node(&mut catalog, "Item", properties(Value::Int(1), 1))
+            .unwrap();
         store
-            .delete_nodes(
+            .create_node(&mut catalog, "Item", properties(Value::Int(1), 0))
+            .unwrap();
+        if skew {
+            commit(
+                &mut store,
                 &mut catalog,
-                "Item",
-                Some(&PropertyFilter::IdEq {
-                    value: Value::Int(deleted.0 as i64),
-                }),
-                false,
+                (0..100)
+                    .map(|_| GraphMutation::CreateNode {
+                        label: "Item".into(),
+                        properties: properties(Value::Int(1), 0),
+                    })
+                    .collect(),
+            );
+        }
+        store.checkpoint(&catalog).unwrap();
+        assert!(store.canonical_base_out_of_core);
+        assert!(store.nodes.is_empty());
+        let snapshot = store.snapshot();
+        store
+            .set_node_properties_by_ids(
+                &mut catalog,
+                &[first],
+                &[NodeSetAssignment {
+                    property: "key".into(),
+                    value: NodeSetValue::Value(Value::Int(1)),
+                }],
             )
             .unwrap();
+        let label = catalog.label_id("Item").unwrap();
+        let predicate = properties(Value::Int(1), 1);
+        let before = store.storage_residency_report().graph_index_reads;
         assert_eq!(
             store
                 .find_node_by_label_and_properties(&catalog, label, &predicate)
                 .unwrap(),
-            Some(expected)
+            Some(first)
         );
+        let reads = store
+            .storage_residency_report()
+            .graph_index_reads
+            .delta_since(before);
+        assert_eq!(
+            reads.operation_count(PersistentGraphIndexClass::NodeEquality),
+            u64::from(!skew)
+        );
+        assert_eq!(reads.property_candidates_returned, if skew { 0 } else { 3 });
+        assert_eq!(
+            snapshot
+                .find_node_by_label_and_properties(&catalog, label, &predicate)
+                .unwrap(),
+            Some(second)
+        );
+        for (deleted, expected) in [(first, second), (second, third)] {
+            store
+                .delete_nodes(
+                    &mut catalog,
+                    "Item",
+                    Some(&PropertyFilter::IdEq {
+                        value: Value::Int(deleted.0 as i64),
+                    }),
+                    false,
+                )
+                .unwrap();
+            assert_eq!(
+                store
+                    .find_node_by_label_and_properties(&catalog, label, &predicate)
+                    .unwrap(),
+                Some(expected)
+            );
+        }
+        let later = store
+            .create_node(&mut catalog, "Item", predicate.clone())
+            .unwrap();
+        assert!(later > third);
+        assert_eq!(
+            store
+                .find_node_by_label_and_properties(&catalog, label, &predicate)
+                .unwrap(),
+            Some(third)
+        );
+        assert_eq!(scan_match(&store, label, &predicate), Some(third));
+        drop(snapshot);
+        drop(store);
+        std::fs::remove_dir_all(path).unwrap();
     }
-    let later = store
-        .create_node(&mut catalog, "Item", predicate.clone())
-        .unwrap();
-    assert!(later > third);
-    assert_eq!(
-        store
-            .find_node_by_label_and_properties(&catalog, label, &predicate)
-            .unwrap(),
-        Some(third)
-    );
-    assert_eq!(scan_match(&store, label, &predicate), Some(third));
-    drop(snapshot);
-    drop(store);
-    std::fs::remove_dir_all(path).unwrap();
 }
 
 #[test]
@@ -601,7 +615,7 @@ fn indexed_cold_merge_bounds_point_reads_for_skewed_residuals() {
     let path = test_dir();
     let mut catalog = Catalog::default();
     let mut store = cold_store(&path, &mut catalog);
-    store
+    let index = store
         .create_property_index(&mut catalog, "Item", "key")
         .unwrap();
     let result = commit(
@@ -619,25 +633,47 @@ fn indexed_cold_merge_bounds_point_reads_for_skewed_residuals() {
     };
     store.checkpoint(&catalog).unwrap();
     let label = catalog.label_id("Item").unwrap();
-    for (suffix, expected) in [(99, Some(NodeId(last as u64))), (100, None)] {
-        let predicate = properties(Value::Int(1), suffix);
-        let before = store.storage_residency_report().graph_index_reads;
-        assert_eq!(
+    let original = *store
+        .checkpoint_statistics
+        .index_samples
+        .get(&index)
+        .unwrap();
+    assert_eq!(original.estimated_unique_values(), Some(1));
+    assert_eq!(original.index_size, 100);
+    for statistics in ["fresh", "stale", "missing"] {
+        if statistics == "stale" {
+            let mut sample = original;
+            sample.updates_since_sample = sample.max_fresh_updates() + 1;
             store
-                .find_node_by_label_and_properties(&catalog, label, &predicate)
-                .unwrap(),
-            expected
-        );
-        let reads = store
-            .storage_residency_report()
-            .graph_index_reads
-            .delta_since(before);
-        assert_eq!(
-            reads.operation_count(PersistentGraphIndexClass::NodeEquality),
-            1
-        );
-        assert_eq!(reads.property_candidates_returned, 33);
-        assert_eq!(scan_match(&store, label, &predicate), expected);
+                .checkpoint_statistics
+                .index_samples
+                .insert(index, sample);
+        } else if statistics == "missing" {
+            store.checkpoint_statistics.index_samples.remove(&index);
+        }
+        for (suffix, expected) in [(99, Some(NodeId(last as u64))), (100, None)] {
+            let predicate = properties(Value::Int(1), suffix);
+            let before = store.storage_residency_report().graph_index_reads;
+            assert_eq!(
+                store
+                    .find_node_by_label_and_properties(&catalog, label, &predicate)
+                    .unwrap(),
+                expected
+            );
+            let reads = store
+                .storage_residency_report()
+                .graph_index_reads
+                .delta_since(before);
+            assert_eq!(
+                reads.operation_count(PersistentGraphIndexClass::NodeEquality),
+                u64::from(statistics != "fresh")
+            );
+            assert_eq!(
+                reads.property_candidates_returned,
+                if statistics == "fresh" { 0 } else { 33 }
+            );
+            assert_eq!(scan_match(&store, label, &predicate), expected);
+        }
     }
     drop(store);
     std::fs::remove_dir_all(path).unwrap();
@@ -648,13 +684,29 @@ fn indexed_cold_merge_rejects_corrupt_projection_before_batch_publication() {
     let path = test_dir();
     let mut catalog = Catalog::default();
     let mut store = cold_store(&path, &mut catalog);
-    store
+    let index = store
         .create_property_index(&mut catalog, "Item", "key")
         .unwrap();
     let first = store
         .create_node(&mut catalog, "Item", properties(Value::Int(7), 0))
         .unwrap();
+    commit(
+        &mut store,
+        &mut catalog,
+        (0..99)
+            .map(|_| GraphMutation::CreateNode {
+                label: "Item".into(),
+                properties: properties(Value::Int(7), 0),
+            })
+            .collect(),
+    );
     store.checkpoint(&catalog).unwrap();
+    let sample = *store
+        .checkpoint_statistics
+        .index_samples
+        .get(&index)
+        .unwrap();
+    store.checkpoint_statistics.index_samples.remove(&index);
     let projection = store.persistent_property_projection.as_ref().unwrap();
     std::fs::OpenOptions::new()
         .write(true)
@@ -663,7 +715,13 @@ fn indexed_cold_merge_rejects_corrupt_projection_before_batch_publication() {
         .set_len(0)
         .unwrap();
     let epoch = store.commit_epoch();
-    for _ in 0..2 {
+    for restore_statistics in [false, true] {
+        if restore_statistics {
+            store
+                .checkpoint_statistics
+                .index_samples
+                .insert(index, sample);
+        }
         let error = store
             .commit_kernel_write_batch(
                 &mut catalog,
@@ -676,7 +734,7 @@ fn indexed_cold_merge_rejects_corrupt_projection_before_batch_publication() {
             .unwrap_err();
         assert!(matches!(error, HawDBError::StorageIntegrity(_)), "{error}");
         assert_eq!(store.commit_epoch(), epoch);
-        assert_eq!(store.node_count_for_label(None), 1);
+        assert_eq!(store.node_count_for_label(None), 100);
         assert!(store
             .persistent_property_projection
             .as_ref()
@@ -717,54 +775,62 @@ fn indexed_cold_merge_scaling_probe() {
             assert!(store.canonical_base_out_of_core);
             assert!(store.nodes.is_empty());
             let label = catalog.label_id("Item").unwrap();
-            for existing in [true, false] {
-                let predicates = (0..100)
-                    .map(|offset| {
-                        let id = offset * nodes / 100;
-                        properties(
-                            Value::Int(if existing { id % keys } else { keys } as i64),
-                            id as i64,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                let expected = predicates
-                    .iter()
-                    .map(|predicate| scan_match(&store, label, predicate))
-                    .collect::<Vec<_>>();
-                for sample in 0..4 {
-                    for indexed in [sample % 2 == 0, sample % 2 != 0] {
-                        let before = store.storage_residency_report().graph_index_reads;
-                        let start = Instant::now();
-                        let results = predicates
-                            .iter()
-                            .map(|predicate| {
-                                if indexed {
-                                    store
-                                        .find_node_by_label_and_properties(
-                                            &catalog, label, predicate,
-                                        )
-                                        .unwrap()
+            for residual in [true, false] {
+                for existing in [true, false] {
+                    let predicates = (0..100)
+                        .map(|offset| {
+                            let id = offset * nodes / 100;
+                            let key = Value::Int(if existing { id % keys } else { keys } as i64);
+                            if residual {
+                                properties(key, id as i64)
+                            } else {
+                                BTreeMap::from([("key".into(), key)])
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    let expected = predicates
+                        .iter()
+                        .map(|predicate| scan_match(&store, label, predicate))
+                        .collect::<Vec<_>>();
+                    for sample in 0..4 {
+                        for indexed in [sample % 2 == 0, sample % 2 != 0] {
+                            let before = store.storage_residency_report().graph_index_reads;
+                            let start = Instant::now();
+                            let results = predicates
+                                .iter()
+                                .map(|predicate| {
+                                    if indexed {
+                                        store
+                                            .find_node_by_label_and_properties(
+                                                &catalog, label, predicate,
+                                            )
+                                            .unwrap()
+                                    } else {
+                                        scan_match(&store, label, predicate)
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+                            let elapsed = start.elapsed().as_secs_f64() * 1_000.0;
+                            assert_eq!(results, expected);
+                            let reads = store
+                                .storage_residency_report()
+                                .graph_index_reads
+                                .delta_since(before);
+                            assert_eq!(
+                                reads.operation_count(PersistentGraphIndexClass::NodeEquality),
+                                if indexed && (distinct || nodes == 8) {
+                                    100
                                 } else {
-                                    scan_match(&store, label, predicate)
+                                    0
                                 }
-                            })
-                            .collect::<Vec<_>>();
-                        let elapsed = start.elapsed().as_secs_f64() * 1_000.0;
-                        assert_eq!(results, expected);
-                        let reads = store
-                            .storage_residency_report()
-                            .graph_index_reads
-                            .delta_since(before);
-                        assert_eq!(
-                            reads.operation_count(PersistentGraphIndexClass::NodeEquality),
-                            if indexed { 100 } else { 0 }
-                        );
-                        eprintln!(
-                            "cold nodes={nodes} distinct={distinct} existing={existing} sample={sample} indexed={indexed} milliseconds={elapsed:.3} candidates={} blocks={} bytes={}",
-                            reads.property_candidates_returned,
-                            reads.property_blocks_read,
-                            reads.property_bytes_read,
-                        );
+                            );
+                            eprintln!(
+                                "cold nodes={nodes} distinct={distinct} residual={residual} existing={existing} sample={sample} indexed={indexed} milliseconds={elapsed:.3} candidates={} blocks={} bytes={}",
+                                reads.property_candidates_returned,
+                                reads.property_blocks_read,
+                                reads.property_bytes_read,
+                            );
+                        }
                     }
                 }
             }

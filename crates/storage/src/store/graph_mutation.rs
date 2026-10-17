@@ -23,6 +23,8 @@ mod checkpoint_capture;
 #[path = "graph_mutation/indexed_merge_tests.rs"]
 mod indexed_merge_tests;
 
+const MAX_COLD_MERGE_POINT_READS: usize = 32;
+
 fn wal_ops_contain_relational_transaction(ops: &[WalOp]) -> bool {
     ops.iter().any(|op| match op {
         WalOp::Relational { .. } => true,
@@ -1638,9 +1640,28 @@ impl GraphStore {
             if self.canonical_base_out_of_core
                 && let Some((reader, projection)) = cold_projection
             {
+                if !projection.is_poisoned()
+                    && self.cold_merge_index_is_low_selectivity(catalog, label_id, property)
+                {
+                    reader
+                        .scan_nodes_by_property_control(label_id, property, value, |node| {
+                            if found.is_some_and(|id| node.id >= id) {
+                                return Ok(CanonicalScanControl::Stop);
+                            }
+                            if !self.node_tombstones.contains(&node.id)
+                                && !self.nodes.contains_key(&node.id)
+                                && properties_contain_all(&node.properties, properties)
+                            {
+                                found = Some(node.id);
+                                return Ok(CanonicalScanControl::Stop);
+                            }
+                            Ok(CanonicalScanControl::Continue)
+                        })
+                        .map_err(canonical_segment_error)?;
+                    return Ok(found);
+                }
                 // Repeated point reads revisit canonical segment framing. Bound
-                // this work before falling back for low-selectivity predicates.
-                const MAX_POINT_READS: usize = 32;
+                // this work when selectivity statistics are missing or stale.
                 let mut point_reads = 0;
                 let (report, _) = projection
                     .scan_equality_candidates(label_id, property, value, |node_id| {
@@ -1650,7 +1671,7 @@ impl GraphStore {
                         {
                             return Ok(CanonicalScanControl::Continue);
                         }
-                        if point_reads == MAX_POINT_READS {
+                        if point_reads == MAX_COLD_MERGE_POINT_READS {
                             scan_fallback = true;
                             return Ok(CanonicalScanControl::Stop);
                         }
@@ -1694,6 +1715,24 @@ impl GraphStore {
             }
         })?;
         Ok(found)
+    }
+
+    fn cold_merge_index_is_low_selectivity(
+        &self,
+        catalog: &Catalog,
+        label_id: LabelId,
+        property: &str,
+    ) -> bool {
+        // Statistics only select a scan; they never establish a match or miss.
+        // The canonical scan still uses its Bloom filter for absent keys.
+        catalog
+            .property_index_id(label_id, property)
+            .and_then(|index| self.checkpoint_statistics.index_samples.get(&index))
+            .is_some_and(|sample| {
+                sample.estimated_unique_values().is_some_and(|unique| {
+                    sample.index_size > unique.saturating_mul(MAX_COLD_MERGE_POINT_READS as u64)
+                })
+            })
     }
 
     pub(super) fn find_relationship_by_properties(
