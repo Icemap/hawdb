@@ -216,6 +216,123 @@ fn bounded_read_snapshot_uses_its_pinned_projection_for_text_seeds() {
 }
 
 #[test]
+fn bounded_text_seed_snapshot_retains_its_projection_during_a_writer_update() {
+    let handle = app_read_handle();
+    let writer_handle = handle.clone();
+    let (start_tx, start_rx) = std::sync::mpsc::channel();
+    let (attempt_tx, attempt_rx) = std::sync::mpsc::channel();
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    let writer = std::thread::spawn(move || {
+        if start_rx.recv().is_err() {
+            return;
+        }
+        let blocked = matches!(
+            writer_handle.inner.try_write(),
+            Err(std::sync::TryLockError::WouldBlock)
+        );
+        attempt_tx.send(blocked).unwrap();
+        let result = (|| {
+            let mut store = writer_handle.write_store()?;
+            store
+                .graph_mut()
+                .database_mut()
+                .query("MATCH (m:Memory {id: 'nearest'}) SET m.title = 'Updated memory'")?;
+            store.graph_mut().database_mut().query_sql(
+                "UPDATE thread_messages SET content = 'Updated payload' \
+                 WHERE content_message_id = 'message-1'",
+            )?;
+            store
+                .search_projection_mut()
+                .unwrap()
+                .index_mut()
+                .upsert_projection_row(SearchProjectionRow {
+                    kind: SearchProjectionKind::Memory,
+                    external_id: "nearest".into(),
+                    title: "Updated memory".into(),
+                    body: "Updated search candidate".into(),
+                    embedding: Some(vec![1.0, 0.0]),
+                    source_id: None,
+                    metadata: BTreeMap::from([("space_id".into(), "default".into())]),
+                })?;
+            crate::Result::Ok(())
+        })();
+        done_tx.send(result).unwrap();
+    });
+    let read = |snapshot: &mut super::NowledgeMemReadSnapshot<'_>| -> crate::Result<_> {
+        let text = snapshot.query_cypher(
+            "CALL text_search($text, topK := 2) YIELD id, score RETURN id ORDER BY id",
+            &BTreeMap::from([("text".into(), Value::String("candidate".into()))]),
+            2,
+        )?;
+        let graph = snapshot.query_cypher(
+            "MATCH (m:Memory {id: 'nearest'}) RETURN m.title AS title LIMIT 1",
+            &BTreeMap::new(),
+            1,
+        )?;
+        let sql = snapshot.query_sql(
+            "SELECT content FROM thread_messages WHERE content_message_id = 'message-1' LIMIT 1",
+            &[],
+            1,
+        )?;
+        Ok((text, graph, sql))
+    };
+    let result = handle.with_bounded_read_snapshot(
+        NowledgeMemReadSnapshotBudget {
+            max_rows: 8,
+            max_payload_bytes: 4096,
+        },
+        |snapshot| {
+            let before = read(snapshot)?;
+            let epoch = snapshot.commit_epoch();
+            start_tx.send(()).unwrap();
+            assert!(attempt_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap());
+            assert_eq!(read(snapshot)?, before);
+            assert_eq!(snapshot.commit_epoch(), epoch);
+            Ok(epoch)
+        },
+    );
+    drop(start_tx);
+    done_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap()
+        .unwrap();
+    writer.join().unwrap();
+    let epoch = result.unwrap();
+    handle
+        .with_bounded_read_snapshot(
+            NowledgeMemReadSnapshotBudget {
+                max_rows: 3,
+                max_payload_bytes: 4096,
+            },
+            |snapshot| {
+                let text = snapshot.query_cypher(
+                    "CALL text_search($text, topK := 1) YIELD id RETURN id",
+                    &BTreeMap::from([("text".into(), Value::String("updated".into()))]),
+                    1,
+                )?;
+                let graph = snapshot.query_cypher(
+                    "MATCH (m:Memory {id: 'nearest'}) RETURN m.title AS title LIMIT 1",
+                    &BTreeMap::new(),
+                    1,
+                )?;
+                let sql = snapshot.query_sql(
+                    "SELECT content FROM thread_messages WHERE content_message_id = 'message-1' LIMIT 1",
+                    &[],
+                    1,
+                )?;
+                assert_eq!(text.rows.len(), 1);
+                assert_eq!(graph.rows[0]["title"], Value::String("Updated memory".into()));
+                assert_eq!(sql.rows[0]["content"], Value::String("Updated payload".into()));
+                assert!(snapshot.commit_epoch() > epoch);
+                Ok(())
+            },
+        )
+        .unwrap();
+}
+
+#[test]
 fn bounded_read_snapshot_filters_text_seeds_before_top_k() {
     let handle = app_read_handle();
     handle
