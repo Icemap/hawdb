@@ -1,112 +1,87 @@
-name: Native Bindings
+name: Manual retained numeric Windows qualification
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "src/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "scripts/cargo-test-required.sh"
-      - "bindings/ffi/**"
-      - "bindings/go/**"
-      - "MODULE.bazel"
-      - "BUILD.bazel"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/native-bindings.yml"
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "scripts/cargo-test-required.sh"
-      - "bindings/ffi/**"
-      - "bindings/go/**"
-      - "MODULE.bazel"
-      - "BUILD.bazel"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/native-bindings.yml"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
-  bazel:
-    name: Bazel native bindings (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-latest]
-    env:
-      USE_BAZEL_VERSION: "9.3.0"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
-        with:
-          bazelisk-cache: true
-          repository-cache: true
-
-      - name: Build the C ABI libraries and Go package
-        run: bazel build //bindings/ffi:hawdb_ffi //bindings/ffi:hawdb_ffi_static //bindings/go:hawdb
-
-      - name: Test Go against the Bazel-built C ABI
-        run: bazel test --test_output=errors --test_arg=-test.v //bindings/go:hawdb_go_tests
-
-  windows-native-contracts:
-    name: Windows native contracts
+  retained-numeric-windows:
+    name: Retained numeric ownership (Windows)
     runs-on: windows-2025
     timeout-minutes: 120
+    env:
+      EXPECTED_ENGINE: 4386263386d3b40cf6f42e8da1c8abaa5cf01ea9
+      EXPECTED_TREE: 593377430ad97841b252464473cac9f65a555d20
     steps:
-      - name: Checkout
+      - name: Checkout frozen qualification source
         uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
-      - name: Install Rust
+      - name: Install pinned Rust
         uses: dtolnay/rust-toolchain@1.97.1
-        with:
-          components: clippy
 
-      - name: Record tested source and toolchain
+      - name: Verify exact production source and record toolchain
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p windows-native-results
-          git log -1 --format='%H%n%T%n%P' > windows-native-results/source.txt
-          rustc --version --verbose > windows-native-results/toolchain.txt
+          mkdir -p retained-numeric-windows-results
+          test "$(git rev-parse "${EXPECTED_ENGINE}^{tree}")" = "$EXPECTED_TREE"
+          test "$(git merge-base "$EXPECTED_ENGINE" HEAD)" = "$EXPECTED_ENGINE"
+          changed=$(git diff --name-only "$EXPECTED_ENGINE" HEAD)
+          test "$changed" = ".github/workflows/native-bindings.yml"
+          test -z "$(git status --porcelain)"
+          git log -1 --format='%H%n%T%n%P' > retained-numeric-windows-results/source.txt
+          git show --format=fuller --no-patch "$EXPECTED_ENGINE" > retained-numeric-windows-results/engine.txt
+          git diff "$EXPECTED_ENGINE" HEAD > retained-numeric-windows-results/workflow-only.patch
+          rustc --version --verbose > retained-numeric-windows-results/toolchain.txt
 
-      - name: Run strict native Windows Clippy
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
-            2>&1 | tee windows-native-results/clippy.txt
-
-      - name: Test abandonment GC power-loss cuts
+      - name: Test root Rust numeric ownership and session limits
         shell: bash
         run: |
           set -euo pipefail
           bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::tests::power_loss::branch_abandonment::abandonment_gc_cuts_preserve_quarantine_and_live_branches \
-            -- --exact --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/abandonment.txt
+            api::retained_query::tests:: -- --nocapture \
+            2>&1 | tee retained-numeric-windows-results/root-numeric.txt
 
-      - name: Preserve Windows validation evidence
+      - name: Test executor numeric ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-executor --all-features --lib \
+            numeric::retained:: -- --nocapture \
+            2>&1 | tee retained-numeric-windows-results/executor-numeric.txt
+
+      - name: Test shared retained admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-qos --all-features --lib \
+            runtime::retained_result:: -- --nocapture \
+            2>&1 | tee retained-numeric-windows-results/retained-admission.txt
+
+      - name: Test COW capacity and checkpoint ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            cow:: -- --nocapture \
+            2>&1 | tee retained-numeric-windows-results/cow-ownership.txt
+
+      - name: Test materialized source lifetime and admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            store::graph_read::retained_scan_tests:: -- --nocapture \
+            2>&1 | tee retained-numeric-windows-results/source-ownership.txt
+
+      - name: Preserve complete native qualification evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: windows-native-contracts-${{ github.sha }}
-          path: windows-native-results
+          name: retained-numeric-windows-${{ github.sha }}
+          path: retained-numeric-windows-results
           if-no-files-found: error
