@@ -144,6 +144,28 @@ jobs:
           cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
             2>&1 | tee windows-native-results/clippy.txt
 
+      - name: Build and test the retained Windows C ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked --manifest-path bindings/ffi/Cargo.toml --lib
+          bash scripts/cargo-test-required.sh --locked --manifest-path bindings/ffi/Cargo.toml --lib retained:: -- --nocapture \
+            2>&1 | tee windows-native-results/retained-ffi.txt
+
+      - name: Install Go for Windows numeric bindings
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: bindings/go/go.mod
+          cache-dependency-path: bindings/go/go.sum
+
+      - name: Test Go against the Windows C ABI
+        shell: bash
+        working-directory: bindings/go
+        run: |
+          set -euo pipefail
+          HAWDB_LIBRARY="$GITHUB_WORKSPACE/bindings/ffi/target/debug/hawdb_ffi.dll" \
+            go test -count=1 -v ./... 2>&1 | tee ../../windows-native-results/go.txt
+
       - name: Test retained indexed node ownership and task controls
         shell: bash
         run: |

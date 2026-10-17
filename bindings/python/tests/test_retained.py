@@ -302,6 +302,31 @@ def test_native_buffer_requests_refuse_without_partial_owner(db):
     assert_empty(db)
 
 
+def test_explicit_zero_request_budget_is_strict_and_default_inherits(db):
+    fixture(db, values=range(3))
+    inherited = cursor(db)
+    batch = inherited.next_batch()
+    assert batch.row_count == 3
+    batch.close()
+    assert inherited.next_batch() is None
+    assert inherited.status == "completed"
+    inherited.close()
+    assert_empty(db)
+
+    strict = cursor(db, max_result_rows=0)
+    for _ in range(2):
+        with pytest.raises(hawdb.exceptions.RetainedError) as failed:
+            strict.next_batch()
+        assert failed.value.kind == "result_budget"
+        assert not failed.value.retryable
+    assert strict.status == "failed"
+    assert strict.profile_copy()["native_emitted_rows"] == 0
+    assert strict.profile_copy()["delivered_rows"] == 0
+    assert strict.profile_copy()["source_pinned_rows"] == 0
+    strict.close()
+    assert_empty(db)
+
+
 def test_late_budget_failure_is_sticky_and_previous_values_remain_readable(db):
     fixture(db)
     query = cursor(db, max_result_rows=3)

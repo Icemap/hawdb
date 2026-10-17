@@ -90,9 +90,10 @@ parameters; any other object shape stays a `Map`.
 The additive `hawdb_retained_*` exports use ABI version 1, checked descriptor
 sizes, fixed-width discriminants and opaque namespace/ID handles. This is an
 experimental adapter for the root numeric cursor described in
-[the retained delivery notes](../../docs/RETAINED_NUMERIC_FOUNDATION.md).
-Complete source/planning admission, allocation/RSS qualification, Python
-views and Arrow export remain unfinished. An experimental purego numeric
+[the retained delivery notes](../../docs/RETAINED_NUMERIC_CORE.md).
+Source capacity and native construction are admitted by the landed numeric core.
+Complete foreign allocation/RSS and performance qualification remain open;
+Arrow export is a separate delivery. An experimental purego numeric
 adapter is described in [the Go notes](../go/README.md); its complete resource
 and platform qualification remains open. This does not qualify general queries,
 source reuse or a whole-operation memory bound.

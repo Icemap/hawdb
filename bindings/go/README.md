@@ -76,12 +76,11 @@ the shared slot/byte/handle allowance. Terminal failures are explicit; previousl
 produced batches remain provisional until successful `io.EOF`. `State` observes
 late completion/failure while a live owner keeps earlier values readable.
 
-This is an experimental numeric adapter. Complete pinned-source/planning
-admission, foreign allocation/RSS and performance qualification, Python views
-and Arrow export remain unfinished. Engine charges do not bound arbitrary Go
+This is an experimental numeric adapter. Complete foreign allocation/RSS and performance qualification remain open.
+Arrow export is a separate delivery. Engine charges do not bound arbitrary Go
 runtime allocations or application collections. Windows amd64/arm64 compile
 checks are not Windows execution qualification. Defaults and durability remain
-unchanged; see [the retained delivery notes](../../docs/RETAINED_NUMERIC_FOUNDATION.md).
+unchanged; see [the retained delivery notes](../../docs/RETAINED_NUMERIC_CORE.md).
 
 ```sh
 bazel test //bindings/go:hawdb_go_tests
