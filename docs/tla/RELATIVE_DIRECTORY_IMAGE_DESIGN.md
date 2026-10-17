@@ -97,7 +97,9 @@ C-ready/E, writer/resource/fairness gates and actual Mem adoption remains requir
 
 `SourceDirectory::visit_children` uses a fresh cursor opened from the retained
 native directory. Linux/Apple use `openat(root,".")` plus `fdopendir`; Windows
-uses `ReOpenFile(root)` plus single-entry `NtQueryDirectoryFile` queries. It
+uses an empty-name `NtCreateFile` relative to the held root with
+`FILE_DIRECTORY_FILE`, plus single-entry `NtQueryDirectoryFile` queries. The
+cursor's full native identity must equal its held root before enumeration. It
 never enumerates through a stored root pathname. Each cursor admits one extra
 project descriptor before native open and releases that receipt after cursor
 closure, including callback error and unwind. Unix descriptor duplication is
@@ -133,8 +135,10 @@ Primary API contracts:
   and [readdir](https://pubs.opengroup.org/onlinepubs/9799919799/functions/readdir.html)
   define stream ownership, enumeration/error handling and concurrent-mutation
   limits.
-- [Microsoft ReOpenFile](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-reopenfile)
-  reopens the held object; backup semantics support directory handles.
+- [Microsoft NtCreateFile](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntcreatefile)
+  defines root-relative opens and directory/access/disposition flags. The trusted
+  empty native name is private to reopening the held cursor, never a public
+  component input. Actual native behavior requires Windows execution.
 - [Microsoft NtQueryDirectoryFile](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntquerydirectoryfile)
   defines per-handle scanning, restart/single-entry flags, returned length and
   incomplete-buffer behavior. Incomplete records are errors, never successful
@@ -168,3 +172,22 @@ captured child's payload while preserving both replacements. Denied descriptor,
 file-versus-directory, missing name, foreign-domain and Unix symlink cases check
 resource refunds. Windows runtime behavior still requires CI/native execution.
 The recorder refusal continues to apply to these new child captures.
+
+
+## Windows cursor correction
+
+PR head 91c6c0c's Windows native job executed all 28 selected cases: 24 passed
+and four enumeration-dependent cases failed with access denied. The cross-target
+Clippy pass had not established runtime support for ReOpenFile on directories.
+The implementation now reopens the held directory directly with NtCreateFile,
+without pathname fallback, handle duplication or shared enumeration offsets.
+Its separately admitted new directory handle must have the captured root's full
+native identity. The original four regressions remain unchanged and must pass
+in the native Windows job; local cross-compilation cannot supply that evidence.
+
+The primary [Wine Win32 conformance test](https://github.com/wine-mirror/wine/blob/master/dlls/kernel32/tests/file.c)
+explicitly exercises ReOpenFile on a directory and expects access denied even
+with backup semantics. The native CI failure is retained separately from this
+source reference; the proposed NT cursor still needs its own native green run.
+Public child-directory opens now explicitly test rejection of an empty name,
+which remains reserved for the private captured-object reopen.

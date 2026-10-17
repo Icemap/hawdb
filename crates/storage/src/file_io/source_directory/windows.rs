@@ -62,8 +62,6 @@ unsafe extern "system" {
 }
 #[link(name = "kernel32")]
 unsafe extern "system" {
-    #[link_name = "ReOpenFile"]
-    fn reopen_file(file: *mut c_void, access: u32, share: u32, flags: u32) -> *mut c_void;
     #[link_name = "SetFileInformationByHandle"]
     fn set_file_information(
         file: *mut c_void,
@@ -241,22 +239,18 @@ pub(super) fn visit_children(
     root: &std::fs::File,
     visitor: &mut dyn FnMut(&str) -> io::Result<()>,
 ) -> io::Result<()> {
-    // SAFETY: borrowed live directory, FILE_LIST_DIRECTORY access, share-all,
-    // and backup-semantics flag. ReOpenFile creates a separate cursor without
-    // resolving the root pathname again. Caller pre-admitted its descriptor.
-    let handle = unsafe {
-        reopen_file(
-            root.as_raw_handle(),
-            READ_DATA | READ_ATTRIBUTES | SYNCHRONIZE,
-            SHARE_ALL,
-            0x0200_0000,
-        )
-    };
-    if handle.is_null() || handle == std::ptr::without_provenance_mut(usize::MAX) {
-        return Err(io::Error::last_os_error());
+    // A trusted empty NT name reopens the held object itself through
+    // RootDirectory. FILE_DIRECTORY_FILE selects a directory and creates an
+    // independent cursor. Public component validation continues to reject
+    // empty names. ReOpenFile rejects directories on native Windows.
+    let cursor = relative_open_kind(root, ChildName(""), READ_DATA, false, 1)?;
+    if crate::native_file_identity::of_file(&cursor)? != crate::native_file_identity::of_file(root)?
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "directory cursor identity differs from captured root",
+        ));
     }
-    // SAFETY: one fresh owned synchronous handle, closed on every return/unwind.
-    let cursor = unsafe { std::fs::File::from_raw_handle(handle) };
     let mut scratch = [0_u64; 512];
     let mut restart = 1;
     loop {

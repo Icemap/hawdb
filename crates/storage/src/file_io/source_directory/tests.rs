@@ -685,7 +685,7 @@ fn child_directory_open_refuses_files_foreign_contexts_and_unadmitted_descriptor
         .open_directory(&foreign.project.io_context(), "child")
         .is_err());
     assert_eq!(foreign.project.metrics().open, 0);
-    for name in ["file", "missing", "..", "child/", "./child"] {
+    for name in ["", "file", "missing", "..", "child/", "./child"] {
         assert!(parent.open_directory(&context, name).is_err(), "{name}");
         assert_eq!(fixture.project.metrics().open, 1);
     }
