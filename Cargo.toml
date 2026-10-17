@@ -324,3 +324,11 @@ harness = false
 [[bench]]
 name = "graph_analytics"
 harness = false
+
+[[bench]]
+name = "host_boundary"
+harness = false
+
+[[bench]]
+name = "host_boundary_allocations"
+harness = false
