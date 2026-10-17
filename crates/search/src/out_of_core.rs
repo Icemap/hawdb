@@ -51,6 +51,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod admitted_root;
 mod generation_writer;
 mod hydration;
 mod projection_scan;
@@ -490,10 +491,11 @@ impl SearchOutOfCoreManifestBody {
         bytes: &[u8],
         task: Option<&hawdb_core::RuntimeTaskContext>,
     ) -> Result<Self> {
-        let envelope: SearchOutOfCoreManifestEnvelope =
-            serde_json::from_slice(bytes).map_err(|error| {
-                HawDBError::Storage(format!("invalid search out-of-core manifest: {error}"))
-            })?;
+        let envelope = serde_json::from_slice::<SearchOutOfCoreManifestEnvelope>(bytes);
+        task.map_or(Ok(()), crate::build_control::checkpoint)?;
+        let envelope = envelope.map_err(|error| {
+            HawDBError::Storage(format!("invalid search out-of-core manifest: {error}"))
+        })?;
         if crate::build_control::json::checksum_with_context(&envelope.body, task)?
             != envelope.checksum
         {
@@ -501,13 +503,21 @@ impl SearchOutOfCoreManifestBody {
                 "search out-of-core manifest checksum mismatch".to_string(),
             ));
         }
-        envelope.body.validate_names()?;
+        envelope.body.validate_names_with_context(task)?;
         Ok(envelope.body)
     }
 }
 
 impl<S: AsRef<str>> SearchOutOfCoreManifestBody<S> {
     fn validate_names(&self) -> Result<()> {
+        self.validate_names_with_context(None)
+    }
+    fn validate_names_with_context(
+        &self,
+        task: Option<&hawdb_core::RuntimeTaskContext>,
+    ) -> Result<()> {
+        task.map_or(Ok(()), crate::build_control::checkpoint)?;
+
         if self.format.as_ref() != OUT_OF_CORE_FORMAT
             || self.generation == 0
             || self.segments.is_empty()
@@ -519,6 +529,7 @@ impl<S: AsRef<str>> SearchOutOfCoreManifestBody<S> {
         let mut ids = BTreeSet::new();
         let mut content_document_count = 0usize;
         for segment in &self.segments {
+            task.map_or(Ok(()), crate::build_control::checkpoint)?;
             if !ids.insert(segment.segment_id) {
                 return Err(HawDBError::Storage(
                     "search out-of-core manifest has duplicate segment ids".to_string(),
@@ -535,6 +546,7 @@ impl<S: AsRef<str>> SearchOutOfCoreManifestBody<S> {
         }
         let mut mutation_generations = BTreeSet::new();
         for run in &self.mutation_runs {
+            task.map_or(Ok(()), crate::build_control::checkpoint)?;
             if run.generation > self.generation || !mutation_generations.insert(run.generation) {
                 return Err(HawDBError::Storage(
                     "search out-of-core manifest has an invalid mutation-run generation"
@@ -1095,7 +1107,10 @@ impl SearchOutOfCoreSegmentReader {
                     root,
                     identity: crate::lexical_projection::ReaderIdentity {
                         source_epoch: manifest.source_graph_commit_epoch,
-                        analyzer_digest: lexical_analyzer_digest(analyzer_lexicon),
+                        analyzer_digest: crate::lexical_projection::analyzer_digest_with_context(
+                            analyzer_lexicon,
+                            context.task,
+                        )?,
                         documents_digest: manifest.documents_digest,
                     },
                     config: lexical_config,
@@ -1255,30 +1270,17 @@ impl SearchOutOfCoreReader {
         lexical_term_policy: SearchLexicalTermPolicy,
         lexical_source_policy: SearchLexicalSourcePolicy,
     ) -> Result<Self> {
-        let root = path.as_ref().to_path_buf();
-        let project_files =
-            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_component(
-                &root, false,
-            )?;
-        let (manifest, segments, visibility) = load_artifact_closure(
-            &root,
-            &config,
-            &analyzer_lexicon,
-            lexical_term_policy,
-            lexical_source_policy,
-        )?;
-        Ok(Self {
-            root,
-            _project_files: project_files,
+        admitted_root::open(admitted_root::OpenContext {
+            root: path.as_ref(),
             config,
             analyzer_lexicon,
-            manifest,
-            segments,
-            visibility,
-            lexical_source_policy,
             lexical_term_policy,
-            runtime_capabilities: crate::compiled_runtime_capabilities(),
-        })
+            lexical_source_policy,
+            admission: None,
+            project: None,
+            max_artifact_read_bytes: u64::MAX,
+        })?
+        .into_ordinary()
     }
 
     pub(super) fn primary_segment(&self) -> &SearchOutOfCoreSegmentReader {
@@ -3013,6 +3015,18 @@ struct LoadedArtifactClosure {
     segments: Vec<SearchOutOfCoreSegmentReader>,
     visibility: mutation_run::MutationVisibility,
     refresh: SearchOutOfCoreRefreshReport,
+    collections_memory: Option<crate::build_memory::read::ReaderMemory>,
+}
+
+struct ClosureLoadContext<'a, 'execution> {
+    root: &'a Path,
+    config: &'a SearchOutOfCoreConfig,
+    analyzer_lexicon: &'a SearchAnalyzerLexicon,
+    lexical_term_policy: SearchLexicalTermPolicy,
+    lexical_source_policy: SearchLexicalSourcePolicy,
+    previous: Option<reuse::View<'a>>,
+    admission: Option<&'a crate::build_memory::read::ReadAdmission<'execution>>,
+    max_artifact_read_bytes: u64,
 }
 
 /// Target-validation work performed while attaching a durable search head.
@@ -3026,32 +3040,6 @@ pub struct SearchOutOfCoreRefreshReport {
     pub reused_content_segments: usize,
 }
 
-fn load_artifact_closure(
-    root: &Path,
-    config: &SearchOutOfCoreConfig,
-    analyzer_lexicon: &SearchAnalyzerLexicon,
-    lexical_term_policy: SearchLexicalTermPolicy,
-    lexical_source_policy: SearchLexicalSourcePolicy,
-) -> Result<(
-    SearchOutOfCoreManifestBody,
-    Vec<SearchOutOfCoreSegmentReader>,
-    mutation_run::MutationVisibility,
-)> {
-    let manifest_path = root.join(OUT_OF_CORE_MANIFEST_FILE);
-    let manifest_bytes = read_bounded_file(&manifest_path, MAX_OUT_OF_CORE_MANIFEST_BYTES)?;
-    let manifest = SearchOutOfCoreManifestBody::decode(&manifest_bytes)?;
-    let closure = load_artifact_closure_for_manifest(
-        root,
-        config,
-        analyzer_lexicon,
-        lexical_term_policy,
-        lexical_source_policy,
-        manifest,
-        None,
-    )?;
-    Ok((closure.manifest, closure.segments, closure.visibility))
-}
-
 fn load_artifact_closure_for_manifest(
     root: &Path,
     config: &SearchOutOfCoreConfig,
@@ -3061,6 +3049,61 @@ fn load_artifact_closure_for_manifest(
     manifest: SearchOutOfCoreManifestBody,
     previous: Option<reuse::View<'_>>,
 ) -> Result<LoadedArtifactClosure> {
+    load_artifact_closure_with_context(
+        ClosureLoadContext {
+            root,
+            config,
+            analyzer_lexicon,
+            lexical_term_policy,
+            lexical_source_policy,
+            previous,
+            admission: None,
+            max_artifact_read_bytes: u64::MAX,
+        },
+        manifest,
+    )
+}
+
+fn load_artifact_closure_with_context(
+    context: ClosureLoadContext<'_, '_>,
+    manifest: SearchOutOfCoreManifestBody,
+) -> Result<LoadedArtifactClosure> {
+    let ClosureLoadContext {
+        root,
+        config,
+        analyzer_lexicon,
+        lexical_term_policy,
+        lexical_source_policy,
+        previous,
+        admission,
+        max_artifact_read_bytes,
+    } = context;
+    let checkpoint = || {
+        admission.map_or(Ok(()), |admission| {
+            crate::build_control::checkpoint(admission.task)
+        })
+    };
+    checkpoint()?;
+    if admission.is_some() && previous.is_some() {
+        return Err(HawDBError::Execution(
+            "governed reuse requires source-root custody".into(),
+        ));
+    }
+    let collections_memory = admission
+        .map(|admission| {
+            use crate::build_memory::{checked_add, checked_mul};
+            admission.retained(checked_add(
+                checked_mul(
+                    manifest.segments.len(),
+                    std::mem::size_of::<SearchOutOfCoreSegmentReader>(),
+                )?,
+                checked_mul(
+                    manifest.mutation_runs.len(),
+                    std::mem::size_of::<mutation_run::SearchMutationRun>(),
+                )?,
+            )?)
+        })
+        .transpose()?;
     let previous = previous.filter(|reader| {
         reader.manifest.embedding_dimension == manifest.embedding_dimension
             && reader.manifest.embedding_model == manifest.embedding_model
@@ -3074,25 +3117,37 @@ fn load_artifact_closure_for_manifest(
         opened_content_segments: 0,
         reused_content_segments: 0,
     };
-    let segments = manifest
-        .segments
-        .iter()
-        .map(|segment| {
-            if let Some(previous) = previous
-                && let Some(position) = previous
-                    .manifest
-                    .segments
-                    .iter()
-                    .position(|reference| reference == segment)
-            {
-                previous.segments[position].validate_pinned_paths(root, segment)?;
-                refresh.reused_content_segments += 1;
-                // Share immutable descriptor/layout metadata as well as file
-                // handles, avoiding a corpus-sized ID-summary copy per refresh.
-                return Ok(previous.segments[position].clone());
-            }
-            refresh.opened_content_segments += 1;
-            SearchOutOfCoreSegmentReader::open(
+    let opened_segments = manifest.segments.iter().map(|segment| {
+        checkpoint()?;
+        if let Some(previous) = previous
+            && let Some(position) = previous
+                .manifest
+                .segments
+                .iter()
+                .position(|reference| reference == segment)
+        {
+            previous.segments[position].validate_pinned_paths(root, segment)?;
+            refresh.reused_content_segments += 1;
+            // Share immutable descriptor/layout metadata as well as file
+            // handles, avoiding a corpus-sized ID-summary copy per refresh.
+            return Ok(previous.segments[position].clone());
+        }
+        refresh.opened_content_segments += 1;
+        match admission {
+            Some(_) => SearchOutOfCoreSegmentReader::open_with_read_admission(
+                SegmentOpenContext {
+                    root,
+                    config,
+                    analyzer_lexicon,
+                    lexical_source_policy,
+                    lexical_term_policy,
+                    active_manifest: &manifest,
+                    admission,
+                    max_artifact_read_bytes,
+                },
+                segment,
+            ),
+            None => SearchOutOfCoreSegmentReader::open(
                 root,
                 config,
                 analyzer_lexicon,
@@ -3100,37 +3155,114 @@ fn load_artifact_closure_for_manifest(
                 lexical_term_policy,
                 &manifest,
                 segment,
-            )
-        })
-        .collect::<Result<Vec<_>>>()?;
+            ),
+        }
+    });
+    let segments = if admission.is_some() {
+        let mut segments = Vec::new();
+        segments
+            .try_reserve_exact(manifest.segments.len())
+            .map_err(|error| {
+                HawDBError::Execution(format!("reader segment list allocation failed: {error}"))
+            })?;
+        if segments.capacity() > manifest.segments.len() {
+            return Err(HawDBError::Execution(
+                "reader segment list exceeded admitted capacity".into(),
+            ));
+        }
+        for segment in opened_segments {
+            segments.push(segment?);
+        }
+        segments
+    } else {
+        opened_segments.collect::<Result<Vec<_>>>()?
+    };
     let mut mutation_budget = mutation_run::MutationRunBudget::new(
         config.max_mutation_working_bytes.get(),
         manifest.mutation_runs.len(),
         manifest.segments.len(),
-    )?;
+    )
+    .map_err(|error| match (admission.is_some(), error) {
+        (true, HawDBError::Storage(message)) => HawDBError::Execution(message),
+        (_, error) => error,
+    })?;
+    let allocation_error = |message| {
+        if admission.is_some() {
+            HawDBError::Execution(message)
+        } else {
+            HawDBError::Storage(message)
+        }
+    };
     let mut mutation_runs = Vec::new();
     mutation_runs
         .try_reserve_exact(manifest.mutation_runs.len())
         .map_err(|error| {
-            HawDBError::Storage(format!(
+            allocation_error(format!(
                 "search mutation-run list allocation failed: {error}"
             ))
         })?;
     if mutation_runs.capacity() > manifest.mutation_runs.len() {
-        return Err(HawDBError::Storage(
+        return Err(allocation_error(
             "search mutation-run list exceeded admitted capacity".into(),
         ));
     }
+    let analyzer_digest = if manifest.mutation_runs.is_empty() {
+        0
+    } else {
+        match admission {
+            Some(admission) => crate::lexical_projection::analyzer_digest_with_context(
+                analyzer_lexicon,
+                admission.task,
+            )?,
+            None => lexical_analyzer_digest(analyzer_lexicon),
+        }
+    };
     for run in &manifest.mutation_runs {
-        mutation_runs.push(mutation_run::SearchMutationRun::open(
-            root,
-            run,
-            config.max_mutation_run_bytes.get(),
-            lexical_analyzer_digest(analyzer_lexicon),
-            &mut mutation_budget,
-        )?);
+        checkpoint()?;
+        let opened = match admission {
+            Some(_) => mutation_run::SearchMutationRun::open_with_read_admission(
+                root,
+                run,
+                config.max_mutation_run_bytes.get(),
+                analyzer_digest,
+                &mut mutation_budget,
+                admission,
+                max_artifact_read_bytes,
+            ),
+            None => mutation_run::SearchMutationRun::open(
+                root,
+                run,
+                config.max_mutation_run_bytes.get(),
+                analyzer_digest,
+                &mut mutation_budget,
+            ),
+        };
+        mutation_runs.push(opened?);
     }
-    mutation_run::validate_closure(&manifest, &mutation_runs)?;
+    let _validation_memory = admission
+        .map(|admission| {
+            use crate::build_memory::{checked_add, checked_mul, SET_ENTRY_BYTES};
+            let entries = manifest
+                .mutation_runs
+                .iter()
+                .try_fold(0usize, |count, run| {
+                    checkpoint()?;
+                    checked_add(count, run.entry_count)
+                })?;
+            admission.scratch(checked_mul(
+                checked_add(manifest.segments.len(), entries)?,
+                SET_ENTRY_BYTES,
+            )?)
+        })
+        .transpose()?;
+    match admission {
+        Some(admission) => mutation_run::validate_closure_with_context(
+            &manifest,
+            &mutation_runs,
+            Some(admission.task),
+        )?,
+        None => mutation_run::validate_closure(&manifest, &mutation_runs)?,
+    }
     let targets_to_validate = mutation_runs
         .iter()
         .zip(&manifest.mutation_runs)
@@ -3153,19 +3285,32 @@ fn load_artifact_closure_for_manifest(
                 Some(run)
             }
         });
-    mutation_run::validate_targets(
-        root,
-        &segments,
-        targets_to_validate,
-        config,
-        analyzer_lexicon,
-        lexical_source_policy,
-    )?;
+    match admission {
+        Some(admission) => mutation_run::validate_targets_with_admission(
+            root,
+            &segments,
+            targets_to_validate,
+            config,
+            analyzer_lexicon,
+            lexical_source_policy,
+            Some((admission, max_artifact_read_bytes)),
+        )?,
+        None => mutation_run::validate_targets(
+            root,
+            &segments,
+            targets_to_validate,
+            config,
+            analyzer_lexicon,
+            lexical_source_policy,
+        )?,
+    }
+    checkpoint()?;
     Ok(LoadedArtifactClosure {
         manifest,
         segments,
         visibility: mutation_run::MutationVisibility::from_validated_runs(mutation_runs),
         refresh,
+        collections_memory,
     })
 }
 
@@ -4367,6 +4512,32 @@ mod tests {
         SearchLexicalProductionQualificationReport, SearchProjectionCleanupOptions,
     };
     use std::io::{Seek, SeekFrom};
+
+    fn load_artifact_closure(
+        root: &Path,
+        config: &SearchOutOfCoreConfig,
+        analyzer_lexicon: &SearchAnalyzerLexicon,
+        lexical_term_policy: SearchLexicalTermPolicy,
+        lexical_source_policy: SearchLexicalSourcePolicy,
+    ) -> Result<(
+        SearchOutOfCoreManifestBody,
+        Vec<SearchOutOfCoreSegmentReader>,
+        mutation_run::MutationVisibility,
+    )> {
+        let manifest_path = root.join(OUT_OF_CORE_MANIFEST_FILE);
+        let manifest_bytes = read_bounded_file(&manifest_path, MAX_OUT_OF_CORE_MANIFEST_BYTES)?;
+        let manifest = SearchOutOfCoreManifestBody::decode(&manifest_bytes)?;
+        let closure = load_artifact_closure_for_manifest(
+            root,
+            config,
+            analyzer_lexicon,
+            lexical_term_policy,
+            lexical_source_policy,
+            manifest,
+            None,
+        )?;
+        Ok((closure.manifest, closure.segments, closure.visibility))
+    }
 
     static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 

@@ -134,6 +134,41 @@ pub(super) fn analyzer_digest(analyzer: &SearchAnalyzerLexicon) -> u64 {
     digest.finish()
 }
 
+pub(super) fn analyzer_digest_with_context(
+    analyzer: &SearchAnalyzerLexicon,
+    task: &RuntimeTaskContext,
+) -> Result<u64> {
+    let mut digest = Digest::new();
+    let mut update = |bytes: &[u8]| -> Result<()> {
+        for chunk in bytes.chunks(8192) {
+            checkpoint(task)?;
+            digest.update(chunk);
+        }
+        Ok(())
+    };
+    checkpoint(task)?;
+    update(ANALYZER_FORMAT_VERSION)?;
+    for rule in &analyzer.alias_rules {
+        checkpoint(task)?;
+        for input in &rule.inputs {
+            update(input.as_bytes())?;
+            update(&[0])?;
+        }
+        update(&[1])?;
+        for alias in &rule.aliases {
+            update(alias.as_bytes())?;
+            update(&[0])?;
+        }
+        update(&[2])?;
+    }
+    for stopword in &analyzer.stopwords {
+        update(stopword.as_bytes())?;
+        update(&[0])?;
+    }
+    checkpoint(task)?;
+    Ok(digest.finish())
+}
+
 /// An order-independent document-set identity used to join immutable search artifacts.
 ///
 /// Artifact checksums remain the integrity boundary. This summary is deliberately

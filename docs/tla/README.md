@@ -2247,3 +2247,11 @@ one query slot. Its two-chunk finite graph has 32 distinct states. Two negative
 controls expose self-wait when capture or body I/O is retained across the next
 read. See [the safety argument and native correspondence](TARGET_REANALYSIS_IO_PROOF.md).
 This is not a proof of external wait fairness or global deadlock freedom.
+
+
+The private admitted root constructor connects these resource protocols to root,
+analyzer/configuration, manifest, segment/run collection and validation-index
+ownership. [Its conditional construction argument](ROOT_READER_CONSTRUCTION_PROOF.md)
+describes destruction and independent-child lifetimes, the public-conversion
+fence and native evidence. It is not a new model-checking result or a certificate
+of cold managed cache/registry ownership, source/GC custody or C-ready readiness.

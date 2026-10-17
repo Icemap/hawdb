@@ -512,6 +512,16 @@ pub(super) fn validate_closure(
     manifest: &SearchOutOfCoreManifestBody,
     runs: &[SearchMutationRun],
 ) -> Result<()> {
+    validate_closure_with_context(manifest, runs, None)
+}
+
+pub(super) fn validate_closure_with_context(
+    manifest: &SearchOutOfCoreManifestBody,
+    runs: &[SearchMutationRun],
+    task: Option<&hawdb_core::RuntimeTaskContext>,
+) -> Result<()> {
+    let checkpoint = || task.map_or(Ok(()), crate::build_control::checkpoint);
+    checkpoint()?;
     if runs.len() != manifest.mutation_runs.len() {
         return Err(HawDBError::Storage(
             "search mutation-run closure does not match the active manifest".to_string(),
@@ -523,16 +533,17 @@ pub(super) fn validate_closure(
     if runs.is_empty() {
         return Ok(());
     }
-    let active_segments = manifest
-        .segments
-        .iter()
-        .map(|segment| segment.segment_id)
-        .collect::<BTreeSet<_>>();
+    let mut active_segments = BTreeSet::new();
+    for segment in &manifest.segments {
+        checkpoint()?;
+        active_segments.insert(segment.segment_id);
+    }
     let mut visible_document_count =
         manifest
             .segments
             .iter()
             .try_fold(0usize, |total, segment| {
+                checkpoint()?;
                 total.checked_add(segment.document_count).ok_or_else(|| {
                     HawDBError::Storage("search mutation-run document count overflows".to_string())
                 })
@@ -543,6 +554,7 @@ pub(super) fn validate_closure(
     let mut retracted_targets = BTreeSet::new();
     for run in runs {
         for entry in run.entries() {
+            checkpoint()?;
             if !active_segments.contains(&entry.target_segment_id) {
                 return Err(HawDBError::Storage(
                     "search mutation-run targets a segment outside the active manifest".to_string(),

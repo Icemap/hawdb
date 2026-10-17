@@ -103,7 +103,7 @@ The ordinary reader entry continues to use the existing ungoverned path.
 
 ## Remaining required construction work
 
-The next visibility implementation adds an admitted mutation-run decoder. Its
+The visibility implementation includes an admitted mutation-run decoder. Its
 preflight and decoding use the same borrowed construction admission; each shared
 term-file payload owns its retained query/host receipts. Stored terms require a
 fresh serving context that borrows execution, including after their parent run
@@ -122,10 +122,16 @@ capture retains a full-file read scope. Later body and term reads acquire I/O
 per bounded call, and an admitted temporary `Source` borrows execution until its
 worker joins and its consumers finish. The one-slot protocol and its limits are
 recorded in [target reanalysis I/O safety](../tla/TARGET_REANALYSIS_IO_PROOF.md).
-The complete root loader still calls the legacy branch, which creates its own
-default task; there is no admitted root factory yet. Root/visibility collection
-and closure-validation set capacity remain unconnected. These tests exercise
-native files, with project owners
+The private root constructor now connects that branch to root/configuration/
+analyzer capacity, head and manifest decoding, exact segment/run collections and
+closure-validation indexes. It borrows an existing project, charges incoming
+host buffers by actual capacity, and retains no producer execution. Its sealed
+wrapper refuses conversion to an ordinary public reader; admitted reuse is
+likewise refused until source-root custody exists. The ordinary public entry
+continues through its existing legacy branch. The conditional argument and
+unproven obligations are in
+[private root construction](../tla/ROOT_READER_CONSTRUCTION_PROOF.md).
+These tests exercise native files, with project owners
 explicitly closed for final heap reclamation; managed cache/registry ownership
 remains a separate unresolved requirement.
 
@@ -136,10 +142,10 @@ remains a separate unresolved requirement.
    artifacts, including retained cache/registry metadata and the opening-lock
    wait. Warm-cache tests alone do not prove this. Preserve the original
    fairness and writer-latency gates when one I/O slot spans a whole artifact.
-2. **Complete metadata closure.** Lexical and shared segment allocation ownership
-   are now connected. Apply the same operation to visibility runs,
-   analyzer/configuration metadata and root/segment collections. Hold retained guards with the actual shared
-   child payloads, including children reused independently of their parent.
+2. **Complete metadata closure.** The private root path now connects visibility,
+   analyzer/configuration and collection admission to the shared children.
+   Qualify cold managed cache/registry owners, then connect source-root custody,
+   governed serving and refresh/reuse before exposing a production entrypoint.
 3. **Bounded cancellation and work.** Check long scalar/line parsing, schema
    validation loops and physical checksum work, not only record boundaries.
    Account for full physical objects when selected metadata is smaller than its

@@ -38,6 +38,7 @@ pub(crate) struct ReadAdmission<'a> {
 }
 
 mod query;
+mod unbound;
 pub(crate) use query::{io_error, QueryFileRange};
 
 /// A bounded positioned range inside an already admitted, held native scope.

@@ -294,3 +294,102 @@ fn borrowed_reader_refuses_an_unbound_task_before_range_allocation_or_io() {
     // range buffer; include their destruction in the complete heap audit.
     assert_eq!(allocation::live(), 0);
 }
+
+#[test]
+fn unknown_length_head_keeps_the_opened_file_across_path_replacement() {
+    let directory = Directory::new();
+    let path = directory.0.join("head");
+    let bytes = b"held old head";
+    std::fs::write(&path, bytes).unwrap();
+    let replace = path.clone();
+    let old = directory.0.join("old-head");
+    AFTER_FILE_OPEN.with(|slot| {
+        *slot.borrow_mut() = Some(Box::new(move || {
+            std::fs::rename(&replace, old).unwrap();
+            std::fs::write(replace, b"new head").unwrap();
+        }))
+    });
+    let governor = governor();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(2 << 20).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(Default::default());
+    let memory = BuildMemory::new(&task).unwrap();
+    let admission = ReadAdmission {
+        memory: &memory,
+        task: &task,
+        permit: &permit,
+    };
+    let input = admission.read_unbound(&path, 1024).unwrap();
+    assert_eq!(&*input, bytes);
+    assert_eq!(std::fs::read(path).unwrap(), b"new head");
+    drop(input);
+    assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
+    drop(memory);
+    drop(task);
+    drop(permit);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+fn unknown_length_head_limit_and_open_cancellation_precede_large_buffer_allocation() {
+    let _serial = allocation::serial();
+    assert_eq!(allocation::live(), 0);
+    let directory = Directory::new();
+    let project = hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_component(
+        &directory.0,
+        false,
+    )
+    .unwrap();
+    let path = directory.0.join("head");
+    std::fs::write(&path, vec![b'x'; 3 << 20]).unwrap();
+    for cancelled in [false, true] {
+        let governor = governor();
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(2 << 20).with_io_wave_slots(1))
+            .unwrap();
+        let task = permit.bind_task_context(Default::default());
+        let memory = BuildMemory::new(&task).unwrap();
+        let admission = ReadAdmission {
+            memory: &memory,
+            task: &task,
+            permit: &permit,
+        };
+        if cancelled {
+            let token = task.cancellation().clone();
+            AFTER_FILE_OPEN.with(|slot| {
+                *slot.borrow_mut() = Some(Box::new(move || {
+                    token.cancel();
+                }))
+            });
+        }
+        let (error, peak) = allocation::measure(|| {
+            admission
+                .read_unbound(&path, if cancelled { 4 << 20 } else { 2 << 20 })
+                .err()
+                .expect("must refuse before buffer allocation")
+        });
+        assert!(matches!(&error, HawDBError::Execution(_)), "{error:?}");
+        assert!(
+            error
+                .to_string()
+                .contains(if cancelled { "cancelled" } else { "limit" }),
+            "{error:?}"
+        );
+        assert!(
+            peak < 16 << 10,
+            "allocated a large head before refusal: {peak}"
+        );
+        drop(error);
+        assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+        assert_eq!(governor.snapshot().active_background_io_slots, 0);
+        drop(memory);
+        drop(task);
+        drop(permit);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        drop(governor);
+    }
+    drop(project);
+    assert_eq!(allocation::live(), 0);
+}
