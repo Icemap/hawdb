@@ -43,11 +43,27 @@ unsafe extern "system" {
         ea_buffer: *const c_void,
         ea_length: u32,
     ) -> i32;
+    #[link_name = "NtQueryDirectoryFile"]
+    fn nt_query_directory(
+        file: *mut c_void,
+        event: *mut c_void,
+        apc_routine: *mut c_void,
+        apc_context: *mut c_void,
+        status: *mut IoStatusBlock,
+        information: *mut c_void,
+        length: u32,
+        class: u32,
+        single_entry: u8,
+        name: *const UnicodeString,
+        restart: u8,
+    ) -> i32;
     #[link_name = "RtlNtStatusToDosError"]
     fn status_to_error(status: i32) -> u32;
 }
 #[link(name = "kernel32")]
 unsafe extern "system" {
+    #[link_name = "ReOpenFile"]
+    fn reopen_file(file: *mut c_void, access: u32, share: u32, flags: u32) -> *mut c_void;
     #[link_name = "SetFileInformationByHandle"]
     fn set_file_information(
         file: *mut c_void,
@@ -81,6 +97,24 @@ fn relative_open(
     name: ChildName<'_>,
     access: u32,
     create: bool,
+) -> io::Result<std::fs::File> {
+    relative_open_kind(root, name, access, create, NON_DIRECTORY)
+}
+
+pub(super) fn open_directory(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+) -> io::Result<std::fs::File> {
+    // FILE_DIRECTORY_FILE; the same native root-relative, no-reparse open.
+    relative_open_kind(root, name, READ_DATA, false, 1)
+}
+
+fn relative_open_kind(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+    access: u32,
+    create: bool,
+    kind: u32,
 ) -> io::Result<std::fs::File> {
     let mut encoded = [0_u16; 256];
     for (slot, byte) in encoded.iter_mut().zip(name.0.bytes()) {
@@ -122,7 +156,7 @@ fn relative_open(
             0,
             SHARE_ALL,
             if create { 3 } else { 1 },
-            NON_DIRECTORY | SYNCHRONOUS_NONALERT | OPEN_REPARSE_POINT,
+            kind | SYNCHRONOUS_NONALERT | OPEN_REPARSE_POINT,
             std::ptr::null(),
             0,
         )
@@ -142,7 +176,13 @@ fn relative_open(
     // exclusively closes it, including validation and error paths below.
     let file = unsafe { std::fs::File::from_raw_handle(handle) };
     let metadata = file.metadata()?;
-    if metadata.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0 || !metadata.is_file() {
+    if metadata.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0
+        || if kind == NON_DIRECTORY {
+            !metadata.is_file()
+        } else {
+            !metadata.is_dir()
+        }
+    {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "source child is not a regular non-reparse file",
@@ -193,6 +233,97 @@ pub(super) fn open_lock_file(
         SourceDirectoryLockMode::ReadExisting => relative_open(root, name, READ_DATA, false),
         SourceDirectoryLockMode::ReadWriteCreate => {
             relative_open(root, name, READ_DATA | WRITE_DATA, true)
+        }
+    }
+}
+
+pub(super) fn visit_children(
+    root: &std::fs::File,
+    visitor: &mut dyn FnMut(&str) -> io::Result<()>,
+) -> io::Result<()> {
+    // SAFETY: borrowed live directory, FILE_LIST_DIRECTORY access, share-all,
+    // and backup-semantics flag. ReOpenFile creates a separate cursor without
+    // resolving the root pathname again. Caller pre-admitted its descriptor.
+    let handle = unsafe {
+        reopen_file(
+            root.as_raw_handle(),
+            READ_DATA | READ_ATTRIBUTES | SYNCHRONIZE,
+            SHARE_ALL,
+            0x0200_0000,
+        )
+    };
+    if handle.is_null() || handle == std::ptr::without_provenance_mut(usize::MAX) {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: one fresh owned synchronous handle, closed on every return/unwind.
+    let cursor = unsafe { std::fs::File::from_raw_handle(handle) };
+    let mut scratch = [0_u64; 512];
+    let mut restart = 1;
+    loop {
+        let mut status = IoStatusBlock {
+            status_or_pointer: 0,
+            information: 0,
+        };
+        // SAFETY: synchronous handle, no APC/event, aligned 4096-byte output
+        // buffer and matching IO_STATUS_BLOCK. FileNamesInformation is class
+        // 12; ReturnSingleEntry limits parsing to one complete record.
+        let result = unsafe {
+            nt_query_directory(
+                cursor.as_raw_handle(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut status,
+                scratch.as_mut_ptr().cast(),
+                4096,
+                12,
+                1,
+                std::ptr::null(),
+                restart,
+            )
+        };
+        restart = 0;
+        if result == 0x8000_0006_u32 as i32 {
+            return Ok(());
+        } // STATUS_NO_MORE_FILES
+        if result != 0 {
+            // SAFETY: pure NTSTATUS translation; overflow/pending are errors,
+            // never a successfully truncated enumeration.
+            return Err(io::Error::from_raw_os_error(
+                unsafe { status_to_error(result) } as i32,
+            ));
+        }
+        // SAFETY: fixed initialized scratch, borrowed only until next query.
+        let bytes = unsafe { std::slice::from_raw_parts(scratch.as_ptr().cast::<u8>(), 4096) };
+        let used = status.information;
+        if !(12..=bytes.len()).contains(&used) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "incomplete native directory record",
+            ));
+        }
+        let next = u32::from_ne_bytes(bytes[0..4].try_into().unwrap());
+        let length = u32::from_ne_bytes(bytes[8..12].try_into().unwrap()) as usize;
+        if next != 0 || !length.is_multiple_of(2) || length > used - 12 || length / 2 > 255 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "unsupported native directory record",
+            ));
+        }
+        let mut name = [0_u8; 255];
+        for (slot, unit) in name.iter_mut().zip(bytes[12..12 + length].chunks_exact(2)) {
+            let value = u16::from_ne_bytes([unit[0], unit[1]]);
+            if value > 127 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "source directory contains a non-ASCII name",
+                ));
+            }
+            *slot = value as u8;
+        }
+        let name = std::str::from_utf8(&name[..length / 2]).expect("ASCII directory name");
+        if !matches!(name, "." | "..") {
+            visitor(name)?;
         }
     }
 }

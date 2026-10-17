@@ -190,3 +190,7 @@ liveness. Those require native implementation/evidence and composed recovery
 arguments. Closed C-ready/E mapping, complete owner/parent/fanout dependencies,
 durable activation receipts, actual Mem integration and the original writer,
 fairness, RSS, I/O and group-fsync qualification remain open.
+
+The image-engine prerequisite now has captured-directory operations and pure
+model guards; see [the correspondence and remaining native gaps](RELATIVE_DIRECTORY_IMAGE_DESIGN.md).
+Native directory recording remains unsupported until that bridge is qualified.

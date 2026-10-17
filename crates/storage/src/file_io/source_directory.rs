@@ -28,6 +28,12 @@ mod platform {
     ) -> io::Result<std::fs::File> {
         Err(unsupported())
     }
+    pub(super) fn open_directory(
+        _root: &std::fs::File,
+        _name: ChildName<'_>,
+    ) -> io::Result<std::fs::File> {
+        Err(unsupported())
+    }
     pub(super) fn remove_child(
         _root: &std::fs::File,
         _name: ChildName<'_>,
@@ -40,6 +46,12 @@ mod platform {
         _name: ChildName<'_>,
         _mode: SourceDirectoryLockMode,
     ) -> io::Result<std::fs::File> {
+        Err(unsupported())
+    }
+    pub(super) fn visit_children(
+        _root: &std::fs::File,
+        _visitor: &mut dyn FnMut(&str) -> io::Result<()>,
+    ) -> io::Result<()> {
         Err(unsupported())
     }
     fn unsupported() -> io::Error {
@@ -168,6 +180,33 @@ impl SourceDirectory {
         Ok(counted(inner, permit))
     }
 
+    /// Capture one child directory without resolving the parent pathname.
+    /// Both authorities have independently counted handles; the child can
+    /// outlive its parent. Symlinks and reparse points are not followed.
+    /// The caller supplies I/O admission and namespace exclusion separately.
+    pub fn open_directory(&self, context: &FileOpenContext, name: &str) -> io::Result<Self> {
+        self.require_context(context)?;
+        let name = ChildName::new(name)?;
+        let _native = native_scope(context)?;
+        let permit = context.acquire(DescriptorKind::Transient)?;
+        let inner = self
+            .root
+            .with_native(|root| platform::open_directory(root, name))
+            .map_err(|error| context.map_open_error(error))?;
+        if !inner.metadata()?.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotADirectory,
+                "source child is not a directory",
+            ));
+        }
+        let identity = SourceDirectoryIdentity(crate::native_file_identity::of_file(&inner)?);
+        Ok(Self {
+            root: counted(inner, permit),
+            context: context.without_inventory(),
+            identity,
+        })
+    }
+
     /// Unlinks one entry relative to the captured root. The caller must exclude
     /// registration/publication and establish that no live reader needs it.
     /// Namespace durability and replay are separate obligations. The operation
@@ -178,6 +217,43 @@ impl SourceDirectory {
         let _native = native_scope(context)?;
         self.root
             .with_native(|root| platform::remove_child(root, name, context))
+            .map_err(|error| context.map_open_error(error))
+    }
+
+    /// Visit generated artifact names through a fresh native directory cursor.
+    /// The caller supplies I/O admission and namespace exclusion: enumeration
+    /// alone is not a snapshot. Exceeding the row budget or encountering an
+    /// unsupported component fails, even after earlier callbacks succeeded;
+    /// callers must not publish partial results. Callback errors stop scanning.
+    /// Each invocation admits one extra descriptor before opening its cursor.
+    pub fn visit_children(
+        &self,
+        context: &FileOpenContext,
+        maximum_entries: usize,
+        mut visitor: impl FnMut(&str) -> io::Result<()>,
+    ) -> io::Result<()> {
+        self.require_context(context)?;
+        // This live counted root prevents attaching a new recorder (attach
+        // requires zero open/reserved descriptors). Release registration
+        // exclusion before invoking user callbacks, which may perform I/O.
+        let _permit = {
+            let _native = native_scope(context)?;
+            context.acquire(DescriptorKind::Transient)?
+        };
+        let mut remaining = maximum_entries;
+        self.root
+            .with_native(|root| {
+                platform::visit_children(root, &mut |name| {
+                    ChildName::new(name)?;
+                    remaining = remaining.checked_sub(1).ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "source directory entry budget exceeded",
+                        )
+                    })?;
+                    visitor(name)
+                })
+            })
             .map_err(|error| context.map_open_error(error))
     }
 

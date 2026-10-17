@@ -508,3 +508,200 @@ fn relative_lock_handle_enforces_native_peer_process_exclusion() {
     drop(source);
     assert_eq!(fixture.project.metrics().open, 0);
 }
+
+#[test]
+fn enumeration_uses_captured_root_and_independent_cursors_after_replacement() {
+    let fixture = Fixture::new(8);
+    let selected = fixture.root.join("selected");
+    fs::create_dir(&selected).unwrap();
+    for index in 0..80 {
+        fs::write(selected.join(format!("segment-{index}")), b"original").unwrap();
+    }
+    let directory = fixture.capture(&selected);
+    fs::rename(&selected, fixture.root.join("moved")).unwrap();
+    fs::create_dir(&selected).unwrap();
+    fs::write(selected.join("foreign"), b"foreign").unwrap();
+    let context = fixture.project.io_context();
+    for _ in 0..2 {
+        let mut names = std::collections::BTreeSet::new();
+        directory
+            .visit_children(&context, 80, |name| {
+                assert!(names.insert(name.to_owned()));
+                // Callbacks can admit native I/O and another independent cursor.
+                let mut child = directory.open_child(&context, name)?;
+                let mut bytes = String::new();
+                child.read_to_string(&mut bytes)?;
+                assert_eq!(bytes, "original");
+                if names.len() == 1 {
+                    let mut nested = 0;
+                    directory.visit_children(&context, 80, |_| {
+                        nested += 1;
+                        Ok(())
+                    })?;
+                    assert_eq!(nested, 80);
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(names.len(), 80);
+        assert!(!names.contains("foreign"));
+        assert_eq!(fixture.project.metrics().open, 1);
+    }
+    assert_eq!(fs::read(selected.join("foreign")).unwrap(), b"foreign");
+    drop(directory);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn enumeration_denial_budget_callback_failure_and_unwind_return_cursor_capacity() {
+    let fixture = Fixture::new(2);
+    fs::write(fixture.root.join("one"), b"one").unwrap();
+    fs::write(fixture.root.join("two"), b"two").unwrap();
+    let directory = fixture.capture(&fixture.root);
+    let context = fixture.project.io_context();
+    let child = directory.open_child(&context, "one").unwrap();
+    let mut visited = 0;
+    assert!(directory
+        .visit_children(&context, 2, |_| {
+            visited += 1;
+            Ok(())
+        })
+        .is_err());
+    assert_eq!(visited, 0);
+    drop(child);
+    assert!(directory
+        .visit_children(&context, 1, |_| {
+            visited += 1;
+            Ok(())
+        })
+        .is_err());
+    assert_eq!(visited, 1);
+    assert_eq!(fixture.project.metrics().open, 1);
+    let error = directory
+        .visit_children(&context, 2, |_| Err(io::Error::other("callback stopped")))
+        .unwrap_err();
+    assert_eq!(error.to_string(), "callback stopped");
+    assert_eq!(fixture.project.metrics().open, 1);
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        directory
+            .visit_children(&context, 2, |_| panic!("visitor unwind"))
+            .unwrap();
+    }));
+    assert!(panic.is_err());
+    assert_eq!(fixture.project.metrics().open, 1);
+    let mut complete = 0;
+    directory
+        .visit_children(&context, 2, |_| {
+            complete += 1;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(complete, 2);
+    drop(directory);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn enumeration_rejects_foreign_domains_and_unsupported_names_without_partial_success() {
+    let fixture = Fixture::new(4);
+    let directory = fixture.capture(&fixture.root);
+    let foreign = Fixture::new(4);
+    assert!(directory
+        .visit_children(&foreign.project.io_context(), 4, |_| panic!(
+            "foreign callback"
+        ))
+        .is_err());
+    assert_eq!(foreign.project.metrics().open, 0);
+    let context = fixture.project.io_context();
+    // Unsupported entries are evidence, never silently omitted as if absent.
+    for name in ["unexpected space", "不可忽略"] {
+        fs::write(fixture.root.join(name), b"unexpected").unwrap();
+        assert!(directory
+            .visit_children(&context, 4, |_| panic!("invalid callback"))
+            .is_err());
+        assert_eq!(fixture.project.metrics().open, 1);
+        assert_eq!(fs::read(fixture.root.join(name)).unwrap(), b"unexpected");
+        fs::remove_file(fixture.root.join(name)).unwrap();
+    }
+    directory
+        .visit_children(&context, 0, |_| panic!("empty callback"))
+        .unwrap();
+}
+
+#[test]
+fn child_directory_retains_relative_authority_after_both_pathnames_move_and_parent_closes() {
+    let fixture = Fixture::new(8);
+    let selected = fixture.root.join("selected");
+    fs::create_dir_all(selected.join("child")).unwrap();
+    fs::write(selected.join("child/payload"), b"retained").unwrap();
+    let parent = fixture.capture(&selected);
+    let context = fixture.project.io_context();
+    let child = parent.open_directory(&context, "child").unwrap();
+    assert_eq!(fixture.project.metrics().open, 2);
+    fs::rename(selected.join("child"), selected.join("old-child")).unwrap();
+    fs::create_dir(selected.join("child")).unwrap();
+    fs::write(selected.join("child/payload"), b"replacement-child").unwrap();
+    fs::rename(&selected, fixture.root.join("moved")).unwrap();
+    fs::create_dir_all(selected.join("child")).unwrap();
+    fs::write(selected.join("child/payload"), b"foreign-root").unwrap();
+    drop(parent);
+    assert_eq!(fixture.project.metrics().open, 1);
+    let mut names = Vec::new();
+    child
+        .visit_children(&context, 1, |name| {
+            names.push(name.to_owned());
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(names, ["payload"]);
+    let mut file = child.open_child(&context, "payload").unwrap();
+    let mut bytes = String::new();
+    file.read_to_string(&mut bytes).unwrap();
+    assert_eq!(bytes, "retained");
+    drop(file);
+    child.remove_child(&context, "payload").unwrap();
+    assert_eq!(
+        fs::read(selected.join("child/payload")).unwrap(),
+        b"foreign-root"
+    );
+    assert_eq!(
+        fs::read(fixture.root.join("moved/child/payload")).unwrap(),
+        b"replacement-child"
+    );
+    assert!(!fixture.root.join("moved/old-child/payload").exists());
+    drop(child);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn child_directory_open_refuses_files_foreign_contexts_and_unadmitted_descriptors() {
+    let fixture = Fixture::new(2);
+    fs::create_dir(fixture.root.join("child")).unwrap();
+    fs::write(fixture.root.join("file"), b"retained").unwrap();
+    let parent = fixture.capture(&fixture.root);
+    let context = fixture.project.io_context();
+    let foreign = Fixture::new(2);
+    assert!(parent
+        .open_directory(&foreign.project.io_context(), "child")
+        .is_err());
+    assert_eq!(foreign.project.metrics().open, 0);
+    for name in ["file", "missing", "..", "child/", "./child"] {
+        assert!(parent.open_directory(&context, name).is_err(), "{name}");
+        assert_eq!(fixture.project.metrics().open, 1);
+    }
+    let file = parent.open_child(&context, "file").unwrap();
+    assert!(parent.open_directory(&context, "child").is_err());
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(file);
+    let child = parent.open_directory(&context, "child").unwrap();
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(child);
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(fixture.root.join("child"), fixture.root.join("alias")).unwrap();
+        assert!(parent.open_directory(&context, "alias").is_err());
+        assert_eq!(fixture.project.metrics().open, 1);
+    }
+    drop(parent);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
