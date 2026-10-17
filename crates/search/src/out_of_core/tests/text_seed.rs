@@ -185,6 +185,66 @@ fn out_of_core_text_seed_scores_use_the_complete_live_corpus_and_bounded_window(
 }
 
 #[test]
+fn out_of_core_text_seed_retains_pinned_generation_across_replacement_and_delete() {
+    let root = OwnedRoot::new("pinned-replacement-delete");
+    let row = |id: &str, body: &str| crate::SearchProjectionRow {
+        kind: crate::SearchProjectionKind::Memory,
+        external_id: id.into(),
+        title: id.into(),
+        body: body.into(),
+        embedding: None,
+        source_id: None,
+        metadata: BTreeMap::new(),
+    };
+    let old = row("a", "legacytoken");
+    let deleted = row("b", "deletedtoken");
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&root.0, Default::default()).unwrap();
+    writer.push(old.clone().into_document()).unwrap();
+    writer.push(deleted.clone().into_document()).unwrap();
+    writer.finish().unwrap();
+
+    let pinned = SearchOutOfCoreReader::open(&root.0).unwrap();
+    let budget = NonZeroUsize::new(64 * 1024 * 1024).unwrap();
+    let ledger = QueryMemoryLedger::new(budget);
+    let account = ledger.account(QueryMemoryClass::ExternalRead, "pinned text seed", budget);
+    let task = crate::RuntimeTaskContext::default();
+    let scores = |reader: &SearchOutOfCoreReader, text: &str| {
+        reader
+            .text_seed_scores_with_context(text, 2, &account, &task, |_| Ok(true))
+            .unwrap()
+            .scores()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(scores(&pinned, "legacytoken"), vec!["memory:a"]);
+    assert_eq!(scores(&pinned, "deletedtoken"), vec!["memory:b"]);
+
+    let replacement = row("a", "freshterm");
+    SearchOutOfCoreGenerationWriter::prepare_delta(
+        &pinned,
+        crate::SearchProjectionDelta {
+            upserts: vec![replacement],
+            deletes: vec!["memory:b".into()],
+            ..Default::default()
+        },
+        Default::default(),
+    )
+    .unwrap()
+    .finish()
+    .unwrap();
+    let current = SearchOutOfCoreReader::open(&root.0).unwrap();
+    assert_ne!(pinned.generation(), current.generation());
+    assert_eq!(scores(&pinned, "legacytoken"), vec!["memory:a"]);
+    assert_eq!(scores(&pinned, "deletedtoken"), vec!["memory:b"]);
+    assert!(scores(&pinned, "freshterm").is_empty());
+    assert!(scores(&current, "legacytoken").is_empty());
+    assert!(scores(&current, "deletedtoken").is_empty());
+    assert_eq!(scores(&current, "freshterm"), vec!["memory:a"]);
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
 fn out_of_core_text_seed_corpus_merge_peak_stays_within_the_shared_root() {
     use crate::lexical_projection::{
         AccountedCorpusStatistics, LexicalCorpusStatistics, QueryContext,
