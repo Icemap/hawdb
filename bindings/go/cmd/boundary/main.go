@@ -46,6 +46,28 @@ type nativeSnapshot struct {
 	ResultConversionNS        uint64
 }
 
+type hostSnapshot struct {
+	values    [6]uint64
+	saturated bool
+}
+
+func hostProfileDelta(before, after hostSnapshot) map[string]any {
+	fields := [6]string{"parameter_conversion_ns", "parameter_conversion_calls",
+		"ffi_call_ns", "ffi_calls", "result_conversion_ns", "result_conversion_calls"}
+	result := map[string]any{"valid": !before.saturated && !after.saturated,
+		"scope":        "go_query_parameter_native_call_result_phases",
+		"scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns"}
+	for i, field := range fields {
+		if after.values[i] < before.values[i] {
+			result["valid"] = false
+			result[field] = nil
+		} else {
+			result[field] = after.values[i] - before.values[i]
+		}
+	}
+	return result
+}
+
 func profileReader(path string) func(*nativeSnapshot) {
 	handle, err := loadProfileLibrary(path)
 	if err != nil {
@@ -162,7 +184,7 @@ func (c *checksum) value(value any) {
 	}
 }
 
-func run(j job, lib *hawdb.Library, nativeRead func(*nativeSnapshot)) (map[string]any, error) {
+func run(j job, lib *hawdb.Library, nativeRead func(*nativeSnapshot)) (report map[string]any, runErr error) {
 	var db *hawdb.DB
 	var err error
 	if j.Backend == "memory" {
@@ -175,6 +197,21 @@ func run(j job, lib *hawdb.Library, nativeRead func(*nativeSnapshot)) (map[strin
 	if err != nil {
 		return nil, err
 	}
+	var hostRead func() hostSnapshot
+	if hostProfiling {
+		hostRead = hostProfileReader(db)
+		failureBefore := hostRead()
+		defer func() {
+			if runErr != nil {
+				if report == nil {
+					report = make(map[string]any)
+				}
+				report["failure_go_host_profile"] = hostProfileDelta(failureBefore, hostRead())
+				report["failure_go_host_profile_scope"] = "db_query_calls_including_setup_warmup_and_cleanup"
+			}
+		}()
+	}
+	// Close executes before the optional failure snapshot above.
 	defer db.Close()
 	setup := time.Now()
 	if err := db.Exec("CREATE INDEX ON :Boundary(id)", nil); err != nil {
@@ -231,6 +268,10 @@ func run(j job, lib *hawdb.Library, nativeRead func(*nativeSnapshot)) (map[strin
 	var nativeBefore, nativeAfter nativeSnapshot
 	if nativeRead != nil {
 		nativeRead(&nativeBefore)
+	}
+	var hostBefore, hostAfter hostSnapshot
+	if hostProfiling {
+		hostBefore = hostRead()
 	}
 	var queryNS, consumeNS int64
 	rowsSeen := 0
@@ -295,8 +336,15 @@ func run(j job, lib *hawdb.Library, nativeRead func(*nativeSnapshot)) (map[strin
 		nativeRead(&nativeAfter)
 		profile = profileDelta(nativeBefore, nativeAfter)
 	}
+	if hostProfiling {
+		hostAfter = hostRead()
+	}
 	runtime.ReadMemStats(&after)
-	return map[string]any{"status": "ok", "layer": "go", "case": j.Case, "backend": j.Backend, "input_rows": len(j.Rows), "output_rows": rowsSeen, "values": rowsSeen * len(j.Columns), "checksum": fmt.Sprintf("%016x", uint64(c)), "setup_ns": setupNS, "query_boundary_ns": queryNS, "write_boundary_ns": writeNS, "read_boundary_ns": queryNS - writeNS, "consumer_ns": consumeNS, "elapsed_ns": elapsedNS, "go_allocations": after.Mallocs - before.Mallocs, "go_allocated_bytes": after.TotalAlloc - before.TotalAlloc, "native_profile": profile, "cpu_profile": j.CPUProfile, "durability": "SyncOnEveryWrite", "cgo_enabled": false}, nil
+	report = map[string]any{"status": "ok", "layer": "go", "case": j.Case, "backend": j.Backend, "input_rows": len(j.Rows), "output_rows": rowsSeen, "values": rowsSeen * len(j.Columns), "checksum": fmt.Sprintf("%016x", uint64(c)), "setup_ns": setupNS, "query_boundary_ns": queryNS, "write_boundary_ns": writeNS, "read_boundary_ns": queryNS - writeNS, "consumer_ns": consumeNS, "elapsed_ns": elapsedNS, "go_allocations": after.Mallocs - before.Mallocs, "go_allocated_bytes": after.TotalAlloc - before.TotalAlloc, "native_profile": profile, "cpu_profile": j.CPUProfile, "durability": "SyncOnEveryWrite", "cgo_enabled": false}
+	if hostProfiling {
+		report["go_host_profile"] = hostProfileDelta(hostBefore, hostAfter)
+	}
+	return report, nil
 }
 
 func main() {
@@ -330,7 +378,10 @@ func main() {
 		result, err = run(j, lib, nativeRead)
 	}
 	if err != nil {
-		result = map[string]any{"status": "error", "layer": "go", "error": err.Error()}
+		if result == nil {
+			result = make(map[string]any)
+		}
+		result["status"], result["layer"], result["error"] = "error", "go", err.Error()
 		if nativeRead != nil {
 			var failureAfter nativeSnapshot
 			nativeRead(&failureAfter)
