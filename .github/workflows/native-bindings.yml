@@ -1,112 +1,81 @@
-name: Native Bindings
-
+name: Baseline Adapter Functional Controls
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "src/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "scripts/cargo-test-required.sh"
-      - "bindings/ffi/**"
-      - "bindings/go/**"
-      - "MODULE.bazel"
-      - "BUILD.bazel"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/native-bindings.yml"
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "scripts/cargo-test-required.sh"
-      - "bindings/ffi/**"
-      - "bindings/go/**"
-      - "MODULE.bazel"
-      - "BUILD.bazel"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/native-bindings.yml"
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
+permissions:
+  contents: read
 jobs:
-  bazel:
-    name: Bazel native bindings (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  ordinary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        size: [3]
+        case: [select]
+        layer: [rust, python, go]
+        backend: [memory, file]
     env:
       USE_BAZEL_VERSION: "9.3.0"
+      ENGINE_COMMIT: 18a23f5dc7e3f39e361d5ff39e0c793f0537c30d
+      BENCH_SIZE: ${{ matrix.size }}
+      BENCH_CASE: ${{ matrix.case }}
+      BENCH_LAYER: ${{ matrix.layer }}
+      BENCH_BACKEND: ${{ matrix.backend }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Verify frozen engine and unchanged workload
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          engine = os.environ["ENGINE_COMMIT"]
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          assert git("diff", "--name-only", engine, "HEAD").splitlines() == [".github/workflows/native-bindings.yml"]
+          assert not git("status", "--porcelain")
+          receipt = {"engine": engine, "engine_tree": git("rev-parse", engine + "^{tree}"),
+                     "checkout": git("rev-parse", "HEAD"), "checkout_tree": git("rev-parse", "HEAD^{tree}"),
+                     "overlay": [".github/workflows/native-bindings.yml"],
+                     "case": os.environ["BENCH_CASE"], "layer": os.environ["BENCH_LAYER"], "backend": os.environ["BENCH_BACKEND"],
+                     "sizes": [int(os.environ["BENCH_SIZE"])], "matrix_sizes": [3], "measured_samples": 3, "discarded_samples": 1,
+                     "defaults_changed": False, "timed_consumers_changed": False,
+                     "engine_default_result_rows": 0, "engine_session_default_result_rows": 0,
+                     "matrix_groups": 6, "shards": 6, "max_parallel_jobs": 4, "per_job_deadline_minutes": 360,
+                     "scope": "Functional three-row baseline adapter controls only, not full90/110 or performance acceptance; preserve refusals and failures."}
+          pathlib.Path(os.environ["RUNNER_TEMP"], "source-qualification.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          print(json.dumps(receipt))
+          PY
+      - name: Preserve source receipt before long measurements
+        uses: actions/upload-artifact@v7
+        with:
+          name: source-${{ matrix.size }}-${{ matrix.case }}-${{ matrix.layer }}-${{ matrix.backend }}-${{ github.sha }}
+          path: ${{ runner.temp }}/source-qualification.json
+          if-no-files-found: error
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
           bazelisk-cache: true
           repository-cache: true
-
-      - name: Build the C ABI libraries and Go package
-        run: bazel build //bindings/ffi:hawdb_ffi //bindings/ffi:hawdb_ffi_static //bindings/go:hawdb
-
-      - name: Test Go against the Bazel-built C ABI
-        run: bazel test --test_output=errors --test_arg=-test.v //bindings/go:hawdb_go_tests
-
-  windows-native-contracts:
-    name: Windows native contracts
-    runs-on: windows-2025
-    timeout-minutes: 120
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          fetch-depth: 2
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.97.1
-        with:
-          components: clippy
-
-      - name: Record tested source and toolchain
-        shell: bash
+          go-version-file: bindings/go/go.mod
+          cache-dependency-path: bindings/go/go.sum
+      - name: Compare frozen ordinary producers
         run: |
-          set -euo pipefail
-          mkdir -p windows-native-results
-          git log -1 --format='%H%n%T%n%P' > windows-native-results/source.txt
-          rustc --version --verbose > windows-native-results/toolchain.txt
-
-      - name: Run strict native Windows Clippy
-        shell: bash
+          python3 -B bindings/benchmarks/compare.py \
+            --output "$RUNNER_TEMP/hawdb-boundary-comparison" \
+            --sizes "$BENCH_SIZE" --samples 3 \
+            --cases "$BENCH_CASE" --layers "$BENCH_LAYER" --backends "$BENCH_BACKEND"
+      - name: Preserve source receipt alongside complete or partial outcomes
+        if: always()
         run: |
-          set -euo pipefail
-          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
-            2>&1 | tee windows-native-results/clippy.txt
-
-      - name: Test abandonment GC power-loss cuts
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::tests::power_loss::branch_abandonment::abandonment_gc_cuts_preserve_quarantine_and_live_branches \
-            -- --exact --nocapture --test-threads=1 \
-            2>&1 | tee windows-native-results/abandonment.txt
-
-      - name: Preserve Windows validation evidence
+          mkdir -p "$RUNNER_TEMP/hawdb-boundary-comparison/evidence"
+          cp "$RUNNER_TEMP/source-qualification.json" "$RUNNER_TEMP/hawdb-boundary-comparison/evidence/"
+      - name: Preserve all outcomes including refusals
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: windows-native-contracts-${{ github.sha }}
-          path: windows-native-results
+          name: ordinary-${{ matrix.size }}-${{ matrix.case }}-${{ matrix.layer }}-${{ matrix.backend }}-${{ github.sha }}
+          path: ${{ runner.temp }}/hawdb-boundary-comparison/evidence
           if-no-files-found: error
