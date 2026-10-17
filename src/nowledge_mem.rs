@@ -2100,32 +2100,40 @@ impl crate::executor::ExternalReadOperator for SearchProjectionExternalReadOpera
             }
             return Ok(output);
         }
-        let search_request = NowledgeMemSearchCandidateRequest::text(
-            request.query_text,
-            request.resources.result.max_rows,
-        )
-        .with_metadata_filters(request.metadata_filters.clone());
-        let execution_options = VectorSearchExecutionOptions::bounded(
-            request.resources.max_parallelism,
-            request.resources.max_working_memory_bytes.get(),
-            request.resources.task_context,
-        );
-        let search = match (self.projection, self.out_of_core_projection) {
-            (None, Some(projection)) => projection
-                .search_candidates_with_report_context(&search_request, execution_options)?,
-            (None, None) => return Err(missing_search_projection_error()),
-            (Some(_), Some(_)) => {
-                return Err(HawDBError::Storage(
-                    "nowledge mem search projection ownership is ambiguous".to_string(),
-                ));
+        if let (None, Some(projection)) = (self.projection, self.out_of_core_projection) {
+            let default_task = RuntimeTaskContext::default();
+            let task = request.resources.task_context.unwrap_or(&default_task);
+            let scored = projection.reader().text_seed_scores_with_metadata_filters(
+                request.query_text,
+                request.metadata_filters,
+                request.resources.result.max_rows,
+                request.working_account,
+                task,
+            )?;
+            let ranked_bytes = scored
+                .scores()
+                .len()
+                .checked_mul(std::mem::size_of::<(&String, &f64)>())
+                .ok_or_else(|| HawDBError::Execution("text seed rank size overflow".into()))?;
+            let _ranked_memory = request.working_account.reserve(ranked_bytes)?;
+            let mut ranked = scored.scores().iter().collect::<Vec<_>>();
+            ranked.sort_unstable_by(|(left_id, left_score), (right_id, right_score)| {
+                right_score
+                    .total_cmp(left_score)
+                    .then_with(|| left_id.cmp(right_id))
+            });
+            for (id, score) in ranked {
+                request.resources.checkpoint()?;
+                output.push(id, scored.external_id(id), *score)?;
             }
-            (Some(_), None) => unreachable!("resident text seeds returned above"),
-        };
-        for hit in search.result.hits {
-            request.resources.checkpoint()?;
-            output.push(&hit.id, hit.external_id.as_deref(), hit.text_score)?;
+            return Ok(output);
         }
-        Ok(output)
+        if self.projection.is_some() {
+            return Err(HawDBError::Storage(
+                "nowledge mem search projection ownership is ambiguous".to_string(),
+            ));
+        }
+        Err(missing_search_projection_error())
     }
 
     fn execute_vector_seed(

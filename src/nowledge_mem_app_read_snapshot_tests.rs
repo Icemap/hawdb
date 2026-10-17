@@ -2002,6 +2002,85 @@ fn bounded_read_snapshot_projection_scan_uses_out_of_core_pin_and_releases_admis
 }
 
 #[test]
+fn bounded_out_of_core_text_seed_filters_before_top_k() {
+    let root = SnapshotTestRoot::new();
+    let search_path = root.0.join("search");
+    let mut writer =
+        crate::SearchOutOfCoreGenerationWriter::create(&search_path, Default::default()).unwrap();
+    for (id, space, title) in [
+        ("other", "other", "graph graph graph graph graph"),
+        ("team", "team", "graph"),
+    ] {
+        writer
+            .push(
+                SearchProjectionRow {
+                    kind: SearchProjectionKind::Memory,
+                    external_id: id.into(),
+                    title: title.into(),
+                    body: "storage".into(),
+                    embedding: None,
+                    source_id: None,
+                    metadata: BTreeMap::from([("space_id".into(), space.into())]),
+                }
+                .into_document(),
+            )
+            .unwrap();
+    }
+    writer.finish().unwrap();
+    let mut database = Database::new_with_config(DatabaseConfig {
+        max_read_result_rows: Some(16),
+        max_read_result_payload_bytes: Some(16 * 1024),
+        ..Default::default()
+    });
+    database
+        .query("CREATE (:Memory {id: 'other', space_id: 'other'})")
+        .unwrap();
+    database
+        .query("CREATE (:Memory {id: 'team', space_id: 'team'})")
+        .unwrap();
+    let graph = NowledgeMemGraph::from_database_with_runtime_governor(
+        database,
+        NowledgeMemGraphMode::ShadowReadOnly,
+        snapshot_governor(),
+    );
+    let projection = super::NowledgeMemOutOfCoreSearchProjection::open(&search_path).unwrap();
+    let handle =
+        NowledgeMemEmbeddedStoreHandle::new(NowledgeMemEmbeddedStore::new_with_out_of_core_search(
+            graph,
+            projection,
+            Default::default(),
+        ))
+        .unwrap();
+    let parameters = BTreeMap::from([
+        ("text".into(), Value::String("graph".into())),
+        ("space_id".into(), Value::String("team".into())),
+    ]);
+    handle
+        .with_bounded_read_snapshot(
+            NowledgeMemReadSnapshotBudget {
+                max_rows: 1,
+                max_payload_bytes: 4096,
+            },
+            |snapshot| {
+                let result = snapshot.query_cypher(
+                    "CALL text_search($text, topK := 1) YIELD id, score \
+                     MATCH (m:Memory) WHERE m.space_id = $space_id \
+                     RETURN m.id AS id, score",
+                    &parameters,
+                    1,
+                )?;
+                assert_eq!(result.rows.len(), 1);
+                assert_eq!(
+                    result.rows[0].get("id"),
+                    Some(&Value::String("team".into()))
+                );
+                Ok(())
+            },
+        )
+        .unwrap();
+}
+
+#[test]
 fn database_instance_identity_tracks_the_exact_published_read_view() {
     let handle = app_read_handle();
     let cloned = handle.clone();

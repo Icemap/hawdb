@@ -5306,13 +5306,27 @@ fn search_document_matches_predicates(
     document: &SearchDocument,
     predicates: &SearchPredicateSet,
 ) -> bool {
+    search_metadata_matches_predicates(&document.id, &document.metadata, predicates)
+}
+
+fn search_metadata_matches_predicates(
+    id: &str,
+    metadata: &BTreeMap<String, String>,
+    predicates: &SearchPredicateSet,
+) -> bool {
     if predicates.is_unsatisfiable() {
         return false;
     }
+    let header = crate::document_encoding::Header {
+        id,
+        title: "",
+        embedding: None,
+        metadata,
+    };
     predicates
         .predicates()
         .iter()
-        .all(|predicate| search_document_matches_predicate(document, predicate))
+        .all(|predicate| search_header_matches_predicate(header, predicate))
 }
 
 struct FilteredSearchDocuments<'a> {
@@ -6282,11 +6296,11 @@ fn search_segment_descriptor_fields(
     fields
 }
 
-fn search_document_matches_predicate(
-    document: &SearchDocument,
+fn search_header_matches_predicate(
+    header: crate::document_encoding::Header<'_>,
     predicate: &SearchPredicate,
 ) -> bool {
-    let actual_values = search_document_field_values(document, predicate.field().name());
+    let actual_values = search_header_field_values(header, predicate.field().name());
     match predicate.op() {
         SearchPredicateOp::Eq(expected) => actual_values.iter().any(|actual| {
             metadata_value_matches(predicate.field().name(), actual.as_ref(), expected.as_str())
@@ -6322,23 +6336,23 @@ fn search_document_matches_predicate(
     }
 }
 
-fn search_document_field_value<'a>(document: &'a SearchDocument, key: &str) -> Option<&'a str> {
+fn search_document_field_values<'a>(document: &'a SearchDocument, key: &str) -> Vec<Cow<'a, str>> {
     use crate::document_encoding::HeaderSource;
-    document.header().field(key)
+    search_header_field_values(document.header(), key)
 }
 
-fn search_document_field_values<'a>(document: &'a SearchDocument, key: &str) -> Vec<Cow<'a, str>> {
+fn search_header_field_values<'a>(
+    header: crate::document_encoding::Header<'a>,
+    key: &str,
+) -> Vec<Cow<'a, str>> {
     if key == "labels" || key.starts_with("metadata.") {
-        return document
+        return header
             .metadata
             .get(key)
             .map(|value| parse_label_metadata_values(value))
             .unwrap_or_default();
     }
-    search_document_field_value(document, key)
-        .map(Cow::Borrowed)
-        .into_iter()
-        .collect()
+    header.field(key).map(Cow::Borrowed).into_iter().collect()
 }
 
 fn parse_label_metadata_values(value: &str) -> Vec<Cow<'_, str>> {
@@ -7706,6 +7720,35 @@ fn decode_search_snapshot_text_bounded(
     bytes: &[u8],
     max_uncompressed_bytes: u64,
 ) -> Result<String> {
+    decode_search_snapshot_text_bounded_with(bytes, max_uncompressed_bytes, |payload, expected| {
+        let decoder =
+            hawdb_storage::compression::Decoder::new(Cursor::new(payload)).map_err(|error| {
+                HawDBError::Storage(format!(
+                    "search projection zstd decompression failed: {error}"
+                ))
+            })?;
+        read_search_snapshot_decoder(decoder, expected)
+    })
+}
+
+fn decode_search_snapshot_text_admitted(
+    bytes: &[u8],
+    max_uncompressed_bytes: u64,
+    memory: &hawdb_executor::QueryMemoryAccount,
+    task: &RuntimeTaskContext,
+) -> Result<String> {
+    decode_search_snapshot_text_bounded_with(bytes, max_uncompressed_bytes, |payload, expected| {
+        let decoder =
+            build_memory::decoder::Decoder::with_account(Cursor::new(payload), memory, task)?;
+        read_search_snapshot_decoder(decoder, expected)
+    })
+}
+
+fn decode_search_snapshot_text_bounded_with(
+    bytes: &[u8],
+    max_uncompressed_bytes: u64,
+    decode: impl FnOnce(&[u8], usize) -> Result<Vec<u8>>,
+) -> Result<String> {
     let Some(header_end) = bytes.windows(2).position(|window| window == b"\n\n") else {
         return Err(HawDBError::Storage(
             "search projection compressed envelope missing header terminator".to_string(),
@@ -7755,23 +7798,7 @@ fn decode_search_snapshot_text_bounded(
             "search projection uncompressed payload requires {expected_uncompressed_len} bytes, exceeding {max_uncompressed_bytes}"
         )));
     }
-    let decoder =
-        hawdb_storage::compression::Decoder::new(Cursor::new(payload)).map_err(|error| {
-            HawDBError::Storage(format!(
-                "search projection zstd decompression failed: {error}"
-            ))
-        })?;
-    let mut decoded = Vec::with_capacity(expected_uncompressed_len.min(1024 * 1024));
-    // The declaration has already passed reader admission. Probe one byte past
-    // it to reject understated lengths without inflating up to the reader limit.
-    decoder
-        .take((expected_uncompressed_len as u64).saturating_add(1))
-        .read_to_end(&mut decoded)
-        .map_err(|error| {
-            HawDBError::Storage(format!(
-                "search projection zstd decompression failed: {error}"
-            ))
-        })?;
+    let decoded = decode(payload, expected_uncompressed_len)?;
     #[cfg(test)]
     compression_tests::record_decoded_bytes(decoded.len());
     if decoded.len() as u64 > max_uncompressed_bytes {
@@ -7801,6 +7828,20 @@ fn decode_search_snapshot_text_bounded(
             "search projection decompressed payload is not valid UTF-8: {error}"
         ))
     })
+}
+
+fn read_search_snapshot_decoder(decoder: impl Read, expected_len: usize) -> Result<Vec<u8>> {
+    let mut decoded = Vec::with_capacity(expected_len.min(1024 * 1024));
+    // Probe one byte past the declared size to reject understated lengths.
+    decoder
+        .take((expected_len as u64).saturating_add(1))
+        .read_to_end(&mut decoded)
+        .map_err(|error| {
+            HawDBError::Storage(format!(
+                "search projection zstd decompression failed: {error}"
+            ))
+        })?;
+    Ok(decoded)
 }
 
 fn checksum_bytes(bytes: &[u8]) -> u64 {

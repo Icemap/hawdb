@@ -120,6 +120,95 @@ fn assert_producer_parity(reader: &SearchOutOfCoreReader, documents: &[SearchDoc
 }
 
 #[test]
+fn filtered_out_of_core_text_seeds_charge_metadata_and_keep_external_ids() {
+    let _serial = crate::test_allocation::serial();
+    let root = OwnedRoot::new("filtered-accounted");
+    let mut writer = SearchOutOfCoreGenerationWriter::create(&root.0, Default::default()).unwrap();
+    let mut other = document(0, "other");
+    other.title = "graph graph graph graph graph graph".into();
+    other
+        .metadata
+        .insert("labels".into(), r#"["planning"]"#.into());
+    let mut team = document(1, "team");
+    team.title = "graph".into();
+    team.metadata
+        .insert("labels".into(), r#"["database"]"#.into());
+    team.metadata
+        .insert("padding".into(), "x".repeat(1024 * 1024));
+    writer.push(other).unwrap();
+    writer.push(team).unwrap();
+    writer.finish().unwrap();
+    let reader = SearchOutOfCoreReader::open(&root.0).unwrap();
+    let budget = NonZeroUsize::new(64 * 1024 * 1024).unwrap();
+    let task = crate::RuntimeTaskContext::default();
+    for filters in [
+        BTreeMap::new(),
+        BTreeMap::from([("space_id".into(), "team".into())]),
+        BTreeMap::from([("labels__in".into(), r#"["database"]"#.into())]),
+    ] {
+        let expected = reader
+            .search_with_options(
+                "graph",
+                None,
+                SearchMode::Text,
+                SearchQueryOptions {
+                    limit: 1,
+                    offset: 0,
+                    rank_window: None,
+                    fusion_weights: SearchFusionWeights::default(),
+                    metadata_filters: filters.clone(),
+                    policy_epoch: None,
+                },
+            )
+            .unwrap();
+        let ledger = QueryMemoryLedger::new(budget);
+        let account = ledger.account(QueryMemoryClass::ExternalRead, "filtered text", budget);
+        let baseline = crate::test_allocation::live();
+        let (actual, peak) = crate::test_allocation::measure(|| {
+            reader
+                .text_seed_scores_with_metadata_filters("graph", &filters, 1, &account, &task)
+                .unwrap()
+        });
+        let actual_bits = actual
+            .scores()
+            .iter()
+            .map(|(id, score)| (id.clone(), score.to_bits()))
+            .collect::<BTreeMap<_, _>>();
+        let expected_bits = expected
+            .result
+            .hits
+            .iter()
+            .map(|hit| (hit.id.clone(), hit.text_score.to_bits()))
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(actual_bits, expected_bits, "filters={filters:?}");
+        for hit in &expected.result.hits {
+            assert_eq!(actual.external_id(&hit.id), hit.external_id.as_deref());
+        }
+        let allocated = peak.checked_sub(baseline).unwrap();
+        assert!(
+            allocated <= ledger.snapshot().peak_bytes,
+            "filtered text peak exceeded its account: allocated {allocated}, charged {}",
+            ledger.snapshot().peak_bytes
+        );
+        drop(actual);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+    let tiny = NonZeroUsize::new(256).unwrap();
+    let ledger = QueryMemoryLedger::new(tiny);
+    let account = ledger.account(QueryMemoryClass::ExternalRead, "tiny filtered text", tiny);
+    assert!(reader
+        .text_seed_scores_with_metadata_filters(
+            "graph",
+            &BTreeMap::from([("space_id".into(), "team".into())]),
+            1,
+            &account,
+            &task,
+        )
+        .is_err());
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
 fn out_of_core_text_seed_scores_use_the_complete_live_corpus_and_bounded_window() {
     let mut a = document(0, "team");
     a.id = "a".into();
@@ -241,6 +330,30 @@ fn out_of_core_text_seed_retains_pinned_generation_across_replacement_and_delete
     assert!(scores(&current, "legacytoken").is_empty());
     assert!(scores(&current, "deletedtoken").is_empty());
     assert_eq!(scores(&current, "freshterm"), vec!["memory:a"]);
+    let filtered_scores = |reader: &SearchOutOfCoreReader, text: &str| {
+        reader
+            .text_seed_scores_with_metadata_filters(text, &BTreeMap::new(), 2, &account, &task)
+            .unwrap()
+    };
+    let pinned_old = filtered_scores(&pinned, "legacytoken");
+    assert_eq!(pinned_old.external_id("memory:a"), Some("a"));
+    assert_eq!(
+        pinned_old.scores().keys().cloned().collect::<Vec<_>>(),
+        vec!["memory:a"]
+    );
+    drop(pinned_old);
+    assert!(filtered_scores(&pinned, "freshterm").scores().is_empty());
+    assert_eq!(
+        filtered_scores(&current, "freshterm")
+            .scores()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>(),
+        vec!["memory:a"]
+    );
+    assert!(filtered_scores(&current, "deletedtoken")
+        .scores()
+        .is_empty());
     assert_eq!(ledger.snapshot().used_bytes, 0);
 }
 
