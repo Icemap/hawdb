@@ -7,8 +7,10 @@
 use crate::build_memory::{
     read::{ReadAdmission, ReaderMemory},
     shared::Shared,
+    BuildMemory,
 };
 use crate::error::{HawDBError, Result};
+use hawdb_executor::QueryMemoryLease;
 use hawdb_storage::file_descriptors::FileOpenContext;
 use hawdb_storage::file_io::{
     File, SourceDirectory, SourceDirectoryIdentity, SourceDirectoryLockMode,
@@ -19,9 +21,266 @@ use std::path::Path;
 use std::sync::RwLock;
 
 mod gate;
+mod pins;
+pub(super) use pins::{ArtifactPin, PendingCapture};
 
 const PROCESS_LOCK: &str = ".search-source-process.lock";
-static ROOTS: gate::Gate<LinkedList<Entry>> = gate::Gate::new(LinkedList::new());
+static ROOTS: gate::Gate<Registry> = gate::Gate::new(Registry {
+    roots: LinkedList::new(),
+    publishers: LinkedList::new(),
+});
+
+struct Registry {
+    roots: LinkedList<Entry>,
+    publishers: LinkedList<PublisherEntry>,
+}
+impl std::ops::Deref for Registry {
+    type Target = LinkedList<Entry>;
+    fn deref(&self) -> &Self::Target {
+        &self.roots
+    }
+}
+impl std::ops::DerefMut for Registry {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.roots
+    }
+}
+
+struct PublisherEntry {
+    identity: SourceDirectoryIdentity,
+    _memory: QueryMemoryLease,
+}
+
+/// Publication and root initialization share one structural gate. A publisher
+/// borrows an existing root's process lock or owns the sole temporary handle;
+/// it never opens a second same-process handle to a retained root's lock inode.
+pub(super) struct PublicationRegistration {
+    // Native process custody closes before its directory; the marker is last.
+    custody: PublicationCustody,
+    _marker: PublisherMarker,
+}
+
+enum PublicationCustody {
+    Borrowed(RootRef),
+    Native(NativeResources),
+}
+
+struct PublisherMarker {
+    identity: SourceDirectoryIdentity,
+}
+
+impl std::fmt::Debug for PublicationRegistration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PublicationRegistration")
+            .field("identity", &self._marker.identity)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PublicationRegistration {
+    pub(super) fn acquire(
+        directory: SourceDirectory,
+        memory: &BuildMemory,
+        task: &hawdb_core::RuntimeTaskContext,
+    ) -> Result<Self> {
+        crate::build_control::checkpoint(task)?;
+        let charge = memory
+            .retained
+            .reserve(size_of::<PublisherEntry>() + 2 * size_of::<usize>())?;
+        let identity = directory.identity();
+        let borrowed = {
+            let mut registry = registry();
+            if registry
+                .publishers
+                .iter()
+                .any(|entry| entry.identity == identity)
+            {
+                return Err(HawDBError::Storage(
+                    "another search projection publication is active".into(),
+                ));
+            }
+            let borrowed = match registry
+                .iter()
+                .find(|entry| entry.state.identity == identity)
+            {
+                Some(entry) if entry.phase == Phase::Ready => {
+                    let native = entry.state.native.read().unwrap_or_else(|p| p.into_inner());
+                    if !native
+                        .as_ref()
+                        .expect("ready root owns native resources")
+                        .directory
+                        .shares_project_context(&directory.operation_context())
+                    {
+                        return Err(HawDBError::Storage(
+                            "publication root belongs to another project descriptor domain".into(),
+                        ));
+                    }
+                    Some(RootRef(Some(entry.state.clone())))
+                }
+                Some(_) => {
+                    return Err(HawDBError::Storage(
+                        "source root is initializing or retiring".into(),
+                    ))
+                }
+                None => None,
+            };
+            registry.publishers.push_back(PublisherEntry {
+                identity,
+                _memory: charge,
+            });
+            borrowed
+        };
+        let marker = PublisherMarker { identity };
+        let custody = match borrowed {
+            Some(root) => {
+                // The borrowed root already owns this exact captured directory.
+                // Return the redundant capture outside the structural gate.
+                drop(directory);
+                PublicationCustody::Borrowed(root)
+            }
+            None => {
+                let file = directory.open_lock_file(
+                    &directory.operation_context(),
+                    PROCESS_LOCK,
+                    SourceDirectoryLockMode::ReadWriteCreate,
+                )?;
+                file.try_lock().map_err(|error| match error {
+                    std::fs::TryLockError::WouldBlock => {
+                        HawDBError::Storage("source root is owned by another process".into())
+                    }
+                    std::fs::TryLockError::Error(error) => error.into(),
+                })?;
+                PublicationCustody::Native(NativeResources {
+                    process_lock: Some(file),
+                    directory,
+                })
+            }
+        };
+        Ok(Self {
+            custody,
+            _marker: marker,
+        })
+    }
+
+    pub(super) fn identity(&self) -> SourceDirectoryIdentity {
+        self._marker.identity
+    }
+
+    pub(super) fn protects(&self, key: super::artifact_key::ArtifactKey) -> bool {
+        let roots = registry();
+        roots
+            .iter()
+            .find(|entry| entry.state.identity == self._marker.identity)
+            .is_some_and(|entry| entry.phase != Phase::Ready || entry.pins.protects(key))
+    }
+
+    pub(super) fn with_directory<T>(&self, action: impl FnOnce(&SourceDirectory) -> T) -> T {
+        match &self.custody {
+            PublicationCustody::Native(native) => action(&native.directory),
+            PublicationCustody::Borrowed(root) => {
+                let native = root
+                    .state()
+                    .native
+                    .read()
+                    .unwrap_or_else(|p| p.into_inner());
+                action(
+                    &native
+                        .as_ref()
+                        .expect("live root owns its directory")
+                        .directory,
+                )
+            }
+        }
+    }
+
+    /// Promote an exclusively borrowed publisher's existing native resources.
+    /// Admission and cancellation happen before mutation; failure leaves the
+    /// original process lock and directory in the publisher. No close/reopen,
+    /// new FD, retained execution permit or new governor is involved.
+    pub(super) fn admit_root(
+        &mut self,
+        context: &FileOpenContext,
+        admission: &ReadAdmission<'_>,
+    ) -> Result<RootRef> {
+        admission
+            .checkpoint()
+            .map_err(|e| HawDBError::Execution(e.to_string()))?;
+        if !self.with_directory(|directory| directory.shares_project_context(context)) {
+            return Err(HawDBError::Storage(
+                "publication root belongs to another project descriptor domain".into(),
+            ));
+        }
+        if let PublicationCustody::Borrowed(root) = &self.custody {
+            if !root.state()._memory.shares_governor_with(admission.permit) {
+                return Err(HawDBError::Storage(
+                    "source root belongs to another runtime governor".into(),
+                ));
+            }
+            return Ok(root.clone());
+        }
+        let state_memory = admission.retained(size_of::<State>() + 2 * size_of::<usize>())?;
+        let entry_memory =
+            admission.retained(size_of::<Entry>() + 2 * size_of::<usize>() + pins::BASE_BYTES)?;
+        let state = Shared::new(State {
+            identity: self._marker.identity,
+            native: RwLock::new(None),
+            _memory: state_memory,
+        });
+        admission
+            .checkpoint()
+            .map_err(|e| HawDBError::Execution(e.to_string()))?;
+        // Only this exclusive publisher can promote its marker. A concurrent
+        // RootRef acquisition refuses while its native-only marker is present.
+        // Prepare the empty candidate's native guard before entering ROOTS.
+        let mut native = state.native.write().unwrap_or_else(|p| p.into_inner());
+        {
+            let mut roots = registry();
+            assert!(roots
+                .iter()
+                .all(|entry| entry.state.identity != state.identity));
+            assert!(roots
+                .publishers
+                .iter()
+                .any(|entry| entry.identity == state.identity));
+            roots.push_back(Entry {
+                state: state.clone(),
+                phase: Phase::Ready,
+                pins: pins::PinTable::default(),
+                _memory: entry_memory,
+            });
+            let previous = std::mem::replace(
+                &mut self.custody,
+                PublicationCustody::Borrowed(RootRef(Some(state.clone()))),
+            );
+            let PublicationCustody::Native(resources) = previous else {
+                unreachable!("exclusive native-only publisher promotes once");
+            };
+            *native = Some(resources);
+            // Ready lookup takes a read guard under ROOTS. Release this new
+            // state's writer before any such lookup can observe Ready.
+            drop(native);
+        }
+        Ok(RootRef(Some(state)))
+    }
+}
+
+impl Drop for PublisherMarker {
+    fn drop(&mut self) {
+        let removed = {
+            let mut registry = registry();
+            let position = registry
+                .publishers
+                .iter()
+                .position(|entry| entry.identity == self.identity)
+                .expect("live publisher remains registered");
+            let mut tail = registry.publishers.split_off(position);
+            let removed = tail.pop_front();
+            registry.publishers.append(&mut tail);
+            removed
+        };
+        drop(removed);
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
@@ -33,6 +292,7 @@ enum Phase {
 struct Entry {
     state: Shared<State>,
     phase: Phase,
+    pins: pins::PinTable,
     // pop_front frees the node before this receipt is released outside the gate.
     _memory: ReaderMemory,
 }
@@ -56,6 +316,7 @@ impl RootRef {
     /// Open relative to the retained directory, then return the opening wave
     /// before admitting the held-file read. A pathname replacement cannot
     /// redirect the selected head, and a one-slot operation cannot self-wait.
+    #[cfg(test)]
     pub(super) fn read_head<'execution>(
         &self,
         context: &FileOpenContext,
@@ -63,6 +324,16 @@ impl RootRef {
         admission: &ReadAdmission<'execution>,
         maximum: u64,
     ) -> Result<crate::build_memory::read::ReadBytes<'execution>> {
+        let file = self.open_head(context, name, admission)?;
+        admission.read_unbound_file(&file, maximum)
+    }
+
+    pub(super) fn open_head(
+        &self,
+        context: &FileOpenContext,
+        name: &str,
+        admission: &ReadAdmission<'_>,
+    ) -> Result<File> {
         let file = {
             let _io = admission
                 .io()
@@ -78,7 +349,7 @@ impl RootRef {
                 .directory
                 .open_child(context, name)?
         };
-        admission.read_unbound_file(&file, maximum)
+        Ok(file)
     }
 
     pub(super) fn acquire(
@@ -87,7 +358,8 @@ impl RootRef {
         admission: &ReadAdmission<'_>,
     ) -> Result<Self> {
         let state_memory = admission.retained(size_of::<State>() + 2 * size_of::<usize>())?;
-        let entry_memory = admission.retained(size_of::<Entry>() + 2 * size_of::<usize>())?;
+        let entry_memory =
+            admission.retained(size_of::<Entry>() + 2 * size_of::<usize>() + pins::BASE_BYTES)?;
         let directory = {
             let _io = admission
                 .io()
@@ -121,6 +393,11 @@ impl RootRef {
                             "source root belongs to another project descriptor domain".into(),
                         ));
                     }
+                    if !entry.state._memory.shares_governor_with(admission.permit) {
+                        return Err(HawDBError::Storage(
+                            "source root belongs to another runtime governor".into(),
+                        ));
+                    }
                     Some(entry.state.clone())
                 }
                 Some(_) => {
@@ -129,9 +406,17 @@ impl RootRef {
                     ))
                 }
                 None => {
+                    if roots
+                        .publishers
+                        .iter()
+                        .any(|entry| entry.identity == identity)
+                    {
+                        return Err(HawDBError::Storage("publication owns source custody; borrow its existing root or retry after publication".into()));
+                    }
                     roots.push_back(Entry {
                         state: state.clone(),
                         phase: Phase::Initializing,
+                        pins: pins::PinTable::default(),
                         _memory: entry_memory,
                     });
                     None
@@ -220,6 +505,10 @@ impl Drop for RootRef {
                 .iter_mut()
                 .find(|entry| entry.state.identity == state.identity)
                 .expect("live root remains registered");
+            assert!(
+                entry.pins.is_empty(),
+                "live pins retain external root references"
+            );
             entry.phase = Phase::Retiring;
         }
         #[cfg(test)]
@@ -249,7 +538,7 @@ impl Drop for RootRef {
     }
 }
 
-fn registry() -> gate::Guard<'static, LinkedList<Entry>> {
+fn registry() -> gate::Guard<'static, Registry> {
     gate::lock(&ROOTS)
 }
 

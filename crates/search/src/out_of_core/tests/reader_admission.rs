@@ -112,6 +112,7 @@ fn assert_segment_refused_before_expansion(
         };
         let result = SearchOutOfCoreSegmentReader::open_with_read_admission(
             SegmentOpenContext {
+                capture: None,
                 root,
                 config: &reader.config,
                 analyzer_lexicon: &reader.analyzer_lexicon,
@@ -272,6 +273,7 @@ fn assert_admitted_segment_lifetime(with_vectors: bool) {
         };
         SearchOutOfCoreSegmentReader::open_with_read_admission(
             SegmentOpenContext {
+                capture: None,
                 root: &root,
                 config: &ordinary.config,
                 analyzer_lexicon: &ordinary.analyzer_lexicon,

@@ -151,7 +151,7 @@ impl ConsumerProjection {
                 root, false,
             )?;
         let lease = SearchProjectionPublishLease::acquire_for_consumer(root)?;
-        let mut index = SearchIndex::open_under_lease(root, true)?;
+        let mut index = SearchIndex::open_under_lease(root, true, &lease)?;
         let authority = operation::Authority::new(lease);
         index.consumer_owner = std::sync::Arc::downgrade(&authority);
         let owner = Self {
@@ -230,7 +230,9 @@ impl ConsumerProjection {
                 index: &mut self.index,
                 operation,
             };
-            scope.index.checkpoint_with_lease(true)?;
+            scope
+                .index
+                .checkpoint_with_lease(Some(scope.operation.publication()))?;
         }
         self.pending_mutation = false;
         Ok(self.receipt())

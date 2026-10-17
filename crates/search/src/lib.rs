@@ -1482,12 +1482,16 @@ impl SearchIndex {
             )?;
         fs::create_dir_all(path.as_ref())?;
         let _lease = out_of_core::SearchProjectionPublishLease::acquire(path.as_ref())?;
-        let mut index = Self::open_under_lease(path.as_ref(), false)?;
+        let mut index = Self::open_under_lease(path.as_ref(), false, &_lease)?;
         index._project_files = Some(project_files);
         Ok(index)
     }
 
-    fn open_under_lease(path: &Path, registered: bool) -> Result<Self> {
+    fn open_under_lease(
+        path: &Path,
+        registered: bool,
+        publication: &out_of_core::SearchProjectionPublishLease,
+    ) -> Result<Self> {
         let mut index = Self {
             path: Some(path.to_path_buf()),
             _project_files: Some(
@@ -1527,7 +1531,10 @@ impl SearchIndex {
         } else {
             index.load_rabitq_projection()?;
         }
-        index.retry_projection_cleanup_under_publication(SearchProjectionCleanupOptions::default());
+        index.retry_projection_cleanup_under_publication(
+            SearchProjectionCleanupOptions::default(),
+            publication,
+        );
         Ok(index)
     }
 
@@ -2488,9 +2495,12 @@ impl SearchIndex {
         };
         if self.consumer_binding_valid
             && self.consumer_binding.is_some()
-            && let Ok(_consumer_mutation) = self.borrow_consumer_mutation()
+            && let Ok(consumer_mutation) = self.borrow_consumer_mutation()
         {
-            return self.retry_projection_cleanup_under_publication(options);
+            return self.retry_projection_cleanup_under_publication(
+                options,
+                consumer_mutation.publication(),
+            );
         }
         let Ok(_publication) = out_of_core::SearchProjectionPublishLease::acquire_for_cleanup(path)
         else {
@@ -2500,7 +2510,7 @@ impl SearchIndex {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .defer_for_publication(options);
         };
-        self.retry_projection_cleanup_under_publication(options)
+        self.retry_projection_cleanup_under_publication(options, &_publication)
     }
 
     // Caller retains the same root's publication authority through discovery
@@ -2508,6 +2518,7 @@ impl SearchIndex {
     fn retry_projection_cleanup_under_publication(
         &self,
         options: SearchProjectionCleanupOptions,
+        publication: &out_of_core::SearchProjectionPublishLease,
     ) -> SearchProjectionCleanupReport {
         let Some(path) = &self.path else {
             return self.projection_cleanup_report();
@@ -2573,7 +2584,7 @@ impl SearchIndex {
         self.cleanup_state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .run(path, generations, options)
+            .run_under_publication(path, generations, options, publication)
     }
 
     pub fn checkpoint(&self) -> Result<()> {
@@ -2582,20 +2593,26 @@ impl SearchIndex {
 
     pub fn checkpoint_with_report(&self) -> Result<SearchCheckpointReport> {
         self.require_unregistered_publication()?;
-        self.checkpoint_with_lease(false)
+        self.checkpoint_with_lease(None)
     }
 
-    fn checkpoint_with_lease(&self, registered: bool) -> Result<SearchCheckpointReport> {
+    fn checkpoint_with_lease(
+        &self,
+        publication: Option<&out_of_core::SearchProjectionPublishLease>,
+    ) -> Result<SearchCheckpointReport> {
         let Some(path) = &self.path else {
             return Ok(SearchCheckpointReport::in_memory(self.documents.len()));
         };
         let started = hawdb_core::time::Instant::now();
         let result = (|| {
-            let _publish_lease = if registered {
+            let owned_publication = if publication.is_some() {
                 None
             } else {
                 Some(out_of_core::SearchProjectionPublishLease::acquire(path)?)
             };
+            let publication_lease = publication
+                .or(owned_publication.as_ref())
+                .expect("checkpoint retains publication authority");
             let snapshot_path = path.join(SEARCH_SNAPSHOT_FILE);
             let snapshot = write_search_snapshot(
                 &snapshot_path,
@@ -2623,6 +2640,7 @@ impl SearchIndex {
                 .unwrap_or_else(|poisoned| poisoned.into_inner()) = self.source_graph_commit_epoch;
             self.retry_projection_cleanup_under_publication(
                 SearchProjectionCleanupOptions::default(),
+                publication_lease,
             );
             if let Some(binding) = &self.consumer_binding {
                 *self

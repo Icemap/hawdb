@@ -111,6 +111,17 @@ pub struct SourceDirectory {
 }
 
 impl SourceDirectory {
+    /// Use the same registered (or standalone) descriptor domain as File::open.
+    /// This does not create a new project or a new descriptor allowance.
+    pub fn capture_for_path(path: &Path) -> io::Result<Self> {
+        Self::capture(path, &crate::file_descriptors::context_for_path(path)?)
+    }
+
+    /// Borrow fresh operation capacity from the captured descriptor domain.
+    pub fn operation_context(&self) -> FileOpenContext {
+        self.context.for_operation()
+    }
+
     /// Use an existing project context; no new registry/domain is created.
     pub fn capture(path: &Path, context: &FileOpenContext) -> io::Result<Self> {
         let native = native_scope(context)?;

@@ -240,9 +240,9 @@ fn corrupt_fifo_is_rejected_without_waiting_for_a_writer() {
 fn child_open_uses_the_fresh_operations_reserved_descriptor_capacity() {
     let fixture = Fixture::new(2);
     fs::write(fixture.root.join("payload.hawdb"), b"reserved child").unwrap();
-    let source = fixture.capture(&fixture.root);
+    let source = SourceDirectory::capture_for_path(&fixture.root).unwrap();
     let reservation = fixture.project.reserve(1).unwrap();
-    let operation = fixture.project.io_context();
+    let operation = source.operation_context();
     assert_eq!(
         (
             fixture.project.metrics().open,

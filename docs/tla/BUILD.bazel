@@ -508,6 +508,7 @@ tla_check(
         "RetainBusy",
         "PinWholeManifest",
         "UnlockBeforePin",
+        "IgnorePendingCapture",
     ]
 ]
 
@@ -552,3 +553,16 @@ tla_check(
     timeout_seconds = 1800,
     tlc_args = ["-cleanup", "-workers", "auto"],
 )
+
+[
+    tla_check(
+        name = "HawDBPublicationRootCustody" + control + "_check",
+        module = "HawDBPublicationRootCustody.tla",
+        config = "mutants/HawDBPublicationRootCustody" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["DuplicateProcessHandle", "IgnorePublisherDuringInit", "ReopenOnPromotion", "UnregisterEarly"]
+]

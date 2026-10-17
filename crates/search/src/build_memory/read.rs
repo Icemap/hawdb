@@ -29,6 +29,12 @@ pub struct ReaderMemory {
     _host: RuntimeRetainedMemory,
 }
 
+impl ReaderMemory {
+    pub(crate) fn shares_governor_with(&self, permit: &RuntimePermit) -> bool {
+        self._host.shares_governor_with(permit)
+    }
+}
+
 /// Borrow execution only while constructing a reader. Returned memory owners
 /// carry neither this context, BuildMemory nor the active RuntimePermit.
 pub(crate) struct ReadAdmission<'a> {

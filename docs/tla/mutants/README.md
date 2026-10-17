@@ -80,3 +80,15 @@ when a producer closes, ignored reads, early mutation-slot release, retained
 producer slots and process-local-only exclusion. The reference-drop control
 rejects count checks separated from nonfinal decrements. The successor witness
 is separate from these mutants; see [the proof boundary](../ROOT_PROCESS_CUSTODY_PROOF.md).
+
+`HawDBPublicationRootCustody` has four independent process-custody controls:
+`DuplicateProcessHandle`, `IgnorePublisherDuringInit`, `UnregisterEarly`, and
+`ReopenOnPromotion`.
+Each expects an invariant violation, rather than a parsing error or deadlock.
+See [the native correspondence](../SOURCE_ROOT_CUSTODY_DESIGN.md#publication-and-retained-root-process-lock-coordination).
+
+`HawDBSourceRootCustody` now includes a temporary pending capture before short
+publication unlock. `IgnorePendingCapture` must violate SourcesLive while the
+closure is still opening. `UnlockBeforePin` now exercises release before any
+pending registration; existing once/retry controls still honor pending capture
+and independently forget installed exact pins.

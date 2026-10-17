@@ -173,6 +173,23 @@ impl SearchProjectionCleanupState {
         report
     }
 
+    pub(super) fn run_under_publication(
+        &mut self,
+        root: &Path,
+        generations: SearchProjectionGenerations,
+        options: SearchProjectionCleanupOptions,
+        publication: &crate::out_of_core::SearchProjectionPublishLease,
+    ) -> SearchProjectionCleanupReport {
+        self.run_with_policy(
+            root,
+            generations,
+            options,
+            |candidate| publication.protects(candidate.artifact_key()),
+            |path| fs::remove_file(path),
+        )
+    }
+
+    #[cfg(test)]
     pub(super) fn run(
         &mut self,
         root: &Path,
@@ -182,11 +199,26 @@ impl SearchProjectionCleanupState {
         self.run_with_remover(root, generations, options, |path| fs::remove_file(path))
     }
 
+    #[cfg(test)]
     fn run_with_remover<F>(
         &mut self,
         root: &Path,
         generations: SearchProjectionGenerations,
         options: SearchProjectionCleanupOptions,
+        remove: F,
+    ) -> SearchProjectionCleanupReport
+    where
+        F: FnMut(&Path) -> io::Result<()>,
+    {
+        self.run_with_policy(root, generations, options, |_| false, remove)
+    }
+
+    fn run_with_policy<F>(
+        &mut self,
+        root: &Path,
+        generations: SearchProjectionGenerations,
+        options: SearchProjectionCleanupOptions,
+        protects: impl Fn(&CleanupCandidate) -> bool,
         mut remove: F,
     ) -> SearchProjectionCleanupReport
     where
@@ -218,6 +250,10 @@ impl SearchProjectionCleanupState {
                 continue;
             }
             report.eligible_files = report.eligible_files.saturating_add(1);
+            if protects(&candidate) {
+                defer_candidate(candidate, capacity, &mut pending, &mut report);
+                continue;
+            }
             process_candidate(
                 root,
                 candidate,
@@ -251,6 +287,10 @@ impl SearchProjectionCleanupState {
                         continue;
                     }
                     report.eligible_files = report.eligible_files.saturating_add(1);
+                    if protects(&candidate) {
+                        defer_candidate(candidate, capacity, &mut pending, &mut report);
+                        continue;
+                    }
                     process_candidate(
                         root,
                         candidate,
@@ -298,44 +338,28 @@ struct CleanupCandidate<S = String> {
 }
 
 impl<S: AsRef<str>> CleanupCandidate<S> {
+    fn artifact_key(&self) -> crate::out_of_core::artifact_key::ArtifactKey {
+        let name = quarantined_artifact_name(self.name.as_ref()).unwrap_or(self.name.as_ref());
+        crate::out_of_core::artifact_key::ArtifactKey::from_file_name(name)
+            .expect("parsed cleanup candidate has a canonical artifact key")
+    }
+
     fn parse(name: S) -> Option<Self> {
-        const OUT_OF_CORE_PREFIXES: &[&str] = &[
-            "search_projection_segments.",
-            "search_projection_segment_payloads.",
-            "search_projection_metadata_payloads.",
-            "search_projection_vector_payloads.",
-            "search_projection_out_of_core_layout.",
-            "search_projection_mutation_run.",
-        ];
+        use crate::out_of_core::artifact_key::ArtifactKey;
         let (artifact_name, quarantined) = match quarantined_artifact_name(name.as_ref()) {
             Some(artifact_name) => (artifact_name, true),
             None => (name.as_ref(), false),
         };
-        if let Some(generation) = parse_generation(artifact_name, "search_lexical.")
-            .or_else(|| parse_generation(artifact_name, "search_lexical.manifest."))
-        {
-            return Some(Self {
-                name,
-                kind: CleanupArtifactKind::Lexical,
-                generation,
-                quarantined,
-            });
-        }
-        if let Some(generation) = parse_generation(artifact_name, "search_rabitq.") {
-            return Some(Self {
-                name,
-                kind: CleanupArtifactKind::RaBitQ,
-                generation,
-                quarantined,
-            });
-        }
-        let generation = OUT_OF_CORE_PREFIXES
-            .iter()
-            .find_map(|prefix| parse_generation(artifact_name, prefix))?;
+        let key = ArtifactKey::from_file_name(artifact_name)?;
+        let kind = match key {
+            ArtifactKey::Content(_) | ArtifactKey::MutationRun(_) => CleanupArtifactKind::OutOfCore,
+            ArtifactKey::Lexical(_) => CleanupArtifactKind::Lexical,
+            ArtifactKey::RaBitQ(_) => CleanupArtifactKind::RaBitQ,
+        };
         Some(Self {
             name,
-            kind: CleanupArtifactKind::OutOfCore,
-            generation,
+            kind,
+            generation: key.generation(),
             quarantined,
         })
     }
@@ -428,13 +452,6 @@ fn defer_candidate(
     } else {
         report.queue_overflow_files = report.queue_overflow_files.saturating_add(1);
     }
-}
-
-fn parse_generation(name: &str, prefix: &str) -> Option<u64> {
-    name.strip_prefix(prefix)?
-        .strip_suffix(".hawdb")?
-        .parse()
-        .ok()
 }
 
 fn older_than_previous(generation: u64, current: Option<u64>) -> bool {

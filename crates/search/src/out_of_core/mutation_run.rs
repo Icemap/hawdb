@@ -431,6 +431,34 @@ impl SearchMutationRun {
         )
     }
 
+    pub(super) fn open_for_capture(
+        root: &Path,
+        manifest: &SearchOutOfCoreMutationRunManifest,
+        max_bytes: u64,
+        expected_analyzer_digest: u64,
+        budget: &mut MutationRunBudget,
+        capture: &super::root_registry::PendingCapture<'_, '_>,
+        maximum_artifact_bytes: u64,
+    ) -> Result<Self> {
+        let key = super::artifact_key::ArtifactKey::from_file_name(&manifest.file)
+            .filter(|key| matches!(key, super::artifact_key::ArtifactKey::MutationRun(_)))
+            .ok_or_else(|| {
+                HawDBError::StorageIntegrity("invalid mutation-run artifact key".into())
+            })?;
+        Self::open_admitted(
+            reader_admission::OpenContext {
+                source_pin: Some(capture.pin(key)?),
+                root,
+                admission: capture.admission(),
+                maximum_encoded_bytes: max_bytes,
+                maximum_artifact_bytes,
+                analyzer_digest: expected_analyzer_digest,
+                budget,
+            },
+            manifest,
+        )
+    }
+
     pub(super) fn open_with_read_admission(
         root: &Path,
         manifest: &SearchOutOfCoreMutationRunManifest,
@@ -443,6 +471,7 @@ impl SearchMutationRun {
         if let Some(admission) = admission {
             return Self::open_admitted(
                 reader_admission::OpenContext {
+                    source_pin: None,
                     root,
                     admission,
                     maximum_encoded_bytes: max_bytes,

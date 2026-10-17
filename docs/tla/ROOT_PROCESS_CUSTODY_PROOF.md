@@ -131,9 +131,9 @@ fixed the fixture; all 14 cases then passed. This changed no production quota or
 assertion. Source-custody regression probes still require both GC paths and exact
 child registrations.
 
-The new `.search-source-process.lock` is a cooperating-process protocol. Existing
-ordinary producers/cleanup do not yet acquire it, and a hostile replacement of
-its namespace entry is not covered. No interoperability, incarnation or GC safety
+The new `.search-source-process.lock` is a cooperating-process protocol. Publication leases now acquire or borrow this custody, and pass their actual
+authority into cleanup. A hostile replacement of its namespace entry is not
+covered. See the [pending/exact registration refinement](SOURCE_ROOT_CUSTODY_DESIGN.md). No interoperability, incarnation or GC safety
 is inferred from holding this file. Read-only lock acquisition/upgrades,
 complete source-relative publication/GC integration and native power-loss bridge
 qualification remain required. Do not activate governed serving until these paths and original
@@ -142,8 +142,9 @@ qualification gates are complete.
 
 ## Captured head reads (private construction only)
 
-RootRef now opens the manifest relative to its counted directory and passes the
-held file into the existing bounded head reader. Opening returns its I/O wave
+RootRef opens the manifest relative to its counted directory and returns a held
+file. Private construction installs pending capture before opening that inode,
+then closes its owned publication lease before bounded read/decode. Opening returns its I/O wave
 before read admission, so a one-slot operation cannot self-wait. The obsolete
 pathname opener was removed. Existing held-file replacement, cancellation and
 pre-allocation limit guards exercise the actual held-file entry point; the
@@ -159,8 +160,9 @@ head 8378f38; fast-forwarding the test-only 11c4938 changes neither Search nor
 Storage source inputs.
 
 Only the root head uses this captured-directory path so far. Segment/run loads,
-exact independent-child pins, publication-excluded capture/GC, native recorder
-mapping and logical incarnation still need integration. The admitted-root
+ordinary independent-child capture, fully source-relative GC and logical
+incarnation still need integration. Private exact pins and pending captures are
+now implemented, while native recorder mapping has separate scoped evidence. The admitted-root
 conversion fence remains in place; these results authorize no public governed
 serving or complete source-custody claim.
 

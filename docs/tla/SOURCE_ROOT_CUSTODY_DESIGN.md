@@ -1,7 +1,12 @@
 # Source-root custody for governed immutable readers
 
-Status: proposed protocol with a finite safety model. Native refinement is
-**not implemented**. The admitted root remains private and refuses public
+Status: partial native refinement with finite safety models. Captured directory
+I/O, private admitted root custody, captured head reads and recorder integration
+exist. Private admitted construction now installs pending captures and exact
+artifact registrations; both cleanup policies consult them under actual
+publication authority. Artifact hydration/reopen and cleanup discovery/unlink
+still resolve paths, and ordinary readers have not adopted these registrations.
+The admitted root remains private and refuses public
 serving/conversion. This document does not qualify legacy readers, source-root
 incarnation, actual Mem activation or complete MVCC readiness.
 
@@ -14,20 +19,26 @@ implementations both need native tests for rename/replacement and typed descript
 admission. The existing short publication lease has a different lifetime from a
 reader: retaining it for an entire view would block subsequent publication.
 
-While holding short publication exclusion, capture the manifest closure and
-install per-artifact registrations before allowing GC to select or unlink those
-artifacts. Then release publication exclusion. Each shared immutable segment or
-mutation term-file payload owns its registration until its final user and any
-in-flight read close. Closing the producer or parent view cannot release a
-child's sources. Reusing one segment must retain only its artifact family, not
-all artifacts from the old manifest. The root directory authority itself does
-not pin every generation.
+While holding actual publication exclusion, install a pending capture for the
+captured root and open its head inode. An owned short lease can then close
+before reading/decoding the manifest and constructing its validated closure.
+GC defers every artifact in that root while this temporary capture is live.
+Before dropping it, transfer exact registrations into each shared immutable
+segment and each stored mutation-term file. The returned tokens retain neither
+the capture's execution admission nor the producer's publication/busy authority.
+
+Closing the producer or parent view cannot release a child's sources. Reusing
+one segment retains only that segment's content/lexical/vector families, not
+parent mutation runs or unrelated manifest segments. Mutation-run IDs occupy a
+separate namespace from equal-valued content IDs. A root directory reference
+alone does not pin every generation. Failed/aborted construction drops the
+initialized prefix and pending guard before exposing a ready view.
 
 Both native cleanup entrypoints must consult the same registrations:
 
-- `generation_cleanup::SearchProjectionCleanupState::run_with_remover` handles
+- `generation_cleanup::SearchProjectionCleanupState::run_under_publication` handles
   discovered and queued retry candidates.
-- `generation_cleanup::once::PreparedCleanup::run_with_remover` handles the
+- `generation_cleanup::once::PreparedCleanup::run_under_publication` handles the
   one-pass writer cleanup.
 
 Selection and unlink must share exclusion against new registration. Existing
@@ -41,6 +52,45 @@ require admission before allocation/open and receipts through actual destruction
 A receipt embedded in a removed BTreeMap value does not necessarily cover the
 remaining tree capacity. Weak registry control blocks can outlive payload guards.
 These resource obligations remain separate from the finite model below.
+
+## Private registration implementation and current evidence
+
+The root entry owns a BTreeMap of exact ArtifactKey registrations plus a pending
+capture count, protected by the existing structural gate. A permanent admitted
+base covers sparse/empty retained tree capacity; each live key retains a
+conservative node/split credit, and each shared token owns its control-block
+receipt. Credits are admitted before insertion. Final token drop removes its
+registration under the gate, then releases receipts and RootRef outside it.
+Shared token clones allocate nothing and retain one registration until their
+last owner closes. These credits are conservative bounds, not complete
+allocator/native-heap/RSS qualification.
+
+Only a mutable successful publication lease can begin capture. Its physical
+identity and the root's governor must match; the returned guard borrows only
+construction admission. Actual writer publication threads its lease into
+one-pass cleanup. Consumer open/checkpoint and admitted mutation cleanup pass
+their existing lease into retry cleanup instead of reacquiring it. Pure remover
+fixtures remain test-only. Pending captures and exact keys are checked for both
+newly scanned and queued candidates.
+
+Scoped macOS/Rust 1.97.1 evidence currently selects 44 passing native cases,
+including real publication of two replacement generations. Independent admitted
+segment and stored-term clones survive parent closure and both cleanup paths;
+they remain readable, unrelated artifacts disappear, and final clone drop
+permits reclamation. Stored terms release the original execution permit and read
+with fresh admission. Other guards exercise pending captures before exact keys
+are known, family collisions, producer closure, admission/FD failure and refund.
+Strict Search all-target/all-feature Clippy passes. This is **not** the original
+ordinary-reader four-case qualification: those APIs still need capture adoption.
+
+The remaining namespace work is essential. Captured head reads and live pins do
+not make later path-based hydration or discovery safe after root replacement.
+Do not change only unlink to a relative operation while discovering generations
+through a potentially foreign pathname: that could delete the captured root's
+active artifacts using the foreign root's generation set. Adopt the same
+captured authority throughout discovery, validation and unlink, and preserve
+bounded evictable-file behavior for retained readers. No public serving or
+activation is authorized by the registration tests.
 
 ## Native ownership lifetime that must be separated
 
@@ -76,9 +126,9 @@ case, not evidence already obtained. The finite `RetainBusy` control catches one
 abstract form of this exclusion error; it does not certify the current native
 lease implementation or its process-ownership mechanism.
 
-## Native relative-I/O prototype
+## Native relative-I/O primitive
 
-`hawdb_storage::file_io::SourceDirectory` now has an uncommitted prototype.
+`hawdb_storage::file_io::SourceDirectory` is the native directory capability.
 It captures one counted native directory from an existing project context.
 Child opens and unlinks use that handle rather than the original root pathname.
 Each operation takes a fresh context from the same project domain, so it can
@@ -102,13 +152,15 @@ Each lock open uses fresh project FD admission. The caller must serialize
 lock-file opens through the process registry: on process-owned POSIX locks,
 closing another descriptor for that lock file can release an existing lock.
 
-The prototype does not capture native publication ownership, install artifact
-registrations, govern caller heap allocation, enumerate a captured directory,
-or synchronize a deletion. `same_directory` compares held physical identities;
+The primitive does not install artifact registrations or govern caller heap
+allocation. Native enumeration and directory synchronization exist; complete
+reader/GC adoption and crash-cut qualification remain separate obligations. `same_directory` compares held physical identities;
 it does not establish logical source/binding incarnation or cross-process GC.
-No reader, publication or cleanup path uses this prototype yet. Existing
-path-based behavior is therefore unchanged. Do not expose governed serving or
-infer the finite model's native refinement from this API alone.
+The private admitted root uses the capability for custody and head reads. The
+publication lease now captures its directory and opens its locks relative to it.
+Artifact hydration and both cleanup paths still need captured-root adoption.
+Do not expose governed serving or infer the finite model's full native
+refinement from this API alone.
 
 The initial prototype refused attached recorders because it had no relative
 namespace mapping. A private NativeDirectoryTrace now binds the held directory
@@ -139,6 +191,86 @@ and [handle-based disposition](https://learn.microsoft.com/en-us/windows/win32/a
 These contracts motivate the implementation; they do not qualify its FFI,
 native resource accounting or platform execution.
 
+## Publication and retained-root process-lock coordination
+
+`root_registry::PublicationRegistration` and `RootRef` share the same inline
+structural gate. Registration admits its list node before entering the gate.
+When an admitted root is ready, publication clones that root's custody under
+the gate, rather than opening a second `.search-source-process.lock` descriptor.
+When no root is registered, the publisher installs a marker under the gate and
+opens the process lock relative to its captured directory outside the gate.
+The marker rejects unrelated root initialization until that publisher closes or
+explicitly promotes its existing custody. An
+initializing or retiring root refuses publication; callers may retry later.
+Same-process exclusion applies on Windows as well as Unix.
+
+An exclusive mutable borrow of the publication lease can promote native-only
+custody into an admitted shared `RootRef`. State/control-block and list-node
+capacity are admitted first, and cancellation is checked before mutation. The
+actual directory and process-lock `File` move into the new state under the
+registry gate; no close/reopen or extra FD is needed. Failure before that point
+leaves original publisher custody intact. Subsequent promotion requests clone
+the existing root only when the FD and governor domains match. A publisher that
+borrows a ready root releases its redundant directory capture outside the gate.
+
+The private full-root constructor can borrow this mutable publication lease for
+construction and retain only root custody afterwards. It first checks that the
+requested reader directory is that captured source within the supplied FD
+context, under admitted I/O. It still refuses public serving/conversion and
+needs exact pins plus directory-relative artifact hydration and GC adoption.
+Consumer `Authority` has not yet adopted this promotion path: a shared Arc of
+the existing producer authority cannot supply an exclusive mutable lease borrow.
+No reader should retain that authority or its operation-busy slot to bypass this
+remaining integration work.
+
+The lease opens `.search_projection.publish.lock` relative to its retained
+capture. Acquisition compares the named root and lock against the captured
+objects before granting authority. Its publication lock closes first; process
+custody then closes before the directory, and the local marker is removed last.
+No native open/close, payload destruction or memory refund runs under the
+structural gate. Existing ready roots also reject a new admitted reader from a
+different runtime governor, even when its FD domain matches. This prevents
+borrowing retained metadata paid for by an unrelated governor.
+
+[HawDBPublicationRootCustody](HawDBPublicationRootCustody.tla) checks the split
+between root initialization, root readiness/retirement, publisher registration,
+process-lock acquisition, closure and marker removal. Native lock closure uses
+the conservative process-owned `F_SETLK` rule: closing **any** descriptor for
+the lock inode releases that process's lock. The ordinary publication lock is
+abstracted by the single publisher; this model concerns the additional process
+custody, not file-lock syscall semantics or memory accounting.
+
+The positive graph has 60 generated / 27 distinct states, depth 9. Four
+independently enabled controls must each produce an invariant violation:
+
+| Control | Fault |
+| --- | --- |
+| DuplicateProcessHandle | Closing a publisher's duplicate descriptor releases a retained reader's process lock. |
+| IgnorePublisherDuringInit | Root initialization opens another process-lock handle while publisher custody is active. |
+| UnregisterEarly | Removing the marker before native closure lets new root custody overlap the closing publisher. |
+| ReopenOnPromotion | Closing native custody during promotion releases the peer lock before retained ownership is installed. |
+
+The native peer-process case retains a reader across failed publisher FD
+admission, successful publisher acquisition and reader closure. It checks
+exclusive peer refusal at each stage, three held descriptors while root and
+publisher coexist (one directory, one process lock, one publication lock), final
+refund, and peer success
+after the final publisher closes. Separate cases cover publisher-first refusal
+and retry, initialization interleaving, root/lock pathname replacement and
+admitted metadata lifetimes. The promotion case occupies all four FD slots,
+transfers custody without opening anything, verifies peer refusal before/after
+transfer and publisher closure, reads through the surviving root, then verifies
+peer success after the last reader closes. Admission refusals at both metadata
+steps and cancellation preserve original custody and allow retry. Current native
+execution evidence is platform
+specific; a Windows cross-compile is not a native Windows test.
+
+This is a finite safety argument for one captured physical root and cooperative
+lock-file identity. It omits external lock-file replacement, logical incarnation,
+exact pins, publication durability, process crashes and liveness. It does not
+prove that subsequent path-based artifact mutations use the held directory.
+Those limitations remain part of the required end state below.
+
 ## Finite safety model
 
 [HawDBSourceRootCustody](HawDBSourceRootCustody.tla) models two physical roots,
@@ -149,10 +281,14 @@ authority. Separate selection/unlink actions share publication exclusion. Both
 cleanup kinds are independently selectable. The current and preceding artifacts
 are abstracted; the model is not a recovery-format or durability specification.
 
-The positive standalone graph has 220 generated / 66 distinct states, depth 10,
-with an empty remaining queue. The registered Bazel checks must replay the final
-module/configurations before this design is delivered. Nine independent mutants
-exercise the required boundaries:
+The pending-capture refinement has 267 generated / 84 distinct states, depth 11,
+with an empty remaining queue. Its registered positive check and ten independent
+negative controls pass with complete input/log evidence. OpenBegin retains the
+fence until InstallPending; InstallPin may complete while cleanup is active,
+transferring protection before clearing the pending root. AbortCapture clears
+construction protection without returning a reader. The original 66-state graph
+is historical evidence for installing exact pins before unlock. Current controls
+exercise these boundaries:
 
 | Control | Violated invariant |
 | --- | --- |
@@ -164,7 +300,8 @@ exercise the required boundaries:
 | PathForRead | ReadUsesCapturedRoot |
 | RetainBusy | ReaderDoesNotExcludeWriter |
 | PinWholeManifest | ChildPinIsExact |
-| UnlockBeforePin | SourcesLive |
+| UnlockBeforePin (release before pending registration) | SourcesLive |
+| IgnorePendingCapture | SourcesLive |
 
 `ReaderDoesNotExcludeWriter` forbids retaining the reader's publication-busy
 reference after installation. It is a structural safety condition, **not** a
@@ -174,12 +311,14 @@ does not establish physical reclamation latency or allocator bounds.
 
 ## Required native refinement and remaining gates
 
-Current native cleanup uses generation sets and path-based unlink. It does not
-implement this live reader registry. Current admitted construction checks project
+Current native cleanup uses generation sets and path-based discovery/unlink,
+and now consults the live private-reader registry. Ordinary serving/refresh
+constructors and all captured-relative I/O paths still need adoption. Current admitted construction checks project
 containment, which does not prove source incarnation or namespace authority.
-Before exposing governed serving, implement the counted native directory
-capability, map manifest/artifact identities and shared child ownership to real
-registrations, and connect both cleanup paths. Native controls must reproduce
+Before exposing governed serving, complete captured-directory discovery,
+validation/hydration/reopen and unlink, ordinary reader/refresh capture and
+logical incarnation validation. Preserve the existing registration consultation
+in both cleanup paths. Native controls must reproduce
 stale-root replacement, final-drop/read races, producer close, segment reuse,
 last-owner removal, cancellation and publication concurrent with retained views.
 

@@ -26,6 +26,7 @@ use std::io::{BufRead, BufReader, Read, Seek, Write};
 pub(crate) struct TermFile {
     pub(super) file: File,
     pub(super) expected_length: Option<u64>,
+    _source_pin: Option<super::super::root_registry::ArtifactPin>,
     _memory: Option<QueryMemoryLease>,
     _reader_memory: Option<crate::build_memory::read::ReaderMemory>,
 }
@@ -38,12 +39,14 @@ impl TermFile {
         file: File,
         expected_length: u64,
         admission: &crate::build_memory::read::ReadAdmission<'_>,
+        source_pin: Option<super::super::root_registry::ArtifactPin>,
     ) -> Result<Shared<Self>> {
         let lease = admission
             .retained(std::mem::size_of::<Self>() + 2 * std::mem::size_of::<usize>() + 4096)?;
         Ok(Shared::new(Self {
             file,
             expected_length: Some(expected_length),
+            _source_pin: source_pin,
             _memory: None,
             _reader_memory: Some(lease),
         }))
@@ -58,6 +61,7 @@ impl TermFile {
             })
             .transpose()?;
         Ok(Shared::new(Self {
+            _source_pin: None,
             file,
             expected_length: None,
             _memory: lease,

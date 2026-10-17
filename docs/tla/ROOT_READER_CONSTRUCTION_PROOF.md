@@ -47,13 +47,18 @@ the query/account reference before the host reservation. It stores no execution
 permit, and the native producer-close test observes zero active CPU/task/I/O
 slots while the private result and an independent child remain alive.
 
-Failure at any constructor boundary drops the initialized prefix. No root is
-returned after a failed decode, child open, closure check or target validation.
+Failure at any constructor boundary drops the temporary initialized prefix. No
+ready view is returned after a failed decode, child open, closure check or target
+validation. A successful custody promotion may remain owned by a live borrowed
+publisher after later construction fails; its metadata remains charged until
+that real shared owner closes. This is distinct from leaking a failed view.
 The private wrapper has no `Deref` or public serving/refresh accessor, and
 `into_ordinary` refuses an admitted result. The ordinary public constructor uses
 the legacy branch; callers cannot acquire an admitted serving capability through
-this unfinished constructor. Admitted reuse is also refused until source-root
-custody is implemented.
+this unfinished constructor. Admitted reuse is still refused until captured-relative reopen, logical
+incarnation and fresh serving/refresh contracts are complete. Private captures
+now protect exact segment and stored-term families; this does not authorize
+ordinary serving.
 
 ## Native evidence and limits
 

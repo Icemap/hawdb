@@ -36,6 +36,9 @@ pub(super) struct OpenContext<'a, 'execution> {
     // process-global descriptor/cache registry inside this constructor.
     pub(super) project: Option<&'a ProjectFileDescriptors>,
     pub(super) max_artifact_read_bytes: u64,
+    // Exclusive construction-time borrow; the returned view never retains the
+    // publication lease. Exact artifact/GC authority remains required separately.
+    pub(super) publication: Option<&'a mut SearchProjectionPublishLease>,
 }
 
 // Deliberately no Deref or public serving/refresh conversion for admitted roots.
@@ -69,7 +72,13 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
         admission,
         project,
         max_artifact_read_bytes,
+        publication,
     } = context;
+    if publication.is_some() && admission.is_none() {
+        return Err(HawDBError::Execution(
+            "publication custody transfer requires reader admission".into(),
+        ));
+    }
     let root_memory = admission
         .map(|admission| {
             admission.retained(root_bytes(
@@ -100,26 +109,67 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
         }
         None => ProjectFileDescriptors::acquire_component(&root, false)?,
     };
-    let native_custody = admission
-        .map(|admission| {
-            super::root_registry::RootRef::acquire(&root, &project_files.io_context(), admission)
-        })
-        .transpose()?;
+    let mut initial_custody = match (admission, publication.is_none()) {
+        (Some(admission), true) => Some(super::root_registry::RootRef::acquire(
+            &root,
+            &project_files.io_context(),
+            admission,
+        )?),
+        _ => None,
+    };
+    let mut owned_publication = match (admission, publication.is_none()) {
+        (Some(admission), true) => {
+            let _io = admission
+                .io()
+                .map_err(|e| HawDBError::Execution(e.to_string()))?;
+            Some(SearchProjectionPublishLease::acquire_for_capture(
+                &root,
+                admission.memory,
+                admission.task,
+            )?)
+        }
+        _ => None,
+    };
+    let publication = publication.or(owned_publication.as_mut());
+    let capture = match (admission, publication) {
+        (Some(admission), Some(publication)) => {
+            {
+                let _io = admission
+                    .io()
+                    .map_err(|e| HawDBError::Execution(e.to_string()))?;
+                publication.require_source_root(&root, &project_files.io_context())?;
+            }
+            Some(match initial_custody.take() {
+                Some(root) => root.begin_capture(publication, admission)?,
+                None => publication.capture_source_root(&project_files.io_context(), admission)?,
+            })
+        }
+        (None, None) => None,
+        _ => unreachable!("admitted construction owns publication capture"),
+    };
+    let native_custody = capture.as_ref().map(|capture| capture.root().clone());
+    let head = match (admission, native_custody.as_ref()) {
+        (Some(admission), Some(root)) => Some(root.open_head(
+            &project_files.io_context(),
+            OUT_OF_CORE_MANIFEST_FILE,
+            admission,
+        )?),
+        _ => None,
+    };
+    // Pending capture is installed and the exact head inode is open. Decode,
+    // validation and artifact hydration need not retain our publication lease.
+    drop(owned_publication);
     let bytes = match admission {
-        Some(admission) => native_custody
-            .as_ref()
-            .expect("admitted root owns custody")
-            .read_head(
-                &project_files.io_context(),
-                OUT_OF_CORE_MANIFEST_FILE,
-                admission,
-                MAX_OUT_OF_CORE_MANIFEST_BYTES.min(max_artifact_read_bytes),
-            )?,
+        Some(admission) => admission.read_unbound_file(
+            head.as_ref().expect("admitted capture opened its head"),
+            MAX_OUT_OF_CORE_MANIFEST_BYTES.min(max_artifact_read_bytes),
+        )?,
         None => ReadBytes::unaccounted(read_bounded_file(
             &root.join(OUT_OF_CORE_MANIFEST_FILE),
             MAX_OUT_OF_CORE_MANIFEST_BYTES,
         )?),
     };
+    drop(head);
     let manifest_memory = admission
         .map(|admission| {
             admission.retained(SearchOutOfCoreManifestBody::decode_capacity(
@@ -135,6 +185,7 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
     drop(bytes);
     let closure = load_artifact_closure_with_context(
         ClosureLoadContext {
+            capture: capture.as_ref(),
             root: &root,
             config: &config,
             analyzer_lexicon: &analyzer_lexicon,
@@ -146,6 +197,7 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
         },
         manifest,
     )?;
+    drop(capture);
     Ok(OpenedRoot {
         _native_custody: native_custody,
         reader: SearchOutOfCoreReader {

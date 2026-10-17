@@ -834,6 +834,7 @@ impl SearchOutOfCoreGenerationWriter {
         generation: u64,
         private_partition: bool,
         artifacts: GenerationArtifacts,
+        publication: &super::SearchProjectionPublishLease,
     ) -> Result<SearchOutOfCoreGenerationBuildReport> {
         let GenerationArtifacts {
             segment: segment_output,
@@ -935,11 +936,12 @@ impl SearchOutOfCoreGenerationWriter {
                     ..Default::default()
                 }
             };
-            cleanup.run(
+            cleanup.run_under_publication(
                 &self.root,
                 cleanup_generations,
                 self.options.cleanup_options,
                 &self.task_context,
+                publication,
             )
         });
 

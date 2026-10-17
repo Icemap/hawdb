@@ -313,7 +313,6 @@ fn cancelled_initialization_closes_before_unregistering_and_allows_retry() {
 fn retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close() {
     const PROBE: &str = "HAWDB_ROOT_REGISTRY_PROBE";
     const BUSY: &str = "HAWDB_ROOT_REGISTRY_PROBE_BUSY";
-    const CASE: &str = "out_of_core::root_registry::tests::retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close";
     if let Some(root) = std::env::var_os(PROBE) {
         let project = ProjectFileDescriptors::acquire_existing(Path::new(&root), 8).unwrap();
         let governor = governor();
@@ -369,28 +368,7 @@ fn retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close()
     assert_eq!(snapshot.active_background_io_slots, 0);
     assert!(snapshot.admitted_memory_bytes > 0);
     assert_eq!(project.metrics().open, 2);
-    let probe = |busy| {
-        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
-        command
-            .args(["--exact", CASE, "--nocapture"])
-            .env(PROBE, &root);
-        if busy {
-            command.env(BUSY, "1");
-        } else {
-            command.env_remove(BUSY);
-        }
-        let result = command.output().unwrap();
-        let output = String::from_utf8_lossy(&result.stdout);
-        assert!(
-            result.status.success(),
-            "{output}\n{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-        assert!(
-            output.contains("1 passed; 0 failed"),
-            "probe selected no case: {output}"
-        );
-    };
+    let probe = |busy| peer_root_probe(&root, busy);
     probe(true);
     // A new operation can be admitted and reuse custody without opening a
     // second process-lock descriptor or retaining the old execution permit.
@@ -414,7 +392,42 @@ fn retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close()
         drop(successor);
     }
     probe(true);
+    // A failed publisher must close only its own captured directory. Closing a
+    // duplicate record-lock handle here could release this root's peer lock on
+    // Unix implementations whose locks belong to the process.
+    // Same-thread reservations are deliberately borrowed by nested operations;
+    // occupy actual descriptors to exercise a genuine final-slot denial.
+    let occupied: Vec<_> = (0..5)
+        .map(|_| SourceDirectory::capture(&root, &project.io_context()).unwrap())
+        .collect();
+    assert_eq!(project.metrics().open, 7);
+    assert!(
+        super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(&root)
+            .is_err()
+    );
+    assert_eq!(project.metrics().open, 7);
+    assert_eq!(project.metrics().reserved, 0);
+    drop(occupied);
+    assert_eq!(project.metrics().open, 2);
+    probe(true);
+    let publisher =
+        super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(&root)
+            .unwrap();
+    // Shared root directory + process lock + publication lock.
+    // Neither directory nor process lock is duplicated.
+    assert_eq!(project.metrics().open, 3);
+    probe(true);
+    drop(publisher);
+    assert_eq!(project.metrics().open, 2);
+    probe(true);
+    let publisher =
+        super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(&root)
+            .unwrap();
+    assert_eq!(project.metrics().open, 3);
     drop(retained);
+    assert_eq!(project.metrics().open, 3);
+    probe(true);
+    drop(publisher);
     assert_eq!(project.metrics().open, 0);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     probe(false);
@@ -430,4 +443,356 @@ fn cold_registry_gate_has_no_query_lifetime_heap() {
     let (_, peak) = allocation::measure(|| drop(registry()));
     assert_eq!(peak, 0);
     assert_eq!(allocation::live(), 0);
+}
+
+#[test]
+fn publisher_only_custody_excludes_new_root_initialization_then_allows_retry() {
+    let fixture = Fixture::new(8);
+    let baseline = fixture.memory.ledger.snapshot().used_bytes;
+    let publisher =
+        super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(
+            &fixture.root,
+        )
+        .unwrap();
+    assert_eq!(fixture.project.metrics().open, 3);
+    assert!(
+        matches!(fixture.open(), Err(HawDBError::Storage(message)) if message.contains("publication owns source custody"))
+    );
+    assert_eq!(fixture.project.metrics().open, 3);
+    assert_eq!(fixture.memory.ledger.snapshot().used_bytes, baseline);
+    drop(publisher);
+    assert_eq!(fixture.project.metrics().open, 0);
+    drop(fixture.open().unwrap());
+    assert_eq!(fixture.memory.ledger.snapshot().used_bytes, baseline);
+}
+
+#[test]
+fn initializing_root_rejects_publisher_without_removing_initialization() {
+    let fixture = Fixture::new(8);
+    let path = fixture.root.clone();
+    AFTER_INITIALIZING.with(|slot| {
+        *slot.borrow_mut() = Some(Box::new(move || {
+            let error =
+                super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(
+                    &path,
+                )
+                .unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("source root is initializing or retiring"));
+        }));
+    });
+    let root = fixture.open().unwrap();
+    assert!(AFTER_INITIALIZING.with(|slot| slot.borrow().is_none()));
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(root);
+    drop(
+        super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(
+            &fixture.root,
+        )
+        .unwrap(),
+    );
+}
+
+#[test]
+fn a_shared_descriptor_domain_does_not_allow_foreign_governor_borrowing() {
+    let fixture = Fixture::new(8);
+    let root = fixture.open().unwrap();
+    let original_charge = fixture.governor.snapshot().admitted_memory_bytes;
+    let foreign = governor();
+    let permit = foreign
+        .try_admit(RuntimeWorkRequest::background_maintenance(16 << 20).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(Default::default());
+    let memory = BuildMemory::new(&task).unwrap();
+    let foreign_charge = foreign.snapshot().admitted_memory_bytes;
+    let result = RootRef::acquire(
+        &fixture.root,
+        &fixture.project.io_context(),
+        &ReadAdmission {
+            memory: &memory,
+            task: &task,
+            permit: &permit,
+        },
+    );
+    assert!(
+        matches!(result, Err(HawDBError::Storage(message)) if message == "source root belongs to another runtime governor")
+    );
+    assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+    assert_eq!(foreign.snapshot().admitted_memory_bytes, foreign_charge);
+    assert_eq!(
+        fixture.governor.snapshot().admitted_memory_bytes,
+        original_charge
+    );
+    assert_eq!(fixture.project.metrics().open, 2);
+    // The legitimate successor still shares the root and its retained charge.
+    drop(fixture.open().unwrap());
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(root);
+}
+
+#[test]
+fn native_publisher_promotion_moves_custody_without_a_new_descriptor() {
+    let fixture = Fixture::new(4);
+    std::fs::write(fixture.root.join("head"), b"promoted head").unwrap();
+    let baseline = fixture.memory.ledger.snapshot().used_bytes;
+    let mut publisher =
+        super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(
+            &fixture.root,
+        )
+        .unwrap();
+    assert_eq!(fixture.project.metrics().open, 3);
+    peer_root_probe(&fixture.root, true);
+    // Occupy the final slot: successful promotion proves it does not open a
+    // replacement directory or process-lock file, even temporarily.
+    let occupied = SourceDirectory::capture(&fixture.root, &fixture.project.io_context()).unwrap();
+    assert_eq!(fixture.project.metrics().open, 4);
+    let root = publisher
+        .admit_source_root(&fixture.project.io_context(), &fixture.admission())
+        .unwrap();
+    assert_eq!(fixture.project.metrics().open, 4);
+    assert_eq!(fixture.project.metrics().reserved, 0);
+    assert_eq!(fixture.governor.snapshot().active_background_io_slots, 0);
+    drop(occupied);
+    let successor = fixture.open().unwrap();
+    assert_eq!(fixture.project.metrics().open, 3);
+    peer_root_probe(&fixture.root, true);
+    drop(publisher);
+    assert_eq!(fixture.project.metrics().open, 2);
+    peer_root_probe(&fixture.root, true);
+    let head = root
+        .read_head(
+            &fixture.project.io_context(),
+            "head",
+            &fixture.admission(),
+            64,
+        )
+        .unwrap();
+    assert_eq!(&*head, b"promoted head");
+    drop(head);
+    drop(root);
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(successor);
+    assert_eq!(fixture.project.metrics().open, 0);
+    assert_eq!(fixture.memory.ledger.snapshot().used_bytes, baseline);
+    assert!(!fixture.is_registered());
+    peer_root_probe(&fixture.root, false);
+}
+
+#[test]
+fn publisher_promotion_admission_failure_preserves_original_custody_and_retry() {
+    use hawdb_core::RuntimeMemoryReservation;
+    let fixture = Fixture::new(4);
+    let mut publisher =
+        super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(
+            &fixture.root,
+        )
+        .unwrap();
+    for limit in [1, size_of::<State>() + 2 * size_of::<usize>()] {
+        let task = RuntimeTaskContext::default()
+            .with_memory_reservation(RuntimeMemoryReservation::new(limit as u64, 0));
+        let memory = BuildMemory::new(&task).unwrap();
+        let baseline = fixture.governor.snapshot().admitted_memory_bytes;
+        let admission = ReadAdmission {
+            memory: &memory,
+            task: &task,
+            permit: &fixture.permit,
+        };
+        assert!(publisher
+            .admit_source_root(&fixture.project.io_context(), &admission)
+            .is_err());
+        assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+        assert_eq!(fixture.governor.snapshot().admitted_memory_bytes, baseline);
+        assert_eq!(fixture.project.metrics().open, 3);
+        assert!(!fixture.is_registered());
+        assert!(fixture.open().is_err());
+    }
+    let cancelled = RuntimeTaskContext::default();
+    let memory = BuildMemory::new(&cancelled).unwrap();
+    cancelled.cancellation().cancel();
+    let admission = ReadAdmission {
+        memory: &memory,
+        task: &cancelled,
+        permit: &fixture.permit,
+    };
+    assert!(publisher
+        .admit_source_root(&fixture.project.io_context(), &admission)
+        .is_err());
+    assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+    assert_eq!(fixture.project.metrics().open, 3);
+    assert!(!fixture.is_registered());
+    let root = publisher
+        .admit_source_root(&fixture.project.io_context(), &fixture.admission())
+        .unwrap();
+    drop(publisher);
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(root);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+fn peer_root_probe(root: &Path, busy: bool) {
+    const PROBE: &str = "HAWDB_ROOT_REGISTRY_PROBE";
+    const BUSY: &str = "HAWDB_ROOT_REGISTRY_PROBE_BUSY";
+    const CASE: &str = "out_of_core::root_registry::tests::retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close";
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command
+        .args(["--exact", CASE, "--nocapture"])
+        .env(PROBE, root);
+    if busy {
+        command.env(BUSY, "1");
+    } else {
+        command.env_remove(BUSY);
+    }
+    let result = command.output().unwrap();
+    let output = String::from_utf8_lossy(&result.stdout);
+    assert!(
+        result.status.success(),
+        "{output}\n{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(
+        output.contains("1 passed; 0 failed"),
+        "probe selected no case: {output}"
+    );
+}
+
+#[test]
+fn exact_pins_protect_each_cleanup_path_until_the_last_independent_owner_closes() {
+    use crate::generation_cleanup::{
+        once::PreparedCleanup, SearchProjectionCleanupState, SearchProjectionGenerations,
+    };
+    use crate::out_of_core::artifact_key::ArtifactKey;
+    for retry in [false, true] {
+        let fixture = Fixture::new(8);
+        let retained = [
+            "search_projection_segments.17.hawdb",
+            "search_projection_segment_payloads.17.hawdb",
+        ];
+        let unrelated = [
+            "search_projection_mutation_run.17.hawdb",
+            "search_projection_segments.18.hawdb",
+        ];
+        for name in retained.iter().chain(unrelated.iter()) {
+            std::fs::write(fixture.root.join(name), name.as_bytes()).unwrap();
+        }
+        let mut publication =
+            super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(
+                &fixture.root,
+            )
+            .unwrap();
+        let admission = fixture.admission();
+        let capture = publication
+            .capture_source_root(&fixture.project.io_context(), &admission)
+            .unwrap();
+        let pin = capture.pin(ArtifactKey::Content(17)).unwrap();
+        let child = pin.clone();
+        drop(capture);
+        assert!(publication.protects(ArtifactKey::Content(17)));
+        assert!(!publication.protects(ArtifactKey::MutationRun(17)));
+        let mut state = SearchProjectionCleanupState::default();
+        let mut sweep = || {
+            let generations = SearchProjectionGenerations {
+                out_of_core: Some(30),
+                ..Default::default()
+            };
+            if retry {
+                state.run_under_publication(
+                    &fixture.root,
+                    generations,
+                    Default::default(),
+                    &publication,
+                );
+            } else {
+                PreparedCleanup::prepare(&fixture.root, &fixture.memory, &fixture.task)
+                    .unwrap()
+                    .run_under_publication(
+                        &fixture.root,
+                        generations,
+                        Default::default(),
+                        &fixture.task,
+                        &publication,
+                    );
+            }
+        };
+        sweep();
+        for name in retained {
+            assert_eq!(
+                std::fs::read(fixture.root.join(name)).unwrap(),
+                name.as_bytes()
+            );
+        }
+        for name in unrelated {
+            assert!(!fixture.root.join(name).exists());
+        }
+        drop(pin);
+        sweep();
+        for name in retained {
+            assert!(fixture.root.join(name).exists());
+        }
+        drop(child);
+        sweep();
+        for name in retained {
+            assert!(!fixture.root.join(name).exists());
+        }
+        drop(publication);
+        assert_eq!(fixture.memory.ledger.snapshot().used_bytes, 0);
+        assert_eq!(fixture.project.metrics().open, 0);
+    }
+}
+
+#[test]
+fn pending_capture_defers_both_cleanup_paths_before_exact_keys_are_known() {
+    use crate::generation_cleanup::{
+        once::PreparedCleanup, SearchProjectionCleanupState, SearchProjectionGenerations,
+    };
+    for retry in [false, true] {
+        let fixture = Fixture::new(8);
+        let name = "search_projection_segments.17.hawdb";
+        std::fs::write(fixture.root.join(name), b"pending source").unwrap();
+        let mut publication =
+            super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(
+                &fixture.root,
+            )
+            .unwrap();
+        let admission = fixture.admission();
+        let capture = publication
+            .capture_source_root(&fixture.project.io_context(), &admission)
+            .unwrap();
+        let mut state = SearchProjectionCleanupState::default();
+        let mut sweep = || {
+            let generations = SearchProjectionGenerations {
+                out_of_core: Some(30),
+                ..Default::default()
+            };
+            if retry {
+                state.run_under_publication(
+                    &fixture.root,
+                    generations,
+                    Default::default(),
+                    &publication,
+                );
+            } else {
+                PreparedCleanup::prepare(&fixture.root, &fixture.memory, &fixture.task)
+                    .unwrap()
+                    .run_under_publication(
+                        &fixture.root,
+                        generations,
+                        Default::default(),
+                        &fixture.task,
+                        &publication,
+                    );
+            }
+        };
+        sweep();
+        assert_eq!(
+            std::fs::read(fixture.root.join(name)).unwrap(),
+            b"pending source"
+        );
+        drop(capture);
+        sweep();
+        assert!(!fixture.root.join(name).exists());
+        drop(publication);
+        assert_eq!(fixture.memory.ledger.snapshot().used_bytes, 0);
+        assert_eq!(fixture.project.metrics().open, 0);
+    }
 }

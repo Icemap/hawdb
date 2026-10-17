@@ -52,6 +52,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 mod admitted_root;
+pub(crate) mod artifact_key;
 mod generation_writer;
 mod hydration;
 mod projection_scan;
@@ -262,11 +263,13 @@ pub(super) struct SegmentReaderContents {
     lexical_projection: LexicalProjectionReader,
     #[cfg(feature = "vector-search")]
     rabitq_projection: Option<vector_reader::Projection>,
+    _source_pins: [Option<root_registry::ArtifactPin>; 3],
     _layout_memory: Option<crate::build_memory::read::ReaderMemory>,
     _reader_memory: Option<crate::build_memory::read::ReaderMemory>,
 }
 
 struct SegmentOpenContext<'a> {
+    capture: Option<&'a root_registry::PendingCapture<'a, 'a>>,
     root: &'a Path,
     config: &'a SearchOutOfCoreConfig,
     analyzer_lexicon: &'a SearchAnalyzerLexicon,
@@ -841,6 +844,7 @@ impl SearchOutOfCoreSegmentReader {
     ) -> Result<Self> {
         Self::open_with_read_admission(
             SegmentOpenContext {
+                capture: None,
                 root,
                 config,
                 analyzer_lexicon,
@@ -859,6 +863,7 @@ impl SearchOutOfCoreSegmentReader {
         manifest: &SearchOutOfCoreSegmentManifest,
     ) -> Result<Self> {
         let SegmentOpenContext {
+            capture,
             root,
             config,
             analyzer_lexicon,
@@ -883,6 +888,10 @@ impl SearchOutOfCoreSegmentReader {
                 )?)
             })
             .transpose()?;
+        let source_pins = match capture {
+            Some(capture) => capture.pin_segment(manifest)?,
+            None => [None, None, None],
+        };
         #[cfg(not(feature = "vector-search"))]
         let _ = active_manifest;
         let descriptor_path = match admission {
@@ -1141,6 +1150,16 @@ impl SearchOutOfCoreSegmentReader {
                     .into(),
             )
         })?;
+        if capture.is_some()
+            && artifact_key::ArtifactKey::from_file_name(&manifest.lexical_manifest_file)
+                != Some(artifact_key::ArtifactKey::Lexical(
+                    lexical_projection.generation(),
+                ))
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "captured lexical data does not match its registered artifact family".into(),
+            ));
+        }
         drop(lexical_manifest_bytes);
         drop(lexical_path);
 
@@ -1182,6 +1201,7 @@ impl SearchOutOfCoreSegmentReader {
 
         Ok(Self(crate::build_memory::shared::Shared::new(
             SegmentReaderContents {
+                _source_pins: source_pins,
                 content_segment_id: manifest.segment_id,
                 descriptor,
                 payload,
@@ -1273,6 +1293,7 @@ impl SearchOutOfCoreReader {
     ) -> Result<Self> {
         admitted_root::open(admitted_root::OpenContext {
             root: path.as_ref(),
+            publication: None,
             config,
             analyzer_lexicon,
             lexical_term_policy,
@@ -3045,6 +3066,7 @@ struct LoadedArtifactClosure {
 }
 
 struct ClosureLoadContext<'a, 'execution> {
+    capture: Option<&'a root_registry::PendingCapture<'a, 'execution>>,
     root: &'a Path,
     config: &'a SearchOutOfCoreConfig,
     analyzer_lexicon: &'a SearchAnalyzerLexicon,
@@ -3077,6 +3099,7 @@ fn load_artifact_closure_for_manifest(
 ) -> Result<LoadedArtifactClosure> {
     load_artifact_closure_with_context(
         ClosureLoadContext {
+            capture: None,
             root,
             config,
             analyzer_lexicon,
@@ -3095,6 +3118,7 @@ fn load_artifact_closure_with_context(
     manifest: SearchOutOfCoreManifestBody,
 ) -> Result<LoadedArtifactClosure> {
     let ClosureLoadContext {
+        capture,
         root,
         config,
         analyzer_lexicon,
@@ -3162,6 +3186,7 @@ fn load_artifact_closure_with_context(
         match admission {
             Some(_) => SearchOutOfCoreSegmentReader::open_with_read_admission(
                 SegmentOpenContext {
+                    capture,
                     root,
                     config,
                     analyzer_lexicon,
@@ -3245,8 +3270,17 @@ fn load_artifact_closure_with_context(
     };
     for run in &manifest.mutation_runs {
         checkpoint()?;
-        let opened = match admission {
-            Some(_) => mutation_run::SearchMutationRun::open_with_read_admission(
+        let opened = match (admission, capture) {
+            (Some(_), Some(capture)) => mutation_run::SearchMutationRun::open_for_capture(
+                root,
+                run,
+                config.max_mutation_run_bytes.get(),
+                analyzer_digest,
+                &mut mutation_budget,
+                capture,
+                max_artifact_read_bytes,
+            ),
+            (Some(_), None) => mutation_run::SearchMutationRun::open_with_read_admission(
                 root,
                 run,
                 config.max_mutation_run_bytes.get(),
@@ -3255,7 +3289,7 @@ fn load_artifact_closure_with_context(
                 admission,
                 max_artifact_read_bytes,
             ),
-            None => mutation_run::SearchMutationRun::open(
+            (None, _) => mutation_run::SearchMutationRun::open(
                 root,
                 run,
                 config.max_mutation_run_bytes.get(),

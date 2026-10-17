@@ -91,6 +91,9 @@ pub struct ConsumerPreparationLease {
 }
 
 impl ConsumerPreparationLease {
+    pub(super) fn publication(&self) -> &SearchProjectionPublishLease {
+        &self.authority._lease
+    }
     pub(super) fn owns(&self, index: &SearchIndex) -> bool {
         self.authority.owns(index)
     }
@@ -126,6 +129,9 @@ pub(crate) struct MutationPermit {
 }
 
 impl MutationPermit {
+    pub(crate) fn publication(&self) -> &SearchProjectionPublishLease {
+        &self.authority._lease
+    }
     pub(super) fn acquire(owner: &Weak<Authority>, generation: u64) -> Result<Self> {
         let authority = owner
             .upgrade()

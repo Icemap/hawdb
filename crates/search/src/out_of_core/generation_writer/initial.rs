@@ -161,6 +161,7 @@ pub(super) fn publish(
     mut writer: SearchOutOfCoreGenerationWriter,
     active: Option<u64>,
     mut report: SearchOutOfCoreGenerationBuildReport,
+    publication: &super::super::SearchProjectionPublishLease,
 ) -> Result<SearchOutOfCoreGenerationBuildReport> {
     // The candidate rechecked its real-root selector under the publication
     // lease. This install retains that lease through manifest-last publication.
@@ -181,11 +182,12 @@ pub(super) fn publish(
         crate::generation_cleanup::once::evidence::Point::AfterCommit,
         &writer.memory,
     );
-    let cleanup = cleanup.run(
+    let cleanup = cleanup.run_under_publication(
         &writer.root,
         generations,
         writer.options.cleanup_options,
         &writer.task_context,
+        publication,
     );
     drop(retention_memory);
     report.cleanup_deleted_files = cleanup.deleted_files;

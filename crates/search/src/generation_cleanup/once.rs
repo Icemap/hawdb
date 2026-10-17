@@ -54,6 +54,25 @@ impl PreparedCleanup {
         })
     }
 
+    pub(crate) fn run_under_publication(
+        self,
+        root: &Path,
+        generations: SearchProjectionGenerations,
+        options: SearchProjectionCleanupOptions,
+        task: &RuntimeTaskContext,
+        publication: &crate::out_of_core::SearchProjectionPublishLease,
+    ) -> CleanupResult {
+        self.run_with_policy(
+            root,
+            generations,
+            options,
+            task,
+            |candidate| publication.protects(candidate.artifact_key()),
+            |path| fs::remove_file(path),
+        )
+    }
+
+    #[cfg(test)]
     pub(crate) fn run(
         self,
         root: &Path,
@@ -66,12 +85,25 @@ impl PreparedCleanup {
         })
     }
 
+    #[cfg(test)]
     fn run_with_remover(
         self,
         root: &Path,
         generations: SearchProjectionGenerations,
         options: SearchProjectionCleanupOptions,
         task: &RuntimeTaskContext,
+        remove: impl FnMut(&Path) -> io::Result<()>,
+    ) -> CleanupResult {
+        self.run_with_policy(root, generations, options, task, |_| false, remove)
+    }
+
+    fn run_with_policy(
+        self,
+        root: &Path,
+        generations: SearchProjectionGenerations,
+        options: SearchProjectionCleanupOptions,
+        task: &RuntimeTaskContext,
+        protects: impl Fn(&CleanupCandidate<&str>) -> bool,
         mut remove: impl FnMut(&Path) -> io::Result<()>,
     ) -> CleanupResult {
         let mut result = CleanupResult {
@@ -113,6 +145,10 @@ impl PreparedCleanup {
                 continue;
             };
             if !candidate.is_obsolete(&generations) {
+                continue;
+            }
+            if protects(&candidate) {
+                result.defer(options);
                 continue;
             }
             if attempts == options.max_delete_attempts.get() {

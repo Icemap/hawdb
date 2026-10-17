@@ -113,7 +113,7 @@ impl SearchOutOfCorePreparedGeneration {
     /// independently of artifact size. A successful selector commit cannot be
     /// undone by cancellation arriving during that commit's durability barrier.
     pub fn publish(self) -> Result<SearchOutOfCoreGenerationBuildReport> {
-        let _lease = super::super::SearchProjectionPublishLease::acquire_with_context(
+        let lease = super::super::SearchProjectionPublishLease::acquire_with_context(
             &self.writer.root,
             &self.writer.memory,
             &self.writer.task_context,
@@ -123,10 +123,13 @@ impl SearchOutOfCorePreparedGeneration {
             Content::Single {
                 artifacts,
                 private_partition,
-            } => self
-                .writer
-                .publish_artifacts(self.generation, private_partition, artifacts),
-            Content::Partitioned(report) => initial::publish(self.writer, self.base.active, report),
+            } => {
+                self.writer
+                    .publish_artifacts(self.generation, private_partition, artifacts, &lease)
+            }
+            Content::Partitioned(report) => {
+                initial::publish(self.writer, self.base.active, report, &lease)
+            }
         }
     }
 }

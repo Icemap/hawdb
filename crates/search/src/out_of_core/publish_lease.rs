@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::root_registry::PublicationRegistration;
 use crate::build_control::checkpoint;
 use crate::build_memory::{path::OwnedPath, reserved::native_path, BuildMemory};
 use crate::error::{HawDBError, Result};
 use hawdb_core::RuntimeTaskContext;
-use hawdb_storage::file_descriptors::DescriptorKind;
-use hawdb_storage::file_io::{File, OpenOptions};
+use hawdb_storage::file_io::{File, SourceDirectory, SourceDirectoryLockMode};
 use std::fs::TryLockError;
 use std::path::Path;
 
@@ -28,7 +28,7 @@ pub(crate) struct SearchProjectionPublishLease {
     lock_file: File,
     // Close the descriptor before releasing process-local exclusion, including
     // platforms whose native record locks belong to the process.
-    _registration: registration::Registration,
+    root: PublicationRegistration,
 }
 
 impl SearchProjectionPublishLease {
@@ -70,9 +70,11 @@ impl SearchProjectionPublishLease {
         task: &RuntimeTaskContext,
     ) -> Result<Self> {
         checkpoint(task)?;
-        let registration = registration::Registration::acquire(root, memory, task)?;
+        let _root_scratch = memory.spool.reserve(native_path::bytes(root)?)?;
+        let directory = SourceDirectory::capture_for_path(root)?;
         #[cfg(test)]
-        tests::after_registration(root);
+        tests::after_capture(root);
+        let registered = PublicationRegistration::acquire(directory, memory, task)?;
         let lock_path = OwnedPath::join(
             root,
             Path::new(SEARCH_PROJECTION_PUBLISH_LOCK_FILE),
@@ -81,13 +83,13 @@ impl SearchProjectionPublishLease {
         )?;
         let _native = memory.spool.reserve(native_path::bytes(&lock_path)?)?;
         checkpoint(task)?;
-        let lock_file = OpenOptions::new()
-            .descriptor_kind(DescriptorKind::OwnershipLock)
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(&lock_path)?;
+        let lock_file = registered.with_directory(|directory| {
+            directory.open_lock_file(
+                &directory.operation_context(),
+                SEARCH_PROJECTION_PUBLISH_LOCK_FILE,
+                SourceDirectoryLockMode::ReadWriteCreate,
+            )
+        })?;
         if let Err(error) = lock_file.try_lock() {
             return match error {
                 TryLockError::WouldBlock => Err(active_publication()),
@@ -96,7 +98,7 @@ impl SearchProjectionPublishLease {
         }
         let lease = Self {
             lock_file,
-            _registration: registration,
+            root: registered,
         };
         #[cfg(test)]
         tests::after_lock(root);
@@ -108,8 +110,70 @@ impl SearchProjectionPublishLease {
         Ok(lease)
     }
 
+    pub(super) fn acquire_for_capture(
+        root: &Path,
+        memory: &BuildMemory,
+        task: &RuntimeTaskContext,
+    ) -> Result<Self> {
+        Self::acquire_lock_with_context(root, memory, task)
+    }
+
+    pub(super) fn source_identity(&self) -> hawdb_storage::file_io::SourceDirectoryIdentity {
+        self.root.identity()
+    }
+
+    pub(crate) fn protects(&self, key: super::artifact_key::ArtifactKey) -> bool {
+        self.root.protects(key)
+    }
+
+    pub(super) fn capture_source_root<'a, 'execution>(
+        &mut self,
+        context: &hawdb_storage::file_descriptors::FileOpenContext,
+        admission: &'a crate::build_memory::read::ReadAdmission<'execution>,
+    ) -> Result<super::root_registry::PendingCapture<'a, 'execution>> {
+        let root = self.admit_source_root(context, admission)?;
+        root.begin_capture(self, admission)
+    }
+
+    pub(super) fn require_source_root(
+        &self,
+        root: &Path,
+        context: &hawdb_storage::file_descriptors::FileOpenContext,
+    ) -> Result<()> {
+        self.root.with_directory(|directory| {
+            if !directory.shares_project_context(context) {
+                return Err(HawDBError::StorageIntegrity(
+                    "publication root does not match reader descriptor domain".into(),
+                ));
+            }
+            let named = SourceDirectory::capture(root, context)?;
+            if !directory.same_directory(&named) {
+                return Err(HawDBError::StorageIntegrity(
+                    "publication root does not match reader root".into(),
+                ));
+            }
+            Ok(())
+        })
+    }
+
+    pub(super) fn admit_source_root(
+        &mut self,
+        context: &hawdb_storage::file_descriptors::FileOpenContext,
+        admission: &crate::build_memory::read::ReadAdmission<'_>,
+    ) -> Result<super::root_registry::RootRef> {
+        self.root.admit_root(context, admission)
+    }
+
     fn require_current_binding(&self, root: &Path, lock_path: &Path) -> Result<()> {
-        self._registration.require_current_root(root)?;
+        self.root.with_directory(|directory| -> Result<()> {
+            let named = SourceDirectory::capture(root, &directory.operation_context())?;
+            if !directory.same_directory(&named) {
+                return Err(HawDBError::StorageIntegrity(
+                    "search publication root changed during acquisition".into(),
+                ));
+            }
+            Ok(())
+        })?;
         if !self.lock_file.matches_native_path(lock_path)? {
             return Err(HawDBError::StorageIntegrity(
                 "search publication lock path changed during acquisition".into(),
@@ -129,120 +193,6 @@ impl Drop for SearchProjectionPublishLease {
     }
 }
 
-// Unix needs process-local exclusion on implementations that use F_SETLK.
-// Directory identity avoids canonicalization's unbounded owned path result and
-// recognizes symlink aliases without cloning a key for the returned lease.
-#[cfg(unix)]
-mod registration {
-    use super::*;
-    use hawdb_executor::QueryMemoryLease;
-    use std::collections::LinkedList;
-    use std::mem::size_of;
-    use std::os::unix::fs::MetadataExt;
-    use std::sync::{Mutex, MutexGuard};
-
-    static ACTIVE: Mutex<LinkedList<Entry>> = Mutex::new(LinkedList::new());
-
-    struct Entry {
-        identity: (u64, u64),
-        _memory: QueryMemoryLease,
-    }
-
-    #[derive(Debug)]
-    pub(super) struct Registration {
-        identity: (u64, u64),
-    }
-
-    impl Registration {
-        // The caller retains admitted native path scratch and the lock FD.
-        pub(super) fn require_current_root(&self, root: &Path) -> Result<()> {
-            let metadata = hawdb_storage::file_io::metadata(root)?;
-            if self.identity != (metadata.dev(), metadata.ino()) {
-                return Err(HawDBError::StorageIntegrity(
-                    "search publication root changed during acquisition".into(),
-                ));
-            }
-            Ok(())
-        }
-
-        pub(super) fn acquire(
-            root: &Path,
-            memory: &BuildMemory,
-            task: &RuntimeTaskContext,
-        ) -> Result<Self> {
-            checkpoint(task)?;
-            let native = memory.spool.reserve(native_path::bytes(root)?)?;
-            let metadata = hawdb_storage::file_io::metadata(root)?;
-            drop(native);
-            let identity = (metadata.dev(), metadata.ino());
-            // Every list node owns its charge. Removing a publisher frees its
-            // node rather than leaving shared table capacity after owner exit.
-            let node = memory
-                .retained
-                .reserve(size_of::<Entry>() + 2 * size_of::<usize>())?;
-            checkpoint(task)?;
-            let mut publishers = active();
-            if publishers.iter().any(|entry| entry.identity == identity) {
-                return Err(active_publication());
-            }
-            publishers.push_back(Entry {
-                identity,
-                _memory: node,
-            });
-            Ok(Self { identity })
-        }
-    }
-
-    impl Drop for Registration {
-        fn drop(&mut self) {
-            let removed = {
-                let mut publishers = active();
-                let index = publishers
-                    .iter()
-                    .position(|entry| entry.identity == self.identity)
-                    .expect("publication registration must remain present");
-                // split_off/append only relink existing nodes. pop_front frees
-                // the removed node before returning its still-admitted payload.
-                let mut tail = publishers.split_off(index);
-                let removed = tail.pop_front();
-                publishers.append(&mut tail);
-                removed
-            };
-            drop(removed);
-        }
-    }
-
-    fn active() -> MutexGuard<'static, LinkedList<Entry>> {
-        ACTIVE
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-}
-
-// Windows LockFileEx rejects overlapping exclusive locks even for different
-// handles in one process. Other non-Unix targets retain File::try_lock's own
-// support/error behavior and need no allocated process registry.
-#[cfg(not(unix))]
-mod registration {
-    use super::*;
-    #[derive(Debug)]
-    pub(super) struct Registration;
-    impl Registration {
-        pub(super) fn require_current_root(&self, _root: &Path) -> Result<()> {
-            Ok(())
-        }
-
-        pub(super) fn acquire(
-            _: &Path,
-            _: &BuildMemory,
-            task: &RuntimeTaskContext,
-        ) -> Result<Self> {
-            checkpoint(task)?;
-            Ok(Self)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,12 +203,12 @@ mod tests {
 
     type Hook = fn(&Path);
     thread_local! {
-        static AFTER_REGISTRATION: std::cell::Cell<Option<Hook>> = const { std::cell::Cell::new(None) };
+        static AFTER_CAPTURE: std::cell::Cell<Option<Hook>> = const { std::cell::Cell::new(None) };
         static AFTER_LOCK: std::cell::Cell<Option<Hook>> = const { std::cell::Cell::new(None) };
     }
 
-    pub(super) fn after_registration(root: &Path) {
-        if let Some(hook) = AFTER_REGISTRATION.with(|slot| slot.take()) {
+    pub(super) fn after_capture(root: &Path) {
+        if let Some(hook) = AFTER_CAPTURE.with(|slot| slot.take()) {
             hook(root);
         }
     }
@@ -269,23 +219,52 @@ mod tests {
     }
 
     #[test]
-    fn replacement_after_registration_cannot_misbind_the_native_lease() {
+    fn replacement_after_capture_cannot_misbind_the_native_lease() {
         let root = test_dir();
         fs::create_dir_all(&root).unwrap();
-        AFTER_REGISTRATION.with(|slot| {
+        AFTER_CAPTURE.with(|slot| {
             slot.set(Some(|root| {
                 fs::rename(root, root.with_extension("replaced")).unwrap();
                 fs::create_dir(root).unwrap();
             }))
         });
         let result = SearchProjectionPublishLease::acquire(&root);
-        assert!(AFTER_REGISTRATION.with(|slot| slot.take()).is_none());
-        #[cfg(unix)]
+        assert!(AFTER_CAPTURE.with(|slot| slot.take()).is_none());
         assert!(matches!(result, Err(HawDBError::StorageIntegrity(_))));
-        // Windows has no process-local directory registration; its retained
-        // native lease correctly covers the new root opened after replacement.
-        #[cfg(not(unix))]
-        drop(result.unwrap());
+        assert!(!root.join(SEARCH_PROJECTION_PUBLISH_LOCK_FILE).exists());
+        assert!(root
+            .with_extension("replaced")
+            .join(SEARCH_PROJECTION_PUBLISH_LOCK_FILE)
+            .is_file());
+        drop(SearchProjectionPublishLease::acquire(&root).unwrap());
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_dir_all(root.with_extension("replaced")).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replacement_after_process_and_publication_locks_cannot_grant_foreign_root_authority() {
+        let root = test_dir();
+        fs::create_dir_all(&root).unwrap();
+        AFTER_LOCK.with(|slot| {
+            slot.set(Some(|root| {
+                fs::rename(root, root.with_extension("replaced")).unwrap();
+                fs::create_dir(root).unwrap();
+                fs::write(root.join("foreign"), b"preserve foreign root").unwrap();
+            }))
+        });
+        let result = SearchProjectionPublishLease::acquire(&root);
+        assert!(matches!(result, Err(HawDBError::StorageIntegrity(_))));
+        assert!(AFTER_LOCK.with(|slot| slot.take()).is_none());
+        assert_eq!(
+            fs::read(root.join("foreign")).unwrap(),
+            b"preserve foreign root"
+        );
+        assert!(!root.join(SEARCH_PROJECTION_PUBLISH_LOCK_FILE).exists());
+        assert!(root
+            .with_extension("replaced")
+            .join(SEARCH_PROJECTION_PUBLISH_LOCK_FILE)
+            .is_file());
         drop(SearchProjectionPublishLease::acquire(&root).unwrap());
         fs::remove_dir_all(&root).unwrap();
         fs::remove_dir_all(root.with_extension("replaced")).unwrap();
@@ -495,15 +474,18 @@ mod tests {
         let first_memory = BuildMemory::new(&task).unwrap();
         let second_memory = BuildMemory::new(&task).unwrap();
         drop(first_memory.retained.reserve(1).unwrap());
+        let capture = |path: &Path| SourceDirectory::capture_for_path(path).unwrap();
+        let directory = capture(&root);
         let (first, peak) = allocation::measure(|| {
-            registration::Registration::acquire(&root, &first_memory, &task).unwrap()
+            PublicationRegistration::acquire(directory, &first_memory, &task).unwrap()
         });
         let bytes = first_memory.ledger.snapshot().used_bytes;
         assert!(bytes > 0);
         assert_eq!(allocation::live(), bytes);
         assert!(peak <= first_memory.ledger.snapshot().peak_bytes);
-        let second = registration::Registration::acquire(&other, &second_memory, &task).unwrap();
-        assert!(registration::Registration::acquire(&alias, &second_memory, &task).is_err());
+        let second =
+            PublicationRegistration::acquire(capture(&other), &second_memory, &task).unwrap();
+        assert!(PublicationRegistration::acquire(capture(&alias), &second_memory, &task).is_err());
         assert_eq!(second_memory.ledger.snapshot().used_bytes, bytes);
         drop(first);
         assert_eq!(first_memory.ledger.snapshot().used_bytes, 0);
@@ -515,7 +497,7 @@ mod tests {
             let task = RuntimeTaskContext::default()
                 .with_memory_reservation(RuntimeMemoryReservation::new((bytes - short) as u64, 0));
             let memory = BuildMemory::new(&task).unwrap();
-            let lease = registration::Registration::acquire(&root, &memory, &task);
+            let lease = PublicationRegistration::acquire(capture(&root), &memory, &task);
             assert_eq!(lease.is_ok(), short == 0);
             drop(lease);
             assert_eq!(memory.ledger.snapshot().used_bytes, 0);

@@ -691,6 +691,12 @@ pub struct FileOpenContext {
 }
 
 impl FileOpenContext {
+    /// Borrow this domain's current operation inventory, without changing the
+    /// project registry or keeping the original operation's reservation alive.
+    pub(crate) fn for_operation(&self) -> Self {
+        Self::from_state(self.state.clone())
+    }
+
     /// Retain project identity without retaining an operation's FD inventory.
     /// Long-lived authorities must take fresh operation contexts for later I/O.
     pub(crate) fn without_inventory(&self) -> Self {

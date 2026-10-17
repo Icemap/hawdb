@@ -20,6 +20,7 @@ use crate::build_memory::{
 use crate::lexical_projection::QueryContext;
 
 pub(super) struct OpenContext<'a, 'execution> {
+    pub(super) source_pin: Option<super::super::root_registry::ArtifactPin>,
     pub(super) root: &'a Path,
     pub(super) admission: &'a ReadAdmission<'execution>,
     pub(super) maximum_encoded_bytes: u64,
@@ -34,6 +35,7 @@ impl SearchMutationRun {
         manifest: &SearchOutOfCoreMutationRunManifest,
     ) -> Result<Self> {
         let OpenContext {
+            source_pin,
             root,
             admission,
             maximum_encoded_bytes,
@@ -74,7 +76,7 @@ impl SearchMutationRun {
         )?;
         let memory = admission.retained(retained)?;
         let _scratch = admission.scratch(working)?;
-        let file = terms::TermFile::new_admitted(file, manifest.len, admission)?;
+        let file = terms::TermFile::new_admitted(file, manifest.len, admission, source_pin)?;
         let envelope =
             streaming::decode_admitted(file, manifest, scalar, admission, maximum_artifact_bytes)?;
         let query = QueryContext::from_read_admission(admission);
