@@ -172,6 +172,20 @@ impl ImmutableFileHandles {
         // mounting an unopened artifact must not warm the descriptor cache.
         // Keep the verified handle alive until the alias has been installed.
         let _verified = Self::open_verified_object(&binding, context, DescriptorKind::Transient)?;
+        // Reopening a branch usually finds the checkpoint alias already mounted.
+        // Only reuse a regular, no-follow alias to this exact verified inode.
+        // Equal bytes, link counts and the binding map cannot establish that.
+        // The live verified handle prevents file-ID reuse during this check.
+        // Cooperating branch admission still excludes concurrent alias mutation.
+        #[cfg(unix)]
+        if let Ok(alias) = fs::symlink_metadata(path)
+            && alias.is_file()
+            && crate::native_file_identity::of_metadata(&alias)
+                == crate::native_file_identity::of_metadata(&_verified.metadata()?)
+        {
+            // Restore copy-on-write tracking even when admission cleared it.
+            return self.bind(path, binding);
+        }
         let candidate = loop {
             let candidate = alias_candidate_path(path)?;
             match fs::hard_link(&binding.object_path, &candidate) {
@@ -437,6 +451,10 @@ mod tests {
 
     impl Fixture {
         fn new() -> Self {
+            Self::new_with(|_| ()).0
+        }
+
+        fn new_with<T>(attach: impl FnOnce(&ProjectFileDescriptors) -> T) -> (Self, T) {
             let root = loop {
                 let root = std::env::temp_dir().join(format!(
                     "hawdb-immutable-alias-{}-{}",
@@ -450,17 +468,21 @@ mod tests {
                 }
             };
             let project = ProjectFileDescriptors::acquire_existing(&root, 8).unwrap();
+            let attached = attach(&project);
             let mut objects = ImmutableObjectStore::open(root.join("immutable")).unwrap();
             let bytes = (0..128 * 1024).map(|i| (i % 251) as u8).collect::<Vec<_>>();
             let reference = ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, &bytes);
             objects.publish(reference, &bytes).unwrap();
-            Self {
-                root,
-                project,
-                objects,
-                reference,
-                bytes,
-            }
+            (
+                Self {
+                    root,
+                    project,
+                    objects,
+                    reference,
+                    bytes,
+                },
+                attached,
+            )
         }
 
         fn mount(&self, name: &str) -> PathBuf {
@@ -491,6 +513,188 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.root);
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn verified_alias_reuse_avoids_namespace_mutation_and_restores_copy_on_write() {
+        use crate::power_loss::{
+            image::ImageLimits, IoEvent, ObservationBoundary, ObservationPoint, PowerLossModel,
+        };
+        for event in [IoEvent::HardLink, IoEvent::Rename] {
+            let (fixture, model) = Fixture::new_with(|project| {
+                PowerLossModel::attach(project, ImageLimits::default()).unwrap()
+            });
+            // The fault model itself retains its native root descriptor.
+            let retained = fixture.project.metrics().open;
+            let point = ObservationPoint {
+                event,
+                relative_path: PathBuf::from("checkpoint"),
+                boundary: ObservationBoundary::Before,
+                skip_matches: 0,
+                include_descendants: true,
+                keep_last: false,
+            };
+            // Exercise the observer on a real first installation, including
+            // the randomly named hard-link candidate in this directory.
+            fs::create_dir(fixture.root.join("checkpoint")).unwrap();
+            model.observe(point.clone()).unwrap();
+            let path = fixture.mount("checkpoint/selected.hawdb");
+            assert!(model.take_observation().unwrap().is_some());
+            fixture.project.immutable_handles.unbind(&path).unwrap();
+            assert!(fixture
+                .project
+                .immutable_handles
+                .binding(&path)
+                .unwrap()
+                .is_none());
+            model.observe(point).unwrap();
+            fixture.mount("checkpoint/selected.hawdb");
+            assert!(model.take_observation().unwrap().is_none(), "{event:?}");
+            assert!(fixture
+                .project
+                .immutable_handles
+                .binding(&path)
+                .unwrap()
+                .is_some());
+            assert_eq!(fixture.project.metrics().open, retained);
+            assert_eq!(fixture.project.metrics().cached_handles, 0);
+            // Audit the actual native history, then mutate through the rebound
+            // alias. The immutable object and a preexisting reader must survive.
+            model.capture().unwrap();
+            let mut reader = File::open(&path).unwrap();
+            fs::write(&path, b"private update").unwrap();
+            assert_eq!(
+                fixture.objects.read(fixture.reference).unwrap(),
+                fixture.bytes
+            );
+            let mut old = Vec::new();
+            reader.read_to_end(&mut old).unwrap();
+            assert_eq!(old, fixture.bytes);
+            drop(reader);
+            // Recovery remounts the checkpoint rather than reusing a detached
+            // writable inode. Its old reader still retains the private update.
+            let mut private = File::open(&path).unwrap();
+            fixture.mount("checkpoint/selected.hawdb");
+            assert_eq!(fs::read(&path).unwrap(), fixture.bytes);
+            let mut old_private = Vec::new();
+            private.read_to_end(&mut old_private).unwrap();
+            assert_eq!(old_private, b"private update");
+            drop(private);
+            model.capture().unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn equal_content_alias_with_multiple_links_is_remounted_to_verified_object() {
+        let fixture = Fixture::new();
+        let path = fixture.mount("selected.hawdb");
+        // Bypass binding-aware IO to simulate an existing wrong alias on reopen.
+        std::fs::remove_file(&path).unwrap();
+        std::fs::copy(fixture.objects.object_path(fixture.reference), &path).unwrap();
+        let other = fixture.root.join("other-copy");
+        std::fs::hard_link(&path, &other).unwrap();
+        let mut private = File::open(&path).unwrap();
+        fixture.mount("selected.hawdb");
+        assert_eq!(fs::read(&path).unwrap(), fixture.bytes);
+        fs::write(&path, b"new private bytes").unwrap();
+        assert_eq!(
+            fixture.objects.read(fixture.reference).unwrap(),
+            fixture.bytes
+        );
+        let mut previous = Vec::new();
+        private.read_to_end(&mut previous).unwrap();
+        assert_eq!(previous, fixture.bytes);
+        assert_eq!(std::fs::read(other).unwrap(), fixture.bytes);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_to_verified_object_is_replaced_with_regular_alias() {
+        let fixture = Fixture::new();
+        let path = fixture.mount("selected.hawdb");
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(fixture.objects.object_path(fixture.reference), &path).unwrap();
+        fixture.mount("selected.hawdb");
+        assert!(std::fs::symlink_metadata(&path).unwrap().is_file());
+        fs::write(path, b"private update").unwrap();
+        assert_eq!(
+            fixture.objects.read(fixture.reference).unwrap(),
+            fixture.bytes
+        );
+    }
+
+    #[test]
+    fn existing_alias_never_bypasses_complete_object_validation() {
+        let fixture = Fixture::new();
+        let path = fixture.mount("selected.hawdb");
+        let binding = fixture
+            .project
+            .immutable_handles
+            .binding(&path)
+            .unwrap()
+            .unwrap();
+        // A same-length in-place corruption preserves both alias identity and
+        // metadata. Managed-object validation must still reject its digest.
+        let mut bytes = fixture.bytes.clone();
+        let middle = bytes.len() / 2;
+        bytes[middle] ^= 1;
+        std::fs::write(&binding.object_path, &bytes).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        let context = crate::file_descriptors::context_for_path(&path).unwrap();
+        let error = fixture
+            .project
+            .immutable_handles
+            .mount(&path, binding, &context)
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("digest mismatch"));
+        assert_eq!(fixture.project.metrics().open, 0);
+        assert_eq!(fixture.project.metrics().cached_handles, 0);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    }
+
+    #[test]
+    fn repeated_checkpoint_mounts_keep_cache_cold_and_rebind_every_alias() {
+        let fixture = Fixture::new();
+        let aliases = (0..32)
+            .map(|i| format!("checkpoint-{i}"))
+            .collect::<Vec<_>>();
+        for alias in &aliases {
+            fixture.mount(alias);
+        }
+        let peak = fixture.project.metrics().high_water;
+        let start = std::time::Instant::now();
+        for _ in 0..8 {
+            // A new admission cannot rely on the previous binding map.
+            for alias in &aliases {
+                fixture
+                    .project
+                    .immutable_handles
+                    .unbind(&fixture.root.join(alias))
+                    .unwrap();
+            }
+            for alias in &aliases {
+                let path = fixture.mount(alias);
+                let binding = fixture
+                    .project
+                    .immutable_handles
+                    .binding(&path)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(binding.reference, fixture.reference);
+            }
+            let metrics = fixture.project.metrics();
+            assert_eq!(metrics.open, 0);
+            assert_eq!(metrics.cached_handles, 0);
+            assert_eq!(metrics.reserved, 0);
+            assert_eq!(metrics.high_water, peak);
+        }
+        eprintln!(
+            "256 remounts / 128 KiB per verified object: {:?}",
+            start.elapsed()
+        );
     }
 
     #[test]
