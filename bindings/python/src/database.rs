@@ -20,10 +20,12 @@ use hawdb::{
 };
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PySequenceMethods};
 
 use crate::errors::{format_embedded_error, format_hawdb_error, Error};
-use crate::value::{py_dict_to_params, py_list_to_params, value_to_py};
+use crate::value::{
+    parameter_sequence, py_dict_to_params, py_list_to_params, py_sequence_to_params, value_to_py,
+};
 
 /// An open HawDB database.
 ///
@@ -84,6 +86,22 @@ impl Database {
         self.inner
             .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("database is closed"))
+    }
+
+    fn execute_batch(
+        slf: Py<Self>,
+        py: Python<'_>,
+        rows: &Bound<'_, PyAny>,
+        execute: impl FnOnce(&mut Transaction) -> PyResult<()>,
+    ) -> PyResult<()> {
+        slf.borrow_mut(py).required()?;
+        if parameter_sequence(rows)?.is_empty()? {
+            return Ok(());
+        }
+        let mut transaction = Self::transaction(slf, py)?;
+        execute(&mut transaction)?;
+        transaction.commit(py)?;
+        Ok(())
     }
 }
 
@@ -212,6 +230,32 @@ impl Database {
             .detach(|| database.database_mut().query_sql_with_params(sql, &values))
             .map_err(|error| format_hawdb_error(&error))?;
         QueryResult::from_output(py, output)
+    }
+
+    /// Runs one Cypher statement for each parameter dict in one transaction.
+    /// Returns None; an empty sequence opens no transaction.
+    fn executemany(
+        slf: Py<Self>,
+        py: Python<'_>,
+        cypher: &str,
+        rows: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        Self::execute_batch(slf, py, rows, |transaction| {
+            transaction.executemany(py, cypher, rows)
+        })
+    }
+
+    /// Runs one SQL statement for each positional parameter sequence in one transaction.
+    /// Returns None; an empty sequence opens no transaction.
+    fn executemany_sql(
+        slf: Py<Self>,
+        py: Python<'_>,
+        sql: &str,
+        rows: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        Self::execute_batch(slf, py, rows, |transaction| {
+            transaction.executemany_sql(py, sql, rows)
+        })
     }
 
     /// Begins an explicit multi-statement transaction.
@@ -446,6 +490,31 @@ impl Transaction {
             .rollback_transaction()
             .map_err(|error| format_hawdb_error(&error))
     }
+
+    fn execute_batch(
+        &mut self,
+        py: Python<'_>,
+        rows: &Bound<'_, PyAny>,
+        mut execute: impl FnMut(&mut Self, &Bound<'_, PyAny>) -> PyResult<()>,
+    ) -> PyResult<()> {
+        self.required()?;
+        let result = (|| {
+            for row in parameter_sequence(rows)?.try_iter()? {
+                execute(self, &row?)?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            // There are no savepoints: a caught batch error must not leave a
+            // committable prefix in the caller's transaction.
+            if let Err(rollback_error) = self.abandon(py) {
+                rollback_error.set_cause(py, Some(error));
+                return Err(rollback_error);
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
 }
 
 #[pymethods]
@@ -492,6 +561,42 @@ impl Transaction {
             .detach(|| embedded.transaction_query_sql_with_params(sql, &values))
             .map_err(|error| format_hawdb_error(&error))?;
         QueryResult::from_output(py, output)
+    }
+
+    /// Runs a batch of Cypher bindings without committing the outer transaction.
+    /// Returns None; any batch failure rolls back and closes the transaction.
+    fn executemany(
+        &mut self,
+        py: Python<'_>,
+        cypher: &str,
+        rows: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        self.execute_batch(py, rows, |transaction, row| {
+            let params = py_dict_to_params(row.cast::<PyDict>()?)?;
+            let mut db = transaction.db.borrow_mut(py);
+            let embedded = db.required()?;
+            py.detach(|| embedded.transaction_query_with_params(cypher, &params))
+                .map(|_| ())
+                .map_err(|error| format_hawdb_error(&error))
+        })
+    }
+
+    /// Runs a batch of SQL bindings without committing the outer transaction.
+    /// Returns None; any batch failure rolls back and closes the transaction.
+    fn executemany_sql(
+        &mut self,
+        py: Python<'_>,
+        sql: &str,
+        rows: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        self.execute_batch(py, rows, |transaction, row| {
+            let params = py_sequence_to_params(parameter_sequence(row)?)?;
+            let mut db = transaction.db.borrow_mut(py);
+            let embedded = db.required()?;
+            py.detach(|| embedded.transaction_query_sql_with_params(sql, &params))
+                .map(|_| ())
+                .map_err(|error| format_hawdb_error(&error))
+        })
     }
 
     /// Publishes every staged statement as one durable commit and closes

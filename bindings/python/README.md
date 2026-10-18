@@ -199,6 +199,30 @@ with db.transaction() as tx:
 `db.read_transaction()` pins the committed state for a stable read scope;
 write statements on it raise the engine's read-transaction error.
 
+`db.executemany(cypher, rows)` accepts a sequence of parameter dicts;
+`db.executemany_sql(sql, rows)` accepts a sequence of positional parameter
+sequences (for example, lists or tuples). Each nonempty batch uses one
+transaction and commits after the last row. A conversion or statement failure
+rolls back the entire batch, including any earlier rows. Parameters use the same
+value mapping as `execute` and `execute_sql`, converted one row at a time.
+Both methods return `None` and discard statement results. An empty sequence is
+a no-op that neither opens a transaction nor executes the statement.
+
+```python
+db.executemany(
+    "CREATE (s:Stock {code: $code})",
+    [{"code": "603122"}, {"code": "600519"}],
+)
+db.executemany_sql("INSERT INTO trades (id) VALUES ($1)", [(1,), (2,)])
+```
+
+`tx.executemany` and `tx.executemany_sql` use an existing transaction without
+committing it. If batch processing fails, they roll back and close the **whole
+transaction**, including earlier statements outside the batch; there are no
+savepoints. Catching the exception does not leave a partial batch that can later
+be committed. A successful batch stays staged until the caller commits or exits
+the transaction context normally.
+
 `hawdb.open()` without a path returns an empty in-memory database for tests,
 notebooks, and other hosts that already hold their data. It answers the same
 `execute` / `execute_sql` calls through the same embedded admission path;
