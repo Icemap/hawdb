@@ -81,6 +81,8 @@ Closing a busy capture or dropping a root to pass preflight is not allowed.
 This fixes the native branch admission floor, not the Consumer allocation/birth/
 debt journal or stationary serving. Full C..E/source ownership, lost/torn/reordered
 write recovery, actual physical memory/I/O and multiwriter/fairness/group-fsync
-qualification remain required. Windows metadata recovery's five-FD completion
-expectation is separately failing and must be diagnosed from its actual report;
-this argument does not assign a new platform limit or waive that failure.
+qualification remain required. Windows metadata recovery separately confirmed
+five-slot exhaustion while retaining its publication candidate through rename;
+[the metadata argument](PROJECT_METADATA_CAPTURE_PROOF.md) derives the platform
+peak and states its native qualification limits. This branch floor argument
+does not waive that recovery gate or change synchronization.

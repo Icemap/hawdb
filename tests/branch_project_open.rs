@@ -1567,6 +1567,7 @@ fn pending_recovery_preserves_live_creators_and_never_admits_busy_main() {
 fn writable_open_recovers_pending_children_with_aggregate_limits_and_no_runtime() {
     use hawdb::{BranchCreateRecoveryLimits, BranchCreateRecoveryStatus};
 
+    let completion_limit = if cfg!(windows) { 6 } else { 5 };
     for limits in [
         BranchCreateRecoveryLimits {
             max_creates: 1,
@@ -1590,9 +1591,9 @@ fn writable_open_recovers_pending_children_with_aggregate_limits_and_no_runtime(
         let mut metadata = Database::open_with_config(
             &project.0,
             DatabaseConfig {
-                // Captured project root + child ownership pair + metadata
-                // lock + catalog reader are all charged during completion.
-                max_open_files: 5,
+                // Windows also retains its write-capable candidate while
+                // the rename acquires its own temporary admission.
+                max_open_files: completion_limit,
                 branch_create_recovery_limits: limits,
                 ..Default::default()
             },
@@ -1637,7 +1638,7 @@ fn writable_open_recovers_pending_children_with_aggregate_limits_and_no_runtime(
             );
         }
         assert_no_runtime(&metadata);
-        assert!(metadata.file_descriptor_metrics().unwrap().high_water <= 5);
+        assert!(metadata.file_descriptor_metrics().unwrap().high_water <= completion_limit);
         assert!(metadata
             .recover_pending_branch_creates(BranchCreateRecoveryLimits::default())
             .unwrap()
@@ -1874,7 +1875,7 @@ fn database_instance_identity_changes_on_branch_selection_and_reopen() {
 }
 
 #[test]
-fn pending_recovery_preserves_evidence_at_four_descriptors_and_completes_at_five() {
+fn pending_recovery_preserves_evidence_below_native_fd_peak_and_completes_at_peak() {
     use hawdb::{BranchCreateRecoveryLimits, BranchCreateRecoveryStatus};
 
     let project = Project::new();
@@ -1890,47 +1891,50 @@ fn pending_recovery_preserves_evidence_at_four_descriptors_and_completes_at_five
         .join(child.to_string())
         .join("branch.head");
     let head_before = std::fs::read(&head).unwrap();
-    let mut refused = Database::open_with_config(
-        &project.0,
-        DatabaseConfig {
-            max_open_files: 4,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    assert_no_runtime(&refused);
-    let report = refused.branch_create_recovery_report().unwrap();
-    assert_eq!(report.entries.len(), 1);
-    assert_eq!(report.entries[0].branch_id, child);
-    assert_eq!(
-        report.entries[0].status,
-        BranchCreateRecoveryStatus::Retained
-    );
-    assert!(report.entries[0]
-        .error
-        .as_ref()
-        .unwrap()
-        .contains("file descriptor budget exceeded"));
-    assert_eq!(std::fs::read(&catalog).unwrap(), before);
-    assert_eq!(std::fs::read(&head).unwrap(), head_before);
-    let retry = refused
-        .recover_pending_branch_creates(BranchCreateRecoveryLimits::default())
+    let completion_limit = if cfg!(windows) { 6 } else { 5 };
+    for refusal_limit in 4..completion_limit {
+        let mut refused = Database::open_with_config(
+            &project.0,
+            DatabaseConfig {
+                max_open_files: refusal_limit,
+                ..Default::default()
+            },
+        )
         .unwrap();
-    assert_eq!(
-        retry.entries[0].status,
-        BranchCreateRecoveryStatus::Retained
-    );
-    assert_eq!(std::fs::read(&catalog).unwrap(), before);
-    assert_eq!(std::fs::read(&head).unwrap(), head_before);
-    let metrics = refused.file_descriptor_metrics().unwrap();
-    assert!(metrics.budget_rejections > 0);
-    assert!(metrics.high_water <= 4);
-    drop(refused);
+        assert_no_runtime(&refused);
+        let report = refused.branch_create_recovery_report().unwrap();
+        assert_eq!(report.entries.len(), 1);
+        assert_eq!(report.entries[0].branch_id, child);
+        assert_eq!(
+            report.entries[0].status,
+            BranchCreateRecoveryStatus::Retained
+        );
+        assert!(report.entries[0]
+            .error
+            .as_ref()
+            .unwrap()
+            .contains("file descriptor budget exceeded"));
+        assert_eq!(std::fs::read(&catalog).unwrap(), before);
+        assert_eq!(std::fs::read(&head).unwrap(), head_before);
+        let retry = refused
+            .recover_pending_branch_creates(BranchCreateRecoveryLimits::default())
+            .unwrap();
+        assert_eq!(
+            retry.entries[0].status,
+            BranchCreateRecoveryStatus::Retained
+        );
+        assert_eq!(std::fs::read(&catalog).unwrap(), before);
+        assert_eq!(std::fs::read(&head).unwrap(), head_before);
+        let metrics = refused.file_descriptor_metrics().unwrap();
+        assert!(metrics.budget_rejections > 0);
+        assert!(metrics.high_water <= refusal_limit);
+        drop(refused);
+    }
 
     let completed = Database::open_with_config(
         &project.0,
         DatabaseConfig {
-            max_open_files: 5,
+            max_open_files: completion_limit,
             ..Default::default()
         },
     )
@@ -1944,7 +1948,10 @@ fn pending_recovery_preserves_evidence_at_four_descriptors_and_completes_at_five
         BranchCreateRecoveryStatus::Completed,
         "{report:?}"
     );
-    assert_eq!(completed.file_descriptor_metrics().unwrap().high_water, 5);
+    assert_eq!(
+        completed.file_descriptor_metrics().unwrap().high_water,
+        completion_limit
+    );
     assert_eq!(std::fs::read(&head).unwrap(), head_before);
     drop(completed);
 

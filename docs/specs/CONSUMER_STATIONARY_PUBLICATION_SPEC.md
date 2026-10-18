@@ -44,10 +44,11 @@ reads and shares that root across refresh. Equal selector UUIDs in a replacement
 namespace cannot retarget it. This metadata-only capture has no branch writer
 lease and is not yet handed through every later runtime-admission transition.
 See [the metadata capture argument](../tla/PROJECT_METADATA_CAPTURE_PROOF.md).
-On verified Linux/macOS, retaining that capture makes pending-child completion
-peak at five native FDs; four preserve pending evidence. Native Windows captured
-reads pass but five-FD recovery completion is still failing. Keep its actual
-report and barriers rather than assuming a cross-platform descriptor bound.
+Pending-child completion with that capture needs five charged slots on Unix
+and six on Windows, whose policy retains a write-capable candidate through the
+separately admitted rename. Native Windows confirmed typed refusal at five;
+the six-slot completion path still needs its native CI result. The lower-budget
+refusal/retry and old-reader assertions remain; no owner or barrier is dropped.
 
 This does not migrate all GraphStore/registry I/O or implement the allocation
 journal. A new ledger must borrow qualified source/project/branch custody from

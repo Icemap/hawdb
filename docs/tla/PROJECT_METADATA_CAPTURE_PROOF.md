@@ -27,19 +27,37 @@ bytes without reading them, and verifies no runtime or head is created. Separate
 four-FD tests retain actual exhaustion, unchanged files, refunds and retry. There
 is no separate descriptor domain, uncounted handle or pathname fallback.
 
-On the verified Linux/macOS path, completing a pending child while this project
-capture remains live has a five-FD peak: project capture, the child's directory/ownership-lock pair,
-catalog metadata lock, and catalog reader or publication candidate. The facade
-regression explicitly tests four descriptors refusing completion and retaining
-catalog/head evidence through retry, then five completing the same receipt and
-preserving inherited data. Aggregate recovery-limit cases use this actual
-five-FD requirement; the four-FD metadata-only/read refusal contract remains.
-The original failed four-FD completion expectation is retained as adverse
-evidence rather than counted as a passing run. Native Windows at `d5f468f`
-passes captured metadata reads but returns `Retained` in both five-FD recovery
-selections. The platform-independent five-FD claim is therefore unproven; report
-diagnostics are retained/enhanced without changing the expected completion or
-weakening its durability barriers.
+Pending-child completion keeps a four-slot base live: project capture (one),
+child directory/ownership-lock pair (two), and catalog metadata lock (one).
+The catalog reader closes before its candidate is published. Unix closes the
+candidate writer before one charged rename operation, giving a five-slot peak.
+Windows additionally retains a write-capable candidate through the standard
+library rename and subsequent `FlushFileBuffers`: candidate (one) plus rename
+admission (one), giving a six-slot peak. The parent namespace barrier follows;
+neither original ownership nor candidate custody is dropped to fit a limit.
+These are managed charged-slot bounds, not an exact count of all OS handles.
+
+Native CI at `d3f914c` (merge `2a3b5580`, tree `4320add1`) confirmed both Windows
+five-slot failures as `requested 1, available 0, limit 5`; Linux/macOS completed
+at five. That merge adds main's JSON_VALUE work; its storage durability and
+recovery fixture paths are unchanged from `d3f914c`. Earlier five-slot native
+Windows outcomes remain adverse evidence.
+
+`windows_replacement_policy_funds_held_candidate_and_rename_together` executes
+the existing Windows policy function, enabled for unit tests on other hosts.
+With four real managed holders, five refuses before rename and preserves both
+names/bytes; six replaces while all old readers still read their old bytes.
+This checks the actual charging/holding implementation without duplicating it.
+It does not establish Windows syscall or power-loss semantics from Unix runs;
+that same regression and the facade cases run in native Windows CI.
+
+The facade pair requires every budget from four up to the platform peak to
+retain unchanged catalog/head evidence through retry, then requires completion
+of the same receipt at five on Unix or six on Windows, with inherited data.
+Aggregate recovery limits use the same platform funding. Initial five-slot
+Windows refusal is not counted as a pass, and native six-slot confirmation
+remains necessary. The persistent default and all synchronization barriers are
+unchanged.
 
 ## Safety argument and finite check
 
