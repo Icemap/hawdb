@@ -1,0 +1,270 @@
+{
+  "source_revision": "923879de",
+  "source_roots": [
+    "src",
+    "crates/core/src",
+    "crates/executor/src",
+    "crates/search/src",
+    "crates/relational/src",
+    "crates/vector-projection/src",
+    "crates/nowledge-contracts/src",
+    "crates/readiness/src"
+  ],
+  "reports": [
+    {
+      "kind": "field",
+      "path": "crates/core/src/graph_rag/mod.rs",
+      "name": "truncation",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "schema-summary",
+      "rationale": "Caller-selected schema summary sizes; this is prompt context, not a complete query result."
+    },
+    {
+      "kind": "field",
+      "path": "crates/executor/src/graph.rs",
+      "name": "truncation_reason",
+      "count": 2,
+      "classification": "resource_failure",
+      "stage": "graph-expansion",
+      "rationale": "Candidate/payload admission returns typed errors; a successful expansion has no truncation reason."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "candidate_truncated",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "candidate_truncation_reason_codes",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "candidate_truncation_reasons",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "graph_context_truncated",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "graph_context_truncation_reason_codes",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "graph_context_truncation_reasons",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "graph_seed_truncated",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "graph_seed_truncation_reason_codes",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "graph_seed_truncation_reasons",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "search_truncated",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "search_truncation_reason_codes",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "search_truncation_reasons",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "truncated",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "truncation_reason_codes",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "truncation_reasons",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "field",
+      "path": "crates/nowledge-contracts/src/workload.rs",
+      "name": "truncated",
+      "count": 1,
+      "classification": "diagnostic",
+      "stage": "workload-report",
+      "rationale": "Fixture evidence copies the graph expansion report; it does not authorize partial runtime success."
+    },
+    {
+      "kind": "field",
+      "path": "crates/search/src/candidate_evidence/report.rs",
+      "name": "truncated",
+      "count": 1,
+      "classification": "diagnostic",
+      "stage": "search-evidence",
+      "rationale": "Copies the Search result page diagnostics without imposing a second result cap."
+    },
+    {
+      "kind": "field",
+      "path": "crates/search/src/candidate_evidence/report.rs",
+      "name": "truncation_reason_codes",
+      "count": 1,
+      "classification": "diagnostic",
+      "stage": "search-evidence",
+      "rationale": "Copies the Search result page diagnostics without imposing a second result cap."
+    },
+    {
+      "kind": "field",
+      "path": "crates/search/src/lib.rs",
+      "name": "truncated",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "search-page",
+      "rationale": "Reports caller-selected limit/offset pagination over ranked Search matches."
+    },
+    {
+      "kind": "field",
+      "path": "crates/search/src/lib.rs",
+      "name": "truncation_reason_codes",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "search-page",
+      "rationale": "Reports caller-selected limit/offset pagination over ranked Search matches."
+    },
+    {
+      "kind": "field",
+      "path": "crates/search/src/lib.rs",
+      "name": "truncation_reasons",
+      "count": 1,
+      "classification": "semantic",
+      "stage": "search-page",
+      "rationale": "Reports caller-selected limit/offset pagination over ranked Search matches."
+    },
+    {
+      "kind": "field",
+      "path": "src/nowledge_mem.rs",
+      "name": "truncation_reason_codes",
+      "count": 1,
+      "classification": "diagnostic",
+      "stage": "mem-reports",
+      "rationale": "Aggregates already-produced retrieval reasons; it does not cut a query stream."
+    },
+    {
+      "kind": "enum",
+      "path": "crates/executor/src/graph.rs",
+      "name": "GraphExpansionTruncationReason",
+      "variants": [
+        "CandidateLimit",
+        "PayloadByteLimit"
+      ],
+      "classification": "resource_failure",
+      "stage": "graph-expansion",
+      "rationale": "Candidate/payload admission returns typed errors; a successful expansion has no truncation reason."
+    },
+    {
+      "kind": "enum",
+      "path": "crates/nowledge-contracts/src/retrieval.rs",
+      "name": "KnowledgeTruncationReasonCode",
+      "variants": [
+        "RankWindowExceeded",
+        "SearchLimitExceeded",
+        "PartialCandidateReturn",
+        "GraphSeedLimitExceeded",
+        "GraphContextLimitExceeded",
+        "CandidateLimitExceeded"
+      ],
+      "classification": "semantic",
+      "stage": "knowledge-windows",
+      "rationale": "Compatibility reports describe explicit search, seed, context and final-candidate request windows; see the producer inventory."
+    },
+    {
+      "kind": "enum",
+      "path": "crates/search/src/lib.rs",
+      "name": "SearchTruncationReasonCode",
+      "variants": [
+        "LimitExceeded"
+      ],
+      "classification": "semantic",
+      "stage": "search-page",
+      "rationale": "Reports caller-selected limit/offset pagination over ranked Search matches."
+    }
+  ]
+}
