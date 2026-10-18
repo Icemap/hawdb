@@ -9,9 +9,6 @@ import shutil
 import subprocess
 import sys
 
-ENGINE = "6881bbcc9809a6195d1bab38fb489aa3684c20fc"
-
-
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -21,31 +18,45 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
+    campaign = json.loads((root / "qualification/resources/campaign.json").read_text())
+    engine = campaign["engine"]
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     source = subprocess.check_output(
         ["git", "show", "-s", "--format=%H%n%T%n%P"], cwd=root, text=True
     ).splitlines()
     changed = subprocess.check_output(
-        ["git", "diff", "--name-only", ENGINE, "HEAD"], cwd=root, text=True
+        ["git", "diff", "--name-only", engine, "HEAD"], cwd=root, text=True
     ).splitlines()
-    assert set(changed) == {
-        '.github/workflows/native-bindings.yml',
-        'bindings/python/src/database.rs',
-        'bindings/python/src/lib.rs',
-        'qualification/resources/baseline-source.json',
-        'qualification/resources/campaign.json',
-        'qualification/resources/numeric.py',
-        'qualification/resources/numeric_driver.py',
-        'qualification/resources/run.py',
-        'qualification/retained/configured.py',
-        'qualification/retained/run.py',
-        'src/embedded.rs',
-    }, changed
-    subprocess.run(["git", "diff", "--exit-code", "HEAD"], cwd=root, check=True)
-    assert not subprocess.check_output(
-        ["git", "ls-files", "--others", "--exclude-standard"], cwd=root
-    )
+    source_check = {
+        "status": "checking", "source": source, "engine_source": engine,
+        "engine_tree": campaign["engine_tree"], "overlay_files": changed,
+        "expected_overlay_files": campaign["overlay_files"],
+        "requested": {key: os.environ.get(key) for key in
+                      ("QUAL_ROWS", "QUAL_BACKEND", "QUAL_CONFIGURATION")},
+        "scope": "Source/request check only; no query or performance outcome.",
+    }
+    source_path = output / "source-check.json"
+    source_path.write_text(json.dumps(source_check, indent=2) + "\n")
+    try:
+        assert len(engine) == 40 and all(c in "0123456789abcdef" for c in engine)
+        assert subprocess.check_output(
+            ["git", "rev-parse", engine + "^{tree}"], cwd=root, text=True
+        ).strip() == campaign["engine_tree"]
+        assert subprocess.check_output(
+            ["git", "merge-base", engine, "HEAD"], cwd=root, text=True
+        ).strip() == engine
+        assert changed == campaign["overlay_files"], changed
+        subprocess.run(["git", "diff", "--exit-code", "HEAD"], cwd=root, check=True)
+        assert not subprocess.check_output(
+            ["git", "ls-files", "--others", "--exclude-standard"], cwd=root
+        )
+    except Exception as error:
+        source_check.update(status="failed", error_type=type(error).__name__, error=str(error))
+        source_path.write_text(json.dumps(source_check, indent=2) + "\n")
+        raise
+    source_check["status"] = "passed"
+    source_path.write_text(json.dumps(source_check, indent=2) + "\n")
     frozen = output / "frozen"
     shutil.copytree(root / "bindings/python/python/hawdb", frozen / "hawdb")
     extension = root / "bazel-bin/bindings/python/python/hawdb/_hawdb.so"
@@ -59,7 +70,7 @@ def main():
     profile = os.environ["QUAL_CONFIGURATION"]
     assert profile in ("default", "large")
     manifest = {
-        "source": source, "engine_source": ENGINE, "overlay_files": changed,
+        "source": source, "engine_source": engine, "overlay_files": changed,
         "producer_hashes": before, "rows": rows, "backend": backend,
         "configured_limits": {"rows":1000000,"logical_payload_bytes":1073741824,"query_memory_bytes":1073741824,"result_budget_bytes":1073741824,"runtime_memory_bytes":2147483648,"batch_payload_bytes":268435456,"blocking_operator_bytes":67108864},
         "defaults_changed": profile == "large", "timed_consumers_changed": False,
