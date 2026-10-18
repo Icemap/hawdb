@@ -851,6 +851,138 @@
       "sha256": "21f250a005106b4f54954bc0fa5c65da64f7c70415b40b1f02030b0df4159491",
       "bytes": 1562,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/diagnose-headroom-state-0c298984 staged test-only diff"
+    },
+    {
+      "path": "receipts/986-0c298984-original-phase-complete-controls.json",
+      "sha256": "7d850618fc13a165222daf63a71054b0ecab80bca37203c5031fd16a313bacff",
+      "bytes": 44798,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-phase-complete-controls.json"
+    },
+    {
+      "path": "original-phase10/summary.json",
+      "sha256": "517f7fe5cfcc637fd51b4607d4a72dd0cce0081b885c4ba3d97b6d42d220722d",
+      "bytes": 144014,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/summary.json"
+    },
+    {
+      "path": "original-phase10/artifact-12147631805.json",
+      "sha256": "1a4dd4e1274c9f916ea7ec595213bd55546166d973e02d6bdaf82dfca7d27688",
+      "bytes": 1906,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12147631805.json"
+    },
+    {
+      "path": "original-phase10/artifact-12147048399.json",
+      "sha256": "f81cf0fc3da69a78af12edbcd552c994e513d870026afc16b195640a408f7c04",
+      "bytes": 250330,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12147048399.json"
+    },
+    {
+      "path": "original-phase10/artifact-12146609852.json",
+      "sha256": "20e9a22e1d401316186cd37ba6565ada98e91ea88b0f91542aca3421313052d5",
+      "bytes": 1912,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12146609852.json"
+    },
+    {
+      "path": "original-phase10/artifact-12146309587.json",
+      "sha256": "e4877aee7553278f59129564fd7cc0a91401d6407f10601110e5f8f7c1c66de4",
+      "bytes": 246988,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12146309587.json"
+    },
+    {
+      "path": "original-phase10/artifact-12148100113.json",
+      "sha256": "ca18a6d7fcc33317d78cc384e992ccab0a1627a7353ed850e4625d1c1fc567d6",
+      "bytes": 252255,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12148100113.json"
+    },
+    {
+      "path": "original-phase10/artifact-12147791239.json",
+      "sha256": "cfd69a523e1731eca8e09a7bfadbf81747d1359993b7eb5a97b0ae6cc7a08417",
+      "bytes": 207507,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12147791239.json"
+    },
+    {
+      "path": "original-phase10/artifact-12147140005.json",
+      "sha256": "f9f7371fb5ea02560156d5a11d0f0d8f62548d115de4a595599b556f5da12067",
+      "bytes": 1909,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12147140005.json"
+    },
+    {
+      "path": "original-phase10/artifact-12147285998.json",
+      "sha256": "90cc7ab4337a90dc198c69796e320ef2a5479e89d54ecb342abcc539c7fd4be1",
+      "bytes": 1918,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12147285998.json"
+    },
+    {
+      "path": "original-phase10/artifact-12148290861.json",
+      "sha256": "efe470804c41d7c6f52077aa5c5f3c94ed8e000db2d7dd7de16df51b0b02b710",
+      "bytes": 1906,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12148290861.json"
+    },
+    {
+      "path": "original-phase10/artifact-12146309621.json",
+      "sha256": "59b23894f5fa1b71f3214b45c8f8833c870c310a27eef19881c5140f0eb55493",
+      "bytes": 1909,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12146309621.json"
+    },
+    {
+      "path": "original-phase10/artifact-12146933542.json",
+      "sha256": "a414b5cc01b703d907e42dd733046e593da58ca2137d949b41a0c541de5476a2",
+      "bytes": 249952,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12146933542.json"
+    },
+    {
+      "path": "original-phase10/artifact-12146911472.json",
+      "sha256": "1fc07415a6f47b69de6f3361556944e0980211d1b8aae436254777e788e4d6a0",
+      "bytes": 1915,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12146911472.json"
+    },
+    {
+      "path": "original-phase10/artifact-12146543646.json",
+      "sha256": "8d4d211bbd82d9bda3327176f3ac51bc69d8a395fa8ae470c04fd4dbc46c049f",
+      "bytes": 246962,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12146543646.json"
+    },
+    {
+      "path": "original-phase10/artifact-12148596763.json",
+      "sha256": "55b6002a1070ecbdaef6857eb3e656fd0463b4d7155a2c2a5d4c08f5d1367633",
+      "bytes": 199471,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12148596763.json"
+    },
+    {
+      "path": "original-phase10/artifact-12147998141.json",
+      "sha256": "2c4b7ee264d985aa4b774655bbb878edcba5c98990ceb315dce64fc82e85abd3",
+      "bytes": 252251,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12147998141.json"
+    },
+    {
+      "path": "original-phase10/artifact-12148350687.json",
+      "sha256": "b88b87949b84a9effc9aebca043a406bd6703db66c51e23ab1f2b153b1b55a9a",
+      "bytes": 199443,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12148350687.json"
+    },
+    {
+      "path": "original-phase10/artifact-12146869842.json",
+      "sha256": "c0e2f1004a4c26a8879c0ea8dcd0b5eecd8d7edbee669e3709fdc3d8f88e2e33",
+      "bytes": 207473,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12146869842.json"
+    },
+    {
+      "path": "original-phase10/artifact-12146860634.json",
+      "sha256": "e6cc9377abb8567bc4ce1c4f41d24547334e94c0616cf7b56a3890998698f333",
+      "bytes": 1903,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12146860634.json"
+    },
+    {
+      "path": "original-phase10/artifact-12147560369.json",
+      "sha256": "503f952e497bd59b8dc93b82c06130aff2495989cead366789de53dc13eccb1e",
+      "bytes": 1912,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12147560369.json"
+    },
+    {
+      "path": "original-phase10/artifact-12147597587.json",
+      "sha256": "3c4947dc68b58d1e0e457b4104a35e1a449b9101efbca87cb5cfd732ae52d6e9",
+      "bytes": 1912,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12147597587.json"
     }
   ],
   "created_at": 1792351101.2527812,
@@ -869,5 +1001,8 @@
       }
     ],
     "scope": "One complete original general selection with nonblocking diagnostics only after original failure. Production branch unchanged. A passing diagnostic does not explain the preserved original failure; inspect actual failure context before causal claims."
-  }
+  },
+  "original_phase_groups": 10,
+  "original_phase_measured_attempt_records": 930,
+  "original_phase_scope": "Original unchanged setup,6positive/2defaultmemory/2exactrow-refusal groups,31samples per mode plus warmup. Prior41db fixture failure remains preserved, no causal claim or90/110 substitution."
 }

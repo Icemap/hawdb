@@ -1,0 +1,55 @@
+{
+  "artifact": 12146309621,
+  "artifact_name": "resource-source-numeric-100000-file-default-false-select-python-bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+  "group": [
+    "default",
+    100000,
+    "file"
+  ],
+  "reports": {
+    "resource-source.json": {
+      "engine": "0c2989842321d10e91f136f3c924badb07038add",
+      "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+      "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+      "tree": "132762f5f969321b0974687c96dabf27236fbaaf",
+      "overlay": [
+        ".github/workflows/native-bindings.yml",
+        "BUILD.bazel",
+        "Cargo.toml",
+        "bindings/python/BUILD.bazel",
+        "bindings/python/Cargo.toml",
+        "bindings/python/src/database.rs",
+        "bindings/python/src/lib.rs",
+        "qualification/phases/consume.py",
+        "qualification/resources/baseline-source.json",
+        "qualification/resources/campaign.json",
+        "qualification/resources/numeric.py",
+        "qualification/resources/numeric_driver.py",
+        "qualification/resources/run.py",
+        "qualification/retained/configured.py",
+        "qualification/retained/run.py",
+        "src/api/retained_query.rs",
+        "src/embedded.rs",
+        "src/lib.rs",
+        "src/retained_phase_profile.rs"
+      ],
+      "requested": {
+        "QUAL_CONFIGURATION": "default",
+        "QUAL_LAYER": "python",
+        "QUAL_SAMPLES": "31",
+        "QUAL_CASE": "select",
+        "QUAL_PHASE_ONLY": "true",
+        "QUAL_INSTRUMENTED": "false",
+        "QUAL_BACKEND": "file",
+        "QUAL_ROWS": "100000",
+        "QUAL_KIND": "numeric"
+      },
+      "scope": "Source/request receipt only; preserve runtime budget, producer and outcome evidence separately."
+    }
+  },
+  "unparsed_reports": {},
+  "verified_files": [],
+  "file_sha256": {
+    "resource-source.json": "2fb26c4f86d2df3f39d0e92ccb7b639e1ae95159666cd65fb477f5e2bc826575"
+  }
+}

@@ -1,0 +1,1621 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+  "tree": "132762f5f969321b0974687c96dabf27236fbaaf",
+  "run": 39154794799,
+  "run_conclusion": "failure",
+  "source_summary_sha256": "517f7fe5cfcc637fd51b4607d4a72dd0cce0081b885c4ba3d97b6d42d220722d",
+  "observed_at": 1792353361.44228,
+  "complete_groups": 10,
+  "positive_groups": 6,
+  "default_memory_refusal_groups": 2,
+  "row_refusal_groups": 2,
+  "samples_per_mode": 31,
+  "measured_mode_windows": 930,
+  "groups": [
+    {
+      "group": [
+        "default",
+        1000,
+        "file"
+      ],
+      "artifact": 12146543646,
+      "expected_success": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1629049,
+              "nearest_rank_p95": 1676990,
+              "maximum": 1753614
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2293274,
+              "nearest_rank_p95": 2369306,
+              "maximum": 2401867
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1278403,
+              "nearest_rank_p95": 1332916,
+              "maximum": 1381176
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 347783,
+              "nearest_rank_p95": 376534,
+              "maximum": 380882
+            },
+            "owned_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "owned_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1278403,
+              "nearest_rank_p95": 1332916,
+              "maximum": 1381176
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3660998656,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 102207488
+        },
+        "retained": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 166140,
+              "nearest_rank_p95": 179516,
+              "maximum": 179718
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 914362,
+              "nearest_rank_p95": 948396,
+              "maximum": 951992
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 109146,
+              "nearest_rank_p95": 123842,
+              "maximum": 123923
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 56537,
+              "nearest_rank_p95": 62946,
+              "maximum": 63097
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 71043,
+              "nearest_rank_p95": 86753,
+              "maximum": 86802
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 5,
+              "nearest_rank_p95": 5,
+              "maximum": 5
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 37740,
+              "nearest_rank_p95": 40456,
+              "maximum": 42891
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3660707840,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 102436864
+        },
+        "arrow": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 244117,
+              "nearest_rank_p95": 270072,
+              "maximum": 279442
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 980416,
+              "nearest_rank_p95": 1004942,
+              "maximum": 1030198
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 117499,
+              "nearest_rank_p95": 141654,
+              "maximum": 152065
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 126566,
+              "nearest_rank_p95": 143256,
+              "maximum": 149889
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 74910,
+              "nearest_rank_p95": 92083,
+              "maximum": 104395
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 5,
+              "nearest_rank_p95": 5,
+              "maximum": 5
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 40847,
+              "nearest_rank_p95": 56775,
+              "maximum": 63087
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3664615424,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 102191104
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000,
+        "memory"
+      ],
+      "artifact": 12146309587,
+      "expected_success": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1723793,
+              "nearest_rank_p95": 2012793,
+              "maximum": 2124956
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2300215,
+              "nearest_rank_p95": 2592633,
+              "maximum": 2692699
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1369279,
+              "nearest_rank_p95": 1651435,
+              "maximum": 1742728
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 344502,
+              "nearest_rank_p95": 372797,
+              "maximum": 382228
+            },
+            "owned_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "owned_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1369279,
+              "nearest_rank_p95": 1651435,
+              "maximum": 1742728
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3630351360,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 102408192
+        },
+        "retained": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 208536,
+              "nearest_rank_p95": 241680,
+              "maximum": 265312
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 887948,
+              "nearest_rank_p95": 966999,
+              "maximum": 1071089
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 141456,
+              "nearest_rank_p95": 167481,
+              "maximum": 168362
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 64018,
+              "nearest_rank_p95": 84468,
+              "maximum": 118455
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 97412,
+              "nearest_rank_p95": 118068,
+              "maximum": 125146
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 5,
+              "nearest_rank_p95": 5,
+              "maximum": 5
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 43684,
+              "nearest_rank_p95": 61946,
+              "maximum": 67250
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3633403904,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 102129664
+        },
+        "arrow": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 265397,
+              "nearest_rank_p95": 282294,
+              "maximum": 314099
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 929633,
+              "nearest_rank_p95": 967255,
+              "maximum": 971049
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 136534,
+              "nearest_rank_p95": 152292,
+              "maximum": 166078
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 127965,
+              "nearest_rank_p95": 146548,
+              "maximum": 148021
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 95733,
+              "nearest_rank_p95": 110758,
+              "maximum": 111000
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 5,
+              "nearest_rank_p95": 5,
+              "maximum": 5
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 40758,
+              "nearest_rank_p95": 46189,
+              "maximum": 55805
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3624902656,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 102297600
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "memory"
+      ],
+      "artifact": 12146933542,
+      "expected_success": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 142302222,
+              "nearest_rank_p95": 152597931,
+              "maximum": 153025577
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 191843184,
+              "nearest_rank_p95": 201769764,
+              "maximum": 202776562
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 92568020,
+              "nearest_rank_p95": 97367123,
+              "maximum": 97715483
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 49552348,
+              "nearest_rank_p95": 55390660,
+              "maximum": 55658454
+            },
+            "owned_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "owned_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 92568020,
+              "nearest_rank_p95": 97367123,
+              "maximum": 97715483
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3619664896,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 218271744
+        },
+        "retained": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 11193860,
+              "nearest_rank_p95": 16546543,
+              "maximum": 16854934
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 66678845,
+              "nearest_rank_p95": 91497195,
+              "maximum": 95093558
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 8913785,
+              "nearest_rank_p95": 13241729,
+              "maximum": 13334811
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2290786,
+              "nearest_rank_p95": 3304814,
+              "maximum": 3520123
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 144789,
+              "nearest_rank_p95": 202355,
+              "maximum": 202756
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 392,
+              "nearest_rank_p95": 392,
+              "maximum": 392
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 8768115,
+              "nearest_rank_p95": 13039374,
+              "maximum": 13132055
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3633336320,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 169971712
+        },
+        "arrow": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 13499820,
+              "nearest_rank_p95": 13705934,
+              "maximum": 13895717
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 68820123,
+              "nearest_rank_p95": 69443352,
+              "maximum": 69884267
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 8944988,
+              "nearest_rank_p95": 9140679,
+              "maximum": 9217778
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 4579222,
+              "nearest_rank_p95": 4656813,
+              "maximum": 4677939
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 145950,
+              "nearest_rank_p95": 156426,
+              "maximum": 159941
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 392,
+              "nearest_rank_p95": 392,
+              "maximum": 392
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 8795672,
+              "nearest_rank_p95": 8991895,
+              "maximum": 9070526
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3673367552,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 170106880
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "file"
+      ],
+      "artifact": 12147048399,
+      "expected_success": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 176822146,
+              "nearest_rank_p95": 187510879,
+              "maximum": 218329469
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 241741209,
+              "nearest_rank_p95": 252135474,
+              "maximum": 297100683
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 119814575,
+              "nearest_rank_p95": 124446888,
+              "maximum": 145399136
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 57103574,
+              "nearest_rank_p95": 64708082,
+              "maximum": 72930333
+            },
+            "owned_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "owned_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 119814575,
+              "nearest_rank_p95": 124446888,
+              "maximum": 145399136
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3655510016,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 243175424
+        },
+        "retained": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 13637492,
+              "nearest_rank_p95": 14353268,
+              "maximum": 14516389
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 86547054,
+              "nearest_rank_p95": 88668988,
+              "maximum": 88669078
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 10695221,
+              "nearest_rank_p95": 11414671,
+              "maximum": 11501550
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2970197,
+              "nearest_rank_p95": 3019485,
+              "maximum": 3025759
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 168757,
+              "nearest_rank_p95": 194215,
+              "maximum": 197761
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 392,
+              "nearest_rank_p95": 392,
+              "maximum": 392
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 10532015,
+              "nearest_rank_p95": 11254421,
+              "maximum": 11332793
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3703595008,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 195158016
+        },
+        "arrow": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 17526640,
+              "nearest_rank_p95": 18378413,
+              "maximum": 18716446
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 90856222,
+              "nearest_rank_p95": 91886456,
+              "maximum": 92083286
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 10894844,
+              "nearest_rank_p95": 11615494,
+              "maximum": 11938671
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 6664784,
+              "nearest_rank_p95": 6826636,
+              "maximum": 6837163
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 169358,
+              "nearest_rank_p95": 202740,
+              "maximum": 206858
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 392,
+              "nearest_rank_p95": 392,
+              "maximum": 392
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 10716495,
+              "nearest_rank_p95": 11424756,
+              "maximum": 11774522
+            }
+          },
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3707643904,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 195244032
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "memory"
+      ],
+      "artifact": 12146869842,
+      "expected_success": false,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "ResourceBudgetError",
+              "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3648382976,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1048084480
+        },
+        "retained": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "RetainedError",
+              "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3679604736,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1048072192
+        },
+        "arrow": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "RetainedError",
+              "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3621129216,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1047879680
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "file"
+      ],
+      "artifact": 12147791239,
+      "expected_success": false,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "ResourceBudgetError",
+              "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3643611136,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1120534528
+        },
+        "retained": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "RetainedError",
+              "execution error: query memory account retained_source (external_read) would use 1071015824 bytes, exceeding its 268435456-byte budget"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3748300800,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1112010752
+        },
+        "arrow": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "RetainedError",
+              "execution error: query memory account retained_source (external_read) would use 1071015952 bytes, exceeding its 268435456-byte budget"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3734290432,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1119571968
+        }
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000000,
+        "memory"
+      ],
+      "artifact": 12148100113,
+      "expected_success": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1795556318,
+              "nearest_rank_p95": 1821910320,
+              "maximum": 1829832069
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2383459547,
+              "nearest_rank_p95": 2418316911,
+              "maximum": 2426106902
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1166343595,
+              "nearest_rank_p95": 1179810556,
+              "maximum": 1182428492
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 627056528,
+              "nearest_rank_p95": 642780692,
+              "maximum": 650021513
+            },
+            "owned_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "owned_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1166343595,
+              "nearest_rank_p95": 1179810556,
+              "maximum": 1182428492
+            }
+          },
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1509003264
+        },
+        "retained": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 134696948,
+              "nearest_rank_p95": 136289974,
+              "maximum": 136505218
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 797067126,
+              "nearest_rank_p95": 804757856,
+              "maximum": 807159566
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 103208192,
+              "nearest_rank_p95": 104581742,
+              "maximum": 104772506
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 31511786,
+              "nearest_rank_p95": 31799123,
+              "maximum": 31999306
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 199634,
+              "nearest_rank_p95": 246623,
+              "maximum": 246905
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 3908,
+              "nearest_rank_p95": 3908,
+              "maximum": 3908
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 103008838,
+              "nearest_rank_p95": 104378964,
+              "maximum": 104573217
+            }
+          },
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1048211456
+        },
+        "arrow": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 154844395,
+              "nearest_rank_p95": 158782142,
+              "maximum": 158951195
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 815383830,
+              "nearest_rank_p95": 823341797,
+              "maximum": 829764221
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 100684325,
+              "nearest_rank_p95": 103136813,
+              "maximum": 103926250
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 54160954,
+              "nearest_rank_p95": 55029096,
+              "maximum": 55832458
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 195025,
+              "nearest_rank_p95": 218410,
+              "maximum": 224529
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 3908,
+              "nearest_rank_p95": 3908,
+              "maximum": 3908
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 100490951,
+              "nearest_rank_p95": 102943047,
+              "maximum": 103733425
+            }
+          },
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1048055808
+        }
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "memory"
+      ],
+      "artifact": 12148350687,
+      "expected_success": false,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "ExecutionError",
+              "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1049337856
+        },
+        "retained": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "RetainedError",
+              "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1048031232
+        },
+        "arrow": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "ArrowMemoryError",
+              "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1048158208
+        }
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000000,
+        "file"
+      ],
+      "artifact": 12147998141,
+      "expected_success": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2394350016,
+              "nearest_rank_p95": 2694883485,
+              "maximum": 2696861555
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 3075184603,
+              "nearest_rank_p95": 3356195175,
+              "maximum": 3369943462
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1736880286,
+              "nearest_rank_p95": 2012243959,
+              "maximum": 2021321433
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 668974378,
+              "nearest_rank_p95": 715565207,
+              "maximum": 756717814
+            },
+            "owned_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "owned_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1736880286,
+              "nearest_rank_p95": 2012243959,
+              "maximum": 2021321433
+            }
+          },
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1696788480
+        },
+        "retained": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 154274702,
+              "nearest_rank_p95": 178415500,
+              "maximum": 244788280
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 904203922,
+              "nearest_rank_p95": 927704593,
+              "maximum": 993831488
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 125605712,
+              "nearest_rank_p95": 149259388,
+              "maximum": 214782169
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 28888359,
+              "nearest_rank_p95": 29484068,
+              "maximum": 30006111
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 186960,
+              "nearest_rank_p95": 259626,
+              "maximum": 595174
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 3908,
+              "nearest_rank_p95": 3908,
+              "maximum": 3908
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 125428079,
+              "nearest_rank_p95": 149072428,
+              "maximum": 214186995
+            }
+          },
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1128472576
+        },
+        "arrow": {
+          "success": true,
+          "samples": 31,
+          "unique_errors": [],
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 173954151,
+              "nearest_rank_p95": 184968705,
+              "maximum": 190760696
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 903084556,
+              "nearest_rank_p95": 921920349,
+              "maximum": 962301245
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 108979379,
+              "nearest_rank_p95": 118281105,
+              "maximum": 121152375
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 65276345,
+              "nearest_rank_p95": 69162611,
+              "maximum": 69608321
+            },
+            "prepare_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 1,
+              "nearest_rank_p95": 1,
+              "maximum": 1
+            },
+            "prepare_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 161061,
+              "nearest_rank_p95": 180589,
+              "maximum": 185227
+            },
+            "pull_calls": {
+              "unit": "calls",
+              "samples": 31,
+              "median": 3908,
+              "nearest_rank_p95": 3908,
+              "maximum": 3908
+            },
+            "pull_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 108812217,
+              "nearest_rank_p95": 118120224,
+              "maximum": 120971786
+            }
+          },
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1150709760
+        }
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "file"
+      ],
+      "artifact": 12148596763,
+      "expected_success": false,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "ExecutionError",
+              "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1194631168
+        },
+        "retained": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "RetainedError",
+              "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1171103744
+        },
+        "arrow": {
+          "success": false,
+          "samples": 31,
+          "unique_errors": [
+            [
+              "ArrowMemoryError",
+              "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+            ]
+          ],
+          "costs": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1173598208
+        }
+      }
+    }
+  ],
+  "scope": "Complete original final-source phase observations with unchanged setup,31samples and full consumer. Expected refusal groups retain nonzero job exits and no qualified costs. Prior41db fixture failure remains preserved, with no causal resolution implied. Does not complete original90/110 or independently approve/merge."
+}

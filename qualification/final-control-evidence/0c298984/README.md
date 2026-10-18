@@ -9,3 +9,5 @@ The six allocation controls comprise three default1k/file positives and three ex
 The original ten retained controls include six positives, two default memory-budget refusals and two explicit row-limit refusals. Native binaries are identified by hashes and source/build commands rather than added to Git; the original retained producer archives remain available from Actions run39154784609. Absolute paths in original receipts preserve provenance.
 
 No complete90/110 performance acceptance, checkpoint-cause resolution, whole-memory guarantee or independent approval follows.
+
+The original final-source phase10 campaign is now fully archived under `original-phase10/`: ten source receipts and ten full producer-verified report bundles. Six groups succeed, two refuse independent default memory budgets, and two refuse the explicit1M row ceiling at1M+1. All30mode processes preserve31measured records plus warmup. The final1M+1/file group reaches actual query refusals in all three modes; prior41db fixture failures remain preserved separately, without a causal claim.
