@@ -1,0 +1,31 @@
+diff --git a/src/api/automatic_checkpoint/tests/headroom.rs b/src/api/automatic_checkpoint/tests/headroom.rs
+index 4cbb640b..6b94354d 100644
+--- a/src/api/automatic_checkpoint/tests/headroom.rs
++++ b/src/api/automatic_checkpoint/tests/headroom.rs
+@@ -100,9 +100,25 @@ fn pending_idle_owner_blocks_pressure_growth_before_admission() {
+     }
+     drop(suspension);
+     paused.recv_timeout(Duration::from_secs(15)).unwrap();
++    let diagnostic_control = Arc::clone(&control);
+     let producer = std::thread::spawn(move || -> Result<Database> {
+         for id in next..320 {
+-            create(&mut db, id)?;
++            if let Err(error) = create(&mut db, id) {
++                // Observe only after the original error; retain its exact cause.
++                match diagnostic_control.state.try_lock() {
++                    Ok(state) => eprintln!(
++                        "checkpoint-capacity diagnostic: id={id}, error={error:?}, phase={:?}, attempts={}, work_progress={}, report={:?}",
++                        state.phase,
++                        state.attempts_started,
++                        diagnostic_control.work_progress.load(std::sync::atomic::Ordering::Relaxed),
++                        state.report,
++                    ),
++                    Err(observation_error) => eprintln!(
++                        "checkpoint-capacity diagnostic: id={id}, error={error:?}, state unavailable: {observation_error:?}"
++                    ),
++                }
++                return Err(error);
++            }
+         }
+         Ok(db)
+     });

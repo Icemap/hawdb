@@ -1,0 +1,873 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "observer_source": "8b6c2f9f918c73b466cef86bfb39c90affc2e464",
+  "observer_tree": "69528bfb902f1fc213c051d8ce0a5bc4e15115ce",
+  "native_source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+  "native_tree": "132762f5f969321b0974687c96dabf27236fbaaf",
+  "native_extensions": {
+    "lib_hawdb_boundary_profile.dylib": {
+      "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/f47d5dd61b1c1626f75e777fa3799fbf/execroot/_main/bazel-out/darwin_arm64-opt/bin/bindings/python/lib_hawdb_boundary_profile.dylib",
+      "sha256": "8effc5172fdf24f1aec52ff5aa84fa315aa1c78d4d50ea4d33053c63755f168f"
+    },
+    "lib_hawdb_retained_phase_profile.dylib": {
+      "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/f47d5dd61b1c1626f75e777fa3799fbf/execroot/_main/bazel-out/darwin_arm64-opt/bin/bindings/python/lib_hawdb_retained_phase_profile.dylib",
+      "sha256": "750b10cb898b5549ce409ab69d026958efed612b8c57e2b3c55ef970716b8c12"
+    }
+  },
+  "compiled_source_difference": "Only three Python observer files differ from native source; no native build-input change.",
+  "resource_groups": 6,
+  "allocation_windows": 186,
+  "phase_groups": 6,
+  "original_retained_groups": 10,
+  "resource_ownership_released": true,
+  "observed_counter_disagreements": 0,
+  "observed_arrow_pool_nonzero_windows": 0,
+  "files": [
+    {
+      "path": "reports/resource/1000001-retained.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000001-retained.stderr"
+    },
+    {
+      "path": "reports/resource/1000001-arrow.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000001-arrow.stderr"
+    },
+    {
+      "path": "reports/resource/1000-retained.json",
+      "sha256": "acfb8da608099112c00970bb575ff948d0d8259fdcd59d29e3c8d8b35fc0332f",
+      "bytes": 28141,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000-retained.json"
+    },
+    {
+      "path": "reports/resource/1000001-owned.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000001-owned.stderr"
+    },
+    {
+      "path": "reports/resource/1000-arrow.json",
+      "sha256": "a5447495f02d9c2bd2e23c1e1f7b639e6fff137b0739e1bc0d5a1aeccb5bf727",
+      "bytes": 28111,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000-arrow.json"
+    },
+    {
+      "path": "reports/resource/1000001-arrow.json",
+      "sha256": "50745c0683ddfb7f2ac3795ee6c0b0b1609c84192845880170552fb8bcd0619f",
+      "bytes": 29616,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000001-arrow.json"
+    },
+    {
+      "path": "reports/resource/1000-arrow.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000-arrow.stderr"
+    },
+    {
+      "path": "reports/resource/1000001-owned.json",
+      "sha256": "f836c32e24656667ce5e548aa0d36c5045ad785318bd050aaca8e9ff57a6002d",
+      "bytes": 25260,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000001-owned.json"
+    },
+    {
+      "path": "reports/resource/1000-owned.json",
+      "sha256": "7922fb10f272a507a7f3dac210f51a542aec82d023bb9b13a83fa1f9d8a4562a",
+      "bytes": 23062,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000-owned.json"
+    },
+    {
+      "path": "reports/resource/1000-owned.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000-owned.stderr"
+    },
+    {
+      "path": "reports/resource/1000001-retained.json",
+      "sha256": "324508485b1d3dce6128f0cf8310818609e843dd1dc39688c88b772f110d044d",
+      "bytes": 29556,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000001-retained.json"
+    },
+    {
+      "path": "reports/resource/1000-retained.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000-retained.stderr"
+    },
+    {
+      "path": "reports/phase/1000000-owned.json",
+      "sha256": "caa6eac0848dce6d504ddefeebc8e1dacf8eedf91512dcec8c01ab5ad68b32b5",
+      "bytes": 26991,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000000-owned.json"
+    },
+    {
+      "path": "reports/phase/1000000-retained.json",
+      "sha256": "9e245740707ba01cc3c7446016b37ec9de5977c2dc22468a1b13e67d3767d764",
+      "bytes": 32865,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000000-retained.json"
+    },
+    {
+      "path": "reports/phase/1000001-retained.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000001-retained.stderr"
+    },
+    {
+      "path": "reports/phase/1000001-retained-progress.json",
+      "sha256": "c4eda2cd977ed9bbb8cfc06da41e3b908735b3274f3c42810d0dddb724d56fb1",
+      "bytes": 25387,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000001-retained-progress.json"
+    },
+    {
+      "path": "reports/phase/1000001-arrow.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000001-arrow.stderr"
+    },
+    {
+      "path": "reports/phase/1000000-arrow-progress.json",
+      "sha256": "d71721f751b5f95922c73a4eb22a874a9d47a9bd0d44e3574c05de9fde0710e2",
+      "bytes": 32835,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000000-arrow-progress.json"
+    },
+    {
+      "path": "reports/phase/1000000-retained-progress.json",
+      "sha256": "9e245740707ba01cc3c7446016b37ec9de5977c2dc22468a1b13e67d3767d764",
+      "bytes": 32865,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000000-retained-progress.json"
+    },
+    {
+      "path": "reports/phase/1000001-arrow-progress.json",
+      "sha256": "e7e17144094bf1fb9ec2783518f73ada4f5820bc5db08ec78149f1d7dd05fbcf",
+      "bytes": 25448,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000001-arrow-progress.json"
+    },
+    {
+      "path": "reports/phase/1000000-retained.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000000-retained.stderr"
+    },
+    {
+      "path": "reports/phase/1000001-owned.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000001-owned.stderr"
+    },
+    {
+      "path": "reports/phase/1000001-owned-progress.json",
+      "sha256": "d4fc706567465cad2da7854b8e18f53c22b0536de803ac77ec992071a11f0db0",
+      "bytes": 20163,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000001-owned-progress.json"
+    },
+    {
+      "path": "reports/phase/1000000-arrow.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000000-arrow.stderr"
+    },
+    {
+      "path": "reports/phase/1000000-owned-progress.json",
+      "sha256": "caa6eac0848dce6d504ddefeebc8e1dacf8eedf91512dcec8c01ab5ad68b32b5",
+      "bytes": 26991,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000000-owned-progress.json"
+    },
+    {
+      "path": "reports/phase/1000000-owned.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000000-owned.stderr"
+    },
+    {
+      "path": "reports/phase/1000001-arrow.json",
+      "sha256": "e7e17144094bf1fb9ec2783518f73ada4f5820bc5db08ec78149f1d7dd05fbcf",
+      "bytes": 25448,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000001-arrow.json"
+    },
+    {
+      "path": "reports/phase/1000001-owned.json",
+      "sha256": "d4fc706567465cad2da7854b8e18f53c22b0536de803ac77ec992071a11f0db0",
+      "bytes": 20163,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000001-owned.json"
+    },
+    {
+      "path": "reports/phase/1000001-retained.json",
+      "sha256": "c4eda2cd977ed9bbb8cfc06da41e3b908735b3274f3c42810d0dddb724d56fb1",
+      "bytes": 25387,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000001-retained.json"
+    },
+    {
+      "path": "reports/phase/1000000-arrow.json",
+      "sha256": "d71721f751b5f95922c73a4eb22a874a9d47a9bd0d44e3574c05de9fde0710e2",
+      "bytes": 32835,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-results/1000000-arrow.json"
+    },
+    {
+      "path": "receipts/986-final-supplemental-0c298984-prepare-state.json",
+      "sha256": "c999868f3224785b30776b557d856f1417c9915424dfd4731247fdfbe2c1e79e",
+      "bytes": 5095,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-0c298984-prepare-state.json"
+    },
+    {
+      "path": "receipts/986-final-supplemental-0c298984-runtime-controller-state.json",
+      "sha256": "9a754f351a6adca72755c51e4ad3250d5af2c9c22f8b14449f72d8fdad96112e",
+      "bytes": 1963,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-0c298984-runtime-controller-state.json"
+    },
+    {
+      "path": "receipts/resource-checkpoint-0c298984-runtime-state.json",
+      "sha256": "a45980bcfb52f009339332f5722ee39f87775d75cc2ad0c32a62b28219d831cd",
+      "bytes": 9905,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-runtime-state.json"
+    },
+    {
+      "path": "receipts/resource-checkpoint-0c298984-full-audit.json",
+      "sha256": "88c7301d561bc056a72ea7049b02cae3d75a31004629537f189b64f5b7f0014e",
+      "bytes": 5393,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-full-audit.json"
+    },
+    {
+      "path": "receipts/phase-checkpoint-0c298984-runtime-state.json",
+      "sha256": "8083cec892130ed8da821350d1b53bc31ca403f1a6855192b323fa253ef60e44",
+      "bytes": 11532,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-runtime-state.json"
+    },
+    {
+      "path": "receipts/phase-checkpoint-0c298984-full-audit.json",
+      "sha256": "3b08ebadc93fb6ae410fb48b7350c08c84958599b59160069a5b907d8ef12d4b",
+      "bytes": 29101,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-full-audit.json"
+    },
+    {
+      "path": "receipts/phase-checkpoint-0c298984-frozen-source.json",
+      "sha256": "37fa067995c528ae3952285615ebe001719c15aa9972634fb2a1faa2aa1a8d8c",
+      "bytes": 1835,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-frozen-source.json"
+    },
+    {
+      "path": "receipts/phase-checkpoint-0c298984-committed-source.json",
+      "sha256": "b3eca38f27ab822451d1f0d9e6a1fd6f7ad4bb02f51b9b2edddd7a9a3a1e81d2",
+      "bytes": 167,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/phase-checkpoint-0c298984-committed-source.json"
+    },
+    {
+      "path": "receipts/986-0c298984-retained-complete-controls.json",
+      "sha256": "1ed0891ce9f5aa00c5e2eb2da1b2e4344122accf9477687aa06804d1f567747d",
+      "bytes": 13530,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-retained-complete-controls.json"
+    },
+    {
+      "path": "receipts/986-0c298984-session-row-policy-qualified-audit.json",
+      "sha256": "efb6bcc7ad0690d712247e026d2eeb1c9f1588e3ddfd7e986a53b6d95ecaa9b7",
+      "bytes": 1781,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-session-row-policy-qualified-audit.json"
+    },
+    {
+      "path": "receipts/986-0c298984-initial-ordinary-adverse-observations-v2.json",
+      "sha256": "f821d184a4cdbaebe0694e42e540dfb40a76f5293b50ac7b2c29fe4970fe19ce",
+      "bytes": 3028,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-initial-ordinary-adverse-observations-v2.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json",
+      "sha256": "a6cd754a029b4c030f76e03fb1666db0358b7bcb1fc9b50813d8814966380c1c",
+      "bytes": 1920,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json",
+      "sha256": "efb8d14b5482053d1db842605a93dc279acd774d679cec54a0ed5d28b7e939d6",
+      "bytes": 4019,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout",
+      "sha256": "e76da3d530e0492fe05491ac1aa39385af20624be7fe4c36c2bdd82a2030870e",
+      "bytes": 9923,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json",
+      "sha256": "744eec499139020dbbf72c17c878f6bb73d30f1de35755994d8287004dcc8325",
+      "bytes": 81,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json",
+      "sha256": "eea2deb9bb65f4974a66c3b79127699147d3dceb661dd46dfefd986fca79a5ee",
+      "bytes": 403,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt",
+      "sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+      "bytes": 16,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete",
+      "sha256": "411d2338f0f543949b97c0c123adc1d20c8a56938e62b661848ae68525241677",
+      "bytes": 12,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json",
+      "sha256": "c59393365e057e577c96c0cb6f3180b1bfb05751291152357cdbe37e1825c43a",
+      "bytes": 1920,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json",
+      "sha256": "3df27a57f01ebe5a3636baf3efe61ca64ccd6fff264994826db664ad86f435fd",
+      "bytes": 4019,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout",
+      "sha256": "b79d56b2a7f7c0de0c3932423846e4ad37525359bc5a830b6717fb26b8f5115c",
+      "bytes": 9866,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json",
+      "sha256": "744eec499139020dbbf72c17c878f6bb73d30f1de35755994d8287004dcc8325",
+      "bytes": 81,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json",
+      "sha256": "0dba79c26dd1e247238a8987e38be6830d21ba2db3f87988e9f933e964f0d392",
+      "bytes": 403,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt",
+      "sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+      "bytes": 16,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete",
+      "sha256": "fb5c8e99166477a6dae4399659e4566a1d1845c60c96b1377631707069a4c963",
+      "bytes": 12,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json",
+      "sha256": "8de16654bfe0abc14eb7892772466c54635b318ffc4d3b27a7b61bd0ccbbbbd4",
+      "bytes": 1919,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json",
+      "sha256": "c424155bfc51a5a61da389d136e8f0406bdf671651bae73db1a76cb50bba2346",
+      "bytes": 4012,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout",
+      "sha256": "3248a957ae52a2615acaeff8e5d3bb3581e20ac11f9f1f8b4d1dd0fe316e9e42",
+      "bytes": 9791,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json",
+      "sha256": "0cf0bd1e46f778bd11bc9346d3501a6956449ef9e8ca41496e8f28815fa61c5b",
+      "bytes": 69,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json",
+      "sha256": "55e8b216ce4726c41f1c0836709005b84559f4170611fcc1347b9ba49e318084",
+      "bytes": 400,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt",
+      "sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+      "bytes": 16,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete",
+      "sha256": "05b00fbdc4504d94b76a29753b5dc9ffbce454116df3f9abf86b738744ac45f9",
+      "bytes": 12,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json",
+      "sha256": "620ae1577398eed417a6fbe1105d7cc2e91531e0dff88593552fa2e73a6132fc",
+      "bytes": 1920,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json",
+      "sha256": "8b5c5088d1f91ad473ede7b3a792a04eadbb3cdadd31c267e51cd088ea4b8c97",
+      "bytes": 4013,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout",
+      "sha256": "1d02c5d0fe5b06ce2f3a563ca5ffc40fc2efa6820831398b441ab45f79a79281",
+      "bytes": 11134,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json",
+      "sha256": "6f3142e1c82dd10e997b684ae67ff25d5bf81ad47233af364efe424535bece02",
+      "bytes": 69,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json",
+      "sha256": "76ae4ce4b389a38189ddd62e3e627c7d433f7c70ba9b6f3193aa422574b5846b",
+      "bytes": 401,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt",
+      "sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+      "bytes": 16,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete",
+      "sha256": "f196c4a5ea8f178f089e888b40c9afa9ccc06d613b3beb2167eefbb47540f092",
+      "bytes": 12,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json",
+      "sha256": "3125ad3f2f358b489ffd02c3ebbb8a1db3c03bfe7431a4018e1b465b52806fee",
+      "bytes": 1922,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json",
+      "sha256": "fc725e396c2ff7b61711f94374a0af15aead6b38b0dde59439000c997d44aa74",
+      "bytes": 4015,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout",
+      "sha256": "36907d9be7799ac3daa0e74791709b1e99bb3038b0823be8d46c946df5a71531",
+      "bytes": 11136,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json",
+      "sha256": "8d57fee6a5cd1542766e895fd7ee2b694702092e2a5447adf851fa3382e9fb7a",
+      "bytes": 69,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json",
+      "sha256": "24dd56822aa3219bc093ced9b4c9b52736cb54cd234bceefff716e23e54ebbff",
+      "bytes": 403,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt",
+      "sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+      "bytes": 16,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete",
+      "sha256": "34a80299a4315c31822ffbcefd6cb6cbd5b2d032e9a33d9417126de162a9ca99",
+      "bytes": 12,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json",
+      "sha256": "c3c334acd660da683d88ce413dd7119c24c6354a55d84026129b10170052290d",
+      "bytes": 1919,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json",
+      "sha256": "b90be7351b1d1fd079e2b7c528ff71d9942e379fc123ce50b9f589ca33f63e62",
+      "bytes": 4012,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout",
+      "sha256": "ccfd3be11d9b5249784c790e6f3ffb0f88a5289585dded0f280b6d83e140d946",
+      "bytes": 9628,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json",
+      "sha256": "7c2784e05537eefdade585eb0b7b8c52781254953b98d5e96d5e45badfbd73da",
+      "bytes": 69,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json",
+      "sha256": "40996bdead317aec4a0e027f995ac67b494093ee9ef7ae35905c15382764629c",
+      "bytes": 400,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt",
+      "sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+      "bytes": 16,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete",
+      "sha256": "e07f6349907cc7d64c48ade6054a7a1970a602e48b3313173e2608975405513e",
+      "bytes": 12,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json",
+      "sha256": "be82a8e9d40b33446af2f56454699e1c13928c9cbf5cf434d74b5fd718b9e91f",
+      "bytes": 1917,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json",
+      "sha256": "e46093c33811b4bbfd2b16f960b34f97e4db2ea347ef5bd65eec99efd47acd31",
+      "bytes": 4010,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout",
+      "sha256": "ffbbdcc0edbab14bf4c5e26dcb9aac2795f9b8c3ed7abb643dfbb3705fa8e10f",
+      "bytes": 9625,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json",
+      "sha256": "58b13475251fa0162ae98e101e27b9d050aee1056561bbffbbd4b6d863ba3ce4",
+      "bytes": 69,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json",
+      "sha256": "ccba12e40aab9c46ccd6523c822cbb63753a0c8699bf62b042dbba2540502846",
+      "bytes": 398,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt",
+      "sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+      "bytes": 16,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt"
+    },
+    {
+      "path": "original-retained10/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete",
+      "sha256": "c6ffe96361719e0162151873cec623df392bddcd6d1f837d5a55c73a970fb3da",
+      "bytes": 12,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-1000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json",
+      "sha256": "1324b2bb355fec636cc2b811eb75cd43832d34bd831f13dab95f973c4d37b090",
+      "bytes": 1921,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json",
+      "sha256": "10aa00b91742ad0bec410bb8d99f138f04318e9718ae3ecfb3e7a3aa69655453",
+      "bytes": 4014,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout",
+      "sha256": "5aaa3124784fe1cd590dd1daf1cf2b93dbb1382c56f69edfd7837650790c4d42",
+      "bytes": 9793,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json",
+      "sha256": "fb12b2db314510a73a26fdce95aae566cc56d5233f8911ba6b93752ced5e1c3d",
+      "bytes": 69,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json",
+      "sha256": "223995975a5959f38d70cc37bf04e46c319efb4528331d6cfb231541527092ac",
+      "bytes": 402,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt",
+      "sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+      "bytes": 16,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt"
+    },
+    {
+      "path": "original-retained10/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete",
+      "sha256": "f63323e528c5ee3da20fead98e8bfb37103d5eed6f234e80325120900fdad932",
+      "bytes": 12,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-default-100000-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json",
+      "sha256": "92985477af0c389c3d1f64b053dc2ab8ab2caf4f220e65851be88f59a1a997d8",
+      "bytes": 1918,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json",
+      "sha256": "a5fd4bcae96ed02881e5d6c8f7d312d9d0c7d77fbe93140b53f49a9d5331b239",
+      "bytes": 4017,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout",
+      "sha256": "872bc297fa1243f8b6ae1e2e98d5fdf84e4e8ebff347c33b89bc1ef1f6eb5d06",
+      "bytes": 9921,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json",
+      "sha256": "744eec499139020dbbf72c17c878f6bb73d30f1de35755994d8287004dcc8325",
+      "bytes": 81,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json",
+      "sha256": "e8b3dc0c29bc74420d678f3229de4d95f953b870f62d66338a778fac7730cfd2",
+      "bytes": 401,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt",
+      "sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+      "bytes": 16,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete",
+      "sha256": "8098a425c83bcedf0a16903f00bff65759f57bc18bc5ee21acb274d55e57c4a1",
+      "bytes": 12,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000000-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json",
+      "sha256": "849e5f4072f8429e94c035c66895520dcdad5a3f2230ff8506341ea9203529c1",
+      "bytes": 1918,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json",
+      "sha256": "99134700a7fd7145214be25a2ca7022caa2f1f0a2a65f80ea66c694d9e3952de",
+      "bytes": 4017,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/manifest.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout",
+      "sha256": "235696bdc568bf4444b0f882b7b720b1d593ae00f004122c07e4078449866134",
+      "bytes": 9864,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stdout"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/0.stderr"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json",
+      "sha256": "744eec499139020dbbf72c17c878f6bb73d30f1de35755994d8287004dcc8325",
+      "bytes": 81,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/observed-limits.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json",
+      "sha256": "fd780b0ecf91545beba7bab617fdd566409245bca58cc2c9e45d2762443cf855",
+      "bytes": 401,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/outcomes.json"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt",
+      "sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+      "bytes": 16,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/python-packages.txt"
+    },
+    {
+      "path": "original-retained10/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete",
+      "sha256": "f5acfa0113808f751ace9b50eba93f477eea7565158cb61ec0ef4645c4fefce7",
+      "bytes": 12,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-file-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/.download-complete"
+    },
+    {
+      "path": "observer-scripts/run-resource-checkpoint-0c298984.py",
+      "sha256": "c604d5f79ff9a4735d64171a824670610a89b02a6beec94fead096e3e247af00",
+      "bytes": 4922,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/run-resource-checkpoint-0c298984.py"
+    },
+    {
+      "path": "observer-scripts/audit-resource-checkpoint-0c298984.py",
+      "sha256": "29ebb4d0ccc00b362194dce4647156d3c03437bbec6dc8cc3c6a605e0d27a33d",
+      "bytes": 5853,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-resource-checkpoint-0c298984.py"
+    },
+    {
+      "path": "observer-scripts/run-phase-checkpoint-0c298984.py",
+      "sha256": "2b1e32cce8ecc2845db0d83756a8b7a99febc5c352e069a2c92fcb03a6bf8c8a",
+      "bytes": 2399,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/run-phase-checkpoint-0c298984.py"
+    },
+    {
+      "path": "observer-scripts/audit-phase-checkpoint-0c298984.py",
+      "sha256": "e5d2e4e2e2cd8f609e3ddd06f52a3d09239c9c91a19350154a7a8ded7cb66815",
+      "bytes": 2513,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-phase-checkpoint-0c298984.py"
+    },
+    {
+      "path": "observer-scripts/run-final-supplemental-controls-0c298984.py",
+      "sha256": "51ee03b69dacc54d2216a49f6be8af416dfdf839932284c3a0598c3f2cb97564",
+      "bytes": 3863,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/run-final-supplemental-controls-0c298984.py"
+    },
+    {
+      "path": "diagnostic/state.json",
+      "sha256": "b533f9db9dbbad8c6fc4b90f3b660e90f6a352a1c0537bad82a18668945449df",
+      "bytes": 4822,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-state.json"
+    },
+    {
+      "path": "diagnostic/plan.json",
+      "sha256": "2b678de7168c38da502989210b5382f876ab63ea567e97a9832a40a55a10811a",
+      "bytes": 780,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-headroom-diagnostic-plan.json"
+    },
+    {
+      "path": "diagnostic/986-headroom-diagnostic-0c298984-general-passed-0.log",
+      "sha256": "b1654b8345bba578875ae88dadef4c546793a04eea2fb9566460772ffa87071b",
+      "bytes": 187910,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-general-passed-0.log"
+    },
+    {
+      "path": "diagnostic/steps/986-headroom-diagnostic-0c298984-worktree.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-worktree.log"
+    },
+    {
+      "path": "diagnostic/steps/986-headroom-diagnostic-0c298984-patch-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-patch-check.log"
+    },
+    {
+      "path": "diagnostic/steps/986-headroom-diagnostic-0c298984-patch.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-patch.log"
+    },
+    {
+      "path": "diagnostic/steps/986-headroom-diagnostic-0c298984-format.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-format.log"
+    },
+    {
+      "path": "diagnostic/steps/986-headroom-diagnostic-0c298984-stage.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-stage.log"
+    },
+    {
+      "path": "diagnostic/steps/986-headroom-diagnostic-0c298984-fmt-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-fmt-check.log"
+    },
+    {
+      "path": "diagnostic/steps/986-headroom-diagnostic-0c298984-clippy.log",
+      "sha256": "5c4f18badb686baba7debc433950a2566bb38d2a193d6b061361465588f08913",
+      "bytes": 5438,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-clippy.log"
+    },
+    {
+      "path": "diagnostic/steps/986-headroom-diagnostic-0c298984-general.log",
+      "sha256": "d07a5fc0068ddb7fa3885856b588c272e276af58d22475fd7cc1c47db30a28d0",
+      "bytes": 4469,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-general.log"
+    },
+    {
+      "path": "diagnostic/formatted-test-only.patch",
+      "sha256": "21f250a005106b4f54954bc0fa5c65da64f7c70415b40b1f02030b0df4159491",
+      "bytes": 1562,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/diagnose-headroom-state-0c298984 staged test-only diff"
+    }
+  ],
+  "created_at": 1792351101.2527812,
+  "scope": "Supplemental fixture intervention only: explicit CHECKPOINT each65536 setup rows, original512-row mutations and31samples plus warmup. Original frozen full consumer, budgets and durability unchanged. Original90/110 and their failures are not replaced. No pure-conversion, universal speedup, atomic-net-ledger, whole-memory bound, leak absence, independent approval or merge claim.",
+  "checkpoint_diagnostic": {
+    "source": "0c2989842321d10e91f136f3c924badb07038add",
+    "diagnostic_tree": "155ba40a546358bc270005d9f2364cd30afc6292",
+    "general_exit": 0,
+    "raw_results": [
+      {
+        "path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-general-passed-0.log",
+        "sha256": "b1654b8345bba578875ae88dadef4c546793a04eea2fb9566460772ffa87071b",
+        "result_lines": [
+          "test result: ok. 1781 passed; 0 failed; 1 ignored; 0 measured; 322 filtered out; finished in 411.66s"
+        ]
+      }
+    ],
+    "scope": "One complete original general selection with nonblocking diagnostics only after original failure. Production branch unchanged. A passing diagnostic does not explain the preserved original failure; inspect actual failure context before causal claims."
+  }
+}

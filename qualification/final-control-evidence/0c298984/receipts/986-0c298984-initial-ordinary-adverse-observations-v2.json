@@ -1,0 +1,94 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "source": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+  "run": 39154768120,
+  "source_summary_sha256": "2bbcb2334c0662e110268c5df88de522d636c9d6d63a5b3b71f015fc953b95d4",
+  "observed_at": 1792350338.525821,
+  "adverse_observations": [
+    {
+      "artifact": 12146514605,
+      "group": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0510855626975346,
+        "query_boundary_ns_median_speedup": 1.06518713680503,
+        "write_boundary_ns_median_speedup": 0.995557859315606,
+        "read_boundary_ns_median_speedup": 1.6279970337840441,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "verified_producer_and_manifest_files": 12
+    },
+    {
+      "artifact": 12146627720,
+      "group": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0372735864658038,
+        "query_boundary_ns_median_speedup": 1.0477801179374453,
+        "write_boundary_ns_median_speedup": 0.987254551558225,
+        "read_boundary_ns_median_speedup": 1.5289012732069014,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "verified_producer_and_manifest_files": 12
+    },
+    {
+      "artifact": 12146993102,
+      "group": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 0.9932983278388459,
+        "query_boundary_ns_median_speedup": 0.9946777072339924,
+        "write_boundary_ns_median_speedup": 0.9332882429836028,
+        "read_boundary_ns_median_speedup": 1.6066004595458028,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "verified_producer_and_manifest_files": 12
+    },
+    {
+      "artifact": 12146524541,
+      "group": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0299256086975979,
+        "query_boundary_ns_median_speedup": 1.0282113067655236,
+        "write_boundary_ns_median_speedup": 0.961028689554016,
+        "read_boundary_ns_median_speedup": 1.6645178803444032,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "verified_producer_and_manifest_files": 12
+    }
+  ],
+  "scope": "Complete producer verification, three samples/side. Ratios do not establish significance, cause or acceptance."
+}

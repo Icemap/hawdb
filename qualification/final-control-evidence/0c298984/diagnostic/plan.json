@@ -1,0 +1,10 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "test_source": "src/api/automatic_checkpoint/tests/headroom.rs",
+  "source_sha256": "b7df3e09a490fed1da8ecebd3478e6ab2dd5c7cc24fdd9a34690fc021752b0d1",
+  "patch_sha256": "5b1209f3e7dc4c2c0862c77dbfe9ec3e01c8e2b8c4c8fffdd571bf9ddfb2fd98",
+  "status": "prepared_not_applied_not_run",
+  "purpose": "Capture row/phase/attempts/work-progress/report only after original error, using nonblocking try_lock, then return exact original error. No retry, assertion/dataset/deadline/concurrency change.",
+  "scheduling": "Only after current serial supplemental controls finish; isolated diagnostic worktree, not PR production branch.",
+  "scope": "Diagnostic proposal only; no inferred checkpoint cause or correctness acceptance."
+}

@@ -1,0 +1,58 @@
+{
+  "status": "passed",
+  "source": [
+    "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+    "132762f5f969321b0974687c96dabf27236fbaaf",
+    "0c2989842321d10e91f136f3c924badb07038add"
+  ],
+  "engine_source": "0c2989842321d10e91f136f3c924badb07038add",
+  "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "overlay_files": [
+    ".github/workflows/native-bindings.yml",
+    "BUILD.bazel",
+    "Cargo.toml",
+    "bindings/python/BUILD.bazel",
+    "bindings/python/Cargo.toml",
+    "bindings/python/src/database.rs",
+    "bindings/python/src/lib.rs",
+    "qualification/phases/consume.py",
+    "qualification/resources/baseline-source.json",
+    "qualification/resources/campaign.json",
+    "qualification/resources/numeric.py",
+    "qualification/resources/numeric_driver.py",
+    "qualification/resources/run.py",
+    "qualification/retained/configured.py",
+    "qualification/retained/run.py",
+    "src/api/retained_query.rs",
+    "src/embedded.rs",
+    "src/lib.rs",
+    "src/retained_phase_profile.rs"
+  ],
+  "expected_overlay_files": [
+    ".github/workflows/native-bindings.yml",
+    "BUILD.bazel",
+    "Cargo.toml",
+    "bindings/python/BUILD.bazel",
+    "bindings/python/Cargo.toml",
+    "bindings/python/src/database.rs",
+    "bindings/python/src/lib.rs",
+    "qualification/phases/consume.py",
+    "qualification/resources/baseline-source.json",
+    "qualification/resources/campaign.json",
+    "qualification/resources/numeric.py",
+    "qualification/resources/numeric_driver.py",
+    "qualification/resources/run.py",
+    "qualification/retained/configured.py",
+    "qualification/retained/run.py",
+    "src/api/retained_query.rs",
+    "src/embedded.rs",
+    "src/lib.rs",
+    "src/retained_phase_profile.rs"
+  ],
+  "requested": {
+    "QUAL_ROWS": "100000",
+    "QUAL_BACKEND": "file",
+    "QUAL_CONFIGURATION": "default"
+  },
+  "scope": "Source/request check only; no query or performance outcome."
+}

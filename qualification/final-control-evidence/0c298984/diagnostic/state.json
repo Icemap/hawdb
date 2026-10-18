@@ -1,0 +1,154 @@
+{
+  "status": "diagnostic_finished",
+  "pid": 529,
+  "started": 1792350689.883627,
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "steps": [
+    {
+      "name": "worktree",
+      "command": [
+        "git",
+        "worktree",
+        "add",
+        "--quiet",
+        "-b",
+        "diagnose/986-headroom-state-0c298984",
+        "/private/tmp/hawdb-wip-ready-20261015/diagnose-headroom-state-0c298984",
+        "0c2989842321d10e91f136f3c924badb07038add"
+      ],
+      "started": 1792350980.1695511,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-worktree.log",
+      "exit": 0,
+      "ended": 1792350981.903856
+    },
+    {
+      "name": "patch-check",
+      "command": [
+        "git",
+        "apply",
+        "--check",
+        "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-headroom-diagnostic-only.patch"
+      ],
+      "started": 1792350981.9046988,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-patch-check.log",
+      "exit": 0,
+      "ended": 1792350981.919843
+    },
+    {
+      "name": "patch",
+      "command": [
+        "git",
+        "apply",
+        "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-headroom-diagnostic-only.patch"
+      ],
+      "started": 1792350981.9209988,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-patch.log",
+      "exit": 0,
+      "ended": 1792350981.927861
+    },
+    {
+      "name": "format",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all"
+      ],
+      "started": 1792350981.932779,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-format.log",
+      "exit": 0,
+      "ended": 1792350987.1499798
+    },
+    {
+      "name": "stage",
+      "command": [
+        "git",
+        "add",
+        "src/api/automatic_checkpoint/tests/headroom.rs"
+      ],
+      "started": 1792350987.600322,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-stage.log",
+      "exit": 0,
+      "ended": 1792350987.980979
+    },
+    {
+      "name": "fmt-check",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792350988.091947,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-fmt-check.log",
+      "exit": 0,
+      "ended": 1792350994.584625
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792350994.7919629,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-clippy.log",
+      "exit": 0,
+      "ended": 1792351038.8798552
+    },
+    {
+      "name": "general",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-general.bep.json"
+      ],
+      "started": 1792351038.951661,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-general.log",
+      "exit": 0,
+      "ended": 1792351497.281216
+    }
+  ],
+  "scope": "Single full original general selection on an isolated failure-only test diagnostic patch. Not final-head qualification, not a retry-until-green or a checkpoint-cause conclusion.",
+  "tree": "155ba40a546358bc270005d9f2364cd30afc6292",
+  "formatted_patch_sha256": "21f250a005106b4f54954bc0fa5c65da64f7c70415b40b1f02030b0df4159491",
+  "general_exit": 0,
+  "test_summaries": [
+    {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/d5103e10894bdb32927ff527a137b62b/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_unit_general_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792351080516",
+      "lastStopTimeMillis": "1792351496799",
+      "totalRunDurationMillis": "416283",
+      "runCount": 1,
+      "totalRunDuration": "416.283s",
+      "firstStartTime": "2026-10-18T19:18:00.516Z",
+      "lastStopTime": "2026-10-18T19:24:56.799Z",
+      "attemptCount": 1
+    }
+  ],
+  "raw_test_logs": [
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-headroom-diagnostic-0c298984-general-passed-0.log",
+      "sha256": "b1654b8345bba578875ae88dadef4c546793a04eea2fb9566460772ffa87071b",
+      "result_lines": [
+        "test result: ok. 1781 passed; 0 failed; 1 ignored; 0 measured; 322 filtered out; finished in 411.66s"
+      ]
+    }
+  ],
+  "ended": 1792351497.426004
+}

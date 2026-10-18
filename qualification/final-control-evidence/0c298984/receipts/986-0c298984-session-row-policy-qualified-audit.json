@@ -1,0 +1,25 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "runtime_source_identical_for_test": true,
+  "test_source": "tests/execution_request_contract.rs",
+  "test_source_git_blob": "2f650043b1d766cfe06389993b26747f0a733ee6",
+  "test_log_sha256": "1816d29851dca4651daff16cee336cddcf11e01809321a1b6a466b13a689a419",
+  "passed_cases": [
+    "default_unlimited_and_explicit_read_row_limits_preserve_complete_delivery",
+    "owned_default_and_explicit_row_limits_cross_the_former_boundary",
+    "unlimited_sql_results_cross_the_former_default_boundary_without_hidden_scan_caps",
+    "zero_host_session_and_request_limits_preserve_their_public_contracts",
+    "session_result_row_settings_are_isolated_and_inherited_by_transactions",
+    "unlimited_rows_still_refuse_wide_json_payload_before_delivery",
+    "session_host_ceiling_bounds_commit_results_before_publication",
+    "session_host_ceiling_bounds_cypher_mutations_in_both_transaction_modes",
+    "session_host_ceiling_bounds_sql_returning_and_rolls_back_caught_errors",
+    "sql_session_row_limits_preserve_aggregates_and_rollback_failed_returning",
+    "read_only_sql_sessions_inherit_limits_without_altering_database_configuration"
+  ],
+  "complete_target_result": "33 passed,0 failed,111.56s under original300s deadline",
+  "published_evidence": "https://github.com/nowledge-co/hawdb/tree/c2a7630410423817ae1b01ad4c91cd2337ab600c/qualification/node-review-evidence/0c298984",
+  "observed_at": 1792349291.209715,
+  "scope": "Final-source typed policy correctness: session0 unlimited, former100k boundary, strict lower-level0/LIMIT0, isolation and independent budget/atomicity contracts. Does not prove final1M performance, full90/110 or independent approval."
+}

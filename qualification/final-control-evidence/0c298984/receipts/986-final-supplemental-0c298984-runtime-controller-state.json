@@ -1,0 +1,56 @@
+{
+  "status": "all_twelve_controls_audited",
+  "pid": 93943,
+  "started": 1792349164.371833,
+  "steps": [
+    {
+      "name": "resources",
+      "command": [
+        "python3",
+        "/private/tmp/hawdb-wip-ready-20261015/run-resource-checkpoint-0c298984.py"
+      ],
+      "started": 1792349214.5417368,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-0c298984-runtime-resources.log",
+      "exit": 0,
+      "ended": 1792350277.4333131
+    },
+    {
+      "name": "resources-audit",
+      "command": [
+        "python3",
+        "/private/tmp/hawdb-wip-ready-20261015/audit-resource-checkpoint-0c298984.py"
+      ],
+      "started": 1792350277.4340758,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-0c298984-runtime-resources-audit.log",
+      "exit": 0,
+      "ended": 1792350277.865191
+    },
+    {
+      "name": "phases",
+      "command": [
+        "python3",
+        "/private/tmp/hawdb-wip-ready-20261015/run-phase-checkpoint-0c298984.py"
+      ],
+      "started": 1792350277.8657038,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-0c298984-runtime-phases.log",
+      "exit": 0,
+      "ended": 1792350973.0850282
+    },
+    {
+      "name": "phases-audit",
+      "command": [
+        "python3",
+        "/private/tmp/hawdb-wip-ready-20261015/audit-phase-checkpoint-0c298984.py"
+      ],
+      "started": 1792350973.087429,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-0c298984-runtime-phases-audit.log",
+      "exit": 0,
+      "ended": 1792350973.967063
+    }
+  ],
+  "scope": "Twelve supplemental final-source file controls, separate from original90/110. Original failures remain preserved; no approval or whole-memory claim.",
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "observer_source": "8b6c2f9f918c73b466cef86bfb39c90affc2e464",
+  "native_source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+  "ended": 1792350973.971925
+}
