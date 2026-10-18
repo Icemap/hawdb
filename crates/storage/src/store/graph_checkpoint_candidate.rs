@@ -18,7 +18,7 @@ use super::durable::CheckpointReplayBoundary;
 use super::immutable_root::PreparedCheckpointBranchRoot;
 use super::*;
 use crate::relational::RelationalRecoverySourceBuilder;
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 
 #[path = "graph_checkpoint_candidate/reclamation.rs"]
 mod reclamation;
@@ -995,7 +995,9 @@ impl CheckpointCandidate {
         let durable = store.durable.as_ref().expect("candidate is durable");
         let path = durable.wal_path.clone();
         let open_wave = replay_io_wave(work)?;
-        let mut output = fs::OpenOptions::new().append(true).open(&path)?;
+        // This private candidate has one writer. Windows append-only handles
+        // lack the write authority needed to truncate an interrupted record.
+        let mut output = fs::OpenOptions::new().write(true).open(&path)?;
         let actual_bytes = output.metadata()?.len();
         match self.wal_write_attempt_end {
             Some(attempted_end)
@@ -1015,6 +1017,9 @@ impl CheckpointCandidate {
                 ));
             }
         }
+        // Repair may have shortened the file; append from the validated end,
+        // never from the new write handle's initial zero cursor.
+        output.seek(SeekFrom::End(0))?;
         drop(open_wave);
         let mut bytes = self.candidate_wal_bytes;
         let mut expected_lsn = self.captured_next_lsn;
