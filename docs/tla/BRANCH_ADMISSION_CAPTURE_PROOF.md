@@ -119,3 +119,10 @@ stationary view/selector receipts specified by the
 [Consumer contract](../specs/CONSUMER_STATIONARY_PUBLICATION_SPEC.md).
 No durability default, head format, release authorization or full-verification
 gate changes in this step.
+
+## Active-WAL read handoff
+
+The [active-WAL refinement](ACTIVE_WAL_CAPTURE_PROOF.md) carries one UUID-relative
+file through prefix validation, cursor replay and name revalidation. It does not
+extend the metadata boundary above into blanket authority for remaining WAL
+writes, doctor effects or a Consumer ledger.

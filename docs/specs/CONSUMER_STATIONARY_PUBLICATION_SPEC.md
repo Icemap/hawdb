@@ -53,6 +53,10 @@ both catalog images under the original relative metadata lock, acquires the UUID
 owner relative to that project, and reads its head through that owner. This does
 not migrate object/WAL/runtime/root-registry I/O or grant ledger authority; see
 [the kernel metadata boundary](../tla/BRANCH_ADMISSION_CAPTURE_PROOF.md).
+Active WAL prefix verification and replay now consume one file opened through
+that UUID owner, retaining it through name checks before installation. Remaining
+WAL writes/doctor/runtime operations are not thereby qualified; see
+[the WAL custody refinement](../tla/ACTIVE_WAL_CAPTURE_PROOF.md).
 Pending-child completion with that capture needs five charged slots on Unix
 and six on Windows, whose policy retains a write-capable candidate through the
 separately admitted rename. Native Windows confirmed typed refusal at five in

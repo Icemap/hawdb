@@ -1062,12 +1062,35 @@ impl GraphStore {
             head.active_wal.generation,
         ));
         let max_wal_bytes = request.replay_config.max_bytes.unwrap_or(u64::MAX);
-        branch_head::validate_active_wal_prefix_from_file(
-            &active_wal_path,
-            head.active_wal,
-            max_wal_bytes,
-        )
-        .map_err(|error| BranchAdmissionError::Recovery(HawDBError::from_storage_error(error)))?;
+        let mut captured_active_wal = if project.is_some() {
+            let directory = branch_lease.captured_directory();
+            let file = directory
+                .open_child(
+                    &directory.operation_context(),
+                    &crate::artifact_files::wal_generation_file(head.active_wal.generation),
+                )
+                .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
+            Some(
+                branch_head::validate_active_wal_prefix_from_open_file(
+                    file,
+                    head.active_wal,
+                    max_wal_bytes,
+                )
+                .map_err(|error| {
+                    BranchAdmissionError::Recovery(HawDBError::from_storage_error(error))
+                })?,
+            )
+        } else {
+            branch_head::validate_active_wal_prefix_from_file(
+                &active_wal_path,
+                head.active_wal,
+                max_wal_bytes,
+            )
+            .map_err(|error| {
+                BranchAdmissionError::Recovery(HawDBError::from_storage_error(error))
+            })?;
+            None
+        };
 
         let runtime_directory = branch_directory.join("runtime");
         // Mutable WAL dependencies survive disposable-runtime cleanup. They
@@ -1120,12 +1143,20 @@ impl GraphStore {
                         replay_config,
                         &mut source,
                     )?;
+                    #[cfg(test)]
+                    if project.is_some()
+                        && let Some(hook) =
+                            AFTER_ACTIVE_WAL_CAPTURE.with(|hook| hook.borrow_mut().take())
+                    {
+                        hook();
+                    }
                     store.replay_branch_active_wal(
                         catalog,
                         &head,
                         &active_wal_path,
                         replay_config,
                         &mut source,
+                        &mut captured_active_wal,
                     )?;
                     store.finish_wal_recovery(
                         source,
@@ -1156,6 +1187,8 @@ impl GraphStore {
                 request.expected_metadata_revision,
             )?;
             validate_admission_binding(&after, &head, &root, root_reference)?;
+            require_captured_wal_name(&captured_active_wal, &active_wal_path)
+                .map_err(BranchAdmissionError::Recovery)?;
             if let Some(project) = project {
                 validate_captured_admission_namespace(project, &branch_lease, branch_directory)?;
             }
@@ -1659,15 +1692,20 @@ impl GraphStore {
         active_wal_path: &Path,
         replay_config: WalReplayConfig,
         source: &mut RelationalRecoverySourceBuilder,
+        captured_file: &mut Option<fs::File>,
     ) -> Result<()> {
         self.replay_branch_wal_interval(
             catalog,
-            active_wal_path,
-            head.active_wal.generation,
-            head.active_wal.replay_start_lsn,
+            BranchWalReplayInput {
+                path: active_wal_path,
+                generation: head.active_wal.generation,
+                start_lsn: head.active_wal.replay_start_lsn,
+                captured_file: Some(captured_file),
+            },
             replay_config,
             source,
         )?;
+        require_captured_wal_name(captured_file, active_wal_path)?;
         if self.commit_epoch < head.logical_commit_epoch {
             return Err(HawDBError::Storage(format!(
                 "branch head commit epoch {} exceeds recovered epoch {}",
@@ -1702,9 +1740,12 @@ impl GraphStore {
             fs::write(&path, bytes)?;
             self.replay_branch_wal_interval(
                 catalog,
-                &path,
-                generation,
-                start_lsn,
+                BranchWalReplayInput {
+                    path: &path,
+                    generation,
+                    start_lsn,
+                    captured_file: None,
+                },
                 replay_config,
                 source,
             )?;
@@ -1725,12 +1766,18 @@ impl GraphStore {
     fn replay_branch_wal_interval(
         &mut self,
         catalog: &mut crate::schema::Catalog,
-        path: &Path,
-        generation: u64,
-        start_lsn: u64,
+        input: BranchWalReplayInput<'_>,
         mut replay_config: WalReplayConfig,
         source: &mut RelationalRecoverySourceBuilder,
     ) -> Result<()> {
+        let BranchWalReplayInput {
+            path,
+            generation,
+            start_lsn,
+            captured_file,
+        } = input;
+        let mut absent = None;
+        let captured_file = captured_file.unwrap_or(&mut absent);
         let before = self.storage_recovery_report.clone();
         replay_config.max_entries = replay_config
             .max_entries
@@ -1766,6 +1813,9 @@ impl GraphStore {
         let repair_directory = path.parent().ok_or_else(|| {
             HawDBError::StorageIntegrity("branch WAL has no parent directory".into())
         })?;
+        if !durable.read_only && replay_config.recovery_mode == RecoveryMode::AutoRepairTornTail {
+            require_captured_wal_name(captured_file, path)?;
+        }
         durable.wal_tail_repair = if !durable.read_only
             && replay_config.recovery_mode == RecoveryMode::AutoRepairTornTail
         {
@@ -1774,10 +1824,13 @@ impl GraphStore {
             super::doctor::reject_pending_wal_doctor_repair(repair_directory)?;
             None
         };
-        durable.wal_bytes = fs::metadata(path)?.len();
+        durable.wal_bytes = match captured_file.as_ref() {
+            Some(file) => file.metadata()?.len(),
+            None => fs::metadata(path)?.len(),
+        };
         self.storage_recovery_report = combine_recovery_reports(
             before,
-            self.replay_wal_interval(catalog, replay_config, source)?,
+            self.replay_wal_interval_with_file(catalog, replay_config, source, captured_file)?,
         );
         Ok(())
     }
@@ -2311,8 +2364,28 @@ fn ready_branch_record_from_project(
     }
 }
 
+struct BranchWalReplayInput<'a> {
+    path: &'a Path,
+    generation: u64,
+    start_lsn: u64,
+    captured_file: Option<&'a mut Option<fs::File>>,
+}
+
+fn require_captured_wal_name(file: &Option<fs::File>, path: &Path) -> Result<()> {
+    if let Some(file) = file
+        && !file.matches_native_path(path)?
+    {
+        return Err(HawDBError::StorageIntegrity(
+            "captured active WAL was replaced".into(),
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 thread_local! {
+    static AFTER_ACTIVE_WAL_CAPTURE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
     static AFTER_ADMISSION_BRANCH_CAPTURE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
 }
@@ -2989,6 +3062,111 @@ mod tests {
         let admitted = GraphStore::admit_captured_branch(request()).unwrap();
         assert_eq!(admitted.store().node_count_for_label(None), 2);
         drop(admitted);
+    }
+
+    #[test]
+    fn captured_active_wal_replay_refuses_replacement_without_reading_foreign_suffix() {
+        let mut fixture = BranchFixture::new();
+        let project = fixture.capture_project(32);
+        let revision = project.metadata().unwrap().main().metadata_revision;
+        let request = || CapturedBranchAdmissionRequest {
+            project: &project,
+            branch_id: fixture.main,
+            expected_metadata_revision: revision,
+            durability: DurabilityPolicy::default(),
+            replay_config: WalReplayConfig {
+                max_open_files: 32,
+                ..Default::default()
+            },
+            read_only: false,
+        };
+        let (mut store, mut schema) = GraphStore::admit_captured_branch(request())
+            .unwrap()
+            .into_parts();
+        store
+            .create_node(&mut schema, "Seed", BTreeMap::new())
+            .unwrap();
+        drop(store);
+        let head = branch_head::read_branch_head(&fixture.head_path(fixture.main)).unwrap();
+        let directory = fixture
+            .head_path(fixture.main)
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let wal = directory.join(crate::artifact_files::wal_generation_file(
+            head.active_wal.generation,
+        ));
+        let moved = wal.with_extension("held");
+        let original = std::fs::read(&wal).unwrap();
+        let mut foreign = original[..crate::wal::frame::WAL_BINARY_FILE_HEADER_BYTES].to_vec();
+        foreign.extend_from_slice(b"malformed foreign suffix");
+        let replacement = foreign.clone();
+        let from = wal.clone();
+        let to = moved.clone();
+        AFTER_ACTIVE_WAL_CAPTURE.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                std::fs::rename(&from, &to).unwrap();
+                std::fs::write(&from, replacement).unwrap();
+            }))
+        });
+        let head_before = std::fs::read(fixture.head_path(fixture.main)).unwrap();
+        let catalog_before = std::fs::read(&fixture.catalog_path).unwrap();
+        assert!(matches!(GraphStore::admit_captured_branch(request()),
+            Err(BranchAdmissionError::Recovery(HawDBError::StorageIntegrity(message))) if message == "captured active WAL was replaced"));
+        assert_eq!(std::fs::read(&moved).unwrap(), original);
+        assert_eq!(std::fs::read(&wal).unwrap(), foreign);
+        assert_eq!(
+            std::fs::read(fixture.head_path(fixture.main)).unwrap(),
+            head_before
+        );
+        assert_eq!(
+            std::fs::read(&fixture.catalog_path).unwrap(),
+            catalog_before
+        );
+        assert_eq!(project.file_descriptors().metrics().admitted_runtimes, 0);
+        assert_eq!(project.file_descriptors().metrics().reserved, 0);
+        std::fs::remove_file(&wal).unwrap();
+        std::fs::rename(&moved, &wal).unwrap();
+        let admitted = GraphStore::admit_captured_branch(request()).unwrap();
+        assert_eq!(admitted.store().node_count_for_label(None), 3);
+    }
+
+    #[test]
+    fn captured_active_wal_automatic_repair_retains_original_reader_and_complete_prefix() {
+        let mut fixture = BranchFixture::new();
+        let project = fixture.capture_project(32);
+        let metadata = project.metadata().unwrap();
+        let head = branch_head::read_branch_head(&fixture.head_path(fixture.main)).unwrap();
+        let wal = fixture.head_path(fixture.main).parent().unwrap().join(
+            crate::artifact_files::wal_generation_file(head.active_wal.generation),
+        );
+        let original = std::fs::read(&wal).unwrap();
+        let mut torn = original.clone();
+        torn.push(1);
+        std::fs::write(&wal, torn).unwrap();
+        let admitted = GraphStore::admit_captured_branch(CapturedBranchAdmissionRequest {
+            project: &project,
+            branch_id: fixture.main,
+            expected_metadata_revision: metadata.main().metadata_revision,
+            durability: DurabilityPolicy::default(),
+            replay_config: WalReplayConfig {
+                max_open_files: 32,
+                recovery_mode: RecoveryMode::AutoRepairTornTail,
+                ..Default::default()
+            },
+            read_only: false,
+        })
+        .unwrap();
+        assert_eq!(admitted.store().node_count_for_label(None), 2);
+        assert!(admitted.store().storage_recovery_report.torn_tail_repaired);
+        assert_eq!(
+            admitted
+                .store()
+                .storage_recovery_report
+                .discarded_wal_tail_bytes,
+            1
+        );
+        assert_eq!(std::fs::read(wal).unwrap(), original);
     }
 
     #[test]

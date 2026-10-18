@@ -995,3 +995,27 @@ tla_check(
     )
     for control in ["PathCatalog", "PathLease", "PathHead", "SkipFence"]
 ]
+
+# Prefix authentication and replay consume the same captured native WAL.
+[
+    genrule(
+        name = "HawDBActiveWalCapture" + control + "_config",
+        srcs = ["HawDBActiveWalCapture.cfg"],
+        outs = ["generated/HawDBActiveWalCapture" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBActiveWalCapture.cfg) > $@",
+        tags = ["manual"],
+    )
+    for control in ["PathPrefix", "PathReplay", "DropBeforeReplay", "SkipNameFence"]
+]
+[
+    tla_check(
+        name = "HawDBActiveWalCapture" + control + "_check",
+        module = "HawDBActiveWalCapture.tla",
+        config = ":HawDBActiveWalCapture" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["PathPrefix", "PathReplay", "DropBeforeReplay", "SkipNameFence"]
+]
