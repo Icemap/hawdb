@@ -143,6 +143,15 @@ jobs:
             consumer::generation_metadata::tests:: -- --nocapture --test-threads=1 \
             2>&1 | tee windows-native-results/consumer-generation-metadata.txt
 
+      - name: Test Search staged payload integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            -- generation_writer::io::tests:: generation_writer::tests::prepared::same_length_installed_ \
+            --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/search-staged-payload-integrity.txt
+
       - name: Test exclusive directory publication and consumer relocation
         shell: bash
         run: |

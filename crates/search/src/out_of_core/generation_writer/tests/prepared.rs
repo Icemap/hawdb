@@ -497,3 +497,65 @@ fn stale_cleanup_preserves_a_peers_standalone_resident_vectors() {
     drop(stale);
     fs::remove_dir_all(root).unwrap();
 }
+
+fn reject_changed_installed_payload(prefix: &'static str) {
+    let root = test_dir("prepared_changed_payload");
+    let initial = baseline(&root);
+    let old_head = fs::read(root.join(OUT_OF_CORE_MANIFEST_FILE)).unwrap();
+    let candidate = capture(&root, false, RuntimeTaskContext::default())
+        .prepare_publication()
+        .unwrap();
+    let name = format!("{prefix}{}.hawdb", initial.generation + 1);
+    publication::AFTER_CONTENT_INSTALL.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move |root| {
+            let path = root.join(name);
+            let mut bytes = fs::read(&path).unwrap();
+            assert!(!bytes.is_empty(), "fixture must exercise nonempty payload");
+            let last = bytes.len() - 1;
+            bytes[last] ^= 1;
+            fs::write(path, bytes).unwrap();
+        }));
+    });
+    let result = candidate.publish();
+    assert!(publication::AFTER_CONTENT_INSTALL.with(|hook| hook.borrow().is_none()));
+    assert!(
+        matches!(result, Err(HawDBError::StorageIntegrity(_))),
+        "{result:?}"
+    );
+    assert_eq!(
+        fs::read(root.join(OUT_OF_CORE_MANIFEST_FILE)).unwrap(),
+        old_head
+    );
+    let reader = SearchOutOfCoreReader::open(&root).unwrap();
+    assert_eq!(reader.generation(), initial.generation);
+    assert_eq!(
+        reader
+            .hydrate_documents(&[document(99).id])
+            .unwrap()
+            .documents,
+        vec![document(99)]
+    );
+    drop(reader);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn same_length_installed_document_corruption_cannot_select_a_generation() {
+    reject_changed_installed_payload("search_projection_segment_payloads.");
+}
+
+#[test]
+fn same_length_installed_metadata_corruption_cannot_select_a_generation() {
+    reject_changed_installed_payload("search_projection_metadata_payloads.");
+}
+
+#[cfg(feature = "vector-search")]
+#[test]
+fn same_length_installed_vector_corruption_cannot_select_a_generation() {
+    reject_changed_installed_payload("search_projection_vector_payloads.");
+}
+
+#[test]
+fn same_length_installed_lexical_corruption_cannot_select_a_generation() {
+    reject_changed_installed_payload("search_lexical.");
+}

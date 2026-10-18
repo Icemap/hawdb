@@ -163,9 +163,12 @@ pub(super) fn install_generation(
     let lexical_artifact_source = io.path(input.stage, Path::new(input.lexical_artifact_name))?;
     let lexical_manifest_source = io.path(input.stage, Path::new(LEXICAL_MANIFEST_FILE))?;
     let (descriptor_len, descriptor_checksum) = io.checksum(&descriptor_source)?;
-    let payload_len = io.length(&payload_source)?;
-    let metadata_payload_len = io.length(&metadata_source)?;
-    let vector_payload_len = io.length(&vector_source)?;
+    let payload_seal = io.seal(&payload_source)?;
+    let payload_len = payload_seal.length;
+    let metadata_seal = io.seal(&metadata_source)?;
+    let metadata_payload_len = metadata_seal.length;
+    let vector_seal = io.seal(&vector_source)?;
+    let vector_payload_len = vector_seal.length;
     for (name, actual, expected) in [
         ("document", payload_len, input.payload_bytes),
         (
@@ -183,7 +186,8 @@ pub(super) fn install_generation(
     }
     let (lexical_manifest_len, lexical_manifest_checksum) =
         io.checksum(&lexical_manifest_source)?;
-    let lexical_artifact_len = io.length(&lexical_artifact_source)?;
+    let lexical_artifact_seal = io.seal(&lexical_artifact_source)?;
+    let lexical_artifact_len = lexical_artifact_seal.length;
     let layout = json::prepare(
         input.layout,
         u64::MAX,
@@ -649,6 +653,14 @@ pub(super) fn install_generation(
             &layout_bytes.bytes,
         )?;
 
+        #[cfg(test)]
+        AFTER_CONTENT_INSTALL.with(|hook| {
+            let callback = hook.borrow_mut().take();
+            if let Some(callback) = callback {
+                callback(input.root);
+            }
+        });
+
         io.verify(
             &io.path(input.root, descriptor_file.as_ref())?,
             descriptor_len,
@@ -663,22 +675,19 @@ pub(super) fn install_generation(
                 "RaBitQ artifact",
             )?;
         }
-        io.verify(
+        io.verify_seal(
             &io.path(input.root, payload_file.as_ref())?,
-            payload_len,
-            None,
+            payload_seal,
             "document payload",
         )?;
-        io.verify(
+        io.verify_seal(
             &io.path(input.root, metadata_payload_file.as_ref())?,
-            metadata_payload_len,
-            None,
+            metadata_seal,
             "metadata payload",
         )?;
-        io.verify(
+        io.verify_seal(
             &io.path(input.root, vector_payload_file.as_ref())?,
-            vector_payload_len,
-            None,
+            vector_seal,
             "vector payload",
         )?;
         io.verify(
@@ -687,10 +696,9 @@ pub(super) fn install_generation(
             Some(lexical_manifest_checksum),
             "lexical manifest",
         )?;
-        io.verify(
+        io.verify_seal(
             &io.path(input.root, Path::new(input.lexical_artifact_name))?,
-            lexical_artifact_len,
-            None,
+            lexical_artifact_seal,
             "lexical artifact",
         )?;
     }
@@ -743,4 +751,11 @@ pub(super) fn file_len_checksum_with_context(
     task: &RuntimeTaskContext,
 ) -> Result<(u64, u64)> {
     GenerationIo::new(memory, task).checksum(path)
+}
+
+#[cfg(test)]
+type ContentInstallHook = std::cell::RefCell<Option<Box<dyn FnOnce(&Path)>>>;
+#[cfg(test)]
+thread_local! {
+    pub(super) static AFTER_CONTENT_INSTALL: ContentInstallHook = const { std::cell::RefCell::new(None) };
 }

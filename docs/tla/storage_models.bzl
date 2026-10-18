@@ -22,6 +22,7 @@ STORAGE_MODELS = [
     "HawDBCompactionVisibility",
     "HawDBCompositePropertyProjection",
     "HawDBConcurrentSnapshots",
+    "HawDBSearchArtifactSealing",
     "HawDBConstrainedInsertIntent",
     "HawDBConstraintPreservingUpdate",
     "HawDBConsumerDirectoryRelocation",

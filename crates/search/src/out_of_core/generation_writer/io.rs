@@ -22,7 +22,7 @@ use crate::build_memory::{
 use crate::{HawDBError, Result};
 use hawdb_core::RuntimeTaskContext;
 use hawdb_executor::QueryMemoryLease;
-use hawdb_integrity::Crc32cHasher;
+use hawdb_integrity::{Crc32cHasher, IntegrityHasher, Sha256Digest};
 use hawdb_storage::durability::durable_replace_file;
 use hawdb_storage::file_io::{self as fs, File, OpenOptions};
 #[cfg(test)]
@@ -83,6 +83,14 @@ fn should_abort_replace() -> bool {
 pub(super) struct GenerationIo<'a> {
     memory: &'a BuildMemory,
     task: &'a RuntimeTaskContext,
+}
+
+// A private, in-process byte seal. It is not an ObjectReference, persisted
+// manifest, source authority or durability/activation receipt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct ArtifactSeal {
+    pub(super) length: u64,
+    sha256: Sha256Digest,
 }
 
 impl<'a> GenerationIo<'a> {
@@ -170,6 +178,55 @@ impl<'a> GenerationIo<'a> {
             )));
         }
         Ok((length, checksum))
+    }
+
+    /// Read one held file to EOF under admitted bounded scratch. The producer
+    /// seals staged bytes before installation; verification must not recompute
+    /// its expectation from an installed pathname or an alias inventory.
+    pub(super) fn seal(&self, path: &Path) -> Result<ArtifactSeal> {
+        let _buffer = self.memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
+        let mut file = self.native(&[path], || File::open(path))??;
+        let expected = file.metadata()?.len();
+        let mut hasher = IntegrityHasher::new();
+        let mut buffer = [0u8; SPOOL_BUFFER_BYTES];
+        let mut length = 0u64;
+        loop {
+            let count = read_chunk(&mut file, &mut buffer, self.task)?;
+            if count == 0 {
+                break;
+            }
+            length = length
+                .checked_add(count as u64)
+                .filter(|length| *length <= expected)
+                .ok_or_else(|| {
+                    HawDBError::StorageIntegrity("search artifact grew while sealing".into())
+                })?;
+            hasher.update(&buffer[..count]);
+        }
+        checkpoint(self.task)?;
+        if length != expected {
+            return Err(HawDBError::StorageIntegrity(
+                "search artifact shrank while sealing".into(),
+            ));
+        }
+        Ok(ArtifactSeal {
+            length,
+            sha256: hasher.finish().sha256,
+        })
+    }
+
+    pub(super) fn verify_seal(
+        &self,
+        path: &Path,
+        expected: ArtifactSeal,
+        name: &str,
+    ) -> Result<()> {
+        if self.seal(path)? != expected {
+            return Err(HawDBError::StorageIntegrity(format!(
+                "published search generation {name} does not match its staged byte seal"
+            )));
+        }
+        Ok(())
     }
 
     pub(super) fn verify(

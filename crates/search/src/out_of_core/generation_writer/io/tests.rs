@@ -240,3 +240,60 @@ fn native_path_scratch_is_admitted_before_the_operation() {
         assert_eq!(memory.ledger.snapshot().used_bytes, 0);
     }
 }
+
+#[test]
+fn staged_byte_seals_detect_same_length_changes_including_the_last_chunk() {
+    let root = Directory::new();
+    let source = root.0.join("source");
+    let target = root.0.join("target");
+    let bytes = vec![37; 3 * SPOOL_BUFFER_BYTES + 11];
+    fs::write(&source, &bytes).unwrap();
+    let (memory, task) = context(256 * 1024);
+    let io = GenerationIo::new(&memory, &task);
+    let expected = io.seal(&source).unwrap();
+    assert_eq!(expected.length, bytes.len() as u64);
+    for offset in [0, SPOOL_BUFFER_BYTES, bytes.len() - 1] {
+        let mut changed = bytes.clone();
+        changed[offset] ^= 1;
+        fs::write(&target, &changed).unwrap();
+        assert!(matches!(
+            io.verify_seal(&target, expected, "payload"),
+            Err(HawDBError::StorageIntegrity(_))
+        ));
+    }
+    fs::write(&target, &bytes).unwrap();
+    io.verify_seal(&target, expected, "payload").unwrap();
+    // The seal is a value captured before installation, not a live expectation
+    // that a later source-name mutation can silently replace.
+    fs::write(&source, vec![38; bytes.len()]).unwrap();
+    assert_ne!(io.seal(&source).unwrap(), expected);
+    io.verify_seal(&target, expected, "payload").unwrap();
+    assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn staged_byte_seal_admission_cancellation_and_empty_files_refund_scratch() {
+    let root = Directory::new();
+    let source = root.0.join("source");
+    fs::write(&source, []).unwrap();
+    let held = 1024;
+    let exact = held + SPOOL_BUFFER_BYTES + native_path::bytes(&source).unwrap();
+    for short in [1, 0] {
+        let (memory, task) = context(exact - short);
+        let other = memory.input.reserve(held).unwrap();
+        let io = GenerationIo::new(&memory, &task);
+        let result = io.seal(&source);
+        if short == 1 {
+            assert!(result.unwrap_err().to_string().contains("query memory"));
+        } else {
+            let seal = result.unwrap();
+            assert_eq!(seal.length, 0);
+            io.verify_seal(&source, seal, "empty").unwrap();
+            task.cancellation().cancel();
+            assert!(io.seal(&source).unwrap_err().to_string().contains("cancel"));
+        }
+        assert_eq!(memory.ledger.snapshot().used_bytes, held);
+        drop(other);
+        assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+    }
+}
