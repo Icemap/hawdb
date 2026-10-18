@@ -2,6 +2,11 @@ name: Native Bindings
 
 on:
   workflow_dispatch:
+    inputs:
+      rabitq_baseline:
+        description: "Run the manual RaBitQ baseline instead of binding checks"
+        type: boolean
+        default: false
   pull_request:
     paths:
       - "src/**"
@@ -40,6 +45,7 @@ concurrency:
 
 jobs:
   bazel:
+    if: github.event_name != 'workflow_dispatch' || !inputs.rabitq_baseline
     name: Bazel native bindings (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -81,6 +87,7 @@ jobs:
         run: go test -race -count=1 -run '^TestRetained' ./...
 
   windows-native-contracts:
+    if: github.event_name != 'workflow_dispatch' || !inputs.rabitq_baseline
     name: Windows native contracts
     runs-on: windows-2025
     timeout-minutes: 120
@@ -177,3 +184,72 @@ jobs:
           name: windows-native-contracts-${{ github.sha }}
           path: windows-native-results
           if-no-files-found: error
+
+  rabitq-baseline:
+    if: github.event_name == 'workflow_dispatch' && inputs.rabitq_baseline
+    name: Manual RaBitQ baseline (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            architecture: x86_64
+          - os: macos-latest
+            architecture: arm64
+    env:
+      HAWDB_RABITQ_BENCH_BUILD: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: clippy
+
+      - name: Record native environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "${{ matrix.architecture }}"
+          mkdir -p "$RUNNER_TEMP/rabitq-baseline"
+          git log -1 --format='%H%n%T%n%P' > "$RUNNER_TEMP/rabitq-baseline/source.txt"
+          rustc --version --verbose > "$RUNNER_TEMP/rabitq-baseline/toolchain.txt"
+          uname -a > "$RUNNER_TEMP/rabitq-baseline/system.txt"
+          df -h "$RUNNER_TEMP" >> "$RUNNER_TEMP/rabitq-baseline/system.txt"
+          if [ "$(uname -s)" = "Darwin" ]; then
+            for key in machdep.cpu.brand_string hw.logicalcpu hw.physicalcpu hw.memsize hw.l1dcachesize hw.l2cachesize hw.l3cachesize; do
+              sysctl "$key" >> "$RUNNER_TEMP/rabitq-baseline/cpu.txt" 2>&1 || true
+            done
+          else
+            lscpu > "$RUNNER_TEMP/rabitq-baseline/cpu.txt"
+            cat /proc/meminfo >> "$RUNNER_TEMP/rabitq-baseline/system.txt"
+          fi
+
+      - name: Check the native benchmark code
+        run: cargo clippy --locked -p hawdb-vector-projection --all-targets --features storage-io -- -D warnings
+
+      - name: Record the complete scalar matrix
+        shell: bash
+        env:
+          HAWDB_RABITQ_BENCH_ARTIFACTS: ${{ runner.temp }}/rabitq-baseline/artifacts
+          HAWDB_RABITQ_BENCH_OUTPUT: ${{ runner.temp }}/rabitq-baseline/samples.jsonl
+        run: |
+          set -euo pipefail
+          cargo test --locked --release -p hawdb-vector-projection --features storage-io \
+            kernel::benchmark::candidate_scan_matrix -- --exact --ignored --nocapture --test-threads=1 \
+            2>&1 | tee "$RUNNER_TEMP/rabitq-baseline/run.log"
+          python3 scripts/summarize-rabitq-baseline.py \
+            "$HAWDB_RABITQ_BENCH_OUTPUT" "$RUNNER_TEMP/rabitq-baseline/audit.json"
+
+      - name: Preserve raw measurements and checksummed artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rabitq-baseline-${{ matrix.os }}-${{ github.sha }}
+          path: ${{ runner.temp }}/rabitq-baseline
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

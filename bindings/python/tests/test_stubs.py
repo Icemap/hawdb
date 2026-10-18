@@ -32,6 +32,7 @@ SIGNATURES = [
     ("open", hawdb.open),
     ("Database.__init__", hawdb.Database),
     ("Database.execute", hawdb.Database.execute),
+    ("Database.explain", hawdb.Database.explain),
     ("Database.execute_sql", hawdb.Database.execute_sql),
     ("Database.executemany", hawdb.Database.executemany),
     ("Database.executemany_sql", hawdb.Database.executemany_sql),
