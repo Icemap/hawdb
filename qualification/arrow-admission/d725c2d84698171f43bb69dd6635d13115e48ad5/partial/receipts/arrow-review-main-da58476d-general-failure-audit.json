@@ -1,0 +1,23 @@
+{
+  "status": "failed_complete_general_partition",
+  "source_guard": "/private/tmp/hawdb-wip-ready-20261015/arrow-review-main-da58476d-preparation-state.json",
+  "failed_tests": [
+    "api::automatic_checkpoint::tests::headroom::preparation_backoff::pressured_writer_finishes_while_a_real_prepared_prefix_remains_paused",
+    "api::automatic_checkpoint::tests::idle_handoff::idle_handle_adopts_and_retires_two_generations_without_frontend_access",
+    "api::automatic_checkpoint::tests::headroom::retired_cow_cleanup_allows_writes_and_fences_manual_resource_release",
+    "api::automatic_checkpoint::tests::idle_handoff::stopping_a_parked_handoff_does_not_wait_for_the_runtime_read_guard",
+    "api::automatic_checkpoint::tests::headroom::pending_idle_owner_blocks_pressure_growth_before_admission",
+    "api::automatic_checkpoint::tests::manual::concurrent_manual_completes_while_adopted_retirement_admission_is_denied",
+    "api::automatic_checkpoint::tests::idle_handoff::projected_artifact_rebuild_invalidates_paused_checkpoint_source",
+    "api::automatic_checkpoint::tests::manual::concurrent_manual_completes_while_automatic_memory_admission_is_denied"
+  ],
+  "result": "test result: FAILED. 1747 passed; 8 failed; 1 ignored; 0 measured; 322 filtered out; finished in 444.63s",
+  "checkpoint_files_identical_to_main": {
+    "src/api/automatic_checkpoint.rs": "2650807e939f8ef796a765c5b5476711732ead3a72b90732246382eafd17a573",
+    "src/api/automatic_checkpoint/tests/idle_handoff.rs": "838b672a6af878e6e04c3e0ac99dcd0eef4fc6366997899713c9a4be73e92546",
+    "src/api/automatic_checkpoint/tests/headroom.rs": "b7df3e09a490fed1da8ecebd3478e6ab2dd5c7cc24fdd9a34690fc021752b0d1",
+    "src/api/automatic_checkpoint/tests/manual.rs": "1976960ec85c715d474c69911f753c2191871529bc07b144999d36bf593e8c0f"
+  },
+  "scope": "Identical files narrow the changed-code boundary but do not establish cause or exonerate unrelated interactions. Next: same isolated failing test on integrated source and unchanged main.",
+  "time": 1792309099.636235
+}

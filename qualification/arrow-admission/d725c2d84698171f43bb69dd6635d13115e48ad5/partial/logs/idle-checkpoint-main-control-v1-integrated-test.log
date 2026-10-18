@@ -1,0 +1,9 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_general_tests
+-----------------------------------------------------------------------------
+
+running 1 test
+test api::automatic_checkpoint::tests::idle_handoff::idle_handle_adopts_and_retires_two_generations_without_frontend_access ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2077 filtered out; finished in 8.04s
+

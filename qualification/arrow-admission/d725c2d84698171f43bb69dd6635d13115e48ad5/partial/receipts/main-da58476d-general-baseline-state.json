@@ -1,0 +1,24 @@
+{
+  "status": "completed_baseline_control",
+  "pid": 62269,
+  "head": "da58476dcb2d1a34789457bfee06c36d004138ca",
+  "command": [
+    "bazel",
+    "test",
+    "//:hawdb_unit_general_tests",
+    "--repo_env=CARGO_BAZEL_ISOLATED=false",
+    "--repo_env=CARGO_NET_OFFLINE=true",
+    "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/main-da58476d-general-baseline.bep.json"
+  ],
+  "started": 1792309690.41912,
+  "scope": "Untouched main full-general control, same native host and default internal case concurrency/deadlines. Diagnostic only. Outcome does not replace the integrated-source general result or prove causation.",
+  "exit": 3,
+  "ended": 1792310061.910181,
+  "targets": [
+    {
+      "label": "//:hawdb_unit_general_tests",
+      "status": "FAILED"
+    }
+  ],
+  "test_log": "/private/tmp/hawdb-wip-ready-20261015/main-da58476d-general-baseline-test.log"
+}

@@ -1,0 +1,12 @@
+{
+  "status": "environment_failure_preserved",
+  "time": 1792310332.850649,
+  "baseline_result": "test result: FAILED. 1697 passed; 26 failed; 1 ignored; 0 measured; 322 filtered out; finished in 366.98s",
+  "baseline_scope": "Full main control is contaminated by ENOSPC; it is not a clean baseline or a cause determination for earlier checkpoint-progress failures.",
+  "fuzz_scope": "Compiler output failure before any test execution:0/98; not a functional failure or a pass.",
+  "preserved_baseline_state": "/private/tmp/hawdb-wip-ready-20261015/main-da58476d-general-baseline-state.json",
+  "preserved_fuzz_state": "/private/tmp/hawdb-wip-ready-20261015/arrow-d725c2d8-remaining-v2-validation-state.json",
+  "cleanup": "/private/tmp/hawdb-wip-ready-20261015/inactive-cargo-incremental-cleanup-20261018-v2.json",
+  "source_unchanged": true,
+  "next": "Repeat immutable-source mandatory fuzz after available disk recovery; rerun clean full-general controls before closing their gate."
+}

@@ -1,0 +1,66 @@
+{
+  "status": "completed_isolated_diagnostic",
+  "pid": 59228,
+  "started": 1792309234.94346,
+  "case": "api::automatic_checkpoint::tests::idle_handoff::idle_handle_adopts_and_retires_two_generations_without_frontend_access",
+  "shared_file_sha256": {
+    "src/api/automatic_checkpoint.rs": "2650807e939f8ef796a765c5b5476711732ead3a72b90732246382eafd17a573",
+    "src/api/automatic_checkpoint/tests/idle_handoff.rs": "838b672a6af878e6e04c3e0ac99dcd0eef4fc6366997899713c9a4be73e92546"
+  },
+  "stages": [
+    {
+      "name": "integrated",
+      "cwd": "/private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--test_arg=api::automatic_checkpoint::tests::idle_handoff::idle_handle_adopts_and_retires_two_generations_without_frontend_access",
+        "--test_arg=--exact",
+        "--test_arg=--nocapture",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/idle-checkpoint-main-control-v1-integrated.bep.json"
+      ],
+      "started": 1792309235.002422,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/idle-checkpoint-main-control-v1-integrated.log",
+      "exit": 0,
+      "ended": 1792309247.354718,
+      "targets": [
+        {
+          "label": "//:hawdb_unit_general_tests",
+          "status": "PASSED"
+        }
+      ],
+      "test_log": "/private/tmp/hawdb-wip-ready-20261015/idle-checkpoint-main-control-v1-integrated-test.log"
+    },
+    {
+      "name": "main",
+      "cwd": "/private/tmp/hawdb-wip-ready-20261015/control-checkpoint-main-da58476d",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--test_arg=api::automatic_checkpoint::tests::idle_handoff::idle_handle_adopts_and_retires_two_generations_without_frontend_access",
+        "--test_arg=--exact",
+        "--test_arg=--nocapture",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/idle-checkpoint-main-control-v1-main.bep.json"
+      ],
+      "started": 1792309247.481059,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/idle-checkpoint-main-control-v1-main.log",
+      "exit": 0,
+      "ended": 1792309330.542936,
+      "targets": [
+        {
+          "label": "//:hawdb_unit_general_tests",
+          "status": "PASSED"
+        }
+      ],
+      "test_log": "/private/tmp/hawdb-wip-ready-20261015/idle-checkpoint-main-control-v1-main-test.log"
+    }
+  ],
+  "scope": "Diagnostic only: identical isolated existing test on integrated Arrow source and untouched main, same case deadline/configuration and original internal Rust concurrency. Not a replacement for the failing complete general partition or evidence of cause.",
+  "ended": 1792309330.616927
+}

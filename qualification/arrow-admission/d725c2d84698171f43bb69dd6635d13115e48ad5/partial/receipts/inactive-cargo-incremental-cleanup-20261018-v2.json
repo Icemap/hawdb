@@ -1,0 +1,25 @@
+{
+  "scope": "Inactive Cargo incremental caches only; sources, native binaries, frozen packages and evidence retained",
+  "started": 1792310168.4654982,
+  "removed": [
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/split-retained-arrow-main-ac8c0555/target/debug/incremental",
+      "kiB": 3536272,
+      "exclusive_cargo_lock": true,
+      "open_handles": 0
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/arrow-packet-bfad9b70/target/debug/incremental",
+      "kiB": 1519384,
+      "exclusive_cargo_lock": true,
+      "open_handles": 0
+    },
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/pr986/target/debug/incremental",
+      "kiB": 2921688,
+      "exclusive_cargo_lock": true,
+      "open_handles": 0
+    }
+  ],
+  "ended": 1792310175.421243
+}

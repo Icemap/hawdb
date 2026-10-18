@@ -1,0 +1,27 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //bindings/python:hawdb_python_tests
+-----------------------------------------------------------------------------
+============================= test session starts ==============================
+platform darwin -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/8c60c62a948e75e080abc731e21db5ea/sandbox/darwin-sandbox/834/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_tests.runfiles/_main
+collected 346 items / 2 skipped
+
+bindings/python/tests/test_arrow.py ...............                      [  4%]
+bindings/python/tests/test_executemany.py .............................. [ 13%]
+.......................................                                  [ 24%]
+bindings/python/tests/test_file.py .....                                 [ 25%]
+bindings/python/tests/test_lite.py .ss                                   [ 26%]
+bindings/python/tests/test_memory.py .....                               [ 28%]
+bindings/python/tests/test_notebook.py ................................. [ 37%]
+................................                                         [ 46%]
+bindings/python/tests/test_params.py ....................ss........      [ 55%]
+bindings/python/tests/test_pydantic_extra.py .s.                         [ 56%]
+bindings/python/tests/test_read_controls.py ............................ [ 64%]
+...........                                                              [ 67%]
+bindings/python/tests/test_retained.py ...........................       [ 75%]
+bindings/python/tests/test_smoke.py ..............                       [ 79%]
+bindings/python/tests/test_stubs.py .................................... [ 89%]
+.........                                                                [ 92%]
+bindings/python/tests/test_transactions.py ..........................    [100%]
+
+================== 341 passed, 7 skipped in 169.25s (0:02:49) ==================

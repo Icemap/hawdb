@@ -1,0 +1,7 @@
+{
+  "sha256": "26808b9f10311b321bccbcdda1298557c0e5f0ab2cc1f5f834f621a3dbfd545c",
+  "copied_from": "/private/tmp/hawdb-wip-ready-20261015/split-retained-arrow-main-ac8c0555/bindings/python/Cargo.lock",
+  "destination": "/private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/bindings/python/Cargo.lock",
+  "reason": "Python/workspace Cargo manifests and root lock are unchanged between parents; preserve prior qualified independent-workspace lock without a dependency update.",
+  "time": 1792308321.659777
+}

@@ -1,0 +1,34 @@
+INFO: Invocation ID: 0716482b-54e3-48e8-9526-f5b4a82554b3
+INFO: Reading 'startup' options from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc:
+  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc:
+  'test' options: --local_test_jobs=HOST_CPUS*0.5
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //bindings/python:hawdb_python_pydantic_tests (0 packages loaded, 0 targets configured)
+Analyzing: target //bindings/python:hawdb_python_pydantic_tests (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //bindings/python:hawdb_python_pydantic_tests (10 packages loaded, 185 targets configured).
+[845 / 846] Testing //bindings/python:hawdb_python_pydantic_tests; 1s disk-cache, darwin-sandbox
+[845 / 846] Testing //bindings/python:hawdb_python_pydantic_tests; 11s disk-cache, darwin-sandbox
+[845 / 846] Testing //bindings/python:hawdb_python_pydantic_tests; 26s disk-cache, darwin-sandbox
+INFO: Found 1 test target...
+Target //bindings/python:hawdb_python_pydantic_tests up-to-date:
+  bazel-bin/bindings/python/hawdb_python_pydantic_tests
+INFO: Elapsed time: 27.148s, Critical Path: 26.75s
+INFO: 13 processes: 12 internal, 2 darwin-sandbox.
+INFO: Build completed successfully, 13 total actions
+INFO: 
+//bindings/python:hawdb_python_pydantic_tests                            PASSED in 26.3s
+
+Executed 1 out of 1 test: 1 test passes.
+INFO: Build Event Protocol files produced successfully.

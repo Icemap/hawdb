@@ -1,0 +1,173 @@
+{
+  "status": "partial_local_staging_only",
+  "files": {
+    "source.json": {
+      "bytes": 17570,
+      "sha256": "387a94628a4985879480e6abb49f4ed9c7487084d9f4bf2333604ebb259b0596"
+    },
+    "Python.Cargo.lock": {
+      "bytes": 37955,
+      "sha256": "26808b9f10311b321bccbcdda1298557c0e5f0ab2cc1f5f834f621a3dbfd545c"
+    },
+    "README.md": {
+      "bytes": 1856,
+      "sha256": "52b7b002c6707981bc0400ef4f4bf213419b42819c2123a35c5251d4d2b93149"
+    },
+    "float-identity-fixture.rs": {
+      "bytes": 5090,
+      "sha256": "b3ad502b65b789f62303411ad38a78d8e9f3c780994ac465506a9ebe723866df"
+    },
+    "receipts/arrow-review-main-da58476d-validation-state.json": {
+      "bytes": 22626,
+      "sha256": "719cc9992ad168e56387fa7bda729a8333f11d97375bb8a357903751dbbbfdca"
+    },
+    "receipts/arrow-review-main-da58476d-general-failure-audit.json": {
+      "bytes": 2037,
+      "sha256": "f8104732d8cc9c434e125451b6d1cfc9a31e3ea884a93031b60d0fdb4067c788"
+    },
+    "receipts/idle-checkpoint-main-control-v1-state.json": {
+      "bytes": 2937,
+      "sha256": "c2ade26d7fad6a3117ebc31e936b05131e8b05cc5c6a939d8098d26c932744aa"
+    },
+    "receipts/inactive-cargo-incremental-cleanup-20261018-v2.json": {
+      "bytes": 791,
+      "sha256": "b0a601741ae1dda3dc8cae37238f1c93e83f45bcee7a717f9e1f73d6c7dac8c4"
+    },
+    "receipts/main-da58476d-general-baseline-state.json": {
+      "bytes": 877,
+      "sha256": "456ca211e2bd20757408be66ddd5d276e708b3c184e290010cad6f2140351727"
+    },
+    "receipts/current-completed-checks.json": {
+      "bytes": 17818,
+      "sha256": "186be539b310ed65913bd04e6340a9062cacfcf1f2623a0cb617c25acdeec617"
+    },
+    "receipts/arrow-review-main-da58476d-float-identity-audit.json": {
+      "bytes": 20548,
+      "sha256": "ffc953ad03f7c737f7867cfc57d99dccea648bbc9f56042930567bc1cac2f1ea"
+    },
+    "receipts/d725c2d8-enospc-recovery-receipt.json": {
+      "bytes": 988,
+      "sha256": "bf0d998bd55bbcd08845da68f161ee4cbcf3b54afaa97fac4a0db4f5b0a9db78"
+    },
+    "receipts/arrow-review-main-da58476d-preparation-state.json": {
+      "bytes": 17698,
+      "sha256": "ad7cfefb5789e3054d44e591d92bff031d88350292481b05c7d57588f679e93f"
+    },
+    "receipts/arrow-main-da58476d-draft-publication-state.json": {
+      "bytes": 28100,
+      "sha256": "cbd4146676c3dcaf708d4b6deb27cf233cf610667c655f77477fe34745615479"
+    },
+    "receipts/arrow-review-main-da58476d-python-lock-control.json": {
+      "bytes": 528,
+      "sha256": "dcd6293d990506516c5ee01b80e6f054c9309b0c147735d415efc64e13a8727b"
+    },
+    "logs/idle-checkpoint-main-control-v1-integrated.log": {
+      "bytes": 2470,
+      "sha256": "f6a18992c5ddc19e98364712592c7da48074fc8ba0901927ec2d6f97b782e3ff"
+    },
+    "logs/arrow-review-main-da58476d-retained.log": {
+      "bytes": 5773,
+      "sha256": "cbdac98213e8e88b7fd05f9bcedd45de47dce9259b4820eceb67811b5da544fb"
+    },
+    "logs/arrow-review-main-da58476d-prek.log": {
+      "bytes": 160,
+      "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-python-bindings_python_hawdb_python_tests-test.log": {
+      "bytes": 2026,
+      "sha256": "8b80b734b55bbc07518cc62d1a4d7a66d95f56090f261639715a09950c014aa3"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-go.log": {
+      "bytes": 2427,
+      "sha256": "95aaeaebae8a76e80d6d3978522e6c53bb54c61c3c75cac50c7c1517c175685b"
+    },
+    "logs/idle-checkpoint-main-control-v1-main.log": {
+      "bytes": 5170,
+      "sha256": "c1b25d578cb4d3890ec77eed5982d761b4948b6c3328dc920a57d57c0f8df71e"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-go-bindings_go_hawdb_go_tests-test.log": {
+      "bytes": 177,
+      "sha256": "0e9861c5329a43eb57cac94191a97556fd7cc21d4c146160c2f1a7333522c268"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-ffi-bindings_ffi_hawdb_ffi_tests-test.log": {
+      "bytes": 1606,
+      "sha256": "0b7adfd464adfa8b877638d798b52abee61671196da06ff43ae9bc6fa8251d1f"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-pydantic.log": {
+      "bytes": 2542,
+      "sha256": "499745d7d99525f45cfcc5da8a68d72eeb2d77aa29a19b0bb52e16b375455296"
+    },
+    "logs/arrow-review-main-da58476d-general.log": {
+      "bytes": 3400,
+      "sha256": "76b910e0de88f8aef3a06566cfe82dd3f0ccbae891f6070924e50b425c4ea1b7"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-python.log": {
+      "bytes": 6416,
+      "sha256": "ab7f27475e6ac76bbcf76b89c549155e38b38d7fbb7cf622b2e266ccdc81506d"
+    },
+    "logs/arrow-review-main-da58476d-wasm.log": {
+      "bytes": 5022,
+      "sha256": "2970bfbddee865824573e5de19252088abd98dccb0ee2bd0ea86836a87893292"
+    },
+    "logs/arrow-review-main-da58476d-install.log": {
+      "bytes": 89,
+      "sha256": "6dd3a3ee6c0892e5369e843cabf8ddc982f55665d60d1d1359fc0d198ee6f427"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-public-consumer.log": {
+      "bytes": 98,
+      "sha256": "e7b6c317f8c6c6476f4aef4a87dcff0a7034f6005426590510b48d574c904f1c"
+    },
+    "logs/arrow-review-main-da58476d-python-native.log": {
+      "bytes": 8737,
+      "sha256": "fa938dfa4f5fbd63c027f8fbfc0552e721049c5bb4b7ba7a4a00a5d5e45ef32c"
+    },
+    "logs/arrow-review-main-da58476d-fmt.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/main-da58476d-general-baseline-test.log": {
+      "bytes": 196375,
+      "sha256": "29e94c600c907c8295891ea756fef628fecd676b461c64f9107b465630116cda"
+    },
+    "logs/arrow-review-main-da58476d-general-_hawdb_unit_general_tests-test.log": {
+      "bytes": 190163,
+      "sha256": "2f85ddb98ef2699a63f03dbf3a01528f9c301a557e99e2c67632aaf66fc7815e"
+    },
+    "logs/idle-checkpoint-main-control-v1-integrated-test.log": {
+      "bytes": 417,
+      "sha256": "6dbbdb08901536723e967bb6aab98cc3611bdb5b32564eed2b7e3836c51eee12"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-fuzz-_hawdb_graph_projection_residency_fuzz_first_half_tests-test.log": {
+      "bytes": 665,
+      "sha256": "4fc41edaa182405eb6bbdae415abbc70791d7c6e79ab3fe1c9dad16396ae1e70"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-pydantic-bindings_python_hawdb_python_pydantic_tests-test.log": {
+      "bytes": 10498,
+      "sha256": "9b7693298033f723e9e42b122d97f4f16199237f9ea27f274085b58dfecfe329"
+    },
+    "logs/arrow-review-main-da58476d-retained-_hawdb_unit_general_tests-test.log": {
+      "bytes": 9222,
+      "sha256": "d2b1d01a32554a2ff5fad88009cc3890f766a983e359d4bc6bc13e0ee9ae5d11"
+    },
+    "logs/arrow-review-main-da58476d-native.log": {
+      "bytes": 60,
+      "sha256": "38d8c89dc8e6fd7af179f88043deeb912f12c2d85dd4979a02bd7c39f45445c4"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-fuzz-_hawdb_graph_projection_residency_fuzz_second_half_tests-test.log": {
+      "bytes": 669,
+      "sha256": "985c7da35514608f071e173a730b447d55688a9dbd0eecfc15733b19d4c8577e"
+    },
+    "logs/arrow-d725c2d8-remaining-fuzz.log": {
+      "bytes": 10717,
+      "sha256": "65f67da3feaf8a18d36fe0e01f868248304d6eddde4d6ae3ec9e44b43fa3a30c"
+    },
+    "logs/idle-checkpoint-main-control-v1-main-test.log": {
+      "bytes": 417,
+      "sha256": "d692fd9f8e5a600b0a5a61edfb6c0347ebc67d5a79041804c59eca40e8582113"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-ffi.log": {
+      "bytes": 2461,
+      "sha256": "11a6a8205c9169639cd33d54f8a793d83d25962f9ca6ff42d736450b166aee93"
+    }
+  }
+}

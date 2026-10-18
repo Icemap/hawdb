@@ -1,0 +1,132 @@
+INFO: Invocation ID: 510c732b-3598-4810-8292-f600325d55e4
+INFO: Reading 'startup' options from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc:
+  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc:
+  'test' options: --local_test_jobs=HOST_CPUS*0.5
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 98 targets (1 packages loaded, 0 targets configured)
+Analyzing: 98 targets (1 packages loaded, 0 targets configured)
+
+INFO: Analyzed 98 targets (2 packages loaded, 207 targets configured).
+[665 / 705] Compiling Rust bin hawdb_optimizer_candidate_fingerprint_fuzz_tests (46 files); 1s disk-cache, darwin-sandbox ... (16 actions running)
+ERROR: /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/crates/optimizer-graph/BUILD.bazel:89:10: Compiling Rust bin hawdb_optimizer_candidate_fingerprint_fuzz_tests (46 files) failed: (Exit 101): process_wrapper failed: error executing Rustc command (from rust_test rule target //crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests) bazel-out/darwin_arm64-opt-exec/bin/external/rules_rust+/util/process_wrapper/process_wrapper --arg-file ... (remaining 16 arguments skipped)
+
+Use --sandbox_debug to see verbose messages from the sandbox and retain the sandbox build root for debugging
+rustc-LLVM ERROR: IO failure on output stream: No space left on device
+[681 / 705] 1 / 98 tests, 1 failed; checking cached actions
+Use --verbose_failures to see the command lines of failed build steps.
+INFO: Elapsed time: 5.700s, Critical Path: 5.13s
+INFO: 68 processes: 68 internal.
+ERROR: Build did NOT complete successfully
+FAILED: 
+//:hawdb_concurrent_key_range_fuzz_tests                              NO STATUS
+//:hawdb_graph_projection_residency_fuzz_first_half_tests             NO STATUS
+//:hawdb_graph_projection_residency_fuzz_second_half_tests            NO STATUS
+//:hawdb_linux_ci_fuzz_smoke_test                                     NO STATUS
+//:hawdb_scan_callback_fuzz_tests                                     NO STATUS
+//crates/compat:hawdb_compat_contract_fuzz_tests                      NO STATUS
+//crates/cypher:hawdb_cypher_backtracking_fuzz_tests                  NO STATUS
+//crates/evidence:hawdb_inventory_health_fuzz_tests                   NO STATUS
+//crates/evidence:hawdb_resource_profile_fuzz_tests                   NO STATUS
+//crates/evidence:hawdb_source_inventory_fuzz_tests                   NO STATUS
+//crates/executor:hawdb_batch_dispatch_fuzz_tests                     NO STATUS
+//crates/executor:hawdb_execution_lifecycle_fuzz_tests                NO STATUS
+//crates/executor:hawdb_execution_report_value_fuzz_tests             NO STATUS
+//crates/executor:hawdb_graph_algorithm_fuzz_tests                    NO STATUS
+//crates/executor:hawdb_graph_hash_join_fuzz_tests                    NO STATUS
+//crates/executor:hawdb_morsel_oracle_fuzz_tests                      NO STATUS
+//crates/executor:hawdb_mutation_lowering_fuzz_tests                  NO STATUS
+//crates/executor:hawdb_mutation_preflight_fuzz_tests                 NO STATUS
+//crates/executor:hawdb_numeric_execution_fuzz_tests                  NO STATUS
+//crates/executor:hawdb_query_observer_fuzz_tests                     NO STATUS
+//crates/executor:hawdb_result_delivery_fuzz_tests                    NO STATUS
+//crates/executor:hawdb_sort_merge_account_fuzz_tests                 NO STATUS
+//crates/executor:hawdb_spill_compaction_fuzz_tests                   NO STATUS
+//crates/executor:hawdb_transform_fuzz_tests                          NO STATUS
+//crates/executor:hawdb_vector_seed_fuzz_tests                        NO STATUS
+//crates/fuzz:hawdb_append_fuzz_cli_tests                             NO STATUS
+//crates/fuzz:hawdb_fuzz_append_replay_tests                          NO STATUS
+//crates/fuzz:hawdb_fuzz_append_seed_7_tests                          NO STATUS
+//crates/fuzz:hawdb_fuzz_cli_tests                                    NO STATUS
+//crates/fuzz:hawdb_fuzz_fast_tests                                   NO STATUS
+//crates/fuzz:hawdb_fuzz_relational_join_rewrite_tests                NO STATUS
+//crates/fuzz:hawdb_parser_fuzz_cli_tests                             NO STATUS
+//crates/fuzz:hawdb_storage_fuzz_tests                                NO STATUS
+//crates/optimizer-graph:hawdb_optimizer_cardinality_defaults_fuzz_tests NO STATUS
+//crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests NO STATUS
+//crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests       NO STATUS
+//crates/optimizer-graph:hawdb_optimizer_full_text_cost_fuzz_tests    NO STATUS
+//crates/optimizer-graph:hawdb_optimizer_trace_cost_fuzz_tests        NO STATUS
+//crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests  NO STATUS
+//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests             NO STATUS
+//crates/readiness:hawdb_graph_route_readiness_fuzz_tests             NO STATUS
+//crates/readiness:hawdb_integration_bundle_fuzz_tests                NO STATUS
+//crates/readiness:hawdb_replacement_summary_fuzz_tests               NO STATUS
+//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests         NO STATUS
+//crates/relational:hawdb_relational_aggregate_state_fuzz_tests       NO STATUS
+//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests    NO STATUS
+//crates/relational:hawdb_relational_explain_report_fuzz_tests        NO STATUS
+//crates/relational:hawdb_relational_field_plan_fuzz_tests            NO STATUS
+//crates/relational:hawdb_relational_index_runtime_fuzz_tests         NO STATUS
+//crates/relational:hawdb_relational_physical_plan_fuzz_tests         NO STATUS
+//crates/relational:hawdb_relational_qualification_fuzz_tests         NO STATUS
+//crates/relational:hawdb_relational_row_runtime_fuzz_tests           NO STATUS
+//crates/relational:hawdb_relational_statement_fuzz_tests             NO STATUS
+//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests       NO STATUS
+//crates/search:hawdb_search_block_encoding_fuzz_tests                NO STATUS
+//crates/search:hawdb_search_bounded_file_fuzz_tests                  NO STATUS
+//crates/search:hawdb_search_candidate_evidence_fuzz_tests            NO STATUS
+//crates/search:hawdb_search_compression_fuzz_tests                   NO STATUS
+//crates/search:hawdb_search_concurrent_read_fuzz_tests               NO STATUS
+//crates/search:hawdb_search_document_analysis_fuzz_tests             NO STATUS
+//crates/search:hawdb_search_document_frequency_fuzz_tests            NO STATUS
+//crates/search:hawdb_search_hex_decoding_fuzz_tests                  NO STATUS
+//crates/search:hawdb_search_hydration_fuzz_tests                     NO STATUS
+//crates/search:hawdb_search_lexical_spill_fuzz_tests                 NO STATUS
+//crates/search:hawdb_search_manifest_budget_fuzz_tests               NO STATUS
+//crates/search:hawdb_search_manifest_encoding_fuzz_tests             NO STATUS
+//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests           NO STATUS
+//crates/search:hawdb_search_projection_evidence_fuzz_tests           NO STATUS
+//crates/search:hawdb_search_spool_decoding_fuzz_tests                NO STATUS
+//crates/search:hawdb_search_spool_encoding_fuzz_tests                NO STATUS
+//crates/search:hawdb_search_term_policy_fuzz_tests                   NO STATUS
+//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests                  NO STATUS
+//crates/sql:hawdb_sql_create_binding_fuzz_tests                      NO STATUS
+//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests                     NO STATUS
+//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests               NO STATUS
+//crates/storage:hawdb_storage_append_reader_fuzz_tests               NO STATUS
+//crates/storage:hawdb_storage_artifact_binding_fuzz_tests            NO STATUS
+//crates/storage:hawdb_storage_backup_hex_fuzz_tests                  NO STATUS
+//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests     NO STATUS
+//crates/storage:hawdb_storage_durable_envelope_fuzz_tests            NO STATUS
+//crates/storage:hawdb_storage_durable_manifest_fuzz_tests            NO STATUS
+//crates/storage:hawdb_storage_file_lock_fuzz_tests                   NO STATUS
+//crates/storage:hawdb_storage_graph_constraints_fuzz_tests           NO STATUS
+//crates/storage:hawdb_storage_graph_overlay_fuzz_tests               NO STATUS
+//crates/storage:hawdb_storage_positioned_read_fuzz_tests             NO STATUS
+//crates/storage:hawdb_storage_projected_artifact_fuzz_tests          NO STATUS
+//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests     NO STATUS
+//crates/storage:hawdb_storage_relational_index_view_fuzz_tests       NO STATUS
+//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests    NO STATUS
+//crates/storage:hawdb_storage_set_value_fuzz_tests                   NO STATUS
+//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests             NO STATUS
+//crates/storage:hawdb_storage_sharded_cache_fuzz_tests               NO STATUS
+//crates/storage:hawdb_storage_source_scan_fuzz_tests                 NO STATUS
+//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests          NO STATUS
+//crates/storage:hawdb_storage_text_fuzz_tests                        NO STATUS
+//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests      NO STATUS
+//crates/storage:hawdb_storage_transaction_locks_fuzz_tests           NO STATUS
+//crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests FAILED TO BUILD
+
+Executed 0 out of 98 tests: 1 fails to build and 97 were skipped.
+INFO: Build Event Protocol files produced successfully.

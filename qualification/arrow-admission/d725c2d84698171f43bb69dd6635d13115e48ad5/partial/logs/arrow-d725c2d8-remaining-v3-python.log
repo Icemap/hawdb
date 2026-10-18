@@ -1,0 +1,146 @@
+INFO: Invocation ID: 3280b07a-050f-4c8f-a56c-58401dbc9bd7
+INFO: Reading 'startup' options from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc:
+  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc:
+  'test' options: --local_test_jobs=HOST_CPUS*0.5
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Loading: 0 packages loaded
+    currently loading: bindings/python
+Analyzing: target //bindings/python:hawdb_python_tests (1 packages loaded, 0 targets configured)
+Analyzing: target //bindings/python:hawdb_python_tests (1 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //bindings/python:hawdb_python_tests (35 packages loaded, 4127 targets configured).
+[842 / 845] Compiling Rust cdylib _hawdb v0.9.0 (6 files); 1s disk-cache, darwin-sandbox
+[845 / 846] Testing //bindings/python:hawdb_python_tests; 0s disk-cache, darwin-sandbox
+[845 / 846] Testing //bindings/python:hawdb_python_tests; 11s disk-cache, darwin-sandbox
+[845 / 846] Testing //bindings/python:hawdb_python_tests; 41s disk-cache, darwin-sandbox
+[845 / 846] Testing //bindings/python:hawdb_python_tests; 102s disk-cache, darwin-sandbox
+[845 / 846] Testing //bindings/python:hawdb_python_tests; 162s disk-cache, darwin-sandbox
+[845 / 846] Testing //bindings/python:hawdb_python_tests; 171s disk-cache, darwin-sandbox
+INFO: Found 1 test target...
+Target //bindings/python:hawdb_python_tests up-to-date:
+  bazel-bin/bindings/python/hawdb_python_tests
+INFO: Elapsed time: 250.015s, Critical Path: 173.07s
+INFO: 89 processes: 41 disk cache hit, 45 internal, 4 darwin-sandbox.
+INFO: Build completed successfully, 89 total actions
+INFO: 
+//bindings/python:hawdb_python_tests                                     PASSED in 171.0s
+
+Executed 1 out of 1 test: 1 test passes.
+INFO: Build Event Protocol files produced successfully.
