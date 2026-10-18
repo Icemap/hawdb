@@ -655,3 +655,12 @@ new finite-model completion claim. The [cleanup/publication proof](../tla/SEARCH
 addresses a prerequisite race only. Native closed C-ready/E custody, incremental
 artifacts, consumer recovery/receipts, actual Mem adoption and all original gates
 remain required.
+
+
+The [stationary Consumer protocol](CONSUMER_STATIONARY_PUBLICATION_SPEC.md)
+now specifies the separate allocation ledger/bootstrap, actual birth custody,
+pre-selection old/new intent roots, bounded selector/receipt and recovery
+ordering. Its [two-installation safety model](../tla/CONSUMER_INCARNATION_CUSTODY_PROOF.md)
+checks seven adverse orderings. This is design evidence only: the existing
+replaceable registry and directory relocation remain the current runtime;
+source-root access, ledger and stationary serving adoption are still required.

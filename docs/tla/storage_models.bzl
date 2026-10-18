@@ -36,6 +36,7 @@ STORAGE_MODELS = [
     "HawDBConsumerInstalledActivation",
     "HawDBConsumerMutationCustody",
     "HawDBConsumerReceiptLedger",
+    "HawDBConsumerIncarnationCustody",
     "HawDBContentSourceOwnershipMove",
     "HawDBContentSourceReplacement",
     "HawDBContentSpaceMergeOwnership",

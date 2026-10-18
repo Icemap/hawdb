@@ -898,3 +898,28 @@ tla_check(
     )
     for control in ["PathForCreate", "PathForData", "PathForRetry", "KeepExecutionInDebt", "ForgetUncertain", "RefundBeforeClose"]
 ]
+
+
+# Durable incarnation/debt protocol; conditional design, not runtime adoption.
+[
+    genrule(
+        name = "HawDBConsumerIncarnationCustody" + control + "_config",
+        srcs = ["HawDBConsumerIncarnationCustody.cfg"],
+        outs = ["generated/HawDBConsumerIncarnationCustody" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBConsumerIncarnationCustody.cfg) > $@",
+        tags = ["manual"],
+    )
+    for control in ["CreateBeforeReservationBarrier", "ReuseCancelledIncarnation", "AdoptUnknownBirth", "ResetMissingLedger", "ForgetDebtOnClose", "RetireBeforeSelectorBarrier", "SelectIncompleteClosure"]
+]
+[
+    tla_check(
+        name = "HawDBConsumerIncarnationCustody" + control + "_check",
+        module = "HawDBConsumerIncarnationCustody.tla",
+        config = ":HawDBConsumerIncarnationCustody" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["CreateBeforeReservationBarrier", "ReuseCancelledIncarnation", "AdoptUnknownBirth", "ResetMissingLedger", "ForgetDebtOnClose", "RetireBeforeSelectorBarrier", "SelectIncompleteClosure"]
+]
