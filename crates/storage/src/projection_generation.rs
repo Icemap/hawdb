@@ -469,16 +469,29 @@ fn shared_catalog(
     Ok(shared)
 }
 
+#[cfg(test)]
+thread_local! {
+    static AFTER_INITIAL_ROOT_CAPTURE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 impl ProjectionGenerationStore {
     pub fn open(root: impl AsRef<Path>) -> Result<Self, ProjectionGenerationError> {
         let root = root.as_ref().to_path_buf();
-        fs::create_dir_all(root.join("generations"))?;
-        fs::create_dir_all(root.join("heads"))?;
+        fs::create_dir_all(&root)?;
         // Existence can be left over from an interrupted creation. Persist
         // every containing name through the admitted project boundary.
         sync_directory_ancestors(&root)?;
         let root = fs::canonicalize(root)?;
-        let captured = CapturedCatalog::capture(&root)?;
+        let chosen = crate::file_io::SourceDirectory::capture_for_path(&root)?;
+        #[cfg(test)]
+        AFTER_INITIAL_ROOT_CAPTURE.with(|hook| {
+            let callback = hook.borrow_mut().take();
+            if let Some(callback) = callback {
+                callback();
+            }
+        });
+        let captured = CapturedCatalog::initialize(chosen)?;
         Self::from_capture(root, captured, false)
     }
 

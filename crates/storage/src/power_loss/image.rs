@@ -231,6 +231,19 @@ impl ImageEngine {
 
     pub fn create_directory(&mut self, path: &Path) -> io::Result<InodeId> {
         let (parent, name) = self.parent(path)?;
+        self.create_directory_in_directory(parent, name)
+    }
+
+    /// Create one directory in a captured parent without resolving its label.
+    pub fn create_directory_at(&mut self, parent: InodeId, name: &Path) -> io::Result<InodeId> {
+        self.create_directory_in_directory(parent, child_name(name)?.to_os_string())
+    }
+
+    fn create_directory_in_directory(
+        &mut self,
+        parent: InodeId,
+        name: OsString,
+    ) -> io::Result<InodeId> {
         self.require_absent(parent, &name)?;
         self.admit_new_inode()?;
         self.admit_operation(0)?;
@@ -986,6 +999,12 @@ mod tests {
             .create_file_at(fixture.captured, Path::new("new"))
             .is_err());
         assert!(engine
+            .create_directory_at(fixture.captured, Path::new("new-directory"))
+            .is_err());
+        assert!(engine
+            .child_inode(fixture.captured, Path::new("new-directory"))
+            .is_err());
+        assert!(engine
             .remove_file_at(fixture.captured, Path::new("payload"))
             .is_err());
         assert!(engine
@@ -1002,6 +1021,12 @@ mod tests {
         engine.limits.max_inodes = engine.inodes.len();
         assert!(engine
             .create_file_at(fixture.captured, Path::new("new"))
+            .is_err());
+        assert!(engine
+            .create_directory_at(fixture.captured, Path::new("new-directory"))
+            .is_err());
+        assert!(engine
+            .child_inode(fixture.captured, Path::new("new-directory"))
             .is_err());
         let image = engine.crash(&CrashPlan::default()).unwrap();
         assert_eq!(

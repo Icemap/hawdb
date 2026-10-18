@@ -787,3 +787,128 @@ fn child_directory_open_refuses_files_foreign_contexts_and_unadmitted_descriptor
     drop(parent);
     assert_eq!(fixture.project.metrics().open, 0);
 }
+
+#[test]
+fn relative_directory_creation_keeps_captured_parent_after_label_reuse() {
+    let fixture = Fixture::new(8);
+    let named = fixture.root.join("named");
+    let moved = fixture.root.join("moved");
+    fs::create_dir(&named).unwrap();
+    let source = fixture.capture(&named);
+    // No descendant is open: this constructor boundary is legal on Windows.
+    fs::rename(&named, &moved).unwrap();
+    fs::create_dir(&named).unwrap();
+    fs::write(named.join("foreign"), b"unchanged").unwrap();
+    let context = fixture.project.io_context();
+    source.create_directory_new(&context, "component").unwrap();
+    assert!(moved.join("component").is_dir());
+    assert!(!named.join("component").exists());
+    assert_eq!(fixture.project.metrics().open, 1);
+    let child = source.open_directory(&context, "component").unwrap();
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop(source);
+    let file = child
+        .open_lock_file(
+            &context,
+            ".owned.lock",
+            SourceDirectoryLockMode::ReadWriteCreate,
+        )
+        .unwrap();
+    drop(file);
+    assert!(moved.join("component/.owned.lock").is_file());
+    assert!(!named.join("component").exists());
+    assert_eq!(fs::read(named.join("foreign")).unwrap(), b"unchanged");
+    drop(child);
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
+fn exclusive_directory_creation_never_adopts_or_replaces_existing_entries() {
+    let fixture = Fixture::new(4);
+    fs::create_dir(fixture.root.join("directory")).unwrap();
+    fs::write(fixture.root.join("directory/data"), b"retained").unwrap();
+    fs::write(fixture.root.join("file"), b"retained file").unwrap();
+    let source = fixture.capture(&fixture.root);
+    let context = fixture.project.io_context();
+    for name in ["directory", "file"] {
+        assert_eq!(
+            source
+                .create_directory_new(&context, name)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+    }
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink("directory", fixture.root.join("link")).unwrap();
+        assert_eq!(
+            source
+                .create_directory_new(&context, "link")
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert!(fs::symlink_metadata(fixture.root.join("link"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+    assert_eq!(
+        fs::read(fixture.root.join("directory/data")).unwrap(),
+        b"retained"
+    );
+    assert_eq!(
+        fs::read(fixture.root.join("file")).unwrap(),
+        b"retained file"
+    );
+    assert_eq!(fixture.project.metrics().open, 1);
+}
+
+#[test]
+fn directory_creation_and_later_open_have_separate_admission_and_outcomes() {
+    let fixture = Fixture::new(2);
+    let source = fixture.capture(&fixture.root);
+    let context = fixture.project.io_context();
+    let reservation = fixture.project.reserve(1).unwrap();
+    let error = source
+        .create_directory_new(&context, "component")
+        .unwrap_err();
+    assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+    assert!(!fixture.root.join("component").exists());
+    drop(reservation);
+    source.create_directory_new(&context, "component").unwrap();
+    assert_eq!(fixture.project.metrics().open, 1);
+    let reservation = fixture.project.reserve(1).unwrap();
+    let error = source.open_directory(&context, "component").unwrap_err();
+    assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+    // A failed subsequent open is not a failed creation or rollback.
+    assert!(fixture.root.join("component").is_dir());
+    drop(reservation);
+    drop(source.open_directory(&context, "component").unwrap());
+    assert_eq!(fixture.project.metrics().open, 1);
+    assert_eq!(fixture.project.metrics().reserved, 0);
+}
+
+#[test]
+fn invalid_directory_names_and_foreign_domain_refuse_before_creation() {
+    let fixture = Fixture::new(4);
+    let foreign = Fixture::new(4);
+    let source = fixture.capture(&fixture.root);
+    for name in ["", ".", "..", "a/b", "a\\b"] {
+        assert_eq!(
+            source
+                .create_directory_new(&fixture.project.io_context(), name)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+    }
+    assert!(source
+        .create_directory_new(&foreign.project.io_context(), "component")
+        .is_err());
+    assert_eq!(fs::read_dir(&fixture.root).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(&foreign.root).unwrap().count(), 0);
+    assert_eq!(fixture.project.metrics().open, 1);
+    assert_eq!(foreign.project.metrics().open, 0);
+}

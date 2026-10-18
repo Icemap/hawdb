@@ -89,6 +89,19 @@ const SYNCHRONOUS_NONALERT: u32 = 0x20;
 const OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 const ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 
+pub(super) fn create_directory(root: &std::fs::File, name: ChildName<'_>) -> io::Result<()> {
+    let mut encoded = [0_u16; 256];
+    for (slot, byte) in encoded.iter_mut().zip(name.0.bytes()) {
+        *slot = u16::from(byte);
+    }
+    // FILE_CREATE (2) + FILE_DIRECTORY_FILE (1): never adopt an existing entry.
+    // FILE_LIST_DIRECTORY shares bit 1 with FILE_READ_DATA for regular files.
+    // No fallible metadata query may hide a completed create from the recorder.
+    let file = relative_open_encoded_raw(root, &mut encoded[..name.0.len()], 1, 2, 1)?;
+    drop(file);
+    Ok(())
+}
+
 pub(super) fn create_control_candidate(
     root: &std::fs::File,
     name: ChildName<'_>,
@@ -237,6 +250,32 @@ fn relative_open_encoded(
     disposition: u32,
     kind: u32,
 ) -> io::Result<std::fs::File> {
+    let file = relative_open_encoded_raw(root, encoded, access, disposition, kind)?;
+    let metadata = file.metadata()?;
+    if metadata.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0
+        || if kind == NON_DIRECTORY {
+            !metadata.is_file()
+        } else if kind == 1 {
+            !metadata.is_dir()
+        } else {
+            !metadata.is_file() && !metadata.is_dir()
+        }
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "source child is not a regular non-reparse file",
+        ));
+    }
+    Ok(file)
+}
+
+fn relative_open_encoded_raw(
+    root: &std::fs::File,
+    encoded: &mut [u16],
+    access: u32,
+    disposition: u32,
+    kind: u32,
+) -> io::Result<std::fs::File> {
     let length = u16::try_from(encoded.len() * 2).expect("bounded name fits native scratch");
     let mut unicode = UnicodeString {
         length,
@@ -291,23 +330,7 @@ fn relative_open_encoded(
     }
     // SAFETY: successful NtCreateFile transferred one fresh handle; this File
     // exclusively closes it, including validation and error paths below.
-    let file = unsafe { std::fs::File::from_raw_handle(handle) };
-    let metadata = file.metadata()?;
-    if metadata.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0
-        || if kind == NON_DIRECTORY {
-            !metadata.is_file()
-        } else if kind == 1 {
-            !metadata.is_dir()
-        } else {
-            !metadata.is_file() && !metadata.is_dir()
-        }
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "source child is not a regular non-reparse file",
-        ));
-    }
-    Ok(file)
+    Ok(unsafe { std::fs::File::from_raw_handle(handle) })
 }
 
 pub(super) fn open_child(root: &std::fs::File, name: ChildName<'_>) -> io::Result<std::fs::File> {

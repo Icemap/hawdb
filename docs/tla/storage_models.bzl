@@ -13,6 +13,7 @@ STORAGE_MODELS = [
     "HawDBBoundedMorselMerge",
     "HawDBBranchLifecycle",
     "HawDBCapturedControlPublication",
+    "HawDBCapturedDirectoryInitialization",
     "HawDBCapturedProjectionCatalog",
     "HawDBPreparedCatalogPublication",
     "HawDBCheckpointCleanupHeadroom",

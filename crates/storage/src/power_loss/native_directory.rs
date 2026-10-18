@@ -18,6 +18,19 @@ pub(crate) struct NativeDirectoryTrace {
 }
 
 impl NativeDirectoryTrace {
+    pub(crate) fn create_directory(
+        &self,
+        name: &Path,
+        native: impl FnOnce() -> io::Result<()>,
+    ) -> io::Result<()> {
+        let label = self.opened_path.join(name);
+        self.core.mutate_observed(
+            Some((IoEvent::CreateDirectory, &label)),
+            |engine| engine.create_directory_at(self.inode, name).map(|_| ()),
+            native,
+        )
+    }
+
     pub(crate) fn create_file(
         &self,
         name: &Path,

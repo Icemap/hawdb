@@ -18,6 +18,18 @@ fn name_bytes(name: ChildName<'_>) -> [u8; 256] {
     bytes
 }
 
+pub(super) fn create_directory(root: &std::fs::File, name: ChildName<'_>) -> io::Result<()> {
+    let name = name_bytes(name);
+    // SAFETY: the live parent FD and terminated validated single component
+    // outlive mkdirat. Creation is exclusive; an existing symlink is not followed.
+    let result = unsafe { libc::mkdirat(root.as_raw_fd(), name.as_ptr().cast(), 0o700) };
+    if result == -1 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
 pub(super) fn create_control_candidate(
     root: &std::fs::File,
     name: ChildName<'_>,

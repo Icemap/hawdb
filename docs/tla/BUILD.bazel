@@ -683,3 +683,27 @@ tla_check(
     )
     for control in ["EarlyRelease", "ResolveLive", "AckEarly", "IgnoreGcRoots", "RetryAttempt"]
 ]
+
+# Independent native-initialization counterexamples; ordinary positive model
+# registration remains in storage_models.bzl.
+[
+    genrule(
+        name = "HawDBCapturedDirectoryInitialization" + control + "_config",
+        srcs = ["HawDBCapturedDirectoryInitialization.cfg"],
+        outs = ["generated/HawDBCapturedDirectoryInitialization" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBCapturedDirectoryInitialization.cfg) > $@",
+    )
+    for control in ["PathForCreate", "SkipParentBarrier", "IgnoreAdmission"]
+]
+[
+    tla_check(
+        name = "HawDBCapturedDirectoryInitialization" + control + "_check",
+        module = "HawDBCapturedDirectoryInitialization.tla",
+        config = ":HawDBCapturedDirectoryInitialization" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["PathForCreate", "SkipParentBarrier", "IgnoreAdmission"]
+]

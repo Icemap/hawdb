@@ -25,6 +25,21 @@ impl CapturedCatalog {
         Self::from_root(root)
     }
 
+    pub(super) fn initialize(root: SourceDirectory) -> io::Result<Self> {
+        let context = root.operation_context();
+        for name in ["generations", "heads"] {
+            match root.create_directory_new(&context, name) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error),
+            }
+        }
+        // Also cover interrupted earlier creation. from_root validates both
+        // existing entries as non-reparse directories before they can be used.
+        root.sync(&context)?;
+        Self::from_root(root)
+    }
+
     pub(super) fn from_root(root: SourceDirectory) -> io::Result<Self> {
         let context = root.operation_context();
         let generations = root.open_directory(&context, "generations")?;

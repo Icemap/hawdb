@@ -22,6 +22,9 @@ mod platform;
 #[cfg(not(any(unix, windows)))]
 mod platform {
     use super::*;
+    pub(super) fn create_directory(_root: &std::fs::File, _name: ChildName<'_>) -> io::Result<()> {
+        Err(unsupported())
+    }
     pub(super) fn create_control_candidate(
         _root: &std::fs::File,
         _name: ChildName<'_>,
@@ -357,6 +360,33 @@ impl SourceDirectory {
         {
             Ok(counted(inner, permit))
         }
+    }
+
+    /// Exclusively create one child directory in this captured parent.
+    /// Existing entries are never adopted, followed, replaced or removed.
+    /// Admission precedes native creation; no descriptor remains open afterwards.
+    ///
+    /// This does not open the child or synchronize its parent entry. A later
+    /// open, barrier or lost response can fail after creation; callers retain
+    /// the actual parent and candidate name as cleanup/recovery evidence.
+    pub fn create_directory_new(&self, context: &FileOpenContext, name: &str) -> io::Result<()> {
+        self.require_context(context)?;
+        let name = ChildName::new(name)?;
+        let _native = native_scope(context)?;
+        self.require_scope(&_native)?;
+        let _permit = context.acquire(DescriptorKind::Transient)?;
+        let create = || {
+            self.root
+                .with_native(|root| platform::create_directory(root, name))
+        };
+        #[cfg(any(test, feature = "test-support"))]
+        let result = match self.trace.as_deref() {
+            Some(trace) => trace.create_directory(Path::new(name.0), create),
+            None => create(),
+        };
+        #[cfg(not(any(test, feature = "test-support")))]
+        let result = create();
+        result.map_err(|error| context.map_open_error(error))
     }
 
     /// Capture one child directory without resolving the parent pathname.

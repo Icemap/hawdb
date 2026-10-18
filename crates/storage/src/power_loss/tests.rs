@@ -731,3 +731,51 @@ fn retained_file_io_stays_in_captured_scope_after_root_path_replacement() {
     drop(file);
     assert_eq!(fixture.model.project().metrics().open, 1);
 }
+
+#[test]
+fn relative_directory_create_is_recorded_before_a_later_open_and_parent_barrier() {
+    use crate::file_io::SourceDirectory;
+    let fixture = Fixture::new(ImageLimits::default());
+    let project = fixture.model.project();
+    fs::create_dir(fixture.root.join("source")).unwrap();
+    crate::durability::sync_directory(&fixture.root).unwrap();
+    let source =
+        SourceDirectory::capture(&fixture.root.join("source"), &project.io_context()).unwrap();
+    fixture
+        .model
+        .observe(ObservationPoint {
+            event: IoEvent::CreateDirectory,
+            relative_path: PathBuf::from("source/component"),
+            boundary: ObservationBoundary::After,
+            skip_matches: 0,
+            include_descendants: false,
+            keep_last: false,
+        })
+        .unwrap();
+    source
+        .create_directory_new(&project.io_context(), "component")
+        .unwrap();
+    let cut = fixture.model.take_observation().unwrap().unwrap();
+    assert_eq!(cut.observed_path(), Some(Path::new("source/component")));
+    fixture.model.capture().unwrap();
+    let lost = cut.crash(&CrashPlan::default()).unwrap();
+    assert!(!lost
+        .directory_paths()
+        .any(|p| p == Path::new("source/component")));
+    // The new directory may survive before the parent barrier, too.
+    let retained = cut.crash(&cut.persist_all_plan()).unwrap();
+    assert!(retained
+        .directory_paths()
+        .any(|p| p == Path::new("source/component")));
+    source.sync(&project.io_context()).unwrap();
+    let durable = fixture
+        .model
+        .capture()
+        .unwrap()
+        .crash(&CrashPlan::default())
+        .unwrap();
+    assert!(durable
+        .directory_paths()
+        .any(|p| p == Path::new("source/component")));
+    assert_eq!(project.metrics().open, 2); // recorder anchor plus source directory
+}

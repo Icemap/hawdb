@@ -232,3 +232,71 @@ fn windows_refused_post_open_move_preserves_custody_data_and_publication() {
     drop((reader, next, store));
     assert_eq!(project.metrics().open, 0);
 }
+
+#[test]
+fn fresh_public_initializer_creates_children_only_in_its_captured_root() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    for recorded in [false, true] {
+        let fixture = Fixture::new();
+        let project = ProjectFileDescriptors::acquire(&fixture.0, 32).unwrap();
+        let model =
+            recorded.then(|| PowerLossModel::attach(&project, ImageLimits::default()).unwrap());
+        let named = fixture.0.join("named");
+        let moved = fixture.0.join("moved");
+        let foreign = Rc::new(RefCell::new(None));
+        let before = Rc::new(RefCell::new(None));
+        let (foreign_slot, before_slot) = (foreign.clone(), before.clone());
+        let (named_hook, moved_hook) = (named.clone(), moved.clone());
+        AFTER_INITIAL_ROOT_CAPTURE.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                fs::rename(&named_hook, &moved_hook).unwrap();
+                let store = ProjectionGenerationStore::open(&named_hook).unwrap();
+                let rows = members(&[("a", "foreign source")]);
+                let sealed = stage(&store, begin("foreign", None, 1), &rows);
+                store.publish(&sealed).unwrap();
+                *before_slot.borrow_mut() = Some(tree(&named_hook));
+                *foreign_slot.borrow_mut() = Some(store);
+            }));
+        });
+        let store = ProjectionGenerationStore::open(&named).unwrap();
+        let rows = members(&[("a", "original source")]);
+        let sealed = stage(&store, begin("original", None, 1), &rows);
+        store.publish(&sealed).unwrap();
+        let reader = store.open_active("session_spans", b"session-1").unwrap();
+        assert_eq!(
+            reader
+                .read_page(None, ProjectionGenerationReadLimits::default())
+                .unwrap()
+                .members,
+            rows
+        );
+        assert!(moved.join("heads").is_dir());
+        assert!(moved.join("generations").is_dir());
+        assert_eq!(tree(&named), *before.borrow().as_ref().unwrap());
+        if let Some(model) = model.as_ref() {
+            model.capture().unwrap();
+        }
+        drop((reader, sealed, store));
+        foreign.borrow_mut().take();
+        drop(model);
+        assert_eq!(project.metrics().open, 0);
+    }
+}
+
+#[test]
+fn fresh_catalog_open_synchronizes_child_directory_entries_before_returning() {
+    let fixture = Fixture::new();
+    let project = ProjectFileDescriptors::acquire(&fixture.0, 32).unwrap();
+    let model = PowerLossModel::attach(&project, ImageLimits::default()).unwrap();
+    let store = ProjectionGenerationStore::open(fixture.0.join("catalog")).unwrap();
+    let image = model.capture().unwrap().crash(&Default::default()).unwrap();
+    for name in ["catalog/generations", "catalog/heads"] {
+        assert!(
+            image.directory_paths().any(|p| p == Path::new(name)),
+            "{name}"
+        );
+    }
+    drop((store, model));
+    assert_eq!(project.metrics().open, 0);
+}
