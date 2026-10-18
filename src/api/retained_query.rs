@@ -291,11 +291,20 @@ struct CursorShared {
     status: AtomicU8,
     limit: usize,
     handle_limit: usize,
+    result_memory_budget: NonZeroUsize,
+    governor: RuntimeGovernor,
     account: QueryMemoryAccount,
     _memory: QueryMemoryLease,
     _runtime: RuntimeRetainedResult,
 }
 impl CursorShared {
+    fn effective_runtime_capacity(&self, memory_capacity_bytes: u64) -> u64 {
+        self.governor
+            .process_memory_policy_snapshot()
+            .map_or(memory_capacity_bytes, |policy| {
+                memory_capacity_bytes.min(policy.resident_limit_bytes)
+            })
+    }
     fn status(&self) -> RetainedQueryStatus {
         match self.status.load(Ordering::Acquire) {
             0 => RetainedQueryStatus::Open,
@@ -722,6 +731,8 @@ impl RetainedQueryCursor {
             status: AtomicU8::new(0),
             limit: options.outstanding_batches.get(),
             handle_limit: governor.retained_result_snapshot().handle_limit,
+            result_memory_budget,
+            governor: governor.clone(),
             account: account.clone(),
             _memory: memory,
             _runtime: runtime,
@@ -846,32 +857,127 @@ impl RetainedQueryCursor {
         }
         result
     }
-    fn admitted_rows(&self, adapter_metadata_bytes: usize) -> Result<NonZeroUsize> {
-        let snapshot = self.governor.retained_result_snapshot();
-        let runtime = self.governor.snapshot();
-        // These query leases have matching runtime reservations. Neither can
-        // be released while this open cursor still needs to inspect its source.
-        let irreducible = self
+    fn batch_fixed_metadata_bytes(adapter_metadata_bytes: usize) -> Result<usize> {
+        (std::mem::size_of::<SlotGuard>()
+            + 2 * std::mem::size_of::<usize>()
+            + std::mem::size_of::<RetainedQueryBatch>()
+            + std::mem::size_of::<RetainedNumericBatch>()
+            + RuntimeRetainedResult::owner_overhead_bytes() as usize
+            + RuntimeRetainedResult::handle_overhead_bytes() as usize)
+            .checked_add(adapter_metadata_bytes)
+            .ok_or(RetainedQueryError::SizeOverflow)
+    }
+
+    fn adapter_irreducible_bytes(&self, adapter_bytes: usize) -> Result<(usize, usize)> {
+        // Source pins belong only to the query root; control and compulsory
+        // adapter descriptors also occupy the separate live-result allowance.
+        let result_irreducible = self
             .shared
             ._memory
             .bytes()
+            .checked_add(adapter_bytes)
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        let irreducible = result_irreducible
             .checked_add(
                 self.source
                     .as_ref()
                     .map_or(0, |source| source._memory.bytes()),
             )
             .ok_or(RetainedQueryError::SizeOverflow)?;
+        Ok((result_irreducible, irreducible))
+    }
+
+    fn require_adapter_metadata_capacity(&self, adapter_bytes: usize) -> Result<()> {
+        let (result, query) = self.adapter_irreducible_bytes(adapter_bytes)?;
+        let snapshot = self.governor.retained_result_snapshot();
+        let runtime = self.governor.snapshot();
+        let result_runtime = u64::try_from(result).map_err(|_| RetainedQueryError::SizeOverflow)?;
+        let query_runtime = u64::try_from(query).map_err(|_| RetainedQueryError::SizeOverflow)?;
+        if result > self.result_memory_budget.get()
+            || result_runtime > snapshot.budget_bytes
+            || query > self.ledger.snapshot().budget_bytes
+            || query_runtime
+                > self
+                    .shared
+                    .effective_runtime_capacity(runtime.limits.memory_capacity_bytes)
+        {
+            return Err(RetainedQueryError::WorkingUnitTooLarge);
+        }
+        Ok(())
+    }
+
+    fn complete_output_allowance(
+        &self,
+        adapter_irreducible_bytes: usize,
+        retained_budget_bytes: u64,
+        runtime_capacity: u64,
+    ) -> Result<usize> {
+        let (result_irreducible, irreducible) =
+            self.adapter_irreducible_bytes(adapter_irreducible_bytes)?;
         let irreducible_runtime =
             u64::try_from(irreducible).map_err(|_| RetainedQueryError::SizeOverflow)?;
-        let runtime_capacity = self.governor.process_memory_policy_snapshot().map_or(
-            runtime.limits.memory_capacity_bytes,
-            |policy| {
-                runtime
-                    .limits
-                    .memory_capacity_bytes
-                    .min(policy.resident_limit_bytes)
-            },
-        );
+        Ok(self
+            .options
+            .batch_bytes
+            .get()
+            .min(
+                self.result_memory_budget
+                    .get()
+                    .saturating_sub(result_irreducible),
+            )
+            .min(
+                self.ledger
+                    .snapshot()
+                    .budget_bytes
+                    .saturating_sub(irreducible),
+            )
+            .min(
+                usize::try_from(retained_budget_bytes)
+                    .unwrap_or(usize::MAX)
+                    .saturating_sub(result_irreducible),
+            )
+            .min(
+                usize::try_from(runtime_capacity.saturating_sub(irreducible_runtime) / 2)
+                    .unwrap_or(usize::MAX),
+            ))
+    }
+
+    fn require_adapter_output_capacity(
+        &self,
+        adapter_metadata_bytes: usize,
+        adapter_irreducible_bytes: usize,
+    ) -> Result<()> {
+        if self.status() != RetainedQueryStatus::Open || self.can_complete_without_output() {
+            return Ok(());
+        }
+        let fixed = Self::batch_fixed_metadata_bytes(adapter_metadata_bytes)?;
+        let required_one =
+            RetainedNumericBuilder::required_capacity_bytes(NonZeroUsize::MIN, self.needs_ids)
+                .and_then(|bytes| bytes.checked_add(fixed))
+                .ok_or(RetainedQueryError::SizeOverflow)?;
+        let snapshot = self.governor.retained_result_snapshot();
+        let runtime = self.governor.snapshot();
+        let capacity = self
+            .shared
+            .effective_runtime_capacity(runtime.limits.memory_capacity_bytes);
+        if required_one
+            > self.complete_output_allowance(
+                adapter_irreducible_bytes,
+                snapshot.budget_bytes,
+                capacity,
+            )?
+        {
+            return Err(RetainedQueryError::WorkingUnitTooLarge);
+        }
+        Ok(())
+    }
+
+    fn admitted_rows(&self, adapter_metadata_bytes: usize) -> Result<NonZeroUsize> {
+        let snapshot = self.governor.retained_result_snapshot();
+        let runtime = self.governor.snapshot();
+        let runtime_capacity = self
+            .shared
+            .effective_runtime_capacity(runtime.limits.memory_capacity_bytes);
         let available = self
             .options
             .batch_bytes
@@ -897,44 +1003,13 @@ impl RetainedQueryCursor {
                 )
                 .unwrap_or(usize::MAX),
             );
-        let fixed = (std::mem::size_of::<SlotGuard>()
-            + 2 * std::mem::size_of::<usize>()
-            + std::mem::size_of::<RetainedQueryBatch>()
-            + std::mem::size_of::<RetainedNumericBatch>()
-            + RuntimeRetainedResult::owner_overhead_bytes() as usize
-            + RuntimeRetainedResult::handle_overhead_bytes() as usize)
-            .checked_add(adapter_metadata_bytes)
-            .ok_or(RetainedQueryError::SizeOverflow)?;
+        let fixed = Self::batch_fixed_metadata_bytes(adapter_metadata_bytes)?;
         let required_one =
             RetainedNumericBuilder::required_capacity_bytes(NonZeroUsize::MIN, self.needs_ids)
                 .and_then(|bytes| bytes.checked_add(fixed))
                 .ok_or(RetainedQueryError::SizeOverflow)?;
-        let complete_allowance = self
-            .options
-            .batch_bytes
-            .get()
-            // Source capacity belongs to the query root. The cursor control
-            // alone is irreducible in the separate task result account.
-            .min(
-                self.result_memory_budget
-                    .get()
-                    .saturating_sub(self.shared._memory.bytes()),
-            )
-            .min(
-                self.ledger
-                    .snapshot()
-                    .budget_bytes
-                    .saturating_sub(irreducible),
-            )
-            .min(
-                usize::try_from(snapshot.budget_bytes)
-                    .unwrap_or(usize::MAX)
-                    .saturating_sub(self.shared._memory.bytes()),
-            )
-            .min(
-                usize::try_from(runtime_capacity.saturating_sub(irreducible_runtime) / 2)
-                    .unwrap_or(usize::MAX),
-            );
+        let complete_allowance =
+            self.complete_output_allowance(0, snapshot.budget_bytes, runtime_capacity)?;
         if required_one > complete_allowance {
             return Err(RetainedQueryError::WorkingUnitTooLarge);
         }

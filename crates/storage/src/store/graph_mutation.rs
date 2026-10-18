@@ -1871,6 +1871,32 @@ impl GraphStore {
             }
             return Ok(vec![id]);
         }
+        if let Some(PropertyFilter::IdIn { values }) = filter {
+            let mut ids = BTreeSet::new();
+            for value in values {
+                let Value::Int(value) = value else {
+                    continue;
+                };
+                // Preserve the signed ID representation used by property_filter_matches.
+                let id = NodeId(*value as u64);
+                if ids.contains(&id) {
+                    continue;
+                }
+                let matches = self.node_owned(id)?.is_some_and(|node| {
+                    label_id.is_none_or(|label_id| node.labels.contains(&label_id))
+                });
+                if matches {
+                    if ids.len() == max_ids {
+                        return Err(HawDBError::Execution(format!(
+                            "mutation would exceed {limit_name} {max_ids}"
+                        )));
+                    }
+                    ids.insert(id);
+                }
+            }
+            // Match scan order without retaining an unbounded copy of the input IDs.
+            return Ok(ids.into_iter().collect());
+        }
         let mut ids = Vec::with_capacity(max_ids.min(1024));
         let mut exceeded = false;
         self.visit_nodes_owned(label_id, |node| {

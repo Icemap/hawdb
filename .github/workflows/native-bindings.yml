@@ -178,6 +178,14 @@ jobs:
             --lib api::retained_query::node::tests -- --nocapture \
             2>&1 | tee windows-native-results/retained-node.txt
 
+      - name: Test retained Arrow array and stream contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
+            api::retained_query::tests::arrow -- --nocapture \
+            2>&1 | tee windows-native-results/retained-arrow.txt
+
       - name: Test abandonment GC power-loss cuts
         shell: bash
         run: |

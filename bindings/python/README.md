@@ -171,7 +171,8 @@ PYTHONPATH="$PWD/bazel-bin/bindings/python/hawdb_python_tests.runfiles/_main/bin
 This is experimental. Whole-operation source/planning qualification, opaque derived-view
 and allocator/RSS accounting, platform and performance qualification remain
 open. Current native result-buffer evidence does not bound whole-operation or
-interpreter RSS. See [the full scope and remaining gates](../../docs/RETAINED_NUMERIC_FOUNDATION.md).
+interpreter RSS. See [the Arrow contract](../../docs/RETAINED_ARROW.md) and
+[the full scope and remaining gates](../../docs/RETAINED_NUMERIC_FOUNDATION.md).
 
 ## Build from source
 

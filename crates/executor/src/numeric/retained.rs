@@ -396,6 +396,18 @@ fn validity_view(rows: usize, words: &[u64]) -> ValidityView<'_> {
 }
 
 impl RetainedNumericBatch {
+    /// Internal HawDB facade contract for Arrow admission preflight across crates.
+    /// Reports charged storage/owner and this view's metadata, excluding other
+    /// views, so the facade can include live leases in its irreducible input.
+    /// This observation is not a stable host API or a process-memory bound.
+    #[doc(hidden)]
+    pub fn retained_memory_bytes(&self) -> Option<usize> {
+        self.storage
+            ._memory
+            .bytes()
+            .checked_add(self._view_memory.bytes())
+    }
+
     /// Values, optional node IDs, optional validity, and selection, in order.
     pub fn buffer_provenance(&self) -> [Option<NumericBufferProvenance>; 4] {
         buffer_provenance(
