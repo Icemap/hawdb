@@ -19,9 +19,16 @@ def database_path(request, tmp_path):
     return None if request.param == "memory" else tmp_path / "graph"
 
 
-def seed(db):
-    for value in [1, 2, 3]:
+def seed(db, count=3):
+    for value in range(1, count + 1):
         db.execute("CREATE (:Item {id: $id})", {"id": value})
+
+
+PAYLOAD_COLUMN = "c" * 2048
+PAYLOAD_LIMIT = 4 * (len(PAYLOAD_COLUMN) + 8) - 1
+PAYLOAD_QUERY = (
+    f"MATCH (n:Item) RETURN n.id AS {PAYLOAD_COLUMN} ORDER BY {PAYLOAD_COLUMN}"
+)
 
 
 def test_row_ceiling_refuses_without_poisoning_handle(opener, database_path):
@@ -35,42 +42,53 @@ def test_row_ceiling_refuses_without_poisoning_handle(opener, database_path):
 
 
 def test_payload_ceiling_refuses_then_accepts_small_result(opener, database_path):
-    with opener(database_path, max_read_result_payload_bytes=128) as db:
+    # Repeated names reach the logical payload cap before physical ownership does.
+    with opener(database_path, max_read_result_payload_bytes=PAYLOAD_LIMIT) as db:
+        seed(db, count=4)
         with pytest.raises(
             exceptions.ExecutionError, match="max_read_result_payload_bytes"
         ):
-            db.execute("RETURN $text AS text", {"text": "x" * 1024})
-        assert db.execute("RETURN 'ok' AS text").fetchall() == [{"text": "ok"}]
+            db.execute(PAYLOAD_QUERY)
+        assert db.execute(
+            "MATCH (n:Item) WHERE n.id = $id RETURN n.id AS id", {"id": 1}
+        ).fetchall() == [{"id": 1}]
 
 
-def test_omitted_and_none_budgets_preserve_defaults(opener, database_path):
-    for options in [
+@pytest.mark.parametrize(
+    "options",
+    [
         {},
         {"max_read_result_rows": None, "max_read_result_payload_bytes": None},
-    ]:
-        with opener(database_path, **options) as db:
-            assert db.execute("UNWIND [1, 2, 3] AS id RETURN id").fetchall() == [
-                {"id": 1}, {"id": 2}, {"id": 3}
-            ]
-            result = db.execute("RETURN $text AS text", {"text": "x" * 1024})
-            assert result.fetchall() == [
-                {"text": "x" * 1024}
-            ]
+    ],
+    ids=["omitted", "none"],
+)
+def test_omitted_and_none_budgets_preserve_defaults(opener, database_path, options):
+    with opener(database_path, **options) as db:
+        seed(db)
+        assert db.execute(
+            "MATCH (n:Item) RETURN n.id AS id ORDER BY id"
+        ).fetchall() == [{"id": 1}, {"id": 2}, {"id": 3}]
+        db.execute("CREATE (:Payload {text: $text})", {"text": "x" * 1024})
+        result = db.execute("MATCH (n:Payload) RETURN n.text AS text")
+        assert result.fetchall() == [{"text": "x" * 1024}]
 
 
-def test_read_only_open_applies_both_ceilings(opener, tmp_path):
+def test_read_only_open_applies_each_ceiling(opener, tmp_path):
     path = tmp_path / "read-only"
     with hawdb.open(path) as writer:
-        seed(writer)
-    with opener(
-        path, read_only=True, max_read_result_rows=1, max_read_result_payload_bytes=128
-    ) as db:
+        seed(writer, count=4)
+    with opener(path, read_only=True, max_read_result_rows=1) as db:
         with pytest.raises(exceptions.ExecutionError, match="max_read_result_rows"):
             db.execute("MATCH (n:Item) RETURN n.id AS id")
+        result = db.execute("MATCH (n:Item) RETURN n.id AS id ORDER BY id LIMIT 1")
+        assert result.fetchone() == {"id": 1}
+    with opener(
+        path, read_only=True, max_read_result_payload_bytes=PAYLOAD_LIMIT
+    ) as db:
         with pytest.raises(
             exceptions.ExecutionError, match="max_read_result_payload_bytes"
         ):
-            db.execute("RETURN $text AS text", {"text": "x" * 1024})
+            db.execute(PAYLOAD_QUERY)
         result = db.execute("MATCH (n:Item) RETURN n.id AS id ORDER BY id LIMIT 1")
         assert result.fetchone() == {"id": 1}
 
@@ -85,10 +103,12 @@ def test_open_time_budget_is_not_persisted(tmp_path):
 
 def test_zero_ceilings_follow_engine_semantics():
     with hawdb.open(max_read_result_rows=0) as db:
-        assert len(db.execute("UNWIND [1, 2] AS id RETURN id")) == 2
+        seed(db)
+        assert len(db.execute("MATCH (n:Item) RETURN n.id")) == 3
     with hawdb.open(max_read_result_payload_bytes=0) as db:
+        seed(db, count=1)
         with pytest.raises(exceptions.ExecutionError):
-            db.execute("RETURN 'nonempty' AS value")
+            db.execute("MATCH (n:Item) RETURN n.id")
 
 
 @pytest.mark.parametrize(
@@ -108,9 +128,9 @@ def test_sql_reads_share_the_open_time_ceiling(database_path):
     with hawdb.open(database_path, max_read_result_rows=1) as db:
         db.execute_sql("CREATE TABLE items (id BIGINT PRIMARY KEY)")
         db.execute_sql("INSERT INTO items (id) VALUES (1), (2)")
-        with pytest.raises(exceptions.ExecutionError, match="max_read_result_rows"):
+        with pytest.raises(exceptions.ExecutionError, match="max_intermediate_rows 1"):
             db.execute_sql("SELECT id FROM items")
-        result = db.execute_sql("SELECT id FROM items ORDER BY id LIMIT 1")
+        result = db.execute_sql("SELECT id FROM items WHERE id = 1")
         assert result.fetchall() == [{"id": 1}]
 
 
@@ -135,12 +155,12 @@ def test_explain_binds_parameters_without_executing(database_path):
 def test_explain_preserves_error_and_handle_contracts():
     db = hawdb.open()
     with pytest.raises(TypeError):
-        db.explain("RETURN $value", {"value": object()})
+        db.explain("MATCH (n) RETURN $value", {"value": object()})
     with pytest.raises(exceptions.ParseError):
         db.explain("MATCH (")
     with db.transaction():
         with pytest.raises(RuntimeError, match="transaction is open"):
-            db.explain("RETURN 1")
+            db.explain("MATCH (n) RETURN n")
     db.close()
     with pytest.raises(RuntimeError, match="database is closed"):
-        db.explain("RETURN 1")
+        db.explain("MATCH (n) RETURN n")
