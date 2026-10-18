@@ -19,6 +19,78 @@ use std::collections::BTreeMap;
 
 mod differential;
 
+#[test]
+fn result_refusals_preserve_the_effective_budget_origin() {
+    use crate::memory::enforced_result_memory_budget_with_option;
+    use hawdb_core::{ResourceBudgetScope, RuntimeMemoryReservation};
+
+    let memory = ExecutionMemoryConfig {
+        query_memory_bytes: NonZeroUsize::new(16).unwrap(),
+        ..ExecutionMemoryConfig::default()
+    };
+    for (grant, expected, origin) in [
+        (None, 16, "ExecutionMemoryConfig.query_memory_bytes"),
+        (
+            Some(8),
+            8,
+            "RuntimeTaskContext.memory_reservation.result_bytes",
+        ),
+        (
+            Some(16),
+            16,
+            "RuntimeTaskContext.memory_reservation.result_bytes",
+        ),
+        (Some(32), 16, "ExecutionMemoryConfig.query_memory_bytes"),
+    ] {
+        let context = grant.map(|bytes| {
+            RuntimeTaskContext::default()
+                .with_memory_reservation(RuntimeMemoryReservation::new(1024, bytes))
+        });
+        let ledger = QueryMemoryLedger::for_query(&memory, context.as_ref()).unwrap();
+        let (budget, option) =
+            enforced_result_memory_budget_with_option(&memory, context.as_ref()).unwrap();
+        let mut calls = 0;
+        let mut consumer = |_| {
+            calls += 1;
+            Ok(())
+        };
+        let mut output = QueryOutputAccumulator::new_with_budget_option(
+            OutputLimits::default(),
+            budget,
+            &ledger,
+            option,
+            ConsumerMemoryMode::Retained,
+            &mut consumer,
+        )
+        .unwrap();
+        let streamed = output
+            .emit(binding("larger than the result allowance"))
+            .unwrap_err();
+        drop(output);
+        let owned = match QueryOutputAccumulator::new_owned_with_budget_option(
+            OutputLimits::default(),
+            budget,
+            &ledger,
+            option,
+        ) {
+            Err(error) => error,
+            Ok(_) => panic!("expected owned-result admission to fail"),
+        };
+        for error in [streamed, owned] {
+            let HawDBError::ResourceBudgetExceeded(cause) = error else {
+                panic!("expected a typed result-memory refusal, got {error:?}");
+            };
+            assert_eq!(cause.scope, ResourceBudgetScope::Account);
+            assert_eq!(cause.owner, "query result");
+            assert_eq!(cause.memory_class, Some("result_materialization"));
+            assert_eq!(cause.budget, expected);
+            assert_eq!(cause.budget_option, origin);
+        }
+        assert_eq!(calls, 0);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+}
+
 fn binding(value: &str) -> Binding {
     Binding::values(BTreeMap::from([(
         "value".to_string(),

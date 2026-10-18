@@ -11,6 +11,34 @@ Development phase. The API surface is intentionally small (`open`, `execute`,
 `execute_sql`, `QueryResult`) while it proves out against real host
 workloads. It is not yet published to PyPI.
 
+## Read budgets and query plans
+
+`open`, `connect` and `Database` accept the keyword-only options
+`max_read_result_rows` and `max_read_result_payload_bytes`. They configure the
+engine's read ceilings for in-memory, file-backed and read-only databases.
+Exceeding a ceiling raises `hawdb.exceptions.ExecutionError`; the binding does
+not return a shortened result. A later read can still succeed within the budget.
+
+```python
+with hawdb.open(max_read_result_rows=1000, max_read_result_payload_bytes=1048576) as db:
+    plan = db.explain(
+        "MATCH (m:Memory) WHERE m.id = $id RETURN m.title",
+        {"id": "memory-1"},
+    )
+    print(plan)
+```
+
+Omitted options and `None` preserve engine defaults: no host row ceiling and a
+64 MiB result payload ceiling. Zero rows follows `DatabaseConfig` semantics and
+disables the host row ceiling; zero payload bytes remains a zero-byte ceiling.
+Other engine memory and session limits still apply. These options do not expose
+the rest of `DatabaseConfig` or change durability.
+
+`db.explain(cypher, params=None)` returns the existing physical plan text without
+executing the statement. Parameters use the same conversion as `execute`.
+Closed handles and an active write transaction reject this database-level call.
+SQL `EXPLAIN` continues through `execute_sql`.
+
 ## Experimental retained numeric buffers
 
 `execute_retained` is an opt-in numeric query surface over the embedded Rust
@@ -199,6 +227,30 @@ with db.transaction() as tx:
 `db.read_transaction()` pins the committed state for a stable read scope;
 write statements on it raise the engine's read-transaction error.
 
+`db.executemany(cypher, rows)` accepts a sequence of parameter dicts;
+`db.executemany_sql(sql, rows)` accepts a sequence of positional parameter
+sequences (for example, lists or tuples). Each nonempty batch uses one
+transaction and commits after the last row. A conversion or statement failure
+rolls back the entire batch, including any earlier rows. Parameters use the same
+value mapping as `execute` and `execute_sql`, converted one row at a time.
+Both methods return `None` and discard statement results. An empty sequence is
+a no-op that neither opens a transaction nor executes the statement.
+
+```python
+db.executemany(
+    "CREATE (s:Stock {code: $code})",
+    [{"code": "603122"}, {"code": "600519"}],
+)
+db.executemany_sql("INSERT INTO trades (id) VALUES ($1)", [(1,), (2,)])
+```
+
+`tx.executemany` and `tx.executemany_sql` use an existing transaction without
+committing it. If batch processing fails, they roll back and close the **whole
+transaction**, including earlier statements outside the batch; there are no
+savepoints. Catching the exception does not leave a partial batch that can later
+be committed. A successful batch stays staged until the caller commits or exits
+the transaction context normally.
+
 `hawdb.open()` without a path returns an empty in-memory database for tests,
 notebooks, and other hosts that already hold their data. It answers the same
 `execute` / `execute_sql` calls through the same embedded admission path;
@@ -228,6 +280,20 @@ surrogate, raises `UnicodeEncodeError`.
 Errors raise `hawdb.exceptions` subclasses (`ParseError`, `SemanticError`,
 `StorageError`, `ExecutionError`, `ConflictError`, ...), mapped from
 `HawDBError` kinds.
+
+Memory-ledger and spill-quota refusals raise `exceptions.ResourceBudgetError`,
+a subclass of `ExecutionError`, with `resource`, `scope`, `owner`,
+`memory_class`, `requested`, `used`, `budget`, and `budget_option` attributes.
+The message retains the existing execution diagnostic. `requested` is the
+additional charge (the net increase for a query-level ownership transfer),
+and `budget` is the effective limit at the refusing boundary. `budget_option`
+identifies a host setting, runtime grant, or constructor argument; increasing
+a configured maximum does not widen a smaller runtime grant. For filesystem
+free-space refusals, `budget` is the usable space after preserving
+`min_spill_free_bytes`; that option is a minimum reserve, not a maximum to raise.
+File-descriptor failures retain `DescriptorError`. Other execution checks may
+still raise the general `ExecutionError`. The [resource metadata contract](../../docs/EXECUTION_REQUEST_CONTRACT.md#resource-refusal-metadata)
+lists built-in budget origins and explains how to handle caller-defined origins.
 
 ## Pydantic rows (optional)
 

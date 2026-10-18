@@ -87,6 +87,9 @@ pub(crate) fn score_function(_kernel: ScanKernel) -> ScoreFunction {
 }
 
 #[cfg(test)]
+mod benchmark;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use hawdb_core::{HawDBError, Result, RuntimeCancellationToken, RuntimeTaskContext};
+use hawdb_core::error::FileDescriptorError;
+use hawdb_core::{
+    HawDBError, ReadBudgetResource, Result, RuntimeCancellationReason, RuntimeCancellationToken,
+    RuntimeTaskContext,
+};
 use hawdb_executor::{
     execute_morsels_ordered, BoundedExecutor, Morsel, MorselAdmission, MorselAdmissionRequest,
     MorselOrdinal, MorselOutput, MorselStreamControl, MorselStreamResources, PipelineId,
@@ -20,9 +24,9 @@ use hawdb_executor::{
     SharedPoolMorselScheduler,
 };
 use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 fn nz(value: usize) -> NonZeroUsize {
     NonZeroUsize::new(value).unwrap()
@@ -703,5 +707,290 @@ fn scheduler_differential_campaign() {
             cases += 1;
         }
     }
+    terminal_worker_resource_error_cancels_live_sibling_and_keeps_original_cause();
+    consumer_resource_error_cancels_live_worker_and_releases_all_leases();
+    serial_resource_failures_signal_exhaustion_but_ordinary_errors_do_not();
+    output_admission_failure_signals_before_running_any_callback();
+    recovered_reservation_does_not_cancel_the_execution_group();
     println!("Public scheduler differential: {cases} fixtures, {} materializing comparisons and {cases} accounted-stream lifecycles", cases * MATERIALIZERS.len());
+}
+
+fn admission(workers: usize) -> MorselAdmission {
+    MorselAdmission::try_new(MorselAdmissionRequest {
+        pipeline_id: PipelineId(996),
+        input_rows: 8,
+        target_rows: nz(1),
+        requested_parallelism: nz(workers),
+        bytes_per_worker: nz(32),
+        memory_budget_bytes: nz(1024),
+    })
+    .unwrap()
+}
+
+fn wait_for_exhaustion(context: &RuntimeTaskContext, observed: &AtomicBool) -> HawDBError {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Err(reason) = context.checkpoint() {
+            assert_eq!(reason, RuntimeCancellationReason::ResourceExhausted);
+            observed.store(true, Ordering::Release);
+            return HawDBError::Execution(format!("sibling stopped: {reason}"));
+        }
+        assert!(Instant::now() < deadline, "sibling was not cancelled");
+        std::thread::yield_now();
+    }
+}
+
+#[test]
+fn terminal_worker_resource_error_cancels_live_sibling_and_keeps_original_cause() {
+    for materialize in [false, true] {
+        let scheduler = SharedPoolMorselScheduler::new(SharedExecutorPool::new(nz(2)).unwrap());
+        let ledger = QueryMemoryLedger::new(nz(1024));
+        let output = ledger.account(QueryMemoryClass::MorselOutput, "outputs", nz(64));
+        let working = ledger.account(QueryMemoryClass::BlockingState, "worker state", nz(16));
+        let parent = RuntimeTaskContext::default();
+        let task = parent.child();
+        let observed = AtomicBool::new(false);
+        let calls = AtomicUsize::new(0);
+        let consumed = AtomicUsize::new(0);
+        let (started, receiver) = mpsc::sync_channel(1);
+        let receiver = Mutex::new(receiver);
+        let execute = |morsel: Morsel| -> Result<MorselOutput<u64>> {
+            calls.fetch_add(1, Ordering::SeqCst);
+            if morsel.ordinal.0 == 0 {
+                let _lease = working.reserve(8)?;
+                started.send(()).unwrap();
+                return Err(wait_for_exhaustion(&task, &observed));
+            }
+            receiver
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap();
+            let _lease = working.reserve(16)?;
+            panic!("the account must refuse 8 + 16 > 16");
+        };
+        let error = if materialize {
+            scheduler
+                .execute_with_context(&admission(2), &task, execute)
+                .unwrap_err()
+        } else {
+            scheduler
+                .execute_accounted_ordered(
+                    &admission(2),
+                    MorselStreamResources {
+                        task_context: Some(&task),
+                        output_account: &output,
+                        output_reservation_bytes: nz(32),
+                    },
+                    execute,
+                    |_, _| {
+                        consumed.fetch_add(1, Ordering::SeqCst);
+                        Ok(MorselStreamControl::Continue)
+                    },
+                )
+                .unwrap_err()
+        };
+        let HawDBError::ResourceBudgetExceeded(error) = error else {
+            panic!("resource cause was replaced: {error:?}");
+        };
+        assert_eq!((error.requested, error.used, error.budget), (16, 8, 16));
+        assert_eq!(error.owner, "worker state");
+        assert!(observed.load(Ordering::Acquire));
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert_eq!(consumed.load(Ordering::SeqCst), 0);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+        assert_eq!(parent.checkpoint(), Ok(()));
+    }
+}
+
+#[test]
+fn consumer_resource_error_cancels_live_worker_and_releases_all_leases() {
+    let scheduler = SharedPoolMorselScheduler::new(SharedExecutorPool::new(nz(2)).unwrap());
+    let ledger = QueryMemoryLedger::new(nz(1024));
+    let output = ledger.account(QueryMemoryClass::MorselOutput, "outputs", nz(64));
+    let working = ledger.account(QueryMemoryClass::BlockingState, "consumer state", nz(16));
+    let task = RuntimeTaskContext::default();
+    let observed = AtomicBool::new(false);
+    let (started, receiver) = mpsc::sync_channel(1);
+    let receiver = Mutex::new(receiver);
+    let error = scheduler
+        .execute_accounted_ordered(
+            &admission(2),
+            MorselStreamResources {
+                task_context: Some(&task),
+                output_account: &output,
+                output_reservation_bytes: nz(32),
+            },
+            |morsel| {
+                if morsel.ordinal.0 == 0 {
+                    receiver
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(Duration::from_secs(5))
+                        .unwrap();
+                    return Ok(MorselOutput::new(0_u64, 8));
+                }
+                let _lease = working.reserve(8)?;
+                started.send(()).unwrap();
+                Err(wait_for_exhaustion(&task, &observed))
+            },
+            |_, _| {
+                let _lease = working.reserve(16)?;
+                panic!("the consumer must fail admission");
+            },
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, HawDBError::ResourceBudgetExceeded(ref error) if error.owner == "consumer state")
+    );
+    assert!(observed.load(Ordering::Acquire));
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn serial_resource_failures_signal_exhaustion_but_ordinary_errors_do_not() {
+    let scheduler = SharedPoolMorselScheduler::new(SharedExecutorPool::new(nz(1)).unwrap());
+    let ledger = QueryMemoryLedger::new(nz(1024));
+    let output = ledger.account(QueryMemoryClass::MorselOutput, "outputs", nz(32));
+    for (error, resource) in [
+        (output.reserve(33).unwrap_err(), true),
+        (
+            HawDBError::read_budget_exceeded(ReadBudgetResource::Rows, 1, "row budget"),
+            true,
+        ),
+        (
+            HawDBError::GraphExpansionCandidateLimitExceeded {
+                requested: 2,
+                limit: 1,
+            },
+            true,
+        ),
+        (
+            HawDBError::GraphExpansionPayloadLimitExceeded {
+                requested: 2,
+                limit: 1,
+            },
+            true,
+        ),
+        (
+            HawDBError::FileDescriptors(FileDescriptorError::BudgetExceeded {
+                requested: 2,
+                available: 1,
+                limit: 1,
+            }),
+            true,
+        ),
+        (
+            HawDBError::FileDescriptors(FileDescriptorError::OsLimit {
+                requested: 1,
+                os_code: None,
+                soft: None,
+                hard: None,
+            }),
+            true,
+        ),
+        (
+            HawDBError::FileDescriptors(FileDescriptorError::InvalidBudget { limit: 0 }),
+            false,
+        ),
+        (
+            HawDBError::FileDescriptors(FileDescriptorError::ConfigurationConflict {
+                configured: 2,
+                requested: 1,
+            }),
+            false,
+        ),
+        (HawDBError::Execution("budget exhausted".into()), false),
+    ] {
+        for consumer in [false, true] {
+            let task = RuntimeTaskContext::default();
+            let result = scheduler.execute_accounted_ordered(
+                &admission(1),
+                MorselStreamResources {
+                    task_context: Some(&task),
+                    output_account: &output,
+                    output_reservation_bytes: nz(32),
+                },
+                |_| {
+                    if consumer {
+                        Ok(MorselOutput::new((), 0))
+                    } else {
+                        Err(error.clone())
+                    }
+                },
+                |_, _| Err(error.clone()),
+            );
+            assert_eq!(result.unwrap_err(), error);
+            assert_eq!(
+                task.checkpoint(),
+                if resource {
+                    Err(RuntimeCancellationReason::ResourceExhausted)
+                } else {
+                    Ok(())
+                }
+            );
+            assert_eq!(ledger.snapshot().used_bytes, 0);
+        }
+    }
+}
+
+#[test]
+fn output_admission_failure_signals_before_running_any_callback() {
+    let scheduler = SharedPoolMorselScheduler::new(SharedExecutorPool::new(nz(2)).unwrap());
+    let ledger = QueryMemoryLedger::new(nz(1024));
+    let output = ledger.account(QueryMemoryClass::MorselOutput, "outputs", nz(16));
+    let task = RuntimeTaskContext::default();
+    let error = scheduler
+        .execute_accounted_ordered(
+            &admission(2),
+            MorselStreamResources {
+                task_context: Some(&task),
+                output_account: &output,
+                output_reservation_bytes: nz(32),
+            },
+            |_| -> Result<MorselOutput<()>> { panic!("output must be admitted first") },
+            |_, _| panic!("no output is admitted"),
+        )
+        .unwrap_err();
+    assert!(matches!(error, HawDBError::ResourceBudgetExceeded(_)));
+    assert_eq!(
+        task.checkpoint(),
+        Err(RuntimeCancellationReason::ResourceExhausted)
+    );
+    assert_eq!(ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn recovered_reservation_does_not_cancel_the_execution_group() {
+    let scheduler = SharedPoolMorselScheduler::new(SharedExecutorPool::new(nz(2)).unwrap());
+    let ledger = QueryMemoryLedger::new(nz(1024));
+    let output = ledger.account(QueryMemoryClass::MorselOutput, "outputs", nz(64));
+    let working = ledger.account(QueryMemoryClass::BlockingState, "recoverable", nz(16));
+    let task = RuntimeTaskContext::default();
+    let mut received = Vec::new();
+    scheduler
+        .execute_accounted_ordered(
+            &admission(2),
+            MorselStreamResources {
+                task_context: Some(&task),
+                output_account: &output,
+                output_reservation_bytes: nz(32),
+            },
+            |morsel| {
+                assert!(matches!(
+                    working.reserve(17),
+                    Err(HawDBError::ResourceBudgetExceeded(_))
+                ));
+                assert_eq!(task.checkpoint(), Ok(()));
+                Ok(MorselOutput::new(morsel.ordinal.0, 8))
+            },
+            |_, value| {
+                received.push(value);
+                Ok(MorselStreamControl::Continue)
+            },
+        )
+        .unwrap();
+    assert_eq!(received, (0..8).collect::<Vec<_>>());
+    assert_eq!(task.checkpoint(), Ok(()));
+    assert_eq!(ledger.snapshot().used_bytes, 0);
 }

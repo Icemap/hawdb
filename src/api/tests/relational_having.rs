@@ -26,6 +26,29 @@ fn having_fixture() -> Database {
 }
 
 #[test]
+fn sql_min_aggregate_works_through_embedded_database() {
+    let mut database = Database::new();
+    database
+        .query_sql("CREATE TABLE sample_sequence (sequence BIGINT PRIMARY KEY)")
+        .unwrap();
+    let query = "SELECT COUNT(*) AS row_count, MIN(sequence) AS first_sequence, MAX(sequence) AS last_sequence FROM sample_sequence";
+    let empty = database.query_sql(query).unwrap();
+    assert_eq!(empty.rows.len(), 1);
+    assert_eq!(empty.rows[0]["row_count"], Value::Int(0));
+    assert_eq!(empty.rows[0]["first_sequence"], Value::Null);
+    assert_eq!(empty.rows[0]["last_sequence"], Value::Null);
+
+    database
+        .query_sql("INSERT INTO sample_sequence (sequence) VALUES (2), (1)")
+        .unwrap();
+    let filled = database.query_sql(query).unwrap();
+    assert_eq!(filled.rows.len(), 1);
+    assert_eq!(filled.rows[0]["row_count"], Value::Int(2));
+    assert_eq!(filled.rows[0]["first_sequence"], Value::Int(1));
+    assert_eq!(filled.rows[0]["last_sequence"], Value::Int(2));
+}
+
+#[test]
 fn relational_having_filters_groups_with_hidden_aggregates_before_limits() {
     let mut database = having_fixture();
     let output = database

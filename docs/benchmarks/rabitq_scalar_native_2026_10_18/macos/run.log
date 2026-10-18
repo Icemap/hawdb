@@ -1,0 +1,78 @@
+[1m[92m   Compiling[0m libc v0.2.190
+[1m[92m   Compiling[0m memchr v2.8.3
+[1m[92m   Compiling[0m find-msvc-tools v0.1.9
+[1m[92m   Compiling[0m cfg-if v1.0.4
+[1m[92m   Compiling[0m shlex v2.0.1
+[1m[92m   Compiling[0m regex-syntax v0.8.11
+[1m[92m   Compiling[0m aho-corasick v1.1.4
+[1m[92m   Compiling[0m jobserver v0.1.35
+[1m[92m   Compiling[0m cc v1.2.67
+[1m[92m   Compiling[0m getrandom v0.4.3
+[1m[92m   Compiling[0m regex-automata v0.4.18
+[1m[92m   Compiling[0m version_check v0.9.5
+[1m[92m   Compiling[0m uuid v1.27.0
+[1m[92m   Compiling[0m generic-array v0.14.7
+[1m[92m   Compiling[0m typenum v1.20.1
+[1m[92m   Compiling[0m pkg-config v0.3.33
+[1m[92m   Compiling[0m crossbeam-utils v0.8.22
+[1m[92m   Compiling[0m proc-macro2 v1.0.106
+[1m[92m   Compiling[0m zstd-sys v2.1.1+zstd.1.5.7
+[1m[92m   Compiling[0m regex v1.13.1
+[1m[92m   Compiling[0m hawdb-core v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/core)
+[1m[92m   Compiling[0m bitflags v2.13.1
+[1m[92m   Compiling[0m quote v1.0.46
+[1m[92m   Compiling[0m semver v1.0.28
+[1m[92m   Compiling[0m crossbeam-epoch v0.9.20
+[1m[92m   Compiling[0m unicode-ident v1.0.24
+[1m[92m   Compiling[0m rustc_version v0.4.1
+[1m[92m   Compiling[0m objc2-core-foundation v0.3.2
+[1m[92m   Compiling[0m sha2-asm v0.6.4
+[1m[92m   Compiling[0m serde_core v1.0.229
+[1m[92m   Compiling[0m crossbeam-deque v0.8.7
+[1m[92m   Compiling[0m autocfg v1.5.1
+[1m[92m   Compiling[0m num-traits v0.2.19
+[1m[92m   Compiling[0m objc2-io-kit v0.3.2
+[1m[92m   Compiling[0m crc32c v0.6.8
+[1m[92m   Compiling[0m block-buffer v0.10.4
+[1m[92m   Compiling[0m crypto-common v0.1.7
+[1m[92m   Compiling[0m zmij v1.0.23
+[1m[92m   Compiling[0m zstd-safe v8.1.0
+[1m[92m   Compiling[0m rayon-core v1.13.0
+[1m[92m   Compiling[0m digest v0.10.7
+[1m[92m   Compiling[0m syn v3.0.3
+[1m[92m   Compiling[0m sysinfo v0.39.6
+[1m[92m   Compiling[0m hawdb-ddl v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/ddl)
+[1m[92m   Compiling[0m cpufeatures v0.2.17
+[1m[92m   Compiling[0m serde_json v1.0.151
+[1m[92m   Compiling[0m serde v1.0.229
+[1m[92m   Compiling[0m hawdb-cgroup v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/cgroup)
+[1m[92m   Compiling[0m hawdb-qos v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/qos)
+[1m[92m   Compiling[0m sha2 v0.10.9
+[1m[92m   Compiling[0m hawdb-cypher v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/cypher)
+[1m[92m   Compiling[0m serde_derive v1.0.229
+[1m[92m   Compiling[0m hawdb-expression v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/expression)
+[1m[92m   Compiling[0m byteorder v1.5.0
+[1m[92m   Compiling[0m either v1.16.0
+[1m[92m   Compiling[0m hawdb-plan-core v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/plan-core)
+[1m[92m   Compiling[0m crc32fast v1.5.2
+[1m[92m   Compiling[0m bytemuck v1.25.2
+[1m[92m   Compiling[0m itoa v1.0.18
+[1m[92m   Compiling[0m roaring v0.11.5
+[1m[92m   Compiling[0m hawdb-plan-cypher v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/plan-cypher)
+[1m[92m   Compiling[0m rayon v1.12.0
+[1m[92m   Compiling[0m hawdb-integrity v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/integrity)
+[1m[92m   Compiling[0m chrono v0.4.45
+[1m[92m   Compiling[0m hawdb-telemetry v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/telemetry)
+[1m[92m   Compiling[0m hawdb-analytics v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/analytics)
+[1m[92m   Compiling[0m memmap2 v0.9.11
+[1m[92m   Compiling[0m fs2 v0.4.3
+[1m[92m   Compiling[0m zstd v0.14.0
+[1m[92m   Compiling[0m hawdb-storage v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/storage)
+[1m[92m   Compiling[0m hawdb-vector-projection v0.9.0 (/Users/runner/work/hawdb/hawdb/crates/vector-projection)
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 7m 14s
+[1m[92m     Running[0m unittests src/lib.rs (target/release/deps/hawdb_vector_projection-a70d8a4ffed844bb)
+
+running 1 test
+test kernel::benchmark::candidate_scan_matrix ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 63 filtered out; finished in 980.75s

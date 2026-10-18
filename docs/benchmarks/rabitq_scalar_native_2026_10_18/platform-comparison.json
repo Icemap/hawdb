@@ -1,0 +1,6 @@
+{
+  "compared_records": 1248,
+  "candidate_or_checksum_mismatches": 0,
+  "identical_fixture_hashes": 16,
+  "scope": "Exact returned candidate IDs/score bits and score_codes checksums across scalar platform runs. Kernel checksum is not full per-vector native parity."
+}

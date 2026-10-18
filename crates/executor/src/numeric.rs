@@ -734,6 +734,15 @@ fn stream_parallel_borrowed_numeric_nodes(
     execution_limit: ExecutionLimit,
     emit: &mut dyn FnMut(BindingBatch) -> Result<BatchControl>,
 ) -> Result<(usize, bool)> {
+    // Cooperating workers share an execution-local stop signal. A failed query
+    // must not poison a caller's reusable parent context or hide its budget error.
+    let task_context = context
+        .task_context
+        .map_or_else(RuntimeTaskContext::default, RuntimeTaskContext::child);
+    let context = NumericExecutionContext {
+        task_context: Some(&task_context),
+        ..context
+    };
     let requested_parallelism =
         NonZeroUsize::new(max_workers).expect("parallel execution has at least one worker");
     let bytes_per_worker = morsel_memory.worker_live_bytes;
@@ -1550,5 +1559,99 @@ mod tests {
         .unwrap_err();
 
         assert!(error.to_string().contains("cannot fit one typed batch"));
+    }
+
+    #[test]
+    pub(super) fn parallel_resource_failure_preserves_parent_context_and_original_error() {
+        use super::*;
+        use hawdb_storage::store::GraphStore;
+
+        let mut catalog = Catalog::default();
+        let mut store = GraphStore::in_memory();
+        for value in 0..8 {
+            store
+                .create_node(
+                    &mut catalog,
+                    "Item",
+                    BTreeMap::from([("score".into(), Value::Int(value))]),
+                )
+                .unwrap();
+        }
+        let label_id = catalog.get_or_create_label("Item");
+        let fragment = NumericFragment {
+            label: "Item",
+            property: "score",
+            property_type: PropertyType::Int,
+            predicate: NumericPredicate::Compare(ComparisonOp::Gte),
+            expected: NumericLiteral::Int(0),
+            fused_operators: None,
+        };
+        let items = [Projection {
+            expression: ProjectionExpression::Property {
+                variable: "n".into(),
+                property: "score".into(),
+            },
+            name: "score".into(),
+        }];
+        let schema = numeric_columnar_schema(fragment, false).unwrap();
+        let pool = SharedExecutorPool::new(NonZeroUsize::new(2).unwrap()).unwrap();
+        let memory = ExecutionMemoryConfig {
+            batch_rows: NonZeroUsize::MIN,
+            ..ExecutionMemoryConfig::default()
+        };
+        let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+        let result_account = ledger.account(
+            crate::QueryMemoryClass::ResultMaterialization,
+            "host result",
+            NonZeroUsize::MIN,
+        );
+        let parent = RuntimeTaskContext::default();
+        for task_context in [None, Some(&parent)] {
+            for refuse in [true, false] {
+                let observer = QueryExecutionObserver::default();
+                let mut rows = 0;
+                let result = stream_parallel_borrowed_numeric_nodes(
+                    fragment,
+                    &items,
+                    label_id,
+                    NonZeroUsize::MIN,
+                    LendingNumericScan {
+                        batch_rows: 1,
+                        needs_node_ids: false,
+                    },
+                    Arc::clone(&schema),
+                    numeric_morsel_memory(1, 1, false, &schema),
+                    2,
+                    pool.clone(),
+                    NumericExecutionContext {
+                        catalog: &catalog,
+                        store: &store,
+                        memory: &memory,
+                        memory_ledger: &ledger,
+                        task_context,
+                        observer: &observer,
+                    },
+                    ExecutionLimit::unlimited(),
+                    &mut |batch| {
+                        if refuse {
+                            let _lease = result_account.reserve(2)?;
+                        }
+                        rows += batch.len();
+                        Ok(BatchControl::Continue)
+                    },
+                );
+                if refuse {
+                    assert!(
+                        matches!(result, Err(HawDBError::ResourceBudgetExceeded(ref error)) if error.owner == "host result")
+                    );
+                    assert_eq!(rows, 0);
+                } else {
+                    assert_eq!(result.unwrap(), (8, false));
+                    assert_eq!(rows, 8);
+                }
+                assert_eq!(ledger.snapshot().used_bytes, 0);
+                assert_eq!(parent.checkpoint(), Ok(()));
+            }
+        }
     }
 }

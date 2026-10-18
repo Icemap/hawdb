@@ -1,7 +1,7 @@
 {
   "protocol": "hawdb-sql-frontend-corpus-v1",
   "audited_base_revision": "1977888050c405adc873ebcccfec77c3352f4659",
-  "case_count": 1007,
+  "case_count": 1009,
   "owned_families": [
     "select",
     "select_graph_table",
@@ -10,7 +10,7 @@
   "sources": [
     {
       "path": "crates/sql/src/tests.rs",
-      "sha256": "b54ebb45487caf9169d16791d868b0126fa87ee529baeba9efd7e8e1f510728b",
+      "sha256": "9ad97d3a221e5a18a75125bb057c92b7eef648976ac9ef5e28f20bae7bb6e740",
       "case_ids": [
         "case-0001",
         "case-0002",
@@ -42,7 +42,9 @@
         "case-0028",
         "case-0029",
         "case-0030",
-        "case-0031"
+        "case-0031",
+        "case-1008",
+        "case-1009"
       ]
     },
     {
@@ -1197,5 +1199,5 @@
     "case-0980",
     "case-0981"
   ],
-  "literal_count": 187
+  "literal_count": 189
 }

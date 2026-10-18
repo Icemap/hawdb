@@ -32,6 +32,13 @@ fn failure(error: HawDBError) -> Failure {
             hawdb_core::ReadBudgetResource::PayloadBytes => Failure::Payload,
         };
     }
+    if let HawDBError::ResourceBudgetExceeded(cause) = &error {
+        return match cause.scope {
+            hawdb_core::ResourceBudgetScope::Account => Failure::Account,
+            hawdb_core::ResourceBudgetScope::Query => Failure::Root,
+            _ => panic!("unexpected resource scope: {cause:?}"),
+        };
+    }
     let HawDBError::Execution(message) = error else {
         panic!("unexpected error class: {error:?}");
     };

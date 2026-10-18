@@ -55,6 +55,9 @@ use serde_json::json;
 mod retained;
 pub use retained::*;
 
+#[cfg(test)]
+mod error_tests;
+
 /// Developer profiling build only. This observation is not an admission ledger
 /// or an allocator-capacity bound. NULL output is a no-op; no buffer is allocated.
 ///
@@ -91,6 +94,7 @@ pub struct HawdbBuffer {
 struct FfiError {
     kind: String,
     message: String,
+    resource_budget: Option<serde_json::Value>,
 }
 
 impl FfiError {
@@ -100,6 +104,7 @@ impl FfiError {
         Self {
             kind: "invalid_argument".to_string(),
             message: message.into(),
+            resource_budget: None,
         }
     }
 
@@ -107,6 +112,7 @@ impl FfiError {
         Self {
             kind: "panic".to_string(),
             message: "hawdb: panic while executing statement".to_string(),
+            resource_budget: None,
         }
     }
 
@@ -121,6 +127,10 @@ impl FfiError {
         Self {
             kind,
             message: error.to_string(),
+            resource_budget: match error {
+                EmbeddedQueryError::Database(inner) => resource_budget_json(inner),
+                _ => None,
+            },
         }
     }
 
@@ -128,8 +138,25 @@ impl FfiError {
         Self {
             kind: variant_name(error),
             message: error.to_string(),
+            resource_budget: resource_budget_json(error),
         }
     }
+}
+
+fn resource_budget_json(error: &HawDBError) -> Option<serde_json::Value> {
+    let HawDBError::ResourceBudgetExceeded(budget) = error else {
+        return None;
+    };
+    Some(json!({
+        "resource": budget.resource.as_str(),
+        "scope": budget.scope.as_str(),
+        "owner": budget.owner,
+        "memory_class": budget.memory_class,
+        "requested": budget.requested,
+        "used": budget.used,
+        "budget": budget.budget,
+        "budget_option": budget.budget_option,
+    }))
 }
 
 /// Extract the enum variant name of an error as snake_case, e.g.
@@ -196,7 +223,10 @@ unsafe fn clear_buffer(out: *mut HawdbBuffer) {
 /// # Safety
 /// `err_out` must be NULL or point to writable [`HawdbBuffer`] storage.
 unsafe fn set_error(err_out: *mut HawdbBuffer, error: FfiError) {
-    let payload = json!({ "kind": error.kind, "message": error.message });
+    let mut payload = json!({ "kind": error.kind, "message": error.message });
+    if let Some(budget) = error.resource_budget {
+        payload["resource_budget"] = budget;
+    }
     unsafe { set_buffer(err_out, payload) };
 }
 
@@ -532,10 +562,7 @@ unsafe fn query_impl(
                 .map_err(|_| FfiError::invalid("hawdb: database mutex poisoned"))?
                 .database_mut()
                 .query_sql_with_params(text, &params)
-                .map_err(|error| FfiError {
-                    kind: variant_name(&error),
-                    message: error.to_string(),
-                })
+                .map_err(|error| FfiError::open(&error))
         } else {
             let params = parse_cypher_params(params_json)?;
             #[cfg(feature = "boundary-profiling")]

@@ -1,0 +1,102 @@
+{
+  "total_samples": 149183,
+  "total_period": 149631891647,
+  "lost_samples": 22,
+  "lost_fraction_of_recorded_plus_lost": 0.00014744814181830368,
+  "kernel_period": 8103309711,
+  "kernel_self_percent": 5.415496403745735,
+  "unknown_leaf_samples": 10316,
+  "unknown_leaf_percent": 6.914997017086397,
+  "top_symbols": [
+    {
+      "samples": 31716,
+      "period": 31811433444,
+      "symbol": "[.] ZSTD_decompressSequences_bmi2.constprop.0",
+      "self_percent": 21.25979501685849
+    },
+    {
+      "samples": 22775,
+      "period": 22843529975,
+      "symbol": "[.] <core::str::pattern::CharSearcher as core::str::pattern::Searcher>::next_match",
+      "self_percent": 15.266484787140627
+    },
+    {
+      "samples": 21031,
+      "period": 21094282279,
+      "symbol": "[.] core::num::imp::dec2flt::parse::parse_number",
+      "self_percent": 14.097450781925554
+    },
+    {
+      "samples": 20333,
+      "period": 20394181997,
+      "symbol": "[.] <f32 as core::str::traits::FromStr>::from_str",
+      "self_percent": 13.62956905277411
+    },
+    {
+      "samples": 8079,
+      "period": 8103309711,
+      "symbol": "[.] hawdb_vector_projection::kernel::score_codes",
+      "self_percent": 5.415496403745735
+    },
+    {
+      "samples": 8065,
+      "period": 8089267585,
+      "symbol": "[.] core::num::imp::dec2flt::lemire::compute_float::<f32>",
+      "self_percent": 5.406111956456164
+    },
+    {
+      "samples": 7686,
+      "period": 7709127174,
+      "symbol": "[.] crc32c::hw_x86_64::crc_u64_parallel3",
+      "self_percent": 5.15206156197422
+    },
+    {
+      "samples": 6534,
+      "period": 6553660806,
+      "symbol": "[.] hawdb_search::decode_embedding",
+      "self_percent": 4.379855613575273
+    },
+    {
+      "samples": 5663,
+      "period": 5680039967,
+      "symbol": "[.] <core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::str::iter::Split<char>, hawdb_search::decode_embedding::{closure#0}>, core::result::Result<core::convert::Infallible, hawdb_core::error::HawDBError>> as core::iter::traits::iterator::Iterator>::next",
+      "self_percent": 3.796008928631278
+    },
+    {
+      "samples": 2303,
+      "period": 2309929727,
+      "symbol": "[.] 0x0000000000175c20",
+      "self_percent": 1.5437415791343518
+    },
+    {
+      "samples": 1481,
+      "period": 1485456329,
+      "symbol": "[.] <hawdb_search::out_of_core::SearchOutOfCoreReader>::read_vector_segment",
+      "self_percent": 0.9927404597038536
+    },
+    {
+      "samples": 1204,
+      "period": 1207622836,
+      "symbol": "[.] crc32c::hw_x86_64::crc_u64_append",
+      "self_percent": 0.8070624669030654
+    },
+    {
+      "samples": 747,
+      "period": 749247723,
+      "symbol": "[.] ZSTD_buildFSETable_body_bmi2.isra.0",
+      "self_percent": 0.5007272946649417
+    },
+    {
+      "samples": 711,
+      "period": 713139399,
+      "symbol": "[.] core::str::converts::from_utf8",
+      "self_percent": 0.4765958587774746
+    },
+    {
+      "samples": 701,
+      "period": 703109309,
+      "symbol": "[.] 0x0000000000175f85",
+      "self_percent": 0.46989268214206714
+    }
+  ]
+}

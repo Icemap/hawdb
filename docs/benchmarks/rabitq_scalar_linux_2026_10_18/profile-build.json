@@ -1,0 +1,15 @@
+{
+  "state": "passed",
+  "source_base": "4c32610910cc78771eeb23d729be7107ff769bf6",
+  "command": [
+    "/home/hawkingrei/devel/nowledge/skein/.scratch/issue-994-rabitq-artifacts/profile-build-1/rabitq-query-profile",
+    "build",
+    "/home/hawkingrei/devel/nowledge/skein/.scratch/issue-994-rabitq-artifacts/profile-build-1/fixture"
+  ],
+  "binary_sha256": "000e882f3d5a564e64e3144687125257321ea31d94750a3a640bb12451a286ab",
+  "example_sha256": "a485d866f487b56c8846c3698e3fbca966967eae69414e258cd5705f9aff17a0",
+  "cargo_lock_sha256": "da456883c7fc4c06424344610b1929ed7dabccc406b61ac99242f4392e6f1c5d",
+  "build_command": "CARGO_PROFILE_RELEASE_DEBUG=1 cargo build --locked --offline --release --example rabitq_query_profile --features vector-search",
+  "profile": "Repository release settings with limited debuginfo enabled; default root features plus vector-search.",
+  "exit_code": 0
+}

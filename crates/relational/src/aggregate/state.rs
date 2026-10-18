@@ -90,6 +90,7 @@ pub(super) enum AggregateExpressionState {
 #[derive(Clone, Copy)]
 pub(super) enum NumericAggregate {
     Sum,
+    Min,
     Max,
 }
 
@@ -174,7 +175,7 @@ impl AggregateExpressionState {
                         distinct: distinct.then(BTreeSet::new),
                     })
                 }
-                "sum" | "max" => {
+                "sum" | "min" | "max" => {
                     let [SqlFunctionArgument::Expression(expression)] = arguments.as_slice() else {
                         return Err(HawDBError::Semantic(
                             "numeric aggregate requires exactly one expression".to_string(),
@@ -183,10 +184,10 @@ impl AggregateExpressionState {
                     Ok(Self::Numeric {
                         expression: expression.clone(),
                         filter: filter.as_deref().cloned(),
-                        aggregate: if name == "sum" {
-                            NumericAggregate::Sum
-                        } else {
-                            NumericAggregate::Max
+                        aggregate: match name.as_str() {
+                            "sum" => NumericAggregate::Sum,
+                            "min" => NumericAggregate::Min,
+                            _ => NumericAggregate::Max,
                         },
                         value: None,
                         distinct: distinct.then(BTreeSet::new),
@@ -374,6 +375,9 @@ pub(super) fn update_numeric_aggregate(
         (NumericAggregate::Max, result @ None, value) => *result = Some(value),
         (NumericAggregate::Max, Some(current), value) if value > *current => *current = value,
         (NumericAggregate::Max, Some(_), _) => {}
+        (NumericAggregate::Min, result @ None, value) => *result = Some(value),
+        (NumericAggregate::Min, Some(current), value) if value < *current => *current = value,
+        (NumericAggregate::Min, Some(_), _) => {}
         (NumericAggregate::Sum, _, _) => {
             return Err(HawDBError::Semantic(
                 "SUM requires BIGINT or DOUBLE PRECISION input".to_string(),

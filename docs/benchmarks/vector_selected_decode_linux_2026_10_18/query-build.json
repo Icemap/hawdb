@@ -1,0 +1,16 @@
+{
+  "base": "4c32610910cc78771eeb23d729be7107ff769bf6",
+  "candidate_branch": "perf/1067-selected-vector-decoding",
+  "source_status": "uncommitted candidate with an exact untracked #1066 helper",
+  "binary_sha256": "eec50803fb35c043e852b4cdc9a02509323092f844961dd95cb73e3be0138f70",
+  "build_log_sha256": "0d6b5a83a421d4b6e256bb389c2079445fad96e9e6a0bc9bafde05fc7fc2d85c",
+  "source_sha256": {
+    "Cargo.toml": "bb39a79474144f60a51edf2c45552ba468e59ca0dae84fa53c259576c55cb6fa",
+    "Cargo.lock": "da456883c7fc4c06424344610b1929ed7dabccc406b61ac99242f4392e6f1c5d",
+    "rust-toolchain.toml": "8e390d6a0838315f972690f46ef8bae8b7ecc9ee6c1ed70140ef852869c2482e",
+    "crates/search/src/out_of_core.rs": "2b378e7d2607f85607b5ab47f9c64b22b9e39c49aaeb40f60108b4324027808e",
+    "crates/search/src/out_of_core/vector_serving.rs": "18519fc01de176e2e4ee358bf0cab8beda8e13fb6cbe2e5869e7cfd2aa0ea1e1",
+    "examples/rabitq_query_profile.rs": "a485d866f487b56c8846c3698e3fbca966967eae69414e258cd5705f9aff17a0"
+  },
+  "command": "CARGO_PROFILE_RELEASE_DEBUG=1 cargo build --locked --release --example rabitq_query_profile --features vector-search"
+}
