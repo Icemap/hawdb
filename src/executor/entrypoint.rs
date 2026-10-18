@@ -117,18 +117,25 @@ fn execute_profiled_output<S: ExecutionStore>(
 
     let memory_ledger = QueryMemoryLedger::for_query(memory, task_context)?
         .with_file_descriptors(store.file_descriptor_context());
-    let result_memory_budget = enforced_result_memory_budget(memory, task_context)?;
+    let (result_memory_budget, budget_option) =
+        enforced_result_memory_budget_with_option(memory, task_context)?;
     let mut output = match target {
-        OutputTarget::Consumer(output_memory, consumer) => QueryOutputAccumulator::new(
+        OutputTarget::Consumer(output_memory, consumer) => {
+            QueryOutputAccumulator::new_with_budget_option(
+                output_limits,
+                result_memory_budget,
+                &memory_ledger,
+                budget_option,
+                output_memory,
+                consumer,
+            )?
+        }
+        OutputTarget::Owned => QueryOutputAccumulator::new_owned_with_budget_option(
             output_limits,
             result_memory_budget,
             &memory_ledger,
-            output_memory,
-            consumer,
+            budget_option,
         )?,
-        OutputTarget::Owned => {
-            QueryOutputAccumulator::new_owned(output_limits, result_memory_budget, &memory_ledger)?
-        }
     };
     let process_memory_start = hawdb_qos::ProcessMemorySnapshot::capture().ok();
     let execution_limit = ExecutionLimit::from_user_max_rows(output_limits.max_rows)?;

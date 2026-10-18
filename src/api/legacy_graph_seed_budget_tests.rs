@@ -15,7 +15,7 @@ fn assert_graph_read_budget_error(error: HawDBError, budget: u64) {
     assert_eq!(cause.budget, budget);
     assert_eq!(
         cause.budget_option,
-        "QueryMemoryLedger::account(budget_bytes)"
+        "ExecutionMemoryConfig.query_memory_bytes"
     );
     assert!(cause.requested > cause.budget.saturating_sub(cause.used));
 }

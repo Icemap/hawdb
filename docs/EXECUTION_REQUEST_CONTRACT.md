@@ -87,11 +87,13 @@ origins:
 
 | `budget_option` | Effective boundary |
 | --- | --- |
-| `ExecutionMemoryConfig.query_memory_bytes` | Configured query root or source account limit. |
+| `ExecutionMemoryConfig.query_memory_bytes` | Configured query root, source account, retrieval pipeline, or result-memory limit. |
 | `RuntimeTaskContext.memory_reservation.memory_bytes` | Runtime-admitted query root; increasing configuration does not widen this grant. |
+| `RuntimeTaskContext.memory_reservation.result_bytes` | Runtime-admitted result-memory limit when it is no larger than the configured query-memory limit. |
 | `ExecutionMemoryConfig.blocking_operator_bytes` | Configured blocking-state account limit. |
 | `QueryMemoryLedger::new(budget_bytes)` | Explicit query-root constructor argument. |
 | `QueryMemoryLedger::account(budget_bytes)` | Explicit account constructor argument, including derived limits. |
+| `KnowledgeRetrievalPipelineBudget::new(query_memory_budget)` | Explicit retrieval pipeline root and account allowance. |
 | `QueryMemoryAccount::sub_account(budget)` | Child allowance reserved in its parent before dispatch. |
 | `QueryMemoryAccount::sibling(budget_bytes)` | Explicit sibling account allowance. |
 | `ExecutionMemoryConfig.max_spill_bytes` | Cumulative bytes written by one spill operator. |
@@ -99,6 +101,12 @@ origins:
 | `ExecutionMemoryConfig.max_total_spill_bytes` | Shared live spill bytes, including pending reservations. |
 | `ExecutionMemoryConfig.max_total_spill_runs` | Shared live spill runs. |
 | `ExecutionMemoryConfig.min_spill_free_bytes` | Filesystem reserve to preserve; `budget` reports probed available space minus this reserve. |
+
+Result memory uses the smaller of the configured query-memory limit and the
+runtime result grant. Equal limits report the runtime grant: raising only the
+configuration cannot widen it. The retrieval graph-read allowance comes from
+`DatabaseConfig.execution_memory.query_memory_bytes`; its output payload limit
+is a separate `ReadBudgetExceeded` boundary.
 
 Shared limits may have been tightened by another query using the same spill
 directory. Filesystem `used` counts reservations not reflected in the space

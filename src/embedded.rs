@@ -1083,6 +1083,10 @@ mod tests {
             assert_eq!(cause.owner, "query result");
             assert_eq!(cause.memory_class, Some("result_materialization"));
             assert_eq!(cause.budget, payload_limit as u64);
+            assert_eq!(
+                cause.budget_option,
+                "RuntimeTaskContext.memory_reservation.result_bytes"
+            );
             assert!(cause.requested > cause.budget.saturating_sub(cause.used));
             assert!(error.to_string().contains("result_materialization"));
             let governor = engine.runtime_governor().snapshot();
