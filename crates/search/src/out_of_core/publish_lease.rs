@@ -156,6 +156,16 @@ impl SearchProjectionPublishLease {
         })
     }
 
+    pub(crate) fn matches_source_directory(&self, path: &Path) -> Result<bool> {
+        self.root.with_directory(|directory| {
+            match SourceDirectory::capture(path, &directory.operation_context()) {
+                Ok(named) => Ok(directory.same_directory(&named)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+                Err(error) => Err(error.into()),
+            }
+        })
+    }
+
     pub(super) fn admit_source_root(
         &mut self,
         context: &hawdb_storage::file_descriptors::FileOpenContext,

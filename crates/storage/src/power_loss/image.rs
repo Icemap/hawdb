@@ -262,6 +262,15 @@ impl ImageEngine {
         Ok(())
     }
 
+    /// The no-replace directory operation must reject every occupied target,
+    /// including an empty directory or an alias of the source itself.
+    pub fn rename_directory_new(&mut self, source: &Path, destination: &Path) -> io::Result<()> {
+        self.directory_inode(source)?;
+        let (parent, name) = self.parent(destination)?;
+        self.require_absent(parent, &name)?;
+        self.rename(source, destination)
+    }
+
     pub fn rename(&mut self, source: &Path, destination: &Path) -> io::Result<()> {
         let inode = self.inode(source)?;
         let (source_parent, source_name) = self.parent(source)?;

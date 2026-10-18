@@ -239,25 +239,71 @@ impl ConsumerProjection {
     }
 
     pub fn publish_directory(&mut self, destination: &Path) -> Result<()> {
-        let _operation = self.authority.acquire()?;
+        let operation = self.authority.acquire()?;
         self.authority.require_index(&self.index)?;
         let pending_mutation = self.pending_mutation;
         self.pending_mutation = true;
-        fs::create_dir(destination)?;
-        let source = self.index.path.as_ref().expect("persistent consumer");
-        if let Err(error) = fs::rename(source, destination) {
-            if let Err(cleanup) = fs::remove_dir(destination) {
-                return Err(invalid(&format!("projection directory publication failed: {error}; destination reservation cleanup failed: {cleanup}")));
-            }
+        // Revoke before the native operation: an error may follow a completed
+        // rename. Never remove a destination on the strength of that error.
+        self.index.consumer_binding_valid = false;
+        let source = self.index.path.take().expect("persistent consumer");
+        if !operation.publication().matches_source_directory(&source)? {
+            return Err(invalid(
+                "consumer directory no longer matches its native owner",
+            ));
+        }
+        let destination_path = destination.to_path_buf();
+        let moved = fs::rename_directory_new(&source, destination);
+        #[cfg(test)]
+        if moved.is_ok() {
+            AFTER_DIRECTORY_MOVE.with(|hook| {
+                let callback = hook.borrow_mut().take();
+                if let Some(callback) = callback {
+                    callback();
+                }
+            });
+        }
+        #[cfg(test)]
+        let moved = if moved.is_ok()
+            && FAIL_DIRECTORY_MOVE_RESPONSE.with(|failure| failure.replace(false))
+        {
+            Err(std::io::Error::other(
+                "injected lost directory move response",
+            ))
+        } else {
+            moved
+        };
+        if let Err(error) = moved {
+            self.index.path = if operation
+                .publication()
+                .matches_source_directory(destination)
+                .unwrap_or(false)
+            {
+                Some(destination_path)
+            } else if operation
+                .publication()
+                .matches_source_directory(&source)
+                .unwrap_or(false)
+            {
+                Some(source)
+            } else {
+                None
+            };
             return Err(error.into());
         }
-        // Rename has already changed the namespace, even if a later durability
-        // barrier fails. Never reuse the vacated path with the moved native lock.
-        self.index.path = Some(destination.to_path_buf());
-        // Revoke operations until both namespace durability and reader reload
-        // succeed. A failed move retains its actual root and recovery evidence.
-        self.index.consumer_binding_valid = false;
+        self.index.path = Some(destination_path);
+        if !operation
+            .publication()
+            .matches_source_directory(destination)?
+        {
+            return Err(invalid("moved projection does not match its native owner"));
+        }
+        // Persist the new link before retiring the old one. A source-parent
+        // failure retains the destination, receipt and revoked native custody.
         sync_published_parent(destination)?;
+        if source.parent() != destination.parent() {
+            sync_published_source_parent(&source)?;
+        }
         // Readers hold paths into their generation. Reload those readers while
         // retaining the lease, receipt, and initializer's runtime configuration.
         self.index.validate_registered_artifacts()?;
@@ -302,7 +348,13 @@ impl ConsumerProjection {
 }
 
 #[cfg(test)]
+type DirectoryMoveHook = std::cell::RefCell<Option<Box<dyn FnOnce()>>>;
+
+#[cfg(test)]
 thread_local! {
+    static AFTER_DIRECTORY_MOVE: DirectoryMoveHook = const { std::cell::RefCell::new(None) };
+    static FAIL_DIRECTORY_MOVE_RESPONSE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static FAIL_SOURCE_PARENT_SYNC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static FAIL_PUBLISHED_PARENT_SYNC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 fn sync_published_parent(destination: &Path) -> Result<()> {
@@ -313,6 +365,15 @@ fn sync_published_parent(destination: &Path) -> Result<()> {
         ));
     }
     hawdb_storage::durability::sync_parent_directory(destination)?;
+    Ok(())
+}
+
+fn sync_published_source_parent(source: &Path) -> Result<()> {
+    #[cfg(test)]
+    if FAIL_SOURCE_PARENT_SYNC.with(|failure| failure.replace(false)) {
+        return Err(invalid("injected source parent synchronization failure"));
+    }
+    hawdb_storage::durability::sync_parent_directory(source)?;
     Ok(())
 }
 
@@ -971,6 +1032,169 @@ mod tests {
         drop(recovered);
         fs::remove_dir_all(parent).unwrap();
     }
+    #[test]
+    fn lost_directory_move_response_keeps_native_custody_and_original_receipt() {
+        let parent = directory();
+        let source = parent.join("source");
+        let destination = parent.join("destination");
+        fs::create_dir(&source).unwrap();
+        let mut owner = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
+        let receipt = owner.receipt();
+        FAIL_DIRECTORY_MOVE_RESPONSE.with(|failure| failure.set(true));
+        assert!(owner
+            .publish_directory(&destination)
+            .unwrap_err()
+            .to_string()
+            .contains("lost directory move response"));
+        assert!(destination.is_dir());
+        assert!(!source.exists());
+        assert_eq!(owner.index().path.as_deref(), Some(destination.as_path()));
+        assert!(!owner.binding_is_valid());
+        assert_eq!(owner.receipt(), receipt);
+        assert!(owner.checkpoint().is_err());
+        assert!(ConsumerProjection::open(&destination).is_err());
+        fs::create_dir(&source).unwrap();
+        let peer = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
+        assert!(owner
+            .apply(|index| index.mark_full_reindex_needed("lost move response"))
+            .is_err());
+        assert!(!peer.index().full_reindex_needed());
+        drop(owner);
+        let reopened = ConsumerProjection::open(&destination).unwrap();
+        assert_eq!(reopened.receipt(), receipt);
+        drop(reopened);
+        drop(peer);
+        fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn lost_move_outcome_with_no_known_locator_retains_custody_and_evidence() {
+        let parent = directory();
+        let source = parent.join("source");
+        let destination = parent.join("destination");
+        let third = parent.join("third");
+        fs::create_dir(&source).unwrap();
+        let mut owner = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
+        let receipt = owner.receipt();
+        let moved = destination.clone();
+        let actual = third.clone();
+        AFTER_DIRECTORY_MOVE.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                fs::rename(&moved, &actual).unwrap();
+            }))
+        });
+        FAIL_DIRECTORY_MOVE_RESPONSE.with(|failure| failure.set(true));
+        assert!(owner.publish_directory(&destination).is_err());
+        assert_eq!(owner.index().path, None);
+        assert!(!owner.binding_is_valid());
+        assert!(third.is_dir());
+        assert!(ConsumerProjection::open(&third).is_err());
+        assert_eq!(owner.receipt(), receipt);
+        assert!(owner.checkpoint().is_err());
+        assert!(owner.reserve_preparation().is_err());
+        drop(owner);
+        let recovered = ConsumerProjection::open(&third).unwrap();
+        assert_eq!(recovered.receipt(), receipt);
+        drop(recovered);
+        fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn a_replaced_source_is_not_moved_using_an_old_native_owner() {
+        let parent = directory();
+        let source = parent.join("source");
+        let original = parent.join("original");
+        let destination = parent.join("destination");
+        fs::create_dir(&source).unwrap();
+        let mut owner = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
+        let receipt = owner.receipt();
+        fs::rename(&source, &original).unwrap();
+        fs::create_dir(&source).unwrap();
+        let peer = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
+        let foreign = fs::read(source.join(SEARCH_SNAPSHOT_FILE)).unwrap();
+        assert!(owner.publish_directory(&destination).is_err());
+        assert!(!destination.exists());
+        assert_eq!(
+            fs::read(source.join(SEARCH_SNAPSHOT_FILE)).unwrap(),
+            foreign
+        );
+        assert!(!owner.binding_is_valid());
+        assert_eq!(owner.index().path, None);
+        assert!(ConsumerProjection::open(&original).is_err());
+        assert_eq!(owner.receipt(), receipt);
+        drop(owner);
+        let recovered = ConsumerProjection::open(&original).unwrap();
+        assert_eq!(recovered.receipt(), receipt);
+        drop(recovered);
+        drop(peer);
+        fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn occupied_directory_target_is_retained_and_failed_owner_requires_reopen() {
+        for populated in [false, true] {
+            let parent = directory();
+            let source = parent.join("source");
+            let destination = parent.join("destination");
+            fs::create_dir(&source).unwrap();
+            fs::create_dir(&destination).unwrap();
+            if populated {
+                fs::write(destination.join("foreign.hawdb"), b"foreign evidence").unwrap();
+            }
+            let mut owner =
+                ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
+            let receipt = owner.receipt();
+            assert!(owner.publish_directory(&destination).is_err());
+            assert!(source.is_dir());
+            assert!(destination.is_dir());
+            if populated {
+                assert_eq!(
+                    fs::read(destination.join("foreign.hawdb")).unwrap(),
+                    b"foreign evidence"
+                );
+            } else {
+                assert!(fs::read_dir(&destination).unwrap().next().is_none());
+            }
+            assert!(!owner.binding_is_valid());
+            assert!(owner.checkpoint().is_err());
+            drop(owner);
+            let reopened = ConsumerProjection::open(&source).unwrap();
+            assert_eq!(reopened.receipt(), receipt);
+            drop(reopened);
+            fs::remove_dir_all(parent).unwrap();
+        }
+    }
+
+    #[test]
+    fn source_parent_sync_failure_keeps_the_moved_directory_revoked() {
+        let parent = directory();
+        let first = parent.join("first");
+        let second = parent.join("second");
+        fs::create_dir(&first).unwrap();
+        fs::create_dir(&second).unwrap();
+        let source = first.join("source");
+        let destination = second.join("destination");
+        fs::create_dir(&source).unwrap();
+        let mut owner = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
+        let receipt = owner.receipt();
+        FAIL_SOURCE_PARENT_SYNC.with(|failure| failure.set(true));
+        assert!(owner
+            .publish_directory(&destination)
+            .unwrap_err()
+            .to_string()
+            .contains("source parent synchronization failure"));
+        assert!(destination.is_dir());
+        assert!(!source.exists());
+        assert!(!owner.binding_is_valid());
+        assert_eq!(owner.index().path.as_deref(), Some(destination.as_path()));
+        assert!(ConsumerProjection::open(&destination).is_err());
+        drop(owner);
+        let reopened = ConsumerProjection::open(&destination).unwrap();
+        assert_eq!(reopened.receipt(), receipt);
+        drop(reopened);
+        fs::remove_dir_all(parent).unwrap();
+    }
+
     #[test]
     fn successful_directory_move_keeps_mutations_on_the_moved_native_root() {
         let parent = directory();

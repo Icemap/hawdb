@@ -97,3 +97,10 @@ and independently forget installed exact pins.
 description after original ownership closes, violating NoUnownedLocalLock. The
 positive protocol explicitly unlocks successful ownership before native close.
 This control is independent of duplicate-handle and early-unregister controls.
+
+`HawDBConsumerDirectoryRelocation` now separates destination/source barriers,
+occupied targets and known/unknown lost outcomes. Existing four controls retain
+their named violations. Generated `ReplaceDestination`,
+`ReleaseBeforeSourceSync` and `SyncSourceFirst` configs independently violate
+NoTargetClobber, PublishedBothParents and SourceSyncFollowsDestination.
+See [directory publication](../CONSUMER_DIRECTORY_RELOCATION_DESIGN.md).

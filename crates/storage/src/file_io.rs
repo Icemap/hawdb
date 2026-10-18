@@ -782,6 +782,7 @@ enum NamespaceOperation {
     CreateDirectories,
     Remove,
     Rename,
+    RenameNew,
     HardLink,
 }
 
@@ -797,10 +798,14 @@ fn namespace_io<T>(
     {
         let context = context_for_path(path)?;
         match operation {
-            NamespaceOperation::Rename | NamespaceOperation::HardLink => {
+            NamespaceOperation::Rename
+            | NamespaceOperation::RenameNew
+            | NamespaceOperation::HardLink => {
                 let destination = destination.expect("two-path namespace operation has a target");
                 let event = match operation {
-                    NamespaceOperation::Rename => crate::power_loss::IoEvent::Rename,
+                    NamespaceOperation::Rename | NamespaceOperation::RenameNew => {
+                        crate::power_loss::IoEvent::Rename
+                    }
                     _ => crate::power_loss::IoEvent::HardLink,
                 };
                 crate::power_loss::two_paths(
@@ -811,6 +816,9 @@ fn namespace_io<T>(
                     Some(event),
                     |engine, source, destination| match operation {
                         NamespaceOperation::Rename => engine.rename(source, destination),
+                        NamespaceOperation::RenameNew => {
+                            engine.rename_directory_new(source, destination)
+                        }
                         _ => engine.hard_link(source, destination),
                     },
                     native,
@@ -898,6 +906,56 @@ pub fn rename(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Re
     }
     Ok(())
 }
+/// Atomically move a directory only if the destination name is absent.
+/// No existence-check/remove/rename fallback is used. Unsupported kernels or
+/// filesystems refuse. Success still needs both parent-directory barriers.
+/// An error may follow a completed move; callers must retain custody/evidence.
+#[doc(hidden)]
+pub fn rename_directory_new(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+) -> io::Result<()> {
+    let source = source.as_ref();
+    let destination = destination.as_ref();
+    two_paths(source, destination, || {
+        namespace_io(
+            NamespaceOperation::RenameNew,
+            source,
+            Some(destination),
+            || {
+                if !std::fs::symlink_metadata(source)?.is_dir() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "directory move requires a direct directory",
+                    ));
+                }
+                // Darwin can report a successful no-op when both names denote
+                // the same entry, even with RENAME_EXCL. Reject existing names
+                // early; the exclusive syscall still closes the ensuing race.
+                match std::fs::symlink_metadata(destination) {
+                    Ok(_) => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::AlreadyExists,
+                            "directory move target already exists",
+                        ))
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error),
+                }
+                #[cfg(test)]
+                rename_new::after_destination_check();
+                rename_new::native(source, destination)
+            },
+        )
+    })?;
+    for path in [source, destination] {
+        unbind_immutable_path(path)?;
+    }
+    Ok(())
+}
+
+mod rename_new;
+
 pub fn hard_link(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
     two_paths(source.as_ref(), destination.as_ref(), || {
         namespace_io(
