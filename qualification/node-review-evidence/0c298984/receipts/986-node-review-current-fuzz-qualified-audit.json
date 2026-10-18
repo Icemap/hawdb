@@ -1,0 +1,598 @@
+{
+  "parent": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "tree": "13035994b43a772d666ab34faa28e911f92f9085",
+  "targets": 98,
+  "all_status": "PASSED",
+  "logs": [
+    {
+      "target": "//crates/search:hawdb_search_compression_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/0-0.log",
+      "sha256": "a6de0a7c7a1ab5d94e98d67d3a18c838a25955cd12a3c2d42e76f6d1400144fd",
+      "duration_ms": "2371"
+    },
+    {
+      "target": "//crates/executor:hawdb_query_observer_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/1-0.log",
+      "sha256": "1958c70155930395079f71d575641419e8f43f28eeb6b845765bc97f2209a938",
+      "duration_ms": "2476"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/2-0.log",
+      "sha256": "4cf52d362b29df10ddb4d8d31d614cb7c3dade2d20b0f6dfb946786c6a88023f",
+      "duration_ms": "8002"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/3-0.log",
+      "sha256": "f69b6bc6dcaa4d24ee458ca9e0fbe480011eb5aee86acb329b54f8e01f05f457",
+      "duration_ms": "2446"
+    },
+    {
+      "target": "//crates/executor:hawdb_graph_hash_join_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/4-0.log",
+      "sha256": "5b686ace67692f707689cd32ce6b8eb6b7c66d62410ed016478c500afbc3a6e9",
+      "duration_ms": "79683"
+    },
+    {
+      "target": "//crates/search:hawdb_search_candidate_evidence_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/5-0.log",
+      "sha256": "40c9f1a3be2fffd6c6985b708dc5cdd4f70a57a3e79393f1a10df136fd20a103",
+      "duration_ms": "1872"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/6-0.log",
+      "sha256": "77222d970cba87d039f9262438624ebb439f72782198cce55178a597c8add1c4",
+      "duration_ms": "6164"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_positioned_read_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/7-0.log",
+      "sha256": "04d07f4c8281f204240c7242eece49d500e5988982215f527c8310fd97ca97c2",
+      "duration_ms": "2780"
+    },
+    {
+      "target": "//crates/executor:hawdb_graph_algorithm_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/8-0.log",
+      "sha256": "80e983b8fe81e44e8a84b87da2a0961e1e28d5ecd1b0de2e436befc9865f9cbc",
+      "duration_ms": "7187"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_graph_overlay_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/9-0.log",
+      "sha256": "c087a7f2d5926110c318cafb635394566cb2ca4dd71d9318c32c23bfdc89013f",
+      "duration_ms": "12984"
+    },
+    {
+      "target": "//crates/optimizer-graph:hawdb_optimizer_cardinality_defaults_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/10-0.log",
+      "sha256": "fb517da862f75a72d292add2d12a7d7a84636dba48118f4a9734ebf20b82db33",
+      "duration_ms": "1452"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_text_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/11-0.log",
+      "sha256": "df8e0b95c78ffb50063d675342761a2ff91d562b2682a9209e7a1a73b999d565",
+      "duration_ms": "1215"
+    },
+    {
+      "target": "//crates/relational:hawdb_relational_row_runtime_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/12-0.log",
+      "sha256": "cd63e605a168204ce69d0ff79849b859b1c5a826382dc66eea0e3ea09f6a8767",
+      "duration_ms": "34490"
+    },
+    {
+      "target": "//crates/executor:hawdb_execution_lifecycle_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/13-0.log",
+      "sha256": "7a3e3c7d3942fc38c50262b0bb95502907a3bff78e4ff0202fc921dc2149f040",
+      "duration_ms": "1763"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_artifact_binding_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/14-0.log",
+      "sha256": "6cfd781a4d3507000ce742773a8fc11eeb8caa81e8bf0c76e1c4c7cf2b93a1c5",
+      "duration_ms": "1758"
+    },
+    {
+      "target": "//crates/executor:hawdb_spill_compaction_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/15-0.log",
+      "sha256": "6a848ef18cd4eaae1ed69dc99ca0e7195daa7eb927a5ed9bd6602df20b4cd478",
+      "duration_ms": "150550"
+    },
+    {
+      "target": "//crates/search:hawdb_search_bounded_file_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/16-0.log",
+      "sha256": "f3ebf0f408b4b6bcccd86cb3a3299ae8f013d7db1f1e6817934a1902d9d7e763",
+      "duration_ms": "2428"
+    },
+    {
+      "target": "//crates/optimizer-graph:hawdb_optimizer_trace_cost_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/17-0.log",
+      "sha256": "235c3c32ad21842a9c3857611394340204320f13c407de99fca7962d55670db9",
+      "duration_ms": "3061"
+    },
+    {
+      "target": "//crates/relational:hawdb_relational_physical_plan_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/18-0.log",
+      "sha256": "07f4a39229b5dd30694110104fb65ee105fbba2986dff8006bae17cad49fc9ee",
+      "duration_ms": "10832"
+    },
+    {
+      "target": "//crates/relational:hawdb_relational_statement_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/19-0.log",
+      "sha256": "094dae2d513c1daf6c87b534f9324eeb22310e4bafc3e27ce74f4f957f2d6516",
+      "duration_ms": "1511"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_append_reader_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/20-0.log",
+      "sha256": "985609e3972d6574ebcd4ac46a3f88210a6cb4342b3e5e637806c3c93e0830fc",
+      "duration_ms": "10951"
+    },
+    {
+      "target": "//crates/readiness:hawdb_replacement_summary_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/21-0.log",
+      "sha256": "e6263de3ccaff4e179c5dda87ed25ef826fde2237a76902e6cd05620abc34786",
+      "duration_ms": "127366"
+    },
+    {
+      "target": "//crates/search:hawdb_search_block_encoding_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/22-0.log",
+      "sha256": "c0941b7c3ff99acfd31c4d9e900c39fe4e2c775bdbdc6f3a8491f67a586c0907",
+      "duration_ms": "8632"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_set_value_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/23-0.log",
+      "sha256": "f4f3fb4882061e6b155032f15a70e6cc9ec222b8fcc30176db11d493b682dd09",
+      "duration_ms": "2245"
+    },
+    {
+      "target": "//crates/executor:hawdb_mutation_lowering_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/24-0.log",
+      "sha256": "1778937f84db9291acfce7d5598bb1fc9763eaf11a1bb1e25c6873e9e8f9f6d0",
+      "duration_ms": "2725"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_graph_constraints_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/25-0.log",
+      "sha256": "f74c8979ddbe66bfc2c1982251cb7fa161c3c86e4dc7546e1677f3d185fdd3f1",
+      "duration_ms": "3511"
+    },
+    {
+      "target": "//crates/optimizer-graph:hawdb_optimizer_full_text_cost_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/26-0.log",
+      "sha256": "d21a824234c0a0757c46befc0aa261507829b05acd3ce7c934895d3329f14d21",
+      "duration_ms": "1235"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_source_scan_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/27-0.log",
+      "sha256": "46c91873afe06e86ff30b91f034d32d396a6c4837e1f9744aba0b5dae6c2937a",
+      "duration_ms": "30639"
+    },
+    {
+      "target": "//crates/executor:hawdb_result_delivery_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/28-0.log",
+      "sha256": "bd8aa28c1b1e4886d62f573f25e02704b2aa4b7a17058b87f970e934644d2a5f",
+      "duration_ms": "2727"
+    },
+    {
+      "target": "//crates/search:hawdb_search_spool_encoding_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/29-0.log",
+      "sha256": "56eefdf079ec6ce4c3f80ec14bee30903c33b03493484575868c5aa078e0c8e3",
+      "duration_ms": "1341"
+    },
+    {
+      "target": "//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/30-0.log",
+      "sha256": "823fedb5e894a9e933d7e443b33449da9c909bf90b0fcb17e4f8d0046c1131ac",
+      "duration_ms": "11554"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_durable_manifest_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/31-0.log",
+      "sha256": "42422e1b799867a5b6cdf0e6829b15a65de2b4354b75c082800ddd74e88bf858",
+      "duration_ms": "13935"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_durable_envelope_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/32-0.log",
+      "sha256": "c705e01c09132e3ac98984054c18fe93371d168c1c926ab66bc2b58c62bc0718",
+      "duration_ms": "9388"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/33-0.log",
+      "sha256": "8b2da57a45f3b0e9118b5fc5df6870efb4f74b2d5e66e4df46421bd360122a89",
+      "duration_ms": "3628"
+    },
+    {
+      "target": "//crates/executor:hawdb_morsel_oracle_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/34-0.log",
+      "sha256": "2a71fdf2e7f17526eb335ea9f7b981e8d03349aafe99270e43d39df83d242d59",
+      "duration_ms": "495"
+    },
+    {
+      "target": "//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/35-0.log",
+      "sha256": "18da9b9aa53bffea6ab8d25b115b658630de2e34eb5e685cbe5437c37713c513",
+      "duration_ms": "4776"
+    },
+    {
+      "target": "//crates/readiness:hawdb_integration_bundle_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/36-0.log",
+      "sha256": "0412c171a65fb06d7c5b1e9574fd91317a5f12c375177116cb63f30b59470b3a",
+      "duration_ms": "106495"
+    },
+    {
+      "target": "//crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/37-0.log",
+      "sha256": "09c336ecc8f414ef18cf3d6d3e2528138522d0c331c26424e2ef94b9fbcabbc5",
+      "duration_ms": "4109"
+    },
+    {
+      "target": "//crates/search:hawdb_search_spool_decoding_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/38-0.log",
+      "sha256": "79575c532304106bff2fe142b11af8a9e404a7521039d35a595efcdaebf2bd8c",
+      "duration_ms": "16787"
+    },
+    {
+      "target": "//crates/search:hawdb_search_concurrent_read_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/39-0.log",
+      "sha256": "2489b2e9538ffb65a9564399aaef15fea63a8d43a8c0ec4b754ab04381e3f1a2",
+      "duration_ms": "6812"
+    },
+    {
+      "target": "//crates/executor:hawdb_batch_dispatch_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/40-0.log",
+      "sha256": "37bcafd52b54721546015e1b09223960d24a385c7a71dc1e80d7fa023316356d",
+      "duration_ms": "1290"
+    },
+    {
+      "target": "//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/41-0.log",
+      "sha256": "36868a0ecf9c3a8bca076b9926c38c8a05f7fa05c4b1c04f329fad117293239c",
+      "duration_ms": "31090"
+    },
+    {
+      "target": "//crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/42-0.log",
+      "sha256": "c847862d689f7defe3b3a9cdce16f83623d60cce80a9d98aa803f9542ce56bbb",
+      "duration_ms": "496"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_transaction_locks_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/43-0.log",
+      "sha256": "f2afa4195e67fd93c11999c6532a71d20d3f529ab888ab9973edf4d25ac09158",
+      "duration_ms": "1588"
+    },
+    {
+      "target": "//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/44-0.log",
+      "sha256": "8b7a8ca4d370f8a5b7a0faf5671efa76aea415ccf5ab2751e77757b88efdff7d",
+      "duration_ms": "626"
+    },
+    {
+      "target": "//crates/executor:hawdb_numeric_execution_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/45-0.log",
+      "sha256": "2de4e91d9c92fe32db50c5921472c0b4b9bbd06a11d3a23a14bbed9924b50054",
+      "duration_ms": "2632"
+    },
+    {
+      "target": "//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/46-0.log",
+      "sha256": "f54bbbc7037f9997a30d603fa89f16838047dea1d88901ad81cc97e0da587411",
+      "duration_ms": "577"
+    },
+    {
+      "target": "//crates/relational:hawdb_relational_aggregate_state_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/47-0.log",
+      "sha256": "053bc18120530a7bcd8f1c5c5501c463cc7275829daf051b4cd166fe8a076a06",
+      "duration_ms": "20962"
+    },
+    {
+      "target": "//crates/cypher:hawdb_cypher_backtracking_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/48-0.log",
+      "sha256": "57ecb8e1be6ffa7bcb7ddbe15fe4d206db998dba3ed061c9b26c5b5a7a6ca698",
+      "duration_ms": "4583"
+    },
+    {
+      "target": "//crates/executor:hawdb_vector_seed_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/49-0.log",
+      "sha256": "c161b49b60963db88eea6abecefcd29815d25d67c46d0847551695d4013feaeb",
+      "duration_ms": "3417"
+    },
+    {
+      "target": "//crates/evidence:hawdb_inventory_health_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/50-0.log",
+      "sha256": "4bd005302709da06b93611b350e0155ec42a77d115838d89fe5455fb5d45e7d5",
+      "duration_ms": "7879"
+    },
+    {
+      "target": "//crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/51-0.log",
+      "sha256": "731b72c58356b8c8741202e1bf4fb771ba032a472f0f803b6780868ea66539f4",
+      "duration_ms": "1355"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_backup_hex_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/52-0.log",
+      "sha256": "66e0dc897d23574b67d27393c2d0b756a63ba2963777551779f47b6673903d9f",
+      "duration_ms": "3381"
+    },
+    {
+      "target": "//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/53-0.log",
+      "sha256": "4ed24501c6bf59ffa910fd2d2a316ad109a979f98af0c1b63d27c27633d91020",
+      "duration_ms": "6310"
+    },
+    {
+      "target": "//crates/relational:hawdb_relational_field_plan_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/54-0.log",
+      "sha256": "01cf37e2f743707a445213dbe5383fb7e36d4471c49c2ce1e361ca40b48ba1d1",
+      "duration_ms": "4969"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_projected_artifact_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/55-0.log",
+      "sha256": "0f3ce7678c2963c6de8fa333568dc37c910820282d89e8d02687550777ed4d94",
+      "duration_ms": "42059"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_sharded_cache_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/56-0.log",
+      "sha256": "7e9b390b07aa7796de4567928091260df75d8597f81f66c8edfeee99beab2685",
+      "duration_ms": "5560"
+    },
+    {
+      "target": "//crates/search:hawdb_search_hydration_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/57-0.log",
+      "sha256": "a3aeba6bc61b1c862e65948040f084f5d6bd272c85b71e20433858c88e3e68e6",
+      "duration_ms": "3035"
+    },
+    {
+      "target": "//crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/58-0.log",
+      "sha256": "99f2daba57efc4798753272bbf5168d4d29f5c87eb55c4a50ead74b099f046fa",
+      "duration_ms": "1388"
+    },
+    {
+      "target": "//crates/search:hawdb_search_projection_evidence_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/59-0.log",
+      "sha256": "282f165f2f785e685600d660244a2f112921b9bfd469032627ee1e66af272160",
+      "duration_ms": "131305"
+    },
+    {
+      "target": "//crates/relational:hawdb_relational_index_runtime_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/60-0.log",
+      "sha256": "822a72021f18d5307536e84f1801244be608a3f18daca7e3658daeba07ffd9b6",
+      "duration_ms": "82053"
+    },
+    {
+      "target": "//crates/search:hawdb_search_document_analysis_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/61-0.log",
+      "sha256": "fbf07f1030c77e643d83795d246e2180f2e92c1d5a5a0df603ccbe18b72823a5",
+      "duration_ms": "6554"
+    },
+    {
+      "target": "//crates/search:hawdb_search_lexical_spill_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/62-0.log",
+      "sha256": "79cb5fd39702d2f71414c7624c62e08227d8fa3d40562b41ad5fe39c70863f22",
+      "duration_ms": "20321"
+    },
+    {
+      "target": "//crates/evidence:hawdb_resource_profile_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/63-0.log",
+      "sha256": "5a064d8a5a92fbf386242d2ec5e893438934445459bbef14097089e36c5f21e9",
+      "duration_ms": "2319"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_relational_index_view_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/64-0.log",
+      "sha256": "5783bf2af07911f5e3bc706f372dd27894725dd01c4416a4f08daa54907b4f37",
+      "duration_ms": "116113"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/65-0.log",
+      "sha256": "1826af5ecd0fc2acabaf627d72bf233fe9025cdef3b33c603e681a93b7dbd7b2",
+      "duration_ms": "62184"
+    },
+    {
+      "target": "//crates/executor:hawdb_transform_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/66-0.log",
+      "sha256": "643b13f75528523a5846fecff9e8465545fefccdb4866ff6e7d2a513fb7c890c",
+      "duration_ms": "3672"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_file_lock_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/67-0.log",
+      "sha256": "a6391704752007ee77fdb1f6d907f7c3842640cf300af21ae28d2448d13809f1",
+      "duration_ms": "2853"
+    },
+    {
+      "target": "//crates/executor:hawdb_execution_report_value_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/68-0.log",
+      "sha256": "e4a9a641714ce153541c836c48e5b8de66650bd9421797b9f87b30bcd8b5bf79",
+      "duration_ms": "4442"
+    },
+    {
+      "target": "//crates/search:hawdb_search_manifest_budget_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/69-0.log",
+      "sha256": "81b9e3ff2de49df7aa2bc13bd75ac4b7435ca9dc6c43086816bbe4be3ab2ab80",
+      "duration_ms": "126141"
+    },
+    {
+      "target": "//crates/executor:hawdb_mutation_preflight_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/70-0.log",
+      "sha256": "c78fad1918b97069f23f587a9312111c713d10017226ca093289231b6924d904",
+      "duration_ms": "3183"
+    },
+    {
+      "target": "//crates/relational:hawdb_relational_explain_report_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/71-0.log",
+      "sha256": "35bb1a9b2f2b87653277feb15076a5bd87db06bfaa5af0d0de97fbe01d54eab6",
+      "duration_ms": "11072"
+    },
+    {
+      "target": "//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/72-0.log",
+      "sha256": "fe9c6c254302eb342cd3419c477305ba0ec2b6dee6e289ef746bf3cb1eb46f65",
+      "duration_ms": "3756"
+    },
+    {
+      "target": "//crates/search:hawdb_search_term_policy_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/73-0.log",
+      "sha256": "8b69ea919671adc6ffd0adba3d8a2dc35f3d70bb2684cb1a60e53049bfa09461",
+      "duration_ms": "61490"
+    },
+    {
+      "target": "//crates/search:hawdb_search_hex_decoding_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/74-0.log",
+      "sha256": "95a07cdd3752abea565714e4a99e0ff5b7ff5c9c88dcde9393b67662ec538e1f",
+      "duration_ms": "1791"
+    },
+    {
+      "target": "//crates/readiness:hawdb_graph_route_readiness_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/75-0.log",
+      "sha256": "ed12a3f5b549209255ce1bd890cdcef84aa54d9d7ee4f697b0ac00988e90ddb5",
+      "duration_ms": "101937"
+    },
+    {
+      "target": "//crates/evidence:hawdb_source_inventory_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/76-0.log",
+      "sha256": "910eb37d5448cff14865bb02f3113dbe4c22650473eb5990453c1e7c2e1fd120",
+      "duration_ms": "3531"
+    },
+    {
+      "target": "//crates/search:hawdb_search_document_frequency_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/77-0.log",
+      "sha256": "05ad4a95c26351ab4b964dc1a9576fbfe7668d73c6043201fed7f93dcc87fdc2",
+      "duration_ms": "16718"
+    },
+    {
+      "target": "//crates/search:hawdb_search_manifest_encoding_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/78-0.log",
+      "sha256": "b306ec1a4056656bb53585b9239656e3dad5dcdd9ae8a2437a661d95439514a0",
+      "duration_ms": "2636"
+    },
+    {
+      "target": "//crates/relational:hawdb_relational_qualification_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/79-0.log",
+      "sha256": "1810fdf32197cd8d19542298dc38e80791f2226ba95fc91ee8e1bc1d7a8cdad8",
+      "duration_ms": "4882"
+    },
+    {
+      "target": "//crates/compat:hawdb_compat_contract_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/80-0.log",
+      "sha256": "b7c9d6a8adcb2823af30497de163bd41360c8d7cb2103535b630770423ab6424",
+      "duration_ms": "714"
+    },
+    {
+      "target": "//crates/executor:hawdb_sort_merge_account_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/81-0.log",
+      "sha256": "e2ef88c14069506238a8d2a980af12a0d059e244f313a4691c1b083bac77e7bb",
+      "duration_ms": "7293"
+    },
+    {
+      "target": "//crates/sql:hawdb_sql_create_binding_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/82-0.log",
+      "sha256": "9942031d070c71b232788a12bc3f30a4ac4c94a2cfc479e1a336558aa949ba7e",
+      "duration_ms": "654"
+    },
+    {
+      "target": "//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/83-0.log",
+      "sha256": "87e12042616165dc009abbdaefa9bb40c53d36f3d10286a82290f635dd4a612f",
+      "duration_ms": "1845"
+    },
+    {
+      "target": "//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/84-0.log",
+      "sha256": "b4cd1faa878fc8c72576891f8ecc8f80e3a7ecec09c00b936aeed1cf462c6653",
+      "duration_ms": "1941"
+    },
+    {
+      "target": "//crates/fuzz:hawdb_parser_fuzz_cli_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/85-0.log",
+      "sha256": "c037e0a0fb31107d679b8c8a04848d4c552b70f6bb97c908179c90b1877b6d77",
+      "duration_ms": "222"
+    },
+    {
+      "target": "//crates/fuzz:hawdb_fuzz_cli_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/86-0.log",
+      "sha256": "514636426de65f89a2e1b6e1037f919edeeaccb2238492ab0d17f7b3c78631c7",
+      "duration_ms": "423"
+    },
+    {
+      "target": "//crates/fuzz:hawdb_fuzz_relational_join_rewrite_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/87-0.log",
+      "sha256": "f03e0f6545a09d5be0fadf61a88abc260a4a75ae2e500cee50c7730fb9df9aed",
+      "duration_ms": "8882"
+    },
+    {
+      "target": "//:hawdb_concurrent_key_range_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/88-0.log",
+      "sha256": "1b453ab12a011599737fe3670876f23c562766f17ad5f2f603981fad2654b1c8",
+      "duration_ms": "1719"
+    },
+    {
+      "target": "//crates/fuzz:hawdb_append_fuzz_cli_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/89-0.log",
+      "sha256": "b8e827added259cbdbcae108d5e6f2c66a0d848bb6c55d30e94f163bcd4e305f",
+      "duration_ms": "31335"
+    },
+    {
+      "target": "//:hawdb_scan_callback_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/90-0.log",
+      "sha256": "1bbb4eb81c37f8643d02e98cbd9a97c92afe13cd0aaa8347fce89d44d5874b07",
+      "duration_ms": "15263"
+    },
+    {
+      "target": "//crates/fuzz:hawdb_fuzz_append_replay_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/91-0.log",
+      "sha256": "5c74eb6d7ea3ed9651bcc27209132dcff3dbd197d91b6dc59b9a4cd6977b96e4",
+      "duration_ms": "47718"
+    },
+    {
+      "target": "//crates/fuzz:hawdb_storage_fuzz_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/92-0.log",
+      "sha256": "fa2db954e4edcf0f2ce1f648a9ff9b2bb1074304ad4108817587172da2c058f7",
+      "duration_ms": "48612"
+    },
+    {
+      "target": "//crates/fuzz:hawdb_fuzz_append_seed_7_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/93-0.log",
+      "sha256": "744a0c11d1cd65618cc839d946c38125decd86f25d965af534fe6f0e10178400",
+      "duration_ms": "51445"
+    },
+    {
+      "target": "//crates/fuzz:hawdb_fuzz_fast_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/94-0.log",
+      "sha256": "b9103af7b54561c2fa91c22c9ba89b911bcbb1c981d86bc533f409007336656f",
+      "duration_ms": "172086"
+    },
+    {
+      "target": "//:hawdb_linux_ci_fuzz_smoke_test",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/95-0.log",
+      "sha256": "39a8074ffb316bc145747528fc427d5aa07a63870080cab075ae99cdfeeb8059",
+      "duration_ms": "176544"
+    },
+    {
+      "target": "//:hawdb_graph_projection_residency_fuzz_second_half_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/96-0.log",
+      "sha256": "44f8bd09e3e5cabe62f9ce0e07dc5d8c7ac29544f45dde70f0c59f5a6df0fae6",
+      "duration_ms": "216429"
+    },
+    {
+      "target": "//:hawdb_graph_projection_residency_fuzz_first_half_tests",
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/97-0.log",
+      "sha256": "424c9e3ac48f59aae2d5d9de61800a6174e6847f3c8d9f6d76f6085ca130615e",
+      "duration_ms": "223325"
+    }
+  ],
+  "observed_at": 1792347553.8263402,
+  "scope": "Exact required three fuzz selections with original settings. Does not replace general/correctness/performance acceptance."
+}

@@ -1,0 +1,8 @@
+{
+  "tree": "13035994b43a772d666ab34faa28e911f92f9085",
+  "case": "api::automatic_checkpoint::tests::headroom::pending_idle_owner_blocks_pressure_growth_before_admission",
+  "result": "passed",
+  "test_seconds": 17.0,
+  "log_sha256": "de4c01f43ac9052fede6da51d769eda6cfb3a74d0a43b5b7d5d3a5078c883693",
+  "scope": "Focused diagnostic only; complete prior general failure remains preserved and no causal explanation is established. Original deadlines and final full suite selection remain unchanged."
+}

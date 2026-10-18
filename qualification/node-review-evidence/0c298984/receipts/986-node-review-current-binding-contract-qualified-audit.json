@@ -1,0 +1,72 @@
+{
+  "parent": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "tree": "13035994b43a772d666ab34faa28e911f92f9085",
+  "observed_at": 1792346939.561197,
+  "scope": "Completed target evidence only; general first failure remains open. No final correctness/performance qualification.",
+  "targets": {
+    "contracts": {
+      "status": "PASSED",
+      "duration_ms": "112844",
+      "logs": [
+        {
+          "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/contracts-0.log",
+          "sha256": "1816d29851dca4651daff16cee336cddcf11e01809321a1b6a466b13a689a419",
+          "result_lines": [
+            "test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 111.56s"
+          ]
+        }
+      ]
+    },
+    "ffi": {
+      "status": "PASSED",
+      "duration_ms": "1021",
+      "logs": [
+        {
+          "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/ffi-0.log",
+          "sha256": "875cbf1364c40678ef48adbd7f9c83ed2768d8c32b7f5f3cb7505ba7515339a2",
+          "result_lines": [
+            "test retained::node::tests::multiple_index_matches_refuse_with_empty_outputs_and_no_retained_owners ... ok",
+            "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s"
+          ]
+        }
+      ]
+    },
+    "go": {
+      "status": "PASSED",
+      "duration_ms": "9443",
+      "logs": [
+        {
+          "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/go-0.log",
+          "sha256": "0e9861c5329a43eb57cac94191a97556fd7cc21d4c146160c2f1a7333522c268",
+          "result_lines": []
+        }
+      ]
+    },
+    "python": {
+      "status": "PASSED",
+      "duration_ms": "186134",
+      "logs": [
+        {
+          "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/python-0.log",
+          "sha256": "f4fee0c84c56b4e0ae8748c7cbffe0d3b0386c9abf20d099c692d364411227a6",
+          "result_lines": [
+            "================== 357 passed, 7 skipped in 183.95s (0:03:03) =================="
+          ]
+        }
+      ]
+    },
+    "pydantic": {
+      "status": "PASSED",
+      "duration_ms": "25375",
+      "logs": [
+        {
+          "path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/pydantic-0.log",
+          "sha256": "f1cb7732ddb846326525cd371053ef8223c4f042a2376741f3e46d0cc08d20c0",
+          "result_lines": [
+            "======================== 43 passed, 1 skipped in 23.94s ========================"
+          ]
+        }
+      ]
+    }
+  }
+}

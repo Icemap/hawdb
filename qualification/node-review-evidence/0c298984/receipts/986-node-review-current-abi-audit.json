@@ -1,0 +1,14 @@
+{
+  "parent": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "source_tree": "13035994b43a772d666ab34faa28e911f92f9085",
+  "existing_C_constants_preserved": 41,
+  "new_C_status": {
+    "HAWDB_RETAINED_MULTIPLE_MATCHES": 19
+  },
+  "C_structures_and_prototypes_unchanged": true,
+  "existing_Go_status_order_preserved": true,
+  "Go_new_status": 19,
+  "Rust_source_note": "RetainedQueryError gains MultipleMatches; exhaustive Rust matches must handle the new variant. C descriptor ABI/version and statuses0..18 are unchanged.",
+  "scope": "Static API/ABI review; native and foreign runtime regressions remain independently required. No approval or performance-equivalence claim.",
+  "observed_at": 1792345948.9492679
+}

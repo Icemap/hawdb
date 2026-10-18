@@ -1,0 +1,776 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "runtime_tree": "13035994b43a772d666ab34faa28e911f92f9085",
+  "local_results": "general1781pass0fail1ignore322filtered; contracts33; fuzz98; C20; Go; Python357pass7skip; Pydantic43pass1skip",
+  "static_checks": "pinned formatting, strict workspace/standalone C/Python/minimal-WASM Clippy, prek and commit hooks pass",
+  "source_equivalence": "Only docs/PR986_REVIEW.md changed after complete runtime verification; full tracked Git object manifests are included.",
+  "adverse": "First complete same-source general attempt:1780pass1fail1ignore322filtered; automatic checkpoint capacity BranchBusy. Isolated and complete replay pass with unchanged assertions/deadlines/concurrency. Cause unresolved.",
+  "rss": "V1 matched wrapper rather than executable and collected zero samples. V2 starts partway through the same run; its sampled maximum is not a whole-run peak. No causality claim.",
+  "files": [
+    {
+      "path": "receipts/986-node-review-current-general-first-failure.json",
+      "sha256": "2b99fe1cbae1463b74c206331693fed57c526dc0b1c9ddb99d2eea89759e3e1a",
+      "bytes": 740,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-general-first-failure.json"
+    },
+    {
+      "path": "receipts/986-node-review-current-headroom-isolated-audit.json",
+      "sha256": "680fff55e44993f1be782d90b2402282d07203a4e852d8d620b205768bae0763",
+      "bytes": 501,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-headroom-isolated-audit.json"
+    },
+    {
+      "path": "receipts/986-node-review-current-runtime-qualified-audit.json",
+      "sha256": "50778f72d3a4f5504a10874cd39e3e8182cb29e6497f54093b4442d3217af442",
+      "bytes": 1019,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-qualified-audit.json"
+    },
+    {
+      "path": "receipts/986-node-review-final-runtime-source-equivalence.json",
+      "sha256": "e8462da67b34f3c2f587a370be6fcab99bc44bbc568228d33b519bdff735ca9d",
+      "bytes": 503,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-runtime-source-equivalence.json"
+    },
+    {
+      "path": "receipts/986-node-review-current-abi-audit.json",
+      "sha256": "e31424cb4a6ce6e5391d2ace017d8f73026908d75d45f5c055317d4bb0b0fab0",
+      "bytes": 713,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-abi-audit.json"
+    },
+    {
+      "path": "receipts/986-node-review-final-static-state.json",
+      "sha256": "8c5ca5dc30fb002e7e6b3a63d01ed0354e3b5b23f1cd186cb87682f428a4acfe",
+      "bytes": 4643,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-static-state.json"
+    },
+    {
+      "path": "receipts/986-node-review-current-binding-contract-qualified-audit.json",
+      "sha256": "a256985da9c63d827505a67b47d22f71ec17acaaaa3221dcd2dcf436367d1920",
+      "bytes": 2625,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-binding-contract-qualified-audit.json"
+    },
+    {
+      "path": "receipts/986-node-review-current-fuzz-qualified-audit.json",
+      "sha256": "2c5305a913fb9716eeaae46ec326415522b1635c487c98305368ac1b0e8c87e0",
+      "bytes": 30499,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-fuzz-qualified-audit.json"
+    },
+    {
+      "path": "receipts/986-node-review-current-runtime-v3-state.json",
+      "sha256": "728d395a56ccbeed7cbe74254bcbcd7ba39006d38e205237ae2594b0076fc158",
+      "bytes": 4296,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-v3-state.json"
+    },
+    {
+      "path": "receipts/986-node-review-publication-state.json",
+      "sha256": "1b7ada48936c9de5de9d7cf93f4b9a4eeecceafb1bec585630fec606f34ca9f2",
+      "bytes": 589,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-publication-state.json"
+    },
+    {
+      "path": "receipts/986-node-review-current-general-rss-observations.json",
+      "sha256": "d6a13ecaaf21935beb862070169277c9b494a0bbca4a65ed948f1a896064acdc",
+      "bytes": 368,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-general-rss-observations.json"
+    },
+    {
+      "path": "receipts/986-node-review-current-general-rss-observations-v2.json",
+      "sha256": "11c91c3bf5f2204678094ac7d5d67a7c89afaf0ecdb1cc531370b7a11b85ad04",
+      "bytes": 15140,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-general-rss-observations-v2.json"
+    },
+    {
+      "path": "logs/general-first-failure.log",
+      "sha256": "efc6b4d48ee64418dcab913eee04e8899c5838fb25dca3ba0efd0ea8ec6a8053",
+      "bytes": 188540,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-general-first-failure.log"
+    },
+    {
+      "path": "logs/headroom-isolated.log",
+      "sha256": "de4c01f43ac9052fede6da51d769eda6cfb3a74d0a43b5b7d5d3a5078c883693",
+      "bytes": 402,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-headroom-isolated-test.log"
+    },
+    {
+      "path": "logs/qualified/ffi-0.log",
+      "sha256": "875cbf1364c40678ef48adbd7f9c83ed2768d8c32b7f5f3cb7505ba7515339a2",
+      "bytes": 2181,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/ffi-0.log"
+    },
+    {
+      "path": "logs/qualified/python-0.log",
+      "sha256": "f4fee0c84c56b4e0ae8748c7cbffe0d3b0386c9abf20d099c692d364411227a6",
+      "bytes": 2106,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/python-0.log"
+    },
+    {
+      "path": "logs/qualified/go-0.log",
+      "sha256": "0e9861c5329a43eb57cac94191a97556fd7cc21d4c146160c2f1a7333522c268",
+      "bytes": 177,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/go-0.log"
+    },
+    {
+      "path": "logs/qualified/general-replay.log",
+      "sha256": "bd9805d09672a3cb209132f990de860ec1003d671d4046d86c85d105e8622c3d",
+      "bytes": 187910,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/general-replay.log"
+    },
+    {
+      "path": "logs/qualified/contracts-0.log",
+      "sha256": "1816d29851dca4651daff16cee336cddcf11e01809321a1b6a466b13a689a419",
+      "bytes": 3707,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/contracts-0.log"
+    },
+    {
+      "path": "logs/qualified/pydantic-0.log",
+      "sha256": "f1cb7732ddb846326525cd371053ef8223c4f042a2376741f3e46d0cc08d20c0",
+      "bytes": 911,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/pydantic-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/83-0.log",
+      "sha256": "87e12042616165dc009abbdaefa9bb40c53d36f3d10286a82290f635dd4a612f",
+      "bytes": 380,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/83-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/43-0.log",
+      "sha256": "f2afa4195e67fd93c11999c6532a71d20d3f529ab888ab9973edf4d25ac09158",
+      "bytes": 497,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/43-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/67-0.log",
+      "sha256": "a6391704752007ee77fdb1f6d907f7c3842640cf300af21ae28d2448d13809f1",
+      "bytes": 1109,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/67-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/22-0.log",
+      "sha256": "c0941b7c3ff99acfd31c4d9e900c39fe4e2c775bdbdc6f3a8491f67a586c0907",
+      "bytes": 404,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/22-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/1-0.log",
+      "sha256": "1958c70155930395079f71d575641419e8f43f28eeb6b845765bc97f2209a938",
+      "bytes": 425,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/1-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/58-0.log",
+      "sha256": "99f2daba57efc4798753272bbf5168d4d29f5c87eb55c4a50ead74b099f046fa",
+      "bytes": 524,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/58-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/3-0.log",
+      "sha256": "f69b6bc6dcaa4d24ee458ca9e0fbe480011eb5aee86acb329b54f8e01f05f457",
+      "bytes": 404,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/3-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/65-0.log",
+      "sha256": "1826af5ecd0fc2acabaf627d72bf233fe9025cdef3b33c603e681a93b7dbd7b2",
+      "bytes": 600,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/65-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/20-0.log",
+      "sha256": "985609e3972d6574ebcd4ac46a3f88210a6cb4342b3e5e637806c3c93e0830fc",
+      "bytes": 15240,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/20-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/41-0.log",
+      "sha256": "36868a0ecf9c3a8bca076b9926c38c8a05f7fa05c4b1c04f329fad117293239c",
+      "bytes": 519,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/41-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/81-0.log",
+      "sha256": "e2ef88c14069506238a8d2a980af12a0d059e244f313a4691c1b083bac77e7bb",
+      "bytes": 447,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/81-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/39-0.log",
+      "sha256": "2489b2e9538ffb65a9564399aaef15fea63a8d43a8c0ec4b754ab04381e3f1a2",
+      "bytes": 414,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/39-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/45-0.log",
+      "sha256": "2de4e91d9c92fe32db50c5921472c0b4b9bbd06a11d3a23a14bbed9924b50054",
+      "bytes": 451,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/45-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/78-0.log",
+      "sha256": "b306ec1a4056656bb53585b9239656e3dad5dcdd9ae8a2437a661d95439514a0",
+      "bytes": 413,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/78-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/85-0.log",
+      "sha256": "c037e0a0fb31107d679b8c8a04848d4c552b70f6bb97c908179c90b1877b6d77",
+      "bytes": 414,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/85-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/7-0.log",
+      "sha256": "04d07f4c8281f204240c7242eece49d500e5988982215f527c8310fd97ca97c2",
+      "bytes": 438,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/7-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/19-0.log",
+      "sha256": "094dae2d513c1daf6c87b534f9324eeb22310e4bafc3e27ce74f4f957f2d6516",
+      "bytes": 434,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/19-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/61-0.log",
+      "sha256": "fbf07f1030c77e643d83795d246e2180f2e92c1d5a5a0df603ccbe18b72823a5",
+      "bytes": 403,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/61-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/24-0.log",
+      "sha256": "1778937f84db9291acfce7d5598bb1fc9763eaf11a1bb1e25c6873e9e8f9f6d0",
+      "bytes": 434,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/24-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/63-0.log",
+      "sha256": "5a064d8a5a92fbf386242d2ec5e893438934445459bbef14097089e36c5f21e9",
+      "bytes": 457,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/63-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/26-0.log",
+      "sha256": "d21a824234c0a0757c46befc0aa261507829b05acd3ce7c934895d3329f14d21",
+      "bytes": 466,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/26-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/5-0.log",
+      "sha256": "40c9f1a3be2fffd6c6985b708dc5cdd4f70a57a3e79393f1a10df136fd20a103",
+      "bytes": 403,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/5-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/87-0.log",
+      "sha256": "f03e0f6545a09d5be0fadf61a88abc260a4a75ae2e500cee50c7730fb9df9aed",
+      "bytes": 407,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/87-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/47-0.log",
+      "sha256": "053bc18120530a7bcd8f1c5c5501c463cc7275829daf051b4cd166fe8a076a06",
+      "bytes": 479,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/47-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/21-0.log",
+      "sha256": "e6263de3ccaff4e179c5dda87ed25ef826fde2237a76902e6cd05620abc34786",
+      "bytes": 628,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/21-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/64-0.log",
+      "sha256": "5783bf2af07911f5e3bc706f372dd27894725dd01c4416a4f08daa54907b4f37",
+      "bytes": 526,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/64-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/2-0.log",
+      "sha256": "4cf52d362b29df10ddb4d8d31d614cb7c3dade2d20b0f6dfb946786c6a88023f",
+      "bytes": 427,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/2-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/59-0.log",
+      "sha256": "282f165f2f785e685600d660244a2f112921b9bfd469032627ee1e66af272160",
+      "bytes": 665,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/59-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/80-0.log",
+      "sha256": "b7c9d6a8adcb2823af30497de163bd41360c8d7cb2103535b630770423ab6424",
+      "bytes": 376,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/80-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/38-0.log",
+      "sha256": "79575c532304106bff2fe142b11af8a9e404a7521039d35a595efcdaebf2bd8c",
+      "bytes": 418,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/38-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/40-0.log",
+      "sha256": "37bcafd52b54721546015e1b09223960d24a385c7a71dc1e80d7fa023316356d",
+      "bytes": 367,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/40-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/42-0.log",
+      "sha256": "c847862d689f7defe3b3a9cdce16f83623d60cce80a9d98aa803f9542ce56bbb",
+      "bytes": 464,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/42-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/82-0.log",
+      "sha256": "9942031d070c71b232788a12bc3f30a4ac4c94a2cfc479e1a336558aa949ba7e",
+      "bytes": 374,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/82-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/0-0.log",
+      "sha256": "a6de0a7c7a1ab5d94e98d67d3a18c838a25955cd12a3c2d42e76f6d1400144fd",
+      "bytes": 382,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/0-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/23-0.log",
+      "sha256": "f4f3fb4882061e6b155032f15a70e6cc9ec222b8fcc30176db11d493b682dd09",
+      "bytes": 427,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/23-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/66-0.log",
+      "sha256": "643b13f75528523a5846fecff9e8465545fefccdb4866ff6e7d2a513fb7c890c",
+      "bytes": 437,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/66-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/4-0.log",
+      "sha256": "5b686ace67692f707689cd32ce6b8eb6b7c66d62410ed016478c500afbc3a6e9",
+      "bytes": 485,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/4-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/27-0.log",
+      "sha256": "46c91873afe06e86ff30b91f034d32d396a6c4837e1f9744aba0b5dae6c2937a",
+      "bytes": 470,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/27-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/62-0.log",
+      "sha256": "79cb5fd39702d2f71414c7624c62e08227d8fa3d40562b41ad5fe39c70863f22",
+      "bytes": 409,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/62-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/46-0.log",
+      "sha256": "f54bbbc7037f9997a30d603fa89f16838047dea1d88901ad81cc97e0da587411",
+      "bytes": 452,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/46-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/86-0.log",
+      "sha256": "514636426de65f89a2e1b6e1037f919edeeaccb2238492ab0d17f7b3c78631c7",
+      "bytes": 484,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/86-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/79-0.log",
+      "sha256": "1810fdf32197cd8d19542298dc38e80791f2226ba95fc91ee8e1bc1d7a8cdad8",
+      "bytes": 452,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/79-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/84-0.log",
+      "sha256": "b4cd1faa878fc8c72576891f8ecc8f80e3a7ecec09c00b936aeed1cf462c6653",
+      "bytes": 460,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/84-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/44-0.log",
+      "sha256": "8b7a8ca4d370f8a5b7a0faf5671efa76aea415ccf5ab2751e77757b88efdff7d",
+      "bytes": 446,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/44-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/25-0.log",
+      "sha256": "f74c8979ddbe66bfc2c1982251cb7fa161c3c86e4dc7546e1677f3d185fdd3f1",
+      "bytes": 466,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/25-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/60-0.log",
+      "sha256": "822a72021f18d5307536e84f1801244be608a3f18daca7e3658daeba07ffd9b6",
+      "bytes": 490,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/60-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/18-0.log",
+      "sha256": "07f4a39229b5dd30694110104fb65ee105fbba2986dff8006bae17cad49fc9ee",
+      "bytes": 481,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/18-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/6-0.log",
+      "sha256": "77222d970cba87d039f9262438624ebb439f72782198cce55178a597c8add1c4",
+      "bytes": 465,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/6-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/51-0.log",
+      "sha256": "731b72c58356b8c8741202e1bf4fb771ba032a472f0f803b6780868ea66539f4",
+      "bytes": 486,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/51-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/14-0.log",
+      "sha256": "6cfd781a4d3507000ce742773a8fc11eeb8caa81e8bf0c76e1c4c7cf2b93a1c5",
+      "bytes": 460,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/14-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/29-0.log",
+      "sha256": "56eefdf079ec6ce4c3f80ec14bee30903c33b03493484575868c5aa078e0c8e3",
+      "bytes": 413,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/29-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/91-0.log",
+      "sha256": "5c74eb6d7ea3ed9651bcc27209132dcff3dbd197d91b6dc59b9a4cd6977b96e4",
+      "bytes": 388,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/91-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/48-0.log",
+      "sha256": "57ecb8e1be6ffa7bcb7ddbe15fe4d206db998dba3ed061c9b26c5b5a7a6ca698",
+      "bytes": 462,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/48-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/75-0.log",
+      "sha256": "ed12a3f5b549209255ce1bd890cdcef84aa54d9d7ee4f697b0ac00988e90ddb5",
+      "bytes": 625,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/75-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/30-0.log",
+      "sha256": "823fedb5e894a9e933d7e443b33449da9c909bf90b0fcb17e4f8d0046c1131ac",
+      "bytes": 497,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/30-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/88-0.log",
+      "sha256": "1b453ab12a011599737fe3670876f23c562766f17ad5f2f603981fad2654b1c8",
+      "bytes": 480,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/88-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/77-0.log",
+      "sha256": "05ad4a95c26351ab4b964dc1a9576fbfe7668d73c6043201fed7f93dcc87fdc2",
+      "bytes": 423,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/77-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/32-0.log",
+      "sha256": "c705e01c09132e3ac98984054c18fe93371d168c1c926ab66bc2b58c62bc0718",
+      "bytes": 450,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/32-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/93-0.log",
+      "sha256": "744a0c11d1cd65618cc839d946c38125decd86f25d965af534fe6f0e10178400",
+      "bytes": 395,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/93-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/53-0.log",
+      "sha256": "4ed24501c6bf59ffa910fd2d2a316ad109a979f98af0c1b63d27c27633d91020",
+      "bytes": 469,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/53-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/16-0.log",
+      "sha256": "f3ebf0f408b4b6bcccd86cb3a3299ae8f013d7db1f1e6817934a1902d9d7e763",
+      "bytes": 378,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/16-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/8-0.log",
+      "sha256": "80e983b8fe81e44e8a84b87da2a0961e1e28d5ecd1b0de2e436befc9865f9cbc",
+      "bytes": 477,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/8-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/97-0.log",
+      "sha256": "424c9e3ac48f59aae2d5d9de61800a6174e6847f3c8d9f6d76f6085ca130615e",
+      "bytes": 665,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/97-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/57-0.log",
+      "sha256": "a3aeba6bc61b1c862e65948040f084f5d6bd272c85b71e20433858c88e3e68e6",
+      "bytes": 382,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/57-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/12-0.log",
+      "sha256": "cd63e605a168204ce69d0ff79849b859b1c5a826382dc66eea0e3ea09f6a8767",
+      "bytes": 384,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/12-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/73-0.log",
+      "sha256": "8b69ea919671adc6ffd0adba3d8a2dc35f3d70bb2684cb1a60e53049bfa09461",
+      "bytes": 418,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/73-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/36-0.log",
+      "sha256": "0412c171a65fb06d7c5b1e9574fd91317a5f12c375177116cb63f30b59470b3a",
+      "bytes": 615,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/36-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/71-0.log",
+      "sha256": "35bb1a9b2f2b87653277feb15076a5bd87db06bfaa5af0d0de97fbe01d54eab6",
+      "bytes": 385,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/71-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/34-0.log",
+      "sha256": "2a71fdf2e7f17526eb335ea9f7b981e8d03349aafe99270e43d39df83d242d59",
+      "bytes": 461,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/34-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/55-0.log",
+      "sha256": "0f3ce7678c2963c6de8fa333568dc37c910820282d89e8d02687550777ed4d94",
+      "bytes": 466,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/55-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/10-0.log",
+      "sha256": "fb517da862f75a72d292add2d12a7d7a84636dba48118f4a9734ebf20b82db33",
+      "bytes": 527,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/10-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/95-0.log",
+      "sha256": "39a8074ffb316bc145747528fc427d5aa07a63870080cab075ae99cdfeeb8059",
+      "bytes": 177,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/95-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/68-0.log",
+      "sha256": "e4a9a641714ce153541c836c48e5b8de66650bd9421797b9f87b30bcd8b5bf79",
+      "bytes": 478,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/68-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/33-0.log",
+      "sha256": "8b2da57a45f3b0e9118b5fc5df6870efb4f74b2d5e66e4df46421bd360122a89",
+      "bytes": 556,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/33-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/76-0.log",
+      "sha256": "910eb37d5448cff14865bb02f3113dbe4c22650473eb5990453c1e7c2e1fd120",
+      "bytes": 399,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/76-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/9-0.log",
+      "sha256": "c087a7f2d5926110c318cafb635394566cb2ca4dd71d9318c32c23bfdc89013f",
+      "bytes": 444,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/9-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/17-0.log",
+      "sha256": "235c3c32ad21842a9c3857611394340204320f13c407de99fca7962d55670db9",
+      "bytes": 564,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/17-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/52-0.log",
+      "sha256": "66e0dc897d23574b67d27393c2d0b756a63ba2963777551779f47b6673903d9f",
+      "bytes": 378,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/52-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/92-0.log",
+      "sha256": "fa2db954e4edcf0f2ce1f648a9ff9b2bb1074304ad4108817587172da2c058f7",
+      "bytes": 1204,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/92-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/28-0.log",
+      "sha256": "bd8aa28c1b1e4886d62f573f25e02704b2aa4b7a17058b87f970e934644d2a5f",
+      "bytes": 445,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/28-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/90-0.log",
+      "sha256": "1bbb4eb81c37f8643d02e98cbd9a97c92afe13cd0aaa8347fce89d44d5874b07",
+      "bytes": 426,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/90-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/15-0.log",
+      "sha256": "6a848ef18cd4eaae1ed69dc99ca0e7195daa7eb927a5ed9bd6602df20b4cd478",
+      "bytes": 603,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/15-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/50-0.log",
+      "sha256": "4bd005302709da06b93611b350e0155ec42a77d115838d89fe5455fb5d45e7d5",
+      "bytes": 489,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/50-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/31-0.log",
+      "sha256": "42422e1b799867a5b6cdf0e6829b15a65de2b4354b75c082800ddd74e88bf858",
+      "bytes": 445,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/31-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/74-0.log",
+      "sha256": "95a07cdd3752abea565714e4a99e0ff5b7ff5c9c88dcde9393b67662ec538e1f",
+      "bytes": 382,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/74-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/89-0.log",
+      "sha256": "b8e827added259cbdbcae108d5e6f2c66a0d848bb6c55d30e94f163bcd4e305f",
+      "bytes": 623,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/89-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/49-0.log",
+      "sha256": "c161b49b60963db88eea6abecefcd29815d25d67c46d0847551695d4013feaeb",
+      "bytes": 461,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/49-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/35-0.log",
+      "sha256": "18da9b9aa53bffea6ab8d25b115b658630de2e34eb5e685cbe5437c37713c513",
+      "bytes": 407,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/35-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/70-0.log",
+      "sha256": "c78fad1918b97069f23f587a9312111c713d10017226ca093289231b6924d904",
+      "bytes": 448,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/70-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/94-0.log",
+      "sha256": "b9103af7b54561c2fa91c22c9ba89b911bcbb1c981d86bc533f409007336656f",
+      "bytes": 3993,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/94-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/69-0.log",
+      "sha256": "81b9e3ff2de49df7aa2bc13bd75ac4b7435ca9dc6c43086816bbe4be3ab2ab80",
+      "bytes": 551,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/69-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/11-0.log",
+      "sha256": "df8e0b95c78ffb50063d675342761a2ff91d562b2682a9209e7a1a73b999d565",
+      "bytes": 366,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/11-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/54-0.log",
+      "sha256": "01cf37e2f743707a445213dbe5383fb7e36d4471c49c2ce1e361ca40b48ba1d1",
+      "bytes": 510,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/54-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/13-0.log",
+      "sha256": "7a3e3c7d3942fc38c50262b0bb95502907a3bff78e4ff0202fc921dc2149f040",
+      "bytes": 474,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/13-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/56-0.log",
+      "sha256": "7e9b390b07aa7796de4567928091260df75d8597f81f66c8edfeee99beab2685",
+      "bytes": 464,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/56-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/96-0.log",
+      "sha256": "44f8bd09e3e5cabe62f9ce0e07dc5d8c7ac29544f45dde70f0c59f5a6df0fae6",
+      "bytes": 669,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/96-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/37-0.log",
+      "sha256": "09c336ecc8f414ef18cf3d6d3e2528138522d0c331c26424e2ef94b9fbcabbc5",
+      "bytes": 395,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/37-0.log"
+    },
+    {
+      "path": "logs/qualified/fuzz/72-0.log",
+      "sha256": "fe9c6c254302eb342cd3419c477305ba0ec2b6dee6e289ef746bf3cb1eb46f65",
+      "bytes": 496,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/fuzz/72-0.log"
+    },
+    {
+      "path": "logs/static/986-node-review-final-install.log",
+      "sha256": "6dd3a3ee6c0892e5369e843cabf8ddc982f55665d60d1d1359fc0d198ee6f427",
+      "bytes": 89,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-install.log"
+    },
+    {
+      "path": "logs/static/986-node-review-final-python-fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-python-fmt.log"
+    },
+    {
+      "path": "logs/static/986-node-review-final-fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-fmt.log"
+    },
+    {
+      "path": "logs/static/986-node-review-final-python.log",
+      "sha256": "9a30d54c8b16d7e49510b182028079bca120aeebb7d662e88f8566e6196a49f6",
+      "bytes": 72,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-python.log"
+    },
+    {
+      "path": "logs/static/986-node-review-final-native.log",
+      "sha256": "c252f3856a0e1c6f2121e0aa263f057aed09d12465df972dc4a66126f3d9f066",
+      "bytes": 60,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-native.log"
+    },
+    {
+      "path": "logs/static/986-node-review-final-wasm.log",
+      "sha256": "6d982f82f533d8d80f700f4952cc773013a451c68f1e72f50affd3e0482b255a",
+      "bytes": 60,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-wasm.log"
+    },
+    {
+      "path": "logs/static/986-node-review-final-ffi.log",
+      "sha256": "0b9c85a57402765a9638848a90eec54abbd9a68f42a071a97aaa9d8acc5ba131",
+      "bytes": 72,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-ffi.log"
+    },
+    {
+      "path": "logs/static/986-node-review-final-prek.log",
+      "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf",
+      "bytes": 160,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-prek.log"
+    },
+    {
+      "path": "logs/static/986-node-review-final-ffi-fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_local_path": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-final-ffi-fmt.log"
+    }
+  ],
+  "scope": "Reviewable source-bound local correctness evidence only. Does not complete performance qualification, independently approve the source or authorize merge. Local absolute paths in raw receipts preserve provenance; index maps every archived file to its original path.",
+  "issue": "ref #976, ref #987, ref #1081"
+}

@@ -1,0 +1,167 @@
+{
+  "status": "passed",
+  "pid": 74300,
+  "started": 1792347976.190138,
+  "parent": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "paths": {
+    "bindings/ffi/include/hawdb_ffi.h": "4064cf780024e2e6aed2c1f404d2576bc82be410e18d5c76566c91a10a949f02",
+    "bindings/ffi/src/retained.rs": "89814224e82c1526d7022f54bc641feb0a78575510bd2c0ab54e21c5251e0731",
+    "bindings/ffi/src/retained/node/tests.rs": "efe5bc4006c2f7f34b4ebfdb7bbc979010713678fd9e058ee254044f481d6c6f",
+    "bindings/go/retained.go": "1c70a07aa796566984b7daaf6fcdaa29da53463755daec9b78587cb02562a2e2",
+    "bindings/go/retained_node_test.go": "ab2d798508463b80d1b4252df2ab291120e19f9dfb37d4aeadbfe67bdb5f18a1",
+    "bindings/python/src/retained.rs": "302872015bf555003df30c8efd598de92226f8d8ad1b07773649883d9ff05b5d",
+    "bindings/python/tests/test_retained_node.py": "fab6fa99210bc57ae464f9d6ad4184c2e82d637c94a50b9eda6bef143530ceb1",
+    "docs/GO_RETAINED_NODE_VIEWS.md": "498243e5b4806fe36454aabf54ba7bae23b5fe46e4a9a7c9a602f46e9b7510cd",
+    "docs/PR986_REVIEW.md": "8db928114f9b0e569a1b3e9756dbe0cc2e86fe350e30b4d8757277192f97d662",
+    "docs/PYTHON_RETAINED_NODE_VIEWS.md": "7a7ecc5caf4365ffa49758e61ba8b781e9f6a0388a5f71de5181eb76fcb5e93a",
+    "docs/RETAINED_NODE_TASK_LIFECYCLE.md": "c9053e3fc65742f6add1b3564ad425be54acc43a6c8c38f286ad9473b78db441",
+    "src/api/retained_query.rs": "d1dfdbc3851cc933e6a5569fe64da77b1a59e52b05b5b5677082048d3af8cd1a",
+    "src/api/retained_query/node.rs": "dbeb0531c05c2c7fb78436866bbdd3498cf9b64746ef555dbecf006e5afdaac8"
+  },
+  "imported_review_source": "ecb9202ddadc862b2d7cf09a058a9d453b17b4e0",
+  "previous_failure": "986-node-review-current-static-header-generation-failure.json",
+  "steps": [
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792347976.2483048,
+      "exit": 0,
+      "ended": 1792347983.318218
+    },
+    {
+      "name": "ffi-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "bindings/ffi/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792347983.38553,
+      "exit": 0,
+      "ended": 1792347988.498971
+    },
+    {
+      "name": "python-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792347988.569966,
+      "exit": 0,
+      "ended": 1792347993.6834939
+    },
+    {
+      "name": "native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792347993.7473469,
+      "exit": 0,
+      "ended": 1792347994.825332
+    },
+    {
+      "name": "ffi",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/ffi/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792347994.8850582,
+      "exit": 0,
+      "ended": 1792347995.500601
+    },
+    {
+      "name": "python",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792347995.587289,
+      "exit": 0,
+      "ended": 1792347995.9610722
+    },
+    {
+      "name": "wasm",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "hawdb",
+        "--no-default-features",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--lib",
+        "--test",
+        "in_memory_portable",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792347996.011445,
+      "exit": 0,
+      "ended": 1792347996.509568
+    },
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792347996.5791428,
+      "exit": 0,
+      "ended": 1792347996.695564
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792347996.762563,
+      "exit": 0,
+      "ended": 1792348002.511709
+    }
+  ],
+  "scope": "Frozen final generated-header tree; full native/foreign/WASM strict checks. No commit before all mandatory checks pass.",
+  "ended": 1792348002.554657
+}

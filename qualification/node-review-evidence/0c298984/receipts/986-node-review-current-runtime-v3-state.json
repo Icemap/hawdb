@@ -1,0 +1,118 @@
+{
+  "status": "passed",
+  "pid": 48399,
+  "started": 1792346505.046726,
+  "steps": [
+    {
+      "name": "contracts",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_execution_request_contract_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-contracts.bep.json"
+      ],
+      "started": 1792346505.14912,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-contracts.log",
+      "exit": 0,
+      "ended": 1792346625.2731829
+    },
+    {
+      "name": "ffi",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/ffi:hawdb_ffi_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-ffi.bep.json"
+      ],
+      "started": 1792346625.3448708,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-ffi.log",
+      "exit": 0,
+      "ended": 1792346628.158576
+    },
+    {
+      "name": "go",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/go:hawdb_go_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-go.bep.json"
+      ],
+      "started": 1792346628.207384,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-go.log",
+      "exit": 0,
+      "ended": 1792346640.339914
+    },
+    {
+      "name": "python",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/python:hawdb_python_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-python.bep.json"
+      ],
+      "started": 1792346640.418037,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-python.log",
+      "exit": 0,
+      "ended": 1792346833.102823
+    },
+    {
+      "name": "pydantic",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/python:hawdb_python_pydantic_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-pydantic.bep.json"
+      ],
+      "started": 1792346833.174152,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-pydantic.log",
+      "exit": 0,
+      "ended": 1792346860.194439
+    },
+    {
+      "name": "fuzz",
+      "command": [
+        "bazel",
+        "test",
+        "//crates/fuzz:hawdb_fuzz_tests",
+        "//crates/fuzz:hawdb_fuzz_cli_tests",
+        "//:hawdb_linux_ci_fuzz_smoke_test",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-fuzz.bep.json"
+      ],
+      "started": 1792346860.2572238,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-fuzz.log",
+      "exit": 0,
+      "ended": 1792347489.896051
+    },
+    {
+      "name": "general",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-general.bep.json"
+      ],
+      "started": 1792347489.986888,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-runtime-general.log",
+      "exit": 0,
+      "ended": 1792347921.463108
+    }
+  ],
+  "scope": "Frozen uncommitted Node review integration. Full original local correctness/fuzz/binding targets, unchanged defaults/deadlines/concurrency. Historical performance is not relabeled.",
+  "parent": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "tree": "13035994b43a772d666ab34faa28e911f92f9085",
+  "ended": 1792347921.5557492
+}

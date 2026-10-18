@@ -1,0 +1,10 @@
+{
+  "scope": "Sampled process RSS only, not peak-allocation or causality proof. No test settings or source changed.",
+  "observer_pid": 67544,
+  "samples": [],
+  "tree": "13035994b43a772d666ab34faa28e911f92f9085",
+  "parent": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "runtime_status": "testing",
+  "sampled_peak_rss_bytes": null,
+  "updated": 1792347587.897305
+}

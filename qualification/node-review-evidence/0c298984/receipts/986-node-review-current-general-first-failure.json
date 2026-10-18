@@ -1,0 +1,10 @@
+{
+  "tree": "13035994b43a772d666ab34faa28e911f92f9085",
+  "parent": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "general_result": "1780passed1failed1ignored322filtered;385.35sec within original900sec target deadline",
+  "failed_case": "api::automatic_checkpoint::tests::headroom::pending_idle_owner_blocks_pressure_growth_before_admission",
+  "failure": "Producer returned BranchBusy for automatic checkpoint capacity after owner resume",
+  "new_Node_cases": "configured budget origin, missing indexed node integrity and multi-match cases all pass",
+  "raw_log_sha256": "efc6b4d48ee64418dcab913eee04e8899c5838fb25dca3ba0efd0ea8ec6a8053",
+  "scope": "Complete failure preserved; no causality claim, no skip/deadline/concurrency change."
+}

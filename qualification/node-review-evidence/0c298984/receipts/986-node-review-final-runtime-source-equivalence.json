@@ -1,0 +1,11 @@
+{
+  "runtime_validated_tree": "13035994b43a772d666ab34faa28e911f92f9085",
+  "final_staged_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "changed_paths": [
+    "docs/PR986_REVIEW.md"
+  ],
+  "production_build_inputs_identical": true,
+  "runtime_receipt": "986-node-review-current-runtime-qualified-audit.json",
+  "scope": "Only review Markdown changed after full runtime verification. Source equivalence does not reuse predecessor performance or new-head CI.",
+  "observed_at": 1792347988.913381
+}

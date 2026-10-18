@@ -1,0 +1,19 @@
+{
+  "parent": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "tree": "13035994b43a772d666ab34faa28e911f92f9085",
+  "status": "passed",
+  "result": [
+    "test result: ok. 1781 passed; 0 failed; 1 ignored; 0 measured; 322 filtered out; finished in 427.72s"
+  ],
+  "general_duration_ms": "430882",
+  "log": "/private/tmp/hawdb-wip-ready-20261015/986-node-review-current-qualified-logs/general-replay.log",
+  "sha256": "bd9805d09672a3cb209132f990de860ec1003d671d4046d86c85d105e8622c3d",
+  "observed_at": 1792347957.859766,
+  "other_receipts": [
+    "986-node-review-current-binding-contract-qualified-audit.json",
+    "986-node-review-current-fuzz-qualified-audit.json",
+    "986-node-review-current-static-state.json"
+  ],
+  "preserved_failure": "986-node-review-current-general-first-failure.json",
+  "scope": "Complete unchanged-source general replay passed. First capacity BranchBusy failure preserved; cause unresolved, no threshold/assertion/concurrency waiver. No final performance or independent approval claim."
+}
