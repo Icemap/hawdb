@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::observer::ExecutionObserver;
+use hawdb_core::{ResourceBudgetError, ResourceBudgetKind, ResourceBudgetScope};
 use std::cell::Cell;
 
 pub(super) fn stream_node_scan_batches(
@@ -804,9 +805,20 @@ impl crate::scan::ExpandedBindingConsumer for ExpandBatchConsumer<'_, '_> {
         let payload_bytes = preview.payload_bytes.saturating_sub(reduction);
         let batch_payload_bytes = self.context.memory.batch_payload_bytes.get();
         if candidate_bytes > batch_payload_bytes {
-            return Err(HawDBError::Execution(format!(
-                "intermediate row uses {candidate_bytes} bytes, exceeding batch_payload_bytes {batch_payload_bytes}"
-            )));
+            return Err(ResourceBudgetError {
+                resource: ResourceBudgetKind::MemoryBytes,
+                scope: ResourceBudgetScope::Account,
+                owner: "AdjacencyExpandExec output".to_string(),
+                memory_class: Some(QueryMemoryClass::PipelineBatch.as_str()),
+                requested: candidate_bytes as u64,
+                used: self.output_lease.bytes() as u64,
+                budget: batch_payload_bytes as u64,
+                budget_option: "ExecutionMemoryConfig.batch_payload_bytes",
+                message: format!(
+                    "intermediate row uses {candidate_bytes} bytes, exceeding batch_payload_bytes {batch_payload_bytes}"
+                ),
+            }
+            .into());
         }
         if !self.output.is_empty()
             && (self.output.len() == self.context.memory.batch_rows.get()
@@ -880,14 +892,19 @@ mod expand_output_tests {
     use std::num::NonZeroUsize;
 
     #[test]
-    fn expand_output_exact_root_flushes_before_copy_and_respects_stop() {
-        for (stop, cancel) in [(false, false), (true, false), (false, true)] {
+    fn expand_output_admits_before_copy_and_respects_stop() {
+        for (stop, cancel, oversized) in [
+            (false, false, false),
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
             let row = Binding::scalar("v", Value::String("x".repeat(4097)));
             let bytes = binding_memory_bytes(&row);
             let limit = NonZeroUsize::new(bytes).unwrap();
             let memory = ExecutionMemoryConfig {
                 query_memory_bytes: limit,
-                batch_payload_bytes: limit,
+                batch_payload_bytes: NonZeroUsize::new(bytes - usize::from(oversized)).unwrap(),
                 batch_rows: NonZeroUsize::new(1).unwrap(),
                 ..Default::default()
             };
@@ -967,6 +984,26 @@ mod expand_output_tests {
                         },
                     )
                 };
+                if oversized {
+                    let HawDBError::ResourceBudgetExceeded(cause) = push().unwrap_err() else {
+                        panic!("expected a typed oversized-row refusal");
+                    };
+                    assert_eq!(cause.resource, ResourceBudgetKind::MemoryBytes);
+                    assert_eq!(cause.scope, ResourceBudgetScope::Account);
+                    assert_eq!(cause.owner, "AdjacencyExpandExec output");
+                    assert_eq!(cause.memory_class, Some("pipeline_batch"));
+                    assert_eq!(cause.requested, bytes as u64);
+                    assert_eq!(cause.used, 0);
+                    assert_eq!(cause.budget, (bytes - 1) as u64);
+                    assert_eq!(
+                        cause.budget_option,
+                        "ExecutionMemoryConfig.batch_payload_bytes"
+                    );
+                    assert_eq!(copies.get(), 0);
+                    assert_eq!(flushes.get(), 0);
+                    assert_eq!(ledger.snapshot().used_bytes, 0);
+                    continue;
+                }
                 assert_eq!(push().unwrap(), ScanControl::Continue);
                 if cancel {
                     let error =
