@@ -147,6 +147,29 @@ jobs:
             --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/project-metadata-recovery.txt
 
+      - name: Test late branch descriptor refusal and target custody
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            -- late_descriptor_refusal_keeps_uuid_owner_through_cleanup_and_retries \
+            --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/branch-admission-late-refusal.txt
+
+      - name: Test branch admission within the original descriptor cap
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --test branch_project_open \
+            -- branch_selection_descriptor_refusal_keeps_source_and_retries_at_original_cap \
+            cold_branch_creation_uses_actual_admission_inventory_with_twelve_descriptors \
+            live_writer_reclamation_retains_readers_descendants_and_budget_retries \
+            storage_inventory_tracks_selection_and_retries_budget_exhaustion \
+            --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/branch-admission.txt
+
       - name: Test captured cleanup and originating operation admission
         if: ${{ !cancelled() }}
         shell: bash

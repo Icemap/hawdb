@@ -22,11 +22,15 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-// Four retained target handles (UUID/registry/runtime locks and mutable WAL), the
-// bounded segment-read wave, and four catalog/publication temporary handles.
-// Additional retained recovery artifacts still obey the same project cap.
-const MIN_BRANCH_ADMISSION_DESCRIPTORS: usize =
-    4 + crate::scan::SHARED_SEGMENT_READ_WORKER_LIMIT + 4;
+// The three native owners (UUID, disposable runtime and root registry) each
+// retain a directory/lock pair, plus one mutable WAL and four sequential
+// catalog/publication temporaries. This is the admission floor, not an upper
+// bound on retained recovery artifacts; every additional open still charges
+// the same project cap and can refuse before candidate installation.
+// Ordinary query read waves run after admission and obtain their own capacity.
+// Reserving their maximum worker count here needlessly rejects a usable source
+// and target under a small host cap, without funding any later query.
+const MIN_BRANCH_ADMISSION_DESCRIPTORS: usize = 3 * 2 + 1 + 4;
 
 /// A sealed source with ownership retained until child publication completes.
 /// No graph/schema runtime or checkpoint data is materialized by this path.
@@ -2792,6 +2796,114 @@ mod tests {
         assert_eq!(store.node_count_for_label(None), 3);
         let retried = fixture.admit(child, DurabilityPolicy::default());
         assert_eq!(retried.store().node_count_for_label(None), 2);
+    }
+
+    #[test]
+    fn late_descriptor_refusal_keeps_uuid_owner_through_cleanup_and_retries() {
+        use crate::file_descriptors::ProjectFileDescriptors;
+        use std::cell::{Cell, RefCell};
+        let fixture = BranchFixture::new();
+        let files = ProjectFileDescriptors::acquire_existing(&fixture.project, 32).unwrap();
+        let config = WalReplayConfig {
+            max_open_files: 32,
+            ..Default::default()
+        };
+        let mut source = fixture
+            .try_admit(fixture.main, DurabilityPolicy::default(), config)
+            .unwrap();
+        let source_head = *source.head();
+        let child = branch_id(2);
+        fixture.fork(&source, child, "late-fd-refusal");
+        let catalog = branch_catalog::read_catalog(&fixture.catalog_path).unwrap();
+        let revision = catalog
+            .branches
+            .iter()
+            .find(|record| record.id == child)
+            .unwrap()
+            .metadata_revision;
+        let head_path = fixture.head_path(child);
+        let target = head_path.parent().unwrap();
+        let catalog_before = std::fs::read(&fixture.catalog_path).unwrap();
+        let head_before = std::fs::read(&head_path).unwrap();
+        let blocked = RefCell::new(Vec::new());
+        let recovered = Cell::new(false);
+        let cleaned = Cell::new(false);
+        let result = GraphStore::admit_branch_from_head_with_revalidation(
+            BranchAdmissionRequest {
+                catalog_path: &fixture.catalog_path,
+                branch_id: child,
+                expected_metadata_revision: revision,
+                head_path: &head_path,
+                immutable_store_root: &fixture.objects,
+                durability: DurabilityPolicy::default(),
+                replay_config: config,
+            },
+            false,
+            false,
+            || {
+                recovered.set(true);
+                let context = files.io_context();
+                let mut options = crate::file_io::OpenOptions::new();
+                options.read(true);
+                loop {
+                    match context.open(&options, &fixture.catalog_path) {
+                        Ok(file) => blocked.borrow_mut().push(file),
+                        Err(error) => {
+                            assert!(matches!(
+                                HawDBError::from(error),
+                                HawDBError::FileDescriptors(_)
+                            ));
+                            break;
+                        }
+                    }
+                }
+                assert_eq!(files.metrics().open, 32);
+            },
+            |runtime| {
+                blocked.borrow_mut().clear();
+                assert!(matches!(
+                    DatabaseDirectoryLease::acquire(target),
+                    Err(DatabaseDirectoryLeaseError::AlreadyOpen)
+                ));
+                assert_eq!(
+                    std::fs::read(&fixture.catalog_path).unwrap(),
+                    catalog_before
+                );
+                assert_eq!(std::fs::read(&head_path).unwrap(), head_before);
+                fs::remove_dir_all(runtime).unwrap();
+                cleaned.set(true);
+            },
+        );
+        assert!(recovered.get() && cleaned.get());
+        assert!(
+            matches!(result, Err(BranchAdmissionError::Catalog(ref error))
+            if hawdb_core::error::file_descriptor_error(error).is_some())
+        );
+        assert!(!target.join("runtime").exists());
+        assert_eq!(files.metrics().reserved, 0);
+        assert_eq!(*source.head(), source_head);
+        let (store, schema) = source.store_and_catalog_mut();
+        store
+            .create_node(schema, "AfterRefusal", BTreeMap::new())
+            .unwrap();
+        assert_eq!(store.node_count_for_label(None), 3);
+        let retried = fixture
+            .try_admit(child, DurabilityPolicy::default(), config)
+            .unwrap();
+        assert_eq!(retried.store().node_count_for_label(None), 2);
+        assert!(files.metrics().high_water <= 32);
+        drop((retried, source));
+        let remaining = files.metrics();
+        assert_eq!(remaining.ownership_locks, 0);
+        assert_eq!(remaining.mutable_wals, 0);
+        assert_eq!(remaining.transient_handles, 0);
+        assert_eq!(remaining.open, remaining.cached_handles);
+        crate::file_descriptors::DescriptorCache::evict_idle(
+            files.immutable_handles.as_ref(),
+            usize::MAX,
+        );
+        assert_eq!(files.metrics().open, 0);
+        assert_eq!(files.metrics().reserved, 0);
     }
 
     #[test]

@@ -27,15 +27,19 @@ bytes without reading them, and verifies no runtime or head is created. Separate
 four-FD tests retain actual exhaustion, unchanged files, refunds and retry. There
 is no separate descriptor domain, uncounted handle or pathname fallback.
 
-Completing a pending child while this project capture remains live has a
-five-FD peak: project capture, the child's directory/ownership-lock pair,
+On the verified Linux/macOS path, completing a pending child while this project
+capture remains live has a five-FD peak: project capture, the child's directory/ownership-lock pair,
 catalog metadata lock, and catalog reader or publication candidate. The facade
 regression explicitly tests four descriptors refusing completion and retaining
 catalog/head evidence through retry, then five completing the same receipt and
 preserving inherited data. Aggregate recovery-limit cases use this actual
 five-FD requirement; the four-FD metadata-only/read refusal contract remains.
 The original failed four-FD completion expectation is retained as adverse
-evidence rather than counted as a passing run.
+evidence rather than counted as a passing run. Native Windows at `d5f468f`
+passes captured metadata reads but returns `Retained` in both five-FD recovery
+selections. The platform-independent five-FD claim is therefore unproven; report
+diagnostics are retained/enhanced without changing the expected completion or
+weakening its durability barriers.
 
 ## Safety argument and finite check
 

@@ -1041,8 +1041,11 @@ fn unopened_catalog_scale_keeps_native_and_project_descriptors_bounded() {
             .unwrap()
     };
     let project = Project::new();
+    // Qualify cold branch creation on an existing project, independently of
+    // the larger one-time empty-project bootstrap inventory.
+    drop(Database::open(&project.0).unwrap());
     let limited = DatabaseConfig {
-        max_open_files: 12,
+        max_open_files: 8,
         ..Default::default()
     };
     let before = native_count();
@@ -1072,9 +1075,9 @@ fn unopened_catalog_scale_keeps_native_and_project_descriptors_bounded() {
     );
     assert_eq!(native_count(), before);
     drop(rejected);
-    // Cold creation explicitly reserves 23 descriptors for its recovery and
-    // sealing path. A finite limit of 32 admits that path; 12 above proves
-    // exhaustion fails before catalog mutation and releases the reservation.
+    // Eight descriptors cannot fund the native admission floor. The separate
+    // twelve-descriptor success test covers the newly usable small budget;
+    // 32 here qualifies many unopened branches without retaining native FDs.
     let config = DatabaseConfig {
         max_open_files: 32,
         ..Default::default()
@@ -1606,7 +1609,8 @@ fn writable_open_recovers_pending_children_with_aggregate_limits_and_no_runtime(
         if limits.max_creates == 1 {
             assert_eq!(
                 report.entries[0].status,
-                BranchCreateRecoveryStatus::Completed
+                BranchCreateRecoveryStatus::Completed,
+                "{report:?}"
             );
         } else {
             assert_eq!(
@@ -1776,7 +1780,8 @@ fn concurrent_pending_reports_and_retries_preserve_deferred_main_admission() {
     assert_eq!(report.entries[0].branch_id, child);
     assert_eq!(
         report.entries[0].status,
-        BranchCreateRecoveryStatus::Completed
+        BranchCreateRecoveryStatus::Completed,
+        "{report:?}"
     );
     assert_eq!(
         shared.branch_create_recovery_report().unwrap(),
@@ -1818,7 +1823,8 @@ fn stale_pending_recovery_does_not_recreate_a_reclaimed_successful_child() {
         .unwrap();
     assert_eq!(
         report.entries[0].status,
-        BranchCreateRecoveryStatus::Completed
+        BranchCreateRecoveryStatus::Completed,
+        "{report:?}"
     );
     assert!(!directory.exists());
     assert_eq!(std::fs::read(&catalog_path).unwrap(), before);
@@ -1935,7 +1941,8 @@ fn pending_recovery_preserves_evidence_at_four_descriptors_and_completes_at_five
     assert_eq!(report.entries[0].branch_id, child);
     assert_eq!(
         report.entries[0].status,
-        BranchCreateRecoveryStatus::Completed
+        BranchCreateRecoveryStatus::Completed,
+        "{report:?}"
     );
     assert_eq!(completed.file_descriptor_metrics().unwrap().high_water, 5);
     assert_eq!(std::fs::read(&head).unwrap(), head_before);
@@ -1952,4 +1959,139 @@ fn pending_recovery_preserves_evidence_at_four_descriptors_and_completes_at_five
             Value::String("preserved".into())
         )])]
     );
+}
+
+#[test]
+fn branch_selection_descriptor_refusal_keeps_source_and_retries_at_original_cap() {
+    use hawdb_storage::file_descriptors::ProjectFileDescriptors;
+    use hawdb_storage::file_io::OpenOptions;
+
+    let project = Project::new();
+    let mut database = Database::open_with_config(
+        &project.0,
+        DatabaseConfig {
+            max_open_files: 32,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    database.query("CREATE (:Memory {id: 'source'})").unwrap();
+    database.checkpoint().unwrap();
+    let child = database
+        .create_branch(BranchCreateRequest {
+            name: Some("admission_child".into()),
+            parent: BranchSelector::Name("main".into()),
+            expected_source_commit_epoch: database.commit_epoch().unwrap(),
+            owner: None,
+            idempotency_key: "admission-child".into(),
+        })
+        .unwrap();
+    let source_instance = database.instance_identity().unwrap();
+    let source_epoch = database.commit_epoch().unwrap();
+    let catalog = project.0.join("branches/catalog.hawdb");
+    let head = project
+        .0
+        .join("branches")
+        .join(child.id.to_string())
+        .join("branch.head");
+    let runtime = head.parent().unwrap().join("runtime");
+    assert!(!runtime.exists());
+    let catalog_before = std::fs::read(&catalog).unwrap();
+    let head_before = std::fs::read(&head).unwrap();
+    let files = ProjectFileDescriptors::acquire_existing(&project.0, 32).unwrap();
+    let mut options = OpenOptions::new();
+    options.read(true);
+    let mut held = Vec::new();
+    while files.metrics().open - files.metrics().cached_handles < 24 {
+        held.push(files.io_context().open(&options, &catalog).unwrap());
+    }
+    // Hold 24 non-cache descriptors. Idle cache eviction is legitimate, but
+    // at most eight slots can then fund catalog lookup and target admission.
+    let error = database
+        .query_sql("USE BRANCH admission_child")
+        .unwrap_err();
+    assert!(matches!(error, HawDBError::FileDescriptors(
+        hawdb::FileDescriptorError::BudgetExceeded { requested, available, limit: 32 }
+    ) if requested > 8 && available <= 8));
+    assert_eq!(files.metrics().open - files.metrics().cached_handles, 24);
+    assert_eq!(files.metrics().reserved, 0);
+    assert_eq!(database.instance_identity().unwrap(), source_instance);
+    assert_eq!(database.commit_epoch().unwrap(), source_epoch);
+    assert!(!database.storage_handle_poisoned().unwrap());
+    assert!(!runtime.exists());
+    assert_eq!(std::fs::read(&catalog).unwrap(), catalog_before);
+    assert_eq!(std::fs::read(&head).unwrap(), head_before);
+    drop(held);
+    assert_eq!(values(&mut database).len(), 1);
+    database
+        .query("CREATE (:Memory {id: 'after-refusal'})")
+        .unwrap();
+    database.query_sql("USE BRANCH admission_child").unwrap();
+    assert_eq!(
+        values(&mut database),
+        vec![BTreeMap::from([(
+            "id".into(),
+            Value::String("source".into())
+        )])]
+    );
+    database.query_sql("USE BRANCH main").unwrap();
+    assert_eq!(values(&mut database).len(), 2);
+    assert!(files.metrics().high_water <= 32);
+    drop(database);
+    let remaining = files.metrics();
+    assert_eq!(remaining.ownership_locks, 0);
+    assert_eq!(remaining.mutable_wals, 0);
+    assert_eq!(remaining.transient_handles, 0);
+    assert_eq!(remaining.open, remaining.cached_handles);
+    // Pressure may retire idle cache, but cannot retire any remaining owner.
+    let reclaimed = files.reserve(32).unwrap();
+    assert_eq!(files.metrics().open, 0);
+    assert_eq!(files.metrics().reserved, 32);
+    drop(reclaimed);
+    assert_eq!(files.metrics().reserved, 0);
+}
+
+#[test]
+fn cold_branch_creation_uses_actual_admission_inventory_with_twelve_descriptors() {
+    let project = Project::new();
+    let mut database = Database::open_with_config(
+        &project.0,
+        DatabaseConfig {
+            max_open_files: 12,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_no_runtime(&database);
+    let main = database
+        .describe_branch(BranchSelector::Name("main".into()))
+        .unwrap();
+    let parameters = [
+        Value::String("small_budget_child".into()),
+        Value::Uuid(main.id),
+        Value::Int(i64::try_from(main.source_commit_epoch).unwrap()),
+        Value::String("small-budget-child".into()),
+    ];
+    let sql = "CREATE BRANCH NAME $1 FROM ID $2 AT REVISION $3 REQUEST KEY $4";
+    let created = database.query_sql_with_params(sql, &parameters).unwrap();
+    assert_eq!(
+        database
+            .query_sql_with_params(sql, &parameters)
+            .unwrap()
+            .rows,
+        created.rows
+    );
+    assert_no_runtime(&database);
+    assert_eq!(
+        database
+            .query_sql("SHOW BRANCHES LIMIT 3")
+            .unwrap()
+            .rows
+            .len(),
+        2
+    );
+    let metrics = database.file_descriptor_metrics().unwrap();
+    assert_eq!(metrics.open, 0);
+    assert_eq!(metrics.reserved, 0);
+    assert!(metrics.high_water <= 12);
 }
