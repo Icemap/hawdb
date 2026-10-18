@@ -1,0 +1,1461 @@
+{
+  "head": "0c2989842321d10e91f136f3c924badb07038add",
+  "observed_at": 1792357875.5658839,
+  "pr": {
+    "baseRefOid": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+    "headRefOid": "0c2989842321d10e91f136f3c924badb07038add",
+    "isDraft": true,
+    "mergeable": "MERGEABLE",
+    "reviews": []
+  },
+  "eligible_check_count": 12,
+  "checks": [
+    {
+      "id": 117784915479,
+      "name": "ci/skein-supply-chain",
+      "node_id": "CR_kwDOTX6JAc8AAAAbbIcuFw",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "sti-prow-518a9701d40f19d3c8165090e08d8a65cb0a0c42e7891fa12dcc6f1df5b1288e",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784915479",
+      "html_url": "https://github.com/nowledge-co/hawdb/runs/117784915479",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-supply-chain/2111920820568723456",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T20:42:16Z",
+      "completed_at": "2026-10-18T20:42:39Z",
+      "output": {
+        "title": "ci/skein-supply-chain",
+        "summary": "Job succeeded.\n\n[Open Spyglass logs](https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-supply-chain/2111920820568723456)",
+        "text": "### Build log\n\n```text\n/tmp/tmp.1LXNvb6mQW/cargo-deny.tar.gz: OK\n^[[0m^[[1m^[[38;5;11mwarning[license-not-encountered]^[[0m^[[1m: license was not encountered^[[0m\n   ^[[0m^[[36m\u250c\u2500^[[0m ./deny.toml:21:4\n   ^[[0m^[[36m\u2502^[[0m\n^[[0m^[[36m21^[[0m ^[[0m^[[36m\u2502^[[0m   \"^[[0m^[[33mBSD-2-Clause^[[0m\",\n   ^[[0m^[[36m\u2502^[[0m    ^[[0m^[[33m\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501^[[0m ^[[0m^[[33munmatched license allowance^[[0m\n\nadvisories ^[[32mok^[[0m, licenses ^[[32mok^[[0m\n```",
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784915479/annotations"
+      },
+      "check_suite": {
+        "id": 106102484523
+      },
+      "app": {
+        "id": 4525174,
+        "client_id": "Iv23li0c9vkEZUvc5zxO",
+        "slug": "nowledge-ci",
+        "node_id": "A_kwDOADRL_M4ARQx2",
+        "owner": {
+          "login": "hawkingrei",
+          "id": 3427324,
+          "node_id": "MDQ6VXNlcjM0MjczMjQ=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/3427324?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/hawkingrei",
+          "html_url": "https://github.com/hawkingrei",
+          "followers_url": "https://api.github.com/users/hawkingrei/followers",
+          "following_url": "https://api.github.com/users/hawkingrei/following{/other_user}",
+          "gists_url": "https://api.github.com/users/hawkingrei/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/hawkingrei/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/hawkingrei/subscriptions",
+          "organizations_url": "https://api.github.com/users/hawkingrei/orgs",
+          "repos_url": "https://api.github.com/users/hawkingrei/repos",
+          "events_url": "https://api.github.com/users/hawkingrei/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/hawkingrei/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "Nowledge CI",
+        "description": "",
+        "external_url": "https://www.nowledge.co/",
+        "html_url": "https://github.com/apps/nowledge-ci",
+        "created_at": "2026-08-08T08:18:57Z",
+        "updated_at": "2026-09-06T03:41:51Z",
+        "permissions": {
+          "actions": "write",
+          "checks": "write",
+          "contents": "write",
+          "issues": "write",
+          "members": "read",
+          "metadata": "read",
+          "pull_requests": "write",
+          "statuses": "write",
+          "workflows": "write"
+        },
+        "events": [
+          "issues",
+          "issue_comment",
+          "label",
+          "pull_request",
+          "pull_request_review",
+          "push",
+          "status"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117784912469,
+      "name": "ci/skein-storage-crash-recovery",
+      "node_id": "CR_kwDOTX6JAc8AAAAbbIciVQ",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "sti-prow-4487d3d130451764cad822e42b60d8752545f4379de6d92b706c28675e78c91e",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784912469",
+      "html_url": "https://github.com/nowledge-co/hawdb/runs/117784912469",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-storage-crash-recovery/2111920820891684864",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T20:42:16Z",
+      "completed_at": "2026-10-18T20:46:08Z",
+      "output": {
+        "title": "ci/skein-storage-crash-recovery",
+        "summary": "Job succeeded.\n\n[Open Spyglass logs](https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-storage-crash-recovery/2111920820891684864)",
+        "text": "### Build log\n\n```text\nExtracting Bazel installation...\nStarting local Bazel server (9.3.0) and connecting to it...\nINFO: Invocation ID: 40065fe3-5490-4ab4-b208-f539f7198bab\nINFO: Reading 'startup' options from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps\nINFO: Options provided by the client:\n  Inherited 'common' options: --isatty=0 --terminal_columns=80\nINFO: Reading rc options for 'test' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config\nINFO: Reading rc options for 'test' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  'test' options: --local_test_jobs=HOST_CPUS*0.5\nComputing main repo mapping: \nComputing main repo mapping: \nLoading: \nLoading: 0 packages loaded\nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nAnalyzing: target //:hawdb_storage_crash_recovery_tests (1 packages loaded)\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (5 packages loaded, 6 targets configured)\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (5 packages loaded, 6 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (18 packages loaded, 20 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (198 packages loaded, 5789 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10063 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10063 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10063 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10063 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10063 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10063 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10063 targets configured)\n\nINFO: Analyzed target //:hawdb_storage_crash_recovery_tests (323 packages loaded, 10715 targets configured).\n[268 / 747] [Prepa] Creating symlink external/rules_rust++rust+rust_linux_x86_64__x86_64-unknown-linux-gnu__stable_tools/rust_toolchain/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcore-b5d59729c8525f07.rmeta [for tool] ... (6 actions, 0 running)\n[330 / 747] Compiling Rust rlib equivalent v1.0.1 (1 file) [for tool]; 0s remote-cache ... (15 actions, 0 running)\n[389 / 747] [Prepa] Compiling Rust rlib icu_provider v1.5.0 (20 files) [for tool]\n[561 / 747] Running Cargo build script serde; 0s remote-cache ... (24 actions, 0 running)\n[707 / 747] Compiling Rust rlib hawdb_expression (3 files); 0s remote-cache, processwrapper-sandbox ... (5 actions, 2 running)\n[726 / 747] Compiling Rust rlib hawdb_plan_cypher (38 files); 0s remote-cache, processwrapper-sandbox\n[727 / 747] [Prepa] Compiling Rust rlib hawdb_plan_cache (2 files) ... (2 actions, 0 running)\n[729 / 747] Compiling Rust rlib hawdb_storage (499 files); 1s remote-cache, processwrapper-sandbox ... (3 actions, 2 running)\n[732 / 747] Compiling Rust rlib hawdb_storage (499 files); 2s remote-cache, processwrapper-sandbox\n[732 / 747] Compiling Rust rlib hawdb_storage (499 files); 11s remote-cache, processwrapper-sandbox\n[732 / 747] Compiling Rust rlib hawdb_storage (499 files); 41s remote-cache, processwrapper-sandbox\n[733 / 747] [Prepa] Compiling Rust rlib hawdb_executor (116 files)\n[741 / 747] Compiling Rust rlib hawdb_search_acl (216 files); 1s remote-cache, processwrapper-sandbox\n[741 / 747] Compiling Rust rlib hawdb_search_acl (216 files); 10s remote-cache, processwrapper-sandbox\n[742 / 747] [Prepa] Compiling Rust rlib hawdb_nowledge_contracts_acl (12 files) ... (2 actions, 0 running)\n[742 / 747] Compiling Rust rlib hawdb_nowledge_contracts_acl (12 files); 1s remote-cache, processwrapper-sandbox ... (2 actions running)\n[744 / 747] Compiling Rust rlib hawdb_readiness_acl (35 files); 0s remote-cache, processwrapper-sandbox\n[744 / 747] Compiling Rust rlib hawdb_readiness_acl (35 files); 1s remote-cache, processwrapper-sandbox\n[745 / 747] [Prepa] Compiling Rust bin hawdb_storage_crash_recovery_tests (277 files)\n[745 / 747] Compiling Rust bin hawdb_storage_crash_recovery_tests (277 files); 1s remote-cache, processwrapper-sandbox\n[745 / 747] Compiling Rust bin hawdb_storage_crash_recovery_tests (277 files); 11s remote-cache, processwrapper-sandbox\n[745 / 747] Compiling Rust bin hawdb_storage_crash_recovery_tests (277 files); 41s remote-cache, processwrapper-sandbox\n[746 / 747] [Prepa] runfiles for //:hawdb_storage_crash_recovery_tests\n[747 / 748] Testing //:hawdb_storage_crash_recovery_tests; 1s remote-cache\n[747 / 748] Testing //:hawdb_storage_crash_recovery_tests; 0s remote-cache, processwrapper-sandbox\n[747 / 748] Testing //:hawdb_storage_crash_recovery_tests; 9s remote-cache, processwrapper-sandbox\n[747 / 748] Testing //:hawdb_storage_crash_recovery_tests; 15s remote-cache, processwrapper-sandbox\nINFO: From Testing //:hawdb_storage_crash_recovery_tests:\n==================== Test output for //:hawdb_storage_crash_recovery_tests:\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\nstorage_crash_recovery_evidence_json {\"blocker_codes\":[],\"case_count\":10,\"cases\":[{\"artifact_generation_valid\":true,\"commit_epoch\":2,\"point\":\"before_wal_append\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":false,\"recovered_commit_epoch\":2,\"relationship_endpoints_valid\":true,\"repetition\":0,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_wal_append\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":0,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_wal_sync\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":0,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"during_checkpoint_publication\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":0,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_manifest_publication\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":0,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":2,\"point\":\"before_wal_append\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":false,\"recovered_commit_epoch\":2,\"relationship_endpoints_valid\":true,\"repetition\":1,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_wal_append\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":1,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_wal_sync\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":1,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"during_checkpoint_publication\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":1,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_manifest_publication\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":1,\"replay_lsn_present\":true,\"whole_batch_recovered\":true}],\"evidence_binding\":{\"generated_at_unix_seconds\":1792356360,\"identity\":{\"canonical_graph_commit_epoch\":1,\"configuration_digest\":\"storage-crash-out-of-core-1m-cache-v1\",\"dataset_fingerprint\":\"storage-crash-matrix-v1\",\"deployment_profile\":\"storage-crash-recovery-ci\",\"durable_format_version\":2,\"enabled_features\":[\"acl\",\"background-maintenance\",\"full-text-search\",\"graph-analytics\",\"vector-search\"],\"policy_version\":1,\"rust_toolchain\":\"1.97.1\",\"schema_version\":1,\"source_revision\":\"0581dc59fe4d271d112e7843cdeb2c741a9ca5d5\",\"target_arch\":\"x86_64\",\"target_os\":\"linux\"}},\"expected_identity\":{\"canonical_graph_commit_epoch\":1,\"configuration_digest\":\"storage-crash-out-of-core-1m-cache-v1\",\"dataset_fingerprint\":\"storage-crash-matrix-v1\",\"deployment_profile\":\"storage-crash-recovery-ci\",\"durable_format_version\":2,\"enabled_features\":[\"acl\",\"background-maintenance\",\"full-text-search\",\"graph-analytics\",\"vector-search\"],\"policy_version\":1,\"rust_toolchain\":\"1.97.1\",\"schema_version\":1,\"source_revision\":\"0581dc59fe4d271d112e7843cdeb2c741a9ca5d5\",\"target_arch\":\"x86_64\",\"target_os\":\"linux\"},\"protocol\":\"hawdb-storage-crash-recovery-evidence-v1\",\"protocol_version\":1,\"ready\":true,\"required_repetitions\":2}\ntest api::tests::storage_recovery::subprocess_crash_matrix_recovers_whole_batches_and_artifact_generations ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2100 filtered out; finished in 14.95s\n\n================================================================================\nINFO: Found 1 test target...\nTarget //:hawdb_storage_crash_recovery_tests up-to-date:\n  /tmp/bazel-links/bin/hawdb_storage_crash_recovery_tests\nINFO: Elapsed time: 210.078s, Critical Path: 146.56s\nINFO: 748 processes: 391 remote cache hit, 341 internal, 17 processwrapper-sandbox.\nINFO: Build completed successfully, 748 total actions\nINFO: \n//:hawdb_storage_crash_recovery_tests                                    PASSED in 15.0s\n\nExecuted 1 out of 1 test: 1 test passes.\nThere were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.\nINFO: Build Event Protocol files produced successfully.\n```",
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784912469/annotations"
+      },
+      "check_suite": {
+        "id": 106102484523
+      },
+      "app": {
+        "id": 4525174,
+        "client_id": "Iv23li0c9vkEZUvc5zxO",
+        "slug": "nowledge-ci",
+        "node_id": "A_kwDOADRL_M4ARQx2",
+        "owner": {
+          "login": "hawkingrei",
+          "id": 3427324,
+          "node_id": "MDQ6VXNlcjM0MjczMjQ=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/3427324?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/hawkingrei",
+          "html_url": "https://github.com/hawkingrei",
+          "followers_url": "https://api.github.com/users/hawkingrei/followers",
+          "following_url": "https://api.github.com/users/hawkingrei/following{/other_user}",
+          "gists_url": "https://api.github.com/users/hawkingrei/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/hawkingrei/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/hawkingrei/subscriptions",
+          "organizations_url": "https://api.github.com/users/hawkingrei/orgs",
+          "repos_url": "https://api.github.com/users/hawkingrei/repos",
+          "events_url": "https://api.github.com/users/hawkingrei/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/hawkingrei/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "Nowledge CI",
+        "description": "",
+        "external_url": "https://www.nowledge.co/",
+        "html_url": "https://github.com/apps/nowledge-ci",
+        "created_at": "2026-08-08T08:18:57Z",
+        "updated_at": "2026-09-06T03:41:51Z",
+        "permissions": {
+          "actions": "write",
+          "checks": "write",
+          "contents": "write",
+          "issues": "write",
+          "members": "read",
+          "metadata": "read",
+          "pull_requests": "write",
+          "statuses": "write",
+          "workflows": "write"
+        },
+        "events": [
+          "issues",
+          "issue_comment",
+          "label",
+          "pull_request",
+          "pull_request_review",
+          "push",
+          "status"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117784910322,
+      "name": "ci/skein-bazel-test-root",
+      "node_id": "CR_kwDOTX6JAc8AAAAbbIcZ8g",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "sti-prow-2e39666f5c7b39eaaea9f2621042a930cd6abee8591cc396de699d876d9dca1c",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784910322",
+      "html_url": "https://github.com/nowledge-co/hawdb/runs/117784910322",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-root/2111920820711329792",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T20:42:16Z",
+      "completed_at": "2026-10-18T21:09:30Z",
+      "output": {
+        "title": "ci/skein-bazel-test-root",
+        "summary": "Job succeeded.\n\n[Open Spyglass logs](https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-root/2111920820711329792)",
+        "text": "### Build log\n\n```text\nExtracting Bazel installation...\nStarting local Bazel server (9.3.0) and connecting to it...\nINFO: Invocation ID: 6348fc54-72a9-46dd-bda2-558955f14a59\nINFO: Reading 'startup' options from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps\nINFO: Options provided by the client:\n  Inherited 'common' options: --isatty=0 --terminal_columns=80\nINFO: Reading rc options for 'test' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config\nINFO: Reading rc options for 'test' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  'test' options: --local_test_jobs=HOST_CPUS*0.5\nComputing main repo mapping: \nComputing main repo mapping: \nComputing main repo mapping: \nLoading: \nLoading: 0 packages loaded\nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nAnalyzing: 59 targets (2 packages loaded)\nAnalyzing: 59 targets (6 packages loaded, 6 targets configured)\nAnalyzing: 59 targets (6 packages loaded, 6 targets configured)\n\nAnalyzing: 59 targets (20 packages loaded, 21 targets configured)\n\nAnalyzing: 59 targets (88 packages loaded, 1126 targets configured)\n\nAnalyzing: 59 targets (243 packages loaded, 6406 targets configured)\n\nAnalyzing: 59 targets (359 packages loaded, 11393 targets configured)\n[31 / 37] Testing //:query_limit_inventory_script_test; 0s remote-cache ... (6 actions, 0 running)\nAnalyzing: 59 targets (376 packages loaded, 11434 targets configured)\n[36 / 37] 5 / 6 tests; Testing //:query_limit_inventory_test; 0s remote-cache, processwrapper-sandbox\nAnalyzing: 59 targets (376 packages loaded, 11440 targets configured)\n[52 / 53] 7 / 8 tests; Testing //:query_limit_inventory_test; 1s remote-cache, processwrapper-sandbox\nAnalyzing: 59 targets (376 packages loaded, 11440 targets configured)\n[53 / 53] 8 / 8 tests; no actions running\nAnalyzing: 59 targets (376 packages loaded, 11440 targets configured)\n[53 / 53] 8 / 8 tests; no actions running\nAnalyzing: 59 targets (376 packages loaded, 11440 targets configured)\n[53 / 53] 8 / 8 tests; no actions running\nAnalyzing: 59 targets (376 packages loaded, 11440 targets configured)\n[53 / 53] 8 / 8 tests; no actions running\nAnalyzing: 59 targets (376 packages loaded, 11440 targets configured)\n[53 / 53] 8 / 8 tests; no actions running\nAnalyzing: 59 targets (376 packages loaded, 11440 targets configured)\n[53 / 53] 8 / 8 tests; no actions running\nAnalyzing: 59 targets (376 packages loaded, 11440 targets configured)\n[53 / 53] 8 / 8 tests; no actions running\nAnalyzing: 59 targets (376 packages loaded, 11440 targets configured)\n[53 / 53] 8 / 8 tests; no actions running\nAnalyzing: 59 targets (376 packages loaded, 11440 targets configured)\n[53 / 53] 8 / 8 tests; no actions running\nAnalyzing: 59 targets (379 packages loaded, 12233 targets configured)\n[512 / 1,141] 8 / 57 tests; Creating runfiles tree bazel-out/k8-fastbuild/bin/hawdb_linux_ci_benchmark_integrity_checksum_smoke_test.runfiles; 0s local ... (8 actions, 2 running)\nINFO: Analyzed 59 targets (379 packages loaded, 12233 targets configured).\n[539 / 1,146] 8 / 58 tests; [Prepa] Compiling Rust (without process_wrapper) rlib tinyjson (4 files) [for tool]\n[624 / 1,146] 8 / 58 tests; Compiling Rust rlib icu_properties v1.5.1 (14 files) [for tool]; 0s remote-cache\n[971 / 1,146] 8 / 58 tests; Running Cargo build script psm; 0s remote-cache ... (10 actions, 0 running)\n[1,019 / 1,146] 8 / 58 tests; [Sched] Compiling Rust rlib hawdb_search_minimal (216 files); Downloading crates/storage/libhawdb_storage-1251401449.rlib, 4.1 MiB / 139.4 MiB ... (5 actions, 0 running)\n[1,020 / 1,146] 8 / 58 tests; [Sched] Compiling Rust rlib hawdb_search_minimal (216 files); Downloading crates/storage/libhawdb_storage-1251401449.rlib, 11.3 MiB / 139.4 MiB ... (7 actions, 0 running)\n[1,020 / 1,146] 8 / 58 tests; [Sched] Compiling Rust rlib hawdb_search_minimal (216 files); Downloading crates/storage/libhawdb_storage-1251401449.rlib, 27.2 MiB / 139.4 MiB ... (7 actions, 0 running)\n[1,020 / 1,146] 8 / 58 tests; [Sched] Compiling Rust rlib hawdb_search_minimal (216 files); Downloading crates/storage/libhawdb_storage-1251401449.rlib, 126.6 MiB / 139.4 MiB ... (7 actions, 0 running)\n[1,020 / 1,146] 8 / 58 tests; Compiling Rust rlib hawdb_search_minimal (216 files); 1s remote-cache, processwrapper-sandbox ... (7 actions running)\n[1,022 / 1,147] 8 / 58 tests; Compiling Rust rlib hawdb_search_minimal (216 files); 2s remote-cache, processwrapper-sandbox ... (7 actions running)\n[1,022 / 1,147] 8 / 58 tests; Compiling Rust rlib hawdb_search_minimal (216 files); 3s remote-cache, processwrapper-sandbox ... (7 actions running)\n[1,022 / 1,147] 8 / 58 tests; Compiling Rust rlib hawdb_search_minimal (216 files); 5s remote-cache, processwrapper-sandbox ... (7 actions running)\n[1,023 / 1,147] 9 / 58 tests; Compiling Rust rlib hawdb_search_minimal (216 files); 6s remote-cache, processwrapper-sandbox ... (6 actions running)\n[1,024 / 1,147] 9 / 58 tests; Compiling Rust rlib hawdb_search_minimal (216 files); 10s remote-cache, processwrapper-sandbox ... (24 actions, 5 running)\n[1,024 / 1,147] 9 / 58 tests; Compiling Rust rlib hawdb_search_minimal (216 files); 11s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,025 / 1,147] 9 / 58 tests; Compiling Rust rlib hawdb_search_minimal (216 files); 13s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,030 / 1,147] 9 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 14s remote-cache, processwrapper-sandbox ... (32 actions, 30 running)\n[1,036 / 1,147] 9 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 15s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,043 / 1,147] 9 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 16s remote-cache, processwrapper-sandbox ... (32 actions, 29 running)\n[1,055 / 1,148] 9 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 17s remote-cache, processwrapper-sandbox ... (31 actions, 29 running)\n[1,068 / 1,152] 9 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 18s remote-cache, processwrapper-sandbox ... (28 actions, 24 running)\n[1,075 / 1,155] 9 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 19s remote-cache, processwrapper-sandbox ... (26 actions, 24 running)\n[1,081 / 1,157] 9 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 20s remote-cache, processwrapper-sandbox ... (24 actions, 23 running)\n[1,086 / 1,158] 11 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 21s remote-cache, processwrapper-sandbox ... (21 actions, 20 running)\n[1,113 / 1,167] 12 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 22s remote-cache, processwrapper-sandbox ... (24 actions, 20 running)\n[1,116 / 1,168] 12 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 24s remote-cache, processwrapper-sandbox ... (24 actions, 20 running)\n[1,120 / 1,169] 14 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 25s remote-cache, processwrapper-sandbox ... (22 actions, 21 running)\n[1,123 / 1,169] 17 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 26s remote-cache, processwrapper-sandbox ... (19 actions running)\n[1,124 / 1,169] 18 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 27s remote-cache, processwrapper-sandbox ... (18 actions running)\n[1,127 / 1,169] 21 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 29s remote-cache, processwrapper-sandbox ... (15 actions running)\n[1,128 / 1,169] 22 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 30s remote-cache, processwrapper-sandbox ... (14 actions running)\n[1,129 / 1,169] 23 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 31s remote-cache, processwrapper-sandbox ... (13 actions running)\n[1,130 / 1,169] 23 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 37s remote-cache, processwrapper-sandbox ... (20 actions, 12 running)\n[1,131 / 1,169] 23 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 39s remote-cache, processwrapper-sandbox ... (21 actions running)\n[1,131 / 1,169] 23 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 40s remote-cache, processwrapper-sandbox ... (21 actions running)\n[1,132 / 1,169] 24 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 41s remote-cache, processwrapper-sandbox ... (20 actions running)\n[1,133 / 1,169] 25 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 42s remote-cache, processwrapper-sandbox ... (19 actions running)\n[1,149 / 1,177] 25 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 43s remote-cache, processwrapper-sandbox ... (19 actions, 12 running)\n[1,153 / 1,179] 25 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 44s remote-cache, processwrapper-sandbox ... (19 actions, 13 running)\n[1,153 / 1,179] 25 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 45s remote-cache, processwrapper-sandbox ... (19 actions, 18 running)\n[1,153 / 1,179] 25 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 46s remote-cache, processwrapper-sandbox ... (19 actions running)\n[1,159 / 1,179] 31 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 48s remote-cache, processwrapper-sandbox ... (13 actions running)\n[1,159 / 1,179] 31 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 52s remote-cache, processwrapper-sandbox ... (13 actions running)\n[1,161 / 1,179] 33 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 53s remote-cache, processwrapper-sandbox ... (11 actions running)\n[1,162 / 1,179] 34 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 54s remote-cache, processwrapper-sandbox ... (10 actions running)\n[1,163 / 1,179] 35 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 56s remote-cache, processwrapper-sandbox ... (9 actions running)\n[1,163 / 1,179] 35 / 58 tests; Compiling Rust bin hawdb_unit_storage_crash_matrix_tests (277 files); 63s remote-cache, processwrapper-sandbox ... (9 actions running)\n[1,171 / 1,183] 36 / 58 tests; Compiling Rust bin hawdb_storage_crash_recovery_tests (277 files); 49s remote-cache, processwrapper-sandbox ... (11 actions, 10 running)\n[1,172 / 1,184] 36 / 58 tests; Compiling Rust bin hawdb_storage_crash_recovery_tests (277 files); 51s remote-cache, processwrapper-sandbox ... (11 actions, 10 running)\n[1,172 / 1,184] 36 / 58 tests; Compiling Rust bin hawdb_storage_crash_recovery_tests (277 files); 52s remote-cache, processwrapper-sandbox ... (11 actions running)\n[1,172 / 1,184] 36 / 58 tests; Compiling Rust bin hawdb_storage_crash_recovery_tests (277 files); 60s remote-cache, processwrapper-sandbox ... (11 actions running)\n[1,173 / 1,184] 36 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 61s remote-cache, processwrapper-sandbox ... (11 actions, 10 running)\n[1,174 / 1,185] 36 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 63s remote-cache, processwrapper-sandbox ... (11 actions running)\n[1,175 / 1,185] 37 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 64s remote-cache, processwrapper-sandbox ... (10 actions running)\n[1,175 / 1,185] 37 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 66s remote-cache, processwrapper-sandbox ... (10 actions running)\n[1,175 / 1,185] 37 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 75s remote-cache, processwrapper-sandbox ... (10 actions running)\n[1,175 / 1,185] 37 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 99s remote-cache, processwrapper-sandbox ... (10 actions running)\n[1,176 / 1,185] 38 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 101s remote-cache, processwrapper-sandbox ... (9 actions running)\n[1,176 / 1,185] 38 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 111s remote-cache, processwrapper-sandbox ... (9 actions running)\n[1,176 / 1,185] 38 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 116s remote-cache, processwrapper-sandbox ... (9 actions running)\n[1,177 / 1,185] 39 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 117s remote-cache, processwrapper-sandbox ... (8 actions running)\n[1,177 / 1,185] 39 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 128s remote-cache, processwrapper-sandbox ... (8 actions running)\n[1,178 / 1,185] 40 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 129s remote-cache, processwrapper-sandbox ... (7 actions running)\n[1,179 / 1,185] 41 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 131s remote-cache, processwrapper-sandbox ... (6 actions running)\n[1,179 / 1,185] 41 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 140s remote-cache, processwrapper-sandbox ... (6 actions running)\n[1,179 / 1,185] 41 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 142s remote-cache, processwrapper-sandbox ... (6 actions running)\n[1,180 / 1,185] 42 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 143s remote-cache, processwrapper-sandbox ... (5 actions running)\n[1,180 / 1,185] 42 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 154s remote-cache, processwrapper-sandbox ... (5 actions running)\n[1,180 / 1,185] 42 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 184s remote-cache, processwrapper-sandbox ... (5 actions running)\n[1,180 / 1,185] 42 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 197s remote-cache, processwrapper-sandbox ... (5 actions running)\n[1,181 / 1,185] 43 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 198s remote-cache, processwrapper-sandbox ... (4 actions running)\n[1,181 / 1,185] 43 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 209s remote-cache, processwrapper-sandbox ... (4 actions running)\n[1,181 / 1,185] 43 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 239s remote-cache, processwrapper-sandbox ... (4 actions running)\n[1,181 / 1,185] 43 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 242s remote-cache, processwrapper-sandbox ... (4 actions running)\n[1,182 / 1,185] 44 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 244s remote-cache, processwrapper-sandbox ... (3 actions running)\n[1,182 / 1,185] 44 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 254s remote-cache, processwrapper-sandbox ... (3 actions running)\n[1,182 / 1,185] 44 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 284s remote-cache, processwrapper-sandbox ... (3 actions running)\n[1,182 / 1,185] 44 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 344s remote-cache, processwrapper-sandbox ... (3 actions running)\n[1,182 / 1,185] 44 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 404s remote-cache, processwrapper-sandbox ... (3 actions running)\n[1,182 / 1,185] 44 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 408s remote-cache, processwrapper-sandbox ... (3 actions running)\n[1,183 / 1,185] 45 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 409s remote-cache, processwrapper-sandbox ... (2 actions running)\n[1,183 / 1,185] 45 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 420s remote-cache, processwrapper-sandbox ... (2 actions running)\n[1,183 / 1,185] 45 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 450s remote-cache, processwrapper-sandbox ... (2 actions running)\n[1,183 / 1,185] 45 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 510s remote-cache, processwrapper-sandbox ... (2 actions running)\n[1,183 / 1,185] 45 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 520s remote-cache, processwrapper-sandbox ... (2 actions running)\n[1,184 / 1,185] 46 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 522s remote-cache, processwrapper-sandbox\n[1,184 / 1,185] 46 / 58 tests; Testing //:hawdb_unit_row_page_compaction_out_of_core_tests; 529s remote-cache, processwrapper-sandbox\n[1,185 / 1,186] 47 / 58 tests; Testing //:hawdb_linux_ci_optimizer_group_3_smoke_test; 1s remote-cache, processwrapper-sandbox\n[1,185 / 1,186] 47 / 58 tests; Testing //:hawdb_linux_ci_optimizer_group_3_smoke_test; 108s remote-cache, processwrapper-sandbox\n[1,186 / 1,187] 48 / 58 tests; Testing //:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test; 0s remote-cache, processwrapper-sandbox\n[1,186 / 1,187] 48 / 58 tests; Testing //:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test; 12s remote-cache, processwrapper-sandbox\n[1,187 / 1,188] 49 / 58 tests; Testing //:hawdb_linux_ci_benchmark_relational_index_access_smoke_test; 1s remote-cache, processwrapper-sandbox\n[1,187 / 1,188] 49 / 58 tests; Testing //:hawdb_linux_ci_benchmark_relational_index_access_smoke_test; 103s remote-cache, processwrapper-sandbox\n[1,188 / 1,189] 50 / 58 tests; Testing //:hawdb_linux_ci_optimizer_group_1_smoke_test; 0s remote-cache, processwrapper-sandbox\n[1,188 / 1,189] 50 / 58 tests; Testing //:hawdb_linux_ci_optimizer_group_1_smoke_test; 221s remote-cache, processwrapper-sandbox\n[1,189 / 1,190] 51 / 58 tests; Testing //:hawdb_linux_ci_relational_row_page_lending_smoke_test; 0s remote-cache, processwrapper-sandbox\n[1,189 / 1,190] 51 / 58 tests; Testing //:hawdb_linux_ci_relational_row_page_lending_smoke_test; 1s remote-cache, processwrapper-sandbox\n[1,190 / 1,191] 52 / 58 tests; Testing //:hawdb_linux_ci_benchmark_integrity_checksum_smoke_test; 1s remote-cache, processwrapper-sandbox\n[1,190 / 1,191] 52 / 58 tests; Testing //:hawdb_linux_ci_benchmark_integrity_checksum_smoke_test; 21s remote-cache, processwrapper-sandbox\n[1,191 / 1,192] 53 / 58 tests; Testing //:hawdb_linux_ci_wal_group_commit_smoke_test; 1s remote-cache, processwrapper-sandbox\n[1,191 / 1,192] 53 / 58 tests; Testing //:hawdb_linux_ci_wal_group_commit_smoke_test; 417s remote-cache, processwrapper-sandbox\n[1,192 / 1,193] 54 / 58 tests; Testing //:hawdb_linux_ci_benchmark_relational_oltp_mix_smoke_test; 0s remote-cache, processwrapper-sandbox\n[1,192 / 1,193] 54 / 58 tests; Testing //:hawdb_linux_ci_benchmark_relational_oltp_mix_smoke_test; 11s remote-cache, processwrapper-sandbox\n[1,193 / 1,194] 55 / 58 tests; Testing //:hawdb_linux_ci_benchmark_index_restart_cost_smoke_test; 1s remote-cache, processwrapper-sandbox\n[1,193 / 1,194] 55 / 58 tests; Testing //:hawdb_linux_ci_benchmark_index_restart_cost_smoke_test; 27s remote-cache, processwrapper-sandbox\n[1,194 / 1,195] 56 / 58 tests; Testing //:hawdb_linux_ci_optimizer_summary_smoke_test; 0s remote-cache, processwrapper-sandbox\n[1,194 / 1,195] 56 / 58 tests; Testing //:hawdb_linux_ci_optimizer_summary_smoke_test; 11s remote-cache, processwrapper-sandbox\n[1,195 / 1,196] 57 / 58 tests; Testing //:hawdb_linux_ci_benchmark_relational_index_page_cache_smoke_test; 0s remote-cache, processwrapper-sandbox\nINFO: Found 1 target and 58 test targets...\nINFO: Elapsed time: 1611.649s, Critical Path: 553.01s\nINFO: 1196 processes: 480 remote cache hit, 618 internal, 156 processwrapper-sandbox.\nINFO: Build completed successfully, 1196 total actions\nINFO: \n//:cargo_bazel_package_parity_script_test                       (cached) PASSED in 0.3s\n//:cargo_bazel_package_parity_test                              (cached) PASSED in 0.4s\n//:hawdb_graph_text_dependency_boundary_test                    (cached) PASSED in 0.0s\n//:hawdb_linux_ci_benchmark_dispatch_tests                      (cached) PASSED in 1.4s\n//:hawdb_minimal_native_vector_boundary_test                    (cached) PASSED in 0.0s\n//:query_limit_inventory_script_test                            (cached) PASSED in 0.2s\n//:root_unit_partition_script_test                              (cached) PASSED in 0.9s\n//:hawdb_acl_capability_tests                                            PASSED in 0.3s\n//:hawdb_branch_project_open_minimal_tests                               PASSED in 100.1s\n//:hawdb_branch_project_open_tests                                       PASSED in 110.1s\n//:hawdb_cli_tests                                                       PASSED in 3.3s\n//:hawdb_default_consumer_tests                                          PASSED in 0.2s\n//:hawdb_execution_request_contract_tests                                PASSED in 236.1s\n//:hawdb_fallible_search_contract_minimal_tests                          PASSED in 0.1s\n//:hawdb_fallible_search_contract_tests                                  PASSED in 0.1s\n//:hawdb_graph_text_consumer_tests                                       PASSED in 0.1s\n//:hawdb_host_allocator_minimal_tests                                    PASSED in 0.1s\n//:hawdb_host_allocator_tests                                            PASSED in 0.1s\n//:hawdb_in_memory_portable_tests                                        PASSED in 0.1s\n//:hawdb_linux_ci_background_maintenance_smoke_test                      PASSED in 4.5s\n//:hawdb_linux_ci_benchmark_index_restart_cost_smoke_test                PASSED in 26.8s\n//:hawdb_linux_ci_benchmark_integrity_checksum_smoke_test                PASSED in 21.1s\n//:hawdb_linux_ci_benchmark_relational_index_access_smoke_test           PASSED in 102.8s\n//:hawdb_linux_ci_benchmark_relational_index_page_cache_smoke_test       PASSED in 0.3s\n//:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test       PASSED in 12.5s\n//:hawdb_linux_ci_benchmark_relational_oltp_mix_smoke_test               PASSED in 11.1s\n//:hawdb_linux_ci_fixture_contract_smoke_test                            PASSED in 0.2s\n//:hawdb_linux_ci_migration_gate_blocked_smoke_test                      PASSED in 17.0s\n//:hawdb_linux_ci_migration_gate_smoke_test                              PASSED in 30.7s\n//:hawdb_linux_ci_optimizer_group_1_smoke_test                           PASSED in 221.3s\n//:hawdb_linux_ci_optimizer_group_3_smoke_test                           PASSED in 108.0s\n//:hawdb_linux_ci_optimizer_summary_smoke_test                           PASSED in 10.8s\n//:hawdb_linux_ci_previous_wrapper_adapter_smoke_test                    PASSED in 0.1s\n//:hawdb_linux_ci_relational_row_page_lending_smoke_test                 PASSED in 1.2s\n//:hawdb_linux_ci_storage_recovery_smoke_test                            PASSED in 4.5s\n//:hawdb_linux_ci_wal_group_commit_smoke_test                            PASSED in 417.2s\n//:hawdb_minimal_consumer_tests                                          PASSED in 0.1s\n//:hawdb_pgq_create_binder_tests                                         PASSED in 0.1s\n//:hawdb_process_memory_policy_contract_minimal_tests                    PASSED in 7.7s\n//:hawdb_process_memory_policy_contract_tests                            PASSED in 7.3s\n//:hawdb_search_generation_context_minimal_tests                         PASSED in 7.4s\n//:hawdb_search_generation_context_tests                                 PASSED in 6.4s\n//:hawdb_search_lexical_corpus_qualification_tests                       PASSED in 0.1s\n//:hawdb_search_projection_consumer_minimal_tests                        PASSED in 9.7s\n//:hawdb_search_projection_consumer_tests                                PASSED in 6.2s\n//:hawdb_shadow_self_tests                                               PASSED in 0.1s\n//:hawdb_unit_analytics_core_general_tests                               PASSED in 81.1s\n//:hawdb_unit_concurrent_tests                                           PASSED in 360.4s\n//:hawdb_unit_general_tests                                              PASSED in 149.9s\n//:hawdb_unit_recovery_tests                                             PASSED in 94.7s\n//:hawdb_unit_row_page_compaction_admission_tests                        PASSED in 42.9s\n//:hawdb_unit_row_page_compaction_materialized_tests                     PASSED in 519.9s\n//:hawdb_unit_row_page_compaction_out_of_core_tests                      PASSED in 528.7s\n//:hawdb_unit_storage_crash_matrix_tests                                 PASSED in 50.6s\n//:hawdb_wal_group_commit_recovery_tests                                 PASSED in 21.5s\n//:hawdb_wasm_playground_bridge_tests                                    PASSED in 1.5s\n//:query_limit_inventory_test                                            PASSED in 1.6s\n//crates/system-sql:hawdb_system_sql_loom_tests                          PASSED in 2.5s\n\nExecuted 51 out of 58 tests: 58 tests pass.\nThere were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.\nINFO: Build Event Protocol files produced successfully.\n```",
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784910322/annotations"
+      },
+      "check_suite": {
+        "id": 106102484523
+      },
+      "app": {
+        "id": 4525174,
+        "client_id": "Iv23li0c9vkEZUvc5zxO",
+        "slug": "nowledge-ci",
+        "node_id": "A_kwDOADRL_M4ARQx2",
+        "owner": {
+          "login": "hawkingrei",
+          "id": 3427324,
+          "node_id": "MDQ6VXNlcjM0MjczMjQ=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/3427324?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/hawkingrei",
+          "html_url": "https://github.com/hawkingrei",
+          "followers_url": "https://api.github.com/users/hawkingrei/followers",
+          "following_url": "https://api.github.com/users/hawkingrei/following{/other_user}",
+          "gists_url": "https://api.github.com/users/hawkingrei/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/hawkingrei/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/hawkingrei/subscriptions",
+          "organizations_url": "https://api.github.com/users/hawkingrei/orgs",
+          "repos_url": "https://api.github.com/users/hawkingrei/repos",
+          "events_url": "https://api.github.com/users/hawkingrei/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/hawkingrei/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "Nowledge CI",
+        "description": "",
+        "external_url": "https://www.nowledge.co/",
+        "html_url": "https://github.com/apps/nowledge-ci",
+        "created_at": "2026-08-08T08:18:57Z",
+        "updated_at": "2026-09-06T03:41:51Z",
+        "permissions": {
+          "actions": "write",
+          "checks": "write",
+          "contents": "write",
+          "issues": "write",
+          "members": "read",
+          "metadata": "read",
+          "pull_requests": "write",
+          "statuses": "write",
+          "workflows": "write"
+        },
+        "events": [
+          "issues",
+          "issue_comment",
+          "label",
+          "pull_request",
+          "pull_request_review",
+          "push",
+          "status"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117784908210,
+      "name": "ci/skein-bazel-test-crates",
+      "node_id": "CR_kwDOTX6JAc8AAAAbbIcRsg",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "sti-prow-6fcb7e4483aca1b98a43373ef34bd20d773c529923bd6f7f5e4154c47207b735",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784908210",
+      "html_url": "https://github.com/nowledge-co/hawdb/runs/117784908210",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-crates/2111920821000736768",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T20:42:16Z",
+      "completed_at": "2026-10-18T20:59:22Z",
+      "output": {
+        "title": "ci/skein-bazel-test-crates",
+        "summary": "Job succeeded.\n\n[Open Spyglass logs](https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-crates/2111920821000736768)",
+        "text": "### Build log\n\n```text\nExtracting Bazel installation...\nStarting local Bazel server (9.3.0) and connecting to it...\nINFO: Invocation ID: 9e9d904c-d317-410a-b44e-49e362ec8593\nINFO: Reading 'startup' options from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps\nINFO: Options provided by the client:\n  Inherited 'common' options: --isatty=0 --terminal_columns=80\nINFO: Reading rc options for 'test' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config\nINFO: Reading rc options for 'test' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  'test' options: --local_test_jobs=HOST_CPUS*0.5\nComputing main repo mapping: \nComputing main repo mapping: \nComputing main repo mapping: \nLoading: \nLoading: 0 packages loaded\nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 1 packages loaded\nAnalyzing: 95 targets (41 packages loaded)\nAnalyzing: 95 targets (45 packages loaded, 6 targets configured)\nAnalyzing: 95 targets (45 packages loaded, 6 targets configured)\n\nAnalyzing: 95 targets (58 packages loaded, 17 targets configured)\n\nAnalyzing: 95 targets (58 packages loaded, 17 targets configured)\n\nAnalyzing: 95 targets (103 packages loaded, 18 targets configured)\n\nAnalyzing: 95 targets (156 packages loaded, 4086 targets configured)\n\nAnalyzing: 95 targets (246 packages loaded, 7138 targets configured)\n\nAnalyzing: 95 targets (341 packages loaded, 11404 targets configured)\n\nAnalyzing: 95 targets (341 packages loaded, 11404 targets configured)\n\nAnalyzing: 95 targets (341 packages loaded, 11404 targets configured)\n\nAnalyzing: 95 targets (341 packages loaded, 11404 targets configured)\n\nAnalyzing: 95 targets (341 packages loaded, 11404 targets configured)\n\nAnalyzing: 95 targets (341 packages loaded, 11404 targets configured)\n\nAnalyzing: 95 targets (341 packages loaded, 11404 targets configured)\n\nAnalyzing: 95 targets (341 packages loaded, 11404 targets configured)\n\nAnalyzing: 95 targets (341 packages loaded, 11404 targets configured)\n\nAnalyzing: 95 targets (344 packages loaded, 12181 targets configured)\n[190 / 220] [Prepa] Creating symlink external/rules_rust++rust+rust_linux_x86_64__x86_64-unknown-linux-gnu__stable_tools/rust_toolchain/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.22.1-rust-1.97.1-stable ... (4 actions, 0 running)\nINFO: Analyzed 95 targets (344 packages loaded, 12205 targets configured).\n[596 / 1,283] Compiling Rust (without process_wrapper) rlib tinyjson (4 files) [for tool]; 0s remote-cache\n[666 / 1,292] Testing //crates/cascades:hawdb_cascades_integration_test; 0s remote-cache ... (9 actions, 0 running)\n[746 / 1,292] 9 / 95 tests; ExtractCargoTomlEnvVars external/rules_rust++crate+crate_index__digest-0.10.7/cargo_toml_env_vars.env; 0s remote-cache ... (31 actions, 0 running)\n[1,099 / 1,302] 10 / 95 tests; Testing //crates/route-ownership:hawdb_route_ownership_tests; Downloading crates/route-ownership/hawdb_route_ownership_tests/test.xml; 0s remote-cache ... (26 actions, 0 running)\n[1,122 / 1,304] 17 / 95 tests; Compiling Rust bin hawdb_optimizer_relational_tests (17 files); 0s remote-cache, processwrapper-sandbox ... (22 actions, 8 running)\n[1,139 / 1,306] 21 / 95 tests; Compiling Rust bin hawdb_optimizer_relational_tests (17 files); 1s remote-cache, processwrapper-sandbox ... (32 actions, 9 running)\n[1,151 / 1,310] 21 / 95 tests; Compiling Rust bin hawdb_optimizer_relational_tests (17 files); 2s remote-cache, processwrapper-sandbox ... (32 actions, 7 running)\n[1,155 / 1,312] 21 / 95 tests; Compiling Rust bin hawdb_optimizer_relational_tests (17 files); 3s remote-cache, processwrapper-sandbox ... (32 actions, 5 running)\n[1,157 / 1,313] 21 / 95 tests; Compiling Rust bin hawdb_plan_cypher_tests (38 files); 4s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,160 / 1,314] 22 / 95 tests; Compiling Rust bin hawdb_plan_cypher_tests (38 files); 5s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,163 / 1,315] 23 / 95 tests; Compiling Rust bin hawdb_optimizer_graph_tests (46 files); 6s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,168 / 1,317] 24 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 6s remote-cache, processwrapper-sandbox ... (32 actions, 30 running)\n[1,170 / 1,317] 24 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 7s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,177 / 1,320] 25 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 8s remote-cache, processwrapper-sandbox ... (32 actions, 28 running)\n[1,182 / 1,322] 26 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 9s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,194 / 1,328] 26 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 10s remote-cache, processwrapper-sandbox ... (32 actions, 27 running)\n[1,207 / 1,333] 28 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 11s remote-cache, processwrapper-sandbox ... (32 actions, 24 running)\n[1,207 / 1,333] 28 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 12s remote-cache, processwrapper-sandbox ... (32 actions, 24 running)\n[1,208 / 1,333] 29 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 13s remote-cache, processwrapper-sandbox ... (32 actions, 29 running)\n[1,211 / 1,333] 32 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 14s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,217 / 1,333] 38 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 15s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,219 / 1,333] 40 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 17s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,223 / 1,335] 40 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 18s remote-cache, processwrapper-sandbox ... (32 actions, 30 running)\n[1,224 / 1,335] 40 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 19s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,224 / 1,335] 41 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 20s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,225 / 1,335] 42 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 21s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,226 / 1,335] 42 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 23s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,227 / 1,335] 43 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 24s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,227 / 1,335] 43 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 25s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,229 / 1,335] 45 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 26s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,232 / 1,336] 45 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 27s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,235 / 1,336] 48 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 28s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,236 / 1,336] 49 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 29s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,238 / 1,337] 49 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 30s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,238 / 1,337] 49 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 31s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,239 / 1,337] 49 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 32s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,241 / 1,338] 49 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 33s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,243 / 1,339] 49 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 35s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,245 / 1,339] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 36s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,246 / 1,339] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 37s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,248 / 1,340] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 38s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,256 / 1,343] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 39s remote-cache, processwrapper-sandbox ... (32 actions, 28 running)\n[1,257 / 1,343] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 40s remote-cache, processwrapper-sandbox ... (32 actions, 27 running)\n[1,258 / 1,344] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 42s remote-cache, processwrapper-sandbox ... (32 actions, 27 running)\n[1,262 / 1,346] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 43s remote-cache, processwrapper-sandbox ... (32 actions, 28 running)\n[1,264 / 1,347] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 44s remote-cache, processwrapper-sandbox ... (32 actions, 29 running)\n[1,265 / 1,347] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 45s remote-cache, processwrapper-sandbox ... (32 actions, 28 running)\n[1,268 / 1,347] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 46s remote-cache, processwrapper-sandbox ... (32 actions, 27 running)\n[1,268 / 1,347] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 47s remote-cache, processwrapper-sandbox ... (32 actions, 28 running)\n[1,268 / 1,347] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 48s remote-cache, processwrapper-sandbox ... (32 actions, 29 running)\n[1,268 / 1,347] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 49s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,268 / 1,347] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 50s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,268 / 1,347] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 51s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,268 / 1,347] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 52s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,269 / 1,347] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 53s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,272 / 1,348] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 54s remote-cache, processwrapper-sandbox ... (32 actions, 30 running)\n[1,278 / 1,351] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 55s remote-cache, processwrapper-sandbox ... (32 actions, 30 running)\n[1,280 / 1,352] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 56s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,286 / 1,355] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 57s remote-cache, processwrapper-sandbox ... (32 actions, 29 running)\n[1,288 / 1,356] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 58s remote-cache, processwrapper-sandbox ... (32 actions, 28 running)\n[1,288 / 1,356] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 59s remote-cache, processwrapper-sandbox ... (32 actions, 28 running)\n[1,290 / 1,357] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 60s remote-cache, processwrapper-sandbox ... (32 actions, 27 running)\n[1,290 / 1,357] 50 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 61s remote-cache, processwrapper-sandbox ... (32 actions, 28 running)\n[1,291 / 1,357] 51 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 62s remote-cache, processwrapper-sandbox ... (32 actions, 29 running)\n[1,291 / 1,357] 51 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 64s remote-cache, processwrapper-sandbox ... (32 actions, 29 running)\n[1,294 / 1,357] 54 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 65s remote-cache, processwrapper-sandbox ... (32 actions, 31 running)\n[1,297 / 1,357] 57 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 66s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,299 / 1,357] 59 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 67s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,299 / 1,357] 59 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 68s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,300 / 1,357] 60 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 70s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,300 / 1,357] 60 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 71s remote-cache, processwrapper-sandbox ... (32 actions running)\n[1,302 / 1,357] 62 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 72s remote-cache, processwrapper-sandbox ... (31 actions running)\n[1,302 / 1,357] 62 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 74s remote-cache, processwrapper-sandbox ... (31 actions running)\n[1,304 / 1,358] 63 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 75s remote-cache, processwrapper-sandbox ... (31 actions running)\n[1,305 / 1,358] 63 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 76s remote-cache, processwrapper-sandbox ... (30 actions running)\n[1,306 / 1,358] 64 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 77s remote-cache, processwrapper-sandbox ... (29 actions running)\n[1,309 / 1,358] 64 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 78s remote-cache, processwrapper-sandbox ... (28 actions, 27 running)\n[1,310 / 1,358] 64 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 80s remote-cache, processwrapper-sandbox ... (28 actions, 26 running)\n[1,312 / 1,358] 64 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 81s remote-cache, processwrapper-sandbox ... (27 actions running)\n[1,312 / 1,358] 64 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 82s remote-cache, processwrapper-sandbox ... (27 actions running)\n[1,313 / 1,358] 64 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 83s remote-cache, processwrapper-sandbox ... (27 actions, 26 running)\n[1,313 / 1,358] 64 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 85s remote-cache, processwrapper-sandbox ... (27 actions, 26 running)\n[1,315 / 1,358] 66 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 86s remote-cache, processwrapper-sandbox ... (25 actions running)\n[1,326 / 1,362] 67 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 88s remote-cache, processwrapper-sandbox ... (23 actions, 19 running)\n[1,327 / 1,362] 67 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 89s remote-cache, processwrapper-sandbox ... (23 actions running)\n[1,331 / 1,363] 69 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 90s remote-cache, processwrapper-sandbox ... (21 actions, 20 running)\n[1,333 / 1,364] 69 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 91s remote-cache, processwrapper-sandbox ... (21 actions, 20 running)\n[1,333 / 1,364] 69 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 92s remote-cache, processwrapper-sandbox ... (21 actions running)\n[1,335 / 1,365] 69 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 93s remote-cache, processwrapper-sandbox ... (21 actions, 20 running)\n[1,337 / 1,366] 69 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 94s remote-cache, processwrapper-sandbox ... (21 actions, 20 running)\n[1,339 / 1,367] 69 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 95s remote-cache, processwrapper-sandbox ... (21 actions, 20 running)\n[1,340 / 1,367] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 96s remote-cache, processwrapper-sandbox ... (20 actions running)\n[1,340 / 1,367] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 106s remote-cache, processwrapper-sandbox ... (20 actions running)\n[1,341 / 1,367] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 111s remote-cache, processwrapper-sandbox ... (20 actions, 19 running)\n[1,342 / 1,368] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 113s remote-cache, processwrapper-sandbox ... (20 actions, 19 running)\n[1,342 / 1,368] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 114s remote-cache, processwrapper-sandbox ... (20 actions running)\n[1,344 / 1,369] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 115s remote-cache, processwrapper-sandbox ... (20 actions running)\n[1,344 / 1,369] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 116s remote-cache, processwrapper-sandbox ... (20 actions running)\n[1,344 / 1,369] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 126s remote-cache, processwrapper-sandbox ... (20 actions running)\n[1,345 / 1,369] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 130s remote-cache, processwrapper-sandbox ... (20 actions, 19 running)\n[1,345 / 1,369] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 131s remote-cache, processwrapper-sandbox ... (20 actions running)\n[1,346 / 1,369] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 137s remote-cache, processwrapper-sandbox ... (19 actions running)\n[1,347 / 1,370] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 138s remote-cache, processwrapper-sandbox ... (20 actions, 19 running)\n[1,349 / 1,371] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 139s remote-cache, processwrapper-sandbox ... (20 actions, 18 running)\n[1,351 / 1,372] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 140s remote-cache, processwrapper-sandbox ... (20 actions, 17 running)\n[1,351 / 1,372] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 142s remote-cache, processwrapper-sandbox ... (20 actions, 17 running)\n[1,351 / 1,372] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 152s remote-cache, processwrapper-sandbox ... (20 actions, 17 running)\n[1,351 / 1,372] 70 / 95 tests; Compiling Rust bin hawdb_storage_tests (499 files); 182s remote-cache, processwrapper-sandbox ... (20 actions, 17 running)\n[1,352 / 1,372] 70 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 175s remote-cache, processwrapper-sandbox ... (20 actions, 16 running)\n[1,353 / 1,373] 70 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 177s remote-cache, processwrapper-sandbox ... (20 actions, 16 running)\n[1,353 / 1,373] 70 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 179s remote-cache, processwrapper-sandbox ... (20 actions, 16 running)\n[1,353 / 1,373] 70 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 187s remote-cache, processwrapper-sandbox ... (20 actions, 16 running)\n[1,353 / 1,373] 70 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 217s remote-cache, processwrapper-sandbox ... (20 actions, 16 running)\n[1,353 / 1,373] 70 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 277s remote-cache, processwrapper-sandbox ... (20 actions, 16 running)\n[1,353 / 1,373] 70 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 291s remote-cache, processwrapper-sandbox ... (20 actions, 17 running)\n[1,354 / 1,373] 71 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 293s remote-cache, processwrapper-sandbox ... (19 actions, 16 running)\n[1,354 / 1,373] 71 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 294s remote-cache, processwrapper-sandbox ... (19 actions, 18 running)\n[1,356 / 1,373] 73 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 296s remote-cache, processwrapper-sandbox ... (17 actions, 16 running)\n[1,356 / 1,373] 73 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 306s remote-cache, processwrapper-sandbox ... (17 actions, 16 running)\n[1,356 / 1,373] 73 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 336s remote-cache, processwrapper-sandbox ... (17 actions, 16 running)\n[1,356 / 1,373] 73 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 396s remote-cache, processwrapper-sandbox ... (17 actions, 16 running)\n[1,356 / 1,373] 73 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 398s remote-cache, processwrapper-sandbox ... (17 actions running)\n[1,357 / 1,373] 74 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 400s remote-cache, processwrapper-sandbox ... (16 actions running)\n[1,357 / 1,373] 74 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 411s remote-cache, processwrapper-sandbox ... (16 actions running)\n[1,357 / 1,373] 74 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 434s remote-cache, processwrapper-sandbox ... (16 actions running)\n[1,358 / 1,373] 75 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 436s remote-cache, processwrapper-sandbox ... (15 actions running)\n[1,359 / 1,373] 76 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 437s remote-cache, processwrapper-sandbox ... (14 actions running)\n[1,359 / 1,373] 76 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 438s remote-cache, processwrapper-sandbox ... (14 actions running)\n[1,360 / 1,373] 77 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 439s remote-cache, processwrapper-sandbox ... (13 actions running)\n[1,360 / 1,373] 77 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 449s remote-cache, processwrapper-sandbox ... (13 actions running)\n[1,361 / 1,373] 78 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 450s remote-cache, processwrapper-sandbox ... (12 actions running)\n[1,361 / 1,373] 78 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 461s remote-cache, processwrapper-sandbox ... (12 actions running)\n[1,361 / 1,373] 78 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 491s remote-cache, processwrapper-sandbox ... (12 actions running)\n[1,361 / 1,373] 78 / 95 tests; Testing //crates/search:hawdb_search_source_policy_tests; 510s remote-cache, processwrapper-sandbox ... (12 actions running)\n[1,362 / 1,373] 79 / 95 tests; Testing //crates/search:hawdb_search_acl_source_policy_tests; 508s remote-cache, processwrapper-sandbox ... (11 actions running)\n[1,362 / 1,373] 79 / 95 tests; Testing //crates/search:hawdb_search_acl_source_policy_tests; 510s remote-cache, processwrapper-sandbox ... (11 actions running)\n[1,364 / 1,373] 81 / 95 tests; Testing //crates/search:hawdb_search_acl_source_policy_tests; 512s remote-cache, processwrapper-sandbox ... (9 actions running)\n[1,365 / 1,373] 82 / 95 tests; Testing //crates/search:hawdb_search_text_background_source_policy_tests; 475s remote-cache, processwrapper-sandbox ... (8 actions running)\n[1,366 / 1,373] 83 / 95 tests; Testing //crates/search:hawdb_search_text_background_source_policy_tests; 476s remote-cache, processwrapper-sandbox ... (7 actions running)\n[1,367 / 1,373] 84 / 95 tests; Testing //crates/search:hawdb_search_text_vector_tests; 445s remote-cache, processwrapper-sandbox ... (6 actions running)\n[1,367 / 1,373] 84 / 95 tests; Testing //crates/search:hawdb_search_text_vector_tests; 455s remote-cache, processwrapper-sandbox ... (6 actions running)\n[1,367 / 1,373] 84 / 95 tests; Testing //crates/search:hawdb_search_text_vector_tests; 474s remote-cache, processwrapper-sandbox ... (6 actions running)\n[1,369 / 1,373] 86 / 95 tests; Testing //crates/search:hawdb_search_text_only_tests; 469s remote-cache, processwrapper-sandbox ... (4 actions running)\n[1,371 / 1,373] 88 / 95 tests; Testing //crates/search:hawdb_search_text_background_tests; 260s remote-cache, processwrapper-sandbox ... (2 actions running)\n[1,371 / 1,373] 88 / 95 tests; Testing //crates/search:hawdb_search_text_background_tests; 270s remote-cache, processwrapper-sandbox ... (2 actions running)\n[1,371 / 1,373] 88 / 95 tests; Testing //crates/search:hawdb_search_text_background_tests; 300s remote-cache, processwrapper-sandbox ... (2 actions running)\n[1,371 / 1,373] 88 / 95 tests; Testing //crates/search:hawdb_search_text_background_tests; 324s remote-cache, processwrapper-sandbox ... (2 actions running)\n[1,372 / 1,373] 89 / 95 tests; Testing //crates/storage:hawdb_storage_tests; 217s remote-cache, processwrapper-sandbox\n[1,372 / 1,373] 89 / 95 tests; Testing //crates/storage:hawdb_storage_tests; 228s remote-cache, processwrapper-sandbox\n[1,372 / 1,373] 89 / 95 tests; Testing //crates/storage:hawdb_storage_tests; 258s remote-cache, processwrapper-sandbox\n[1,372 / 1,373] 89 / 95 tests; Testing //crates/storage:hawdb_storage_tests; 294s remote-cache, processwrapper-sandbox\n[1,373 / 1,374] 90 / 95 tests; Testing //crates/qualification:hawdb_content_store_production_mutation_tests; 0s remote-cache, processwrapper-sandbox\n[1,373 / 1,374] 90 / 95 tests; Testing //crates/qualification:hawdb_content_store_production_mutation_tests; 57s remote-cache, processwrapper-sandbox\n[1,374 / 1,375] 91 / 95 tests; Testing //crates/qualification:hawdb_content_store_production_overflow_compaction_tests; 0s remote-cache, processwrapper-sandbox\n[1,374 / 1,375] 91 / 95 tests; Testing //crates/qualification:hawdb_content_store_production_overflow_compaction_tests; 16s remote-cache, processwrapper-sandbox\n[1,375 / 1,376] 92 / 95 tests; Testing //crates/qualification:hawdb_qualification_production_tests; 1s remote-cache, processwrapper-sandbox\n[1,375 / 1,376] 92 / 95 tests; Testing //crates/qualification:hawdb_qualification_production_tests; 5s remote-cache, processwrapper-sandbox\n[1,376 / 1,377] 93 / 95 tests; Testing //crates/qualification:hawdb_content_store_initial_row_page_qualification_tests; 0s remote-cache, processwrapper-sandbox\n[1,376 / 1,377] 93 / 95 tests; Testing //crates/qualification:hawdb_content_store_initial_row_page_qualification_tests; 69s remote-cache, processwrapper-sandbox\n[1,377 / 1,378] 94 / 95 tests; Testing //crates/qualification:hawdb_content_store_production_read_tests; 0s remote-cache, processwrapper-sandbox\n[1,377 / 1,378] 94 / 95 tests; Testing //crates/qualification:hawdb_content_store_production_read_tests; 7s remote-cache, processwrapper-sandbox\nINFO: Found 95 test targets...\nINFO: Elapsed time: 997.972s, Critical Path: 714.26s\nINFO: 1378 processes: 526 remote cache hit, 727 internal, 220 processwrapper-sandbox.\nINFO: Build completed successfully, 1378 total actions\nINFO: \n//crates/analytics:hawdb_analytics_tests                        (cached) PASSED in 0.0s\n//crates/cascades:hawdb_cascades_integration_test               (cached) PASSED in 0.1s\n//crates/cascades:hawdb_cascades_tests                          (cached) PASSED in 0.1s\n//crates/cgroup:hawdb_cgroup_tests                              (cached) PASSED in 0.1s\n//crates/core:hawdb_core_tests                                  (cached) PASSED in 0.2s\n//crates/ddl:hawdb_ddl_tests                                    (cached) PASSED in 0.1s\n//crates/evidence:hawdb_evidence_tests                          (cached) PASSED in 0.2s\n//crates/fuzz-contracts:hawdb_fuzz_contracts_tests              (cached) PASSED in 0.0s\n//crates/integrity:hawdb_integrity_tests                        (cached) PASSED in 0.0s\n//crates/optimizer:hawdb_optimizer_tests                        (cached) PASSED in 0.0s\n//crates/optimizer-predicate:hawdb_optimizer_predicate_tests    (cached) PASSED in 0.0s\n//crates/optimizer-relational:hawdb_optimizer_relational_tests  (cached) PASSED in 0.7s\n//crates/optimizer-vector:hawdb_optimizer_vector_tests          (cached) PASSED in 0.1s\n//crates/plan-core:hawdb_plan_core_tests                        (cached) PASSED in 0.1s\n//crates/qos:hawdb_qos_loom_tests                               (cached) PASSED in 0.0s\n//crates/qos:hawdb_qos_tests                                    (cached) PASSED in 0.1s\n//crates/query:hawdb_query_tests                                (cached) PASSED in 0.0s\n//crates/route-ownership:hawdb_route_ownership_tests            (cached) PASSED in 0.4s\n//crates/search:hawdb_search_analyzer_workspace_allocation_tests (cached) PASSED in 1.0s\n//crates/search:hawdb_search_identifier_allocation_tests        (cached) PASSED in 0.7s\n//crates/sql-syntax:hawdb_sql_syntax_tests                      (cached) PASSED in 0.0s\n//crates/sql-syntax:postgres_pgq_tests                          (cached) PASSED in 0.1s\n//crates/sql-syntax:postgres_select_pgq_tests                   (cached) PASSED in 0.1s\n//crates/system-sql:hawdb_system_sql_loom_tests                 (cached) PASSED in 2.5s\n//crates/telemetry:hawdb_telemetry_tests                        (cached) PASSED in 0.0s\n//crates/artifact:hawdb_artifact_tests                                   PASSED in 0.1s\n//crates/bootstrap:hawdb_bootstrap_tests                                 PASSED in 0.3s\n//crates/compat:hawdb_compat_tests                                       PASSED in 0.6s\n//crates/cypher:hawdb_cypher_tests                                       PASSED in 0.5s\n//crates/executor:hawdb_executor_unit_tests                              PASSED in 15.5s\n//crates/executor:hawdb_morsel_oracle_tests                              PASSED in 0.4s\n//crates/executor:hawdb_projection_allocation_tests                      PASSED in 14.0s\n//crates/executor:hawdb_query_observer_release_tests                     PASSED in 0.7s\n//crates/explain:hawdb_explain_tests                                     PASSED in 0.1s\n//crates/expression:hawdb_expression_tests                               PASSED in 0.2s\n//crates/nowledge-contracts:hawdb_nowledge_contracts_tests               PASSED in 0.1s\n//crates/optimizer-graph:hawdb_optimizer_graph_tests                     PASSED in 0.3s\n//crates/optimizer-graph:planner_golden_test                             PASSED in 0.3s\n//crates/plan-cache:hawdb_plan_cache_loom_tests                          PASSED in 0.4s\n//crates/plan-cache:hawdb_plan_cache_tests                               PASSED in 0.3s\n//crates/plan-cypher:hawdb_plan_cypher_tests                             PASSED in 0.6s\n//crates/qualification:hawdb_content_store_contract_tests                PASSED in 0.5s\n//crates/qualification:hawdb_content_store_initial_row_page_qualification_tests PASSED in 69.3s\n//crates/qualification:hawdb_content_store_memory_qualification_cli_tests PASSED in 0.3s\n//crates/qualification:hawdb_content_store_mutation_qualification_cli_tests PASSED in 0.3s\n//crates/qualification:hawdb_content_store_overflow_compaction_qualification_cli_tests PASSED in 0.3s\n//crates/qualification:hawdb_content_store_production_mutation_tests     PASSED in 56.8s\n//crates/qualification:hawdb_content_store_production_overflow_compaction_tests PASSED in 16.0s\n//crates/qualification:hawdb_content_store_production_read_tests         PASSED in 7.2s\n//crates/qualification:hawdb_content_store_read_qualification_cli_tests  PASSED in 0.4s\n//crates/qualification:hawdb_graph_index_qualification_cli_tests         PASSED in 1.3s\n//crates/qualification:hawdb_graph_storage_qualification_cli_tests       PASSED in 0.2s\n//crates/qualification:hawdb_qualification_content_store_tests           PASSED in 0.5s\n//crates/qualification:hawdb_qualification_misc_tests                    PASSED in 0.3s\n//crates/qualification:hawdb_qualification_production_tests              PASSED in 5.4s\n//crates/qualification:hawdb_qualification_release_bundle_tests          PASSED in 5.8s\n//crates/qualification:hawdb_release_bundle_cli_tests                    PASSED in 0.3s\n//crates/qualification:hawdb_soak_cli_tests                              PASSED in 0.3s\n//crates/query-policy:hawdb_query_policy_tests                           PASSED in 0.1s\n//crates/readiness:hawdb_readiness_tests                                 PASSED in 39.5s\n//crates/relational:hawdb_relational_tests                               PASSED in 8.1s\n//crates/resource-profile:hawdb_resource_profile_tests                   PASSED in 0.1s\n//crates/runtime-tokio:hawdb_runtime_tokio_tests                         PASSED in 0.4s\n//crates/search:hawdb_search_acl_source_policy_tests                     PASSED in 511.9s\n//crates/search:hawdb_search_acl_streamed_lifecycle_tests                PASSED in 367.6s\n//crates/search:hawdb_search_acl_tests                                   PASSED in 471.2s\n//crates/search:hawdb_search_analyzer_allocation_tests                   PASSED in 0.5s\n//crates/search:hawdb_search_analyzer_observation_tests                  PASSED in 0.2s\n//crates/search:hawdb_search_background_only_source_policy_tests         PASSED in 22.0s\n//crates/search:hawdb_search_background_only_tests                       PASSED in 214.1s\n//crates/search:hawdb_search_descriptor_allocation_tests                 PASSED in 10.1s\n//crates/search:hawdb_search_lexical_delta_allocation_tests              PASSED in 4.4s\n//crates/search:hawdb_search_minimal_source_policy_tests                 PASSED in 22.5s\n//crates/search:hawdb_search_minimal_tests                               PASSED in 217.0s\n//crates/search:hawdb_search_segment_allocation_tests                    PASSED in 6.5s\n//crates/search:hawdb_search_source_policy_tests                         PASSED in 510.5s\n//crates/search:hawdb_search_streamed_lifecycle_tests                    PASSED in 220.6s\n//crates/search:hawdb_search_tests                                       PASSED in 448.4s\n//crates/search:hawdb_search_text_background_source_policy_tests         PASSED in 476.7s\n//crates/search:hawdb_search_text_background_streamed_lifecycle_tests    PASSED in 359.8s\n//crates/search:hawdb_search_text_background_tests                       PASSED in 323.9s\n//crates/search:hawdb_search_text_only_source_policy_tests               PASSED in 474.7s\n//crates/search:hawdb_search_text_only_streamed_lifecycle_tests          PASSED in 362.0s\n//crates/search:hawdb_search_text_only_tests                             PASSED in 468.9s\n//crates/search:hawdb_search_text_vector_source_policy_tests             PASSED in 460.2s\n//crates/search:hawdb_search_text_vector_streamed_lifecycle_tests        PASSED in 360.9s\n//crates/search:hawdb_search_text_vector_tests                           PASSED in 474.3s\n//crates/search:hawdb_search_vector_background_source_policy_tests       PASSED in 21.3s\n//crates/search:hawdb_search_vector_background_tests                     PASSED in 192.3s\n//crates/search:hawdb_search_vector_only_source_policy_tests             PASSED in 26.0s\n//crates/search:hawdb_search_vector_only_tests                           PASSED in 105.0s\n//crates/sql:hawdb_sql_tests                                             PASSED in 1.0s\n//crates/storage:hawdb_storage_tests                                     PASSED in 294.8s\n//crates/system-sql:hawdb_system_sql_tests                               PASSED in 0.2s\n//crates/vector-projection:hawdb_vector_projection_tests                 PASSED in 11.0s\n\nExecuted 70 out of 95 tests: 95 tests pass.\nThere were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.\nINFO: Build Event Protocol files produced successfully.\n```",
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784908210/annotations"
+      },
+      "check_suite": {
+        "id": 106102484523
+      },
+      "app": {
+        "id": 4525174,
+        "client_id": "Iv23li0c9vkEZUvc5zxO",
+        "slug": "nowledge-ci",
+        "node_id": "A_kwDOADRL_M4ARQx2",
+        "owner": {
+          "login": "hawkingrei",
+          "id": 3427324,
+          "node_id": "MDQ6VXNlcjM0MjczMjQ=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/3427324?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/hawkingrei",
+          "html_url": "https://github.com/hawkingrei",
+          "followers_url": "https://api.github.com/users/hawkingrei/followers",
+          "following_url": "https://api.github.com/users/hawkingrei/following{/other_user}",
+          "gists_url": "https://api.github.com/users/hawkingrei/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/hawkingrei/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/hawkingrei/subscriptions",
+          "organizations_url": "https://api.github.com/users/hawkingrei/orgs",
+          "repos_url": "https://api.github.com/users/hawkingrei/repos",
+          "events_url": "https://api.github.com/users/hawkingrei/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/hawkingrei/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "Nowledge CI",
+        "description": "",
+        "external_url": "https://www.nowledge.co/",
+        "html_url": "https://github.com/apps/nowledge-ci",
+        "created_at": "2026-08-08T08:18:57Z",
+        "updated_at": "2026-09-06T03:41:51Z",
+        "permissions": {
+          "actions": "write",
+          "checks": "write",
+          "contents": "write",
+          "issues": "write",
+          "members": "read",
+          "metadata": "read",
+          "pull_requests": "write",
+          "statuses": "write",
+          "workflows": "write"
+        },
+        "events": [
+          "issues",
+          "issue_comment",
+          "label",
+          "pull_request",
+          "pull_request_review",
+          "push",
+          "status"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117784905263,
+      "name": "ci/skein-bazel-test-analytics-dense",
+      "node_id": "CR_kwDOTX6JAc8AAAAbbIcGLw",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "sti-prow-a68aa7dba401884d5d742fe191e6396c81e9588c153ff2408393ee7c9d1b86ed",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784905263",
+      "html_url": "https://github.com/nowledge-co/hawdb/runs/117784905263",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-analytics-dense/2111920820791021568",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T20:42:16Z",
+      "completed_at": "2026-10-18T20:56:35Z",
+      "output": {
+        "title": "ci/skein-bazel-test-analytics-dense",
+        "summary": "Job succeeded.\n\n[Open Spyglass logs](https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-analytics-dense/2111920820791021568)",
+        "text": "### Build log\n\n```text\nExtracting Bazel installation...\nStarting local Bazel server (9.3.0) and connecting to it...\nINFO: Invocation ID: 4f6a7fa4-f664-404f-a82c-5db159b4c8f4\nINFO: Reading 'startup' options from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps\nINFO: Options provided by the client:\n  Inherited 'common' options: --isatty=0 --terminal_columns=80\nINFO: Reading rc options for 'test' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config\nINFO: Reading rc options for 'test' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  'test' options: --local_test_jobs=HOST_CPUS*0.5\nComputing main repo mapping: \nComputing main repo mapping: \nComputing main repo mapping: \nLoading: \nLoading: 0 packages loaded\nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nAnalyzing: target //:hawdb_unit_analytics_rss_tests (1 packages loaded)\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (5 packages loaded, 6 targets configured)\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (5 packages loaded, 6 targets configured)\n\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (18 packages loaded, 8 targets configured)\n\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (182 packages loaded, 4947 targets configured)\n\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (324 packages loaded, 10733 targets configured)\n\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (324 packages loaded, 10733 targets configured)\n\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (324 packages loaded, 10733 targets configured)\n\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (324 packages loaded, 10733 targets configured)\n\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (324 packages loaded, 10733 targets configured)\n\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (324 packages loaded, 10733 targets configured)\n\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (324 packages loaded, 10733 targets configured)\n\nAnalyzing: target //:hawdb_unit_analytics_rss_tests (324 packages loaded, 10733 targets configured)\n\nINFO: Analyzed target //:hawdb_unit_analytics_rss_tests (327 packages loaded, 11376 targets configured).\n[170 / 665] [Prepa] Creating symlink external/rules_rust++rust+rust_linux_x86_64__x86_64-unknown-linux-gnu__stable_tools/rust_toolchain/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld [for tool] ... (5 actions, 1 running)\n[306 / 753] [Prepa] Creating symlink external/rules_rust++rust+rust_linux_x86_64__x86_64-unknown-linux-gnu__stable_tools/rust_toolchain/lib/libLLVM.so.22.1-rust-1.97.1-stable ... (2 actions, 0 running)\n[372 / 753] Compiling Rust rlib serde v1.0.228 (25 files) [for tool]; 0s remote-cache ... (4 actions, 0 running)\n[397 / 753] Compiling Rust rlib cargo_util_schemas v0.3.1 (8 files) [for tool]; 0s remote-cache\n[719 / 753] Running Cargo build script psm; 0s remote-cache ... (4 actions, 0 running)\n[737 / 753] [Sched] Compiling Rust rlib hawdb_storage (499 files); Downloading external/rules_rust++crate+crate_index__roaring-0.11.5/libroaring-2947376283.rlib, 2.1 MiB / 3.5 MiB\n[737 / 753] Compiling Rust rlib hawdb_storage (499 files); 1s remote-cache, processwrapper-sandbox\n[737 / 753] Compiling Rust rlib hawdb_storage (499 files); 10s remote-cache, processwrapper-sandbox\n[737 / 753] Compiling Rust rlib hawdb_storage (499 files); 40s remote-cache, processwrapper-sandbox\n[751 / 753] [Sched] Compiling Rust bin hawdb_unit_test_binary (277 files); Downloading crates/executor/libhawdb_executor-1315828133.rlib, 12.1 MiB / 29.6 MiB\n[751 / 753] [Sched] Compiling Rust bin hawdb_unit_test_binary (277 files); Downloading external/rules_rust++crate+crate_index__sqlparser-0.63.0/libsqlparser-2331587404.rlib, 32.4 MiB / 37.6 MiB\n[751 / 753] Compiling Rust bin hawdb_unit_test_binary (277 files); 1s remote-cache, processwrapper-sandbox\n[751 / 753] Compiling Rust bin hawdb_unit_test_binary (277 files); 9s remote-cache, processwrapper-sandbox\n[751 / 753] Compiling Rust bin hawdb_unit_test_binary (277 files); 39s remote-cache, processwrapper-sandbox\n[752 / 753] [Prepa] runfiles for //:hawdb_unit_analytics_rss_tests\n[753 / 754] Testing //:hawdb_unit_analytics_rss_tests; 0s remote-cache, processwrapper-sandbox\n[753 / 754] Testing //:hawdb_unit_analytics_rss_tests; 2s remote-cache, processwrapper-sandbox\n[753 / 754] Testing //:hawdb_unit_analytics_rss_tests; 670s remote-cache, processwrapper-sandbox\nINFO: Found 1 test target...\nTarget //:hawdb_unit_analytics_rss_tests up-to-date:\n  /tmp/bazel-links/bin/hawdb_unit_analytics_rss_tests\n[754 / 754] 1 / 1 tests; no actions running\nINFO: Elapsed time: 841.565s, Critical Path: 764.51s\nINFO: 754 processes: 409 remote cache hit, 342 internal, 4 processwrapper-sandbox.\nINFO: Build completed successfully, 754 total actions\nINFO: \n//:hawdb_unit_analytics_rss_tests                                        PASSED in 669.9s\n\nExecuted 1 out of 1 test: 1 test passes.\nINFO: Build Event Protocol files produced successfully.\n```",
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784905263/annotations"
+      },
+      "check_suite": {
+        "id": 106102484523
+      },
+      "app": {
+        "id": 4525174,
+        "client_id": "Iv23li0c9vkEZUvc5zxO",
+        "slug": "nowledge-ci",
+        "node_id": "A_kwDOADRL_M4ARQx2",
+        "owner": {
+          "login": "hawkingrei",
+          "id": 3427324,
+          "node_id": "MDQ6VXNlcjM0MjczMjQ=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/3427324?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/hawkingrei",
+          "html_url": "https://github.com/hawkingrei",
+          "followers_url": "https://api.github.com/users/hawkingrei/followers",
+          "following_url": "https://api.github.com/users/hawkingrei/following{/other_user}",
+          "gists_url": "https://api.github.com/users/hawkingrei/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/hawkingrei/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/hawkingrei/subscriptions",
+          "organizations_url": "https://api.github.com/users/hawkingrei/orgs",
+          "repos_url": "https://api.github.com/users/hawkingrei/repos",
+          "events_url": "https://api.github.com/users/hawkingrei/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/hawkingrei/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "Nowledge CI",
+        "description": "",
+        "external_url": "https://www.nowledge.co/",
+        "html_url": "https://github.com/apps/nowledge-ci",
+        "created_at": "2026-08-08T08:18:57Z",
+        "updated_at": "2026-09-06T03:41:51Z",
+        "permissions": {
+          "actions": "write",
+          "checks": "write",
+          "contents": "write",
+          "issues": "write",
+          "members": "read",
+          "metadata": "read",
+          "pull_requests": "write",
+          "statuses": "write",
+          "workflows": "write"
+        },
+        "events": [
+          "issues",
+          "issue_comment",
+          "label",
+          "pull_request",
+          "pull_request_review",
+          "push",
+          "status"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117784902964,
+      "name": "ci/skein-bazel-build",
+      "node_id": "CR_kwDOTX6JAc8AAAAbbIb9NA",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "sti-prow-6d311530f38780eda5023c8897473c84a64d471bab1cadbffa813053c4328e46",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784902964",
+      "html_url": "https://github.com/nowledge-co/hawdb/runs/117784902964",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-build/2111920820623249408",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T20:42:16Z",
+      "completed_at": "2026-10-18T20:45:45Z",
+      "output": {
+        "title": "ci/skein-bazel-build",
+        "summary": "Job succeeded.\n\n[Open Spyglass logs](https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-build/2111920820623249408)",
+        "text": "### Build log\n\n```text\nExtracting Bazel installation...\nStarting local Bazel server (9.3.0) and connecting to it...\nINFO: Invocation ID: 7d3e747b-e12c-44f0-a9fb-ea19e6240757\nINFO: Reading 'startup' options from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps\nINFO: Options provided by the client:\n  Inherited 'common' options: --isatty=0 --terminal_columns=80\nINFO: Reading rc options for 'build' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config\nComputing main repo mapping: \nComputing main repo mapping: \nLoading: \nLoading: 0 packages loaded\nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nAnalyzing: target //:hawdb (1 packages loaded)\nAnalyzing: target //:hawdb (5 packages loaded, 6 targets configured)\nAnalyzing: target //:hawdb (5 packages loaded, 6 targets configured)\n\nAnalyzing: target //:hawdb (7 packages loaded, 8 targets configured)\n\nAnalyzing: target //:hawdb (61 packages loaded, 8 targets configured)\n\nAnalyzing: target //:hawdb (235 packages loaded, 7391 targets configured)\n\nAnalyzing: target //:hawdb (321 packages loaded, 10707 targets configured)\n\nAnalyzing: target //:hawdb (321 packages loaded, 10707 targets configured)\n\nAnalyzing: target //:hawdb (321 packages loaded, 10707 targets configured)\n\nAnalyzing: target //:hawdb (321 packages loaded, 10707 targets configured)\n\nAnalyzing: target //:hawdb (321 packages loaded, 10707 targets configured)\n\nAnalyzing: target //:hawdb (321 packages loaded, 10707 targets configured)\n\nAnalyzing: target //:hawdb (321 packages loaded, 10707 targets configured)\n\nINFO: Analyzed target //:hawdb (324 packages loaded, 11343 targets configured).\n[167 / 513] Creating source manifest for @@rules_rust++crate+crate_index__crossbeam-epoch-0.9.20//:_bs_ [for tool]; 0s local ... (10 actions, 1 running)\n[304 / 748] Compiling Rust (without process_wrapper) bin process_wrapper (6 files) [for tool]; 0s remote-cache\n[386 / 748] Compiling Rust rlib icu_provider v1.5.0 (20 files) [for tool]; 0s remote-cache\n[693 / 748] Running Cargo build script zstd-safe; 0s remote-cache ... (8 actions, 0 running)\n[729 / 748] [Sched] Compiling Rust rlib hawdb_optimizer_graph (46 files); Downloading external/rules_rust++crate+crate_index__regex-automata-0.4.18/libregex_automata-3910630829.rlib, 52.5 KiB / 11.6 MiB ... (3 actions, 0 running)\n[729 / 748] Compiling Rust rlib hawdb_optimizer_graph (46 files); 0s remote-cache, processwrapper-sandbox ... (3 actions running)\n[731 / 748] Compiling Rust rlib hawdb_storage (499 files); 1s remote-cache, processwrapper-sandbox ... (2 actions, 1 running)\n[733 / 748] Compiling Rust rlib hawdb_storage (499 files); 3s remote-cache, processwrapper-sandbox\n[733 / 748] Compiling Rust rlib hawdb_storage (499 files); 13s remote-cache, processwrapper-sandbox\n[734 / 748] [Prepa] Compiling Rust rlib hawdb_vector_projection (16 files)\n[736 / 748] Compiling Rust rlib hawdb_executor (116 files); 1s remote-cache, processwrapper-sandbox\n[736 / 748] Compiling Rust rlib hawdb_executor (116 files); 3s remote-cache, processwrapper-sandbox\n[737 / 748] [Prepa] Compiling Rust rlib hawdb_artifact (1 file)\n[741 / 748] Compiling Rust rlib hawdb_relational v0.10.0 (71 files); 1s remote-cache, processwrapper-sandbox ... (3 actions running)\n[742 / 748] Compiling Rust rlib hawdb_compat (13 files); 3s remote-cache, processwrapper-sandbox ... (2 actions running)\n[743 / 748] Compiling Rust rlib hawdb_search (216 files); 5s remote-cache, processwrapper-sandbox\n[744 / 748] checking cached actions\n[744 / 748] Compiling Rust rlib hawdb_bootstrap (7 files); 0s remote-cache, processwrapper-sandbox ... (2 actions running)\n[746 / 748] Compiling Rust rlib hawdb_readiness (35 files); 0s remote-cache, processwrapper-sandbox\n[746 / 748] Compiling Rust rlib hawdb_readiness (35 files); 1s remote-cache, processwrapper-sandbox\n[747 / 748] [Prepa] Compiling Rust rlib hawdb (277 files)\n[747 / 748] Compiling Rust rlib hawdb (277 files); 1s remote-cache, processwrapper-sandbox\nINFO: Found 1 target...\nTarget //:hawdb up-to-date:\n  /tmp/bazel-links/bin/libhawdb-2944768876.rlib\n[748 / 748] no actions running\nINFO: Elapsed time: 125.560s, Critical Path: 58.54s\nINFO: 748 processes: 394 remote cache hit, 337 internal, 17 processwrapper-sandbox.\nINFO: Build completed successfully, 748 total actions\nINFO: \nINFO: \nINFO: Invocation ID: c6fa4ffa-ec12-42a9-bf8f-12489cb6923b\nINFO: Reading 'startup' options from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps\nINFO: Options provided by the client:\n  Inherited 'common' options: --isatty=0 --terminal_columns=80\nINFO: Reading rc options for 'build' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config\nComputing main repo mapping: \nLoading: \nLoading: 0 packages loaded\nLoading: 0 packages loaded\nLoading: 0 packages loaded\nLoading: 0 packages loaded\nLoading: 0 packages loaded\nWARNING: Build option --@@rules_rust+//rust/settings:pipelined_compilation has changed, discarding analysis cache (this can be expensive, see https://bazel.build/advanced/performance/iteration-speed).\nAnalyzing: target //:hawdb_minimal (0 packages loaded, 0 targets configured)\nAnalyzing: target //:hawdb_minimal (0 packages loaded, 0 targets configured)\n\nINFO: Analyzed target //:hawdb_minimal (278 packages loaded, 10588 targets configured).\n[319 / 816] Compiling Rust rlib stable_deref_trait v1.2.0 (1 file) [for tool]; 0s remote-cache ... (24 actions, 0 running)\n[440 / 816] Compiling Rust rlib url v2.5.4 (9 files) [for tool]; 0s remote-cache ... (2 actions, 0 running)\n[792 / 816] Compiling Rust metadata rlib hawdb_expression (3 files); 0s remote-cache, processwrapper-sandbox ... (3 actions, 2 running)\n[797 / 816] Compiling Rust metadata rlib hawdb_plan_cypher (38 files); 1s remote-cache, processwrapper-sandbox\n[800 / 816] Compiling Rust metadata rlib hawdb_storage (499 files); 0s remote-cache, processwrapper-sandbox ... (3 actions, 2 running)\n[803 / 816] Compiling Rust metadata rlib hawdb_storage (499 files); 2s remote-cache, processwrapper-sandbox\n[803 / 816] Compiling Rust metadata rlib hawdb_storage (499 files); 11s remote-cache, processwrapper-sandbox\n[804 / 816] [Prepa] Compiling Rust metadata rlib hawdb_executor (116 files)\n[804 / 816] Compiling Rust metadata rlib hawdb_executor (116 files); 1s remote-cache, processwrapper-sandbox\n[805 / 816] [Prepa] Compiling Rust metadata rlib hawdb_resource_profile (1 file) ... (3 actions, 0 running)\n[809 / 816] Compiling Rust metadata rlib hawdb_relational v0.10.0 (71 files); 0s remote-cache, processwrapper-sandbox ... (3 actions running)\n[810 / 816] Compiling Rust metadata rlib hawdb_relational v0.10.0 (71 files); 2s remote-cache, processwrapper-sandbox ... (2 actions running)\n[811 / 816] Compiling Rust metadata rlib hawdb_search_minimal (216 files); 3s remote-cache, processwrapper-sandbox\n[812 / 816] [Prepa] Compiling Rust metadata rlib hawdb_nowledge_contracts_minimal (12 files)\n[813 / 816] Compiling Rust metadata rlib hawdb_nowledge_contracts_minimal (12 files); 1s remote-cache, processwrapper-sandbox\n[814 / 816] Compiling Rust metadata rlib hawdb_readiness_minimal (35 files); 0s remote-cache, processwrapper-sandbox\n[815 / 816] [Prepa] Compiling Rust metadata rlib hawdb_minimal (277 files)\n[815 / 816] Compiling Rust metadata rlib hawdb_minimal (277 files); 1s remote-cache, processwrapper-sandbox\nINFO: Found 1 target...\nTarget //:hawdb_minimal up-to-date:\n  /tmp/bazel-links/bin/libhawdb-977399630.rmeta\nINFO: Elapsed time: 64.896s, Critical Path: 55.24s\nINFO: 291 processes: 525 action cache hit, 268 remote cache hit, 1 internal, 22 processwrapper-sandbox.\nINFO: Build completed successfully, 291 total actions\nINFO: \n```",
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117784902964/annotations"
+      },
+      "check_suite": {
+        "id": 106102484523
+      },
+      "app": {
+        "id": 4525174,
+        "client_id": "Iv23li0c9vkEZUvc5zxO",
+        "slug": "nowledge-ci",
+        "node_id": "A_kwDOADRL_M4ARQx2",
+        "owner": {
+          "login": "hawkingrei",
+          "id": 3427324,
+          "node_id": "MDQ6VXNlcjM0MjczMjQ=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/3427324?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/hawkingrei",
+          "html_url": "https://github.com/hawkingrei",
+          "followers_url": "https://api.github.com/users/hawkingrei/followers",
+          "following_url": "https://api.github.com/users/hawkingrei/following{/other_user}",
+          "gists_url": "https://api.github.com/users/hawkingrei/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/hawkingrei/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/hawkingrei/subscriptions",
+          "organizations_url": "https://api.github.com/users/hawkingrei/orgs",
+          "repos_url": "https://api.github.com/users/hawkingrei/repos",
+          "events_url": "https://api.github.com/users/hawkingrei/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/hawkingrei/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "Nowledge CI",
+        "description": "",
+        "external_url": "https://www.nowledge.co/",
+        "html_url": "https://github.com/apps/nowledge-ci",
+        "created_at": "2026-08-08T08:18:57Z",
+        "updated_at": "2026-09-06T03:41:51Z",
+        "permissions": {
+          "actions": "write",
+          "checks": "write",
+          "contents": "write",
+          "issues": "write",
+          "members": "read",
+          "metadata": "read",
+          "pull_requests": "write",
+          "statuses": "write",
+          "workflows": "write"
+        },
+        "events": [
+          "issues",
+          "issue_comment",
+          "label",
+          "pull_request",
+          "pull_request_review",
+          "push",
+          "status"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117754084021,
+      "name": "Bazel native bindings (ubuntu-24.04)",
+      "node_id": "CR_kwDOTX6JAc8AAAAbarC6tQ",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "d6dcb6f7-b9a5-5caf-bfca-6b94f9e0dfb3",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754084021",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256469/job/117754084021",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256469/job/117754084021",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T18:27:51Z",
+      "completed_at": "2026-10-18T18:32:55Z",
+      "output": {
+        "title": null,
+        "summary": null,
+        "text": null,
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754084021/annotations"
+      },
+      "check_suite": {
+        "id": 106102495955
+      },
+      "app": {
+        "id": 15368,
+        "client_id": "Iv1.05c79e9ad1f6bdfa",
+        "slug": "github-actions",
+        "node_id": "MDM6QXBwMTUzNjg=",
+        "owner": {
+          "login": "github",
+          "id": 9919,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/github",
+          "html_url": "https://github.com/github",
+          "followers_url": "https://api.github.com/users/github/followers",
+          "following_url": "https://api.github.com/users/github/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+          "organizations_url": "https://api.github.com/users/github/orgs",
+          "repos_url": "https://api.github.com/users/github/repos",
+          "events_url": "https://api.github.com/users/github/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/github/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "GitHub Actions",
+        "description": "Automate your workflow from idea to production",
+        "external_url": "https://help.github.com/en/actions",
+        "html_url": "https://github.com/apps/github-actions",
+        "created_at": "2018-07-30T09:30:17Z",
+        "updated_at": "2026-06-18T16:17:48Z",
+        "permissions": {
+          "actions": "write",
+          "administration": "read",
+          "artifact_metadata": "write",
+          "attestations": "write",
+          "checks": "write",
+          "code_quality": "write",
+          "contents": "write",
+          "copilot_requests": "write",
+          "deployments": "write",
+          "discussions": "write",
+          "drives": "write",
+          "issues": "write",
+          "merge_queues": "write",
+          "metadata": "read",
+          "models": "read",
+          "packages": "write",
+          "pages": "write",
+          "pull_requests": "write",
+          "repository_hooks": "write",
+          "repository_projects": "write",
+          "security_events": "write",
+          "statuses": "write",
+          "vulnerability_alerts": "read"
+        },
+        "events": [
+          "branch_protection_rule",
+          "check_run",
+          "check_suite",
+          "create",
+          "delete",
+          "deployment",
+          "deployment_status",
+          "discussion",
+          "discussion_comment",
+          "fork",
+          "gollum",
+          "issues",
+          "issue_comment",
+          "label",
+          "merge_group",
+          "milestone",
+          "page_build",
+          "public",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "push",
+          "registry_package",
+          "release",
+          "repository",
+          "repository_dispatch",
+          "status",
+          "watch",
+          "workflow_dispatch",
+          "workflow_run"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117754084010,
+      "name": "Bazel build and test (macos-latest)",
+      "node_id": "CR_kwDOTX6JAc8AAAAbarC6qg",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "5b5bfad4-6d53-5ed7-816c-5f9372063318",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754084010",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256475/job/117754084010",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256475/job/117754084010",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T18:27:56Z",
+      "completed_at": "2026-10-18T18:35:01Z",
+      "output": {
+        "title": null,
+        "summary": null,
+        "text": null,
+        "annotations_count": 1,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754084010/annotations"
+      },
+      "check_suite": {
+        "id": 106102495973
+      },
+      "app": {
+        "id": 15368,
+        "client_id": "Iv1.05c79e9ad1f6bdfa",
+        "slug": "github-actions",
+        "node_id": "MDM6QXBwMTUzNjg=",
+        "owner": {
+          "login": "github",
+          "id": 9919,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/github",
+          "html_url": "https://github.com/github",
+          "followers_url": "https://api.github.com/users/github/followers",
+          "following_url": "https://api.github.com/users/github/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+          "organizations_url": "https://api.github.com/users/github/orgs",
+          "repos_url": "https://api.github.com/users/github/repos",
+          "events_url": "https://api.github.com/users/github/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/github/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "GitHub Actions",
+        "description": "Automate your workflow from idea to production",
+        "external_url": "https://help.github.com/en/actions",
+        "html_url": "https://github.com/apps/github-actions",
+        "created_at": "2018-07-30T09:30:17Z",
+        "updated_at": "2026-06-18T16:17:48Z",
+        "permissions": {
+          "actions": "write",
+          "administration": "read",
+          "artifact_metadata": "write",
+          "attestations": "write",
+          "checks": "write",
+          "code_quality": "write",
+          "contents": "write",
+          "copilot_requests": "write",
+          "deployments": "write",
+          "discussions": "write",
+          "drives": "write",
+          "issues": "write",
+          "merge_queues": "write",
+          "metadata": "read",
+          "models": "read",
+          "packages": "write",
+          "pages": "write",
+          "pull_requests": "write",
+          "repository_hooks": "write",
+          "repository_projects": "write",
+          "security_events": "write",
+          "statuses": "write",
+          "vulnerability_alerts": "read"
+        },
+        "events": [
+          "branch_protection_rule",
+          "check_run",
+          "check_suite",
+          "create",
+          "delete",
+          "deployment",
+          "deployment_status",
+          "discussion",
+          "discussion_comment",
+          "fork",
+          "gollum",
+          "issues",
+          "issue_comment",
+          "label",
+          "merge_group",
+          "milestone",
+          "page_build",
+          "public",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "push",
+          "registry_package",
+          "release",
+          "repository",
+          "repository_dispatch",
+          "status",
+          "watch",
+          "workflow_dispatch",
+          "workflow_run"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117754083941,
+      "name": "Windows native contracts",
+      "node_id": "CR_kwDOTX6JAc8AAAAbarC6ZQ",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "931bf8c6-d837-5769-8b9c-573c330bdc69",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754083941",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256469/job/117754083941",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256469/job/117754083941",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T18:27:51Z",
+      "completed_at": "2026-10-18T19:05:25Z",
+      "output": {
+        "title": null,
+        "summary": null,
+        "text": null,
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754083941/annotations"
+      },
+      "check_suite": {
+        "id": 106102495955
+      },
+      "app": {
+        "id": 15368,
+        "client_id": "Iv1.05c79e9ad1f6bdfa",
+        "slug": "github-actions",
+        "node_id": "MDM6QXBwMTUzNjg=",
+        "owner": {
+          "login": "github",
+          "id": 9919,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/github",
+          "html_url": "https://github.com/github",
+          "followers_url": "https://api.github.com/users/github/followers",
+          "following_url": "https://api.github.com/users/github/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+          "organizations_url": "https://api.github.com/users/github/orgs",
+          "repos_url": "https://api.github.com/users/github/repos",
+          "events_url": "https://api.github.com/users/github/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/github/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "GitHub Actions",
+        "description": "Automate your workflow from idea to production",
+        "external_url": "https://help.github.com/en/actions",
+        "html_url": "https://github.com/apps/github-actions",
+        "created_at": "2018-07-30T09:30:17Z",
+        "updated_at": "2026-06-18T16:17:48Z",
+        "permissions": {
+          "actions": "write",
+          "administration": "read",
+          "artifact_metadata": "write",
+          "attestations": "write",
+          "checks": "write",
+          "code_quality": "write",
+          "contents": "write",
+          "copilot_requests": "write",
+          "deployments": "write",
+          "discussions": "write",
+          "drives": "write",
+          "issues": "write",
+          "merge_queues": "write",
+          "metadata": "read",
+          "models": "read",
+          "packages": "write",
+          "pages": "write",
+          "pull_requests": "write",
+          "repository_hooks": "write",
+          "repository_projects": "write",
+          "security_events": "write",
+          "statuses": "write",
+          "vulnerability_alerts": "read"
+        },
+        "events": [
+          "branch_protection_rule",
+          "check_run",
+          "check_suite",
+          "create",
+          "delete",
+          "deployment",
+          "deployment_status",
+          "discussion",
+          "discussion_comment",
+          "fork",
+          "gollum",
+          "issues",
+          "issue_comment",
+          "label",
+          "merge_group",
+          "milestone",
+          "page_build",
+          "public",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "push",
+          "registry_package",
+          "release",
+          "repository",
+          "repository_dispatch",
+          "status",
+          "watch",
+          "workflow_dispatch",
+          "workflow_run"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117754083843,
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "node_id": "CR_kwDOTX6JAc8AAAAbarC6Aw",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "bcd3ddab-5591-56a5-8449-f1515fbb5e90",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754083843",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256475/job/117754083843",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256475/job/117754083843",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T18:27:51Z",
+      "completed_at": "2026-10-18T18:33:21Z",
+      "output": {
+        "title": null,
+        "summary": null,
+        "text": null,
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754083843/annotations"
+      },
+      "check_suite": {
+        "id": 106102495973
+      },
+      "app": {
+        "id": 15368,
+        "client_id": "Iv1.05c79e9ad1f6bdfa",
+        "slug": "github-actions",
+        "node_id": "MDM6QXBwMTUzNjg=",
+        "owner": {
+          "login": "github",
+          "id": 9919,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/github",
+          "html_url": "https://github.com/github",
+          "followers_url": "https://api.github.com/users/github/followers",
+          "following_url": "https://api.github.com/users/github/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+          "organizations_url": "https://api.github.com/users/github/orgs",
+          "repos_url": "https://api.github.com/users/github/repos",
+          "events_url": "https://api.github.com/users/github/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/github/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "GitHub Actions",
+        "description": "Automate your workflow from idea to production",
+        "external_url": "https://help.github.com/en/actions",
+        "html_url": "https://github.com/apps/github-actions",
+        "created_at": "2018-07-30T09:30:17Z",
+        "updated_at": "2026-06-18T16:17:48Z",
+        "permissions": {
+          "actions": "write",
+          "administration": "read",
+          "artifact_metadata": "write",
+          "attestations": "write",
+          "checks": "write",
+          "code_quality": "write",
+          "contents": "write",
+          "copilot_requests": "write",
+          "deployments": "write",
+          "discussions": "write",
+          "drives": "write",
+          "issues": "write",
+          "merge_queues": "write",
+          "metadata": "read",
+          "models": "read",
+          "packages": "write",
+          "pages": "write",
+          "pull_requests": "write",
+          "repository_hooks": "write",
+          "repository_projects": "write",
+          "security_events": "write",
+          "statuses": "write",
+          "vulnerability_alerts": "read"
+        },
+        "events": [
+          "branch_protection_rule",
+          "check_run",
+          "check_suite",
+          "create",
+          "delete",
+          "deployment",
+          "deployment_status",
+          "discussion",
+          "discussion_comment",
+          "fork",
+          "gollum",
+          "issues",
+          "issue_comment",
+          "label",
+          "merge_group",
+          "milestone",
+          "page_build",
+          "public",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "push",
+          "registry_package",
+          "release",
+          "repository",
+          "repository_dispatch",
+          "status",
+          "watch",
+          "workflow_dispatch",
+          "workflow_run"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117754083742,
+      "name": "Bazel native bindings (macos-latest)",
+      "node_id": "CR_kwDOTX6JAc8AAAAbarC5ng",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "3e522904-54c8-5b26-90ce-cbd9ed7923a3",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754083742",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256469/job/117754083742",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256469/job/117754083742",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T18:28:00Z",
+      "completed_at": "2026-10-18T18:37:08Z",
+      "output": {
+        "title": null,
+        "summary": null,
+        "text": null,
+        "annotations_count": 1,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754083742/annotations"
+      },
+      "check_suite": {
+        "id": 106102495955
+      },
+      "app": {
+        "id": 15368,
+        "client_id": "Iv1.05c79e9ad1f6bdfa",
+        "slug": "github-actions",
+        "node_id": "MDM6QXBwMTUzNjg=",
+        "owner": {
+          "login": "github",
+          "id": 9919,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/github",
+          "html_url": "https://github.com/github",
+          "followers_url": "https://api.github.com/users/github/followers",
+          "following_url": "https://api.github.com/users/github/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+          "organizations_url": "https://api.github.com/users/github/orgs",
+          "repos_url": "https://api.github.com/users/github/repos",
+          "events_url": "https://api.github.com/users/github/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/github/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "GitHub Actions",
+        "description": "Automate your workflow from idea to production",
+        "external_url": "https://help.github.com/en/actions",
+        "html_url": "https://github.com/apps/github-actions",
+        "created_at": "2018-07-30T09:30:17Z",
+        "updated_at": "2026-06-18T16:17:48Z",
+        "permissions": {
+          "actions": "write",
+          "administration": "read",
+          "artifact_metadata": "write",
+          "attestations": "write",
+          "checks": "write",
+          "code_quality": "write",
+          "contents": "write",
+          "copilot_requests": "write",
+          "deployments": "write",
+          "discussions": "write",
+          "drives": "write",
+          "issues": "write",
+          "merge_queues": "write",
+          "metadata": "read",
+          "models": "read",
+          "packages": "write",
+          "pages": "write",
+          "pull_requests": "write",
+          "repository_hooks": "write",
+          "repository_projects": "write",
+          "security_events": "write",
+          "statuses": "write",
+          "vulnerability_alerts": "read"
+        },
+        "events": [
+          "branch_protection_rule",
+          "check_run",
+          "check_suite",
+          "create",
+          "delete",
+          "deployment",
+          "deployment_status",
+          "discussion",
+          "discussion_comment",
+          "fork",
+          "gollum",
+          "issues",
+          "issue_comment",
+          "label",
+          "merge_group",
+          "milestone",
+          "page_build",
+          "public",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "push",
+          "registry_package",
+          "release",
+          "repository",
+          "repository_dispatch",
+          "status",
+          "watch",
+          "workflow_dispatch",
+          "workflow_run"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 117754083678,
+      "name": "Build and test",
+      "node_id": "CR_kwDOTX6JAc8AAAAbarC5Xg",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add",
+      "external_id": "81d4fc6f-fc8c-5021-b7b7-fe73ab9fa3bc",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754083678",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256475/job/117754083678",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39154256475/job/117754083678",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-18T18:27:51Z",
+      "completed_at": "2026-10-18T18:35:27Z",
+      "output": {
+        "title": null,
+        "summary": null,
+        "text": null,
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117754083678/annotations"
+      },
+      "check_suite": {
+        "id": 106102495973
+      },
+      "app": {
+        "id": 15368,
+        "client_id": "Iv1.05c79e9ad1f6bdfa",
+        "slug": "github-actions",
+        "node_id": "MDM6QXBwMTUzNjg=",
+        "owner": {
+          "login": "github",
+          "id": 9919,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjk5MTk=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/9919?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/github",
+          "html_url": "https://github.com/github",
+          "followers_url": "https://api.github.com/users/github/followers",
+          "following_url": "https://api.github.com/users/github/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/github/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github/subscriptions",
+          "organizations_url": "https://api.github.com/users/github/orgs",
+          "repos_url": "https://api.github.com/users/github/repos",
+          "events_url": "https://api.github.com/users/github/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/github/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "GitHub Actions",
+        "description": "Automate your workflow from idea to production",
+        "external_url": "https://help.github.com/en/actions",
+        "html_url": "https://github.com/apps/github-actions",
+        "created_at": "2018-07-30T09:30:17Z",
+        "updated_at": "2026-06-18T16:17:48Z",
+        "permissions": {
+          "actions": "write",
+          "administration": "read",
+          "artifact_metadata": "write",
+          "attestations": "write",
+          "checks": "write",
+          "code_quality": "write",
+          "contents": "write",
+          "copilot_requests": "write",
+          "deployments": "write",
+          "discussions": "write",
+          "drives": "write",
+          "issues": "write",
+          "merge_queues": "write",
+          "metadata": "read",
+          "models": "read",
+          "packages": "write",
+          "pages": "write",
+          "pull_requests": "write",
+          "repository_hooks": "write",
+          "repository_projects": "write",
+          "security_events": "write",
+          "statuses": "write",
+          "vulnerability_alerts": "read"
+        },
+        "events": [
+          "branch_protection_rule",
+          "check_run",
+          "check_suite",
+          "create",
+          "delete",
+          "deployment",
+          "deployment_status",
+          "discussion",
+          "discussion_comment",
+          "fork",
+          "gollum",
+          "issues",
+          "issue_comment",
+          "label",
+          "merge_group",
+          "milestone",
+          "page_build",
+          "public",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "push",
+          "registry_package",
+          "release",
+          "repository",
+          "repository_dispatch",
+          "status",
+          "watch",
+          "workflow_dispatch",
+          "workflow_run"
+        ]
+      },
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+          "id": 4805158980,
+          "number": 986,
+          "head": {
+            "ref": "feat/978-boundary-baseline",
+            "sha": "0c2989842321d10e91f136f3c924badb07038add",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          },
+          "base": {
+            "ref": "main",
+            "sha": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+            "repo": {
+              "id": 1300138241,
+              "url": "https://api.github.com/repos/nowledge-co/hawdb",
+              "name": "hawdb"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "scope": "All12 eligible final-head native/Prow checks successful. Full matrices and independent disposition/approval remain open; no physical-power-loss or overall acceptance claim."
+}

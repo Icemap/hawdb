@@ -1,0 +1,28 @@
+{
+  "head": "0c2989842321d10e91f136f3c924badb07038add",
+  "observed_at": 1792356550.7195299,
+  "completed_checks": [
+    {
+      "name": "ci/skein-supply-chain",
+      "check_id": 117784915479,
+      "url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-supply-chain/2111920820568723456",
+      "log_sha256": "675c201e54bf47c307b28ea8a04b22048d60347a93635a1a75e0e2ac9b179db7",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add"
+    },
+    {
+      "name": "ci/skein-storage-crash-recovery",
+      "check_id": 117784912469,
+      "url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-storage-crash-recovery/2111920820891684864",
+      "log_sha256": "296746edf87b123d8522161e29a7f017ce2316db203ffabfdb28034a7cf20a89",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add"
+    },
+    {
+      "name": "ci/skein-bazel-build",
+      "check_id": 117784902964,
+      "url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-build/2111920820623249408",
+      "log_sha256": "b297ba37dfcd87c1e17e50f2eff26911b3f1089155758c1bbc0b6ada44bb8f8f",
+      "head_sha": "0c2989842321d10e91f136f3c924badb07038add"
+    }
+  ],
+  "scope": "GitHub check-run head association and embedded complete build logs. Explicit checkout tree not yet independently verified; subprocess recovery does not prove physical power-loss safety."
+}

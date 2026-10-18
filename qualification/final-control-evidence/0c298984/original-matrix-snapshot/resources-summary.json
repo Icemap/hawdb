@@ -1,0 +1,3521 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+  "tree": "132762f5f969321b0974687c96dabf27236fbaaf",
+  "run": 39154779183,
+  "url": "https://github.com/nowledge-co/hawdb/actions/runs/39154779183",
+  "status": "queued",
+  "conclusion": null,
+  "expected_groups": 110,
+  "observed_complete_groups": 24,
+  "full_requested_matrix_observed": false,
+  "missing_groups": [
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ]
+  ],
+  "reports": [
+    {
+      "group": [
+        "numeric",
+        1000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3644929024,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 71417856,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 1327510,
+            "nearest_rank_p95_ns": 1512801,
+            "maximum_ns": 1565855,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3648591872,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 71114752,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 172894,
+            "nearest_rank_p95_ns": 221332,
+            "maximum_ns": 225678,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3647945728,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 71974912,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 222425,
+            "nearest_rank_p95_ns": 264474,
+            "maximum_ns": 292703,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12146621962
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3628558336,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 71835648,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 4570346,
+            "nearest_rank_p95_ns": 4795133,
+            "maximum_ns": 4818097,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3630184448,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 71028736,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 463016,
+            "nearest_rank_p95_ns": 514734,
+            "maximum_ns": 521533,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3631873024,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 72265728,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 967313,
+            "nearest_rank_p95_ns": 1067333,
+            "maximum_ns": 1071209,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12146812691
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3665767424,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 82554880,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 1581911,
+            "nearest_rank_p95_ns": 1631874,
+            "maximum_ns": 1694862,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3665635328,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 82714624,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 150871,
+            "nearest_rank_p95_ns": 181291,
+            "maximum_ns": 183374,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3668059136,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 83267584,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 220786,
+            "nearest_rank_p95_ns": 239098,
+            "maximum_ns": 250181,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12147445287
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "fill_bulk",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 21078016,
+            "query_boundary_ns": 29598736,
+            "consumer_ns": 75351,
+            "native_profile": {
+              "allocated_bytes": 39922402,
+              "allocation_calls": 154418,
+              "deallocated_bytes": 38588082,
+              "deallocation_calls": 144587,
+              "live_requested_bytes_after": 2111441,
+              "live_requested_bytes_before": 777121,
+              "process_peak_requested_bytes": 5337531,
+              "reallocation_calls": 2476
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 22282240,
+            "query_boundary_ns": 26281235,
+            "consumer_ns": 74428,
+            "native_profile": {
+              "allocated_bytes": 37470225,
+              "allocation_calls": 135326,
+              "deallocated_bytes": 36109581,
+              "deallocation_calls": 124430,
+              "live_requested_bytes_after": 2234511,
+              "live_requested_bytes_before": 873867,
+              "process_peak_requested_bytes": 5433179,
+              "reallocation_calls": 2171
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12147720325
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3646057472,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 82477056,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 4683619,
+            "nearest_rank_p95_ns": 4812982,
+            "maximum_ns": 5056747,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3650932736,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 81866752,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 413784,
+            "nearest_rank_p95_ns": 442026,
+            "maximum_ns": 473747,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3650703360,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 83091456,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 972979,
+            "nearest_rank_p95_ns": 995722,
+            "maximum_ns": 1021119,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12147108809
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3635783680,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 213733376,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 171984844,
+            "nearest_rank_p95_ns": 180390547,
+            "maximum_ns": 181431808,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3677346816,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 165666816,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 14383685,
+            "nearest_rank_p95_ns": 14583088,
+            "maximum_ns": 16636287,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3707357184,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 165666816,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 17352644,
+            "nearest_rank_p95_ns": 17622866,
+            "maximum_ns": 17774097,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12146574660
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3639633920,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 293441536,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 542263459,
+            "nearest_rank_p95_ns": 583877899,
+            "maximum_ns": 584849916,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3716910080,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 165879808,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 36686638,
+            "nearest_rank_p95_ns": 37574431,
+            "maximum_ns": 37687253,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3740484608,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 166010880,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 85110481,
+            "nearest_rank_p95_ns": 87143722,
+            "maximum_ns": 87874246,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12148085682
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3650139136,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 239833088,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 172010599,
+            "nearest_rank_p95_ns": 179642075,
+            "maximum_ns": 225780659,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3685299200,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 191524864,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 11656012,
+            "nearest_rank_p95_ns": 13081871,
+            "maximum_ns": 15355758,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3713195008,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 191315968,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 15952066,
+            "nearest_rank_p95_ns": 17183644,
+            "maximum_ns": 19163310,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12147358023
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3591153664,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 318959616,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 559783248,
+            "nearest_rank_p95_ns": 585527559,
+            "maximum_ns": 595863651,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3659136000,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 190963712,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 34608380,
+            "nearest_rank_p95_ns": 34941490,
+            "maximum_ns": 34948906,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3680474112,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 191152128,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 84594716,
+            "nearest_rank_p95_ns": 86673648,
+            "maximum_ns": 87992741,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12147843671
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3643574272,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1043759104,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+          ]
+        },
+        "retained": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3680345088,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1043894272,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+          ]
+        },
+        "arrow": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3697884160,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1043857408,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+          ]
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12147749520
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3643145216,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1043980288,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+          ]
+        },
+        "retained": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3647979520,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1044099072,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+          ]
+        },
+        "arrow": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3678510080,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1044008960,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+          ]
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12148371595
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3652709376,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1168236544,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+          ]
+        },
+        "retained": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3740938240,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1117052928,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget"
+          ]
+        },
+        "arrow": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3726184448,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1117020160,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071015280 bytes, exceeding its 268435456-byte budget"
+          ]
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12148826453
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3655825408,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1108299776,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+          ]
+        },
+        "retained": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3748487168,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1107963904,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019472 bytes, exceeding its 268435456-byte budget"
+          ]
+        },
+        "arrow": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3730208768,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1108299776,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget",
+            "execution error: query memory account retained_source (external_read) would use 1071019408 bytes, exceeding its 268435456-byte budget"
+          ]
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12148717239
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1505079296,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 1854478843,
+            "nearest_rank_p95_ns": 1923001908,
+            "maximum_ns": 1957262860,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1043804160,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 120439879,
+            "nearest_rank_p95_ns": 122740419,
+            "maximum_ns": 125153874,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1043841024,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 162822228,
+            "nearest_rank_p95_ns": 164911580,
+            "maximum_ns": 165081418,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12148932834
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 2275872768,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 5596773523,
+            "nearest_rank_p95_ns": 5849951765,
+            "maximum_ns": 6153119045,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1044090880,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 355658255,
+            "nearest_rank_p95_ns": 363068719,
+            "maximum_ns": 369719324,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1043984384,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 861176419,
+            "nearest_rank_p95_ns": 897335002,
+            "maximum_ns": 907204530,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12149012643
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1719398400,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 1980363936,
+            "nearest_rank_p95_ns": 2124834005,
+            "maximum_ns": 2237151061,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1126658048,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 173916147,
+            "nearest_rank_p95_ns": 180175543,
+            "maximum_ns": 180357044,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1122177024,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 196890134,
+            "nearest_rank_p95_ns": 222706757,
+            "maximum_ns": 226772863,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12150036040
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "memory",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1044856832,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000"
+          ]
+        },
+        "retained": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1043800064,
+          "observed_latency": null,
+          "adverse": [
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+          ]
+        },
+        "arrow": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1043853312,
+          "observed_latency": null,
+          "adverse": [
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+          ]
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12149932870
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 2455891968,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 5980957834,
+            "nearest_rank_p95_ns": 6308021742,
+            "maximum_ns": 6478302711,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1135960064,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 337110015,
+            "nearest_rank_p95_ns": 347273665,
+            "maximum_ns": 347925608,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1135403008,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 866907082,
+            "nearest_rank_p95_ns": 888822915,
+            "maximum_ns": 896192435,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12149659662
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "memory",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1045118976,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000"
+          ]
+        },
+        "retained": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1044180992,
+          "observed_latency": null,
+          "adverse": [
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+          ]
+        },
+        "arrow": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1044123648,
+          "observed_latency": null,
+          "adverse": [
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+          ]
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12150645674
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "file",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1217536000,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000"
+          ]
+        },
+        "retained": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1101918208,
+          "observed_latency": null,
+          "adverse": [
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+          ]
+        },
+        "arrow": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1111953408,
+          "observed_latency": null,
+          "adverse": [
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+          ]
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12150109915
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "fill_bulk",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 28758016,
+            "query_boundary_ns": 20454908,
+            "consumer_ns": 55272,
+            "native_profile": {
+              "allocated_bytes": 41492835,
+              "allocation_calls": 178381,
+              "deallocated_bytes": 40158515,
+              "deallocation_calls": 168550,
+              "live_requested_bytes_after": 2154840,
+              "live_requested_bytes_before": 820520,
+              "process_peak_requested_bytes": 5666704,
+              "reallocation_calls": 13425
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 31293440,
+            "query_boundary_ns": 20515329,
+            "consumer_ns": 55452,
+            "native_profile": {
+              "allocated_bytes": 39041144,
+              "allocation_calls": 159294,
+              "deallocated_bytes": 37678476,
+              "deallocation_calls": 148384,
+              "live_requested_bytes_after": 2290004,
+              "live_requested_bytes_before": 927336,
+              "process_peak_requested_bytes": 5771014,
+              "reallocation_calls": 13120
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12150054544
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "file",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1215774720,
+          "observed_latency": null,
+          "adverse": [
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000"
+          ]
+        },
+        "retained": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1141121024,
+          "observed_latency": null,
+          "adverse": [
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+          ]
+        },
+        "arrow": {
+          "success": false,
+          "expected_success": false,
+          "row_boundary_required": true,
+          "row_boundary_proven": true,
+          "acceptance_failure": null,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "process_peak_rss_bytes": 1140109312,
+          "observed_latency": null,
+          "adverse": [
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+          ]
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12150444784
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "fill_bulk",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 47362048,
+            "query_boundary_ns": 62245350,
+            "consumer_ns": 58366913,
+            "native_profile": {
+              "allocation_calls": 183418,
+              "allocated_bytes": 41647182,
+              "deallocation_calls": 173582,
+              "deallocated_bytes": 40304586,
+              "reallocation_calls": 13449,
+              "parameter_conversion_ns": 19797412,
+              "engine_call_ns": 21785730,
+              "result_conversion_ns": 20186675,
+              "live_requested_bytes_before": 128299,
+              "live_requested_bytes_after": 1470895,
+              "process_peak_requested_bytes": 4975251,
+              "python_traced_current_bytes": 551568,
+              "python_traced_peak_bytes": 551568
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 50372608,
+            "query_boundary_ns": 60385369,
+            "consumer_ns": 58668237,
+            "native_profile": {
+              "allocation_calls": 163331,
+              "allocated_bytes": 39171487,
+              "deallocation_calls": 152416,
+              "deallocated_bytes": 37800543,
+              "reallocation_calls": 13144,
+              "parameter_conversion_ns": 19804374,
+              "engine_call_ns": 20014269,
+              "result_conversion_ns": 20158724,
+              "live_requested_bytes_before": 237558,
+              "live_requested_bytes_after": 1608502,
+              "process_peak_requested_bytes": 5082004,
+              "python_traced_current_bytes": 551568,
+              "python_traced_peak_bytes": 551568
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12151048913
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "fill_bulk",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 39174144,
+            "query_boundary_ns": 80513706,
+            "consumer_ns": 74687569,
+            "native_profile": {
+              "allocation_calls": 159455,
+              "allocated_bytes": 40076733,
+              "deallocation_calls": 149619,
+              "deallocated_bytes": 38734137,
+              "reallocation_calls": 2500,
+              "parameter_conversion_ns": 25054767,
+              "engine_call_ns": 28592742,
+              "result_conversion_ns": 26303445,
+              "live_requested_bytes_before": 84615,
+              "live_requested_bytes_after": 1427211,
+              "process_peak_requested_bytes": 4645793,
+              "python_traced_current_bytes": 551540,
+              "python_traced_peak_bytes": 551540
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 41291776,
+            "query_boundary_ns": 77958141,
+            "consumer_ns": 74287152,
+            "native_profile": {
+              "allocation_calls": 139363,
+              "allocated_bytes": 37600552,
+              "deallocation_calls": 128462,
+              "deallocated_bytes": 36231632,
+              "reallocation_calls": 2195,
+              "parameter_conversion_ns": 25000237,
+              "engine_call_ns": 26176930,
+              "result_conversion_ns": 26414375,
+              "live_requested_bytes_before": 183759,
+              "live_requested_bytes_after": 1552679,
+              "process_peak_requested_bytes": 4743839,
+              "python_traced_current_bytes": 551540,
+              "python_traced_peak_bytes": 551540
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12151019291
+    }
+  ],
+  "collection_or_integrity_errors": [],
+  "scope": "Source/selection and complete archived producer/report verification. Persistent range cache and incremental summaries only; benchmark source, workloads, budgets, samples and deadlines unchanged. All adverse/partial/setup failures remain explicit. No final acceptance, approval or whole-memory/source-reuse proof."
+}

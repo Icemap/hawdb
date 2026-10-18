@@ -1,0 +1,1433 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "source": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+  "tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed",
+  "run": 39154768120,
+  "url": "https://github.com/nowledge-co/hawdb/actions/runs/39154768120",
+  "status": "queued",
+  "conclusion": null,
+  "expected_groups": 90,
+  "observed_complete_groups": 38,
+  "full_requested_matrix_observed": false,
+  "missing_groups": [
+    [
+      "fill",
+      "go",
+      "file",
+      100000
+    ],
+    [
+      "fill",
+      "go",
+      "file",
+      1000000
+    ],
+    [
+      "fill",
+      "go",
+      "memory",
+      100000
+    ],
+    [
+      "fill",
+      "go",
+      "memory",
+      1000000
+    ],
+    [
+      "fill",
+      "python",
+      "file",
+      100000
+    ],
+    [
+      "fill",
+      "python",
+      "file",
+      1000000
+    ],
+    [
+      "fill",
+      "python",
+      "memory",
+      100000
+    ],
+    [
+      "fill",
+      "python",
+      "memory",
+      1000000
+    ],
+    [
+      "fill",
+      "rust",
+      "file",
+      100000
+    ],
+    [
+      "fill",
+      "rust",
+      "file",
+      1000000
+    ],
+    [
+      "fill",
+      "rust",
+      "memory",
+      100000
+    ],
+    [
+      "fill",
+      "rust",
+      "memory",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "go",
+      "file",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "go",
+      "memory",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "python",
+      "file",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "python",
+      "memory",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "rust",
+      "file",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "rust",
+      "memory",
+      1000000
+    ],
+    [
+      "point",
+      "go",
+      "file",
+      100000
+    ],
+    [
+      "point",
+      "go",
+      "file",
+      1000000
+    ],
+    [
+      "point",
+      "go",
+      "memory",
+      100000
+    ],
+    [
+      "point",
+      "go",
+      "memory",
+      1000000
+    ],
+    [
+      "point",
+      "python",
+      "file",
+      100000
+    ],
+    [
+      "point",
+      "python",
+      "file",
+      1000000
+    ],
+    [
+      "point",
+      "python",
+      "memory",
+      100000
+    ],
+    [
+      "point",
+      "python",
+      "memory",
+      1000000
+    ],
+    [
+      "point",
+      "rust",
+      "file",
+      100000
+    ],
+    [
+      "point",
+      "rust",
+      "file",
+      1000000
+    ],
+    [
+      "point",
+      "rust",
+      "memory",
+      100000
+    ],
+    [
+      "point",
+      "rust",
+      "memory",
+      1000000
+    ],
+    [
+      "select",
+      "go",
+      "file",
+      100000
+    ],
+    [
+      "select",
+      "go",
+      "file",
+      1000000
+    ],
+    [
+      "select",
+      "go",
+      "memory",
+      100000
+    ],
+    [
+      "select",
+      "go",
+      "memory",
+      1000000
+    ],
+    [
+      "select",
+      "python",
+      "file",
+      100000
+    ],
+    [
+      "select",
+      "python",
+      "file",
+      1000000
+    ],
+    [
+      "select",
+      "python",
+      "memory",
+      100000
+    ],
+    [
+      "select",
+      "python",
+      "memory",
+      1000000
+    ],
+    [
+      "select",
+      "rust",
+      "file",
+      1000000
+    ],
+    [
+      "select",
+      "rust",
+      "memory",
+      1000000
+    ],
+    [
+      "wide",
+      "go",
+      "file",
+      100000
+    ],
+    [
+      "wide",
+      "go",
+      "file",
+      1000000
+    ],
+    [
+      "wide",
+      "go",
+      "memory",
+      100000
+    ],
+    [
+      "wide",
+      "go",
+      "memory",
+      1000000
+    ],
+    [
+      "wide",
+      "python",
+      "file",
+      100000
+    ],
+    [
+      "wide",
+      "python",
+      "file",
+      1000000
+    ],
+    [
+      "wide",
+      "python",
+      "memory",
+      100000
+    ],
+    [
+      "wide",
+      "python",
+      "memory",
+      1000000
+    ],
+    [
+      "wide",
+      "rust",
+      "file",
+      100000
+    ],
+    [
+      "wide",
+      "rust",
+      "file",
+      1000000
+    ],
+    [
+      "wide",
+      "rust",
+      "memory",
+      100000
+    ],
+    [
+      "wide",
+      "rust",
+      "memory",
+      1000000
+    ]
+  ],
+  "reports": [
+    {
+      "shard": [
+        "fill_bulk",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0510855626975346,
+          "query_boundary_ns_median_speedup": 1.06518713680503,
+          "write_boundary_ns_median_speedup": 0.995557859315606,
+          "read_boundary_ns_median_speedup": 1.6279970337840441,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12146514605
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0372735864658038,
+          "query_boundary_ns_median_speedup": 1.0477801179374453,
+          "write_boundary_ns_median_speedup": 0.987254551558225,
+          "read_boundary_ns_median_speedup": 1.5289012732069014,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12146627720
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 0.9932983278388459,
+          "query_boundary_ns_median_speedup": 0.9946777072339924,
+          "write_boundary_ns_median_speedup": 0.9332882429836028,
+          "read_boundary_ns_median_speedup": 1.6066004595458028,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12146993102
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0299256086975979,
+          "query_boundary_ns_median_speedup": 1.0282113067655236,
+          "write_boundary_ns_median_speedup": 0.961028689554016,
+          "read_boundary_ns_median_speedup": 1.6645178803444032,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12146524541
+    },
+    {
+      "shard": [
+        "select",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "select",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.6392708919805934,
+          "query_boundary_ns_median_speedup": 1.676790085855824,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.676790085855824,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12146949837
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0524249030088928,
+          "query_boundary_ns_median_speedup": 1.05278411988256,
+          "write_boundary_ns_median_speedup": 0.9936228891330472,
+          "read_boundary_ns_median_speedup": 1.4293420608831358,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12148055029
+    },
+    {
+      "shard": [
+        "select",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "select",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.6281077457012147,
+          "query_boundary_ns_median_speedup": 1.6438747332481536,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.6438747332481536,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12147500991
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0086663319303075,
+          "query_boundary_ns_median_speedup": 1.0089519081744602,
+          "write_boundary_ns_median_speedup": 0.9789772690666128,
+          "read_boundary_ns_median_speedup": 1.1702768603413882,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12146768998
+    },
+    {
+      "shard": [
+        "select",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "select",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0906892304084752,
+          "query_boundary_ns_median_speedup": 1.4749338101442602,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.4749338101442602,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12147922082
+    },
+    {
+      "shard": [
+        "select",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "select",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.1225753331230923,
+          "query_boundary_ns_median_speedup": 1.5464927916400193,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.5464927916400193,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12147274631
+    },
+    {
+      "shard": [
+        "select",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "select",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.3289862104435755,
+          "query_boundary_ns_median_speedup": 1.3382750886621277,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.3382750886621277,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12147533410
+    },
+    {
+      "shard": [
+        "select",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "select",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.2444451004960795,
+          "query_boundary_ns_median_speedup": 1.2571402126598505,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.2571402126598505,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12147599211
+    },
+    {
+      "shard": [
+        "wide",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "wide",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.8379520492972805,
+          "query_boundary_ns_median_speedup": 1.9305537707746587,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.9305537707746587,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12147693375
+    },
+    {
+      "shard": [
+        "wide",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "wide",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0082311776421577,
+          "query_boundary_ns_median_speedup": 1.410123661462433,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.410123661462433,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12147864753
+    },
+    {
+      "shard": [
+        "wide",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "wide",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.6727773028544224,
+          "query_boundary_ns_median_speedup": 1.7841359114860387,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.7841359114860387,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12147868185
+    },
+    {
+      "shard": [
+        "wide",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "wide",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0821503009153013,
+          "query_boundary_ns_median_speedup": 1.3438963609423031,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.3438963609423031,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12148686138
+    },
+    {
+      "shard": [
+        "wide",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "wide",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0584083668589688,
+          "query_boundary_ns_median_speedup": 1.0604080973884586,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.0604080973884586,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12148293043
+    },
+    {
+      "shard": [
+        "point",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "point",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.7508933665826145,
+          "query_boundary_ns_median_speedup": 1.7568644426729303,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.7568644426729303,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12149061357
+    },
+    {
+      "shard": [
+        "point",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "point",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.6607675208080823,
+          "query_boundary_ns_median_speedup": 1.6670472138587584,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.6670472138587584,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12148951976
+    },
+    {
+      "shard": [
+        "wide",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "wide",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0477129687963567,
+          "query_boundary_ns_median_speedup": 1.050231735866915,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.050231735866915,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12148283734
+    },
+    {
+      "shard": [
+        "point",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "point",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.7062289098725594,
+          "query_boundary_ns_median_speedup": 1.7655057389227522,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.7655057389227522,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12148669313
+    },
+    {
+      "shard": [
+        "point",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "point",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.867928003572114,
+          "query_boundary_ns_median_speedup": 1.8691573508712438,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.8691573508712438,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12148878919
+    },
+    {
+      "shard": [
+        "point",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "point",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 2.0062809349352233,
+          "query_boundary_ns_median_speedup": 2.0120283770487988,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 2.0120283770487988,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12149057579
+    },
+    {
+      "shard": [
+        "point",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "point",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.9331485103138515,
+          "query_boundary_ns_median_speedup": 2.0178512334686713,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 2.0178512334686713,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12149282979
+    },
+    {
+      "shard": [
+        "fill",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 12.297068819878753,
+          "query_boundary_ns_median_speedup": 12.3289526023781,
+          "write_boundary_ns_median_speedup": 12.947582998702853,
+          "read_boundary_ns_median_speedup": 1.3447068717375368,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12149173941
+    },
+    {
+      "shard": [
+        "fill",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 2.2457703316337594,
+          "query_boundary_ns_median_speedup": 2.2460888934621206,
+          "write_boundary_ns_median_speedup": 2.249159358785928,
+          "read_boundary_ns_median_speedup": 1.526483566357982,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12149487808
+    },
+    {
+      "shard": [
+        "fill",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 3.3452754529547057,
+          "query_boundary_ns_median_speedup": 3.403788907829166,
+          "write_boundary_ns_median_speedup": 3.4206008442046487,
+          "read_boundary_ns_median_speedup": 1.6667005758679982,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12150380079
+    },
+    {
+      "shard": [
+        "fill",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 9.3340386167622,
+          "query_boundary_ns_median_speedup": 10.03956548830606,
+          "write_boundary_ns_median_speedup": 10.350708159521051,
+          "read_boundary_ns_median_speedup": 1.7007313502921408,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12148899534
+    },
+    {
+      "shard": [
+        "fill",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 7.928330077829663,
+          "query_boundary_ns_median_speedup": 7.947169991307608,
+          "write_boundary_ns_median_speedup": 8.279495367240422,
+          "read_boundary_ns_median_speedup": 1.1165231177250245,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12149383736
+    },
+    {
+      "shard": [
+        "fill",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "fill",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 2.7122597222711593,
+          "query_boundary_ns_median_speedup": 2.7132849528407172,
+          "write_boundary_ns_median_speedup": 2.7285615590984094,
+          "read_boundary_ns_median_speedup": 1.1419952438047725,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12149712636
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill_bulk",
+          "size": 100000,
+          "backend": "file",
+          "qualified": false,
+          "before_samples": 3,
+          "after_samples": 3,
+          "refusals_or_failures": {
+            "baseline": [
+              "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            ],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12150048128
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill_bulk",
+          "size": 100000,
+          "backend": "memory",
+          "qualified": false,
+          "before_samples": 3,
+          "after_samples": 3,
+          "refusals_or_failures": {
+            "baseline": [
+              "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            ],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12150511134
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill_bulk",
+          "size": 100000,
+          "backend": "memory",
+          "qualified": false,
+          "before_samples": 3,
+          "after_samples": 3,
+          "refusals_or_failures": {
+            "baseline": [
+              "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            ],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12150606732
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill_bulk",
+          "size": 100000,
+          "backend": "file",
+          "qualified": false,
+          "before_samples": 3,
+          "after_samples": 3,
+          "refusals_or_failures": {
+            "baseline": [
+              "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            ],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12150871047
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "fill_bulk",
+          "size": 100000,
+          "backend": "memory",
+          "qualified": false,
+          "before_samples": 3,
+          "after_samples": 3,
+          "refusals_or_failures": {
+            "baseline": [
+              "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            ],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12151415335
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "fill_bulk",
+          "size": 100000,
+          "backend": "file",
+          "qualified": false,
+          "before_samples": 3,
+          "after_samples": 3,
+          "refusals_or_failures": {
+            "baseline": [
+              "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            ],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12151585253
+    },
+    {
+      "shard": [
+        "select",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "select",
+          "size": 100000,
+          "backend": "memory",
+          "qualified": false,
+          "before_samples": 3,
+          "after_samples": 3,
+          "refusals_or_failures": {
+            "baseline": [
+              "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            ],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12151305994
+    },
+    {
+      "shard": [
+        "select",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "select",
+          "size": 100000,
+          "backend": "file",
+          "qualified": false,
+          "before_samples": 3,
+          "after_samples": 3,
+          "refusals_or_failures": {
+            "baseline": [
+              "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+              "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            ],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12151555577
+    }
+  ],
+  "collection_or_integrity_errors": [],
+  "scope": "Source/selection and complete archived producer/report verification. Persistent range cache and incremental summaries only; benchmark source, workloads, budgets, samples and deadlines unchanged. All adverse/partial/setup failures remain explicit. No final acceptance, approval or whole-memory/source-reuse proof."
+}

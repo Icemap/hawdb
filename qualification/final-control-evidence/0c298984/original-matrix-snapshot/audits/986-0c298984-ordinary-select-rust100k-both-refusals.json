@@ -1,0 +1,28 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "source": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+  "observed_at": 1792358771.604672,
+  "groups": [
+    {
+      "artifact": 12151305994,
+      "backend": "memory",
+      "bundle_sha256": "75d5e8bd9a5e52f10feea5d631c0fd4c6051117983f99dc8c0194d609fefbe3a",
+      "baseline_child_attempts_refused_in_warmup": 4,
+      "baseline_error": "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+      "candidate_measured_successes": 3,
+      "candidate_discarded_success": 1,
+      "paired_ratio": null
+    },
+    {
+      "artifact": 12151555577,
+      "backend": "file",
+      "bundle_sha256": "96cbee2da9403179036600db731a0fe206423f88b71dbdf9b60ed861e3151634",
+      "baseline_child_attempts_refused_in_warmup": 4,
+      "baseline_error": "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+      "candidate_measured_successes": 3,
+      "candidate_discarded_success": 1,
+      "paired_ratio": null
+    }
+  ],
+  "scope": "Original100kRustselectbothbackends, actual baseline query-warmup memory refusals before measured work; candidate successes. Twelve producer files per group verified. Failed attempts do not supply baseline latency. Full90/110 and independent disposition remain required."
+}

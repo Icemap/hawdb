@@ -1,0 +1,8 @@
+{
+  "head": "0c2989842321d10e91f136f3c924badb07038add",
+  "check": 117784905263,
+  "url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-analytics-dense/2111920820791021568",
+  "output_sha256": "c7a51768d2a00a9a3134e844dbed888462cda8c868e8ab549ca95064a1893bd3",
+  "observed_at": 1792357146.876031,
+  "scope": "Completed check and embedded build log; independent checkout metadata remains unavailable."
+}

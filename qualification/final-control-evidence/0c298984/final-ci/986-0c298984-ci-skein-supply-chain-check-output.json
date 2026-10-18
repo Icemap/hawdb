@@ -1,0 +1,7 @@
+{
+  "encoding": "UTF-8",
+  "raw_log_sha256": "675c201e54bf47c307b28ea8a04b22048d60347a93635a1a75e0e2ac9b179db7",
+  "raw_log_bytes": 478,
+  "text": "### Build log\n\n```text\n/tmp/tmp.1LXNvb6mQW/cargo-deny.tar.gz: OK\n^[[0m^[[1m^[[38;5;11mwarning[license-not-encountered]^[[0m^[[1m: license was not encountered^[[0m\n   ^[[0m^[[36m┌─^[[0m ./deny.toml:21:4\n   ^[[0m^[[36m│^[[0m\n^[[0m^[[36m21^[[0m ^[[0m^[[36m│^[[0m   \"^[[0m^[[33mBSD-2-Clause^[[0m\",\n   ^[[0m^[[36m│^[[0m    ^[[0m^[[33m━━━━━━━━━━━━^[[0m ^[[0m^[[33munmatched license allowance^[[0m\n\nadvisories ^[[32mok^[[0m, licenses ^[[32mok^[[0m\n```",
+  "scope": "Exact GitHub check output text, escaped in JSON to preserve original whitespace."
+}

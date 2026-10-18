@@ -1,0 +1,337 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+  "run": 39154779183,
+  "observed_at": 1792358308.5204768,
+  "summary_sha256": "8a4549a7948be2103d0969fb89786176d51d1b2d90e0d3a1e5e0bfc1e704d44f",
+  "groups": [
+    {
+      "group": [
+        "numeric",
+        1000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12146621962,
+      "outcome": "positive",
+      "bundle_sha256": "be7f3183f7dac854bb0eede624a7bb9f8cd98a30d32e2c95c1bfc876c09fa197",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12146812691,
+      "outcome": "positive",
+      "bundle_sha256": "e3214d0c9d6551876abe548e075446033f8e6a91f03ffc0cf601779a61c63782",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12147445287,
+      "outcome": "positive",
+      "bundle_sha256": "ad08d9c9b5fd05c68804b95bdc8c853532b90ec4c9b125a7ee8747fac07ff1d1",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12147108809,
+      "outcome": "positive",
+      "bundle_sha256": "097e52b75cb823d588a63a0748bb68993c579d2da293d590bdd785ffe14b6b16",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12146574660,
+      "outcome": "positive",
+      "bundle_sha256": "e32de6c9f7644d441d2778d9ef3768915a0cd6e15c31413addce47959e4ea14c",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12148085682,
+      "outcome": "positive",
+      "bundle_sha256": "26501a5ac1ea08eb8a847df253e448004820f61303296db8ffea74ab76b4bafc",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12147358023,
+      "outcome": "positive",
+      "bundle_sha256": "f2b8d3e63bbbfeb91ae8dd23fdf8bf22e75386865b9b2c129024860c3fda2c16",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12147843671,
+      "outcome": "positive",
+      "bundle_sha256": "ed4093a34c49f3a856a0f72993d3981a606723966a47088bfef65d3a2260ca74",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12147749520,
+      "outcome": "default_memory_refusal",
+      "bundle_sha256": "8cc4ae31f44d2b3b157f800c6908d444ad79701a848c57aa6f20ee595195c94f",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12148371595,
+      "outcome": "default_memory_refusal",
+      "bundle_sha256": "f576ea2b6e093a8cead193872ceb2216a319040ec57ef190242b30ee949dbf2f",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12148826453,
+      "outcome": "default_memory_refusal",
+      "bundle_sha256": "b7965e7f0f3b19ba03b3782cea2dedd478421124ac83f42686636fa9b68c5981",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12148717239,
+      "outcome": "default_memory_refusal",
+      "bundle_sha256": "efc159ec9ecc11fde7a81abbf175fccdc7a08beef24713ba9640c927a5f764bf",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12148932834,
+      "outcome": "positive",
+      "bundle_sha256": "3356f72033156ea1d90ba1232eb833efee8f15336e2fad693fbb7d101ec86436",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12149012643,
+      "outcome": "positive",
+      "bundle_sha256": "520267db65ed9fdabe74d1cfaccceccacc786ffa06fda7f6d09c33d0b32b7e4d",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12150036040,
+      "outcome": "positive",
+      "bundle_sha256": "e427d62e7611ec3051f36b964cee1a49afcbde407e2095fee2314c60c45c21dd",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "memory",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12149932870,
+      "outcome": "explicit_row_refusal",
+      "bundle_sha256": "f4848e71ee96c13085ac083acf60007044f2cf4faccafa15de926637f4bae278",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12149659662,
+      "outcome": "positive",
+      "bundle_sha256": "3f9e61e68ffd77767d12b220a725ad85e562824893f981f161a111700b1c2cf3",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "memory",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12150645674,
+      "outcome": "explicit_row_refusal",
+      "bundle_sha256": "7856726e6da3de873766906f235279ebb2bf4e5015c17426b67efe60355f0582",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "file",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12150109915,
+      "outcome": "explicit_row_refusal",
+      "bundle_sha256": "1dc212ee0eb1960e9fe35545746120835849e19a80489f89fe4d37029b1f5a3e",
+      "measured_attempts": 93,
+      "warmups": 3
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "file",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12150444784,
+      "outcome": "explicit_row_refusal",
+      "bundle_sha256": "b9e56771fe059aff2c6a68587fd57ed32baa7145c3cb8e25c108db4784eda5f4",
+      "measured_attempts": 93,
+      "warmups": 3
+    }
+  ],
+  "counts": {
+    "positive": 12,
+    "default_memory_refusal": 4,
+    "explicit_row_refusal": 4
+  },
+  "measured_attempts": 1860,
+  "warmups": 60,
+  "scope": "Original numeric20 resource controls only. Full producer verification, exact errors, parity/release/pool balance and observed quantiles recomputed. Plain/instrumented separate; query boundary differs from complete operation. No whole-memory bound, production tails, successful refusal ratio, complete ordinary90/resource110 acceptance or independent approval."
+}

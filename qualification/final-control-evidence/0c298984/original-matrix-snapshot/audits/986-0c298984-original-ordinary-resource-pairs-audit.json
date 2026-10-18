@@ -1,0 +1,215 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+  "run": 39154779183,
+  "observed_at": 1792359172.548943,
+  "summary_sha256": "55a206fea065eedf7da6f5f38db6531d37aa811104641aaddc30ec201878f8b6",
+  "audited_pairs": 4,
+  "pairs": [
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "fill_bulk",
+        "rust"
+      ],
+      "artifact": 12147720325,
+      "bundle_sha256": "32fe3a8b9fb4d3639fe9097986f24024986cc6e7d36faa2fd1ba138f62fce340",
+      "observed_medians": {
+        "baseline": {
+          "process_peak_rss_bytes": 21078016,
+          "query_boundary_ns": 29598736,
+          "consumer_ns": 75351,
+          "native_profile": {
+            "allocated_bytes": 39922402,
+            "allocation_calls": 154418,
+            "deallocated_bytes": 38588082,
+            "deallocation_calls": 144587,
+            "live_requested_bytes_after": 2111441,
+            "live_requested_bytes_before": 777121,
+            "process_peak_requested_bytes": 5337531,
+            "reallocation_calls": 2476
+          }
+        },
+        "candidate": {
+          "process_peak_rss_bytes": 22282240,
+          "query_boundary_ns": 26281235,
+          "consumer_ns": 74428,
+          "native_profile": {
+            "allocated_bytes": 37470225,
+            "allocation_calls": 135326,
+            "deallocated_bytes": 36109581,
+            "deallocation_calls": 124430,
+            "live_requested_bytes_after": 2234511,
+            "live_requested_bytes_before": 873867,
+            "process_peak_requested_bytes": 5433179,
+            "reallocation_calls": 2171
+          }
+        }
+      },
+      "process_RSS_relative_increase": 0.057131752817722425
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "fill_bulk",
+        "rust"
+      ],
+      "artifact": 12150054544,
+      "bundle_sha256": "705ecdea1701b8d06a9ababe63129cdd7ad69b4f7e70dcd729738252e94fcf78",
+      "observed_medians": {
+        "baseline": {
+          "process_peak_rss_bytes": 28758016,
+          "query_boundary_ns": 20454908,
+          "consumer_ns": 55272,
+          "native_profile": {
+            "allocated_bytes": 41492835,
+            "allocation_calls": 178381,
+            "deallocated_bytes": 40158515,
+            "deallocation_calls": 168550,
+            "live_requested_bytes_after": 2154840,
+            "live_requested_bytes_before": 820520,
+            "process_peak_requested_bytes": 5666704,
+            "reallocation_calls": 13425
+          }
+        },
+        "candidate": {
+          "process_peak_rss_bytes": 31293440,
+          "query_boundary_ns": 20515329,
+          "consumer_ns": 55452,
+          "native_profile": {
+            "allocated_bytes": 39041144,
+            "allocation_calls": 159294,
+            "deallocated_bytes": 37678476,
+            "deallocation_calls": 148384,
+            "live_requested_bytes_after": 2290004,
+            "live_requested_bytes_before": 927336,
+            "process_peak_requested_bytes": 5771014,
+            "reallocation_calls": 13120
+          }
+        }
+      },
+      "process_RSS_relative_increase": 0.08816407919099833
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "fill_bulk",
+        "python"
+      ],
+      "artifact": 12151048913,
+      "bundle_sha256": "33a9bfaac6a146d534ae4dd9691b7855fba13fbf219eb8af4bb1452627642d32",
+      "observed_medians": {
+        "baseline": {
+          "process_peak_rss_bytes": 47362048,
+          "query_boundary_ns": 62245350,
+          "consumer_ns": 58366913,
+          "native_profile": {
+            "allocation_calls": 183418,
+            "allocated_bytes": 41647182,
+            "deallocation_calls": 173582,
+            "deallocated_bytes": 40304586,
+            "reallocation_calls": 13449,
+            "parameter_conversion_ns": 19797412,
+            "engine_call_ns": 21785730,
+            "result_conversion_ns": 20186675,
+            "live_requested_bytes_before": 128299,
+            "live_requested_bytes_after": 1470895,
+            "process_peak_requested_bytes": 4975251,
+            "python_traced_current_bytes": 551568,
+            "python_traced_peak_bytes": 551568
+          }
+        },
+        "candidate": {
+          "process_peak_rss_bytes": 50372608,
+          "query_boundary_ns": 60385369,
+          "consumer_ns": 58668237,
+          "native_profile": {
+            "allocation_calls": 163331,
+            "allocated_bytes": 39171487,
+            "deallocation_calls": 152416,
+            "deallocated_bytes": 37800543,
+            "reallocation_calls": 13144,
+            "parameter_conversion_ns": 19804374,
+            "engine_call_ns": 20014269,
+            "result_conversion_ns": 20158724,
+            "live_requested_bytes_before": 237558,
+            "live_requested_bytes_after": 1608502,
+            "process_peak_requested_bytes": 5082004,
+            "python_traced_current_bytes": 551568,
+            "python_traced_peak_bytes": 551568
+          }
+        }
+      },
+      "process_RSS_relative_increase": 0.06356481881864573
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "fill_bulk",
+        "python"
+      ],
+      "artifact": 12151019291,
+      "bundle_sha256": "9c9ab8919a8159bd22c126828c960cd3c486392bfcbcba1ef780e18bccbb5809",
+      "observed_medians": {
+        "baseline": {
+          "process_peak_rss_bytes": 39174144,
+          "query_boundary_ns": 80513706,
+          "consumer_ns": 74687569,
+          "native_profile": {
+            "allocation_calls": 159455,
+            "allocated_bytes": 40076733,
+            "deallocation_calls": 149619,
+            "deallocated_bytes": 38734137,
+            "reallocation_calls": 2500,
+            "parameter_conversion_ns": 25054767,
+            "engine_call_ns": 28592742,
+            "result_conversion_ns": 26303445,
+            "live_requested_bytes_before": 84615,
+            "live_requested_bytes_after": 1427211,
+            "process_peak_requested_bytes": 4645793,
+            "python_traced_current_bytes": 551540,
+            "python_traced_peak_bytes": 551540
+          }
+        },
+        "candidate": {
+          "process_peak_rss_bytes": 41291776,
+          "query_boundary_ns": 77958141,
+          "consumer_ns": 74287152,
+          "native_profile": {
+            "allocation_calls": 139363,
+            "allocated_bytes": 37600552,
+            "deallocation_calls": 128462,
+            "deallocated_bytes": 36231632,
+            "reallocation_calls": 2195,
+            "parameter_conversion_ns": 25000237,
+            "engine_call_ns": 26176930,
+            "result_conversion_ns": 26414375,
+            "live_requested_bytes_before": 183759,
+            "live_requested_bytes_after": 1552679,
+            "process_peak_requested_bytes": 4743839,
+            "python_traced_current_bytes": 551540,
+            "python_traced_peak_bytes": 551540
+          }
+        }
+      },
+      "process_RSS_relative_increase": 0.054056879966541294
+    }
+  ],
+  "scope": "Original instrumented resource pairs only. Three measured processes plus one discarded per side. All reported allocation/conversion/traced-heap/RSS medians recomputed. Native requested traffic excludes foreign heaps; whole-process RSS includes setup/runtime/consumer. Query boundary and consumer timings differ from complete operation. No pure conversion attribution, significance, causality, hard memory bound or full90/110 acceptance."
+}

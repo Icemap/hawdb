@@ -1,0 +1,838 @@
+{
+  "artifact": 12148899534,
+  "reports": {
+    "source-qualification.json": {
+      "engine": "0c2989842321d10e91f136f3c924badb07038add",
+      "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+      "checkout": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+      "checkout_tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed",
+      "overlay": [
+        ".github/workflows/native-bindings.yml"
+      ],
+      "case": "fill",
+      "layer": "python",
+      "backend": "memory",
+      "sizes": [
+        1000
+      ],
+      "matrix_sizes": [
+        1000,
+        100000,
+        1000000
+      ],
+      "measured_samples": 3,
+      "discarded_samples": 1,
+      "defaults_changed": false,
+      "timed_consumers_changed": false,
+      "engine_default_result_rows": 0,
+      "engine_session_default_result_rows": 0,
+      "matrix_groups": 90,
+      "shards": 90,
+      "max_parallel_jobs": 4,
+      "per_job_deadline_minutes": 360,
+      "candidate_requires_final_head_equivalence": true,
+      "scope": "A shard alone does not establish full-matrix acceptance; preserve refusals and failures."
+    },
+    "manifest.json": {
+      "sources": {
+        "baseline": {
+          "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+          "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478",
+          "adapter_patch_sha256": "b8f34cfaff27cafc06b3da87d0ae55e5f146038f01d5cfdf3b1ada0ef568094e",
+          "adapter_spec_sha256": "f0eff1a343765f25acbbdbe18019b3641f96de07d4d5a177ea2c641c02a4905d",
+          "adaptations": [
+            "Identical ordinary harness and manual targets.",
+            "Identical untimed in-memory opening adapter."
+          ]
+        },
+        "candidate": {
+          "head": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+          "tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed"
+        }
+      },
+      "producers": {
+        "baseline": {
+          "rust": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/hawdb_bench_host_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary",
+            "sha256": "8e545c24d2105938f8e8ae01225a574d44d772215294e46caa8ca100a384c95b"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary.runfiles",
+              "sha256": "765764640f2e6f2553b6a07b8c20b6e81cb1a564688017316ae468ebcc1eb43e",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "93e295e0b37cede63621aa53e7f859e00d1f4994b6e088200a377e8615a6b437"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/libhawdb_ffi.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi.so",
+            "sha256": "b58de72507b687a8bc416324268682a5038d18f5ca58131da9da17327cbbbdde"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/_hawdb.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/python/hawdb/_hawdb.so",
+            "sha256": "3f23c60bd39d480e0ccfddd44068ecf2ff7598bc21be19ae1acf5ab7d1263d11"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-2c5af747e1f8/bin/bindings/go/cmd/boundary/boundary_/boundary",
+            "sha256": "3b186ee647e626999bfb39b98375d44dd5401fa9d4e55cc4ac3b8d30345fcbd2"
+          }
+        },
+        "candidate": {
+          "rust": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/hawdb_bench_host_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary",
+            "sha256": "c102afdac9d2407b472048944e4dad8137593a1c796987981138777ec56d6a22"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary.runfiles",
+              "sha256": "3b1c1061c05904bec16491cf6a745005f89f17a2afbf6faa2a43b95b787cb8b3",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "78422c6faaae8f0d062728e2eeb17d98dbd414f054ffc901127c43a7843d2bfc"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/libhawdb_ffi.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi.so",
+            "sha256": "59ec0f109eef1031604fa1d3de6a1b3768e9b090c4db2be85c3e668f713f1914"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/_hawdb.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/python/hawdb/_hawdb.so",
+            "sha256": "181ec4de0ba59d7815be3c4c3154ea711a7aec97c38b7693deb2cae17aabb953"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-2c5af747e1f8/bin/bindings/go/cmd/boundary/boundary_/boundary",
+            "sha256": "3a4b18afcc48c2a16d50e9da2777e877aadad028b4d4bce6689587da02a7fe96"
+          }
+        }
+      },
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "matrix_selection": {
+        "sizes": "1000",
+        "cases": "fill",
+        "layers": [
+          "python"
+        ],
+        "backends": "memory",
+        "samples": 3
+      },
+      "build": "default Bazel configuration, -c opt",
+      "defaults_changed": false,
+      "ordering": "baseline then candidate; ratios of medians, not alternated pairs",
+      "measurement_limits": [
+        "Process RSS includes fixture/setup/host runtime.",
+        "A shard does not establish complete matrix coverage.",
+        "Ordinary APIs do not use Arrow or retained cursors.",
+        "Python launcher, package and runtime are copied independently; runfiles hashes are checked before and after each producer matrix.",
+        "Any refusal/failure prevents a group speedup claim."
+      ]
+    },
+    "comparison.json": {
+      "sources": {
+        "baseline": {
+          "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+          "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478",
+          "adapter_patch_sha256": "b8f34cfaff27cafc06b3da87d0ae55e5f146038f01d5cfdf3b1ada0ef568094e",
+          "adapter_spec_sha256": "f0eff1a343765f25acbbdbe18019b3641f96de07d4d5a177ea2c641c02a4905d",
+          "adaptations": [
+            "Identical ordinary harness and manual targets.",
+            "Identical untimed in-memory opening adapter."
+          ]
+        },
+        "candidate": {
+          "head": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+          "tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed"
+        }
+      },
+      "producers": {
+        "baseline": {
+          "rust": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/hawdb_bench_host_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary",
+            "sha256": "8e545c24d2105938f8e8ae01225a574d44d772215294e46caa8ca100a384c95b"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary.runfiles",
+              "sha256": "765764640f2e6f2553b6a07b8c20b6e81cb1a564688017316ae468ebcc1eb43e",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "93e295e0b37cede63621aa53e7f859e00d1f4994b6e088200a377e8615a6b437"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/libhawdb_ffi.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi.so",
+            "sha256": "b58de72507b687a8bc416324268682a5038d18f5ca58131da9da17327cbbbdde"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/_hawdb.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/python/hawdb/_hawdb.so",
+            "sha256": "3f23c60bd39d480e0ccfddd44068ecf2ff7598bc21be19ae1acf5ab7d1263d11"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-2c5af747e1f8/bin/bindings/go/cmd/boundary/boundary_/boundary",
+            "sha256": "3b186ee647e626999bfb39b98375d44dd5401fa9d4e55cc4ac3b8d30345fcbd2"
+          }
+        },
+        "candidate": {
+          "rust": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/hawdb_bench_host_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary",
+            "sha256": "c102afdac9d2407b472048944e4dad8137593a1c796987981138777ec56d6a22"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary.runfiles",
+              "sha256": "3b1c1061c05904bec16491cf6a745005f89f17a2afbf6faa2a43b95b787cb8b3",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "78422c6faaae8f0d062728e2eeb17d98dbd414f054ffc901127c43a7843d2bfc"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/libhawdb_ffi.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi.so",
+            "sha256": "59ec0f109eef1031604fa1d3de6a1b3768e9b090c4db2be85c3e668f713f1914"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/_hawdb.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/python/hawdb/_hawdb.so",
+            "sha256": "181ec4de0ba59d7815be3c4c3154ea711a7aec97c38b7693deb2cae17aabb953"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-2c5af747e1f8/bin/bindings/go/cmd/boundary/boundary_/boundary",
+            "sha256": "3a4b18afcc48c2a16d50e9da2777e877aadad028b4d4bce6689587da02a7fe96"
+          }
+        }
+      },
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "matrix_selection": {
+        "sizes": "1000",
+        "cases": "fill",
+        "layers": [
+          "python"
+        ],
+        "backends": "memory",
+        "samples": 3
+      },
+      "build": "default Bazel configuration, -c opt",
+      "defaults_changed": false,
+      "ordering": "baseline then candidate; ratios of medians, not alternated pairs",
+      "measurement_limits": [
+        "Process RSS includes fixture/setup/host runtime.",
+        "A shard does not establish complete matrix coverage.",
+        "Ordinary APIs do not use Arrow or retained cursors.",
+        "Python launcher, package and runtime are copied independently; runfiles hashes are checked before and after each producer matrix.",
+        "Any refusal/failure prevents a group speedup claim."
+      ],
+      "driver_exits": {
+        "baseline": 0,
+        "candidate": 0
+      },
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 9.3340386167622,
+          "query_boundary_ns_median_speedup": 10.03956548830606,
+          "write_boundary_ns_median_speedup": 10.350708159521051,
+          "read_boundary_ns_median_speedup": 1.7007313502921408
+        }
+      ],
+      "all_paths_succeeded": true
+    },
+    "baseline/report.json": {
+      "source": {
+        "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+        "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478"
+      },
+      "spec": "ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md",
+      "seed": 24301,
+      "sizes": [
+        1000
+      ],
+      "cases": [
+        "fill"
+      ],
+      "backends": [
+        "memory"
+      ],
+      "layers": [
+        "python"
+      ],
+      "samples": 3,
+      "discarded_iterations": 1,
+      "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu": "x86_64",
+      "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "go": "go version go1.27.2 linux/amd64",
+      "build": "Bazel opt, all three engine dependencies compiled together",
+      "defaults_changed": false,
+      "strict_zero_copy": false,
+      "terminal": true,
+      "instrumented": false,
+      "go_host_profiles": false,
+      "native_profiles": false,
+      "go_cpu_profiles": false,
+      "binaries": {
+        "python": {
+          "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary",
+          "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+        }
+      },
+      "library_sha256": "b58de72507b687a8bc416324268682a5038d18f5ca58131da9da17327cbbbdde",
+      "python_extension_path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/_hawdb.so",
+      "python_extension_sha256": "3f23c60bd39d480e0ccfddd44068ecf2ff7598bc21be19ae1acf5ab7d1263d11",
+      "records": [
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 305551,
+          "query_boundary_ns": 1027589555,
+          "write_boundary_ns": 1021423022,
+          "read_boundary_ns": 6166533,
+          "consumer_ns": 8207617,
+          "elapsed_ns": 1036636042,
+          "native_profile": null,
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 35758080,
+          "process_exit": 0,
+          "process_seconds": 1.196435461999954,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-0.job.json",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/_hawdb.so"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-0.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-0.stderr",
+          "process_peak_rss_bytes": 36196352,
+          "size": 1000,
+          "iteration": 0,
+          "discarded": true,
+          "fixture_sha256": "92dfd222bd376b6cf270b3b503f9b4d9d987a43a1c7ec76f7b91f722b5c657eb",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 328193,
+          "query_boundary_ns": 1027731786,
+          "write_boundary_ns": 1021556507,
+          "read_boundary_ns": 6175279,
+          "consumer_ns": 7997364,
+          "elapsed_ns": 1036504516,
+          "native_profile": null,
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 36188160,
+          "process_exit": 0,
+          "process_seconds": 1.1850666660000115,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-1.job.json",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/_hawdb.so"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-1.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-1.stderr",
+          "process_peak_rss_bytes": 36450304,
+          "size": 1000,
+          "iteration": 1,
+          "discarded": false,
+          "fixture_sha256": "d4708b98b03143ffc1ce49ec7ce46b928c90df573b33630cfa9cd086a41574bb",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 279712,
+          "query_boundary_ns": 1020662178,
+          "write_boundary_ns": 1014589651,
+          "read_boundary_ns": 6072527,
+          "consumer_ns": 8091780,
+          "elapsed_ns": 1029505729,
+          "native_profile": null,
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 35893248,
+          "process_exit": 0,
+          "process_seconds": 1.1712585769998896,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-2.job.json",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/_hawdb.so"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-2.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-2.stderr",
+          "process_peak_rss_bytes": 36294656,
+          "size": 1000,
+          "iteration": 2,
+          "discarded": false,
+          "fixture_sha256": "3cb848d15aec7e55be89fa4140be70a728eeb17a483fbfb0c7632e17f4df2c5c",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 297396,
+          "query_boundary_ns": 1029002201,
+          "write_boundary_ns": 1022665841,
+          "read_boundary_ns": 6336360,
+          "consumer_ns": 7988627,
+          "elapsed_ns": 1037855281,
+          "native_profile": null,
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 35876864,
+          "process_exit": 0,
+          "process_seconds": 1.1830168970000159,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-3.job.json",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/_hawdb.so"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-3.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/python-fill-1000-memory-3.stderr",
+          "process_peak_rss_bytes": 36278272,
+          "size": 1000,
+          "iteration": 3,
+          "discarded": false,
+          "fixture_sha256": "88be41de542cc4b5e126741df18f415f6ba1a8d4d143f39c35aac8fa7eb11dd4",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        }
+      ],
+      "summaries": [
+        {
+          "layer": "python",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "successful_samples": 3,
+          "failed_samples": 0,
+          "median_query_boundary_ns": 1027731786,
+          "median_write_boundary_ns": 1021556507,
+          "median_read_boundary_ns": 6175279,
+          "median_elapsed_ns": 1036504516
+        }
+      ],
+      "measurement_limits": [
+        "A selected layer/backend shard qualifies only its recorded groups; full-matrix acceptance requires complete coverage across shards.",
+        "Process peak RSS includes runtime, fixture, setup and query; it is not a query-only allocation ledger.",
+        "Go allocation counts exclude the native engine; run the separately instrumented matrix for native/Python profiles.",
+        "Each iteration opens its own store; seeded read runs measure a warm store, not cold artifact reads.",
+        "Write cases include a final verification query in query_boundary_ns; write_boundary_ns and read_boundary_ns separate the phases without removing calls.",
+        "The query timer excludes the identical checksum algorithm; consumer time is reported separately."
+      ],
+      "parity_failures": 0,
+      "value_parity_records": 4,
+      "successful_records": 4,
+      "refused_or_failed_records": 0,
+      "profile_failures": 0,
+      "failure_profile_failures": 0,
+      "go_host_profile_failures": 0,
+      "failure_go_host_profile_failures": 0,
+      "phase_timing_failures": 0,
+      "all_paths_succeeded": true
+    },
+    "candidate/report.json": {
+      "source": {
+        "head": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+        "tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed"
+      },
+      "spec": "ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md",
+      "seed": 24301,
+      "sizes": [
+        1000
+      ],
+      "cases": [
+        "fill"
+      ],
+      "backends": [
+        "memory"
+      ],
+      "layers": [
+        "python"
+      ],
+      "samples": 3,
+      "discarded_iterations": 1,
+      "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu": "x86_64",
+      "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "go": "go version go1.27.2 linux/amd64",
+      "build": "Bazel opt, all three engine dependencies compiled together",
+      "defaults_changed": false,
+      "strict_zero_copy": false,
+      "terminal": true,
+      "instrumented": false,
+      "go_host_profiles": false,
+      "native_profiles": false,
+      "go_cpu_profiles": false,
+      "binaries": {
+        "python": {
+          "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary",
+          "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+        }
+      },
+      "library_sha256": "59ec0f109eef1031604fa1d3de6a1b3768e9b090c4db2be85c3e668f713f1914",
+      "python_extension_path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/_hawdb.so",
+      "python_extension_sha256": "181ec4de0ba59d7815be3c4c3154ea711a7aec97c38b7693deb2cae17aabb953",
+      "records": [
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 290834,
+          "query_boundary_ns": 104885696,
+          "write_boundary_ns": 101197103,
+          "read_boundary_ns": 3688593,
+          "consumer_ns": 8102531,
+          "elapsed_ns": 113549263,
+          "native_profile": null,
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 37740544,
+          "process_exit": 0,
+          "process_seconds": 0.2596068739999282,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-0.job.json",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/_hawdb.so"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-0.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-0.stderr",
+          "process_peak_rss_bytes": 37871616,
+          "size": 1000,
+          "iteration": 0,
+          "discarded": true,
+          "fixture_sha256": "9a721b7e41d097c3ad95c0f1a836b356a989a530a7d9a4d496e1bf8c3565885b",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 287678,
+          "query_boundary_ns": 102527833,
+          "write_boundary_ns": 98896878,
+          "read_boundary_ns": 3630955,
+          "consumer_ns": 8170508,
+          "elapsed_ns": 111363719,
+          "native_profile": null,
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 38068224,
+          "process_exit": 0,
+          "process_seconds": 0.25505057999998826,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-1.job.json",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/_hawdb.so"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-1.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-1.stderr",
+          "process_peak_rss_bytes": 38068224,
+          "size": 1000,
+          "iteration": 1,
+          "discarded": false,
+          "fixture_sha256": "202851fe03a2e269f019b4024c8bb56b76c37613fc1250164996d533e0e12e6a",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 299149,
+          "query_boundary_ns": 102082685,
+          "write_boundary_ns": 98572986,
+          "read_boundary_ns": 3509699,
+          "consumer_ns": 8175258,
+          "elapsed_ns": 110909079,
+          "native_profile": null,
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 37879808,
+          "process_exit": 0,
+          "process_seconds": 0.25250822899988634,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-2.job.json",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/_hawdb.so"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-2.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-2.stderr",
+          "process_peak_rss_bytes": 37879808,
+          "size": 1000,
+          "iteration": 2,
+          "discarded": false,
+          "fixture_sha256": "cd089c16adebeaafc5f295babc5b08224f1d4eb6131d034f61a5dfe5cb749640",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 289902,
+          "query_boundary_ns": 102368154,
+          "write_boundary_ns": 98694359,
+          "read_boundary_ns": 3673795,
+          "consumer_ns": 8012863,
+          "elapsed_ns": 111045664,
+          "native_profile": null,
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 37904384,
+          "process_exit": 0,
+          "process_seconds": 0.2546184729999368,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-3.job.json",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/_hawdb.so"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-3.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/python-fill-1000-memory-3.stderr",
+          "process_peak_rss_bytes": 37904384,
+          "size": 1000,
+          "iteration": 3,
+          "discarded": false,
+          "fixture_sha256": "5fb810bb07fa1ce118dbc524d6aa21325f247efcc576bc50225baa87ab2e8e36",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        }
+      ],
+      "summaries": [
+        {
+          "layer": "python",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "successful_samples": 3,
+          "failed_samples": 0,
+          "median_query_boundary_ns": 102368154,
+          "median_write_boundary_ns": 98694359,
+          "median_read_boundary_ns": 3630955,
+          "median_elapsed_ns": 111045664
+        }
+      ],
+      "measurement_limits": [
+        "A selected layer/backend shard qualifies only its recorded groups; full-matrix acceptance requires complete coverage across shards.",
+        "Process peak RSS includes runtime, fixture, setup and query; it is not a query-only allocation ledger.",
+        "Go allocation counts exclude the native engine; run the separately instrumented matrix for native/Python profiles.",
+        "Each iteration opens its own store; seeded read runs measure a warm store, not cold artifact reads.",
+        "Write cases include a final verification query in query_boundary_ns; write_boundary_ns and read_boundary_ns separate the phases without removing calls.",
+        "The query timer excludes the identical checksum algorithm; consumer time is reported separately."
+      ],
+      "parity_failures": 0,
+      "value_parity_records": 4,
+      "successful_records": 4,
+      "refused_or_failed_records": 0,
+      "profile_failures": 0,
+      "failure_profile_failures": 0,
+      "go_host_profile_failures": 0,
+      "failure_go_host_profile_failures": 0,
+      "phase_timing_failures": 0,
+      "all_paths_succeeded": true
+    }
+  },
+  "verified_uploaded_producers_and_manifests": [
+    {
+      "path": "baseline-producer/hawdb_bench_host_boundary",
+      "sha256": "8e545c24d2105938f8e8ae01225a574d44d772215294e46caa8ca100a384c95b"
+    },
+    {
+      "path": "baseline-producer/python_boundary",
+      "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+    },
+    {
+      "path": "baseline-producer/libhawdb_ffi.so",
+      "sha256": "b58de72507b687a8bc416324268682a5038d18f5ca58131da9da17327cbbbdde"
+    },
+    {
+      "path": "baseline-producer/_hawdb.so",
+      "sha256": "3f23c60bd39d480e0ccfddd44068ecf2ff7598bc21be19ae1acf5ab7d1263d11"
+    },
+    {
+      "path": "baseline-producer/boundary",
+      "sha256": "3b186ee647e626999bfb39b98375d44dd5401fa9d4e55cc4ac3b8d30345fcbd2"
+    },
+    {
+      "path": "baseline-producer/python_boundary.runfiles_manifest",
+      "sha256": "93e295e0b37cede63621aa53e7f859e00d1f4994b6e088200a377e8615a6b437"
+    },
+    {
+      "path": "candidate-producer/hawdb_bench_host_boundary",
+      "sha256": "c102afdac9d2407b472048944e4dad8137593a1c796987981138777ec56d6a22"
+    },
+    {
+      "path": "candidate-producer/python_boundary",
+      "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+    },
+    {
+      "path": "candidate-producer/libhawdb_ffi.so",
+      "sha256": "59ec0f109eef1031604fa1d3de6a1b3768e9b090c4db2be85c3e668f713f1914"
+    },
+    {
+      "path": "candidate-producer/_hawdb.so",
+      "sha256": "181ec4de0ba59d7815be3c4c3154ea711a7aec97c38b7693deb2cae17aabb953"
+    },
+    {
+      "path": "candidate-producer/boundary",
+      "sha256": "3a4b18afcc48c2a16d50e9da2777e877aadad028b4d4bce6689587da02a7fe96"
+    },
+    {
+      "path": "candidate-producer/python_boundary.runfiles_manifest",
+      "sha256": "78422c6faaae8f0d062728e2eeb17d98dbd414f054ffc901127c43a7843d2bfc"
+    }
+  ],
+  "scope": "Native producer and launcher-manifest bytes verified; archived Python runfiles permission/symlink metadata is not independently requalified.",
+  "campaign_selection": {
+    "engine": "0c2989842321d10e91f136f3c924badb07038add",
+    "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+    "checkout": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+    "checkout_tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed",
+    "overlay": [
+      ".github/workflows/native-bindings.yml"
+    ],
+    "case": "fill",
+    "layer": "python",
+    "backend": "memory",
+    "sizes": [
+      1000
+    ],
+    "matrix_sizes": [
+      1000,
+      100000,
+      1000000
+    ],
+    "measured_samples": 3,
+    "discarded_samples": 1,
+    "defaults_changed": false,
+    "timed_consumers_changed": false,
+    "engine_default_result_rows": 0,
+    "engine_session_default_result_rows": 0,
+    "matrix_groups": 90,
+    "shards": 90,
+    "max_parallel_jobs": 4,
+    "per_job_deadline_minutes": 360,
+    "candidate_requires_final_head_equivalence": true,
+    "scope": "A shard alone does not establish full-matrix acceptance; preserve refusals and failures."
+  },
+  "artifact_name": "ordinary-1000-fill-python-memory-66de653eeb6dc3aa17b03218a3b533fd68b31184",
+  "workflow_run": 39154768120
+}

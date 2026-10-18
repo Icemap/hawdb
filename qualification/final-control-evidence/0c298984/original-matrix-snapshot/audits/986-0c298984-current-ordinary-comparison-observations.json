@@ -1,0 +1,1224 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "source": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+  "source_summary_sha256": "00cc2623136c69a8812cd51770e54ea3078118dd94c17e4b2566f4eeabee8500",
+  "observed_at": 1792358771.674585,
+  "observed_complete_groups": 38,
+  "expected_groups": 90,
+  "comparable": [
+    {
+      "artifact": 12146514605,
+      "selection": [
+        "fill_bulk",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0510855626975346,
+        "query_boundary_ns_median_speedup": 1.06518713680503,
+        "write_boundary_ns_median_speedup": 0.995557859315606,
+        "read_boundary_ns_median_speedup": 1.6279970337840441,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "write_boundary_ns_median_speedup": 0.995557859315606
+      }
+    },
+    {
+      "artifact": 12146627720,
+      "selection": [
+        "fill_bulk",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0372735864658038,
+        "query_boundary_ns_median_speedup": 1.0477801179374453,
+        "write_boundary_ns_median_speedup": 0.987254551558225,
+        "read_boundary_ns_median_speedup": 1.5289012732069014,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "write_boundary_ns_median_speedup": 0.987254551558225
+      }
+    },
+    {
+      "artifact": 12146993102,
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 0.9932983278388459,
+        "query_boundary_ns_median_speedup": 0.9946777072339924,
+        "write_boundary_ns_median_speedup": 0.9332882429836028,
+        "read_boundary_ns_median_speedup": 1.6066004595458028,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "elapsed_ns_median_speedup": 0.9932983278388459,
+        "query_boundary_ns_median_speedup": 0.9946777072339924,
+        "write_boundary_ns_median_speedup": 0.9332882429836028
+      }
+    },
+    {
+      "artifact": 12146524541,
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0299256086975979,
+        "query_boundary_ns_median_speedup": 1.0282113067655236,
+        "write_boundary_ns_median_speedup": 0.961028689554016,
+        "read_boundary_ns_median_speedup": 1.6645178803444032,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "write_boundary_ns_median_speedup": 0.961028689554016
+      }
+    },
+    {
+      "artifact": 12146949837,
+      "selection": [
+        "select",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "select",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.6392708919805934,
+        "query_boundary_ns_median_speedup": 1.676790085855824,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.676790085855824,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12148055029,
+      "selection": [
+        "fill_bulk",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0524249030088928,
+        "query_boundary_ns_median_speedup": 1.05278411988256,
+        "write_boundary_ns_median_speedup": 0.9936228891330472,
+        "read_boundary_ns_median_speedup": 1.4293420608831358,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "write_boundary_ns_median_speedup": 0.9936228891330472
+      }
+    },
+    {
+      "artifact": 12147500991,
+      "selection": [
+        "select",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "select",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.6281077457012147,
+        "query_boundary_ns_median_speedup": 1.6438747332481536,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.6438747332481536,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12146768998,
+      "selection": [
+        "fill_bulk",
+        "go",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0086663319303075,
+        "query_boundary_ns_median_speedup": 1.0089519081744602,
+        "write_boundary_ns_median_speedup": 0.9789772690666128,
+        "read_boundary_ns_median_speedup": 1.1702768603413882,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "write_boundary_ns_median_speedup": 0.9789772690666128
+      }
+    },
+    {
+      "artifact": 12147922082,
+      "selection": [
+        "select",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "select",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0906892304084752,
+        "query_boundary_ns_median_speedup": 1.4749338101442602,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.4749338101442602,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12147274631,
+      "selection": [
+        "select",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "select",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.1225753331230923,
+        "query_boundary_ns_median_speedup": 1.5464927916400193,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.5464927916400193,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12147533410,
+      "selection": [
+        "select",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "select",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.3289862104435755,
+        "query_boundary_ns_median_speedup": 1.3382750886621277,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.3382750886621277,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12147599211,
+      "selection": [
+        "select",
+        "go",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "select",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.2444451004960795,
+        "query_boundary_ns_median_speedup": 1.2571402126598505,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.2571402126598505,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12147693375,
+      "selection": [
+        "wide",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "wide",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.8379520492972805,
+        "query_boundary_ns_median_speedup": 1.9305537707746587,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.9305537707746587,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12147864753,
+      "selection": [
+        "wide",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "wide",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0082311776421577,
+        "query_boundary_ns_median_speedup": 1.410123661462433,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.410123661462433,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12147868185,
+      "selection": [
+        "wide",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "wide",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.6727773028544224,
+        "query_boundary_ns_median_speedup": 1.7841359114860387,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.7841359114860387,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12148686138,
+      "selection": [
+        "wide",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "wide",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0821503009153013,
+        "query_boundary_ns_median_speedup": 1.3438963609423031,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.3438963609423031,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12148293043,
+      "selection": [
+        "wide",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "wide",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0584083668589688,
+        "query_boundary_ns_median_speedup": 1.0604080973884586,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.0604080973884586,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12149061357,
+      "selection": [
+        "point",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "point",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.7508933665826145,
+        "query_boundary_ns_median_speedup": 1.7568644426729303,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.7568644426729303,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12148951976,
+      "selection": [
+        "point",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "point",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.6607675208080823,
+        "query_boundary_ns_median_speedup": 1.6670472138587584,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.6670472138587584,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12148283734,
+      "selection": [
+        "wide",
+        "go",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "wide",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0477129687963567,
+        "query_boundary_ns_median_speedup": 1.050231735866915,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.050231735866915,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12148669313,
+      "selection": [
+        "point",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "point",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.7062289098725594,
+        "query_boundary_ns_median_speedup": 1.7655057389227522,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.7655057389227522,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12148878919,
+      "selection": [
+        "point",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "point",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.867928003572114,
+        "query_boundary_ns_median_speedup": 1.8691573508712438,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.8691573508712438,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12149057579,
+      "selection": [
+        "point",
+        "go",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "point",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 2.0062809349352233,
+        "query_boundary_ns_median_speedup": 2.0120283770487988,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 2.0120283770487988,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12149282979,
+      "selection": [
+        "point",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "point",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.9331485103138515,
+        "query_boundary_ns_median_speedup": 2.0178512334686713,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 2.0178512334686713,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12149173941,
+      "selection": [
+        "fill",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 12.297068819878753,
+        "query_boundary_ns_median_speedup": 12.3289526023781,
+        "write_boundary_ns_median_speedup": 12.947582998702853,
+        "read_boundary_ns_median_speedup": 1.3447068717375368,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12149487808,
+      "selection": [
+        "fill",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 2.2457703316337594,
+        "query_boundary_ns_median_speedup": 2.2460888934621206,
+        "write_boundary_ns_median_speedup": 2.249159358785928,
+        "read_boundary_ns_median_speedup": 1.526483566357982,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12150380079,
+      "selection": [
+        "fill",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 3.3452754529547057,
+        "query_boundary_ns_median_speedup": 3.403788907829166,
+        "write_boundary_ns_median_speedup": 3.4206008442046487,
+        "read_boundary_ns_median_speedup": 1.6667005758679982,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12148899534,
+      "selection": [
+        "fill",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 9.3340386167622,
+        "query_boundary_ns_median_speedup": 10.03956548830606,
+        "write_boundary_ns_median_speedup": 10.350708159521051,
+        "read_boundary_ns_median_speedup": 1.7007313502921408,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12149383736,
+      "selection": [
+        "fill",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 7.928330077829663,
+        "query_boundary_ns_median_speedup": 7.947169991307608,
+        "write_boundary_ns_median_speedup": 8.279495367240422,
+        "read_boundary_ns_median_speedup": 1.1165231177250245,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12149712636,
+      "selection": [
+        "fill",
+        "go",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 2.7122597222711593,
+        "query_boundary_ns_median_speedup": 2.7132849528407172,
+        "write_boundary_ns_median_speedup": 2.7285615590984094,
+        "read_boundary_ns_median_speedup": 1.1419952438047725,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    }
+  ],
+  "adverse": [
+    {
+      "artifact": 12146514605,
+      "selection": [
+        "fill_bulk",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0510855626975346,
+        "query_boundary_ns_median_speedup": 1.06518713680503,
+        "write_boundary_ns_median_speedup": 0.995557859315606,
+        "read_boundary_ns_median_speedup": 1.6279970337840441,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "write_boundary_ns_median_speedup": 0.995557859315606
+      }
+    },
+    {
+      "artifact": 12146627720,
+      "selection": [
+        "fill_bulk",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0372735864658038,
+        "query_boundary_ns_median_speedup": 1.0477801179374453,
+        "write_boundary_ns_median_speedup": 0.987254551558225,
+        "read_boundary_ns_median_speedup": 1.5289012732069014,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "write_boundary_ns_median_speedup": 0.987254551558225
+      }
+    },
+    {
+      "artifact": 12146993102,
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 0.9932983278388459,
+        "query_boundary_ns_median_speedup": 0.9946777072339924,
+        "write_boundary_ns_median_speedup": 0.9332882429836028,
+        "read_boundary_ns_median_speedup": 1.6066004595458028,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "elapsed_ns_median_speedup": 0.9932983278388459,
+        "query_boundary_ns_median_speedup": 0.9946777072339924,
+        "write_boundary_ns_median_speedup": 0.9332882429836028
+      }
+    },
+    {
+      "artifact": 12146524541,
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0299256086975979,
+        "query_boundary_ns_median_speedup": 1.0282113067655236,
+        "write_boundary_ns_median_speedup": 0.961028689554016,
+        "read_boundary_ns_median_speedup": 1.6645178803444032,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "write_boundary_ns_median_speedup": 0.961028689554016
+      }
+    },
+    {
+      "artifact": 12148055029,
+      "selection": [
+        "fill_bulk",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0524249030088928,
+        "query_boundary_ns_median_speedup": 1.05278411988256,
+        "write_boundary_ns_median_speedup": 0.9936228891330472,
+        "read_boundary_ns_median_speedup": 1.4293420608831358,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "write_boundary_ns_median_speedup": 0.9936228891330472
+      }
+    },
+    {
+      "artifact": 12146768998,
+      "selection": [
+        "fill_bulk",
+        "go",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0086663319303075,
+        "query_boundary_ns_median_speedup": 1.0089519081744602,
+        "write_boundary_ns_median_speedup": 0.9789772690666128,
+        "read_boundary_ns_median_speedup": 1.1702768603413882,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {
+        "write_boundary_ns_median_speedup": 0.9789772690666128
+      }
+    }
+  ],
+  "non_comparable": [
+    {
+      "artifact": 12150048128,
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "file",
+        100000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 100000,
+        "backend": "file",
+        "qualified": false,
+        "before_samples": 3,
+        "after_samples": 3,
+        "refusals_or_failures": {
+          "baseline": [
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "candidate": []
+        }
+      }
+    },
+    {
+      "artifact": 12150511134,
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "memory",
+        100000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 100000,
+        "backend": "memory",
+        "qualified": false,
+        "before_samples": 3,
+        "after_samples": 3,
+        "refusals_or_failures": {
+          "baseline": [
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "candidate": []
+        }
+      }
+    },
+    {
+      "artifact": 12150606732,
+      "selection": [
+        "fill_bulk",
+        "python",
+        "memory",
+        100000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 100000,
+        "backend": "memory",
+        "qualified": false,
+        "before_samples": 3,
+        "after_samples": 3,
+        "refusals_or_failures": {
+          "baseline": [
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "candidate": []
+        }
+      }
+    },
+    {
+      "artifact": 12150871047,
+      "selection": [
+        "fill_bulk",
+        "python",
+        "file",
+        100000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 100000,
+        "backend": "file",
+        "qualified": false,
+        "before_samples": 3,
+        "after_samples": 3,
+        "refusals_or_failures": {
+          "baseline": [
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "candidate": []
+        }
+      }
+    },
+    {
+      "artifact": 12151415335,
+      "selection": [
+        "fill_bulk",
+        "go",
+        "memory",
+        100000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill_bulk",
+        "size": 100000,
+        "backend": "memory",
+        "qualified": false,
+        "before_samples": 3,
+        "after_samples": 3,
+        "refusals_or_failures": {
+          "baseline": [
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "candidate": []
+        }
+      }
+    },
+    {
+      "artifact": 12151585253,
+      "selection": [
+        "fill_bulk",
+        "go",
+        "file",
+        100000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill_bulk",
+        "size": 100000,
+        "backend": "file",
+        "qualified": false,
+        "before_samples": 3,
+        "after_samples": 3,
+        "refusals_or_failures": {
+          "baseline": [
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "candidate": []
+        }
+      }
+    },
+    {
+      "artifact": 12151305994,
+      "selection": [
+        "select",
+        "rust",
+        "memory",
+        100000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "select",
+        "size": 100000,
+        "backend": "memory",
+        "qualified": false,
+        "before_samples": 3,
+        "after_samples": 3,
+        "refusals_or_failures": {
+          "baseline": [
+            "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "candidate": []
+        }
+      }
+    },
+    {
+      "artifact": 12151555577,
+      "selection": [
+        "select",
+        "rust",
+        "file",
+        100000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "select",
+        "size": 100000,
+        "backend": "file",
+        "qualified": false,
+        "before_samples": 3,
+        "after_samples": 3,
+        "refusals_or_failures": {
+          "baseline": [
+            "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "candidate": []
+        }
+      }
+    }
+  ],
+  "scope": "Producer-verified original ordinary observations. Ratios are baseline/candidate medians, three samples per side. None means unavailable, not zero. No significance, causality, universal improvement or acceptance claim."
+}

@@ -1,0 +1,5 @@
+{
+  "observed_at": 1792356598.6934521,
+  "public_prowjob_metadata": "Six standard storage.googleapis.com artifact prowjob.json reads returned HTTP403",
+  "scope": "No checkout ref assertion derived from inaccessible metadata. No credentials or alternate access attempted; current-head check associations remain verified via GitHub."
+}

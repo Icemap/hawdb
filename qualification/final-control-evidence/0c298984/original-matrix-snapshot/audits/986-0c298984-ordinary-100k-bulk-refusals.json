@@ -1,0 +1,100 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "source": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+  "observed_at": 1792358349.890342,
+  "summary_sha256": "86392027cbfb61c13f1b1c541ecefb40f385e1015cc536973b4ea05df3e0ebd6",
+  "audited_groups": 6,
+  "groups": [
+    {
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "file",
+        100000
+      ],
+      "artifact": 12150048128,
+      "bundle_sha256": "6a951d50b6276c7e40cc5321f6905eacb993f1bac2e15d2c2c02f590e8c9b8a3",
+      "baseline_error": "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+      "baseline_measured_refusals": 3,
+      "candidate_measured_successes": 3,
+      "warmups_per_side": 1,
+      "paired_ratio": null
+    },
+    {
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "memory",
+        100000
+      ],
+      "artifact": 12150511134,
+      "bundle_sha256": "225696afecd3eb3c08955ab052874d324da2a1c81778eab4c1652f55bb0860b8",
+      "baseline_error": "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+      "baseline_measured_refusals": 3,
+      "candidate_measured_successes": 3,
+      "warmups_per_side": 1,
+      "paired_ratio": null
+    },
+    {
+      "selection": [
+        "fill_bulk",
+        "python",
+        "memory",
+        100000
+      ],
+      "artifact": 12150606732,
+      "bundle_sha256": "598ff0b91fbc80d4d847fcdb9da42c1e2c3d45d8a21ec7fb9fbb7f1a51fbddff",
+      "baseline_error": "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+      "baseline_measured_refusals": 3,
+      "candidate_measured_successes": 3,
+      "warmups_per_side": 1,
+      "paired_ratio": null
+    },
+    {
+      "selection": [
+        "fill_bulk",
+        "python",
+        "file",
+        100000
+      ],
+      "artifact": 12150871047,
+      "bundle_sha256": "c83cc2f171016232717e0d8a9f77896e780d82fe0716219359d0a63e95c4b19d",
+      "baseline_error": "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+      "baseline_measured_refusals": 3,
+      "candidate_measured_successes": 3,
+      "warmups_per_side": 1,
+      "paired_ratio": null
+    },
+    {
+      "selection": [
+        "fill_bulk",
+        "go",
+        "memory",
+        100000
+      ],
+      "artifact": 12151415335,
+      "bundle_sha256": "498d6d66c9cf9a36b44c7cabb5f52252f17a8960b1c4a2089b5db41ce9931d0e",
+      "baseline_error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+      "baseline_measured_refusals": 3,
+      "candidate_measured_successes": 3,
+      "warmups_per_side": 1,
+      "paired_ratio": null
+    },
+    {
+      "selection": [
+        "fill_bulk",
+        "go",
+        "file",
+        100000
+      ],
+      "artifact": 12151585253,
+      "bundle_sha256": "38644c302a13db24ed277d53a720cf9acd7c704b5acf01b00336a3354768d60c",
+      "baseline_error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+      "baseline_measured_refusals": 3,
+      "candidate_measured_successes": 3,
+      "warmups_per_side": 1,
+      "paired_ratio": null
+    }
+  ],
+  "scope": "Original 100k Rust/Python/Go bulk groups: baseline independent16MiB result refusals, candidate successes; complete producer verification, no paired ratio. Workload/default/durability unchanged; original full90/110 still required."
+}
