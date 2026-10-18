@@ -84,8 +84,9 @@ boundary; a self-consistent V4 table cannot mint it.
 Production immediate and retry cleanup now require `VerifiedRetention`, borrowed
 from the actual publication lease. The selected head, complete dependency graph,
 semantic decoders, directory enumeration and unlink all use that captured native
-source for projection artifacts. Validation scratch still uses the root pathname;
-the replacement-namespace regression described below exposes that remaining gap.
+source for projection artifacts and validation scratch. Body files, lexical
+spill creation/reopen and deferred scratch cleanup now use the original held
+parent/child directory capabilities. Path labels never select those I/O targets.
 Caller-supplied generation sets
 and the transitional namespace fences are restricted to synthetic test paths;
 they cannot authorize production deletion.
@@ -135,17 +136,26 @@ The vector-bearing and historical-fallback gap must be resolved before qualifyin
 complete cleanup; indefinite preservation is not the final reclamation contract.
 
 The real immediate/retry namespace-GC probes reclaim obsolete A and retain active
-A without changing replacement B projection files. A stronger regression,
-`validation_scratch_keeps_all_operations_off_the_replacement_namespace`, also
-checks replacement B directory metadata and currently fails on macOS: hydrated
-body stages and lexical retraction spills still create and remove temporary
-entries through B. Preserve this failing assertion in the CI integration draft.
-Completing captured cleanup requires source-bound scratch creation, spill I/O,
-and deferred cleanup custody; projection-file equality alone is insufficient. Additional native probes
-cover missing dependencies, byte/file ceilings and replacement of a warm-cache
-name; each refusal must delete nothing. Retained child/term tests also require
-actual reclamation after the final owner closes, not indefinite preservation.
-These are targeted native evidence, not Consumer activation qualification.
+A without changing replacement B projection files. The stronger native regression
+`validation_scratch_keeps_all_operations_off_the_replacement_namespace` now also
+passes its replacement B directory-metadata assertion in the local integration
+source. Governed cleanup uses a separate validation authority alongside its
+existing artifact capture; the two captures must identify the same source.
+A 10,000-term governed fixture requires actual captured spill writes, cold opens
+and removal, and preserves a foreign diagnostic-label directory unchanged.
+
+The stage ledger registers creation evidence before native effects. A real mkdir
+followed by an injected lost response retains native parent/candidate metadata;
+retry removes A's private directory while preserving the same-named B directory.
+A governed debt releases execution/I/O slots and refuses an ungoverned retry;
+`retry_staging_cleanup_with_context` borrows fresh actual work/IO capacity. The
+original metadata remains funded until native custody closes. Legacy path-based
+producer stages are separate and have not gained this captured refinement.
+
+These are targeted local evidence, not Windows scratch/Consumer activation or
+whole-operation physical resource/performance qualification. Original Windows
+source/publication directory-move failures remain enabled. Missing-dependency,
+fresh-name and byte/file-ceiling refusals still precede projection unlink.
 
 The actual Consumer generation metadata/producer ledger, persistent non-reused
 incarnations, unresolved candidate custody, prebuilt immutable query view,
@@ -254,7 +264,8 @@ partition cleanup regression and three admission regressions pass locally.
 `HawDBScopedCleanupAdmission` models aggregate admission, refusal, payload
 funding and the prohibition on exporting a persistent root. Its four negative
 controls are finite invariant checks, not a proof of the implementation or of
-scratch namespace custody. The scratch regression above remains unresolved.
+scratch namespace custody. Captured scratch adoption has its separate local
+native and lifecycle evidence; composed MVCC qualification remains open.
 
 Absence-proof I/O denial also remains `Unknown` before any proof I/O. A queued
 producer may have a zero-slot request in the existing API; do not invent a slot,

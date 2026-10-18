@@ -73,6 +73,31 @@ impl<'a> Source<'a> {
         }
         Ok(())
     }
+    pub(super) fn validate_capture(
+        &self,
+        capture: &super::root_registry::PendingCapture<'_, '_>,
+    ) -> Result<()> {
+        if capture.source_identity() != self.publication.source_identity() {
+            return Err(HawDBError::StorageIntegrity(
+                "validation scratch and artifact capture have different sources".into(),
+            ));
+        }
+        Ok(())
+    }
+    pub(super) fn validation_stage(
+        &self,
+        label: &Path,
+        memory: &crate::build_memory::BuildMemory,
+        task: &hawdb_core::RuntimeTaskContext,
+        admission: Option<&crate::build_memory::read::ReadAdmission<'_>>,
+    ) -> Result<super::generation_writer::StageDirectory> {
+        self.require_admission(admission)?;
+        self.publication.with_captured_directory(|parent| {
+            super::generation_writer::StageDirectory::create_captured(
+                label, parent, memory, task, admission,
+            )
+        })
+    }
     pub(super) fn open_admitted(
         &self,
         name: &str,

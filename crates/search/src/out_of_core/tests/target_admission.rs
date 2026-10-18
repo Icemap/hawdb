@@ -78,7 +78,10 @@ impl Fixture {
             &self.reader.config,
             &self.reader.analyzer_lexicon,
             self.reader.lexical_source_policy,
-            Some((admission, 32 << 20)),
+            mutation_run::TargetValidationContext {
+                admission: Some((admission, 32 << 20)),
+                source: None,
+            },
         )
     }
 }
@@ -108,13 +111,17 @@ fn target_validation_uses_one_admission_for_probe_hydration_and_stored_terms() {
     assert_eq!(memory.ledger.snapshot().used_bytes, baseline);
     assert_eq!(governor.snapshot().active_background_io_slots, 0);
     // Governed terms cannot silently fall back to the legacy default task.
-    let error = mutation_run::validate_targets(
+    let error = mutation_run::validate_targets_with_admission(
         &fixture.root,
         &fixture.reader.segments,
         std::iter::once(&run),
         &fixture.reader.config,
         &fixture.reader.analyzer_lexicon,
         fixture.reader.lexical_source_policy,
+        mutation_run::TargetValidationContext {
+            admission: None,
+            source: None,
+        },
     )
     .unwrap_err();
     assert!(matches!(error, HawDBError::Execution(_)), "{error:?}");
@@ -326,6 +333,7 @@ fn admitted_cjk_target_reanalysis_borrows_execution_until_worker_join_and_refund
         .unwrap();
     let context = || crate::lexical_projection::retraction::RetractionContext {
         root: &fixture.root,
+        scratch: None,
         memory: &memory,
         task: &task,
         needs_chinese: source.needs_chinese,

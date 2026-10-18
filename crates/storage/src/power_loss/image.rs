@@ -415,6 +415,25 @@ impl ImageEngine {
         Ok(())
     }
 
+    /// Remove only an empty directory entry through a captured parent. The
+    /// directory inode remains distinct from any later reuse of that name.
+    pub fn remove_directory_at(&mut self, directory: InodeId, name: &Path) -> io::Result<()> {
+        let inode = self.child_inode(directory, name)?;
+        if !self.current_directory(inode)?.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::DirectoryNotEmpty,
+                "relative directory removal target is not empty",
+            ));
+        }
+        self.admit_operation(0)?;
+        self.namespace(vec![EntryChange {
+            directory,
+            name: child_name(name)?.to_os_string(),
+            value: None,
+        }])?;
+        Ok(())
+    }
+
     pub fn write(&mut self, inode: InodeId, offset: u64, bytes: &[u8]) -> io::Result<OperationId> {
         if bytes.is_empty() {
             return Err(invalid("empty writes have no persistence operation"));

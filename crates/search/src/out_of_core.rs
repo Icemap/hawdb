@@ -299,7 +299,9 @@ pub(super) struct PublishedOutOfCoreProjection {
 
 mod artifact_reference;
 mod captured_cleanup;
+mod scratch_directory;
 use artifact_reference::{ArtifactObject, ResidentSnapshot, SegmentObjects};
+pub(crate) use scratch_directory::{ScratchDirectory, SpillFile};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -3355,6 +3357,7 @@ struct LoadedArtifactClosure {
 }
 
 struct ClosureLoadContext<'a, 'execution> {
+    validation_source: Option<&'a captured_cleanup::Source<'a>>,
     cleanup_source: Option<&'a captured_cleanup::Source<'a>>,
     capture: Option<&'a root_registry::PendingCapture<'a, 'execution>>,
     root: &'a Path,
@@ -3390,6 +3393,7 @@ fn load_artifact_closure_for_manifest(
     load_artifact_closure_with_context(
         ClosureLoadContext {
             cleanup_source: None,
+            validation_source: None,
             capture: None,
             root,
             config,
@@ -3410,6 +3414,7 @@ fn load_artifact_closure_with_context(
 ) -> Result<LoadedArtifactClosure> {
     let ClosureLoadContext {
         cleanup_source,
+        validation_source,
         capture,
         root,
         config,
@@ -3420,6 +3425,9 @@ fn load_artifact_closure_with_context(
         admission,
         max_artifact_read_bytes,
     } = context;
+    if let (Some(source), Some(capture)) = (validation_source, capture) {
+        source.validate_capture(capture)?;
+    }
     if cleanup_source.is_some()
         && (capture.is_some()
             || previous.is_some()
@@ -3683,25 +3691,18 @@ fn load_artifact_closure_with_context(
                 Some(run)
             }
         });
-    match admission {
-        Some(admission) => mutation_run::validate_targets_with_admission(
-            root,
-            &segments,
-            targets_to_validate,
-            config,
-            analyzer_lexicon,
-            lexical_source_policy,
-            Some((admission, max_artifact_read_bytes)),
-        )?,
-        None => mutation_run::validate_targets(
-            root,
-            &segments,
-            targets_to_validate,
-            config,
-            analyzer_lexicon,
-            lexical_source_policy,
-        )?,
-    }
+    mutation_run::validate_targets_with_admission(
+        root,
+        &segments,
+        targets_to_validate,
+        config,
+        analyzer_lexicon,
+        lexical_source_policy,
+        mutation_run::TargetValidationContext {
+            admission: admission.map(|admission| (admission, max_artifact_read_bytes)),
+            source: validation_source.or(cleanup_source),
+        },
+    )?;
     checkpoint()?;
     Ok(LoadedArtifactClosure {
         manifest,
@@ -3833,6 +3834,7 @@ pub(super) fn captured_artifact_generations(
             let closure = load_artifact_closure_with_context(
                 ClosureLoadContext {
                     cleanup_source: admission.is_synchronous().then_some(&source),
+                    validation_source: Some(&source),
                     capture: capture.as_ref(),
                     root: root_label,
                     config: &config,
@@ -3877,6 +3879,7 @@ pub(super) fn captured_artifact_generations(
             let closure = load_artifact_closure_with_context(
                 ClosureLoadContext {
                     cleanup_source: Some(&source),
+                    validation_source: Some(&source),
                     capture: None,
                     root: root_label,
                     config: &config,

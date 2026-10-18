@@ -18,6 +18,8 @@ STORAGE_MODELS = [
     "HawDBPreparedCatalogPublication",
     "HawDBCapturedFileCustody",
     "HawDBCapturedUnlink",
+    "HawDBPrivateDirectoryCreation",
+    "HawDBCapturedScratch",
     "HawDBCapturedRetention",
     "HawDBScopedCleanupAdmission",
     "HawDBResidentVectorAbsence",

@@ -10,7 +10,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct NativeDirectoryTrace {
     core: Arc<ModelCore>,
     inode: InodeId,
@@ -18,6 +18,14 @@ pub(crate) struct NativeDirectoryTrace {
 }
 
 impl NativeDirectoryTrace {
+    pub(crate) fn metadata_bound(&self, child_bytes: usize) -> io::Result<usize> {
+        self.opened_path
+            .capacity()
+            .checked_add(child_bytes)
+            .and_then(|bytes| bytes.checked_mul(2))
+            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Self>() + 16))
+            .ok_or_else(|| invalid("directory trace metadata bound overflow"))
+    }
     pub(crate) fn create_directory(
         &self,
         name: &Path,
@@ -184,6 +192,19 @@ impl NativeDirectoryTrace {
         self.core.mutate_observed(
             Some((IoEvent::Remove, &label)),
             |engine| engine.remove_file_at(self.inode, name),
+            native,
+        )
+    }
+
+    pub(crate) fn remove_directory(
+        &self,
+        name: &Path,
+        native: impl FnOnce() -> io::Result<()>,
+    ) -> io::Result<()> {
+        let label = self.opened_path.join(name);
+        self.core.mutate_observed(
+            Some((IoEvent::Remove, &label)),
+            |engine| engine.remove_directory_at(self.inode, name),
             native,
         )
     }

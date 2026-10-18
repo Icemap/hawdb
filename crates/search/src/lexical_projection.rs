@@ -56,6 +56,8 @@ mod corpus_query;
 pub(super) use corpus_query::AccountedCorpusStatistics;
 mod raw_query;
 mod spill_control;
+#[cfg(test)]
+pub(crate) use spill_control::take_captured_io;
 use spill_control::Control as SpillControl;
 mod spill_memory;
 use spill_memory::{PendingPostings, RunPosting};
@@ -2633,6 +2635,7 @@ impl<'workspace> LexicalProjectionWriter<'workspace> {
 struct RemoveOnDrop {
     path: PathBuf,
     armed: bool,
+    control: Option<SpillControl>,
     _memory: Option<crate::build_memory::reserved::Grant>,
 }
 
@@ -2642,6 +2645,11 @@ impl RemoveOnDrop {
     }
 
     fn remove(&mut self) -> Result<()> {
+        if let Some(control) = &self.control {
+            control.with_path(&self.path, || control.remove(&self.path))?;
+            self.disarm();
+            return Ok(());
+        }
         native_path::with_scratch(
             self._memory.as_ref().map(Grant::reservation),
             &self.path,
@@ -2681,22 +2689,47 @@ trait SpillIo {
 
     fn create(&mut self, path: &Path) -> Result<Self::Writer>;
     fn remove(&mut self, path: &Path) -> Result<()>;
+    fn create_in(&mut self, path: &Path, control: &SpillControl) -> Result<Self::Writer> {
+        if control.captured() {
+            return Err(HawDBError::Execution(
+                "spill I/O backend does not support captured creation".into(),
+            ));
+        }
+        self.create(path)
+    }
+    fn remove_in(&mut self, path: &Path, control: &SpillControl) -> Result<()> {
+        if control.captured() {
+            return Err(HawDBError::Execution(
+                "spill I/O backend does not support captured removal".into(),
+            ));
+        }
+        self.remove(path)
+    }
 }
 
 struct FileSpillIo;
 
 impl SpillIo for FileSpillIo {
-    type Writer = BufWriter<File>;
+    type Writer = BufWriter<crate::out_of_core::SpillFile>;
 
     fn create(&mut self, path: &Path) -> Result<Self::Writer> {
         Ok(BufWriter::with_capacity(
             SPILL_IO_BUFFER_BYTES,
-            File::create(path)?,
+            crate::out_of_core::SpillFile::Legacy(File::create(path)?),
         ))
     }
 
     fn remove(&mut self, path: &Path) -> Result<()> {
         Ok(fs::remove_file(path)?)
+    }
+    fn create_in(&mut self, path: &Path, control: &SpillControl) -> Result<Self::Writer> {
+        Ok(BufWriter::with_capacity(
+            SPILL_IO_BUFFER_BYTES,
+            control.create(path)?,
+        ))
+    }
+    fn remove_in(&mut self, path: &Path, control: &SpillControl) -> Result<()> {
+        control.remove(path)
     }
 }
 
@@ -2731,7 +2764,7 @@ impl<W: Write> SpillRunWriter<W> {
         control.check()?;
         let total_bytes = checked_spill_bytes(previous_bytes, RUN_HEADER.len() as u64, limit)?;
         let buffer_memory = control.reserve(SPILL_IO_BUFFER_BYTES)?;
-        let mut writer = control.with_path(path, || io.create(path))?;
+        let mut writer = control.with_path(path, || io.create_in(path, control))?;
         writer.write_all(RUN_HEADER)?;
         Ok(Self {
             writer,
@@ -2870,7 +2903,7 @@ impl SpillRuns {
                     native_path::with_scratch(
                         source._memory.as_ref().map(Grant::reservation),
                         &source.path,
-                        || io.remove(&source.path),
+                        || io.remove_in(&source.path, &self.control),
                     )?;
                     source.disarm();
                 }
@@ -2900,7 +2933,7 @@ impl SpillRuns {
 }
 
 struct RunReader {
-    reader: BufReader<File>,
+    reader: BufReader<crate::out_of_core::SpillFile>,
     config: LexicalProjectionConfig,
     control: SpillControl,
     _buffer_memory: Option<crate::build_memory::reserved::Grant>,
@@ -2919,7 +2952,7 @@ impl RunReader {
     ) -> Result<Self> {
         control.check()?;
         let memory = control.reserve(SPILL_IO_BUFFER_BYTES)?;
-        let file = control.with_path(path, || Ok(File::open(path)?))?;
+        let file = control.with_path(path, || control.open(path))?;
         let mut reader = BufReader::with_capacity(SPILL_IO_BUFFER_BYTES, file);
         let mut header = [0u8; 8];
         reader.read_exact(&mut header)?;

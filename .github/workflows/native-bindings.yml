@@ -129,6 +129,29 @@ jobs:
             generation_cleanup::tests:: --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/cleanup-admission.txt
 
+      - name: Test private captured directory creation and crash cuts
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            -- file_io::source_directory::directory_candidate::tests:: \
+            recorded_directory_candidate_keeps_creation_evidence_and_empty_removal_cuts \
+            recorded_creation_refusal_before_native_effect_leaves_candidate_unowned \
+            --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/private-directory.txt
+
+      - name: Test governed scratch spills and deferred original-custody cleanup
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            -- governed_cleanup_spills_reopens_and_removes_only_in_its_captured_scratch_namespace \
+            lost_response_after_creation_retains_original_custody_and_retries_off_replacement_root \
+            --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/private-scratch.txt
+
       - name: Test captured root, replacement namespace and resident retention
         if: ${{ !cancelled() }}
         shell: bash

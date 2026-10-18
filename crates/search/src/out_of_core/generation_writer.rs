@@ -303,6 +303,17 @@ impl SearchOutOfCoreGenerationWriter {
         spool::retry_staging_cleanup(root.as_ref(), max_attempts)
     }
 
+    /// Retry retained private stages using fresh caller memory and I/O capacity.
+    /// Captured tickets keep their original native source and metadata funding;
+    /// a governed ticket refuses an ungoverned retry instead of bypassing it.
+    pub fn retry_staging_cleanup_with_context(
+        root: impl AsRef<Path>,
+        max_attempts: usize,
+        task: &RuntimeTaskContext,
+    ) -> Result<SearchStagingCleanupReport> {
+        spool::retry_staging_cleanup_with_context(root.as_ref(), max_attempts, task)
+    }
+
     pub fn create(
         root: impl AsRef<Path>,
         options: SearchOutOfCoreGenerationBuildOptions,

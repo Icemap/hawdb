@@ -29,6 +29,9 @@ impl Fixture {
         Self::new_with_chinese(false)
     }
     fn new_with_chinese(chinese: bool) -> Self {
+        Self::new_with_content(chinese, None)
+    }
+    fn new_with_content(chinese: bool, content: Option<&str>) -> Self {
         let root = crate::test_temp_dir().join(format!(
             "hawdb-private-admitted-root-{}",
             hawdb_core::generate_uuidv7().unwrap()
@@ -49,7 +52,7 @@ impl Fixture {
                     } else {
                         id.into()
                     },
-                    content: "graph source text".into(),
+                    content: content.unwrap_or("graph source text").into(),
                     embedding: None,
                     metadata: BTreeMap::new(),
                 })
@@ -972,4 +975,60 @@ fn captured_cleanup_missing_dependency_refuses_before_any_unlink() {
 #[test]
 fn captured_cleanup_checks_fresh_names_even_with_a_warm_managed_cache() {
     cleanup_refuses_before_unlink(CleanupRefusal::ReplacedWarmDependency);
+}
+
+#[test]
+fn governed_cleanup_spills_reopens_and_removes_only_in_its_captured_scratch_namespace() {
+    let content = (0..10_000)
+        .map(|i| format!("uniquelexicalterm{i:05} "))
+        .collect::<String>();
+    let fixture = Fixture::new_with_content(false, Some(&content));
+    let foreign = fixture.root.join("foreign-label");
+    std::fs::create_dir(&foreign).unwrap();
+    std::fs::write(foreign.join("evidence"), b"unchanged foreign root").unwrap();
+    let before = std::fs::metadata(&foreign).unwrap().modified().unwrap();
+    let governor = governor();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(8 << 20).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(Default::default());
+    let memory = BuildMemory::new(&task).unwrap();
+    let admission = ReadAdmission {
+        memory: &memory,
+        task: &task,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
+    };
+    let mut publication = SearchProjectionPublishLease::acquire_for_cleanup(&fixture.root).unwrap();
+    publication.admit_cleanup_resources(&admission).unwrap();
+    crate::lexical_projection::take_captured_io();
+    let verified = captured_artifact_generations(
+        &foreign,
+        &publication,
+        &fixture.reader.analyzer_lexicon,
+        &task,
+        Default::default(),
+        Some(&admission),
+    )
+    .unwrap();
+    assert!(verified.generations.is_some());
+    let [created, reopened, removed] = crate::lexical_projection::take_captured_io();
+    assert!(created > 0 && reopened > 0 && removed > 0,
+        "fixture must execute captured spill writes/cold opens/removal: {created}/{reopened}/{removed}");
+    assert_eq!(
+        std::fs::metadata(&foreign).unwrap().modified().unwrap(),
+        before
+    );
+    assert_eq!(
+        std::fs::read(foreign.join("evidence")).unwrap(),
+        b"unchanged foreign root"
+    );
+    assert!(!std::fs::read_dir(&fixture.root).unwrap().any(|entry| entry
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .ends_with(".stage")));
+    drop(verified);
+    drop(publication);
+    assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
 }

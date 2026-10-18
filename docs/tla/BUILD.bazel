@@ -850,3 +850,51 @@ tla_check(
     )
     for control in ["DelayedUnlink", "PathUnlink", "RebindHeldHandle"]
 ]
+
+[
+    genrule(
+        name = "HawDBPrivateDirectoryCreation" + control + "_config",
+        srcs = ["HawDBPrivateDirectoryCreation.cfg"],
+        outs = ["generated/HawDBPrivateDirectoryCreation" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBPrivateDirectoryCreation.cfg) > $@",
+        tags = ["manual"],
+    )
+    for control in ["NoScopeCheck", "RecordAfterOpen", "ForgetOnOpenRefusal", "AdoptUnknown"]
+]
+
+[
+    tla_check(
+        name = "HawDBPrivateDirectoryCreation" + control + "_check",
+        module = "HawDBPrivateDirectoryCreation.tla",
+        config = ":HawDBPrivateDirectoryCreation" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["NoScopeCheck", "RecordAfterOpen", "ForgetOnOpenRefusal", "AdoptUnknown"]
+]
+
+[
+    genrule(
+        name = "HawDBCapturedScratch" + control + "_config",
+        srcs = ["HawDBCapturedScratch.cfg"],
+        outs = ["generated/HawDBCapturedScratch" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBCapturedScratch.cfg) > $@",
+        tags = ["manual"],
+    )
+    for control in ["PathForCreate", "PathForData", "PathForRetry", "KeepExecutionInDebt", "ForgetUncertain", "RefundBeforeClose"]
+]
+
+[
+    tla_check(
+        name = "HawDBCapturedScratch" + control + "_check",
+        module = "HawDBCapturedScratch.tla",
+        config = ":HawDBCapturedScratch" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["PathForCreate", "PathForData", "PathForRetry", "KeepExecutionInDebt", "ForgetUncertain", "RefundBeforeClose"]
+]

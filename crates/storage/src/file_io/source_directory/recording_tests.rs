@@ -358,6 +358,84 @@ fn relative_create_observations_retain_the_actual_before_and_after_inode_sets() 
 }
 
 #[test]
+fn recorded_directory_candidate_keeps_creation_evidence_and_empty_removal_cuts() {
+    for boundary in [ObservationBoundary::Before, ObservationBoundary::After] {
+        let fixture = Fixture::new(16, ImageLimits::default());
+        let parent = fixture.source("");
+        let context = fixture.project.io_context();
+        let mut candidate = parent.prepare_directory_candidate("private").unwrap();
+        fixture.observe(IoEvent::CreateDirectory, "private", boundary);
+        parent
+            .create_directory_candidate(&context, &mut candidate)
+            .unwrap();
+        assert!(candidate.creation_completed());
+        let cut = fixture.model().take_observation().unwrap().unwrap();
+        let image = cut.crash(&cut.persist_all_plan()).unwrap();
+        assert_eq!(
+            image
+                .directory_paths()
+                .any(|path| path == Path::new("private")),
+            boundary == ObservationBoundary::After
+        );
+
+        let child = parent.open_created_directory(&context, &candidate).unwrap();
+        let mut file = child.create_child_new(&context, "payload").unwrap();
+        file.write_all(b"temporary bytes").unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        assert!(parent
+            .remove_created_directory(&context, &mut candidate)
+            .is_err());
+        assert!(candidate.creation_completed());
+        child.remove_child(&context, "payload").unwrap();
+        drop(child);
+        fixture.observe(IoEvent::Remove, "private", boundary);
+        parent
+            .remove_created_directory(&context, &mut candidate)
+            .unwrap();
+        assert!(candidate.removal_completed());
+        let cut = fixture.model().take_observation().unwrap().unwrap();
+        let image = cut.crash(&cut.persist_all_plan()).unwrap();
+        assert_eq!(
+            image
+                .directory_paths()
+                .any(|path| path == Path::new("private")),
+            boundary == ObservationBoundary::Before
+        );
+        parent.sync(&context).unwrap();
+        let snapshot = fixture.model().capture().unwrap();
+        assert!(!snapshot
+            .crash(&CrashPlan::default())
+            .unwrap()
+            .directory_paths()
+            .any(|path| path == Path::new("private")));
+        drop(parent);
+        assert_eq!(fixture.project.metrics().open, 1);
+    }
+}
+
+#[test]
+fn recorded_creation_refusal_before_native_effect_leaves_candidate_unowned() {
+    let fixture = Fixture::new(
+        16,
+        ImageLimits {
+            max_inodes: 1,
+            ..Default::default()
+        },
+    );
+    let parent = fixture.source("");
+    let context = fixture.project.io_context();
+    let mut candidate = parent.prepare_directory_candidate("private").unwrap();
+    assert!(parent
+        .create_directory_candidate(&context, &mut candidate)
+        .is_err());
+    assert!(!candidate.may_own_entry());
+    assert!(!fixture.root.join("private").exists());
+    drop(parent);
+    assert_eq!(fixture.project.metrics().open, 1);
+}
+
+#[test]
 fn failed_native_lock_create_and_unlink_never_publish_candidate_history() {
     let fixture = Fixture::new(32, ImageLimits::default());
     let context = fixture.project.io_context();

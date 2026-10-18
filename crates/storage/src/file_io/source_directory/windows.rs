@@ -342,10 +342,28 @@ pub(super) fn remove_child(
     name: ChildName<'_>,
     context: &FileOpenContext,
 ) -> io::Result<()> {
+    remove_entry(root, name, context, NON_DIRECTORY)
+}
+
+pub(super) fn remove_directory(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+    context: &FileOpenContext,
+) -> io::Result<()> {
+    // FILE_DIRECTORY_FILE; the kernel also rejects a nonempty directory.
+    remove_entry(root, name, context, 1)
+}
+
+fn remove_entry(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+    context: &FileOpenContext,
+    kind: u32,
+) -> io::Result<()> {
     // Windows deletes by a handle opened relative to RootDirectory. Reserve
     // this extra handle before opening it, and close before returning capacity.
     let _permit = context.acquire(DescriptorKind::Transient)?;
-    let file = relative_open(root, name, DELETE, false)?;
+    let file = relative_open_kind(root, name, DELETE, false, kind)?;
     // Remove the name when this DELETE handle closes, even while an immutable
     // reader/cache retains another share-delete handle. Legacy disposition only
     // marks delete-pending until all handles close, so a successful GC would

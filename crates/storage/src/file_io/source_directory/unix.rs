@@ -200,6 +200,23 @@ pub(super) fn remove_child(
     }
 }
 
+pub(super) fn remove_directory(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+    _context: &FileOpenContext,
+) -> io::Result<()> {
+    let name = name_bytes(name);
+    // SAFETY: live captured parent and validated, terminated child component.
+    // AT_REMOVEDIR rejects regular files and nonempty directories.
+    let result =
+        unsafe { libc::unlinkat(root.as_raw_fd(), name.as_ptr().cast(), libc::AT_REMOVEDIR) };
+    if result == -1 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
 pub(super) fn open_lock_file(
     root: &std::fs::File,
     name: ChildName<'_>,

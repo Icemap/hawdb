@@ -12,6 +12,8 @@ use std::path::Path;
 
 mod control_candidate;
 pub use control_candidate::{CapturedControlCandidate, PendingControlPublication};
+mod directory_candidate;
+pub use directory_candidate::CapturedDirectoryCandidate;
 
 #[cfg(unix)]
 #[path = "source_directory/unix.rs"]
@@ -61,6 +63,13 @@ mod platform {
         Err(unsupported())
     }
     pub(super) fn remove_child(
+        _root: &std::fs::File,
+        _name: ChildName<'_>,
+        _context: &FileOpenContext,
+    ) -> io::Result<()> {
+        Err(unsupported())
+    }
+    pub(super) fn remove_directory(
         _root: &std::fs::File,
         _name: ChildName<'_>,
         _context: &FileOpenContext,
@@ -198,6 +207,49 @@ impl SourceDirectory {
 
     pub fn same_directory(&self, other: &Self) -> bool {
         self.identity.0 == other.identity.0
+    }
+
+    /// Duplicate this held directory with fresh capacity from the same project
+    /// domain. This never reopens its pathname or duplicates a process lock.
+    /// The caller owns metadata admission and any logical source registrations.
+    pub fn duplicate(&self, context: &FileOpenContext) -> io::Result<Self> {
+        self.require_context(context)?;
+        let scope = native_scope(context)?;
+        self.require_scope(&scope)?;
+        let permit = context.acquire(DescriptorKind::Transient)?;
+        let inner = self
+            .root
+            .with_native(std::fs::File::try_clone)
+            .map_err(|error| context.map_open_error(error))?;
+        Ok(Self {
+            root: counted(inner, permit),
+            context: context.without_inventory(),
+            identity: self.identity,
+            capture_id: next_capture_id()?,
+            cached_children: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(any(test, feature = "test-support"))]
+            trace: self.trace.clone(),
+        })
+    }
+
+    /// Conservative owned metadata for a duplicate or generated child capture.
+    /// This excludes shared project/model state and performs no I/O/allocation.
+    pub fn metadata_bound(&self, child_bytes: usize) -> io::Result<usize> {
+        let _ = child_bytes;
+        let bytes = std::mem::size_of::<Self>();
+        #[cfg(any(test, feature = "test-support"))]
+        if let Some(trace) = &self.trace {
+            return bytes
+                .checked_add(trace.metadata_bound(child_bytes)?)
+                .ok_or_else(|| io::Error::other("directory metadata bound overflow"));
+        }
+        Ok(bytes)
+    }
+
+    /// Exclusively create one regular read/write child. A private-directory
+    /// owner must retain cleanup evidence before calling this primitive.
+    pub fn create_child_new(&self, context: &FileOpenContext, name: &str) -> io::Result<File> {
+        self.open_mutable_child(context, name, true)
     }
 
     /// Pure domain comparison; does not open a file or consume FD inventory.

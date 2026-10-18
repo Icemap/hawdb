@@ -1,13 +1,12 @@
 # Captured artifact I/O and cleanup
 
-Status: CI integration draft. Private exact pins, captured immutable-file
-reopen, full-reference projection validation and captured projection deletion are
-implemented in the integration source. Ordinary governed serving remains
-unqualified. A stronger native regression still fails because temporary
-validation stages and lexical spills use the replacement pathname. Captured
-scratch creation, spill I/O and deferred cleanup custody remain required; the
-existing projection-file isolation probes do not establish that boundary.
-These contracts do not complete MVCC qualification.
+Status: CI integration draft. Private exact pins, captured immutable-file reopen,
+full-reference projection validation and captured projection deletion are
+implemented. The local integration source now also routes validation body/spill
+I/O and deferred private-stage cleanup through retained native directories. Its
+original scratch isolation regression passes locally. Native Windows scratch
+adoption, complete Consumer publication and ordinary governed serving remain
+unqualified. These contracts do not complete MVCC qualification.
 
 ## One authority for the complete operation
 
@@ -294,3 +293,101 @@ invariant. The caller's publication/retention proof is a precondition; this mode
 does not prove GC admission, native syscall behavior, scratch isolation or
 power-loss durability. The unchanged image-engine unlink already removes the
 namespace entry independently of retained inode data.
+
+## Private validation scratch integration in progress
+
+The local prototype adds a fixed-size `CapturedDirectoryCandidate` bound to one
+actual parent capture and component. Its states are Fresh, Attempted, Refused,
+Created and Removed. It is neither persisted incarnation evidence nor an owning
+publication capability. The caller must retain the parent and candidate and
+exclude rebinding its private name. A duplicate directory consumes fresh capacity
+from the same project domain and does not duplicate the process lock.
+
+Creation preflight, including FD admission and recorder simulation, happens
+before the native attempt. Exclusive-create collisions own no entry. Once the
+native call succeeds, the caller-owned marker becomes Created before a
+post-effect observation can fail or unwind. Opening the child is a separate
+admitted operation: refusal must preserve creation evidence. An uncertain native
+failure remains Attempted and cannot authorize adoption or deletion just because
+a matching installed name exists. Empty-directory removal stays captured-relative
+and has matching image-engine namespace events; it never recurses.
+
+Five local native tests cover FD refusal before creation, successful creation
+followed by FD refusal before opening, collision/capture mismatch, retained-parent
+namespace replacement, private file read/write, refusal of nonempty deletion and
+final removal/refund. Recorder before/after creation/removal and pre-native model
+refusal checks pass. Separate Search integration tests now exercise body/spill
+adoption and deferred retry; primitive tests alone do not establish that scope.
+
+`HawDBPrivateDirectoryCreation` checks capture matching, retaining possible
+native effects before child open, refusal of unknown adoption and collision
+handling. Its four negative controls remove those obligations independently. The
+model assumes its caller retains the parent/evidence; it does not prove the
+caller ledger, memory funding, recovery, private-name exclusion or liveness.
+Direct TLC checked 80 generated/distinct states at depth 3. The positive model
+and all four expected-violation controls also passed their registered Bazel
+targets. These primitive results alone do not qualify the separate Search integration.
+
+The local implementation extends the existing `StageDirectory` cleanup ledger.
+Its obligations, preserved by the separate captured backend, are:
+
+1. Register candidate custody and admit its complete metadata before creation.
+   Construct it from the actual publication's captured directory, with the
+   original operation accounts and same project FD domain. Labels may describe
+   paths; they cannot select a directory, spill file or cleanup target.
+2. Keep parent/candidate evidence across child-open failure and cancellation.
+   Fresh/refused candidates own no native entry; attempted unknown outcomes
+   remain quarantined rather than being silently forgotten or adopted by name.
+3. Propagate the created child capability through hydrated body creation,
+   lexical spill writes, merges, cold reads and file guards. Preserve every CRC,
+   retraction/target check, cancellation check and typed budget refusal. Fixing
+   only the body file or directory creation is insufficient.
+4. Deferred tickets retain native custody, original retained memory and disk
+   reservations. They must release task/controller execution and busy slots.
+   Retries borrow fresh actual memory/I/O/FD admission; they never manufacture a
+   governor, clear a reservation or retarget replacement B. Active cleanup must
+   not retry old path-backed B tickets as a side effect of creating A scratch.
+5. Close streams and child/native directories before refunding their metadata.
+   Failed deletion retains the existing owner for bounded retry. Prove eventual
+   reclamation after refusal is removed, not merely preservation forever.
+
+Native controls must expose path-based scratch creation, path-based spill reopen,
+path-based deferred retry, lost creation evidence and early metadata refund.
+Keep the original Windows move/publication regressions enabled. Persistent
+Consumer incarnation/producer ledgers, stationary selection and recovery remain
+separate required acceptance work; a process-local scratch marker cannot replace
+them.
+
+The governed path carries a validation source independently of its immutable
+artifact capture, checking both captured source identities before reanalysis.
+This preserves the artifact cache/pin protocol while giving scratch its actual
+publication authority. It does not relax the serving constructor guards.
+
+`HawDBCapturedScratch` is the bounded lifecycle refinement: diagnostic namespace
+replacement cannot retarget creation, data I/O or retry; debt retains native
+custody/funding without execution; native handles close before refund. TLC checked
+54 generated / 34 distinct states at depth 10; the positive and six expected
+negative controls also passed their registered Bazel targets. Unknown creation
+may remain quarantined, so this safety model does not prove liveness, durable
+incarnations, lost-process ledger recovery, physical resource bounds or MVCC.
+
+The governed high-cardinality native fixture initially hit a genuine 4 MiB query
+spool refusal. That adverse log is retained. With an 8 MiB operation budget the
+same fixture completes and requires nonzero captured spill creation, cold reopen
+and removal counters; increasing the budget cannot silently turn it into a
+non-spilling test. A separate original-account pressure test still requires
+refusal while its credits are held and reclamation after refund.
+
+Three compiled native negative controls independently replace captured spill
+reopen with pathname open, retarget deferred removal by pathname, or discard
+creation custody. Each fails its corresponding real regression; restoring the
+source passes all three positive regressions (governed spill, creation-response
+loss/retry, and replacement-root scratch isolation). These binaries and logs are
+retained separately from the positive build. The restored run took 193 seconds;
+a live sample located the delay in fixture mutation JSON writes, and the process
+completed without a restart. No performance improvement is claimed.
+
+The cross-platform captured Search CI job now runs five private-directory tests
+and the two new governed-scratch/custody tests in independent steps and preserves
+their logs even when the existing Windows directory-move suite fails. Native CI
+results for this adoption are pending until the updated source is pushed.

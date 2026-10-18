@@ -140,6 +140,12 @@ impl PendingCapture<'_, '_> {
         )?)
     }
 
+    pub(in crate::out_of_core) fn source_identity(
+        &self,
+    ) -> hawdb_storage::file_io::SourceDirectoryIdentity {
+        self.root.state().identity
+    }
+
     pub(in crate::out_of_core) fn root(&self) -> &RootRef {
         &self.root
     }

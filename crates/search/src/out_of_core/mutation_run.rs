@@ -669,15 +669,12 @@ pub(super) fn validate_closure_with_context(
 /// Checksums and aggregate identity alone cannot prove that a target exists or
 /// that its term/length contribution is exact. Stage one version at a time and
 /// compare spillable contributions without retaining a complete body or term set.
-pub(super) fn validate_targets<'a>(
-    root: &Path,
-    segments: &[SearchOutOfCoreSegmentReader],
-    runs: impl Iterator<Item = &'a SearchMutationRun>,
-    config: &SearchOutOfCoreConfig,
-    analyzer: &SearchAnalyzerLexicon,
-    source_policy: crate::SearchLexicalSourcePolicy,
-) -> Result<()> {
-    validate_targets_with_admission(root, segments, runs, config, analyzer, source_policy, None)
+pub(super) struct TargetValidationContext<'a, 'execution> {
+    pub(super) admission: Option<(
+        &'a crate::build_memory::read::ReadAdmission<'execution>,
+        u64,
+    )>,
+    pub(super) source: Option<&'a super::captured_cleanup::Source<'a>>,
 }
 
 pub(super) fn validate_targets_with_admission<'a>(
@@ -687,8 +684,12 @@ pub(super) fn validate_targets_with_admission<'a>(
     config: &SearchOutOfCoreConfig,
     analyzer: &SearchAnalyzerLexicon,
     source_policy: crate::SearchLexicalSourcePolicy,
-    admission: Option<(&crate::build_memory::read::ReadAdmission<'_>, u64)>,
+    context: TargetValidationContext<'_, '_>,
 ) -> Result<()> {
+    let TargetValidationContext {
+        admission,
+        source: cleanup_source,
+    } = context;
     let mut runs = runs.peekable();
     if runs.peek().is_none() {
         return Ok(());
@@ -717,7 +718,15 @@ pub(super) fn validate_targets_with_admission<'a>(
         crate::lexical_projection::QueryContext::from_read_admission(admission)
     });
     crate::build_control::checkpoint(task)?;
-    let mut stage = super::generation_writer::StageDirectory::create(root, memory, task)?;
+    let mut stage = match cleanup_source {
+        Some(source) => source.validation_stage(
+            root,
+            memory,
+            task,
+            admission.map(|(admission, _)| admission),
+        )?,
+        None => super::generation_writer::StageDirectory::create(root, memory, task)?,
+    };
     stage.reserve_disk(
         config
             .max_uncompressed_segment_bytes
@@ -731,6 +740,15 @@ pub(super) fn validate_targets_with_admission<'a>(
         memory,
         task,
     )?;
+    let mut captured_body = if let Some(directory) = stage.scratch_directory() {
+        let _io = admission
+            .map(|(admission, _)| admission.io())
+            .transpose()
+            .map_err(|error| HawDBError::Execution(error.to_string()))?;
+        Some(directory.create(&path)?)
+    } else {
+        None
+    };
     for entry in runs.flat_map(SearchMutationRun::entries) {
         crate::build_control::checkpoint(task)?;
         let mut terms = entry
@@ -772,12 +790,19 @@ pub(super) fn validate_targets_with_admission<'a>(
                 .map(|(admission, _)| admission.io())
                 .transpose()
                 .map_err(|error| HawDBError::Execution(error.to_string()))?;
-            hawdb_storage::file_io::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(&*path)?
+            if let Some(body) = &mut captured_body {
+                use std::io::{Seek, SeekFrom};
+                body.set_len(0)?;
+                body.seek(SeekFrom::Start(0))?;
+                body.try_clone()?
+            } else {
+                hawdb_storage::file_io::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .open(&*path)?
+            }
         };
         let limits = (
             config.max_uncompressed_segment_bytes.get(),
@@ -810,6 +835,7 @@ pub(super) fn validate_targets_with_admission<'a>(
             analyzer,
             crate::lexical_projection::retraction::RetractionContext {
                 root: &stage.path,
+                scratch: stage.scratch_directory(),
                 memory,
                 task,
                 needs_chinese: source.needs_chinese,
