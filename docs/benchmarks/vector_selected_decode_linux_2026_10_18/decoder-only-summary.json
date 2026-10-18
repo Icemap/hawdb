@@ -1,0 +1,406 @@
+{
+  "state": "passed",
+  "campaign_cases": 20000,
+  "timing_groups": 36,
+  "records": 217,
+  "run_log_sha256": "a500a7b39dfe9b6a20933630d83b3dfcd3353167c372776ab2e58cae1852c55b",
+  "comparisons": [
+    {
+      "rows": 1,
+      "dimension": 3,
+      "stride": 1,
+      "original_ns": [
+        491,
+        450,
+        451,
+        451,
+        451
+      ],
+      "selected_ns": [
+        591,
+        491,
+        461,
+        461,
+        461
+      ],
+      "original_median_ns": 451,
+      "selected_median_ns": 461,
+      "original_over_selected": 0.9783080260303688
+    },
+    {
+      "rows": 1,
+      "dimension": 3,
+      "stride": 2,
+      "original_ns": [
+        451,
+        451,
+        451,
+        461,
+        461
+      ],
+      "selected_ns": [
+        451,
+        461,
+        451,
+        461,
+        451
+      ],
+      "original_median_ns": 451,
+      "selected_median_ns": 451,
+      "original_over_selected": 1.0
+    },
+    {
+      "rows": 1,
+      "dimension": 3,
+      "stride": 100,
+      "original_ns": [
+        490,
+        471,
+        470,
+        461,
+        460
+      ],
+      "selected_ns": [
+        441,
+        501,
+        471,
+        451,
+        451
+      ],
+      "original_median_ns": 470,
+      "selected_median_ns": 451,
+      "original_over_selected": 1.042128603104213
+    },
+    {
+      "rows": 1,
+      "dimension": 384,
+      "stride": 1,
+      "original_ns": [
+        15288,
+        15248,
+        15448,
+        15399,
+        15368
+      ],
+      "selected_ns": [
+        15559,
+        15379,
+        22572,
+        15559,
+        15419
+      ],
+      "original_median_ns": 15368,
+      "selected_median_ns": 15559,
+      "original_over_selected": 0.9877241467960666
+    },
+    {
+      "rows": 1,
+      "dimension": 384,
+      "stride": 2,
+      "original_ns": [
+        15219,
+        15309,
+        15218,
+        15259,
+        15218
+      ],
+      "selected_ns": [
+        15389,
+        15318,
+        15349,
+        15399,
+        15329
+      ],
+      "original_median_ns": 15219,
+      "selected_median_ns": 15349,
+      "original_over_selected": 0.9915303928594696
+    },
+    {
+      "rows": 1,
+      "dimension": 384,
+      "stride": 100,
+      "original_ns": [
+        15389,
+        15319,
+        15329,
+        15179,
+        15338
+      ],
+      "selected_ns": [
+        15318,
+        15398,
+        15309,
+        15309,
+        15389
+      ],
+      "original_median_ns": 15329,
+      "selected_median_ns": 15318,
+      "original_over_selected": 1.0007181094137616
+    },
+    {
+      "rows": 32,
+      "dimension": 3,
+      "stride": 1,
+      "original_ns": [
+        10900,
+        10610,
+        10570,
+        10700,
+        10539
+      ],
+      "selected_ns": [
+        11271,
+        10940,
+        10890,
+        11100,
+        10720
+      ],
+      "original_median_ns": 10610,
+      "selected_median_ns": 10940,
+      "original_over_selected": 0.9698354661791591
+    },
+    {
+      "rows": 32,
+      "dimension": 3,
+      "stride": 2,
+      "original_ns": [
+        16691,
+        10279,
+        10239,
+        10329,
+        18134
+      ],
+      "selected_ns": [
+        9789,
+        9678,
+        9358,
+        9528,
+        15109
+      ],
+      "original_median_ns": 10329,
+      "selected_median_ns": 9678,
+      "original_over_selected": 1.0672659640421576
+    },
+    {
+      "rows": 32,
+      "dimension": 3,
+      "stride": 100,
+      "original_ns": [
+        10460,
+        10439,
+        10480,
+        10290,
+        10569
+      ],
+      "selected_ns": [
+        7954,
+        7995,
+        7665,
+        7654,
+        7754
+      ],
+      "original_median_ns": 10460,
+      "selected_median_ns": 7754,
+      "original_over_selected": 1.3489811710085118
+    },
+    {
+      "rows": 32,
+      "dimension": 384,
+      "stride": 1,
+      "original_ns": [
+        500546,
+        525503,
+        510796,
+        501178,
+        492311
+      ],
+      "selected_ns": [
+        497060,
+        569906,
+        561190,
+        497130,
+        502229
+      ],
+      "original_median_ns": 501178,
+      "selected_median_ns": 502229,
+      "original_over_selected": 0.997907329126753
+    },
+    {
+      "rows": 32,
+      "dimension": 384,
+      "stride": 2,
+      "original_ns": [
+        519562,
+        492873,
+        498613,
+        498062,
+        495126
+      ],
+      "selected_ns": [
+        443620,
+        429703,
+        421890,
+        418022,
+        424274
+      ],
+      "original_median_ns": 498062,
+      "selected_median_ns": 424274,
+      "original_over_selected": 1.1739159128299166
+    },
+    {
+      "rows": 32,
+      "dimension": 384,
+      "stride": 100,
+      "original_ns": [
+        498152,
+        492832,
+        494565,
+        497901,
+        500817
+      ],
+      "selected_ns": [
+        334386,
+        337050,
+        339405,
+        338122,
+        334486
+      ],
+      "original_median_ns": 497901,
+      "selected_median_ns": 337050,
+      "original_over_selected": 1.4772318647085003
+    },
+    {
+      "rows": 8192,
+      "dimension": 3,
+      "stride": 1,
+      "original_ns": [
+        2844723,
+        2596728,
+        2579627,
+        2598602,
+        2652763
+      ],
+      "selected_ns": [
+        2861112,
+        2861023,
+        2854931,
+        2839783,
+        2915274
+      ],
+      "original_median_ns": 2598602,
+      "selected_median_ns": 2861023,
+      "original_over_selected": 0.9082772141293516
+    },
+    {
+      "rows": 8192,
+      "dimension": 3,
+      "stride": 2,
+      "original_ns": [
+        2645619,
+        2616776,
+        2630672,
+        2677990,
+        2650328
+      ],
+      "selected_ns": [
+        2495749,
+        2494817,
+        2476142,
+        2508493,
+        2540964
+      ],
+      "original_median_ns": 2645619,
+      "selected_median_ns": 2495749,
+      "original_over_selected": 1.0600501092056933
+    },
+    {
+      "rows": 8192,
+      "dimension": 3,
+      "stride": 100,
+      "original_ns": [
+        2578073,
+        2609062,
+        2657151,
+        2648104,
+        2628007
+      ],
+      "selected_ns": [
+        2014018,
+        2002026,
+        1994492,
+        2005061,
+        2011182
+      ],
+      "original_median_ns": 2628007,
+      "selected_median_ns": 2005061,
+      "original_over_selected": 1.3106868070347983
+    },
+    {
+      "rows": 8192,
+      "dimension": 384,
+      "stride": 1,
+      "original_ns": [
+        85633248,
+        85829876,
+        86025012,
+        85952346,
+        86185723
+      ],
+      "selected_ns": [
+        86785805,
+        87522422,
+        87422767,
+        86936818,
+        86859975
+      ],
+      "original_median_ns": 85952346,
+      "selected_median_ns": 86936818,
+      "original_over_selected": 0.9886760060622417
+    },
+    {
+      "rows": 8192,
+      "dimension": 384,
+      "stride": 2,
+      "original_ns": [
+        86471067,
+        86866747,
+        86314955,
+        86379045,
+        86169153
+      ],
+      "selected_ns": [
+        72421011,
+        72905498,
+        72746962,
+        72579167,
+        72569179
+      ],
+      "original_median_ns": 86379045,
+      "selected_median_ns": 72579167,
+      "original_over_selected": 1.1901355247022882
+    },
+    {
+      "rows": 8192,
+      "dimension": 384,
+      "stride": 100,
+      "original_ns": [
+        86025715,
+        88099826,
+        86828136,
+        87042698,
+        86908547
+      ],
+      "selected_ns": [
+        57835934,
+        58001875,
+        58079832,
+        57831347,
+        57631353
+      ],
+      "original_median_ns": 86908547,
+      "selected_median_ns": 57835934,
+      "original_over_selected": 1.502673873996744
+    }
+  ],
+  "scope": "Decoder-only repeated-decimal synthetic text; one warmup/five samples with alternating order. Reference filtering, verification and destruction are outside the timer. This is not full-query latency or measured RSS."
+}

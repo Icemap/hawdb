@@ -20,7 +20,7 @@ use hawdb_core::{HawDBError, Result, RuntimeTaskContext};
 use std::num::NonZeroUsize;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PipelineId(pub u32);
@@ -222,6 +222,9 @@ impl SharedPoolMorselScheduler {
             .collect()
     }
 
+    /// Typed resource failures stop cooperating siblings and preserve the first
+    /// resource cause. Ordinary callback errors retain input-ordered collection.
+    /// Use a child context when the parent will be reused for later work.
     pub fn execute_with_context<T, F>(
         &self,
         admission: &MorselAdmission,
@@ -242,10 +245,28 @@ impl SharedPoolMorselScheduler {
             HawDBError::Execution("non-empty morsel admission reserved no workers".to_string())
         })?;
         let morsels = admission.morsels().collect::<Vec<_>>();
-        BoundedExecutor::with_pool(max_workers, self.pool.clone())
+        let resource_failure = Mutex::new(None);
+        let outputs = BoundedExecutor::with_pool(max_workers, self.pool.clone())
             .map_ordered_with_context(&morsels, context, |morsel| {
-                execute_catching_panic(&execute, *morsel)
-            })
+                let result = execute_catching_panic(&execute, *morsel);
+                if let Err(error) = &result
+                    && crate::concurrent::is_resource_exhaustion(error)
+                {
+                    resource_failure
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .get_or_insert_with(|| error.clone());
+                    context.cancellation().cancel_for_resource_exhaustion();
+                }
+                result
+            });
+        if let Some(error) = resource_failure
+            .into_inner()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        {
+            return Err(error);
+        }
+        outputs
             .map_err(|reason| HawDBError::Execution(format!("runtime task stopped: {reason}")))?
             .into_iter()
             .collect()
@@ -258,6 +279,11 @@ impl SharedPoolMorselScheduler {
     /// `execute`. The returned resident estimate must fit that reservation.
     /// The lease remains live through `consume`, so a consumer that retains
     /// the value must transfer it into another query-owned account.
+    ///
+    /// A terminal typed resource refusal stops dispatch and signals resource
+    /// exhaustion on `task_context` before joining in-flight callbacks. Callbacks
+    /// must check that same context to stop cooperatively. The original resource
+    /// error is returned. Use a child context to isolate a reusable parent.
     pub fn execute_accounted_ordered<T, F, C>(
         &self,
         admission: &MorselAdmission,

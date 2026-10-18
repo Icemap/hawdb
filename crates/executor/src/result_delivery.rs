@@ -84,10 +84,29 @@ impl<'a> QueryOutputAccumulator<'a> {
         memory_mode: ConsumerMemoryMode,
         consumer: &'a mut dyn FnMut(Row) -> Result<()>,
     ) -> Result<Self> {
-        let result_account = memory_ledger.account(
+        Self::new_with_budget_option(
+            limits,
+            result_memory_budget,
+            memory_ledger,
+            "QueryMemoryLedger::account(budget_bytes)",
+            memory_mode,
+            consumer,
+        )
+    }
+
+    pub fn new_with_budget_option(
+        limits: OutputLimits,
+        result_memory_budget: NonZeroUsize,
+        memory_ledger: &QueryMemoryLedger,
+        budget_option: &'static str,
+        memory_mode: ConsumerMemoryMode,
+        consumer: &'a mut dyn FnMut(Row) -> Result<()>,
+    ) -> Result<Self> {
+        let result_account = memory_ledger.account_with_budget_option(
             QueryMemoryClass::ResultMaterialization,
             "query result",
             result_memory_budget,
+            budget_option,
         );
         let retained_result_lease = result_account.reserve(0)?;
         Ok(Self {
@@ -108,10 +127,25 @@ impl<'a> QueryOutputAccumulator<'a> {
         result_memory_budget: NonZeroUsize,
         memory_ledger: &QueryMemoryLedger,
     ) -> Result<Self> {
-        let result_account = memory_ledger.account(
+        Self::new_owned_with_budget_option(
+            limits,
+            result_memory_budget,
+            memory_ledger,
+            "QueryMemoryLedger::account(budget_bytes)",
+        )
+    }
+
+    pub fn new_owned_with_budget_option(
+        limits: OutputLimits,
+        result_memory_budget: NonZeroUsize,
+        memory_ledger: &QueryMemoryLedger,
+        budget_option: &'static str,
+    ) -> Result<Self> {
+        let result_account = memory_ledger.account_with_budget_option(
             QueryMemoryClass::ResultMaterialization,
             "query result",
             result_memory_budget,
+            budget_option,
         );
         let retained_result_lease =
             result_account.reserve(QueryRowsBuilder::owner_memory_bytes())?;

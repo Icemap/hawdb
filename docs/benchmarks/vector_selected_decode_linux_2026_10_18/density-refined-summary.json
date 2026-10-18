@@ -1,0 +1,165 @@
+{
+  "measurement_count": 120,
+  "warmups_per_process": 3,
+  "processes": 12,
+  "comparison_sha256": "1f3b38c57a65b56b1113a8782d61052027dbc6761637f6ae80cccfb71abc55d7",
+  "cases": [
+    {
+      "candidate_limit": 1024,
+      "samples_per_version": 20,
+      "original_median_ms": 1491.055246,
+      "candidate_median_ms": 1169.243355,
+      "median_change_percent": -21.582828125471064,
+      "runs": [
+        {
+          "run": 0,
+          "label": "original",
+          "median_ms": 1491.7057255,
+          "min_ms": 1477.712796,
+          "max_ms": 1517.897914,
+          "max_rss_kib": 41564,
+          "user_cpu_seconds": 19.178159,
+          "system_cpu_seconds": 0.18131699999999998
+        },
+        {
+          "run": 1,
+          "label": "candidate",
+          "median_ms": 1169.553898,
+          "min_ms": 1168.490166,
+          "max_ms": 1183.426738,
+          "max_rss_kib": 40192,
+          "user_cpu_seconds": 15.039769,
+          "system_cpu_seconds": 0.182288
+        },
+        {
+          "run": 2,
+          "label": "candidate",
+          "median_ms": 1166.7987275,
+          "min_ms": 1158.624497,
+          "max_ms": 1212.459631,
+          "max_rss_kib": 41916,
+          "user_cpu_seconds": 15.234932,
+          "system_cpu_seconds": 0.20216199999999998
+        },
+        {
+          "run": 3,
+          "label": "original",
+          "median_ms": 1491.055246,
+          "min_ms": 1487.974281,
+          "max_ms": 1513.505602,
+          "max_rss_kib": 41504,
+          "user_cpu_seconds": 19.219496,
+          "system_cpu_seconds": 0.177308
+        }
+      ],
+      "full_output_sha256": "b43cefd244bb9ca7fee4cd29f7f596f3a246adef4455a143223579e1bf1a90ff",
+      "admitted_working_bytes": 904704,
+      "raw_vector_bytes_read": 1572864
+    },
+    {
+      "candidate_limit": 50000,
+      "samples_per_version": 20,
+      "original_median_ms": 2006.33964,
+      "candidate_median_ms": 1799.392524,
+      "median_change_percent": -10.314660183856006,
+      "runs": [
+        {
+          "run": 0,
+          "label": "original",
+          "median_ms": 2004.144308,
+          "min_ms": 1998.70557,
+          "max_ms": 2015.907047,
+          "max_rss_kib": 43692,
+          "user_cpu_seconds": 25.767662,
+          "system_cpu_seconds": 0.279877
+        },
+        {
+          "run": 1,
+          "label": "candidate",
+          "median_ms": 1798.2489035,
+          "min_ms": 1792.38099,
+          "max_ms": 1812.827258,
+          "max_rss_kib": 43472,
+          "user_cpu_seconds": 23.106968,
+          "system_cpu_seconds": 0.26204
+        },
+        {
+          "run": 2,
+          "label": "candidate",
+          "median_ms": 1801.9695085,
+          "min_ms": 1795.246476,
+          "max_ms": 1808.080035,
+          "max_rss_kib": 43692,
+          "user_cpu_seconds": 23.130582,
+          "system_cpu_seconds": 0.25806799999999996
+        },
+        {
+          "run": 3,
+          "label": "original",
+          "median_ms": 2007.857755,
+          "min_ms": 2001.352555,
+          "max_ms": 2016.688424,
+          "max_rss_kib": 45256,
+          "user_cpu_seconds": 25.881742,
+          "system_cpu_seconds": 0.287893
+        }
+      ],
+      "full_output_sha256": "71a9ce4a1032e45232ce3bea14f40a2b1752e5b04ff6935a749ebe3ea72b0bf8",
+      "admitted_working_bytes": 7403008,
+      "raw_vector_bytes_read": 76800000
+    },
+    {
+      "candidate_limit": 100000,
+      "samples_per_version": 20,
+      "original_median_ms": 2047.337575,
+      "candidate_median_ms": 2063.298361,
+      "median_change_percent": 0.7795874112260126,
+      "runs": [
+        {
+          "run": 0,
+          "label": "original",
+          "median_ms": 2048.2519285,
+          "min_ms": 2045.862272,
+          "max_ms": 2053.804673,
+          "max_rss_kib": 47640,
+          "user_cpu_seconds": 26.318366,
+          "system_cpu_seconds": 0.272934
+        },
+        {
+          "run": 1,
+          "label": "candidate",
+          "median_ms": 2058.098349,
+          "min_ms": 2052.432481,
+          "max_ms": 2071.389097,
+          "max_rss_kib": 47728,
+          "user_cpu_seconds": 26.485921,
+          "system_cpu_seconds": 0.23318499999999998
+        },
+        {
+          "run": 2,
+          "label": "candidate",
+          "median_ms": 2072.857049,
+          "min_ms": 2057.371625,
+          "max_ms": 2091.676992,
+          "max_rss_kib": 47880,
+          "user_cpu_seconds": 26.650017,
+          "system_cpu_seconds": 0.247031
+        },
+        {
+          "run": 3,
+          "label": "original",
+          "median_ms": 2040.4367815,
+          "min_ms": 2037.364988,
+          "max_ms": 2054.088006,
+          "max_rss_kib": 47704,
+          "user_cpu_seconds": 26.252405,
+          "system_cpu_seconds": 0.286016
+        }
+      ],
+      "full_output_sha256": "334687d0e2c9b1e7f6d48bbaf4573ef6105bbc629d96a743b9e9ec7e2145966b",
+      "admitted_working_bytes": 13803008,
+      "raw_vector_bytes_read": 153600000
+    }
+  ],
+  "scope": "Shared-host warm-cache wall timings. No owned compilation, fuzz, large artifact download or independent artifact hashing overlapped timed comparison. Light source edits and remote CI polling did occur. All samples retained; full-process CPU/RSS include open, warmups and verification. Full Debug equality uses the same compiler and unchanged output types, not a stable production serialization format."
+}

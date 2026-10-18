@@ -1,0 +1,26 @@
+[
+  {
+    "file": "decoder-only.log",
+    "original_sha256": "a500a7b39dfe9b6a20933630d83b3dfcd3353167c372776ab2e58cae1852c55b",
+    "recorded_sha256": "9e866b2481771bce613a459b1eb3a0b76c7c16c90f0b7648a7e644b97b6205e7",
+    "change": "Remove trailing empty lines only; all records unchanged."
+  },
+  {
+    "file": "matched-2.run.log",
+    "original_sha256": "5e8934f380a42f4162b1990ae0ec59353b893f1e8130de8fe214739fc154b775",
+    "recorded_sha256": "18ad735e40b2b1e685d6f8d7617a5174210e16339e1738d3d5680e863a6e1f40",
+    "change": "Remove trailing empty lines only; all records unchanged."
+  },
+  {
+    "file": "matched-3.run.log",
+    "original_sha256": "4f0bc778e4977125002003d3c6b808b522b68ae7347b82715171113dceb83356",
+    "recorded_sha256": "6e136c7cecaab3afd00618e9e01f2d547f96a2708313e2fd059c0a9aec780784",
+    "change": "Remove trailing empty lines only; all records unchanged."
+  },
+  {
+    "file": "matched-4.run.log",
+    "original_sha256": "99a95fa9894f50579cc48fe8cd947f0c6d3c7eca0e6ec66a5270e2ac7ecdcc0d",
+    "recorded_sha256": "03f2fdc27526dabd4cda34f35a85f93b57ef0ad43499fabec7f25169a4d31c93",
+    "change": "Remove trailing empty lines only; all records unchanged."
+  }
+]

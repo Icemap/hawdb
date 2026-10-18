@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use hawdb_core::error::FileDescriptorError;
 use hawdb_core::{
     HawDBError, Result as HawDBResult, RuntimeCancellationReason, RuntimeTaskContext,
 };
@@ -404,6 +405,9 @@ impl BoundedExecutor {
             };
 
             stop_ordered_window(&window);
+            if let Err(error) = &result {
+                cancel_resource_exhaustion(error, context);
+            }
             drop(receiver);
             result
         });
@@ -458,15 +462,42 @@ where
     let mut report = BoundedOrderedStreamReport::default();
     for index in 0..input_count {
         runtime_checkpoint(context)?;
-        let output = operation(index)?;
+        let output = operation(index).inspect_err(|error| {
+            cancel_resource_exhaustion(error, context);
+        })?;
         report.peak_reorder_entries = 1;
-        if consume(index, output)? == BoundedOrderedStreamControl::Stop {
+        if consume(index, output).inspect_err(|error| {
+            cancel_resource_exhaustion(error, context);
+        })? == BoundedOrderedStreamControl::Stop
+        {
             report.stopped_early = true;
             break;
         }
     }
     runtime_checkpoint(context)?;
     Ok(report)
+}
+
+pub(crate) fn is_resource_exhaustion(error: &HawDBError) -> bool {
+    match error {
+        HawDBError::ResourceBudgetExceeded(_)
+        | HawDBError::ReadBudgetExceeded(_)
+        | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
+        | HawDBError::GraphExpansionPayloadLimitExceeded { .. }
+        | HawDBError::FileDescriptors(
+            FileDescriptorError::BudgetExceeded { .. } | FileDescriptorError::OsLimit { .. },
+        ) => true,
+        HawDBError::BranchReclamationBlocked { cause, .. } => is_resource_exhaustion(cause),
+        _ => false,
+    }
+}
+
+fn cancel_resource_exhaustion(error: &HawDBError, context: Option<&RuntimeTaskContext>) {
+    if is_resource_exhaustion(error)
+        && let Some(context) = context
+    {
+        context.cancellation().cancel_for_resource_exhaustion();
+    }
 }
 
 fn claim_ordered_index(

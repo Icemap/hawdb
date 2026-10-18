@@ -1,0 +1,16 @@
+{
+  "git_commit": "3ae50b58614d8b15e7dc0ca5210e091c070c2e10",
+  "binary_sha256": "3ba8409f5dee6d106069250d567e1233fd52b705e98207e0f1b89eb2b814aa25",
+  "source_sha256": {
+    "Cargo.toml": "e38fb4d0421c65fa0e0cde54d788ff29e4652a514b915e8316c4971eb594d352",
+    "Cargo.lock": "da456883c7fc4c06424344610b1929ed7dabccc406b61ac99242f4392e6f1c5d",
+    "crates/search/src/out_of_core.rs": "6140e94f2cd7b45eb288c8168c106318cc1ca401357de334b6d7a0bd0aa7072d",
+    "crates/search/src/out_of_core/vector_serving.rs": "77f8179d0a8ada72b7a8a9098ca0686b2a0e13df77158829bf75e3cce0d04717",
+    "examples/query_rerank_qualification.rs": "2d77fb978e6ca9e6bda5773b865a60eb0e7104ff09ae9fe9ae1a7ba3d808941f"
+  },
+  "command": "CARGO_PROFILE_RELEASE_DEBUG=1 cargo build --locked --release --example query_rerank_qualification --features vector-search --message-format=json",
+  "temporary_source": "query_rerank_qualification.rs",
+  "profile": "repository release with debug information",
+  "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "production_files_match_main": "4c32610910cc78771eeb23d729be7107ff769bf6"
+}

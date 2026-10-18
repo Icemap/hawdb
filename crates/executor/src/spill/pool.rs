@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use crate::ExecutionMemoryConfig;
-use hawdb_core::{HawDBError, Result};
+use hawdb_core::{
+    HawDBError, ResourceBudgetError, ResourceBudgetKind, ResourceBudgetScope, Result,
+};
 use hawdb_storage::file_descriptors::FileOpenContext;
 use std::collections::BTreeMap;
 use std::io::ErrorKind;
@@ -235,10 +237,20 @@ impl SpillPool {
     pub(super) fn begin_run(&self, operator: &str) -> Result<()> {
         let mut state = lock_unpoisoned(&self.shared.state);
         if state.active_runs >= state.limits.max_total_runs {
-            return Err(HawDBError::Execution(format!(
-                "{operator} exceeded shared max_total_spill_runs {}",
-                state.limits.max_total_runs
-            )));
+            return Err(HawDBError::from(ResourceBudgetError {
+                resource: ResourceBudgetKind::SpillRuns,
+                scope: ResourceBudgetScope::SharedPool,
+                owner: operator.to_string(),
+                memory_class: None,
+                requested: 1,
+                used: state.active_runs as u64,
+                budget: state.limits.max_total_runs as u64,
+                budget_option: "ExecutionMemoryConfig.max_total_spill_runs",
+                message: format!(
+                    "{operator} exceeded shared max_total_spill_runs {}",
+                    state.limits.max_total_runs
+                ),
+            }));
         }
         state.active_runs = state.active_runs.saturating_add(1);
         state.peak_active_runs = state.peak_active_runs.max(state.active_runs);
@@ -257,13 +269,25 @@ impl SpillPool {
     ) -> Result<SpillWriteReservation> {
         loop {
             let mut state = lock_unpoisoned(&self.shared.state);
-            let next_active = state.active_bytes.saturating_add(bytes);
-            if next_active > state.limits.max_total_bytes {
-                return Err(HawDBError::Execution(format!(
-                    "{operator} exceeded shared max_total_spill_bytes {} (next active total {next_active})",
-                    state.limits.max_total_bytes
-                )));
+            let next_active = state.active_bytes.checked_add(bytes);
+            if next_active.is_none_or(|next| next > state.limits.max_total_bytes) {
+                return Err(HawDBError::from(ResourceBudgetError {
+                    resource: ResourceBudgetKind::SpillBytes,
+                    scope: ResourceBudgetScope::SharedPool,
+                    owner: operator.to_string(),
+                    memory_class: None,
+                    requested: bytes,
+                    used: state.active_bytes,
+                    budget: state.limits.max_total_bytes,
+                    budget_option: "ExecutionMemoryConfig.max_total_spill_bytes",
+                    message: format!(
+                    "{operator} exceeded shared max_total_spill_bytes {} (next active total {})",
+                    state.limits.max_total_bytes,
+                    state.active_bytes.saturating_add(bytes)
+                    ),
+                }));
             }
+            let next_active = next_active.expect("validated spill reservation fits u64");
             let probe_required = state.last_probed_available_bytes.is_none()
                 || state.bytes_reserved_since_probe >= state.limits.free_space_probe_interval_bytes;
             if probe_required {
@@ -309,13 +333,23 @@ impl SpillPool {
             let required = state
                 .limits
                 .min_free_bytes
-                .saturating_add(state.unreflected_reserved_bytes)
-                .saturating_add(bytes);
-            if available < required {
-                return Err(HawDBError::Execution(format!(
+                .checked_add(state.unreflected_reserved_bytes)
+                .and_then(|required| required.checked_add(bytes));
+            if required.is_none_or(|required| available < required) {
+                return Err(HawDBError::from(ResourceBudgetError {
+                    resource: ResourceBudgetKind::SpillBytes,
+                    scope: ResourceBudgetScope::FileSystem,
+                    owner: operator.to_string(),
+                    memory_class: None,
+                    requested: bytes,
+                    used: state.unreflected_reserved_bytes,
+                    budget: available.saturating_sub(state.limits.min_free_bytes),
+                    budget_option: "ExecutionMemoryConfig.min_spill_free_bytes",
+                    message: format!(
                     "{operator} cannot preserve min_spill_free_bytes {}: filesystem has {available} bytes available and {bytes} bytes were requested",
                     state.limits.min_free_bytes
-                )));
+                    ),
+                }));
             }
             state.active_bytes = next_active;
             state.peak_active_bytes = state.peak_active_bytes.max(next_active);
@@ -646,6 +680,17 @@ mod tests {
         };
 
         assert!(error.to_string().contains("min_spill_free_bytes"));
+        let HawDBError::ResourceBudgetExceeded(details) = error else {
+            panic!("expected typed free-space rejection");
+        };
+        assert_eq!(details.scope, ResourceBudgetScope::FileSystem);
+        assert_eq!(details.resource, ResourceBudgetKind::SpillBytes);
+        assert_eq!((details.requested, details.used, details.budget), (8, 0, 7));
+        assert_eq!(
+            details.budget_option,
+            "ExecutionMemoryConfig.min_spill_free_bytes"
+        );
+        assert_eq!(pool.snapshot().active_bytes, 0);
         assert_eq!(pool.snapshot().free_space_probe_count, 2);
         assert_eq!(probe.calls.load(Ordering::Relaxed), 2);
         std::fs::remove_dir(&memory.spill_directory).unwrap();
@@ -679,6 +724,57 @@ mod tests {
         snapshot.join().unwrap();
         assert_eq!(pool.snapshot().free_space_probe_count, 1);
         assert_eq!(probe.calls.load(Ordering::Relaxed), 1);
+        std::fs::remove_dir(&memory.spill_directory).unwrap();
+    }
+
+    #[test]
+    fn shared_byte_overflow_refuses_without_probing_or_charging() {
+        let mut memory = test_memory("shared-overflow", 64);
+        memory.max_total_spill_bytes = NonZeroU64::MAX;
+        let probe = Arc::new(AdjustableSpaceProbe::new(u64::MAX));
+        let pool = SpillPool::open_with_probe(&memory, probe.clone()).unwrap();
+        // Model a nearly full shared pool without creating an exabyte file.
+        lock_unpoisoned(&pool.shared.state).active_bytes = u64::MAX - 8;
+        let before = pool.snapshot();
+        let error = pool.reserve_bytes("overflow", 16).err().unwrap();
+        let HawDBError::ResourceBudgetExceeded(details) = error else {
+            panic!("expected typed shared byte overflow");
+        };
+        assert_eq!(details.scope, ResourceBudgetScope::SharedPool);
+        assert_eq!(
+            (details.requested, details.used, details.budget),
+            (16, u64::MAX - 8, u64::MAX)
+        );
+        assert_eq!(pool.snapshot(), before);
+        assert_eq!(probe.calls.load(Ordering::Relaxed), 0);
+        std::fs::remove_dir(&memory.spill_directory).unwrap();
+    }
+
+    #[test]
+    fn free_space_reserve_overflow_refuses_at_maximum_available_bytes() {
+        let mut memory = test_memory("free-space-overflow", 64);
+        memory.max_total_spill_bytes = NonZeroU64::MAX;
+        let pool =
+            SpillPool::open_with_probe(&memory, Arc::new(AdjustableSpaceProbe::new(u64::MAX)))
+                .unwrap();
+        let error = pool.reserve_bytes("overflow", u64::MAX).err().unwrap();
+        let HawDBError::ResourceBudgetExceeded(details) = error else {
+            panic!("expected typed free-space overflow");
+        };
+        assert_eq!(details.scope, ResourceBudgetScope::FileSystem);
+        assert_eq!(
+            (details.requested, details.used, details.budget),
+            (u64::MAX, 0, u64::MAX - 1)
+        );
+        let snapshot = pool.snapshot();
+        assert_eq!(
+            (
+                snapshot.active_bytes,
+                snapshot.pending_write_bytes,
+                snapshot.peak_active_bytes
+            ),
+            (0, 0, 0)
+        );
         std::fs::remove_dir(&memory.spill_directory).unwrap();
     }
 }

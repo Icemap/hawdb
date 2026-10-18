@@ -69,6 +69,78 @@ that snapshot, not a promise of ongoing host-result accounting. A successful
 request consumer has a zero completion charge after validated delivery. Neither
 counter bounds process RSS or memory subsequently retained by host callbacks.
 
+## Resource refusal metadata
+
+Memory-ledger and spill-quota admission failures expose
+`HawDBError::ResourceBudgetExceeded`. Rust, FFI JSON, and Python preserve the
+resource kind, refusing scope, owner, memory class, additional request, current
+usage, effective budget, and `budget_option`. Rejected reservations do not charge
+the account. Query-level ownership transfers report their net additional charge.
+
+When a typed resource refusal escapes a contextual morsel worker or its ordered
+consumer, the scheduler signals `RuntimeCancellationReason::ResourceExhausted`
+before joining its in-flight workers. Workers checking that same context stop
+cooperatively; the scheduler returns the original resource error and its metadata,
+not the secondary cancellation error. Memory, spill, descriptor exhaustion, read
+budgets, and graph expansion limits participate. Invalid resource configuration
+and ordinary callback errors do not signal resource exhaustion. A reservation
+refusal handled inside an operator (for example, by spilling) does not cancel it.
+The Tokio operation wrapper also preserves an operation error after a resource
+stop; an operation that returns success after that signal is still rejected.
+Explicit user cancellation and deadlines keep their existing precedence.
+
+The numeric parallel pipeline uses a child task context, including for raw calls
+without a host context, so sibling failure does not poison a reusable caller
+context. Direct scheduler users should likewise pass a child if the parent is
+reused. `cancel_for_resource_exhaustion` preserves the first local cancellation
+cause and wakes descendant waiters; generic cancellation telemetry includes it
+in the cancellation count. Generic `map_ordered` APIs still materialize every
+callback result; they do not interpret a nested `Result`. Callbacks that do not
+check a context cannot be interrupted while executing. Ordered streaming may
+already have delivered a validated prefix before failure; it never reports that
+prefix as a successful complete query.
+
+Classify errors by `resource` and `scope`. `budget_option` identifies the effective
+boundary's origin; it is an extensible diagnostic string, not a closed enum or
+an instruction to raise a setting automatically. The explicit
+`new_with_budget_option` and `account_with_budget_option` constructors also accept
+caller-defined static strings. Hosts must tolerate unknown origins while retaining
+the typed classification and numeric fields. These are the current built-in
+origins:
+
+| `budget_option` | Effective boundary |
+| --- | --- |
+| `ExecutionMemoryConfig.query_memory_bytes` | Configured query root, source account, retrieval pipeline, or result-memory limit. |
+| `RuntimeTaskContext.memory_reservation.memory_bytes` | Runtime-admitted query root; increasing configuration does not widen this grant. |
+| `RuntimeTaskContext.memory_reservation.result_bytes` | Runtime-admitted result-memory limit when it is no larger than the configured query-memory limit. |
+| `ExecutionMemoryConfig.blocking_operator_bytes` | Configured blocking-state account limit. |
+| `QueryMemoryLedger::new(budget_bytes)` | Explicit query-root constructor argument. |
+| `QueryMemoryLedger::account(budget_bytes)` | Explicit account constructor argument, including derived limits. |
+| `KnowledgeRetrievalPipelineBudget::new(query_memory_budget)` | Explicit retrieval pipeline root and account allowance. |
+| `QueryMemoryAccount::sub_account(budget)` | Child allowance reserved in its parent before dispatch. |
+| `QueryMemoryAccount::sibling(budget_bytes)` | Explicit sibling account allowance. |
+| `ExecutionMemoryConfig.max_spill_bytes` | Cumulative bytes written by one spill operator. |
+| `ExecutionMemoryConfig.max_spill_runs` | Cumulative runs created by one spill operator. |
+| `ExecutionMemoryConfig.max_total_spill_bytes` | Shared live spill bytes, including pending reservations. |
+| `ExecutionMemoryConfig.max_total_spill_runs` | Shared live spill runs. |
+| `ExecutionMemoryConfig.min_spill_free_bytes` | Filesystem reserve to preserve; `budget` reports probed available space minus this reserve. |
+
+Result memory uses the smaller of the configured query-memory limit and the
+runtime result grant. Equal limits report the runtime grant: raising only the
+configuration cannot widen it. The retrieval graph-read allowance comes from
+`DatabaseConfig.execution_memory.query_memory_bytes`; its output payload limit
+is a separate `ReadBudgetExceeded` boundary.
+
+Shared limits may have been tightened by another query using the same spill
+directory. Filesystem `used` counts reservations not reflected in the space
+probe, rather than all occupied disk space. Raising the minimum reserve reduces
+usable space. `used + requested` can overflow `u64`; hosts must not rely on an
+unchecked sum to interpret the refusal.
+
+Existing descriptor errors retain their separate type. Operator-local checks
+that have not been converted may still return `Execution`; this metadata contract
+does not claim that every execution limit uses the new variant.
+
 ## Model and evidence boundaries
 
 `HawDBValidatedResultDelivery.tla` models collection, whole-input validation,
