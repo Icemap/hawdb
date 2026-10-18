@@ -624,3 +624,35 @@ fn selection_and_finish_take_fresh_inventory_after_constructor_reservation_close
     assert_eq!(project.metrics().open, 0);
     assert_eq!(project.metrics().reserved, 0);
 }
+
+#[test]
+fn owned_candidate_keeps_native_capture_after_last_external_arc_without_extra_fd() {
+    let fixture = Fixture::new();
+    let project = ProjectFileDescriptors::acquire(&fixture.0, 3).unwrap();
+    let directory = Arc::new(SourceDirectory::capture(&fixture.0, &project.io_context()).unwrap());
+    let weak = Arc::downgrade(&directory);
+    let context = directory.operation_context();
+    assert_eq!(project.metrics().open, 1);
+    let mut candidate = directory
+        .create_owned_control_candidate(&context, "owned.candidate")
+        .unwrap();
+    assert_eq!(project.metrics().open, 2);
+    candidate.write_all(b"owned capture").unwrap();
+    candidate.seal().unwrap();
+    drop(directory);
+    assert!(weak.upgrade().is_some());
+    candidate
+        .select_head(&context, "selector.hawdb")
+        .unwrap()
+        .finish(&context)
+        .unwrap();
+    assert!(candidate.is_complete());
+    assert_eq!(project.metrics().open, 2);
+    drop(candidate);
+    assert!(weak.upgrade().is_none());
+    assert_eq!(project.metrics().open, 0);
+    assert_eq!(
+        fs::read(fixture.0.join("selector.hawdb")).unwrap(),
+        b"owned capture"
+    );
+}

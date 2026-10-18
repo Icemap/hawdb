@@ -25,6 +25,7 @@ use crate::file_io::OpenOptions;
 use crate::file_io::{self as fs, File};
 
 mod captured;
+mod publication;
 use crate::relational::{decode_relational_primary_key, encode_relational_primary_key};
 use crate::relational::{
     decode_relational_row_payload, encode_relational_row_payload, validate_row, RelationalKey,
@@ -32,6 +33,10 @@ use crate::relational::{
 };
 use captured::{CapturedCatalog, CatalogIdentity};
 use hawdb_integrity::{crc32c, Crc32c, IntegrityDigest, IntegrityHasher, Sha256Digest};
+pub use publication::{
+    PendingProjectionPublication, PreparedProjectionPublication, ProjectionGenerationPreparation,
+    ProjectionGenerationResolution,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -64,6 +69,10 @@ pub enum ProjectionGenerationError {
     Conflict(String),
     Corruption(String),
     NotFound(String),
+    /// A live operation owns this target, or its structural gate is busy.
+    Busy,
+    /// Resolve the previous attempted publication before admitting another one.
+    PublicationUncertain,
 }
 
 impl Display for ProjectionGenerationError {
@@ -84,6 +93,10 @@ impl Display for ProjectionGenerationError {
             }
             Self::NotFound(message) => {
                 write!(formatter, "projection generation not found: {message}")
+            }
+            Self::Busy => formatter.write_str("projection generation publication is busy"),
+            Self::PublicationUncertain => {
+                formatter.write_str("projection publication outcome requires resolution")
             }
         }
     }
@@ -323,6 +336,10 @@ pub enum ProjectionGenerationState {
     Staging,
     Abandoned,
     Sealed,
+    /// Selection is reserved or attempted; this is not a durable receipt.
+    PublicationPending,
+    /// The attempted owner dropped without resolving its outcome.
+    PublicationUncertain,
     Published,
     Failed,
     Missing,
@@ -428,6 +445,8 @@ struct ProjectionGenerationShared {
     open_writers: BTreeSet<String>,
     pinned: BTreeMap<String, usize>,
     temporary_sequence: u64,
+    publication_sequence: u64,
+    publications: BTreeMap<String, publication::PublicationSlot>,
 }
 
 type CatalogRegistry = BTreeMap<CatalogIdentity, Weak<Mutex<ProjectionGenerationShared>>>;
@@ -524,72 +543,21 @@ impl ProjectionGenerationStore {
         &self,
         sealed: &SealedProjectionGeneration,
     ) -> Result<ProjectionGenerationPublishReport, ProjectionGenerationError> {
-        self.ensure_writable()?;
-        let mut shared = self.lock_shared()?;
-        if !Arc::ptr_eq(&self.shared, &sealed._pin.store.shared) {
-            return Err(ProjectionGenerationError::Conflict(
-                "sealed generation belongs to a different catalog".into(),
-            ));
-        }
-        let manifest = self.read_manifest(&self.manifest_path(&sealed.manifest.begin.identity))?;
-        if manifest != sealed.manifest {
-            return Err(ProjectionGenerationError::Conflict(
-                "sealed generation token does not match durable candidate metadata".to_string(),
-            ));
-        }
-        let head_path = self.head_path(
-            &manifest.begin.identity.projection,
-            &manifest.begin.identity.owner_key,
-        );
-        let current = self.read_optional_head(&head_path)?;
-        if let Some(current) = &current {
-            validate_head_owner(current, &manifest.begin.identity)?;
-            if current.manifest.begin.identity.generation == manifest.begin.identity.generation {
-                if current.manifest != manifest {
-                    return Err(ProjectionGenerationError::Conflict(
-                        "published generation identity was reused with different content"
-                            .to_string(),
-                    ));
+        let preparation = match self.prepare_publication(sealed) {
+            Err(ProjectionGenerationError::PublicationUncertain) => {
+                // A dropped attempted owner must be resolved before another
+                // preparation. Normal publication decodes the head only once.
+                if let Some(report) = self.published_receipt(sealed)? {
+                    return Ok(report);
                 }
-                self.stabilize_selected_head(&head_path, current)?;
-                return Ok(ProjectionGenerationPublishReport {
-                    identity: manifest.begin.identity,
-                    previous_generation: Some(current.manifest.begin.identity.generation.clone()),
-                    publication_commit_epoch: current.publication_commit_epoch,
-                    idempotent: true,
-                });
+                self.prepare_publication(sealed)?
             }
-            if manifest.begin.source_watermark < current.manifest.begin.source_watermark {
-                return Err(ProjectionGenerationError::Conflict(format!(
-                    "source watermark {} is older than active watermark {}",
-                    manifest.begin.source_watermark, current.manifest.begin.source_watermark
-                )));
-            }
-        }
-        let observed_head = current
-            .as_ref()
-            .map(|head| head.manifest.begin.identity.generation.as_str());
-        if observed_head != manifest.begin.expected_head.as_deref() {
-            return Err(ProjectionGenerationError::Conflict(format!(
-                "expected head {:?}, observed {:?}",
-                manifest.begin.expected_head, observed_head
-            )));
-        }
-        let publication_commit_epoch = current
-            .as_ref()
-            .map_or(1, |head| head.publication_commit_epoch.saturating_add(1));
-        let head = ProjectionGenerationHead {
-            publication_commit_epoch,
-            manifest: manifest.clone(),
+            preparation => preparation?,
         };
-        let bytes = encode_head(&head)?;
-        self.write_control(&head_path, &bytes, &mut shared)?;
-        Ok(ProjectionGenerationPublishReport {
-            identity: manifest.begin.identity,
-            previous_generation: current.map(|head| head.manifest.begin.identity.generation),
-            publication_commit_epoch,
-            idempotent: false,
-        })
+        match preparation {
+            ProjectionGenerationPreparation::AlreadyPublished(report) => Ok(report),
+            ProjectionGenerationPreparation::Prepared(mut prepared) => prepared.select()?.finish(),
+        }
     }
 
     /// Resolves an already selected operation without opening/scanning its data
@@ -600,13 +568,22 @@ impl ProjectionGenerationStore {
         &self,
         sealed: &SealedProjectionGeneration,
     ) -> Result<Option<ProjectionGenerationPublishReport>, ProjectionGenerationError> {
-        let _shared = self.lock_shared()?;
+        let shared = self.lock_shared()?;
         if !Arc::ptr_eq(&self.shared, &sealed._pin.store.shared) {
             return Err(ProjectionGenerationError::Conflict(
                 "sealed generation belongs to a different catalog".into(),
             ));
         }
         let identity = &sealed.manifest.begin.identity;
+        let owner = owner_key_hash(&identity.projection, &identity.owner_key);
+        if shared.publications.contains_key(&owner) {
+            drop(shared);
+            return match self.resolve_publication(sealed, None)? {
+                ProjectionGenerationResolution::Published(report) => Ok(Some(report)),
+                ProjectionGenerationResolution::NotSelected => Ok(None),
+            };
+        }
+
         let Some(head) =
             self.read_optional_head(&self.head_path(&identity.projection, &identity.owner_key))?
         else {
@@ -709,7 +686,9 @@ impl ProjectionGenerationStore {
         match self.read_optional_manifest(&manifest_path) {
             Ok(Some(manifest)) => Ok(ProjectionGenerationStatus {
                 identity: identity.clone(),
-                state: if active_generation.as_deref() == Some(identity.generation.as_str()) {
+                state: if let Some(state) = publication::pending_state(&shared, identity) {
+                    state
+                } else if active_generation.as_deref() == Some(identity.generation.as_str()) {
                     ProjectionGenerationState::Published
                 } else {
                     ProjectionGenerationState::Sealed
@@ -1834,7 +1813,7 @@ fn release_pin(shared: &mut ProjectionGenerationShared, key: &str) {
     }
 }
 
-fn read_bounded_file(file: File, path: &Path, max_bytes: usize) -> io::Result<Vec<u8>> {
+fn read_bounded_file(file: &mut File, path: &Path, max_bytes: usize) -> io::Result<Vec<u8>> {
     let file_len = file.metadata()?.len();
     if file_len > u64::try_from(max_bytes).unwrap_or(u64::MAX) {
         return Err(io::Error::new(
@@ -2256,6 +2235,7 @@ mod tests {
     use super::*;
 
     mod captured_catalog;
+    mod prepared_publication;
 
     fn path(name: &str) -> PathBuf {
         let nonce = std::time::SystemTime::now()

@@ -2494,3 +2494,51 @@ fn relational_prefix_nullable_unique_suffix_requires_complete_nonnull_binding() 
         }
     }
 }
+
+#[test]
+fn prepared_catalog_selection_releases_database_borrow_before_barriers() {
+    let (_root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
+    let dependencies = read(&db);
+    let catalog = db.projection_generation_store().unwrap();
+    let sealed = seal(&catalog, "g1", dependencies.source_epoch(), None);
+    let hawdb::ProjectionGenerationPreparation::Prepared(mut prepared) =
+        catalog.prepare_publication(&sealed).unwrap()
+    else {
+        panic!("unexpected selected head");
+    };
+    let pending = db
+        .select_prepared_projection(&dependencies, &mut prepared)
+        .unwrap();
+    // The return type retains the real prepared owner, not the source borrow.
+    // Later source writes do not roll back a completed selection.
+    db.query("MATCH (n:Other) SET n.value = 3").unwrap();
+    assert_eq!(pending.finish().unwrap().identity.generation, "g1");
+    assert!(catalog.published_receipt(&sealed).unwrap().is_some());
+}
+
+#[test]
+fn prepared_catalog_selection_rejects_changed_source_without_consuming_owner() {
+    let (_root, mut db) = fixture(DurabilityPolicy::SyncOnEveryWrite);
+    let dependencies = read(&db);
+    let catalog = db.projection_generation_store().unwrap();
+    let sealed = seal(&catalog, "g1", dependencies.source_epoch(), None);
+    let hawdb::ProjectionGenerationPreparation::Prepared(mut prepared) =
+        catalog.prepare_publication(&sealed).unwrap()
+    else {
+        panic!("unexpected selected head");
+    };
+    db.query("MATCH (n:Memory) SET n.value = 3").unwrap();
+    assert!(matches!(
+        db.select_prepared_projection(&dependencies, &mut prepared),
+        Err(ProjectionPublicationError::Dependency(_))
+    ));
+    assert!(matches!(
+        catalog.open_active("test_mvcc", b"workspace"),
+        Err(ProjectionGenerationError::NotFound(_))
+    ));
+    drop(prepared);
+    assert!(matches!(
+        catalog.prepare_publication(&sealed).unwrap(),
+        hawdb::ProjectionGenerationPreparation::Prepared(_)
+    ));
+}

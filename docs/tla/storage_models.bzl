@@ -14,6 +14,7 @@ STORAGE_MODELS = [
     "HawDBBranchLifecycle",
     "HawDBCapturedControlPublication",
     "HawDBCapturedProjectionCatalog",
+    "HawDBPreparedCatalogPublication",
     "HawDBCheckpointCleanupHeadroom",
     "HawDBColumnGroupManifest",
     "HawDBColumnarShadowIntegration",

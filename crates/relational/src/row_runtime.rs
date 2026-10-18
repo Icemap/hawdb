@@ -1374,6 +1374,10 @@ impl<'a> RelationalRowRuntime<'a> {
 
 fn map_projection_read_error(error: ProjectionGenerationError) -> HawDBError {
     match error {
+        error @ (ProjectionGenerationError::Busy
+        | ProjectionGenerationError::PublicationUncertain) => {
+            HawDBError::Execution(error.to_string())
+        }
         ProjectionGenerationError::Admission(message) => HawDBError::Execution(message),
         ProjectionGenerationError::Io(error) => HawDBError::StorageIntegrity(error.to_string()),
         error @ (ProjectionGenerationError::Conflict(_)

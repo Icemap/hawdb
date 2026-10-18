@@ -3,6 +3,24 @@
 
 use super::*;
 use std::io::Write;
+use std::sync::Arc;
+
+#[derive(Debug)]
+enum DirectoryOwner<'a> {
+    Borrowed(&'a SourceDirectory),
+    Shared(Arc<SourceDirectory>),
+}
+
+impl std::ops::Deref for DirectoryOwner<'_> {
+    type Target = SourceDirectory;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Borrowed(directory) => directory,
+            Self::Shared(directory) => directory,
+        }
+    }
+}
 
 #[cfg(test)]
 type RenameHook = std::cell::RefCell<Option<Box<dyn FnOnce()>>>;
@@ -28,7 +46,7 @@ enum State {
 #[derive(Debug)]
 pub struct CapturedControlCandidate<'a> {
     file: File,
-    directory: &'a SourceDirectory,
+    directory: DirectoryOwner<'a>,
     name: [u8; 256],
     length: usize,
     state: State,
@@ -80,10 +98,36 @@ impl SourceDirectory {
         bytes[..name.0.len()].copy_from_slice(name.0.as_bytes());
         Ok(CapturedControlCandidate {
             file,
-            directory: self,
+            directory: DirectoryOwner::Borrowed(self),
             name: bytes,
             length: name.0.len(),
             state: State::Writable,
+        })
+    }
+}
+
+impl SourceDirectory {
+    /// Retain an existing shared capture without duplicating its native handle
+    /// or preserving a producer's FD inventory. This still grants no exclusion.
+    #[doc(hidden)]
+    pub fn create_owned_control_candidate(
+        self: &Arc<Self>,
+        context: &FileOpenContext,
+        name: &str,
+    ) -> io::Result<CapturedControlCandidate<'static>> {
+        let CapturedControlCandidate {
+            file,
+            name,
+            length,
+            state,
+            ..
+        } = self.create_control_candidate(context, name)?;
+        Ok(CapturedControlCandidate {
+            file,
+            directory: DirectoryOwner::Shared(self.clone()),
+            name,
+            length,
+            state,
         })
     }
 }

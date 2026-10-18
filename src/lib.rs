@@ -355,13 +355,15 @@ pub use hawdb_runtime_tokio::{
 pub use hawdb_storage::file_descriptors::FileDescriptorMetrics;
 pub use hawdb_storage::projection_generation::{
     decode_projection_relational_member, encode_projection_relational_member,
-    ProjectionGenerationBatchLimits, ProjectionGenerationBegin, ProjectionGenerationCursor,
-    ProjectionGenerationDigestBuilder, ProjectionGenerationError, ProjectionGenerationGcLimits,
-    ProjectionGenerationGcReport, ProjectionGenerationIdentity, ProjectionGenerationManifest,
-    ProjectionGenerationMember, ProjectionGenerationPage, ProjectionGenerationPublishReport,
+    PendingProjectionPublication, PreparedProjectionPublication, ProjectionGenerationBatchLimits,
+    ProjectionGenerationBegin, ProjectionGenerationCursor, ProjectionGenerationDigestBuilder,
+    ProjectionGenerationError, ProjectionGenerationGcLimits, ProjectionGenerationGcReport,
+    ProjectionGenerationIdentity, ProjectionGenerationManifest, ProjectionGenerationMember,
+    ProjectionGenerationPage, ProjectionGenerationPreparation, ProjectionGenerationPublishReport,
     ProjectionGenerationReadLimits, ProjectionGenerationReadReport, ProjectionGenerationReader,
-    ProjectionGenerationSeal, ProjectionGenerationState, ProjectionGenerationStatus,
-    ProjectionGenerationStore, ProjectionGenerationWriter, SealedProjectionGeneration,
+    ProjectionGenerationResolution, ProjectionGenerationSeal, ProjectionGenerationState,
+    ProjectionGenerationStatus, ProjectionGenerationStore, ProjectionGenerationWriter,
+    SealedProjectionGeneration,
 };
 pub use hawdb_storage::scan::ScanPredicate;
 #[cfg(feature = "vector-search")]

@@ -16,7 +16,8 @@
 
 use super::*;
 use hawdb_storage::projection_generation::{
-    ProjectionGenerationError, ProjectionGenerationPublishReport, SealedProjectionGeneration,
+    PendingProjectionPublication, PreparedProjectionPublication, ProjectionGenerationError,
+    ProjectionGenerationPublishReport, SealedProjectionGeneration,
 };
 use hawdb_storage::store::{GraphReadDependencies, GraphReadDependencyError};
 use hawdb_storage::version::VersionKey;
@@ -475,6 +476,32 @@ impl fmt::Display for ProjectionPublicationError {
 impl std::error::Error for ProjectionPublicationError {}
 
 impl Database {
+    /// Select an already prepared catalog publication under the exclusive
+    /// database borrow. Preparation and pending durability run outside this
+    /// borrow; the pending lifetime is tied only to the prepared owner.
+    /// Requires a known durable source prefix and the host's actual target
+    /// publication authority. This does not install a Consumer read view.
+    pub fn select_prepared_projection<'a>(
+        &mut self,
+        dependencies: &PreparedReadDependencies,
+        prepared: &'a mut PreparedProjectionPublication,
+    ) -> std::result::Result<PendingProjectionPublication<'a>, ProjectionPublicationError> {
+        use ProjectionPublicationError as E;
+        self.ensure_writable().map_err(E::Storage)?;
+        let catalog = self.projection_generation_store().map_err(E::Storage)?;
+        if !prepared.matches_catalog(&catalog) {
+            return Err(E::Generation(ProjectionGenerationError::Conflict(
+                "prepared publication belongs to a different catalog".into(),
+            )));
+        }
+        self.validate_prepared_projection_source(
+            dependencies,
+            prepared.source_watermark(),
+            ProjectionSourceDurability::RequireKnownDurable,
+        )?;
+        prepared.select().map_err(E::Generation)
+    }
+
     pub fn begin_prepared_read(&self, limits: PreparedReadLimits) -> Result<PreparedRead> {
         let graph = self.runtime.get()?.store.capture_read_dependencies(
             limits.dependency_entries.get(),

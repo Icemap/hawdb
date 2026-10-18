@@ -16,7 +16,7 @@ pub(super) struct CapturedCatalog {
     // Retain all three identities while the shared registry key is live.
     root: SourceDirectory,
     pub(super) generations: SourceDirectory,
-    heads: SourceDirectory,
+    pub(super) heads: Arc<SourceDirectory>,
 }
 
 impl CapturedCatalog {
@@ -28,7 +28,7 @@ impl CapturedCatalog {
     pub(super) fn from_root(root: SourceDirectory) -> io::Result<Self> {
         let context = root.operation_context();
         let generations = root.open_directory(&context, "generations")?;
-        let heads = root.open_directory(&context, "heads")?;
+        let heads = Arc::new(root.open_directory(&context, "heads")?);
         Ok(Self {
             #[cfg(test)]
             before_close: None,
@@ -103,6 +103,13 @@ impl ProjectionGenerationStore {
             {
                 return Ok(true);
             }
+            if shared.publications.contains_key(&owner_key_hash(
+                &begin.identity.projection,
+                &begin.identity.owner_key,
+            )) {
+                report.pinned_generations_skipped += 1;
+                return Ok(true);
+            }
             let head_path = self.head_path(&begin.identity.projection, &begin.identity.owner_key);
             if let Some(head) = self.read_optional_head(&head_path)? {
                 validate_head_owner(&head, &begin.identity)?;
@@ -130,6 +137,13 @@ impl ProjectionGenerationStore {
             Err(error) => return Err(error),
         };
         if self.manifest_path(&manifest.begin.identity) != path {
+            return Ok(true);
+        }
+        if shared.publications.contains_key(&owner_key_hash(
+            &manifest.begin.identity.projection,
+            &manifest.begin.identity.owner_key,
+        )) {
+            report.pinned_generations_skipped += 1;
             return Ok(true);
         }
         let key = identity_key(&manifest.begin.identity);
@@ -309,8 +323,8 @@ impl ProjectionGenerationStore {
         path: &Path,
     ) -> Result<Option<ProjectionGenerationManifest>, ProjectionGenerationError> {
         match self.open_file(path) {
-            Ok(file) => {
-                decode_manifest(&read_bounded_file(file, path, MAX_ENVELOPE_BYTES)?).map(Some)
+            Ok(mut file) => {
+                decode_manifest(&read_bounded_file(&mut file, path, MAX_ENVELOPE_BYTES)?).map(Some)
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error.into()),
@@ -334,7 +348,9 @@ impl ProjectionGenerationStore {
         path: &Path,
     ) -> Result<Option<ProjectionGenerationHead>, ProjectionGenerationError> {
         match self.open_file(path) {
-            Ok(file) => decode_head(&read_bounded_file(file, path, MAX_ENVELOPE_BYTES)?).map(Some),
+            Ok(mut file) => {
+                decode_head(&read_bounded_file(&mut file, path, MAX_ENVELOPE_BYTES)?).map(Some)
+            }
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error.into()),
         }

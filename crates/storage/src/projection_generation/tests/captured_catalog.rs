@@ -350,6 +350,17 @@ fn lost_selection_requires_a_head_barrier_before_receipt_retry_or_gc_retirement(
                         .reclaim(ProjectionGenerationGcLimits::default())
                         .unwrap()
                         .generations_reclaimed,
+                    0,
+                    "an unresolved owner must retain both recovery roots"
+                );
+                let unresolved = model.capture().unwrap().crash(&Default::default()).unwrap();
+                recover_catalog_image(&unresolved, "g1", &old_rows);
+                assert!(store.published_receipt(&next).unwrap().is_some());
+                assert_eq!(
+                    store
+                        .reclaim(ProjectionGenerationGcLimits::default())
+                        .unwrap()
+                        .generations_reclaimed,
                     1
                 );
             }
