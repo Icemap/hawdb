@@ -15,6 +15,10 @@ protocol objects keep the extension module alive. Previously delivered arrays
 remain readable after cursor, stream or database closure.
 
 Schema and descriptor ownership consumes the existing query/runtime allowances.
+Stream adoption checks the irreducible metadata for its descriptor, schema and
+minimum demanded batch against the existing allowances. An impossible working
+unit refuses before taking the caller's cursor; releasable arrays and schemas
+can still cause retryable pressure. Empty sources can complete without a batch.
 Export may refuse before adoption when byte, slot or handle capacity is missing.
 It does not increase those allowances, prefetch data or silently gather rows.
 Successful EOF is required before treating all earlier batches as a complete

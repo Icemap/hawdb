@@ -181,6 +181,14 @@ fn capacity<T>(extra: usize) -> Result<usize> {
         .and_then(|n| n.checked_add(64))
         .ok_or(RetainedQueryError::SizeOverflow)
 }
+fn retained_metadata_bytes(bytes: usize) -> Result<usize> {
+    bytes
+        .checked_add(
+            usize::try_from(RuntimeRetainedResult::handle_overhead_bytes())
+                .map_err(|_| RetainedQueryError::SizeOverflow)?,
+        )
+        .ok_or(RetainedQueryError::SizeOverflow)
+}
 fn handles(shared: &CursorShared, count: usize) -> Result<()> {
     if count > shared.handle_limit {
         return Err(RetainedQueryError::WorkingUnitTooLarge);
@@ -217,6 +225,36 @@ unsafe extern "C" fn release_schema(schema: *mut ArrowSchema) {
     }));
 }
 
+fn schema_parent_capacity(count: usize, wrapper_bytes: usize) -> Result<usize> {
+    let extra = count
+        .checked_mul(std::mem::size_of::<ArrowSchema>() + std::mem::size_of::<*mut ArrowSchema>())
+        .and_then(|n| n.checked_add(wrapper_bytes))
+        .and_then(|n| n.checked_add(std::mem::size_of::<ArrowSchema>()))
+        .ok_or(RetainedQueryError::SizeOverflow)?;
+    capacity::<SchemaOwner>(extra)
+}
+fn schema_child_capacity(column: &RetainedColumnSchema) -> Result<usize> {
+    let extra = column
+        .name
+        .len()
+        .checked_add(1)
+        .and_then(|n| {
+            n.checked_add(35 * usize::from(column.role == RetainedColumnRole::NodeIdentity))
+        })
+        .ok_or(RetainedQueryError::SizeOverflow)?;
+    capacity::<SchemaOwner>(extra)
+}
+fn schema_metadata_bytes(shared: &CursorShared, wrapper_bytes: usize) -> Result<usize> {
+    let mut bytes =
+        retained_metadata_bytes(schema_parent_capacity(shared.schema.len(), wrapper_bytes)?)?;
+    for column in &shared.schema {
+        bytes = bytes
+            .checked_add(retained_metadata_bytes(schema_child_capacity(column)?)?)
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+    }
+    Ok(bytes)
+}
+
 fn schema(
     shared: &Arc<CursorShared>,
     wrapper_bytes: usize,
@@ -236,12 +274,7 @@ fn schema(
             .checked_add(2)
             .ok_or(RetainedQueryError::SizeOverflow)?,
     )?;
-    let parent_bytes = count
-        .checked_mul(std::mem::size_of::<ArrowSchema>() + std::mem::size_of::<*mut ArrowSchema>())
-        .and_then(|n| n.checked_add(wrapper_bytes))
-        .and_then(|n| n.checked_add(std::mem::size_of::<ArrowSchema>()))
-        .ok_or(RetainedQueryError::SizeOverflow)?;
-    let lease = admit(shared, capacity::<SchemaOwner>(parent_bytes)?, code)?;
+    let lease = admit(shared, schema_parent_capacity(count, wrapper_bytes)?, code)?;
     let mut parent = Box::new(SchemaOwner {
         name: None,
         metadata: Vec::new(),
@@ -251,13 +284,7 @@ fn schema(
     });
     for column in &shared.schema {
         let identity = column.role == RetainedColumnRole::NodeIdentity;
-        let name_bytes = column
-            .name
-            .len()
-            .checked_add(1)
-            .and_then(|n| n.checked_add(35 * usize::from(identity)))
-            .ok_or(RetainedQueryError::SizeOverflow)?;
-        let lease = admit(shared, capacity::<SchemaOwner>(name_bytes)?, code)?;
+        let lease = admit(shared, schema_child_capacity(column)?, code)?;
         let mut owner = Box::new(SchemaOwner {
             name: Some(
                 CString::new(column.name.as_bytes())
@@ -377,8 +404,7 @@ struct ArrayReservation {
     children: Vec<MetadataLease>,
 }
 impl ArrayReservation {
-    fn new(shared: &Arc<CursorShared>, wrapper_bytes: usize, code: &CodeOwner) -> Result<Self> {
-        let count = shared.schema.len();
+    fn metadata_layout(count: usize, wrapper_bytes: usize) -> Result<(usize, usize)> {
         let extra = count
             .checked_mul(
                 std::mem::size_of::<ArrowArray>()
@@ -389,10 +415,24 @@ impl ArrayReservation {
             .and_then(|n| n.checked_add(std::mem::size_of::<ArrowArray>()))
             .and_then(|n| n.checked_add(std::mem::size_of::<Arc<RetainedQueryBatch>>()))
             .ok_or(RetainedQueryError::SizeOverflow)?;
-        let parent = admit(shared, capacity::<ArrayOwner>(extra)?, code)?;
+        Ok((capacity::<ArrayOwner>(extra)?, capacity::<ArrayOwner>(0)?))
+    }
+    fn required_metadata_bytes(shared: &CursorShared, wrapper_bytes: usize) -> Result<usize> {
+        let count = shared.schema.len();
+        let (parent, child) = Self::metadata_layout(count, wrapper_bytes)?;
+        let parent = retained_metadata_bytes(parent)?;
+        retained_metadata_bytes(child)?
+            .checked_mul(count)
+            .and_then(|bytes| bytes.checked_add(parent))
+            .ok_or(RetainedQueryError::SizeOverflow)
+    }
+    fn new(shared: &Arc<CursorShared>, wrapper_bytes: usize, code: &CodeOwner) -> Result<Self> {
+        let count = shared.schema.len();
+        let (parent_bytes, child_bytes) = Self::metadata_layout(count, wrapper_bytes)?;
+        let parent = admit(shared, parent_bytes, code)?;
         let mut children = Vec::with_capacity(count);
         for _ in 0..count {
-            children.push(admit(shared, capacity::<ArrayOwner>(0)?, code)?);
+            children.push(admit(shared, child_bytes, code)?);
         }
         Ok(Self { parent, children })
     }

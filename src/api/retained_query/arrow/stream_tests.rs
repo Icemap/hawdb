@@ -32,6 +32,207 @@ fn values(array: &ArrowArray) -> Vec<i64> {
     }
 }
 
+fn largest_admitted_stream_wrapper(
+    cursor: &mut Option<RetainedQueryCursor>,
+    ceiling: usize,
+) -> usize {
+    // Calibrate against real admitted metadata, independent of ABI sizes.
+    let mut low = 0usize;
+    let mut high = ceiling;
+    while low < high {
+        let bytes = low + (high - low).div_ceil(2);
+        match RetainedArrowStream::try_take_cursor(cursor, bytes, None) {
+            Ok(stream) => {
+                *cursor = Some(stream.into_cursor());
+                low = bytes;
+            }
+            Err(_) => high = bytes - 1,
+        }
+        assert!(cursor.is_some());
+        assert_eq!(cursor.as_ref().unwrap().profile().visited_rows, 0);
+    }
+    low
+}
+
+#[test]
+fn stream_own_metadata_cannot_create_permanent_retryable_pressure() {
+    let mut db = fixture();
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = Some(
+        db.query_with_params_retained(QUERY, &params(), options())
+            .unwrap(),
+    );
+    let low = largest_admitted_stream_wrapper(&mut cursor, 64 * 1024);
+    let stream = RetainedArrowStream::try_take_cursor(&mut cursor, low, None).unwrap();
+    assert!(cursor.is_none());
+    assert_eq!(governor.retained_result_snapshot().view_handles, 2);
+    let (code, mut array) = pull(&stream);
+    eprintln!(
+        "own-wrapper-boundary={low} code={code} status={:?} retained={:?}",
+        stream.status(),
+        governor.retained_result_snapshot()
+    );
+    if code == 0 {
+        assert!(array.release.is_some());
+        assert!(stream.profile().visited_rows > 0);
+        release_array(&mut array);
+    } else {
+        assert!(array.release.is_none());
+        assert_eq!(stream.profile().visited_rows, 0);
+        assert_eq!(
+            stream.status(),
+            RetainedQueryStatus::Failed,
+            "no external owners can be released: the stream's own wrapper must not cause permanent retryable pressure"
+        );
+    }
+    drop(stream);
+    let released = governor.retained_result_snapshot();
+    assert_eq!(released.retained_bytes, 0);
+    assert_eq!(released.view_handles, 0);
+    assert_eq!(released.buffer_owners, 0);
+}
+
+#[test]
+fn stream_metadata_one_byte_over_intrinsic_allowance_preserves_cursor() {
+    for query_bytes in [None, NonZeroUsize::new(64 * 1024)] {
+        let mut config = crate::DatabaseConfig::default();
+        if let Some(bytes) = query_bytes {
+            config.execution_memory.query_memory_bytes = bytes;
+        }
+        let mut db = fixture_with_config(config);
+        let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+        db.set_runtime_governor(governor.clone());
+        let mut cursor = Some(
+            db.query_with_params_retained(QUERY, &params(), options())
+                .unwrap(),
+        );
+        let boundary = largest_admitted_stream_wrapper(&mut cursor, 64 * 1024);
+        let before = governor.retained_result_snapshot();
+        let error =
+            RetainedArrowStream::try_take_cursor(&mut cursor, boundary + 1, None).unwrap_err();
+        assert!(
+            matches!(error, RetainedQueryError::WorkingUnitTooLarge),
+            "{error:?}"
+        );
+        assert!(!error.is_retryable());
+        assert_eq!(governor.retained_result_snapshot(), before);
+        assert_eq!(cursor.as_ref().unwrap().profile().visited_rows, 0);
+        let stream = RetainedArrowStream::try_take_cursor(&mut cursor, 0, None).unwrap();
+        let (code, mut array) = pull(&stream);
+        assert_eq!(code, 0);
+        assert_eq!(values(&array), vec![2]);
+        release_array(&mut array);
+        drop(stream);
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    }
+}
+
+#[test]
+fn stream_metadata_byte_pressure_from_a_live_array_remains_retryable() {
+    let mut db = fixture();
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = Some(
+        db.query_with_params_retained(QUERY, &params(), options())
+            .unwrap(),
+    );
+    let boundary = largest_admitted_stream_wrapper(&mut cursor, 64 * 1024);
+    let stream = RetainedArrowStream::try_take_cursor(&mut cursor, boundary, None).unwrap();
+    let (code, mut held) = pull(&stream);
+    assert_eq!(code, 0);
+    assert!(held.release.is_some());
+    let before = stream.profile();
+    let (code, refused) = pull(&stream);
+    assert_eq!(code, 12);
+    assert!(refused.release.is_none());
+    assert_eq!(stream.status(), RetainedQueryStatus::Open);
+    assert_eq!(stream.profile().visited_rows, before.visited_rows);
+    release_array(&mut held);
+    let (code, mut next) = pull(&stream);
+    assert_eq!(code, 0);
+    assert!(next.release.is_some());
+    assert!(stream.profile().visited_rows > before.visited_rows);
+    release_array(&mut next);
+    drop(stream);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
+#[test]
+fn stream_metadata_does_not_charge_source_pins_to_the_result_allowance() {
+    let mut db = fixture_with_unrequested_payload(128 * 1024);
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    assert!(cursor.profile().source_pinned_capacity_bytes > 64 * 1024);
+    let stream = cursor.into_arrow_stream(0).unwrap();
+    let mut output = Vec::new();
+    loop {
+        let (code, mut array) = pull(&stream);
+        assert_eq!(code, 0);
+        if array.release.is_none() {
+            break;
+        }
+        output.extend(values(&array));
+        release_array(&mut array);
+    }
+    assert_eq!(output, (2..9).collect::<Vec<_>>());
+    drop(stream);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
+#[test]
+fn stream_metadata_long_schema_and_empty_source_fit_the_complete_protocol() {
+    for empty in [false, true] {
+        let mut db = if empty {
+            let mut db = Database::new();
+            db.query("CREATE NODE TABLE Item").unwrap();
+            db.query("CREATE PROPERTY ON NODE TABLE Item(score) TYPE INT")
+                .unwrap();
+            db
+        } else {
+            fixture()
+        };
+        let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 128 * 1024);
+        db.set_runtime_governor(governor.clone());
+        let query =
+            format!(
+            "MATCH (n:Item) WHERE n.score >= $min RETURN n.score AS {}, id(n) AS {}, n.score AS {}",
+            "a".repeat(4096), "b".repeat(4096), "c".repeat(4096),
+        );
+        let mut cursor = Some(
+            db.query_with_params_retained(&query, &params(), options())
+                .unwrap(),
+        );
+        let boundary = largest_admitted_stream_wrapper(&mut cursor, 128 * 1024);
+        let stream = RetainedArrowStream::try_take_cursor(&mut cursor, boundary, None).unwrap();
+        let mut schema = ArrowSchema::default();
+        assert_eq!(
+            unsafe { stream.descriptor().get_schema.unwrap()(pointer(&stream), &mut schema) },
+            0
+        );
+        assert!(schema.release.is_some());
+        assert_eq!(schema.n_children, 3);
+        assert_eq!(stream.profile().visited_rows, 0);
+        unsafe { schema.release.unwrap()(&mut schema) };
+        let (code, mut array) = pull(&stream);
+        assert_eq!(code, 0);
+        if !empty {
+            assert!(array.release.is_some());
+            release_array(&mut array);
+        } else {
+            assert!(array.release.is_none());
+            assert_eq!(stream.status(), RetainedQueryStatus::Completed);
+            assert_eq!(stream.profile().visited_rows, 0);
+        }
+        drop(stream);
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.retained_result_snapshot().view_handles, 0);
+    }
+}
+
 #[test]
 fn stream_creation_schema_and_stopped_consumer_do_not_pull_or_prefetch() {
     let db = fixture();

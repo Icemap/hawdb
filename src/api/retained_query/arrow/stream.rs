@@ -50,7 +50,27 @@ impl RetainedArrowStream {
         let extra = wrapper_bytes
             .checked_add(std::mem::size_of::<ArrowArrayStream>())
             .ok_or(RetainedQueryError::SizeOverflow)?;
-        let lease = admit(&native.shared, capacity::<StreamOwner>(extra)?, &code)?;
+        let stream_capacity = capacity::<StreamOwner>(extra)?;
+        let stream_metadata = retained_metadata_bytes(stream_capacity)?;
+        let schema_metadata = stream_metadata
+            .checked_add(schema_metadata_bytes(&native.shared, 0)?)
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        native.require_adapter_metadata_capacity(schema_metadata)?;
+        let protocol_metadata = stream_metadata
+            .checked_add(ArrayReservation::required_metadata_bytes(
+                &native.shared,
+                0,
+            )?)
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        // The stream cannot release its own descriptor, or the array metadata
+        // required during a pull, while continuing that same pull. Include
+        // both in the minimum working unit before taking the caller's cursor.
+        // Releasable schemas/arrays/other cursors remain temporary pressure.
+        native.require_adapter_output_capacity(
+            2 * std::mem::size_of::<usize>() + 64,
+            protocol_metadata,
+        )?;
+        let lease = admit(&native.shared, stream_capacity, &code)?;
         let mut owner = Box::new(StreamOwner {
             state: Mutex::new(StreamState {
                 cursor: None,
