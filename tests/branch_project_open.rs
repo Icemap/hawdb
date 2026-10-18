@@ -1587,7 +1587,9 @@ fn writable_open_recovers_pending_children_with_aggregate_limits_and_no_runtime(
         let mut metadata = Database::open_with_config(
             &project.0,
             DatabaseConfig {
-                max_open_files: 4,
+                // Captured project root + child ownership pair + metadata
+                // lock + catalog reader are all charged during completion.
+                max_open_files: 5,
                 branch_create_recovery_limits: limits,
                 ..Default::default()
             },
@@ -1631,7 +1633,7 @@ fn writable_open_recovers_pending_children_with_aggregate_limits_and_no_runtime(
             );
         }
         assert_no_runtime(&metadata);
-        assert!(metadata.file_descriptor_metrics().unwrap().high_water <= 4);
+        assert!(metadata.file_descriptor_metrics().unwrap().high_water <= 5);
         assert!(metadata
             .recover_pending_branch_creates(BranchCreateRecoveryLimits::default())
             .unwrap()
@@ -1862,5 +1864,92 @@ fn database_instance_identity_changes_on_branch_selection_and_reopen() {
     assert_ne!(
         reopened.instance_identity().unwrap(),
         selected_main_identity
+    );
+}
+
+#[test]
+fn pending_recovery_preserves_evidence_at_four_descriptors_and_completes_at_five() {
+    use hawdb::{BranchCreateRecoveryLimits, BranchCreateRecoveryStatus};
+
+    let project = Project::new();
+    let mut writer = Database::open(&project.0).unwrap();
+    writer.query("CREATE (:Memory {id: 'preserved'})").unwrap();
+    let child = pending_children(&project.0, &mut writer, 1)[0];
+    drop(writer);
+    let catalog = project.0.join("branches/catalog.hawdb");
+    let before = std::fs::read(&catalog).unwrap();
+    let head = project
+        .0
+        .join("branches")
+        .join(child.to_string())
+        .join("branch.head");
+    let head_before = std::fs::read(&head).unwrap();
+    let mut refused = Database::open_with_config(
+        &project.0,
+        DatabaseConfig {
+            max_open_files: 4,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_no_runtime(&refused);
+    let report = refused.branch_create_recovery_report().unwrap();
+    assert_eq!(report.entries.len(), 1);
+    assert_eq!(report.entries[0].branch_id, child);
+    assert_eq!(
+        report.entries[0].status,
+        BranchCreateRecoveryStatus::Retained
+    );
+    assert!(report.entries[0]
+        .error
+        .as_ref()
+        .unwrap()
+        .contains("file descriptor budget exceeded"));
+    assert_eq!(std::fs::read(&catalog).unwrap(), before);
+    assert_eq!(std::fs::read(&head).unwrap(), head_before);
+    let retry = refused
+        .recover_pending_branch_creates(BranchCreateRecoveryLimits::default())
+        .unwrap();
+    assert_eq!(
+        retry.entries[0].status,
+        BranchCreateRecoveryStatus::Retained
+    );
+    assert_eq!(std::fs::read(&catalog).unwrap(), before);
+    assert_eq!(std::fs::read(&head).unwrap(), head_before);
+    let metrics = refused.file_descriptor_metrics().unwrap();
+    assert!(metrics.budget_rejections > 0);
+    assert!(metrics.high_water <= 4);
+    drop(refused);
+
+    let completed = Database::open_with_config(
+        &project.0,
+        DatabaseConfig {
+            max_open_files: 5,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_no_runtime(&completed);
+    let report = completed.branch_create_recovery_report().unwrap();
+    assert_eq!(report.entries.len(), 1);
+    assert_eq!(report.entries[0].branch_id, child);
+    assert_eq!(
+        report.entries[0].status,
+        BranchCreateRecoveryStatus::Completed
+    );
+    assert_eq!(completed.file_descriptor_metrics().unwrap().high_water, 5);
+    assert_eq!(std::fs::read(&head).unwrap(), head_before);
+    drop(completed);
+
+    let mut reopened = Database::open(&project.0).unwrap();
+    reopened
+        .query_sql_with_params("USE BRANCH ID $1", &[Value::Uuid(child)])
+        .unwrap();
+    assert_eq!(
+        values(&mut reopened),
+        vec![BTreeMap::from([(
+            "id".into(),
+            Value::String("preserved".into())
+        )])]
     );
 }

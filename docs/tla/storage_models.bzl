@@ -72,6 +72,7 @@ STORAGE_MODELS = [
     "HawDBOverflowPublication",
     "HawDBPageCacheAdmission",
     "HawDBPrimaryKeyPredicate",
+    "HawDBProjectMetadataCapture",
     "HawDBProjectionBaselineComparison",
     "HawDBProjectionCaptureClosure",
     "HawDBProjectionChangeCapture",

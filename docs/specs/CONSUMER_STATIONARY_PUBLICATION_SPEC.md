@@ -35,6 +35,15 @@ live physical directory identity, and closes the lock before unregistering.
 branch catalog/root-pin guards already consume that fence. Initial directory
 capture and the owner lock each consume the existing project FD inventory.
 
+`ProjectMetadata` now captures its actual project root before selector/catalog
+reads and shares that root across refresh. Equal selector UUIDs in a replacement
+namespace cannot retarget it. This metadata-only capture has no branch writer
+lease and is not yet handed through every later runtime-admission transition.
+See [the metadata capture argument](../tla/PROJECT_METADATA_CAPTURE_PROOF.md).
+Retaining that capture makes pending-child completion peak at five native FDs;
+four-FD admission preserves pending evidence instead of completing. The paired
+facade regression checks both refusal and completion without dropping custody.
+
 This does not migrate all GraphStore/registry I/O or implement the allocation
 journal. A new ledger must borrow qualified source/project/branch custody from
 the actual kernel owner. Capturing whatever directory a saved label names later,

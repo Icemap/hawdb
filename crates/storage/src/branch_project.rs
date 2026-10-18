@@ -30,12 +30,13 @@
 use crate::branch_catalog::{self, BranchId, BranchRecord, BranchState, CatalogMetadataLease};
 use crate::durability;
 use crate::file_descriptors::ProjectFileDescriptors;
-use crate::file_io::{self as fs, File, OpenOptions};
+use crate::file_io::{self as fs, File, OpenOptions, SourceDirectory};
 use hawdb_core::{HawDBError, Result};
 use hawdb_integrity::crc32c;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 pub const PROJECT_HEADER: &str = "HAWDB_BRANCH_PROJECT_V1";
 const BOOTSTRAP_HEADER: &str = "HAWDB_BRANCH_BOOTSTRAP_V1";
@@ -156,17 +157,23 @@ pub fn inspect_project_manifest(root: &Path) -> Result<ProjectManifest> {
         }
         Err(error) => return Err(error.into()),
     };
+    decode_project_manifest(&encoded)
+}
+
+fn decode_project_manifest(encoded: &[u8]) -> Result<ProjectManifest> {
     if encoded.starts_with(LEGACY_HEADER) {
         return Ok(ProjectManifest::Legacy);
     }
-    ProjectSelector::decode(&encoded).map(ProjectManifest::Branch)
+    ProjectSelector::decode(encoded).map(ProjectManifest::Branch)
 }
 
 /// A validated metadata snapshot with a shared, finite project FD domain.
+/// It retains a counted project directory; refresh reads through that same root.
 /// It owns no branch writer lock, WAL, recovery cache, or runtime lease.
 #[derive(Debug)]
 pub struct ProjectMetadata {
     files: ProjectFileDescriptors,
+    root: Arc<SourceDirectory>,
     selector: ProjectSelector,
     catalog: branch_catalog::Catalog,
     main_index: usize,
@@ -179,11 +186,25 @@ impl ProjectMetadata {
     }
 
     pub fn from_files(files: ProjectFileDescriptors) -> Result<Self> {
-        let selector = match inspect_project_manifest(files.root())? {
+        let root = Arc::new(SourceDirectory::capture(files.root(), &files.io_context())?);
+        #[cfg(test)]
+        if let Some(hook) = AFTER_METADATA_CAPTURE.with(|hook| hook.borrow_mut().take()) {
+            hook();
+        }
+        Self::from_captured(files, root)
+    }
+
+    fn from_captured(files: ProjectFileDescriptors, root: Arc<SourceDirectory>) -> Result<Self> {
+        let context = files.io_context();
+        let encoded = read_bounded_file(root.open_child(&context, MANIFEST_FILE)?)?;
+        let selector = match decode_project_manifest(&encoded)? {
             ProjectManifest::Branch(selector) => selector,
             _ => return Err(integrity("project selector has not been published")),
         };
-        let catalog = branch_catalog::read_catalog(&catalog_path(files.root()))?;
+        let catalog = {
+            let branches = root.open_directory(&context, BRANCH_DIRECTORY)?;
+            branch_catalog::read_catalog_file(branches.open_child(&context, CATALOG_FILE)?)?
+        };
         let main_index = validate_catalog_identity(selector, &catalog)?;
         let main = &catalog.branches[main_index];
         if main.state != BranchState::Ready || main.base_root_digest.is_none() {
@@ -191,6 +212,7 @@ impl ProjectMetadata {
         }
         Ok(Self {
             files,
+            root,
             selector,
             catalog,
             main_index,
@@ -213,15 +235,22 @@ impl ProjectMetadata {
         &self.files
     }
 
-    /// Read a new atomic catalog image without acquiring a data-branch lock.
+    /// Read a new atomic catalog image through the original captured project.
+    /// This shares its directory handle and does not acquire a data-branch lock.
     /// A changed project selector is corruption, not a request to retarget.
     pub fn refresh(&self) -> Result<Self> {
-        let refreshed = Self::from_files(self.files.clone())?;
+        let refreshed = Self::from_captured(self.files.clone(), Arc::clone(&self.root))?;
         if refreshed.selector != self.selector {
             return Err(integrity("published project identity changed"));
         }
         Ok(refreshed)
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static AFTER_METADATA_CAPTURE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// Durably choose bootstrap UUIDs before publishing any catalog/head state.
@@ -306,9 +335,12 @@ pub fn catalog_path(root: &Path) -> PathBuf {
 }
 
 fn read_bounded(path: &Path) -> io::Result<Vec<u8>> {
+    read_bounded_file(File::open(path)?)
+}
+
+fn read_bounded_file(file: File) -> io::Result<Vec<u8>> {
     let mut encoded = Vec::with_capacity(MAX_SELECTOR_BYTES);
-    File::open(path)?
-        .take((MAX_SELECTOR_BYTES + 1) as u64)
+    file.take((MAX_SELECTOR_BYTES + 1) as u64)
         .read_to_end(&mut encoded)?;
     Ok(encoded)
 }

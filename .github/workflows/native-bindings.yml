@@ -127,6 +127,26 @@ jobs:
             -- ownership::tests:: --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/database-directory-ownership.txt
 
+      - name: Test captured project metadata reads
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            -- branch_project::tests:: --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/project-metadata.txt
+
+      - name: Test captured metadata pending recovery descriptor boundary
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --test branch_project_open \
+            -- pending_recovery_preserves_evidence_at_four_descriptors_and_completes_at_five \
+            writable_open_recovers_pending_children_with_aggregate_limits_and_no_runtime \
+            --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/project-metadata-recovery.txt
+
       - name: Test captured cleanup and originating operation admission
         if: ${{ !cancelled() }}
         shell: bash

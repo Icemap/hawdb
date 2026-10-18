@@ -628,11 +628,14 @@ impl Catalog {
 
 /// Read a published catalog after applying the same byte bound as the decoder.
 pub fn read_catalog(path: &Path) -> io::Result<Catalog> {
-    let length = fs::metadata(path)?.len();
+    read_catalog_file(fs::File::open(path)?)
+}
+
+pub(crate) fn read_catalog_file(file: File) -> io::Result<Catalog> {
+    let length = file.metadata()?.len();
     if length > MAX_CATALOG_BYTES as u64 {
         return Err(invalid_data("branch catalog exceeds its byte limit"));
     }
-    let file = fs::File::open(path)?;
     let mut encoded = Vec::with_capacity(length as usize);
     file.take((MAX_CATALOG_BYTES + 1) as u64)
         .read_to_end(&mut encoded)?;

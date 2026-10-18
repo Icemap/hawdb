@@ -131,7 +131,7 @@ fn manifest_probe_only_recognizes_the_exact_legacy_header() {
 
 #[test]
 fn metadata_opens_while_main_is_busy_without_reading_its_wal() {
-    let fixture = Fixture::new(4);
+    let fixture = Fixture::new(6);
     let selector = identity(11, 12);
     fixture.publish_metadata(selector);
     let main_directory = fixture
@@ -150,12 +150,13 @@ fn metadata_opens_while_main_is_busy_without_reading_its_wal() {
     assert_eq!(before.open, 2);
     assert_eq!(before.ownership_locks, 1);
     assert_eq!(before.transient_handles, 1);
-    let first = ProjectMetadata::open(fixture.root(), 4).unwrap();
-    let second = ProjectMetadata::open(fixture.root(), 4).unwrap();
+    let first = ProjectMetadata::open(fixture.root(), 6).unwrap();
+    let second = ProjectMetadata::open(fixture.root(), 6).unwrap();
     assert_eq!(first.selector(), selector);
     assert_eq!(first.main().source_commit_epoch, 42);
     assert_eq!(second.main().id, selector.main_branch_id);
-    assert_eq!(first.file_descriptors().metrics().open, before.open);
+    assert_eq!(first.file_descriptors().metrics().open, before.open + 2);
+    assert_eq!(fixture.files.metrics().high_water, 6);
     assert_eq!(fixture.files.metrics().mutable_wals, 0);
     assert_eq!(fixture.files.metrics().admitted_runtimes, 0);
     assert!(!main_directory.join("head.hawdb").exists());
@@ -164,8 +165,10 @@ fn metadata_opens_while_main_is_busy_without_reading_its_wal() {
         b"corrupt data; must not be read on metadata open",
     );
     drop(writer);
-    assert_eq!(fixture.files.metrics().open, 0);
+    assert_eq!(fixture.files.metrics().open, 2);
     assert_eq!(first.refresh().unwrap().catalog().revision, 2);
+    drop((first, second));
+    assert_eq!(fixture.files.metrics().open, 0);
 }
 
 #[test]
@@ -225,7 +228,7 @@ fn metadata_exhaustion_preserves_files_and_can_be_retried() {
     drop(handles);
     let metadata = ProjectMetadata::open(fixture.root(), 4).unwrap();
     assert_eq!(metadata.selector(), selector);
-    assert_eq!(metadata.file_descriptors().metrics().open, 0);
+    assert_eq!(metadata.file_descriptors().metrics().open, 1);
     assert!(metadata.file_descriptors().metrics().high_water <= 4);
     assert!(matches!(
         ProjectMetadata::open(fixture.root(), 5).unwrap_err(),
@@ -348,5 +351,80 @@ fn legacy_store_rejects_project_selector_before_wal_or_reclamation() {
         std::fs::read(&old_checkpoint).unwrap(),
         b"preserve old generation",
     );
+    assert_eq!(fixture.files.metrics().open, 0);
+}
+
+#[test]
+fn metadata_capture_and_refresh_ignore_replacement_even_with_matching_selector() {
+    let fixture = Fixture::new(4);
+    let selector = identity(121, 122);
+    fixture.publish_metadata(selector);
+    let moved = fixture.root().with_extension("moved");
+    let original = fixture.root().to_path_buf();
+    let renamed = moved.clone();
+    let mut replacement_catalog = branch_catalog::read_catalog(&catalog_path(&original)).unwrap();
+    replacement_catalog.revision = 900;
+    let replacement_bytes = replacement_catalog.encode().unwrap();
+    AFTER_METADATA_CAPTURE.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move || {
+            // No child handle is open while the empty-handle directory moves,
+            // so this boundary is supported on native Windows too.
+            std::fs::rename(&original, &renamed).unwrap();
+            std::fs::create_dir_all(original.join(BRANCH_DIRECTORY)).unwrap();
+            std::fs::write(original.join(MANIFEST_FILE), selector.encode()).unwrap();
+            std::fs::write(catalog_path(&original), replacement_bytes).unwrap();
+        }));
+    });
+    let metadata = ProjectMetadata::open(fixture.root(), 4).unwrap();
+    assert_eq!(metadata.catalog().revision, 2);
+    assert_eq!(fixture.files.metrics().open, 1);
+    let replacement = std::fs::read(catalog_path(fixture.root())).unwrap();
+    let mut updated = metadata.catalog().clone();
+    updated.revision = 3;
+    std::fs::write(catalog_path(&moved), updated.encode().unwrap()).unwrap();
+    let refreshed = metadata.refresh().unwrap();
+    assert_eq!(refreshed.catalog().revision, 3);
+    // Refresh borrows the same counted root rather than opening another one.
+    assert_eq!(fixture.files.metrics().open, 1);
+    assert_eq!(
+        std::fs::read(catalog_path(fixture.root())).unwrap(),
+        replacement
+    );
+    std::fs::remove_file(fixture.root().join(MANIFEST_FILE)).unwrap();
+    assert_eq!(metadata.refresh().unwrap().catalog().revision, 3);
+    std::fs::write(fixture.root().join(MANIFEST_FILE), selector.encode()).unwrap();
+    std::fs::write(moved.join(MANIFEST_FILE), identity(131, 132).encode()).unwrap();
+    assert!(metadata.refresh().is_err());
+    assert_eq!(fixture.files.metrics().open, 1);
+    drop((metadata, refreshed));
+    assert_eq!(fixture.files.metrics().open, 0);
+    std::fs::remove_dir_all(moved).unwrap();
+}
+
+#[test]
+fn captured_metadata_descriptor_refusal_preserves_original_and_retries() {
+    let fixture = Fixture::new(4);
+    let selector = identity(141, 142);
+    fixture.publish_metadata(selector);
+    let original = std::fs::read(catalog_path(fixture.root())).unwrap();
+    let metadata = ProjectMetadata::open(fixture.root(), 4).unwrap();
+    let blockers = (0..2)
+        .map(|_| File::open(fixture.root().join(MANIFEST_FILE)).unwrap())
+        .collect::<Vec<_>>();
+    // The selector read fits. Capturing branches then opening its catalog must
+    // refuse in the original domain, refunding only the attempted handles.
+    assert!(matches!(
+        metadata.refresh().unwrap_err(),
+        HawDBError::FileDescriptors(FileDescriptorError::BudgetExceeded { limit: 4, .. })
+    ));
+    assert_eq!(fixture.files.metrics().open, 3);
+    assert_eq!(
+        std::fs::read(catalog_path(fixture.root())).unwrap(),
+        original
+    );
+    drop(blockers);
+    assert_eq!(metadata.refresh().unwrap().selector(), selector);
+    assert_eq!(fixture.files.metrics().open, 1);
+    drop(metadata);
     assert_eq!(fixture.files.metrics().open, 0);
 }
