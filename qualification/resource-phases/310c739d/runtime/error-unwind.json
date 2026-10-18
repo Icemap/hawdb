@@ -1,0 +1,89 @@
+{
+  "status": "passed_both_backends_error_and_healthy_retry",
+  "exit": 0,
+  "source_head": "7a7ccfc8656495d750a903a0fc20f3a0342c2ea4",
+  "extension_sha256": "95ff8d4194dcc0431461f0738642295058f24c29590945fa90fea408ebeb1766",
+  "consumer_sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+  "scope": "Current collector real error unwind control, not final matrix qualification.",
+  "result": {
+    "records": [
+      {
+        "backend": "memory",
+        "rejected": {
+          "type": "ParseError",
+          "message": "parse error: expected identifier at byte 7 line 1 column 8 near ``"
+        },
+        "error_phase_delta": {
+          "prepare_calls": 0,
+          "prepare_ns": 0,
+          "pull_calls": 0,
+          "pull_ns": 0,
+          "owned_calls": 1,
+          "owned_ns": 1875
+        },
+        "healthy_retry": {
+          "rows": 1,
+          "checksum": "d94d12186c0f2fb7",
+          "query_boundary_ns": 1572125,
+          "elapsed_ns": 1581333,
+          "retained_snapshot": null,
+          "status": "ok",
+          "parity": true,
+          "complete_attempt_ns": 1589750,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 1540250
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": true,
+          "handoff_boundary_residual_ns": 31875,
+          "native_work_ns": 1540250,
+          "phase_scope": "Rust admitted owned facade call, including native materialization. Residual includes parameters, ABI/metadata, host materialization/wrappers, release and timing overhead; checksum iteration is excluded. It is not pure per-value conversion or a storage-to-host copy claim."
+        }
+      },
+      {
+        "backend": "file",
+        "rejected": {
+          "type": "ParseError",
+          "message": "parse error: expected identifier at byte 7 line 1 column 8 near ``"
+        },
+        "error_phase_delta": {
+          "prepare_calls": 0,
+          "prepare_ns": 0,
+          "pull_calls": 0,
+          "pull_ns": 0,
+          "owned_calls": 1,
+          "owned_ns": 6542
+        },
+        "healthy_retry": {
+          "rows": 1,
+          "checksum": "d94d12186c0f2fb7",
+          "query_boundary_ns": 230709,
+          "elapsed_ns": 233958,
+          "retained_snapshot": null,
+          "status": "ok",
+          "parity": true,
+          "complete_attempt_ns": 241542,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 225000
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": true,
+          "handoff_boundary_residual_ns": 5709,
+          "native_work_ns": 225000,
+          "phase_scope": "Rust admitted owned facade call, including native materialization. Residual includes parameters, ABI/metadata, host materialization/wrappers, release and timing overhead; checksum iteration is excluded. It is not pure per-value conversion or a storage-to-host copy claim."
+        }
+      }
+    ],
+    "scope": "Real parse rejection followed by unchanged complete owned consumer on both backends. Native counter/error unwind control only; no latency ratio/full exception matrix."
+  }
+}

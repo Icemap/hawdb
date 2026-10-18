@@ -1,0 +1,4 @@
+{
+  "status": "passed",
+  "scope": "Formatting/native workspace strict Clippy/minimalWASM strict Clippy/all-files prek/independentPython strictClippy/actionlint1.7.7 and planner hash controls. No compiled Bazel extension or runtime/latency qualification claim."
+}

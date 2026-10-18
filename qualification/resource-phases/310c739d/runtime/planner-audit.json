@@ -1,0 +1,12 @@
+{
+  "resources": {
+    "groups": 110,
+    "group_sha256": "cc583c164571864ecc57a9acf61c7809013df50008542c31f5f5fa8b83c7b5ef",
+    "unchanged_from_original": true
+  },
+  "phases": {
+    "groups": 10,
+    "group_sha256": "cbd723ce6d554478b75d7518406ea172a3f5c4308352b6b0cd36750ff107bc6d",
+    "unchanged_from_original": true
+  }
+}

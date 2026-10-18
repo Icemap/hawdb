@@ -1,0 +1,63 @@
+{
+  "status": "prepared_not_built_or_dispatched",
+  "engine": "310c739dbaa51dd0fab5d61128eda1d2d465c2c3",
+  "tree": "62dc18f4e8e90045fcc053d0c79e02aa8c44564c",
+  "overlay_paths": [
+    ".github/workflows/native-bindings.yml",
+    "BUILD.bazel",
+    "Cargo.toml",
+    "bindings/python/BUILD.bazel",
+    "bindings/python/Cargo.toml",
+    "bindings/python/src/database.rs",
+    "bindings/python/src/lib.rs",
+    "qualification/phases/consume.py",
+    "qualification/resources/baseline-source.json",
+    "qualification/resources/campaign.json",
+    "qualification/resources/numeric.py",
+    "qualification/resources/numeric_driver.py",
+    "qualification/resources/run.py",
+    "qualification/retained/configured.py",
+    "qualification/retained/run.py",
+    "src/api/retained_query.rs",
+    "src/embedded.rs",
+    "src/lib.rs",
+    "src/retained_phase_profile.rs"
+  ],
+  "overlay_sha256": {
+    ".github/workflows/native-bindings.yml": "8f998fb793caca931fab9c4d37cf13d95a621fb5cab97af29350a6d717a4431b",
+    "BUILD.bazel": "7307d38754191d1d700216151994ff230bf2616c800f83fb4be2678803391575",
+    "Cargo.toml": "c6e0719b5106a415dd105f34e92190be083a48d5863f30688775b1dafcca79aa",
+    "bindings/python/BUILD.bazel": "fdc7e2bcf88d179c06e58e7b434c3e3c405333c5b85a3b0e4d8ea5520e283a35",
+    "bindings/python/Cargo.toml": "089fe1a25ab50fc61b69029c3ef4bc3693918336c25564ee1c1109f81873b590",
+    "bindings/python/src/database.rs": "52de0af07bd1498f602a4dae7099dce10c79c5984b66543d8a93be8852758294",
+    "bindings/python/src/lib.rs": "a65949658bb640b2500480e87f627e3f2a2c2af96c2a72ec5d3454ec45e65d6b",
+    "qualification/phases/consume.py": "30be4cf3c40205ca27d5ed2190319b842795b692a2a10cacc882858a6363b668",
+    "qualification/resources/baseline-source.json": "d3e2c6bcc835f402ee724ad8f37ef3adc5a8df254984c6fb04e3d5d0918b1e13",
+    "qualification/resources/campaign.json": "d2c53a17a4260798cfbe172cf1bac79e8416545282ba2913148cb77feb3465b2",
+    "qualification/resources/numeric.py": "2e557b27a9527b0cfcd2af9459b16935a255a5c471326c1a836f7ff9063fa780",
+    "qualification/resources/numeric_driver.py": "6f9389c6d699a0203f2348718e7cbddbbddf976ba0816c89a04f1c6b01310142",
+    "qualification/resources/run.py": "28078a100322de7b812260d1a7917b3356d0927ff90a2fbb620561aae03d8b48",
+    "qualification/retained/configured.py": "371ff7ded3312a45ec4deb4413fd83a751fded0bc6791d9fd6c8785fe3a6c4ac",
+    "qualification/retained/run.py": "6a261983ee20ebab780a74d8645945b901a7f8e591018f8945c29d2dc90e4714",
+    "src/api/retained_query.rs": "242cd9e684a82f06b9d659cd56ba110c2e5e79a444af5488d95124a5639f18df",
+    "src/embedded.rs": "446e66981acbb7df2c1a40caa23a9494187797cc6e08ed5491b1cca166703895",
+    "src/lib.rs": "061360d55b443fc12269c62adb46a273477b0666228e573ca82893f482788eba",
+    "src/retained_phase_profile.rs": "edc025eeea53bf94ee108642cef2f6205f2fd6e4ac2c1eccd81f2ebfe35d1f75"
+  },
+  "consumer_sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+  "scope": "Current-source qualification preparation only; final composition and source equivalence remain required after Node review/landing. Original90/110/10 controls retained with10separate phase-only groups.",
+  "updated": 1792321748.6254752,
+  "workflow_resolution": "9 dispatch inputs; all original normal/manual jobs retained; qualification dispatches grouped by kind and selection and do not cancel a live campaign",
+  "actual_planner": {
+    "resources": {
+      "groups": 110,
+      "group_sha256": "cc583c164571864ecc57a9acf61c7809013df50008542c31f5f5fa8b83c7b5ef",
+      "unchanged_from_original": true
+    },
+    "phases": {
+      "groups": 10,
+      "group_sha256": "cbd723ce6d554478b75d7518406ea172a3f5c4308352b6b0cd36750ff107bc6d",
+      "unchanged_from_original": true
+    }
+  }
+}

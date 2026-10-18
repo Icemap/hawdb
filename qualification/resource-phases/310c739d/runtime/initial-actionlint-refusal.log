@@ -1,0 +1,5 @@
+.github/workflows/native-bindings.yml:4:3: maximum number of inputs for "workflow_dispatch" event is 10 but 15 inputs are provided. see https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#providing-inputs [events]
+  |
+4 |   workflow_dispatch:
+  |   ^~~~~~~~~~~~~~~~~~
+exit status 1
