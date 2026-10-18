@@ -553,8 +553,61 @@ fn cleanup_uses_one_captured_namespace_with_scratch_probe(retry: bool, check_scr
     )
     .unwrap();
     let publication = SearchProjectionPublishLease::acquire_for_cleanup(&fixture.root).unwrap();
+    let run_cleanup = |root: &Path| {
+        if retry {
+            crate::generation_cleanup::SearchProjectionCleanupState::default()
+                .run_under_publication(
+                    root,
+                    Default::default(),
+                    &publication,
+                    &fixture.reader.analyzer_lexicon,
+                    None,
+                );
+        } else {
+            PreparedCleanup::prepare(root, &memory, &task)
+                .unwrap()
+                .run_under_publication(
+                    root,
+                    Default::default(),
+                    &task,
+                    &publication,
+                    &fixture.reader.analyzer_lexicon,
+                    None,
+                );
+        }
+    };
     let captured = fixture.root.with_extension("captured-gc-source");
-    std::fs::rename(&fixture.root, &captured).unwrap();
+    let rename = std::fs::rename(&fixture.root, &captured);
+    if cfg!(windows)
+        && rename
+            .as_ref()
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::PermissionDenied)
+    {
+        // An open in-directory publication lock can prevent native rename on
+        // Windows. The original namespace must remain owned and safe to clean.
+        assert!(fixture.root.is_dir());
+        assert!(!captured.exists());
+        std::fs::create_dir(&captured).unwrap();
+        let foreign_bytes = b"unrelated namespace must remain untouched";
+        let foreign_file = captured.join(obsolete_name);
+        std::fs::write(&foreign_file, foreign_bytes).unwrap();
+        let foreign_directory_before = std::fs::metadata(&captured).unwrap().modified().unwrap();
+        run_cleanup(&fixture.root);
+        assert!(fixture.root.join(&active_name).is_file());
+        assert!(!fixture.root.join(obsolete_name).exists());
+        assert_eq!(std::fs::read(&foreign_file).unwrap(), foreign_bytes);
+        if check_scratch {
+            assert_eq!(
+                std::fs::metadata(&captured).unwrap().modified().unwrap(),
+                foreign_directory_before,
+                "validation scratch must not touch an unrelated namespace"
+            );
+        }
+        drop(publication);
+        std::fs::remove_dir_all(captured).unwrap();
+        return;
+    }
+    rename.unwrap();
     let replacement = Replacement {
         named: fixture.root.clone(),
         captured,
@@ -599,26 +652,7 @@ fn cleanup_uses_one_captured_namespace_with_scratch_probe(retry: bool, check_scr
         .unwrap()
         .modified()
         .unwrap();
-    if retry {
-        crate::generation_cleanup::SearchProjectionCleanupState::default().run_under_publication(
-            &fixture.root,
-            Default::default(),
-            &publication,
-            &fixture.reader.analyzer_lexicon,
-            None,
-        );
-    } else {
-        PreparedCleanup::prepare(&fixture.root, &memory, &task)
-            .unwrap()
-            .run_under_publication(
-                &fixture.root,
-                Default::default(),
-                &task,
-                &publication,
-                &fixture.reader.analyzer_lexicon,
-                None,
-            );
-    }
+    run_cleanup(&fixture.root);
     let foreign_directory_after = std::fs::metadata(&fixture.root)
         .unwrap()
         .modified()
