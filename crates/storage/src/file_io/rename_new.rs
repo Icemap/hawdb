@@ -277,6 +277,104 @@ mod tests {
         );
     }
 
+    // Exercise the retained resources missing from empty-directory move tests.
+    // A refused move must retain custody; dropping it to make a move succeed
+    // would open a peer-acquisition window. Consumer relocation remains a
+    // separate availability requirement and is not waived by this probe.
+    #[test]
+    fn open_child_custody_survives_native_move_or_refusal() {
+        use crate::file_io::{SourceDirectory, SourceDirectoryLockMode};
+        use std::fs::TryLockError;
+        for standard_move in [false, true] {
+            for resources in [0, 1, 2, 3, 4, 5] {
+                let fixture = Fixture::new();
+                let project = ProjectFileDescriptors::acquire(&fixture.0, 16).unwrap();
+                let source = fixture.0.join("source");
+                let destination = fixture.0.join("destination");
+                std::fs::create_dir(&source).unwrap();
+                std::fs::write(
+                    source.join(".search-source-process.lock"),
+                    b"retained child",
+                )
+                .unwrap();
+                let directory = (resources != 0)
+                    .then(|| SourceDirectory::capture(&source, &project.io_context()).unwrap());
+                let locked = matches!(resources, 3 | 5);
+                let child = (resources >= 2).then(|| {
+                    if resources >= 4 {
+                        return fs::OpenOptions::new()
+                            .read(true)
+                            .write(true)
+                            .open(source.join(".search-source-process.lock"))
+                            .unwrap();
+                    }
+                    directory
+                        .as_ref()
+                        .unwrap()
+                        .open_lock_file(
+                            &project.io_context(),
+                            ".search-source-process.lock",
+                            SourceDirectoryLockMode::ReadWriteCreate,
+                        )
+                        .unwrap()
+                });
+                if locked {
+                    child.as_ref().unwrap().try_lock().unwrap();
+                }
+                let moved = if standard_move {
+                    std::fs::rename(&source, &destination)
+                } else {
+                    fs::rename_directory_new(&source, &destination)
+                };
+                eprintln!("directory move probe: std={standard_move}, resources={resources} (0=none, 1=root, 2=relative-child, 3=relative-locked-child, 4=absolute-child, 5=absolute-locked-child), result={moved:?}");
+                if resources == 0 {
+                    moved.as_ref().unwrap();
+                }
+                let observed = if moved.is_ok() {
+                    assert!(!source.exists());
+                    &destination
+                } else {
+                    assert!(!destination.exists());
+                    &source
+                };
+                // Windows byte-range locks exclude reads through another
+                // handle too. Inspect identity while held; verify bytes after
+                // closure below, without unlocking early for a pathname read.
+                if !locked {
+                    assert_eq!(
+                        std::fs::read(observed.join(".search-source-process.lock")).unwrap(),
+                        b"retained child"
+                    );
+                }
+                if let Some(directory) = &directory {
+                    let current =
+                        SourceDirectory::capture(observed, &project.io_context()).unwrap();
+                    assert!(directory.same_directory(&current));
+                    if locked {
+                        let peer = directory
+                            .open_lock_file(
+                                &project.io_context(),
+                                ".search-source-process.lock",
+                                SourceDirectoryLockMode::ReadWriteCreate,
+                            )
+                            .unwrap();
+                        assert!(matches!(peer.try_lock(), Err(TryLockError::WouldBlock)));
+                    }
+                }
+                drop(child);
+                drop(directory);
+                assert_eq!(project.metrics().open, 0);
+                if moved.is_err() {
+                    fs::rename_directory_new(&source, &destination).unwrap();
+                }
+                assert_eq!(
+                    std::fs::read(destination.join(".search-source-process.lock")).unwrap(),
+                    b"retained child"
+                );
+            }
+        }
+    }
+
     #[test]
     fn same_target_is_not_a_successful_exclusive_move() {
         let fixture = Fixture::new();

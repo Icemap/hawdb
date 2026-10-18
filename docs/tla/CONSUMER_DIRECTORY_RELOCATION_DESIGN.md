@@ -1,7 +1,8 @@
 # Consumer directory publication
 
 Status: native no-replace publication and process-local failure handling are
-implemented; native Windows qualification is pending. This is not a completed
+implemented; native Windows Consumer relocation qualification failed on the
+`49a1899` PR merge build. This is not a completed
 MVCC, logical-incarnation, C/E installation or Mem activation contract.
 
 ## Namespace operation
@@ -89,3 +90,36 @@ move and mutation, target/source parent synchronization failure, lost response,
 an unlocatable moved root, source replacement, retained peer exclusion and
 receipt recovery. The synthetic fixtures do not establish full-dataset serving,
 physical RSS/I/O envelopes, fairness or cross-parent power-loss safety.
+
+
+## Windows open-child qualification failure
+
+The [Windows native-contract run on 49a1899](https://github.com/nowledge-co/hawdb/actions/runs/39091487031/job/117569129379)
+passed the five storage exclusive-move cases, but Consumer relocation failed
+six of 21 cases. The ordinary successful-move case returned AccessDenied (5).
+The source-replacement fixture also failed in `std::fs::rename` before calling
+our move adapter. Thus changing only MoveFileW is not an established remedy.
+The 66 recorder/directory and 36 root-custody cases passed in the same job.
+The tested commit/tree are recorded by that job; its PR merge source must not
+be relabeled as the exact head tree.
+
+Microsoft's [native rename rules](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)
+restrict renaming directories containing open files. Their POSIX replacement
+flag is documented for replacing an open destination when replacement is also
+requested; it is not a documented exemption for held source descendants.
+Requesting replacement would violate this adapter's occupied-target contract.
+The new native probe independently varies retained root, child and child-lock
+handles for both the standard-library and exclusive move paths. It records
+actual outcomes and verifies retained file identity, peer exclusion, unchanged
+bytes after refusal and successful movement after resources are closed.
+This probe does not waive any Consumer test or establish relocation success.
+
+Do not close and reacquire the retained process/publication locks around rename:
+that creates an unowned interval and loses the authority the protocol requires.
+The finite model permits a native move; its safety invariants do not prove that
+Windows offers that transition while these descendants are held. A portable
+activation design must establish an executable publication transition, most
+likely by selecting already-installed immutable output through a selector while
+keeping source directories stationary. Full selector/receipt identity, custody,
+recovery and GC qualification remain required; changing this failure to a
+permanent refusal does not complete Consumer activation or MVCC.
