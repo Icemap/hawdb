@@ -229,6 +229,19 @@ Errors raise `hawdb.exceptions` subclasses (`ParseError`, `SemanticError`,
 `StorageError`, `ExecutionError`, `ConflictError`, ...), mapped from
 `HawDBError` kinds.
 
+Memory-ledger and spill-quota refusals raise `exceptions.ResourceBudgetError`,
+a subclass of `ExecutionError`, with `resource`, `scope`, `owner`,
+`memory_class`, `requested`, `used`, `budget`, and `budget_option` attributes.
+The message retains the existing execution diagnostic. `requested` is the
+additional charge (the net increase for a query-level ownership transfer),
+and `budget` is the effective limit at the refusing boundary. `budget_option`
+identifies a host setting, runtime grant, or constructor argument; increasing
+a configured maximum does not widen a smaller runtime grant. For filesystem
+free-space refusals, `budget` is the usable space after preserving
+`min_spill_free_bytes`; that option is a minimum reserve, not a maximum to raise.
+File-descriptor failures retain `DescriptorError`. Other execution checks may
+still raise the general `ExecutionError`.
+
 ## Pydantic rows (optional)
 
 The `pydantic` extra types the rows a statement returned and the parameters a

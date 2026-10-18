@@ -480,6 +480,21 @@ fn json_error_from_hawdb(error: HawDBError) -> serde_json::Value {
             });
             response
         }
+        HawDBError::ResourceBudgetExceeded(cause) => {
+            let mut response = json_error("execution", &cause.message);
+            response["error"]["details"] = serde_json::json!({
+                "kind": "resource_budget_exceeded",
+                "resource": cause.resource.as_str(),
+                "scope": cause.scope.as_str(),
+                "owner": cause.owner,
+                "memory_class": cause.memory_class,
+                "requested": cause.requested,
+                "used": cause.used,
+                "budget": cause.budget,
+                "budget_option": cause.budget_option,
+            });
+            response
+        }
         error @ (HawDBError::GraphExpansionCandidateLimitExceeded { .. }
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. }) => json_error("execution", error),
         error @ HawDBError::TransactionConflict { .. } => json_error("execution", error),

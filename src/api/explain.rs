@@ -19,7 +19,7 @@ use crate::executor::{self, Row};
 use crate::qos::WorkRequest;
 use hawdb_core::Result;
 use hawdb_executor::binding::Binding;
-use hawdb_executor::memory::{enforced_query_memory_budget, enforced_result_memory_budget};
+use hawdb_executor::memory::enforced_result_memory_budget;
 use hawdb_executor::result_delivery::{ConsumerMemoryMode, OutputLimits, QueryOutputAccumulator};
 use hawdb_executor::QueryMemoryLedger;
 use hawdb_explain::json::{
@@ -81,10 +81,7 @@ pub(super) fn admit_explain_output(
     options: QueryExecutionOptions<'_>,
 ) -> Result<QueryOutput> {
     query_runtime_checkpoint(options.task_context)?;
-    let ledger = QueryMemoryLedger::new(enforced_query_memory_budget(
-        &config.execution_memory,
-        options.task_context,
-    )?);
+    let ledger = QueryMemoryLedger::for_query(&config.execution_memory, options.task_context)?;
     let mut rows = Vec::new();
     let mut consumer = |row| {
         rows.push(row);

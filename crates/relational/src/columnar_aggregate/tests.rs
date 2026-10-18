@@ -362,7 +362,10 @@ fn query_memory_admission_is_shared_and_released_on_drop() {
     )
     .err()
     .expect("second lease exceeds shared budget");
-    assert!(matches!(error, HawDBError::Execution(_)));
+    assert!(
+        matches!(error, HawDBError::ResourceBudgetExceeded(ref details)
+        if details.scope == hawdb_core::ResourceBudgetScope::Query)
+    );
     assert_eq!(ledger.snapshot().used_bytes, bytes);
     drop(first);
     assert_eq!(ledger.snapshot().used_bytes, 0);

@@ -55,16 +55,14 @@ pub(super) fn admit_append_explain(
     options: QueryStreamOptions,
     task_context: Option<&hawdb_core::RuntimeTaskContext>,
 ) -> Result<QueryOutput> {
-    use hawdb_executor::memory::{enforced_query_memory_budget, enforced_result_memory_budget};
+    use hawdb_executor::memory::enforced_result_memory_budget;
     use hawdb_executor::result_delivery::{
         ConsumerMemoryMode, OutputLimits, QueryOutputAccumulator,
     };
 
     super::query_runtime::query_runtime_checkpoint(task_context)?;
-    let ledger = hawdb_executor::QueryMemoryLedger::new(enforced_query_memory_budget(
-        &config.execution_memory,
-        task_context,
-    )?);
+    let ledger =
+        hawdb_executor::QueryMemoryLedger::for_query(&config.execution_memory, task_context)?;
     let result_budget = enforced_result_memory_budget(&config.execution_memory, task_context)?;
     let mut output = hawdb_executor::QueryRowsBuilder::with_row_capacity(rows.len());
     {

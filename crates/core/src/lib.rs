@@ -35,7 +35,10 @@ pub use cancellation::{
     RuntimeTaskContext,
 };
 pub use capability::{RuntimeCapabilities, RuntimeCapability};
-pub use error::{HawDBError, ReadBudgetError, ReadBudgetResource, Result};
+pub use error::{
+    HawDBError, ReadBudgetError, ReadBudgetResource, ResourceBudgetError, ResourceBudgetKind,
+    ResourceBudgetScope, Result,
+};
 pub use graph::RelationshipDirection;
 pub use graph_rag::{
     build_graph_rag_schema_context, GraphRagCommonPathSummary, GraphRagGeneratedQuery,

@@ -46,6 +46,16 @@ prebuilt Cargo artifact is required.
   (e.g. `capability_unavailable`, `execution`, `admission`, `stopped`);
   `invalid_argument` marks caller-side contract violations and `panic`
   a contained Rust panic.
+- **Resource refusals**: memory-ledger and spill-quota failures use
+  `kind: "resource_budget_exceeded"` and add a `resource_budget` object with
+  `resource`, `scope`, `owner`, `memory_class` (nullable), `requested`, `used`,
+  `budget`, and `budget_option`. The message is unchanged. Counts are unsigned
+  64-bit integers; hosts must preserve their precision. `requested` is the
+  additional charge, or the net increase for a query-level ownership transfer.
+  The option names the effective host limit, runtime grant, or constructor
+  argument. Filesystem failures report usable space after the configured
+  minimum free-space reserve, so raising that minimum reduces usable space.
+  Existing descriptor errors and ordinary error JSON remain unchanged.
 - **The handle is thread-safe**: calls on one `HawdbDatabase` are
   serialized internally. Callers that want per-thread parallelism open
   multiple handles.

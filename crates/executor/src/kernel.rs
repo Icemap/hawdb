@@ -20,7 +20,9 @@ use crate::{
     ExecutionMemoryConfig, QueryMemoryAccount, QueryMemoryClass, QueryMemoryLease,
     QueryMemoryLedger,
 };
-use hawdb_core::{HawDBError, Result};
+use hawdb_core::{
+    HawDBError, ResourceBudgetError, ResourceBudgetKind, ResourceBudgetScope, Result,
+};
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -285,10 +287,20 @@ impl SpillBudgetTracker {
         let mut current = self.run_count.load(Ordering::Acquire);
         loop {
             if current >= self.max_runs {
-                return Err(HawDBError::Execution(format!(
-                    "{} exceeded max_spill_runs {}",
-                    self.operator, self.max_runs
-                )));
+                return Err(HawDBError::from(ResourceBudgetError {
+                    resource: ResourceBudgetKind::SpillRuns,
+                    scope: ResourceBudgetScope::Operator,
+                    owner: self.operator.to_string(),
+                    memory_class: None,
+                    requested: 1,
+                    used: current as u64,
+                    budget: self.max_runs as u64,
+                    budget_option: "ExecutionMemoryConfig.max_spill_runs",
+                    message: format!(
+                        "{} exceeded max_spill_runs {}",
+                        self.operator, self.max_runs
+                    ),
+                }));
             }
             match self.run_count.compare_exchange_weak(
                 current,
@@ -320,14 +332,27 @@ impl SpillBudgetTracker {
     ) -> Result<(SpillWriteReservation, SpillBudgetReservation<'_>)> {
         let mut current = self.used_bytes.load(Ordering::Acquire);
         loop {
+            let budget_error = |message| {
+                HawDBError::from(ResourceBudgetError {
+                    resource: ResourceBudgetKind::SpillBytes,
+                    scope: ResourceBudgetScope::Operator,
+                    owner: self.operator.to_string(),
+                    memory_class: None,
+                    requested: bytes,
+                    used: current,
+                    budget: self.max_bytes,
+                    budget_option: "ExecutionMemoryConfig.max_spill_bytes",
+                    message,
+                })
+            };
             let next = current.checked_add(bytes).ok_or_else(|| {
-                HawDBError::Execution(format!(
+                budget_error(format!(
                     "{} exceeded max_spill_bytes {} (byte count overflow)",
                     self.operator, self.max_bytes
                 ))
             })?;
             if next > self.max_bytes {
-                return Err(HawDBError::Execution(format!(
+                return Err(budget_error(format!(
                     "{} exceeded max_spill_bytes {} (next total {})",
                     self.operator, self.max_bytes, next
                 )));
@@ -367,7 +392,7 @@ impl SpillBudgetTracker {
 
     fn pool_error(&self, error: HawDBError) -> HawDBError {
         match error {
-            HawDBError::FileDescriptors(_) => error,
+            HawDBError::FileDescriptors(_) | HawDBError::ResourceBudgetExceeded(_) => error,
             _ => {
                 HawDBError::Execution(format!("{} spill pool unavailable: {error}", self.operator))
             }

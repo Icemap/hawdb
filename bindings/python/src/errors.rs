@@ -61,6 +61,12 @@ create_exception!(
 );
 create_exception!(
     hawdb.exceptions,
+    ResourceBudgetError,
+    ExecutionError,
+    "Execution resource reservation refused; attributes identify the effective budget."
+);
+create_exception!(
+    hawdb.exceptions,
     ConflictError,
     Error,
     "Transaction conflict or exhausted commit sequence."
@@ -111,6 +117,21 @@ pub fn format_hawdb_error(error: &HawDBError) -> PyErr {
         HawDBError::Storage(_) => StorageError::new_err(message),
         HawDBError::FileDescriptors(_) => DescriptorError::new_err(message),
         HawDBError::StorageIntegrity(_) => IntegrityError::new_err(message),
+        HawDBError::ResourceBudgetExceeded(budget) => Python::attach(|py| {
+            let exception = ResourceBudgetError::new_err(message);
+            let value = exception.value(py);
+            let attributes = (|| -> PyResult<()> {
+                value.setattr("resource", budget.resource.as_str())?;
+                value.setattr("scope", budget.scope.as_str())?;
+                value.setattr("owner", &budget.owner)?;
+                value.setattr("memory_class", budget.memory_class)?;
+                value.setattr("requested", budget.requested)?;
+                value.setattr("used", budget.used)?;
+                value.setattr("budget", budget.budget)?;
+                value.setattr("budget_option", budget.budget_option)
+            })();
+            attributes.err().unwrap_or(exception)
+        }),
         HawDBError::Execution(_)
         | HawDBError::BranchEvidenceBudgetExceeded { .. }
         | HawDBError::ReadBudgetExceeded(_)
@@ -144,6 +165,7 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
     module.add("IntegrityError", py.get_type::<IntegrityError>())?;
     module.add("DescriptorError", py.get_type::<DescriptorError>())?;
     module.add("ExecutionError", py.get_type::<ExecutionError>())?;
+    module.add("ResourceBudgetError", py.get_type::<ResourceBudgetError>())?;
     module.add("ConflictError", py.get_type::<ConflictError>())?;
     module.add("CapabilityError", py.get_type::<CapabilityError>())?;
     module.add("BranchError", py.get_type::<BranchError>())?;
@@ -152,4 +174,95 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
     module.add("RetainedError", py.get_type::<RetainedError>())?;
     module.add("BackpressureError", py.get_type::<BackpressureError>())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hawdb::{ResourceBudgetKind, ResourceBudgetScope};
+
+    #[test]
+    fn embedded_resource_errors_keep_python_type_message_and_fields() {
+        Python::initialize();
+        Python::attach(|py| {
+            for (resource, scope, class) in [
+                (
+                    ResourceBudgetKind::MemoryBytes,
+                    ResourceBudgetScope::Query,
+                    Some("blocking_state"),
+                ),
+                (
+                    ResourceBudgetKind::SpillBytes,
+                    ResourceBudgetScope::SharedPool,
+                    None,
+                ),
+                (
+                    ResourceBudgetKind::SpillRuns,
+                    ResourceBudgetScope::Operator,
+                    None,
+                ),
+            ] {
+                let source = HawDBError::from(hawdb::ResourceBudgetError {
+                    resource,
+                    scope,
+                    owner: "sort".into(),
+                    memory_class: class,
+                    requested: 9,
+                    used: u64::MAX - 8,
+                    budget: u64::MAX,
+                    budget_option: "test grant",
+                    message: "reservation refused".into(),
+                });
+                let exception = format_embedded_error(&EmbeddedQueryError::Database(source));
+                assert!(exception.is_instance_of::<ResourceBudgetError>(py));
+                assert!(exception.is_instance_of::<ExecutionError>(py));
+                let value = exception.value(py);
+                assert_eq!(
+                    value.str().unwrap().to_str().unwrap(),
+                    "execution error: reservation refused"
+                );
+                for (field, expected) in [
+                    ("resource", resource.as_str()),
+                    ("scope", scope.as_str()),
+                    ("owner", "sort"),
+                    ("budget_option", "test grant"),
+                ] {
+                    assert_eq!(
+                        value.getattr(field).unwrap().extract::<String>().unwrap(),
+                        expected
+                    );
+                }
+                assert_eq!(
+                    value
+                        .getattr("memory_class")
+                        .unwrap()
+                        .extract::<Option<String>>()
+                        .unwrap()
+                        .as_deref(),
+                    class
+                );
+                for (field, expected) in [
+                    ("requested", 9),
+                    ("used", u64::MAX - 8),
+                    ("budget", u64::MAX),
+                ] {
+                    assert_eq!(
+                        value.getattr(field).unwrap().extract::<u64>().unwrap(),
+                        expected
+                    );
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn ordinary_execution_error_is_not_resource_exhaustion() {
+        Python::initialize();
+        Python::attach(|py| {
+            let exception = format_hawdb_error(&HawDBError::Execution("consumer failed".into()));
+            assert!(exception.is_instance_of::<ExecutionError>(py));
+            assert!(!exception.is_instance_of::<ResourceBudgetError>(py));
+            assert!(!exception.value(py).hasattr("budget").unwrap());
+        });
+    }
 }

@@ -108,7 +108,10 @@ fn rejects_result_memory(door: FrontDoor, analyze: bool) {
         },
     )
     .unwrap_err();
-    assert!(matches!(error, crate::HawDBError::Execution(_)), "{error}");
+    assert!(
+        matches!(error, crate::HawDBError::ResourceBudgetExceeded(_)),
+        "{error}"
+    );
     assert!(
         error.to_string().contains("result_materialization"),
         "{error}"
@@ -426,7 +429,14 @@ fn snapshot_report_obeys_runtime_memory_reservations() {
                     &context,
                 )
                 .unwrap_err();
-            assert!(matches!(error, crate::HawDBError::Execution(_)), "{error}");
+            if reservation.1 == 0 {
+                assert!(matches!(error, crate::HawDBError::Execution(_)), "{error}");
+            } else {
+                assert!(
+                    matches!(error, crate::HawDBError::ResourceBudgetExceeded(_)),
+                    "{error}"
+                );
+            }
             assert!(error.to_string().contains("query"), "{error}");
         }
     }
