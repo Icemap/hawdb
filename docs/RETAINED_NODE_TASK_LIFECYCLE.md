@@ -23,10 +23,12 @@ Exported `RetainedNodeView` owners can outlive both cursor and context: their
 independent query/runtime leases continue charging original row/catalog data
 and foreign metadata until their final release.
 
-An existing `RuntimeMemoryReservation` limits the retained ledger to the smaller
-of configured and admitted query memory. Its admitted result reservation caps
-the result account, including cursor control, source ownership and duplicate
-view metadata. Zero reservations fail, and smaller admissions are never raised
+An existing `RuntimeMemoryReservation` supplies the retained ledger's query limit.
+The result account uses the smaller of configured query memory and admitted
+result memory, including cursor control, source ownership and duplicate view
+metadata. Every charge must fit both limits. Typed refusals identify the actual
+configuration option or runtime reservation and distinguish account from query
+exhaustion. Zero reservations fail, and smaller admissions are never raised
 to a configured floor. Runtime retained reservations remain independently
 required; an existing host reservation does not exempt these owners from
 runtime admission. Conservative overlap is allowed.
