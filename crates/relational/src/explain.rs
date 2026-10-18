@@ -665,7 +665,7 @@ fn explain_aggregate_expression(expression: &SqlExpression) -> Option<String> {
             .collect::<Vec<_>>();
         return (!aggregates.is_empty()).then(|| format!("coalesce({})", aggregates.join(", ")));
     }
-    if !matches!(name.as_str(), "count" | "sum" | "max") {
+    if !matches!(name.as_str(), "count" | "sum" | "min" | "max") {
         return None;
     }
     let arguments = arguments

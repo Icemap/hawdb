@@ -276,6 +276,15 @@ fn canonical_mutation_checksum_preserves_budget_refusal_type() {
         execution: Some(&permit),
     };
     let error = read_encoding::checksum(&run.body, context).unwrap_err();
-    assert!(matches!(error, HawDBError::Execution(_)), "{error:?}");
+    assert!(
+        matches!(&error, HawDBError::ResourceBudgetExceeded(cause)
+            if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                && cause.scope == hawdb_core::ResourceBudgetScope::Account
+                && cause.owner == "tiny mutation checksum"
+                && cause.budget == 1
+                && cause.used == 0
+                && cause.requested > 1),
+        "{error:?}"
+    );
     assert_eq!(governor.snapshot().active_background_io_slots, 0);
 }

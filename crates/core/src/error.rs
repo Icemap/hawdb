@@ -15,6 +15,9 @@
 use crate::RuntimeCapability;
 use std::fmt::{Display, Formatter};
 
+mod resource;
+pub use resource::{ResourceBudgetError, ResourceBudgetKind, ResourceBudgetScope};
+
 /// Descriptor admission failures are distinct from corrupt storage or a busy
 /// branch. Project quota counts belong to one engine resource domain; OS-limit
 /// failures can additionally report the process allowance when it is known.
@@ -89,6 +92,8 @@ pub enum HawDBError {
     /// A registered Search target is retained by another native operation.
     ProjectionBusy,
     Execution(String),
+    /// Box the diagnostic so successful Result values do not grow with its fields.
+    ResourceBudgetExceeded(Box<ResourceBudgetError>),
     ReadBudgetExceeded(ReadBudgetError),
     GraphExpansionCandidateLimitExceeded {
         requested: usize,
@@ -144,6 +149,7 @@ impl Display for HawDBError {
                 write!(f, "storage integrity error: {message}")
             }
             HawDBError::Execution(message) => write!(f, "execution error: {message}"),
+            HawDBError::ResourceBudgetExceeded(error) => write!(f, "execution error: {error}"),
             HawDBError::ReadBudgetExceeded(error) => write!(f, "execution error: {error}"),
             HawDBError::GraphExpansionCandidateLimitExceeded { requested, limit } => write!(
                 f,
@@ -198,6 +204,7 @@ impl std::error::Error for HawDBError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::FileDescriptors(error) => Some(error),
+            Self::ResourceBudgetExceeded(error) => Some(error.as_ref()),
             Self::ReadBudgetExceeded(error) => Some(error),
             Self::BranchReclamationBlocked { cause, .. } => Some(cause.as_ref()),
             _ => None,
@@ -218,13 +225,15 @@ impl HawDBError {
         })
     }
 
-    /// Preserve a descriptor rejection through nested storage error wrappers.
+    /// Preserve a resource rejection through nested storage error wrappers.
     pub fn from_storage_error(error: impl std::error::Error + 'static) -> Self {
         if let Some(error) = (&error as &dyn std::error::Error).downcast_ref::<Self>() {
             return error.clone();
         }
         if let Some(resource) = file_descriptor_error(&error) {
             Self::FileDescriptors(resource)
+        } else if let Some(resource) = resource::find_resource_budget_error(&error) {
+            Self::from(resource)
         } else {
             Self::Storage(error.to_string())
         }
@@ -249,6 +258,12 @@ impl HawDBError {
 }
 
 pub type Result<T> = std::result::Result<T, HawDBError>;
+
+impl From<ResourceBudgetError> for HawDBError {
+    fn from(error: ResourceBudgetError) -> Self {
+        Self::ResourceBudgetExceeded(Box::new(error))
+    }
+}
 
 impl From<std::io::Error> for HawDBError {
     fn from(error: std::io::Error) -> Self {

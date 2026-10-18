@@ -42,11 +42,31 @@ pub fn enforced_result_memory_budget(
     memory: &ExecutionMemoryConfig,
     task_context: Option<&RuntimeTaskContext>,
 ) -> Result<NonZeroUsize> {
+    enforced_result_memory_budget_with_option(memory, task_context).map(|(budget, _)| budget)
+}
+
+/// Returns the effective result limit and the configuration or admission that supplied it.
+#[doc(hidden)]
+pub fn enforced_result_memory_budget_with_option(
+    memory: &ExecutionMemoryConfig,
+    task_context: Option<&RuntimeTaskContext>,
+) -> Result<(NonZeroUsize, &'static str)> {
+    let configured = (
+        memory.query_memory_bytes,
+        "ExecutionMemoryConfig.query_memory_bytes",
+    );
     let Some(reservation) = task_context.and_then(RuntimeTaskContext::memory_reservation) else {
-        return Ok(memory.query_memory_bytes);
+        return Ok(configured);
     };
     let admitted = runtime_memory_budget("query result", reservation.result_bytes())?;
-    Ok(admitted.min(memory.query_memory_bytes))
+    if admitted <= memory.query_memory_bytes {
+        Ok((
+            admitted,
+            "RuntimeTaskContext.memory_reservation.result_bytes",
+        ))
+    } else {
+        Ok(configured)
+    }
 }
 
 fn runtime_memory_budget(owner: &str, bytes: u64) -> Result<NonZeroUsize> {
@@ -375,7 +395,68 @@ fn usize_to_u64(value: usize) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hawdb_core::RuntimeMemoryReservation;
     use hawdb_plan_cypher::Predicate;
+
+    #[test]
+    fn result_memory_origin_tracks_the_effective_limit() {
+        let memory = ExecutionMemoryConfig {
+            query_memory_bytes: NonZeroUsize::new(128).unwrap(),
+            ..ExecutionMemoryConfig::default()
+        };
+        let ungoverned = RuntimeTaskContext::default();
+        for context in [None, Some(&ungoverned)] {
+            assert_eq!(
+                enforced_result_memory_budget_with_option(&memory, context).unwrap(),
+                (
+                    memory.query_memory_bytes,
+                    "ExecutionMemoryConfig.query_memory_bytes"
+                )
+            );
+        }
+        for (grant, expected, origin) in [
+            (64, 64, "RuntimeTaskContext.memory_reservation.result_bytes"),
+            (
+                128,
+                128,
+                "RuntimeTaskContext.memory_reservation.result_bytes",
+            ),
+            (256, 128, "ExecutionMemoryConfig.query_memory_bytes"),
+        ] {
+            let context = RuntimeTaskContext::default()
+                .with_memory_reservation(RuntimeMemoryReservation::new(1024, grant));
+            let (budget, option) =
+                enforced_result_memory_budget_with_option(&memory, Some(&context)).unwrap();
+            assert_eq!(budget.get(), expected);
+            assert_eq!(option, origin);
+            assert_eq!(
+                enforced_result_memory_budget(&memory, Some(&context)).unwrap(),
+                budget
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_result_grants_do_not_fall_back_to_configuration() {
+        let memory = ExecutionMemoryConfig::default();
+        let context = RuntimeTaskContext::default()
+            .with_memory_reservation(RuntimeMemoryReservation::new(1024, 0));
+        let error = enforced_result_memory_budget_with_option(&memory, Some(&context)).unwrap_err();
+        assert!(matches!(error, HawDBError::Execution(_)));
+        assert!(error
+            .to_string()
+            .contains("query result reservation must be non-zero"));
+        if usize::BITS < u64::BITS {
+            let context = RuntimeTaskContext::default()
+                .with_memory_reservation(RuntimeMemoryReservation::new(1024, u64::MAX));
+            let error =
+                enforced_result_memory_budget_with_option(&memory, Some(&context)).unwrap_err();
+            assert!(matches!(error, HawDBError::Execution(_)));
+            assert!(error
+                .to_string()
+                .contains("does not fit the executor address space"));
+        }
+    }
 
     fn admission_test_config() -> ExecutionMemoryConfig {
         ExecutionMemoryConfig {

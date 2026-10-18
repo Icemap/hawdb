@@ -157,6 +157,7 @@ pub const fn nowledge_query_fuzz_error_class(error: &HawDBError) -> &'static str
         HawDBError::Execution(_)
         | HawDBError::BranchEvidenceBudgetExceeded { .. }
         | HawDBError::ReadBudgetExceeded(_)
+        | HawDBError::ResourceBudgetExceeded(_)
         | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. }
         | HawDBError::TransactionConflict { .. }

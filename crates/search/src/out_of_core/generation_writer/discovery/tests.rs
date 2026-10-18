@@ -85,10 +85,12 @@ fn discovery_resource_failure_and_cancellation_never_reuse_a_generation() {
             if cancel {
                 task.cancellation().cancel();
             }
-            assert!(matches!(
-                next(&fixture.0, u64::MAX, &memory, &task),
-                Err(HawDBError::Execution(_))
-            ));
+            let error = next(&fixture.0, u64::MAX, &memory, &task).unwrap_err();
+            if cancel {
+                assert!(matches!(error, HawDBError::Execution(_)));
+            } else {
+                assert!(matches!(error, HawDBError::ResourceBudgetExceeded(_)));
+            }
             assert_eq!(memory.ledger.snapshot().used_bytes, 0);
         }
     }
@@ -152,7 +154,7 @@ fn discovery_decode_admission_covers_valid_escaped_sequence_and_invalid_json() {
         let (limited, task) = context(exact - 1);
         assert!(matches!(
             admitted_manifest_generation(&bytes, &limited, &task),
-            Err(HawDBError::Execution(_))
+            Err(HawDBError::ResourceBudgetExceeded(_))
         ));
     }
     // Active outer decoding and native recovery traversal use the same ledger.
@@ -244,7 +246,10 @@ fn active_manifest_admission_covers_compact_untrusted_segment_sequences() {
         let (limited, task) = context(memory.ledger.snapshot().peak_bytes - 1);
         assert!(matches!(
             active_identity(&fixture.0, &limited, &task),
-            Err(HawDBError::Execution(_))
+            Err(HawDBError::ResourceBudgetExceeded(ref cause))
+                if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                    && cause.budget == limited.ledger.snapshot().budget_bytes as u64
+                    && cause.requested > cause.budget.saturating_sub(cause.used)
         ));
         assert_eq!(limited.ledger.snapshot().used_bytes, 0);
     }
@@ -280,7 +285,10 @@ fn active_manifest_admission_covers_compact_untrusted_mutation_sequences() {
         let (limited, task) = context(memory.ledger.snapshot().peak_bytes - 1);
         assert!(matches!(
             active_identity(&fixture.0, &limited, &task),
-            Err(HawDBError::Execution(_))
+            Err(HawDBError::ResourceBudgetExceeded(ref cause))
+                if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                    && cause.budget == limited.ledger.snapshot().budget_bytes as u64
+                    && cause.requested > cause.budget.saturating_sub(cause.used)
         ));
         assert_eq!(limited.ledger.snapshot().used_bytes, 0);
     }

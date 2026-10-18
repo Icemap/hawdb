@@ -277,6 +277,7 @@ fn numeric_paths_match_scalar_oracle() {
 #[test]
 #[ignore = "deterministic local numeric execution campaign"]
 fn numeric_execution_differential_campaign() {
+    super::tests::parallel_resource_failure_preserves_parent_context_and_original_error();
     campaign(256);
     eprintln!("numeric execution campaign: 256 seeds, 9216 path/batch/exit cases");
 }

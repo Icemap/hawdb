@@ -132,7 +132,12 @@ fn descriptor_refuses_map_expansion_before_owned_metadata_allocation() {
                 permit: &permit,
             }),
         );
-        assert!(matches!(result, Err(HawDBError::Execution(_))));
+        assert!(
+            matches!(result, Err(HawDBError::ResourceBudgetExceeded(ref cause))
+            if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                && cause.budget == (2 << 20)
+                && cause.requested > cause.budget.saturating_sub(cause.used))
+        );
     });
     assert!(
         peak < 16 << 10,

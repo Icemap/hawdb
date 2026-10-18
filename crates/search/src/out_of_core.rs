@@ -65,6 +65,8 @@ mod root_registry;
 mod text_seed;
 #[cfg(feature = "vector-search")]
 mod vector_reader;
+#[cfg(test)]
+mod vector_selection_tests;
 mod vector_serving;
 pub use generation_writer::{
     GovernedSearchGenerationUpdate, GovernedSearchGenerationWriter, PreparedSearchPublication,
@@ -422,7 +424,6 @@ struct SearchMetadataDocument {
 
 #[derive(Debug)]
 struct SearchVectorDocument {
-    vector_ordinal: u64,
     id: String,
     embedding: Vec<f32>,
 }
@@ -2791,6 +2792,17 @@ impl SearchOutOfCoreReader {
         segment: &SearchSegmentDescriptorEntry,
         metrics: &mut SearchOutOfCoreMetrics,
     ) -> Result<Vec<SearchVectorDocument>> {
+        self.read_vector_segment_selected(artifact, segment, metrics, usize::MAX, |_| true)
+    }
+
+    fn read_vector_segment_selected(
+        &self,
+        artifact: &SearchOutOfCoreSegmentReader,
+        segment: &SearchSegmentDescriptorEntry,
+        metrics: &mut SearchOutOfCoreMetrics,
+        selected_capacity: usize,
+        selected: impl FnMut(u64) -> bool,
+    ) -> Result<Vec<SearchVectorDocument>> {
         let layout = Self::artifact_layout_range(artifact, segment.segment_id)?;
         let range = layout.vectors;
         let payload = read_out_of_core_payload_range(
@@ -2815,6 +2827,8 @@ impl SearchOutOfCoreReader {
             range.entry_count,
             layout.vector_ordinal_base,
             self.manifest.embedding_dimension,
+            selected_capacity,
+            selected,
         )
     }
 
@@ -4322,6 +4336,8 @@ fn decode_vector_segment(
     expected_count: usize,
     expected_ordinal_base: u64,
     expected_dimension: Option<usize>,
+    selected_capacity: usize,
+    mut selected: impl FnMut(u64) -> bool,
 ) -> Result<Vec<SearchVectorDocument>> {
     let mut lines = text.lines();
     if lines.next() != Some("HAWDB_SEARCH_VECTOR_SEGMENT_V1") {
@@ -4330,7 +4346,11 @@ fn decode_vector_segment(
             segment.segment_id
         )));
     }
-    let mut documents = Vec::with_capacity(expected_count);
+    let mut documents: Vec<SearchVectorDocument> =
+        Vec::with_capacity(expected_count.min(selected_capacity));
+    let mut count = 0usize;
+    let mut previous_unselected_id = None;
+    let mut invalid_layout = false;
     for line in lines {
         let fields = line.split('\t').collect::<Vec<_>>();
         match fields.as_slice() {
@@ -4341,25 +4361,45 @@ fn decode_vector_segment(
                         segment.segment_id
                     ))
                 })?;
-                let embedding = decode_embedding(raw_embedding)?.ok_or_else(|| {
-                    HawDBError::Storage(format!(
+                let embedding = if selected(vector_ordinal) {
+                    decode_embedding(raw_embedding)?
+                } else {
+                    None
+                };
+                let (dimension, finite) = match &embedding {
+                    Some(values) => (values.len(), values.iter().all(|value| value.is_finite())),
+                    None => validate_unselected_embedding(raw_embedding)?,
+                };
+                if dimension == 0 {
+                    return Err(HawDBError::Storage(format!(
                         "search segment {} vector sidecar contains an empty embedding",
                         segment.segment_id
-                    ))
-                })?;
-                if embedding.iter().any(|value| !value.is_finite())
-                    || expected_dimension.is_none_or(|dimension| embedding.len() != dimension)
-                {
+                    )));
+                }
+                if !finite || expected_dimension.is_none_or(|expected| dimension != expected) {
                     return Err(HawDBError::Storage(format!(
                         "search segment {} vector sidecar has an invalid embedding",
                         segment.segment_id
                     )));
                 }
-                documents.push(SearchVectorDocument {
-                    vector_ordinal,
-                    id: decode_string(raw_id)?,
-                    embedding,
-                });
+                let id = decode_string(raw_id)?;
+                // Retained IDs remain in the output; only an unselected predecessor
+                // needs separate ownership for the ordering check.
+                let previous_id = previous_unselected_id
+                    .as_deref()
+                    .or_else(|| documents.last().map(|document| document.id.as_str()));
+                invalid_layout |= vector_ordinal
+                    != expected_ordinal_base.saturating_add(count as u64)
+                    || previous_id.is_some_and(|previous| previous >= id.as_str())
+                    || id < segment.first_document_id
+                    || id > segment.last_document_id;
+                count = count.saturating_add(1);
+                if let Some(embedding) = embedding {
+                    previous_unselected_id = None;
+                    documents.push(SearchVectorDocument { id, embedding });
+                } else {
+                    previous_unselected_id = Some(id);
+                }
             }
             _ => {
                 return Err(HawDBError::Storage(format!(
@@ -4369,21 +4409,43 @@ fn decode_vector_segment(
             }
         }
     }
-    if documents.len() != expected_count
-        || documents.iter().enumerate().any(|(offset, document)| {
-            document.vector_ordinal != expected_ordinal_base.saturating_add(offset as u64)
-        })
-        || documents.windows(2).any(|pair| pair[0].id >= pair[1].id)
-        || documents.iter().any(|document| {
-            document.id < segment.first_document_id || document.id > segment.last_document_id
-        })
-    {
+    // Keep layout errors after row parsing, including errors in unselected rows.
+    if count != expected_count || invalid_layout {
         return Err(HawDBError::Storage(format!(
             "search segment {} vector sidecar count, bounds, or ordering mismatch",
             segment.segment_id
         )));
     }
     Ok(documents)
+}
+
+fn validate_unselected_embedding(input: &str) -> Result<(usize, bool)> {
+    if input.is_empty() {
+        return Ok((0, true));
+    }
+    let mut dimension = 0usize;
+    let mut finite = true;
+    for raw in input.split(',') {
+        if !is_common_finite_decimal(raw) {
+            let value = raw
+                .parse::<f32>()
+                .map_err(|_| HawDBError::Storage(format!("invalid embedding value: {raw}")))?;
+            // A later parse error must still take precedence over a non-finite value.
+            finite &= value.is_finite();
+        }
+        dimension += 1;
+    }
+    Ok((dimension, finite))
+}
+
+fn is_common_finite_decimal(value: &str) -> bool {
+    // These normalized decimal forms are finite without conversion. All other
+    // representations retain the same parser, including exponent and overflow cases.
+    let unsigned = value.strip_prefix('-').unwrap_or(value);
+    matches!(unsigned, "0" | "1")
+        || unsigned.strip_prefix("0.").is_some_and(|fraction| {
+            !fraction.is_empty() && fraction.bytes().all(|byte| byte.is_ascii_digit())
+        })
 }
 
 fn decode_optional_vector_ordinal(raw: &str) -> Result<Option<u64>> {

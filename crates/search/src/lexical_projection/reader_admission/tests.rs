@@ -72,7 +72,12 @@ fn admitted_lexical_manifest_refuses_compact_directory_before_record_allocation(
             &bytes,
         )
         .unwrap_err();
-        assert!(matches!(error, HawDBError::Execution(_)));
+        assert!(
+            matches!(error, HawDBError::ResourceBudgetExceeded(ref cause)
+            if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                && cause.budget == (2 << 20)
+                && cause.requested > cause.budget.saturating_sub(cause.used))
+        );
     });
     assert!(
         peak < 16 << 10,

@@ -357,10 +357,10 @@ fn resident_frequency_denial_stops_analysis_and_preserves_the_active_generation(
     // Both limits are equal; retained path sizes and allocation growth can
     // make the account limit reject before the aggregate ledger limit.
     assert!(
-        matches!(&error, HawDBError::Execution(message)
-            if message.contains("search build state (blocking_state)")
-                && (message.ends_with(&format!("exceeding query_memory_bytes {budget}"))
-                    || message.ends_with(&format!("exceeding its {budget}-byte budget")))),
+        matches!(&error, HawDBError::ResourceBudgetExceeded(details)
+            if details.owner == "search build state"
+                && details.memory_class == Some("blocking_state")
+                && details.budget == budget),
         "{error}"
     );
     let visited = crate::analyzer_stream::IDENTIFIER_VISITS.with(|visits| visits.get());

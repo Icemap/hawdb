@@ -72,6 +72,7 @@ pub struct KnowledgeRetrievalPipelineReport {
 #[doc(hidden)]
 pub struct KnowledgeRetrievalPipelineBudget {
     ledger: QueryMemoryLedger,
+    budget_option: &'static str,
     working: QueryMemoryLease,
     result: QueryMemoryLease,
     result_payload_budget: usize,
@@ -81,28 +82,43 @@ pub struct KnowledgeRetrievalPipelineBudget {
 
 impl KnowledgeRetrievalPipelineBudget {
     pub fn new(query_memory_budget: NonZeroUsize, result_payload_budget: usize) -> Result<Self> {
+        Self::new_with_budget_option(
+            query_memory_budget,
+            result_payload_budget,
+            "KnowledgeRetrievalPipelineBudget::new(query_memory_budget)",
+        )
+    }
+
+    pub fn new_with_budget_option(
+        query_memory_budget: NonZeroUsize,
+        result_payload_budget: usize,
+        budget_option: &'static str,
+    ) -> Result<Self> {
         if result_payload_budget == 0 {
             return Err(HawDBError::Execution(
                 "knowledge retrieval requires a positive result payload budget".to_string(),
             ));
         }
-        let ledger = QueryMemoryLedger::new(query_memory_budget);
+        let ledger = QueryMemoryLedger::new_with_budget_option(query_memory_budget, budget_option);
         let working = ledger
-            .account(
+            .account_with_budget_option(
                 QueryMemoryClass::BlockingState,
                 "knowledge_retrieval_working",
                 query_memory_budget,
+                budget_option,
             )
             .reserve(0)?;
         let result = ledger
-            .account(
+            .account_with_budget_option(
                 QueryMemoryClass::ResultMaterialization,
                 "knowledge_retrieval_result",
                 query_memory_budget,
+                budget_option,
             )
             .reserve(0)?;
         Ok(Self {
             ledger,
+            budget_option,
             working,
             result,
             result_payload_budget,
@@ -126,10 +142,11 @@ impl KnowledgeRetrievalPipelineBudget {
 
     /// Short-lived and transferable reads share the pipeline's root budget.
     pub fn working_account(&self) -> QueryMemoryAccount {
-        self.ledger.account(
+        self.ledger.account_with_budget_option(
             QueryMemoryClass::BlockingState,
             "knowledge_retrieval_graph_read",
             NonZeroUsize::new(self.ledger.snapshot().budget_bytes).expect("positive query budget"),
+            self.budget_option,
         )
     }
 
@@ -200,6 +217,54 @@ mod tests {
 
     fn budget() -> KnowledgeRetrievalPipelineBudget {
         KnowledgeRetrievalPipelineBudget::new(NonZeroUsize::new(1024).unwrap(), 128).unwrap()
+    }
+
+    #[test]
+    fn retrieval_accounts_and_shared_root_preserve_budget_origin() {
+        use hawdb_core::{HawDBError, ResourceBudgetScope};
+
+        let origin = "ExecutionMemoryConfig.query_memory_bytes";
+        let mut pipeline = KnowledgeRetrievalPipelineBudget::new_with_budget_option(
+            NonZeroUsize::new(16).unwrap(),
+            128,
+            origin,
+        )
+        .unwrap();
+        let graph = pipeline.working_account();
+        for (error, owner) in [
+            (
+                graph.reserve(17).unwrap_err(),
+                "knowledge_retrieval_graph_read",
+            ),
+            (
+                pipeline.retain_working(17).unwrap_err(),
+                "knowledge_retrieval_working",
+            ),
+            (
+                pipeline.retain_result(17, 1).unwrap_err(),
+                "knowledge_retrieval_result",
+            ),
+        ] {
+            let HawDBError::ResourceBudgetExceeded(cause) = error else {
+                panic!("expected a typed retrieval account refusal, got {error:?}");
+            };
+            assert_eq!(cause.scope, ResourceBudgetScope::Account);
+            assert_eq!(cause.owner, owner);
+            assert_eq!(cause.budget, 16);
+            assert_eq!(cause.budget_option, origin);
+        }
+        assert_eq!(pipeline.ledger.snapshot().used_bytes, 0);
+        pipeline.retain_working(10).unwrap();
+        let error = pipeline.retain_result(7, 1).unwrap_err();
+        let HawDBError::ResourceBudgetExceeded(cause) = error else {
+            panic!("expected a typed retrieval root refusal, got {error:?}");
+        };
+        assert_eq!(cause.scope, ResourceBudgetScope::Query);
+        assert_eq!(cause.budget_option, origin);
+        assert_eq!(cause.budget, 16);
+        assert_eq!(cause.used, 10);
+        assert_eq!(cause.requested, 7);
+        assert_eq!(pipeline.ledger.snapshot().used_bytes, 10);
     }
 
     #[test]

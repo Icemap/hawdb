@@ -1294,6 +1294,21 @@ mod tests {
         assert!(error
             .to_string()
             .contains("shared max_total_spill_bytes 80"));
+        let HawDBError::ResourceBudgetExceeded(details) = error else {
+            panic!("expected typed shared spill byte rejection");
+        };
+        assert_eq!(details.resource, hawdb_core::ResourceBudgetKind::SpillBytes);
+        assert_eq!(details.scope, hawdb_core::ResourceBudgetScope::SharedPool);
+        assert_eq!(
+            (details.requested, details.used, details.budget),
+            (40, 80, 80)
+        );
+        assert_eq!(details.owner, "Second");
+        assert_eq!(
+            details.budget_option,
+            "ExecutionMemoryConfig.max_total_spill_bytes"
+        );
+        assert_eq!(second_budget.used_bytes(), 40);
         second_writer.finish().unwrap();
 
         let snapshot = memory.spill_pool_snapshot().unwrap();
@@ -1322,6 +1337,17 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.to_string().contains("shared max_total_spill_runs 1"));
+        let HawDBError::ResourceBudgetExceeded(details) = error else {
+            panic!("expected typed shared spill run rejection");
+        };
+        assert_eq!(details.resource, hawdb_core::ResourceBudgetKind::SpillRuns);
+        assert_eq!(details.scope, hawdb_core::ResourceBudgetScope::SharedPool);
+        assert_eq!((details.requested, details.used, details.budget), (1, 1, 1));
+        assert_eq!(
+            details.budget_option,
+            "ExecutionMemoryConfig.max_total_spill_runs"
+        );
+        assert_eq!(second_budget.run_count(), 0);
         drop(first_run);
         let (second_run, second_writer) = second_budget.create_run("second").unwrap();
         second_writer.finish().unwrap();
@@ -1347,6 +1373,19 @@ mod tests {
             assert_eq!(tracker.used_bytes(), u64::MAX - 8);
             let error = result.err().unwrap();
             assert!(error.to_string().contains("max_spill_bytes"));
+            let HawDBError::ResourceBudgetExceeded(details) = error else {
+                panic!("expected typed operator spill byte overflow");
+            };
+            assert_eq!(details.resource, hawdb_core::ResourceBudgetKind::SpillBytes);
+            assert_eq!(details.scope, hawdb_core::ResourceBudgetScope::Operator);
+            assert_eq!(
+                (details.requested, details.used, details.budget),
+                (16, u64::MAX - 8, u64::MAX)
+            );
+            assert_eq!(
+                details.budget_option,
+                "ExecutionMemoryConfig.max_spill_bytes"
+            );
             let snapshot = memory.spill_pool_snapshot().unwrap();
             assert_eq!(snapshot.active_bytes, 0);
             assert_eq!(snapshot.pending_write_bytes, 0);
@@ -1387,6 +1426,7 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.to_string().contains("spill pool unavailable"));
+        assert!(matches!(error, HawDBError::Execution(_)));
         assert_eq!(
             tracker.used_bytes(),
             0,
@@ -1406,8 +1446,53 @@ mod tests {
             .write(0, &empty_binding(), &spill_budget)
             .unwrap_err();
         assert!(error.to_string().contains("min_spill_free_bytes"));
+        assert!(
+            matches!(error, HawDBError::ResourceBudgetExceeded(ref details)
+            if details.scope == hawdb_core::ResourceBudgetScope::FileSystem)
+        );
+        assert_eq!(spill_budget.used_bytes(), 0);
         drop(writer);
         drop(run);
+        let snapshot = memory.spill_pool_snapshot().unwrap();
+        assert_eq!(
+            (
+                snapshot.active_bytes,
+                snapshot.pending_write_bytes,
+                snapshot.active_runs
+            ),
+            (0, 0, 0)
+        );
+        std::fs::remove_dir(&memory.spill_directory).unwrap();
+    }
+
+    #[test]
+    fn operator_run_quota_is_typed_and_cumulative_after_cleanup() {
+        let mut memory = test_memory("operator-run-quota");
+        memory.max_spill_runs = NonZeroUsize::MIN;
+        let tracker = SpillBudgetTracker::new("Sort", &memory);
+        let (run, writer) = tracker.create_run("sort").unwrap();
+        drop(writer);
+        drop(run);
+        let error = tracker
+            .create_run("sort")
+            .err()
+            .expect("cumulative run quota");
+        assert_eq!(
+            error.to_string(),
+            "execution error: Sort exceeded max_spill_runs 1"
+        );
+        let HawDBError::ResourceBudgetExceeded(details) = error else {
+            panic!("expected typed operator run rejection");
+        };
+        assert_eq!(details.resource, hawdb_core::ResourceBudgetKind::SpillRuns);
+        assert_eq!(details.scope, hawdb_core::ResourceBudgetScope::Operator);
+        assert_eq!((details.requested, details.used, details.budget), (1, 1, 1));
+        assert_eq!(
+            details.budget_option,
+            "ExecutionMemoryConfig.max_spill_runs"
+        );
+        assert_eq!(tracker.run_count(), 1);
+        assert_eq!(memory.spill_pool_snapshot().unwrap().active_runs, 0);
         std::fs::remove_dir(&memory.spill_directory).unwrap();
     }
 

@@ -1,0 +1,872 @@
+{
+  "records": 289,
+  "campaign_cases": 20000,
+  "timing_groups": 48,
+  "run_log_sha256": "99a95fa9894f50579cc48fe8cd947f0c6d3c7eca0e6ec66a5270e2ac7ecdcc0d",
+  "groups": [
+    {
+      "group": [
+        "full_decode",
+        1,
+        3,
+        1,
+        false
+      ],
+      "median_ns": 331,
+      "measured_ns": [
+        340,
+        331,
+        331,
+        330,
+        330
+      ],
+      "warmup_ns": 350
+    },
+    {
+      "group": [
+        "full_decode",
+        1,
+        3,
+        1,
+        true
+      ],
+      "median_ns": 331,
+      "measured_ns": [
+        371,
+        351,
+        330,
+        331,
+        321
+      ],
+      "warmup_ns": 671
+    },
+    {
+      "group": [
+        "full_decode",
+        1,
+        384,
+        1,
+        false
+      ],
+      "median_ns": 10189,
+      "measured_ns": [
+        10179,
+        10180,
+        10219,
+        10189,
+        10189
+      ],
+      "warmup_ns": 10179
+    },
+    {
+      "group": [
+        "full_decode",
+        1,
+        384,
+        1,
+        true
+      ],
+      "median_ns": 10229,
+      "measured_ns": [
+        10199,
+        10249,
+        15389,
+        10229,
+        10209
+      ],
+      "warmup_ns": 10470
+    },
+    {
+      "group": [
+        "full_decode",
+        32,
+        3,
+        1,
+        false
+      ],
+      "median_ns": 7094,
+      "measured_ns": [
+        7094,
+        7134,
+        7073,
+        7214,
+        7084
+      ],
+      "warmup_ns": 7073
+    },
+    {
+      "group": [
+        "full_decode",
+        32,
+        3,
+        1,
+        true
+      ],
+      "median_ns": 7344,
+      "measured_ns": [
+        7474,
+        7324,
+        7374,
+        7344,
+        7344
+      ],
+      "warmup_ns": 7764
+    },
+    {
+      "group": [
+        "full_decode",
+        32,
+        384,
+        1,
+        false
+      ],
+      "median_ns": 330450,
+      "measured_ns": [
+        330349,
+        329337,
+        330450,
+        331592,
+        344527
+      ],
+      "warmup_ns": 323217
+    },
+    {
+      "group": [
+        "full_decode",
+        32,
+        384,
+        1,
+        true
+      ],
+      "median_ns": 335128,
+      "measured_ns": [
+        332484,
+        331452,
+        335128,
+        339046,
+        338535
+      ],
+      "warmup_ns": 343264
+    },
+    {
+      "group": [
+        "full_decode",
+        8192,
+        3,
+        1,
+        false
+      ],
+      "median_ns": 1727411,
+      "measured_ns": [
+        1734925,
+        1727411,
+        1849540,
+        1726950,
+        1678939
+      ],
+      "warmup_ns": 1727241
+    },
+    {
+      "group": [
+        "full_decode",
+        8192,
+        3,
+        1,
+        true
+      ],
+      "median_ns": 1748199,
+      "measured_ns": [
+        1754511,
+        1816749,
+        1737159,
+        1748199,
+        1735506
+      ],
+      "warmup_ns": 1760302
+    },
+    {
+      "group": [
+        "full_decode",
+        8192,
+        384,
+        1,
+        false
+      ],
+      "median_ns": 86766233,
+      "measured_ns": [
+        86639845,
+        86223154,
+        86766233,
+        87324450,
+        87061346
+      ],
+      "warmup_ns": 87184056
+    },
+    {
+      "group": [
+        "full_decode",
+        8192,
+        384,
+        1,
+        true
+      ],
+      "median_ns": 87422804,
+      "measured_ns": [
+        87422804,
+        87073318,
+        87543791,
+        87299794,
+        87475192
+      ],
+      "warmup_ns": 87969610
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        3,
+        1,
+        false
+      ],
+      "median_ns": 331,
+      "measured_ns": [
+        360,
+        331,
+        341,
+        330,
+        331
+      ],
+      "warmup_ns": 3386
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        3,
+        1,
+        true
+      ],
+      "median_ns": 341,
+      "measured_ns": [
+        411,
+        341,
+        340,
+        341,
+        330
+      ],
+      "warmup_ns": 772
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        3,
+        2,
+        false
+      ],
+      "median_ns": 321,
+      "measured_ns": [
+        361,
+        330,
+        321,
+        320,
+        321
+      ],
+      "warmup_ns": 230
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        3,
+        2,
+        true
+      ],
+      "median_ns": 330,
+      "measured_ns": [
+        381,
+        341,
+        330,
+        321,
+        320
+      ],
+      "warmup_ns": 350
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        3,
+        100,
+        false
+      ],
+      "median_ns": 330,
+      "measured_ns": [
+        330,
+        321,
+        330,
+        331,
+        621
+      ],
+      "warmup_ns": 231
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        3,
+        100,
+        true
+      ],
+      "median_ns": 330,
+      "measured_ns": [
+        321,
+        330,
+        321,
+        571,
+        511
+      ],
+      "warmup_ns": 320
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        384,
+        1,
+        false
+      ],
+      "median_ns": 10199,
+      "measured_ns": [
+        10349,
+        10230,
+        10199,
+        10179,
+        10199
+      ],
+      "warmup_ns": 11301
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        384,
+        1,
+        true
+      ],
+      "median_ns": 10289,
+      "measured_ns": [
+        10550,
+        10239,
+        10319,
+        10259,
+        10289
+      ],
+      "warmup_ns": 10700
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        384,
+        2,
+        false
+      ],
+      "median_ns": 10229,
+      "measured_ns": [
+        10229,
+        10180,
+        10189,
+        10239,
+        10360
+      ],
+      "warmup_ns": 10069
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        384,
+        2,
+        true
+      ],
+      "median_ns": 10299,
+      "measured_ns": [
+        10269,
+        10299,
+        10279,
+        10389,
+        10409
+      ],
+      "warmup_ns": 10259
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        384,
+        100,
+        false
+      ],
+      "median_ns": 10339,
+      "measured_ns": [
+        10319,
+        10339,
+        10339,
+        10360,
+        10350
+      ],
+      "warmup_ns": 10179
+    },
+    {
+      "group": [
+        "selected_preparation",
+        1,
+        384,
+        100,
+        true
+      ],
+      "median_ns": 10399,
+      "measured_ns": [
+        10390,
+        10410,
+        10399,
+        10389,
+        10420
+      ],
+      "warmup_ns": 10369
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        3,
+        1,
+        false
+      ],
+      "median_ns": 7273,
+      "measured_ns": [
+        7374,
+        7273,
+        7264,
+        7224,
+        7314
+      ],
+      "warmup_ns": 7594
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        3,
+        1,
+        true
+      ],
+      "median_ns": 7373,
+      "measured_ns": [
+        7655,
+        7584,
+        7323,
+        7373,
+        7314
+      ],
+      "warmup_ns": 7995
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        3,
+        2,
+        false
+      ],
+      "median_ns": 7203,
+      "measured_ns": [
+        7203,
+        7274,
+        7193,
+        7124,
+        7294
+      ],
+      "warmup_ns": 7214
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        3,
+        2,
+        true
+      ],
+      "median_ns": 6522,
+      "measured_ns": [
+        6642,
+        6592,
+        6522,
+        6432,
+        6462
+      ],
+      "warmup_ns": 7514
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        3,
+        100,
+        false
+      ],
+      "median_ns": 7104,
+      "measured_ns": [
+        7083,
+        7083,
+        7234,
+        7104,
+        7254
+      ],
+      "warmup_ns": 7074
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        3,
+        100,
+        true
+      ],
+      "median_ns": 5140,
+      "measured_ns": [
+        5140,
+        8716,
+        5109,
+        5370,
+        5089
+      ],
+      "warmup_ns": 5451
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        384,
+        1,
+        false
+      ],
+      "median_ns": 324248,
+      "measured_ns": [
+        324128,
+        331623,
+        327123,
+        323337,
+        324248
+      ],
+      "warmup_ns": 325861
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        384,
+        1,
+        true
+      ],
+      "median_ns": 326332,
+      "measured_ns": [
+        326332,
+        326692,
+        325771,
+        325611,
+        329848
+      ],
+      "warmup_ns": 332624
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        384,
+        2,
+        false
+      ],
+      "median_ns": 339748,
+      "measured_ns": [
+        339748,
+        342933,
+        334207,
+        383349,
+        332394
+      ],
+      "warmup_ns": 331442
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        384,
+        2,
+        true
+      ],
+      "median_ns": 282590,
+      "measured_ns": [
+        282590,
+        287960,
+        282159,
+        287699,
+        279033
+      ],
+      "warmup_ns": 292659
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        384,
+        100,
+        false
+      ],
+      "median_ns": 329037,
+      "measured_ns": [
+        326292,
+        326883,
+        329037,
+        334107,
+        331021
+      ],
+      "warmup_ns": 328927
+    },
+    {
+      "group": [
+        "selected_preparation",
+        32,
+        384,
+        100,
+        true
+      ],
+      "median_ns": 226134,
+      "measured_ns": [
+        226134,
+        222687,
+        226314,
+        231314,
+        224491
+      ],
+      "warmup_ns": 225934
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        3,
+        1,
+        false
+      ],
+      "median_ns": 1793745,
+      "measured_ns": [
+        1948315,
+        1793745,
+        1773176,
+        1822790,
+        1765933
+      ],
+      "warmup_ns": 2333798
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        3,
+        1,
+        true
+      ],
+      "median_ns": 1863677,
+      "measured_ns": [
+        1866181,
+        1863677,
+        1855421,
+        1890016,
+        1860240
+      ],
+      "warmup_ns": 2027063
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        3,
+        2,
+        false
+      ],
+      "median_ns": 1823100,
+      "measured_ns": [
+        1783516,
+        1830885,
+        1879957,
+        1823100,
+        1812901
+      ],
+      "warmup_ns": 1836615
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        3,
+        2,
+        true
+      ],
+      "median_ns": 1656928,
+      "measured_ns": [
+        1657039,
+        1677868,
+        1637432,
+        1603729,
+        1656928
+      ],
+      "warmup_ns": 1663851
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        3,
+        100,
+        false
+      ],
+      "median_ns": 1797662,
+      "measured_ns": [
+        1781792,
+        1815345,
+        1772535,
+        1797662,
+        1803082
+      ],
+      "warmup_ns": 1738311
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        3,
+        100,
+        true
+      ],
+      "median_ns": 1337499,
+      "measured_ns": [
+        1326619,
+        1364350,
+        1361134,
+        1337499,
+        1331558
+      ],
+      "warmup_ns": 1310759
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        384,
+        1,
+        false
+      ],
+      "median_ns": 86878133,
+      "measured_ns": [
+        86541160,
+        86971357,
+        86878133,
+        86659842,
+        88775461
+      ],
+      "warmup_ns": 99700587
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        384,
+        1,
+        true
+      ],
+      "median_ns": 87367320,
+      "measured_ns": [
+        87367320,
+        87128903,
+        87910930,
+        87021190,
+        87762482
+      ],
+      "warmup_ns": 87101401
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        384,
+        2,
+        false
+      ],
+      "median_ns": 87870223,
+      "measured_ns": [
+        87454363,
+        88049069,
+        87870223,
+        87906200,
+        87846990
+      ],
+      "warmup_ns": 88434983
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        384,
+        2,
+        true
+      ],
+      "median_ns": 73079937,
+      "measured_ns": [
+        75901250,
+        72971403,
+        72874081,
+        73079937,
+        73539710
+      ],
+      "warmup_ns": 74756011
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        384,
+        100,
+        false
+      ],
+      "median_ns": 86925381,
+      "measured_ns": [
+        87288292,
+        89162117,
+        86855239,
+        86925381,
+        86821907
+      ],
+      "warmup_ns": 87306857
+    },
+    {
+      "group": [
+        "selected_preparation",
+        8192,
+        384,
+        100,
+        true
+      ],
+      "median_ns": 58547956,
+      "measured_ns": [
+        62652946,
+        58459258,
+        58547956,
+        58555118,
+        57986001
+      ],
+      "warmup_ns": 64323069
+    }
+  ]
+}

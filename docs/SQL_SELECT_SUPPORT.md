@@ -49,9 +49,10 @@ implementation for three-valued comparisons, AND/OR/NOT, IS NULL, IN and LIKE.
 The compiled slots bind parameters for each execution; the cached source template
 retains the original parameter references and source spans.
 
-The supported aggregate profile is COUNT(* or column), SUM and MAX over the
-existing column/literal/OCTET_LENGTH inputs, optional aggregate DISTINCT/FILTER,
-and same-type COALESCE. HAVING scalar operands include grouped columns, literals,
+The supported aggregate profile includes COUNT(* or column), SUM, MIN and MAX
+over the existing column/literal/OCTET_LENGTH inputs, optional aggregate
+DISTINCT, FILTER for COUNT and SUM, and same-type COALESCE. HAVING scalar operands
+include grouped columns, literals,
 parameters and these aggregate expressions. Numeric comparisons reconcile BIGINT
 and DOUBLE PRECISION; text UUID constants use existing UUID conversion. This is
 not a general PostgreSQL coercion, scalar-function, subquery or arithmetic layer.
@@ -62,7 +63,7 @@ SELECT owners reject HAVING explicitly rather than ignoring it.
 HAVING uses the general aggregate path; columnar and single-COUNT-DISTINCT shortcuts
 do not bypass the group filter. Inputs referenced only by HAVING participate in
 scan and hydration planning. COUNT and OCTET_LENGTH can use overflow metadata;
-DISTINCT, MAX(body) and value-sensitive FILTER predicates still require hydration.
+DISTINCT, MIN/MAX(body) and value-sensitive FILTER predicates still require hydration.
 Grouped HAVING rereads admitted scan fields after sorting, including all output
 state inputs, so the replay does not force metadata-only inputs to be hydrated.
 Non-HAVING grouped replay retains its existing field contract.

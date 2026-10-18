@@ -18,7 +18,7 @@ use std::fmt::{self, Formatter};
 use hawdb::{Uuid, Value};
 use pyo3::exceptions::{PyOverflowError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyFloat, PyList, PyString, PyTuple};
+use pyo3::types::{PyByteArray, PyBytes, PyDict, PyFloat, PyList, PySequence, PyString, PyTuple};
 use pyo3::IntoPyObjectExt;
 
 /// How deep lists, tuples, and dicts may nest in one parameter: the
@@ -191,6 +191,30 @@ pub fn py_list_to_params(list: &Bound<'_, PyList>) -> PyResult<Vec<Value>> {
     list.iter()
         .enumerate()
         .map(|(index, item)| py_to_value(&item, &ParamPath::Position(index + 1), 0))
+        .collect()
+}
+
+/// Batch containers must be sequences of bindings, not text or binary scalars.
+pub fn parameter_sequence<'a, 'py>(
+    object: &'a Bound<'py, PyAny>,
+) -> PyResult<&'a Bound<'py, PySequence>> {
+    if object.is_instance_of::<PyString>()
+        || object.is_instance_of::<PyBytes>()
+        || object.is_instance_of::<PyByteArray>()
+    {
+        return Err(PyTypeError::new_err(
+            "parameter bindings require a sequence, not a text or binary scalar",
+        ));
+    }
+    object.cast::<PySequence>().map_err(Into::into)
+}
+
+/// Batch SQL rows accept the sequence protocol while sharing scalar conversion.
+pub fn py_sequence_to_params(sequence: &Bound<'_, PySequence>) -> PyResult<Vec<Value>> {
+    sequence
+        .try_iter()?
+        .enumerate()
+        .map(|(index, item)| py_to_value(&item?, &ParamPath::Position(index + 1), 0))
         .collect()
 }
 

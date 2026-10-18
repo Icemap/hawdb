@@ -1,0 +1,67 @@
+{
+  "state": "passed",
+  "source_sha256": "80ef8be418b671cd06ceafb6494a7fbbd0c116552b075770f311f4e81d1632aa",
+  "runs": [
+    {
+      "label": "original",
+      "min_ms": 1521.446223,
+      "median_ms": 1536.9331815,
+      "p95_ms": 1559.52535375,
+      "max_ms": 1567.286398,
+      "max_rss_kib": 40680,
+      "user_cpu_s": 156.490584,
+      "system_cpu_s": 1.393786
+    },
+    {
+      "label": "candidate",
+      "min_ms": 1148.456649,
+      "median_ms": 1152.920487,
+      "p95_ms": 1169.55777375,
+      "max_ms": 1243.326548,
+      "max_rss_kib": 40748,
+      "user_cpu_s": 117.307914,
+      "system_cpu_s": 1.432672
+    },
+    {
+      "label": "candidate",
+      "min_ms": 1148.827079,
+      "median_ms": 1153.92726,
+      "p95_ms": 1169.6344429,
+      "max_ms": 1180.751423,
+      "max_rss_kib": 40936,
+      "user_cpu_s": 117.392901,
+      "system_cpu_s": 1.382658
+    },
+    {
+      "label": "original",
+      "min_ms": 1492.433983,
+      "median_ms": 1500.4734175,
+      "p95_ms": 1514.78290275,
+      "max_ms": 1532.394356,
+      "max_rss_kib": 40792,
+      "user_cpu_s": 152.749705,
+      "system_cpu_s": 1.482632
+    }
+  ],
+  "aggregate": {
+    "original": {
+      "queries": 200,
+      "median_ms": 1522.583792,
+      "p95_ms": 1554.6875014500001,
+      "min_ms": 1492.433983,
+      "max_ms": 1567.286398
+    },
+    "candidate": {
+      "queries": 200,
+      "median_ms": 1153.4262115,
+      "p95_ms": 1169.56077005,
+      "min_ms": 1148.456649,
+      "max_ms": 1243.326548
+    }
+  },
+  "median_latency_reduction_percent": 24.245468948220616,
+  "original_over_candidate_median": 1.3200530530860057,
+  "fixture_files": 106,
+  "scope": "Warm-cache repeated public serving query, no sampling profiler. Each process opens the same fixture and performs three warmups before 100 measured queries. Shared host, not idle-host qualified. Peak RSS and CPU cover the complete child process including open/warmup; they are not query-only admission measurements.",
+  "rss_observation": "Whole-process peak RSS remained about 40 MiB; no peak RSS reduction established."
+}

@@ -2181,6 +2181,7 @@ fn error_class(error: &HawDBError) -> &'static str {
         HawDBError::Semantic(_) => "semantic",
         HawDBError::Execution(_)
         | HawDBError::ReadBudgetExceeded(_)
+        | HawDBError::ResourceBudgetExceeded(_)
         | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. }
         | HawDBError::TransactionConflict { .. }

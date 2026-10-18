@@ -424,6 +424,13 @@ fn charge_graph_algorithm_memory(
         HawDBError::Execution(message) => HawDBError::Execution(format!(
             "GraphAlgorithm {algorithm} {phase} memory admission failed: {message}"
         )),
+        HawDBError::ResourceBudgetExceeded(mut cause) => {
+            cause.message = format!(
+                "GraphAlgorithm {algorithm} {phase} memory admission failed: {}",
+                cause.message
+            );
+            HawDBError::ResourceBudgetExceeded(cause)
+        }
         error => error,
     })?;
     Ok(())

@@ -275,7 +275,7 @@ async fn wait_for_io_retry(
     let mut cancellation = Box::pin(context.cancellation().cancelled());
     poll_fn(|task| {
         if cancellation.as_mut().poll(task).is_ready() {
-            return Poll::Ready(Err(RuntimeCancellationReason::Cancelled));
+            return Poll::Ready(context.checkpoint());
         }
         if retry.as_mut().poll(task).is_ready() {
             return Poll::Ready(context.checkpoint());
@@ -528,35 +528,42 @@ mod tests {
 
     #[test]
     fn io_retry_is_woken_immediately_by_parent_cancellation() {
-        struct CountWake(AtomicUsize);
+        for reason in [
+            RuntimeCancellationReason::Cancelled,
+            RuntimeCancellationReason::ResourceExhausted,
+        ] {
+            struct CountWake(AtomicUsize);
 
-        impl std::task::Wake for CountWake {
-            fn wake(self: Arc<Self>) {
-                self.0.fetch_add(1, Ordering::AcqRel);
+            impl std::task::Wake for CountWake {
+                fn wake(self: Arc<Self>) {
+                    self.0.fetch_add(1, Ordering::AcqRel);
+                }
             }
-        }
 
-        let runtime = runtime();
-        let token = hawdb_core::RuntimeCancellationToken::new();
-        let context = RuntimeTaskContext::without_deadline(token.child());
-        runtime
-            .block_on(async {
-                // A long timer makes the notification assertion independent of
-                // the production retry interval or wall-clock scheduling noise.
-                let mut retry = Box::pin(wait_for_io_retry(&context, Duration::from_secs(3600)));
-                let wake = Arc::new(CountWake(AtomicUsize::new(0)));
-                let waker = std::task::Waker::from(Arc::clone(&wake));
-                let mut task = std::task::Context::from_waker(&waker);
-                assert!(retry.as_mut().poll(&mut task).is_pending());
-                assert_eq!(wake.0.load(Ordering::Acquire), 0);
-                token.cancel();
-                assert!(wake.0.load(Ordering::Acquire) > 0);
-                assert_eq!(
-                    retry.as_mut().poll(&mut task),
-                    Poll::Ready(Err(RuntimeCancellationReason::Cancelled))
-                );
-            })
-            .unwrap();
+            let runtime = runtime();
+            let token = hawdb_core::RuntimeCancellationToken::new();
+            let context = RuntimeTaskContext::without_deadline(token.child());
+            runtime
+                .block_on(async {
+                    // A long timer makes the notification assertion independent of
+                    // the production retry interval or wall-clock scheduling noise.
+                    let mut retry =
+                        Box::pin(wait_for_io_retry(&context, Duration::from_secs(3600)));
+                    let wake = Arc::new(CountWake(AtomicUsize::new(0)));
+                    let waker = std::task::Waker::from(Arc::clone(&wake));
+                    let mut task = std::task::Context::from_waker(&waker);
+                    assert!(retry.as_mut().poll(&mut task).is_pending());
+                    assert_eq!(wake.0.load(Ordering::Acquire), 0);
+                    if reason == RuntimeCancellationReason::ResourceExhausted {
+                        token.cancel_for_resource_exhaustion();
+                    } else {
+                        token.cancel();
+                    }
+                    assert!(wake.0.load(Ordering::Acquire) > 0);
+                    assert_eq!(retry.as_mut().poll(&mut task), Poll::Ready(Err(reason)));
+                })
+                .unwrap();
+        }
     }
 
     #[test]

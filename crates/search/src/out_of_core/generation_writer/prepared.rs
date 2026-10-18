@@ -158,7 +158,12 @@ impl CapturedBase {
             }
             Err(error)
                 if writer.expected_active_generation.is_some()
-                    || matches!(error, HawDBError::Execution(_)) =>
+                    || matches!(
+                        error,
+                        HawDBError::Execution(_)
+                            | HawDBError::ResourceBudgetExceeded(_)
+                            | HawDBError::FileDescriptors(_)
+                    ) =>
             {
                 Err(error)
             }

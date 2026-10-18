@@ -5391,9 +5391,10 @@ impl<S: crate::executor::ExecutionStore> KnowledgeRetrievalGraphContext<'_, S> {
         let graph_commit_epoch =
             <S as hawdb_storage::graph_engine::GraphReadEngine>::commit_epoch(self.store);
         let mut pipeline =
-            hawdb_search::knowledge_retrieval_pipeline::KnowledgeRetrievalPipelineBudget::new(
+            hawdb_search::knowledge_retrieval_pipeline::KnowledgeRetrievalPipelineBudget::new_with_budget_option(
                 self.query_memory_budget,
                 self.result_payload_budget,
+                "ExecutionMemoryConfig.query_memory_bytes",
             )?;
         let graph_read_account = pipeline.working_account();
         let graph = KnowledgeRetrievalPipelineContext {

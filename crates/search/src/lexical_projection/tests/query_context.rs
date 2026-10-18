@@ -250,7 +250,7 @@ fn lexical_query_context_refuses_competing_budget_before_candidate_callbacks_and
         Ok(true)
     });
     assert!(
-        matches!(result, Err(HawDBError::Execution(_))),
+        matches!(result, Err(HawDBError::ResourceBudgetExceeded(_))),
         "shared workspace admission must refuse before producing a partial result"
     );
     assert_eq!(calls, 0);
@@ -377,7 +377,7 @@ fn lexical_query_context_delta_ids_admit_before_copy_and_drop_unretained_ids() {
                 assert!(!report.report.scores.contains_key(&long_id));
                 drop(report);
             } else {
-                assert!(matches!(result, Err(HawDBError::Execution(_))));
+                assert!(matches!(result, Err(HawDBError::ResourceBudgetExceeded(_))));
                 drop(result);
             }
             assert_eq!(ledger.snapshot().used_bytes, 0);

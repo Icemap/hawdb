@@ -227,7 +227,10 @@ fn run_refused(items: Vec<Projection>, external_id: String, watched_bytes: usize
         0,
         "oversized projection copied payload before row admission"
     );
-    assert!(matches!(result, Err(HawDBError::Execution(_))));
+    assert!(matches!(
+        result,
+        Err(HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_))
+    ));
     assert_eq!(callbacks.get(), 0);
     assert_eq!(external.calls.get(), 1);
     assert_eq!(ledger.snapshot().used_bytes, 0);
@@ -603,7 +606,10 @@ fn run_stored_property_projection_with_source(
         if numeric {
             assert!(error.to_string().contains("batch_payload_bytes"), "{error}");
         } else {
-            assert!(matches!(error, HawDBError::Execution(_)));
+            assert!(matches!(
+                error,
+                HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_)
+            ));
         }
         assert_eq!(rows.get(), 0);
     } else {
@@ -711,7 +717,10 @@ fn run_pruning_budget(predicate: Predicate, count: usize, refusal: bool) {
     );
     if refusal {
         assert!(
-            matches!(result, Err(HawDBError::Execution(_))),
+            matches!(
+                result,
+                Err(HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_))
+            ),
             "indexed candidate storage escaped its working budget: {result:?}"
         );
         assert_eq!(rows, 0, "refused pruning exposed a partial result");
@@ -1615,7 +1624,10 @@ fn owned_numeric_buffer_refuses_typed_capacity_before_allocation() {
         "typed numeric columns allocated before scratch admission"
     );
     drop(window);
-    assert!(matches!(result, Err(HawDBError::Execution(_))));
+    assert!(matches!(
+        result,
+        Err(HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_))
+    ));
     assert_eq!(ledger.snapshot().used_bytes, 0);
 }
 
@@ -1719,7 +1731,10 @@ fn owned_numeric_buffer_refuses_small_validity_capacity_before_allocation() {
         "numeric validity bitmap allocated outside its scratch budget"
     );
     drop(window);
-    assert!(matches!(result, Err(HawDBError::Execution(_))));
+    assert!(matches!(
+        result,
+        Err(HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_))
+    ));
     assert_eq!(ledger.snapshot().used_bytes, 0);
 }
 
@@ -1937,7 +1952,10 @@ fn run_full_node_source_admission(persisted: bool, materialized: bool, source: F
         "full node payload was copied before query admission"
     );
     drop(window);
-    assert!(matches!(result, Err(HawDBError::Execution(_))));
+    assert!(matches!(
+        result,
+        Err(HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_))
+    ));
     assert_eq!(rows.get(), 0);
     assert_eq!(predicate_calls.get(), 0);
     assert_eq!(ledger.snapshot().used_bytes, 0);
@@ -2111,7 +2129,10 @@ fn run_full_node_scan_buffer(persisted: bool, case: FullNodeBufferCase) {
         FullNodeBufferCase::Error => assert!(
             matches!(result, Err(HawDBError::Execution(message)) if message == "full node consumer sentinel")
         ),
-        FullNodeBufferCase::Refusal => assert!(matches!(result, Err(HawDBError::Execution(_)))),
+        FullNodeBufferCase::Refusal => assert!(matches!(
+            result,
+            Err(HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_))
+        )),
         FullNodeBufferCase::Retained => assert_eq!(result.unwrap(), BatchControl::Continue),
     }
     assert_eq!(
@@ -2370,7 +2391,10 @@ fn run_point_read_admission(persisted: bool, case: PointReadCase) {
         "graph point hydration copied its payload before admission"
     );
     drop(window);
-    assert!(matches!(result, Err(HawDBError::Execution(_))));
+    assert!(matches!(
+        result,
+        Err(HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_))
+    ));
     assert_eq!(rows.get(), 0);
     assert_eq!(ledger.snapshot().used_bytes, 0);
     assert_eq!(store.node_owned(target).unwrap().unwrap().id, target);
@@ -2608,7 +2632,10 @@ fn run_relationship_owned_read(persisted: bool, case: RelationshipReadCase) {
     if stop {
         assert!(result.is_ok());
     } else {
-        assert!(matches!(result, Err(HawDBError::Execution(_))));
+        assert!(matches!(
+            result,
+            Err(HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_))
+        ));
     }
     assert_eq!(buffered.len(), usize::from(retained));
     if retained {
@@ -2889,7 +2916,10 @@ fn relationship_owned_read_filtered_ordering_admits_before_native_or_indexed_cop
         let copies = window.allocations();
         drop(window);
         assert_eq!(copies, 0, "filtered source copied before query admission");
-        assert!(matches!(result, Err(HawDBError::Execution(_))));
+        assert!(matches!(
+            result,
+            Err(HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_))
+        ));
         assert_eq!(ledger.snapshot().used_bytes, 0);
         // Refusal must preserve the canonical reader's health and index mapping.
         assert_eq!(
@@ -3310,7 +3340,10 @@ fn run_blocking_source_admission(persisted: bool, source: BlockingSource) {
             "unused unrelated payload must not be admitted: {result:?}"
         );
     } else {
-        assert!(matches!(result, Err(HawDBError::Execution(_))));
+        assert!(matches!(
+            result,
+            Err(HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_))
+        ));
     }
     assert_eq!(
         rows.get(),
@@ -3591,7 +3624,13 @@ fn run_expand_output_admission(persisted: bool, owner: ExpandOutputOwner) {
     let copies = window.allocations();
     drop(window);
     let error = result.expect_err("complete derived row must be refused");
-    assert!(matches!(error, HawDBError::Execution(_)), "{error}");
+    assert!(
+        matches!(
+            error,
+            HawDBError::Execution(_) | HawDBError::ResourceBudgetExceeded(_)
+        ),
+        "{error}"
+    );
     assert!(
         error
             .to_string()
@@ -4311,7 +4350,13 @@ fn entity_functions_refuse_large_owned_outputs_before_payload_allocation() {
         let allocations = window.allocations();
         drop(window);
         assert!(
-            matches!(result, Err(HawDBError::Execution(_))),
+            matches!(&result, Err(HawDBError::ResourceBudgetExceeded(cause))
+                if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                    && cause.scope == hawdb_core::ResourceBudgetScope::Account
+                    && cause.owner == "ProjectExec expressions"
+                    && cause.budget == memory.query_memory_bytes.get() as u64
+                    && cause.budget_option == "ExecutionMemoryConfig.query_memory_bytes"
+                    && cause.requested > cause.budget.saturating_sub(cause.used)),
             "{mode}: {result:?}"
         );
         assert_eq!(allocations, 0, "{mode}: copied payload before admission");

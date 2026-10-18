@@ -91,7 +91,19 @@ fn knowledge_context_edge_visitor_releases_admission_on_completion_stop_and_erro
             Ok(ScanControl::Continue)
         },
     );
-    assert!(matches!(result, Err(HawDBError::Execution(_))));
+    let Err(HawDBError::ResourceBudgetExceeded(cause)) = result else {
+        panic!("expected a typed edge-read memory refusal, got {result:?}");
+    };
+    assert_eq!(cause.resource, crate::ResourceBudgetKind::MemoryBytes);
+    assert_eq!(cause.scope, crate::ResourceBudgetScope::Account);
+    assert_eq!(cause.owner, "context-edges");
+    assert_eq!(cause.memory_class, Some("external_read"));
+    assert_eq!(cause.budget, budget.get() as u64);
+    assert_eq!(
+        cause.budget_option,
+        "QueryMemoryLedger::account(budget_bytes)"
+    );
+    assert!(cause.requested > cause.budget.saturating_sub(cause.used));
     assert_eq!(visited, 0);
     assert_eq!(ledger.snapshot().used_bytes, 0);
 }

@@ -19,8 +19,8 @@ use std::collections::BTreeMap;
 pub(super) type TestRow = [RelationalValue; 7];
 pub(super) type Output = Vec<(Vec<RelationalValue>, Vec<(String, Value)>)>;
 
-pub(super) const PROJECTIONS: &str = "COUNT(*) AS rows, COUNT(n) AS present, COUNT(DISTINCT n) AS distinct_count, SUM(n) AS total, SUM(DISTINCT n) AS distinct_sum, MAX(n) AS maximum, MAX(body) AS body_max, SUM(amount) AS amount_sum, COALESCE(SUM(n), 0) AS fallback, COUNT(*) FILTER (WHERE flag = TRUE) AS flagged, SUM(OCTET_LENGTH(payload)) AS payload_bytes";
-pub(super) const HAVING: [&str; 10] = [
+pub(super) const PROJECTIONS: &str = "COUNT(*) AS rows, COUNT(n) AS present, COUNT(DISTINCT n) AS distinct_count, SUM(n) AS total, SUM(DISTINCT n) AS distinct_sum, MIN(n) AS minimum, MIN(body) AS body_min, MAX(n) AS maximum, MAX(body) AS body_max, SUM(amount) AS amount_sum, COALESCE(SUM(n), 0) AS fallback, COUNT(*) FILTER (WHERE flag = TRUE) AS flagged, SUM(OCTET_LENGTH(payload)) AS payload_bytes";
+pub(super) const HAVING: [&str; 11] = [
     "COUNT(*) >= $1",
     "SUM(n) > $1",
     "COUNT(DISTINCT n) IN (0, 1, $1)",
@@ -31,6 +31,7 @@ pub(super) const HAVING: [&str; 10] = [
     "COUNT(*) = 0 OR MAX(flag) = TRUE",
     "MAX(body) NOT IN ('z', NULL)",
     "MAX(body) IS NOT NULL AND MAX(body) ILIKE 'Z%'",
+    "MIN(n) <= $1",
 ];
 
 pub(super) fn select(sql: &str) -> SelectStatement {
@@ -198,6 +199,15 @@ pub(super) fn reference(
             i64::try_from(numbers.iter().map(|value| i128::from(*value)).sum::<i128>()).unwrap()
         });
         let maximum = numbers.iter().copied().max();
+        let minimum = numbers.iter().copied().min();
+        let body_min = rows
+            .iter()
+            .filter_map(|row| match &row[4] {
+                RelationalValue::Text(value) => Some(value.as_str()),
+                RelationalValue::Null => None,
+                _ => panic!("text fixture"),
+            })
+            .min();
         let body_max = rows
             .iter()
             .filter_map(|row| match &row[4] {
@@ -222,6 +232,7 @@ pub(super) fn reference(
             Some(7) => rows.is_empty() || flags > 0,
             Some(8) => false,
             Some(9) => body_max.is_some_and(|body| body.to_lowercase().starts_with('z')),
+            Some(10) => minimum.is_some_and(|minimum| minimum <= threshold),
             _ => panic!("unknown predicate shape"),
         };
         if !keep {
@@ -264,6 +275,11 @@ pub(super) fn reference(
                     } else {
                         Value::Int(unique.iter().sum())
                     },
+                ),
+                ("minimum", minimum.map_or(Value::Null, Value::Int)),
+                (
+                    "body_min",
+                    body_min.map_or(Value::Null, |body| Value::String(body.into())),
                 ),
                 ("maximum", maximum.map_or(Value::Null, Value::Int)),
                 (

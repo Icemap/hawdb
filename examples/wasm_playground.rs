@@ -87,6 +87,7 @@ impl QueryBridge {
                     HawDBError::FileDescriptors(_) => "file_descriptors",
                     HawDBError::Execution(_)
                     | HawDBError::ReadBudgetExceeded(_)
+                    | HawDBError::ResourceBudgetExceeded(_)
                     | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
                     | HawDBError::GraphExpansionPayloadLimitExceeded { .. } => "execution",
                     HawDBError::BranchCommandUnsupported { .. } => "branch_command_unsupported",
