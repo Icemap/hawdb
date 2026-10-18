@@ -1,0 +1,9 @@
+{
+  "original_sha256": "26808b9f10311b321bccbcdda1298557c0e5f0ab2cc1f5f834f621a3dbfd545c",
+  "final_sha256": "dd9c56c116b3ec00283213f265f31db64db94abbcca670a6c6d7178718084e4c",
+  "external_resolutions_identical": true,
+  "external_packages": 135,
+  "local_versions": [
+    "0.10.0"
+  ]
+}

@@ -1,0 +1,28 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //bindings/python:hawdb_python_tests
+-----------------------------------------------------------------------------
+============================= test session starts ==============================
+platform darwin -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/6bdc4be816603ab9519d512630b55ff0/sandbox/darwin-sandbox/825/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_tests.runfiles/_main
+collected 360 items / 2 skipped
+
+bindings/python/tests/test_arrow.py ...............                      [  4%]
+bindings/python/tests/test_executemany.py .............................. [ 12%]
+.......................................                                  [ 23%]
+bindings/python/tests/test_file.py .....                                 [ 24%]
+bindings/python/tests/test_lite.py .ss                                   [ 25%]
+bindings/python/tests/test_memory.py .....                               [ 26%]
+bindings/python/tests/test_notebook.py ................................. [ 36%]
+................................                                         [ 45%]
+bindings/python/tests/test_params.py ....................ss........      [ 53%]
+bindings/python/tests/test_pydantic_extra.py .s.                         [ 54%]
+bindings/python/tests/test_read_controls.py ............................ [ 61%]
+...........                                                              [ 65%]
+bindings/python/tests/test_retained.py ...........................       [ 72%]
+bindings/python/tests/test_retained_node.py ..............               [ 76%]
+bindings/python/tests/test_smoke.py ..............                       [ 80%]
+bindings/python/tests/test_stubs.py .................................... [ 90%]
+.........                                                                [ 92%]
+bindings/python/tests/test_transactions.py ..........................    [100%]
+
+================== 355 passed, 7 skipped in 265.05s (0:04:25) ==================

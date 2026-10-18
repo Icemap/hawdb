@@ -1,0 +1,42 @@
+INFO: Invocation ID: 04e09233-203f-42aa-9377-fe7c37b8f08d
+INFO: Reading 'startup' options from /private/tmp/hawdb-wip-ready-20261015/split-retained-node-main-6db1c013/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/split-retained-node-main-6db1c013/.bazelrc:
+  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/split-retained-node-main-6db1c013/.bazelrc:
+  'test' options: --local_test_jobs=HOST_CPUS*0.5
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-wip-ready-20261015/split-retained-node-main-6db1c013/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //:hawdb_in_memory_portable_tests (0 packages loaded, 0 targets configured)
+Analyzing: target //:hawdb_in_memory_portable_tests (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:hawdb_in_memory_portable_tests (0 packages loaded, 10 targets configured).
+[750 / 757] Compiling Rust rlib hawdb_search_minimal (216 files); 1s disk-cache, darwin-sandbox
+[751 / 757] [Prepa] Compiling Rust rlib hawdb_bootstrap_minimal (7 files)
+[752 / 757] Compiling Rust rlib hawdb_bootstrap_minimal (7 files); 1s disk-cache, darwin-sandbox ... (2 actions, 1 running)
+[753 / 757] Compiling Rust rlib hawdb_readiness_minimal (35 files); 1s disk-cache, darwin-sandbox
+[754 / 757] [Prepa] Compiling Rust rlib hawdb_minimal (277 files)
+[754 / 757] Compiling Rust rlib hawdb_minimal (277 files); 1s disk-cache, darwin-sandbox
+[755 / 757] [Prepa] Compiling Rust bin hawdb_in_memory_portable_tests (1 file)
+[755 / 757] Compiling Rust bin hawdb_in_memory_portable_tests (1 file); 1s disk-cache, darwin-sandbox
+[757 / 758] Testing //:hawdb_in_memory_portable_tests; 0s disk-cache, darwin-sandbox
+[757 / 758] Testing //:hawdb_in_memory_portable_tests; 1s disk-cache, darwin-sandbox
+INFO: Found 1 test target...
+Target //:hawdb_in_memory_portable_tests up-to-date:
+  bazel-bin/hawdb_in_memory_portable_tests
+INFO: Elapsed time: 21.474s, Critical Path: 20.64s
+INFO: 12 processes: 5 internal, 8 darwin-sandbox.
+INFO: Build completed successfully, 12 total actions
+INFO: 
+//:hawdb_in_memory_portable_tests                                        PASSED in 1.6s
+
+Executed 1 out of 1 test: 1 test passes.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+INFO: Build Event Protocol files produced successfully.

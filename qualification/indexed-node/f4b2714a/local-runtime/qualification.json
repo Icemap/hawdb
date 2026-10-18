@@ -1,0 +1,98 @@
+{
+  "head": "f4b2714a4ca5e3fd0e1cee98ad3d7eda719b6554",
+  "tree": "adf8e234eddda5a48cb755bc1d8fe9560d7cf9c5",
+  "base": "6db1c0137b6232d0612a656bd49eba4951ed461b",
+  "observed_main": "e864272ea7a7f9915a9d60d965a60192127d8abb",
+  "created": 1792323538.403153,
+  "general": {
+    "passed": 1777,
+    "failed": 0,
+    "ignored": 1,
+    "filtered_by_registered_partition": 322
+  },
+  "retained": 90,
+  "portable": 8,
+  "contracts": 30,
+  "fuzz": {
+    "targets": 98,
+    "executed": 79,
+    "cached": 19,
+    "residency_halves": 2,
+    "seeds_per_half": 16,
+    "state_checks_per_half": 992
+  },
+  "ffi": 19,
+  "python": {
+    "passed": 355,
+    "skipped": 7
+  },
+  "pydantic": {
+    "passed": 43,
+    "skipped": 1
+  },
+  "public_node": {
+    "head": "f4b2714a4ca5e3fd0e1cee98ad3d7eda719b6554",
+    "tree": "adf8e234eddda5a48cb755bc1d8fe9560d7cf9c5",
+    "extension_sha256": "ee4fe3a93e2c402034a4782ae5828de3239e13818982ae1f833a7ab1fc25715a",
+    "versions": {
+      "python": "3.11.15 (main, Apr 14 2026, 14:45:51) [Clang 22.1.3 ]",
+      "pyarrow": "26.0.0"
+    },
+    "coverage": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "8",
+        "time": "6.900",
+        "timestamp": "2026-10-18T19:33:45.934702+08:00",
+        "hostname": "hawkingreis-MacBook-Pro.local"
+      }
+    ]
+  },
+  "public_predecessor_310": {
+    "head": "310c739dbaa51dd0fab5d61128eda1d2d465c2c3",
+    "tree": "62dc18f4e8e90045fcc053d0c79e02aa8c44564c",
+    "extension_sha256": "2dc8c93b644c5e15d50b73af296c35138a0dabf47cf8353f17582a1cff9fb059",
+    "versions": {
+      "python": "3.11.15 (main, Apr 14 2026, 14:45:51) [Clang 22.1.3 ]",
+      "pyarrow": "26.0.0"
+    },
+    "coverage": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "8",
+        "time": "15.235",
+        "timestamp": "2026-10-18T19:33:29.614099+08:00",
+        "hostname": "hawkingreis-MacBook-Pro.local"
+      }
+    ]
+  },
+  "go_race": {
+    "command": [
+      "go",
+      "test",
+      "-race",
+      "-count=1",
+      "-run",
+      "^TestRetained",
+      "./..."
+    ],
+    "library_sha256": "30a030d6128322dec65539d0cb879a844a801cfb15ac17aed9f967f5b5f19531",
+    "native_library_source": "f4b2714a4ca5e3fd0e1cee98ad3d7eda719b6554",
+    "result": "passed",
+    "architecture": "aarch64/64-bit",
+    "note": "All4 TestRetainedNode functions and11 TestRetained functions match the selected pattern. Node fixture skips only on non64-bit hosts; library/open errors are fatal."
+  },
+  "pending": [
+    "Windows",
+    "Skein exact-source results",
+    "genuine independent review/approval",
+    "normal Tide integration",
+    "final986composition/performance/resources"
+  ]
+}
