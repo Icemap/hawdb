@@ -92,3 +92,8 @@ publication unlock. `IgnorePendingCapture` must violate SourcesLive while the
 closure is still opening. `UnlockBeforePin` now exercises release before any
 pending registration; existing once/retry controls still honor pending capture
 and independently forget installed exact pins.
+
+`HawDBPublicationRootCustodyCloseWithoutUnlock` retains a fork-inherited open
+description after original ownership closes, violating NoUnownedLocalLock. The
+positive protocol explicitly unlocks successful ownership before native close.
+This control is independent of duplicate-handle and early-unregister controls.

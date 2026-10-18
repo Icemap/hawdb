@@ -234,14 +234,19 @@ borrowing retained metadata paid for by an unrelated governor.
 
 [HawDBPublicationRootCustody](HawDBPublicationRootCustody.tla) checks the split
 between root initialization, root readiness/retirement, publisher registration,
-process-lock acquisition, closure and marker removal. Native lock closure uses
-the conservative process-owned `F_SETLK` rule: closing **any** descriptor for
-the lock inode releases that process's lock. The ordinary publication lock is
-abstracted by the single publisher; this model concerns the additional process
-custody, not file-lock syscall semantics or memory accounting.
+process-lock acquisition, closure and marker removal. The abstraction covers
+both the conservative process-owned `F_SETLK` duplicate-close hazard and the
+inherited-open-description hazard of `flock`: a fork can retain an inherited
+description until exec/exit, despite CLOEXEC. Positive custody therefore avoids
+opening duplicate process-lock descriptors and explicitly unlocks successful
+ownership before closing. Native unlock success is assumed; close is the
+fallback after an OS unlock error. The single publisher abstracts its separate
+publication lock. This is not a file-lock syscall or memory refinement proof.
 
-The positive graph has 60 generated / 27 distinct states, depth 9. Four
-independently enabled controls must each produce an invariant violation:
+The inherited-description refinement has 159 generated / 54 distinct states,
+depth 10, with an empty remaining queue. Its positive and five independent
+controls pass. The earlier 60/27/depth9 graph is historical evidence without the
+inherited-description transition. Controls must produce these violations:
 
 | Control | Fault |
 | --- | --- |
@@ -249,6 +254,19 @@ independently enabled controls must each produce an invariant violation:
 | IgnorePublisherDuringInit | Root initialization opens another process-lock handle while publisher custody is active. |
 | UnregisterEarly | Removing the marker before native closure lets new root custody overlap the closing publisher. |
 | ReopenOnPromotion | Closing native custody during promotion releases the peer lock before retained ownership is installed. |
+| CloseWithoutUnlock | A fork-inherited description retains a local kernel lock after all logical/local owners close; NoUnownedLocalLock fails. |
+
+Two deterministic native cases duplicate the open description before locking,
+then keep it alive after either the final root or native-only publisher closes.
+The peer must refuse while the original owner lives and succeed after its
+closure while the duplicate remains. Dropping the duplicate precedes fresh
+reacquisition; production custody never creates that duplicate. Both cases
+reproduced the same locked-after-close failure before correction and pass after
+using File::try_lock_owned. No sleep, retry, quota or deadline change is used.
+The guard is created only after successful acquisition; failed acquisition must
+never construct an unlock owner. Borrowed publisher closure does not unlock a
+still-live root. These regressions model the fork-to-exec mechanism; they do not
+prove that a fork caused each previously observed CI failure.
 
 The native peer-process case retains a reader across failed publisher FD
 admission, successful publisher acquisition and reader closure. It checks

@@ -564,5 +564,6 @@ tla_check(
         timeout_seconds = 1800,
         tlc_args = ["-cleanup", "-workers", "auto"],
     )
-    for control in ["DuplicateProcessHandle", "IgnorePublisherDuringInit", "ReopenOnPromotion", "UnregisterEarly"]
+    for control in ["DuplicateProcessHandle", "IgnorePublisherDuringInit", "ReopenOnPromotion",
+        "CloseWithoutUnlock", "UnregisterEarly"]
 ]

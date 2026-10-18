@@ -11,7 +11,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Barrier};
 
 type Hook = RefCell<Option<Box<dyn FnOnce()>>>;
+type ProcessOpenHook = RefCell<Option<Box<dyn FnOnce(&File)>>>;
 thread_local! {
+    pub(super) static AFTER_PROCESS_OPEN: ProcessOpenHook = RefCell::new(None);
     pub(super) static AFTER_INITIALIZING: Hook = const { RefCell::new(None) };
     pub(super) static AFTER_RETIRING: Hook = const { RefCell::new(None) };
     pub(super) static AFTER_NATIVE_CLOSE: Hook = const { RefCell::new(None) };
@@ -20,6 +22,13 @@ pub(super) fn hook(slot: &'static std::thread::LocalKey<Hook>) {
     let action = slot.with(|slot| slot.borrow_mut().take());
     if let Some(action) = action {
         action();
+    }
+}
+
+pub(super) fn after_process_open(file: &File) {
+    let callback = AFTER_PROCESS_OPEN.with(|slot| slot.borrow_mut().take());
+    if let Some(callback) = callback {
+        callback(file);
     }
 }
 
@@ -795,4 +804,54 @@ fn pending_capture_defers_both_cleanup_paths_before_exact_keys_are_known() {
         assert_eq!(fixture.memory.ledger.snapshot().used_bytes, 0);
         assert_eq!(fixture.project.metrics().open, 0);
     }
+}
+
+// A dup shares the inherited open description, making the fork-to-exec window
+// deterministic without depending on process scheduling or extending deadlines.
+fn assert_inherited_description_released(publisher: bool) {
+    let fixture = Fixture::new(8);
+    let inherited = Arc::new(std::sync::Mutex::new(None));
+    let saved = inherited.clone();
+    AFTER_PROCESS_OPEN.with(|slot| {
+        *slot.borrow_mut() = Some(Box::new(move |file| {
+            *saved.lock().unwrap() = Some(file.try_clone().unwrap());
+        }));
+    });
+    let close: Box<dyn FnOnce()> = if publisher {
+        let owner =
+            super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(
+                &fixture.root,
+            )
+            .unwrap();
+        Box::new(move || drop(owner))
+    } else {
+        let owner = fixture.open().unwrap();
+        Box::new(move || drop(owner))
+    };
+    let inherited = inherited
+        .lock()
+        .unwrap()
+        .take()
+        .expect("duplicated native description");
+    assert!(AFTER_PROCESS_OPEN.with(|slot| slot.borrow().is_none()));
+    peer_root_probe(&fixture.root, true);
+    close();
+    assert_eq!(fixture.project.metrics().open, 1);
+    assert!(!fixture.is_registered());
+    peer_root_probe(&fixture.root, false);
+    drop(inherited);
+    let next = fixture.open().unwrap();
+    peer_root_probe(&fixture.root, true);
+    drop(next);
+    peer_root_probe(&fixture.root, false);
+}
+
+#[test]
+fn final_root_unlocks_before_an_inherited_description_closes() {
+    assert_inherited_description_released(false);
+}
+
+#[test]
+fn native_publisher_unlocks_before_an_inherited_description_closes() {
+    assert_inherited_description_released(true);
 }

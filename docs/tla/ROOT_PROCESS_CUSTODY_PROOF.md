@@ -115,7 +115,7 @@ fresh reservation inventories.
 | FailInit | RootRef initialization guard follows the same retirement path on error or unwind |
 | Nonfinal reference drop | Count check and nonfinal Shared decrement under the registry gate |
 | BeginRetirement | Last external reference changes phase to Retiring under gate |
-| CloseRetired | Extract resources, close process-lock FD then directory FD outside gate |
+| CloseRetired | Extract resources, explicitly unlock successful process custody, then close lock FD and directory FD outside gate |
 | Unregister | Unlink entry only after native resource closure; free receipts/control block outside gate |
 | Producer and admitted-mutation slot | Not implemented by this registry |
 | Exact child and in-flight source pins | Not implemented; children must gain independent custody before activation |
@@ -225,3 +225,19 @@ budget, deadline, test selection or final postcondition is relaxed. This checks
 relative authority at a native supported replacement boundary; it does not
 promise that Windows permits every host rename while descendants are held, and
 does not qualify segment/run loads, source pins, GC, incarnation or activation.
+
+## Inherited open descriptions at final closure
+
+Closing a parent FD alone can leave an inherited flock description locked until
+exec/exit. Root and native-only publisher process custody now use the storage
+library's owned lock guard, constructed by `File::try_lock_owned` only after a
+successful acquisition. Guard destruction explicitly unlocks before native close,
+matching the existing storage publication guard's lifetime rule. CLOEXEC remains
+set but is not the unlock mechanism. A borrowed publisher never constructs a
+second process-lock owner.
+
+The publication-custody model and its `CloseWithoutUnlock` control now exercise
+this case; see [the scoped model/native correspondence](SOURCE_ROOT_CUSTODY_DESIGN.md#publication-and-retained-root-process-lock-coordination).
+The finite model assumes native unlock succeeds. Unlock errors fall back to
+close and may leave temporary exclusion until inherited descriptions close;
+no scheduling/latency guarantee or native refinement is claimed from this model.

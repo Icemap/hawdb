@@ -46,8 +46,9 @@ pub struct File {
 /// A publication scope owns lock release, independently of descriptor copies
 /// retained by a concurrent fork before close-on-exec. Construct only after
 /// successful acquisition; failed acquisition must never unlock another owner.
+#[doc(hidden)]
 #[derive(Debug)]
-pub(crate) struct PublicationLockGuard(File);
+pub struct PublicationLockGuard(File);
 
 impl PublicationLockGuard {
     pub(crate) fn new(locked: File) -> Self {
@@ -293,6 +294,15 @@ impl File {
             .map_err(TryLockError::Error)?
             .try_lock()
     }
+    /// Own successful acquisition and explicit unlock independently of native
+    /// descriptions inherited by a fork before close-on-exec. A failed acquire
+    /// closes the input handle without constructing an unlock owner.
+    #[doc(hidden)]
+    pub fn try_lock_owned(self) -> Result<PublicationLockGuard, TryLockError> {
+        self.try_lock()?;
+        Ok(PublicationLockGuard::new(self))
+    }
+
     pub fn unlock(&self) -> io::Result<()> {
         self.writable_native()?.unlock()
     }

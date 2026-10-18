@@ -144,7 +144,9 @@ impl PublicationRegistration {
                     PROCESS_LOCK,
                     SourceDirectoryLockMode::ReadWriteCreate,
                 )?;
-                file.try_lock().map_err(|error| match error {
+                #[cfg(test)]
+                tests::after_process_open(&file);
+                let file = file.try_lock_owned().map_err(|error| match error {
                     std::fs::TryLockError::WouldBlock => {
                         HawDBError::Storage("source root is owned by another process".into())
                     }
@@ -299,7 +301,7 @@ struct Entry {
 
 struct NativeResources {
     // Closing the process lock must precede dropping its captured directory.
-    process_lock: Option<File>,
+    process_lock: Option<hawdb_storage::file_io::PublicationLockGuard>,
     directory: SourceDirectory,
 }
 
@@ -448,18 +450,14 @@ impl RootRef {
                 PROCESS_LOCK,
                 SourceDirectoryLockMode::ReadWriteCreate,
             )?;
-            native.process_lock = Some(lock);
-            native
-                .process_lock
-                .as_ref()
-                .unwrap()
-                .try_lock()
-                .map_err(|error| match error {
-                    std::fs::TryLockError::WouldBlock => {
-                        HawDBError::Storage("source root is owned by another process".into())
-                    }
-                    std::fs::TryLockError::Error(error) => error.into(),
-                })?;
+            #[cfg(test)]
+            tests::after_process_open(&lock);
+            native.process_lock = Some(lock.try_lock_owned().map_err(|error| match error {
+                std::fs::TryLockError::WouldBlock => {
+                    HawDBError::Storage("source root is owned by another process".into())
+                }
+                std::fs::TryLockError::Error(error) => error.into(),
+            })?);
         }
         admission
             .checkpoint()
