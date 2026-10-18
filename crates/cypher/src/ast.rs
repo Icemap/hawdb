@@ -322,6 +322,10 @@ pub enum PropertyPredicate {
         expression: ScalarExpression,
         value: ScalarExpression,
     },
+    ExpressionIn {
+        expression: ScalarExpression,
+        values: ValueExpression,
+    },
     ListContains {
         variable: String,
         property: String,

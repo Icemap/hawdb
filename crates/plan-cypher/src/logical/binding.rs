@@ -902,6 +902,17 @@ pub(super) fn plan_predicate(
                 value: plan_scalar_expression(scope, value, parameters)?,
             })
         }
+        PropertyPredicate::ExpressionIn { expression, values } => {
+            match bind_value(values, parameters)? {
+                Value::List(values) => Ok(Predicate::ExpressionIn {
+                    expression: plan_scalar_expression(scope, expression, parameters)?,
+                    values,
+                }),
+                value => Err(HawDBError::Semantic(format!(
+                    "IN predicate requires a list value, got {value:?}"
+                ))),
+            }
+        }
         PropertyPredicate::ListContains {
             variable,
             property,
@@ -1277,6 +1288,9 @@ pub(super) fn collect_predicate_variables(
                 collect_scalar_expression_variables(value, variables);
             }
         }
+        PropertyPredicate::ExpressionIn { expression, .. } => {
+            collect_scalar_expression_variables(expression, variables);
+        }
         _ => {
             if let Some(variable) = predicate_variable(predicate) {
                 variables.insert(variable.to_string());
@@ -1311,6 +1325,7 @@ pub(super) fn predicate_variable(predicate: &PropertyPredicate) -> Option<&str> 
         | PropertyPredicate::ExpressionNotEq { .. }
         | PropertyPredicate::ExpressionCompare { .. }
         | PropertyPredicate::ExpressionContains { .. }
+        | PropertyPredicate::ExpressionIn { .. }
         | PropertyPredicate::ParameterIsNull { .. }
         | PropertyPredicate::ParameterIsNotNull { .. }
         | PropertyPredicate::ParameterEq { .. }

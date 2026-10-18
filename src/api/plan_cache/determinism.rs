@@ -153,6 +153,9 @@ fn predicate_is_deterministic(predicate: &cypher::PropertyPredicate) -> bool {
         | Predicate::ParameterNotEq { right: value, .. }
         | Predicate::IdIn { values: value, .. }
         | Predicate::In { values: value, .. } => value_is_deterministic(value),
+        Predicate::ExpressionIn { expression, values } => {
+            scalar_is_deterministic(expression) && value_is_deterministic(values)
+        }
         Predicate::ExpressionEq { expression, value }
         | Predicate::ExpressionNotEq { expression, value }
         | Predicate::ExpressionCompare {

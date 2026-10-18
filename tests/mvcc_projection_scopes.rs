@@ -439,3 +439,81 @@ fn complete_hop_guards_validate_hot_and_cold_pinned_values() {
         std::fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[test]
+fn scalar_expression_in_keeps_snapshot_and_label_dependencies_through_publication() {
+    for change in ["related", "phantom", "unrelated"] {
+        let root = std::env::temp_dir().join(format!(
+            "hawdb-expression-in-dependencies-{}-{}-{change}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let mut db = Database::open(root.join("db")).unwrap();
+        db.query("CREATE (:Memory {id:'a', space_id:''})").unwrap();
+        let epoch = db.commit_epoch().unwrap();
+        let query = "MATCH (m:Memory) WHERE (CASE WHEN m.space_id IS NULL OR m.space_id = '' THEN $default_space ELSE m.space_id END) IN $space_ids RETURN m.id AS id ORDER BY id";
+        let parameters = std::collections::BTreeMap::from([
+            ("default_space".into(), Value::String("default".into())),
+            (
+                "space_ids".into(),
+                Value::List(vec![Value::String("default".into())]),
+            ),
+        ]);
+        let plan = db.explain_query_with_params(query, &parameters).unwrap();
+        assert!(format!("{:?}", plan.physical_plan).contains("ExpressionIn"));
+        let mut read = db.begin_prepared_read(limits()).unwrap();
+        db.query(match change {
+            "related" => "MATCH (m:Memory) SET m.space_id='private'",
+            "phantom" => "CREATE (:Memory {id:'b'})",
+            "unrelated" => "CREATE (:Other {id:'other'})",
+            _ => unreachable!(),
+        })
+        .unwrap();
+        let rows = read
+            .query_with_params(query, &parameters)
+            .unwrap()
+            .output
+            .rows;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("id"), Some(&Value::String("a".into())));
+        let current_rows = db.query_with_params(query, &parameters).unwrap().rows.len();
+        assert_eq!(
+            current_rows,
+            match change {
+                "related" => 0,
+                "phantom" => 2,
+                "unrelated" => 1,
+                _ => unreachable!(),
+            }
+        );
+        let dependencies = read.finish().unwrap();
+        assert_eq!(dependencies.node_domain_count(), 1);
+        assert!(!dependencies.requires_unchanged_database_epoch());
+        // An empty candidate exercises source validation, not complete mapping.
+        let writer = hawdb::SearchOutOfCoreGenerationWriter::create(
+            root.join("search"),
+            hawdb::SearchOutOfCoreGenerationBuildOptions {
+                source_graph_commit_epoch: Some(epoch),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let result =
+            db.publish_prepared_search(&dependencies, writer.prepare_publication().unwrap());
+        if change == "unrelated" {
+            result.unwrap();
+        } else {
+            assert!(
+                matches!(result, Err(ProjectionPublicationError::Dependency(_))),
+                "stale scalar ExpressionIn {change} was accepted"
+            );
+        }
+        drop(dependencies);
+        drop(db);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}

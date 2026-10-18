@@ -302,6 +302,10 @@ fn evaluate_predicate_truth(
                 _ => PredicateTruth::False,
             }
         }
+        Predicate::ExpressionIn { expression, values } => {
+            let actual = project_expression_value(expression, catalog, binding)?;
+            predicate_in_truth(Some(&actual), values)
+        }
         Predicate::PropertyListContains {
             variable,
             property,
@@ -549,6 +553,7 @@ pub fn property_filter_from_predicate(predicate: &Predicate) -> Result<PropertyF
         }
         Predicate::ExpressionCompare { .. }
         | Predicate::ExpressionContains { .. }
+        | Predicate::ExpressionIn { .. }
         | Predicate::ConstantBool(_)
         | Predicate::RelationshipExists { .. }
         | Predicate::BoundRelationshipExists { .. } => Err(HawDBError::Execution(
@@ -666,6 +671,7 @@ pub fn predicate_references_only_variable(predicate: &Predicate, variable: &str)
         | Predicate::ExpressionNotEq { .. }
         | Predicate::ExpressionCompare { .. }
         | Predicate::ExpressionContains { .. } => false,
+        Predicate::ExpressionIn { .. } => false,
     }
 }
 

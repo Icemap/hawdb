@@ -706,6 +706,7 @@ fn predicate_references_only_variable(predicate: &Predicate, variable: &str) -> 
         | Predicate::ExpressionNotEq { .. }
         | Predicate::ExpressionCompare { .. }
         | Predicate::ExpressionContains { .. } => false,
+        Predicate::ExpressionIn { .. } => false,
     }
 }
 

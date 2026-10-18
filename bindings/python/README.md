@@ -115,6 +115,62 @@ The strict payload path builds no Python row list, result JSON or IPC envelope.
 materialization. Writable buffer requests and dtype changes refuse before
 ownership transfer. The extension imports without NumPy or PyArrow.
 
+Compatible batches expose standard `__arrow_c_array__` capsules and both
+batches/cursors expose schema-only `__arrow_c_schema__`. Cursor
+`__arrow_c_stream__` exports a demand-driven stream, adopting the cursor;
+the original cursor then reports closed. Exporting a capsule does not pull.
+Only empty/contiguous selections are eligible; sparse selections and requested
+schema arguments refuse explicitly. Capsules are consumed once, and abandoned
+capsules release their owners. Arrays already handed to a consumer remain
+readable after stream or database close.
+
+Selection contiguity is checked per demanded batch. An Arrow stream may return
+earlier arrays and then terminate with `SelectionRequiresMaterialization`
+(errno 22) when matching/nonmatching rows interleave. Earlier arrays stay
+readable but remain an incomplete result. Known plan/schema incompatibility is
+checked at creation; export does not pre-scan, gather or copy the source. Native
+retained batches preserve sparse selection for selection-aware consumers.
+Arrow data/stream export currently requires a little-endian host. Errno 12
+can mean retryable pressure or a terminal capacity/result-budget failure;
+inspect the diagnostic rather than retrying solely on errno. Generic Arrow
+consumers may stop after any stream error.
+
+Cursor pull, close and Arrow adoption are serialized. `close()` waits for an
+in-flight pull while releasing the GIL; it is idempotent. Batches already
+delivered by that pull remain independently readable. Indexed complete-node views remain a separate delivery.
+
+With optional PyArrow installed, use its public protocol APIs:
+
+```python
+reader = pyarrow.RecordBatchReader.from_stream(query)
+try:
+    for batch in reader:
+        consume(batch)  # release each batch before retaining more than two
+finally:
+    reader.close()
+```
+
+`pyarrow.record_batch(batch)` imports an eligible retained batch. Collecting all
+stream batches, including `read_all()`, still obeys shared limits and may raise
+an Arrow resource error; it does not enlarge the native pool. EOF confirmation
+after the immutable source is exhausted needs no new slot/descriptor.
+
+The optional public-consumer tests are skipped without PyArrow. After building
+the default test target, they can be run in a separate environment containing
+pytest and PyArrow (locally verified with 26.0.0):
+
+```bash
+bazel test //bindings/python:hawdb_python_tests
+PYTHONPATH="$PWD/bazel-bin/bindings/python/hawdb_python_tests.runfiles/_main/bindings/python/python" \
+  /path/to/consumer-venv/bin/python -m pytest --import-mode=importlib \
+  --rootdir="$PWD" bindings/python/tests/test_arrow_consumer.py -v
+```
+
+This is experimental. Whole-operation source/planning qualification, opaque derived-view
+and allocator/RSS accounting, platform and performance qualification remain
+open. Current native result-buffer evidence does not bound whole-operation or
+interpreter RSS. See [the full scope and remaining gates](../../docs/RETAINED_ARROW.md).
+
 ## Build from source
 
 From the repository root, Bazel builds the native extension and runs the same

@@ -246,6 +246,14 @@ jobs:
           HAWDB_LIBRARY="$GITHUB_WORKSPACE/bindings/ffi/target/debug/hawdb_ffi.dll" \
             go test -count=1 -v ./... 2>&1 | tee ../../windows-native-results/go.txt
 
+      - name: Test retained Arrow array and stream contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
+            api::retained_query::tests::arrow -- --nocapture \
+            2>&1 | tee windows-native-results/retained-arrow.txt
+
       - name: Test abandonment GC power-loss cuts
         shell: bash
         run: |

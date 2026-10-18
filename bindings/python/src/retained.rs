@@ -22,6 +22,8 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
+mod arrow;
+
 fn check_buffer_flags(flags: c_int) -> PyResult<()> {
     if flags & ffi::PyBUF_WRITABLE != 0 {
         return Err(PyBufferError::new_err("retained buffers are read-only"));
@@ -208,6 +210,17 @@ impl RetainedCursor {
 }
 #[pymethods]
 impl RetainedCursor {
+    fn __arrow_c_schema__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        arrow::cursor_schema(py, self)
+    }
+    #[pyo3(signature = (requested_schema = None))]
+    fn __arrow_c_stream__<'py>(
+        &self,
+        py: Python<'py>,
+        requested_schema: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        arrow::cursor_stream(py, self, requested_schema)
+    }
     fn next_batch(&self, py: Python<'_>) -> PyResult<Option<Py<RetainedBatch>>> {
         let metadata = metadata::<RetainedBatch>(py)?;
         // Detach while waiting for the lock, then keep it through Python
@@ -359,6 +372,17 @@ impl RetainedBatch {
 }
 #[pymethods]
 impl RetainedBatch {
+    fn __arrow_c_schema__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        arrow::batch_schema(py, self)
+    }
+    #[pyo3(signature = (requested_schema = None))]
+    fn __arrow_c_array__<'py>(
+        &self,
+        py: Python<'py>,
+        requested_schema: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+        arrow::batch_array(py, self, requested_schema)
+    }
     fn close(&mut self) {
         self.inner.take();
     }

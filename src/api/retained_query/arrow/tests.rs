@@ -1,0 +1,649 @@
+// Copyright 2026 Nowledge
+// SPDX-License-Identifier: Apache-2.0
+
+use super::*;
+use std::ffi::CStr;
+
+#[test]
+fn contiguous_export_shares_values_with_nonzero_child_offsets_and_survives_close() {
+    let mut db = fixture();
+    let governor = governor_with_handles(1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(
+            &(QUERY.to_owned() + " SKIP 1 LIMIT 2"),
+            &params(),
+            RetainedQueryOptions {
+                batch_rows: nz(9),
+                ..options()
+            },
+        )
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    assert_eq!(batch.selected_rows(), &[3, 4]);
+    let RetainedColumnValues::Int64(native) = batch.column(0).unwrap() else {
+        panic!("int");
+    };
+    let original = native.as_ptr();
+    let original_provenance = batch.column_provenance(0).unwrap();
+    let export = batch.export_arrow(0).unwrap();
+    let selected_provenance = export.column_provenance(0).unwrap();
+    assert_eq!(selected_provenance.identity, original_provenance.identity);
+    assert_eq!(
+        selected_provenance.retained_capacity_bytes,
+        original_provenance.retained_capacity_bytes
+    );
+    assert_eq!(
+        selected_provenance.byte_offset,
+        original_provenance.byte_offset + 3 * 8
+    );
+    assert_eq!(selected_provenance.byte_length, 2 * 8);
+    assert_eq!(selected_provenance, export.column_provenance(2).unwrap());
+    unsafe {
+        assert_eq!(CStr::from_ptr(export.schema().format), c"+s");
+        let fields = std::slice::from_raw_parts(export.schema().children, 3);
+        assert_eq!(CStr::from_ptr((*fields[0]).format), c"l");
+        assert_eq!(CStr::from_ptr((*fields[1]).format), c"L");
+        assert_eq!((*fields[0]).flags, 2);
+        assert_eq!((*fields[1]).flags, 0);
+        let metadata = std::slice::from_raw_parts((*fields[1]).metadata.cast::<u8>(), 35);
+        assert_eq!(i32::from_ne_bytes(metadata[..4].try_into().unwrap()), 1);
+        assert_eq!(&metadata[8..18], b"hawdb:role");
+        assert_eq!(&metadata[22..], b"node_identity");
+        let columns = std::slice::from_raw_parts(export.array().children, 3);
+        assert_eq!(export.array().length, 2);
+        assert_eq!(export.array().offset, 0);
+        assert_eq!((*columns[0]).offset, 3);
+        assert_eq!((*columns[0]).length, 2);
+        assert_eq!(*(*columns[0]).buffers.add(1), original.cast());
+        assert_eq!(*(*columns[0]).buffers.add(1), *(*columns[2]).buffers.add(1));
+        assert!((*(*columns[0]).buffers).is_null());
+    }
+    cursor.close();
+    assert_eq!(export.status(), RetainedQueryStatus::Closed);
+    drop(batch);
+    drop(cursor);
+    drop(db);
+    unsafe {
+        let column = *export.array().children;
+        let values = *(*column).buffers.add(1);
+        assert_eq!(
+            std::slice::from_raw_parts(values.cast::<i64>().add((*column).offset as usize), 2),
+            &[3, 4]
+        );
+    }
+    assert!(governor.retained_result_snapshot().retained_bytes > 0);
+    drop(export);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    assert_eq!(governor.retained_result_snapshot().view_handles, 0);
+}
+
+#[test]
+fn earlier_arrow_export_observes_late_failure_and_keeps_payload_readable() {
+    let db = fixture();
+    let mut cursor = db
+        .query_with_params_retained(
+            QUERY,
+            &params(),
+            RetainedQueryOptions {
+                max_result_rows: Some(1),
+                ..options()
+            },
+        )
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let export = batch.export_arrow(0).unwrap();
+    assert_eq!(export.status(), RetainedQueryStatus::Open);
+    assert!(matches!(
+        cursor.next_batch(),
+        Err(RetainedQueryError::ResultBudget { .. })
+    ));
+    assert_eq!(export.status(), RetainedQueryStatus::Failed);
+    assert_eq!(cursor.profile().source_pinned_rows, 0);
+    drop(batch);
+    drop(cursor);
+    drop(db);
+    unsafe {
+        let column = *export.array().children;
+        assert_eq!(
+            *(*(*column).buffers.add(1))
+                .cast::<i64>()
+                .add((*column).offset as usize),
+            2
+        );
+    }
+}
+
+#[test]
+fn moved_child_remains_valid_after_record_batch_release() {
+    let mut db = fixture();
+    let governor = governor_with_handles(1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let (mut schema, mut array) = batch.export_arrow(0).unwrap().into_raw();
+    let mut child = unsafe {
+        let source = *array.children;
+        let moved = std::ptr::read(source);
+        (*source).release = None;
+        moved
+    };
+    drop(batch);
+    drop(cursor);
+    drop(db);
+    unsafe {
+        array.release.unwrap()(&mut array);
+        schema.release.unwrap()(&mut schema);
+        assert!(array.release.is_none() && schema.release.is_none());
+        assert_eq!(
+            *(*child.buffers.add(1))
+                .cast::<i64>()
+                .add(child.offset as usize),
+            2
+        );
+        child.release.unwrap()(&mut child);
+    }
+    assert!(child.release.is_none());
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    assert_eq!(governor.retained_result_snapshot().view_handles, 0);
+}
+
+#[test]
+fn schema_ownership_does_not_keep_a_result_slot() {
+    let mut db = fixture();
+    let governor = governor_with_handles(1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let schema = batch.export_arrow_schema(0).unwrap();
+    drop(batch);
+    assert_eq!(cursor.outstanding_batches(), 0);
+    cursor.close();
+    drop(cursor);
+    drop(db);
+    assert_eq!(governor.retained_result_snapshot().buffer_owners, 1);
+    unsafe {
+        assert_eq!(CStr::from_ptr(schema.descriptor().format), c"+s");
+    }
+    drop(schema);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
+#[test]
+fn sparse_selection_refuses_without_charging_or_copying() {
+    let mut db = fixture();
+    db.query("MATCH (n:Item) WHERE n.score = 4 SET n.score = 0")
+        .unwrap();
+    let mut cursor = db
+        .query_with_params_retained(
+            QUERY,
+            &params(),
+            RetainedQueryOptions {
+                batch_rows: nz(9),
+                ..options()
+            },
+        )
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    assert_eq!(batch.selected_rows(), &[2, 3, 5, 6, 7, 8]);
+    let before = db.retained_result_snapshot().unwrap();
+    assert!(matches!(
+        batch.export_arrow(0),
+        Err(RetainedQueryError::SelectionRequiresMaterialization)
+    ));
+    assert_eq!(before, db.retained_result_snapshot().unwrap());
+    assert_eq!(scores(&batch), vec![2, 3, 5, 6, 7, 8]);
+}
+
+#[test]
+fn impossible_protocol_and_wrapper_overflow_refuse_without_partial_ownership() {
+    let mut db = fixture();
+    let governor = governor_with_handles(10);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let before = governor.retained_result_snapshot();
+    assert!(matches!(
+        batch.export_arrow(0),
+        Err(RetainedQueryError::WorkingUnitTooLarge)
+    ));
+    assert_eq!(before, governor.retained_result_snapshot());
+    assert!(matches!(
+        batch.export_arrow_schema(usize::MAX),
+        Err(RetainedQueryError::SizeOverflow)
+    ));
+    assert_eq!(before, governor.retained_result_snapshot());
+}
+
+#[test]
+fn temporary_handle_pressure_rolls_back_and_release_allows_export_retry() {
+    let mut db = fixture();
+    let governor = governor_with_handles(11);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    // Exercise failure before construction and during complete descriptor
+    // reservation after schema construction; every path must roll back.
+    for occupancy in [11, 6, 3] {
+        let mut views = Vec::new();
+        while governor.retained_result_snapshot().view_handles < occupancy {
+            views.push(batch.try_retain(0).unwrap());
+        }
+        let before = governor.retained_result_snapshot();
+        let error = batch.export_arrow(0).unwrap_err();
+        assert!(error.is_retryable());
+        let after = governor.retained_result_snapshot();
+        assert_eq!(before.retained_bytes, after.retained_bytes);
+        assert_eq!(before.view_handles, after.view_handles);
+        assert_eq!(before.buffer_owners, after.buffer_owners);
+        assert!(after.backpressure_events > before.backpressure_events);
+        drop(views);
+    }
+    let export = batch.export_arrow(0).unwrap();
+    assert_eq!(governor.retained_result_snapshot().view_handles, 11);
+    drop(batch);
+    drop(cursor);
+    drop(export);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
+#[test]
+fn nullable_float_bits_and_all_null_empty_selection_survive_arrow_layout() {
+    let mut db = Database::new();
+    db.query("CREATE NODE TABLE Item").unwrap();
+    db.query("CREATE PROPERTY ON NODE TABLE Item(score) TYPE FLOAT")
+        .unwrap();
+    for value in [
+        Value::Null,
+        Value::Float(-0.0),
+        Value::Float(0.0),
+        Value::Float(f64::from_bits(0x7ff800000000002a)),
+        Value::Float(f64::INFINITY),
+    ] {
+        db.query_with_params(
+            "CREATE (:Item {score: $value})",
+            &BTreeMap::from([("value".into(), value)]),
+        )
+        .unwrap();
+    }
+    let mut cursor = db
+        .query_with_params_retained(
+            QUERY,
+            &BTreeMap::from([("min".into(), Value::Float(f64::NEG_INFINITY))]),
+            RetainedQueryOptions {
+                batch_rows: nz(5),
+                ..options()
+            },
+        )
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let export = batch.export_arrow(0).unwrap();
+    unsafe {
+        let field = *export.schema().children;
+        assert_eq!(CStr::from_ptr((*field).format), c"g");
+        let column = *export.array().children;
+        assert_eq!((*column).offset, 1);
+        assert_eq!((*column).null_count, -1);
+        assert_eq!(*(*(*column).buffers).cast::<u64>(), 30);
+        assert_eq!(
+            std::slice::from_raw_parts((*(*column).buffers.add(1)).cast::<u64>().add(1), 4),
+            &[1 << 63, 0, 0x7ff800000000002a, 0x7ff0000000000000]
+        );
+    }
+    drop(export);
+    drop(batch);
+    drop(cursor);
+    db.query("MATCH (n:Item) SET n.score = NULL").unwrap();
+    let mut cursor = db
+        .query_with_params_retained(
+            QUERY,
+            &BTreeMap::from([("min".into(), Value::Float(0.0))]),
+            RetainedQueryOptions {
+                batch_rows: nz(5),
+                ..options()
+            },
+        )
+        .unwrap();
+    let schema = cursor.export_arrow_schema(0).unwrap();
+    assert_eq!(schema.descriptor().n_children, 3);
+    let batch = cursor.next_batch().unwrap().unwrap();
+    assert!(batch.selected_rows().is_empty());
+    let export = batch.export_arrow(0).unwrap();
+    assert_eq!(export.array().length, 0);
+    unsafe {
+        let column = *export.array().children;
+        assert_eq!((*column).offset, 0);
+        assert_eq!((*column).null_count, 0);
+        assert_eq!(*(*(*column).buffers).cast::<u64>(), 0);
+        assert_eq!(CStr::from_ptr((**export.schema().children).format), c"g");
+    }
+    assert!(cursor.next_batch().unwrap().is_none());
+    drop(batch);
+    drop(export);
+    drop(schema);
+    drop(cursor);
+    assert_eq!(db.retained_result_snapshot().unwrap().retained_bytes, 0);
+}
+
+#[test]
+fn complete_export_wrapper_impossibility_is_not_temporary_pressure() {
+    for (query_bytes, memory_bytes, result_bytes, wrapper_bytes) in [
+        (256 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024, 32 * 1024),
+        (64 * 1024, 64 * 1024 * 1024, 256 * 1024, 32 * 1024),
+        (256 * 1024 * 1024, 128 * 1024, 1024 * 1024, 64 * 1024),
+    ] {
+        let mut config = crate::DatabaseConfig::default();
+        config.execution_memory.query_memory_bytes = nz(query_bytes);
+        let mut db = fixture_with_config(config);
+        let governor = governor_with_result_ceiling(1024, memory_bytes, result_bytes);
+        db.set_runtime_governor(governor.clone());
+        let mut cursor = db
+            .query_with_params_retained(QUERY, &params(), options())
+            .unwrap();
+        let batch = cursor.next_batch().unwrap().unwrap();
+        let before = governor.retained_result_snapshot();
+        let error = batch.export_arrow(wrapper_bytes).unwrap_err();
+        let after = governor.retained_result_snapshot();
+        assert_eq!(before, after);
+        assert_eq!(scores(&batch), vec![2]);
+        assert!(
+            matches!(error, RetainedQueryError::WorkingUnitTooLarge),
+            "{error:?}"
+        );
+        assert!(!error.is_retryable());
+    }
+}
+
+fn largest_admitted_export_wrapper(
+    mut export: impl FnMut(usize) -> Result<()>,
+    ceiling: usize,
+) -> usize {
+    let mut low = 0;
+    let mut high = ceiling;
+    while low < high {
+        let bytes = low + (high - low).div_ceil(2);
+        if export(bytes).is_ok() {
+            low = bytes;
+        } else {
+            high = bytes - 1;
+        }
+    }
+    low
+}
+
+#[test]
+fn direct_export_neighboring_intrinsic_boundary_is_permanent_without_partial_adoption() {
+    let mut db = fixture();
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let boundary =
+        largest_admitted_export_wrapper(|bytes| batch.export_arrow(bytes).map(drop), 64 * 1024);
+    let before = governor.retained_result_snapshot();
+    assert!(matches!(
+        batch.export_arrow(boundary + 1),
+        Err(RetainedQueryError::WorkingUnitTooLarge)
+    ));
+    assert_eq!(before, governor.retained_result_snapshot());
+    assert_eq!(scores(&batch), vec![2]);
+    drop(batch.export_arrow(boundary).unwrap());
+    drop((batch, cursor, db));
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
+#[test]
+fn direct_export_live_array_byte_pressure_remains_retryable_after_intrinsic_preflight() {
+    let mut db = fixture();
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let boundary =
+        largest_admitted_export_wrapper(|bytes| batch.export_arrow(bytes).map(drop), 64 * 1024);
+    let held = batch.export_arrow(boundary).unwrap();
+    let before = governor.retained_result_snapshot();
+    let error = batch.export_arrow(0).unwrap_err();
+    assert!(error.is_retryable(), "{error:?}");
+    let after = governor.retained_result_snapshot();
+    assert_eq!(before.retained_bytes, after.retained_bytes);
+    assert_eq!(before.buffer_owners, after.buffer_owners);
+    assert_eq!(before.view_handles, after.view_handles);
+    assert_eq!(scores(&batch), vec![2]);
+    drop(held);
+    drop(batch.export_arrow(0).unwrap());
+    drop((batch, cursor, db));
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
+#[test]
+fn direct_schema_export_includes_its_borrowed_input_in_the_complete_allowance() {
+    let mut db = fixture();
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let boundary = largest_admitted_export_wrapper(
+        |bytes| batch.export_arrow_schema(bytes).map(drop),
+        64 * 1024,
+    );
+    let before = governor.retained_result_snapshot();
+    assert!(matches!(
+        batch.export_arrow_schema(boundary + 1),
+        Err(RetainedQueryError::WorkingUnitTooLarge)
+    ));
+    assert_eq!(before, governor.retained_result_snapshot());
+    drop(batch.export_arrow_schema(boundary).unwrap());
+    assert_eq!(scores(&batch), vec![2]);
+    drop((batch, cursor, db));
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
+#[test]
+fn direct_export_source_pins_remain_separate_from_the_result_allowance() {
+    let mut db = fixture_with_unrequested_payload(128 * 1024);
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    assert!(cursor.profile().source_pinned_capacity_bytes > 64 * 1024);
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let export = batch.export_arrow(0).unwrap();
+    assert_eq!(scores(&batch), vec![2]);
+    drop(cursor);
+    drop(db);
+    assert_eq!(export.column_provenance(0).unwrap().byte_length, 8);
+    drop((export, batch));
+    let released = governor.retained_result_snapshot();
+    assert_eq!(released.retained_bytes, 0);
+    assert_eq!(released.buffer_owners, 0);
+    assert_eq!(released.view_handles, 0);
+}
+
+#[test]
+fn direct_export_query_ledger_pressure_clears_when_the_source_cursor_closes() {
+    let mut config = crate::DatabaseConfig::default();
+    config.execution_memory.query_memory_bytes = nz(64 * 1024);
+    let mut db = fixture_with_config(config);
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 256 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    assert!(cursor.profile().source_pinned_capacity_bytes > 0);
+    let boundary =
+        largest_admitted_export_wrapper(|bytes| batch.export_arrow(bytes).map(drop), 64 * 1024);
+    let before = governor.retained_result_snapshot();
+    let visited = cursor.profile().visited_rows;
+    let error = batch.export_arrow(boundary + 1).unwrap_err();
+    assert!(
+        matches!(
+            error,
+            RetainedQueryError::RetainedAdmission(
+                hawdb_qos::RuntimeRetainedResultError::Capacity {
+                    resource: hawdb_qos::RuntimeRetainedResultResource::QueryBytes,
+                    retryable: true,
+                    ..
+                }
+            )
+        ),
+        "{error:?}"
+    );
+    let after = governor.retained_result_snapshot();
+    assert_eq!(before.retained_bytes, after.retained_bytes);
+    assert_eq!(before.buffer_owners, after.buffer_owners);
+    assert_eq!(before.view_handles, after.view_handles);
+    assert_eq!(cursor.profile().visited_rows, visited);
+    cursor.close();
+    let export = batch.export_arrow(boundary + 1).unwrap();
+    assert_eq!(scores(&batch), vec![2]);
+    drop((export, batch, cursor, db));
+    let released = governor.retained_result_snapshot();
+    assert_eq!(released.retained_bytes, 0);
+    assert_eq!(released.buffer_owners, 0);
+    assert_eq!(released.view_handles, 0);
+}
+
+#[test]
+fn float_and_identity_arrow_payload_snapshot_for_cross_revision_compatibility() {
+    let mut db = Database::new();
+    let governor = governor_with_handles(1024);
+    db.set_runtime_governor(governor.clone());
+    db.query("CREATE NODE TABLE Item").unwrap();
+    db.query("CREATE PROPERTY ON NODE TABLE Item(score) TYPE FLOAT")
+        .unwrap();
+    let bits = [
+        0x8000000000000000,
+        0,
+        0x7ff800000000002a,
+        0x7ff0000000000000,
+    ];
+    for value in std::iter::once(Value::Null).chain(
+        bits.into_iter()
+            .map(|word| Value::Float(f64::from_bits(word))),
+    ) {
+        db.query_with_params(
+            "CREATE (:Item {score: $value})",
+            &BTreeMap::from([("value".into(), value)]),
+        )
+        .unwrap();
+    }
+    let mut cursor = db
+        .query_with_params_retained(
+            QUERY,
+            &BTreeMap::from([("min".into(), Value::Float(f64::NEG_INFINITY))]),
+            RetainedQueryOptions {
+                batch_rows: nz(5),
+                ..options()
+            },
+        )
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    assert_eq!(batch.selected_rows(), &[1, 2, 3, 4]);
+    let export = batch.export_arrow(0).unwrap();
+    assert!(cursor.next_batch().unwrap().is_none());
+    drop(cursor);
+    drop(db);
+    let mut columns = Vec::new();
+    for index in 0..3 {
+        // The descriptor owns the buffers after database/cursor closure. Bounds
+        // come from the retained batch and the verified contiguous selection.
+        let (name, format, flags, offset, length, null_count, metadata, values, validity) = unsafe {
+            let field = &**export.schema().children.add(index);
+            let array = &**export.array().children.add(index);
+            assert_eq!(array.n_buffers, 2);
+            assert_eq!(array.offset, 1);
+            assert_eq!(array.length, 4);
+            let expected_pointer = match batch.column(index).unwrap() {
+                RetainedColumnValues::Float64(values) => values.as_ptr().cast::<u8>(),
+                RetainedColumnValues::UInt64(values) => values.as_ptr().cast::<u8>(),
+                _ => panic!("Float64 or UInt64 fixture column"),
+            };
+            assert_eq!((*array.buffers.add(1)).cast::<u8>(), expected_pointer);
+            let values = std::slice::from_raw_parts(expected_pointer.add(8), 4 * 8).to_vec();
+            let validity = if (*array.buffers).is_null() {
+                Vec::new()
+            } else {
+                std::slice::from_raw_parts((*array.buffers).cast::<u8>(), 1).to_vec()
+            };
+            let metadata = if field.metadata.is_null() {
+                Vec::new()
+            } else {
+                // Standard metadata: three i32 fields, ten key bytes and
+                // thirteen value bytes; pointer addresses are never compared
+                // across revisions.
+                std::slice::from_raw_parts(field.metadata.cast::<u8>(), 35).to_vec()
+            };
+            (
+                CStr::from_ptr(field.name).to_str().unwrap().to_owned(),
+                CStr::from_ptr(field.format).to_str().unwrap().to_owned(),
+                field.flags,
+                array.offset,
+                array.length,
+                array.null_count,
+                metadata,
+                values,
+                validity,
+            )
+        };
+        let provenance = export.column_provenance(index).unwrap();
+        assert_eq!(provenance.byte_offset, 8);
+        assert_eq!(provenance.byte_length, 32);
+        if index == 1 {
+            assert_eq!(format, "L");
+            assert_eq!(null_count, 0);
+            assert!(validity.is_empty());
+            assert_eq!(&metadata[8..18], b"hawdb:role");
+            assert_eq!(&metadata[22..], b"node_identity");
+        } else {
+            assert_eq!(format, "g");
+            assert_eq!(null_count, -1);
+            assert_eq!(validity, [30]);
+            assert!(metadata.is_empty());
+            assert_eq!(
+                values,
+                bits.into_iter()
+                    .flat_map(u64::to_le_bytes)
+                    .collect::<Vec<_>>()
+            );
+        }
+        columns.push(serde_json::json!({
+            "name": name, "format": format, "flags": flags,
+            "offset": offset, "length": length, "null_count": null_count,
+            "metadata": metadata, "values": values, "validity": validity,
+            "provenance_byte_offset": provenance.byte_offset,
+            "provenance_byte_length": provenance.byte_length,
+        }));
+    }
+    println!(
+        "ARROW_FLOAT_IDENTITY_SNAPSHOT={}",
+        serde_json::json!({
+            "root_length": export.array().length,
+            "root_offset": export.array().offset,
+            "root_children": export.array().n_children,
+            "columns": columns,
+        })
+    );
+    drop(export);
+    drop(batch);
+    let snapshot = governor.retained_result_snapshot();
+    assert_eq!(snapshot.retained_bytes, 0);
+    assert_eq!(snapshot.buffer_owners, 0);
+    assert_eq!(snapshot.view_handles, 0);
+}

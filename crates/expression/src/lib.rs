@@ -77,6 +77,10 @@ pub enum Predicate {
         expression: ProjectionExpression,
         value: ProjectionExpression,
     },
+    ExpressionIn {
+        expression: ProjectionExpression,
+        values: Vec<Value>,
+    },
     PropertyListContains {
         variable: String,
         property: String,
