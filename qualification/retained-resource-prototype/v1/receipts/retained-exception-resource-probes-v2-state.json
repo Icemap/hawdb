@@ -1,0 +1,130 @@
+{
+  "status": "passed_expected_refusal_diagnostics_only",
+  "pid": 76145,
+  "started": 1792303250.336246,
+  "groups": [
+    {
+      "backend": "memory",
+      "mode": "retained",
+      "case": "strict_source_reuse",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-retained-strict_source_reuse.json",
+      "started": 1792303250.3368719,
+      "exit": 0,
+      "ended": 1792303250.6241221,
+      "sha256": "0e826de30d45684d326035975a2ce4b447154cf776e441b9c4b73a2d10c374e7"
+    },
+    {
+      "backend": "memory",
+      "mode": "retained",
+      "case": "row_ceiling",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-retained-row_ceiling.json",
+      "started": 1792303250.6298618,
+      "exit": 0,
+      "ended": 1792303251.1691039,
+      "sha256": "3f626ca39363848d24477fbc9bef6b3cf03a8c685503baf3abb2df330bd57997"
+    },
+    {
+      "backend": "memory",
+      "mode": "retained",
+      "case": "unsupported_plan",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-retained-unsupported_plan.json",
+      "started": 1792303251.719523,
+      "exit": 0,
+      "ended": 1792303252.145429,
+      "sha256": "e99a17cc28efc60d6c776066aa6f169d99b1b3bb831d155a5575dd354c49e962"
+    },
+    {
+      "backend": "memory",
+      "mode": "arrow",
+      "case": "strict_source_reuse",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-arrow-strict_source_reuse.json",
+      "started": 1792303252.146868,
+      "exit": 0,
+      "ended": 1792303252.605653,
+      "sha256": "dbbb277596456ed40b641e821e69edbcfcab7dc752edc847ce8f1cdcdc2753ab"
+    },
+    {
+      "backend": "memory",
+      "mode": "arrow",
+      "case": "row_ceiling",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-arrow-row_ceiling.json",
+      "started": 1792303252.633539,
+      "exit": 0,
+      "ended": 1792303252.926054,
+      "sha256": "cbe5f5b3c9db7dcfe019fdd8b31fdb4ecb762d5bf70cd6512c0f413282ff1525"
+    },
+    {
+      "backend": "memory",
+      "mode": "arrow",
+      "case": "unsupported_plan",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-arrow-unsupported_plan.json",
+      "started": 1792303252.9317079,
+      "exit": 0,
+      "ended": 1792303253.19981,
+      "sha256": "e24af4ef89973565f0b2d0083d28a7d6bdca504970c1f7e93269774537cc2949"
+    },
+    {
+      "backend": "file",
+      "mode": "retained",
+      "case": "strict_source_reuse",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-retained-strict_source_reuse.json",
+      "started": 1792303253.2012491,
+      "exit": 0,
+      "ended": 1792303255.888803,
+      "sha256": "14c53e461949cd2b023ce4abec4ab3d6a4cd8e22ae9bd00cfe746ad26a324343"
+    },
+    {
+      "backend": "file",
+      "mode": "retained",
+      "case": "row_ceiling",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-retained-row_ceiling.json",
+      "started": 1792303255.916663,
+      "exit": 0,
+      "ended": 1792303258.3704882,
+      "sha256": "3b454a6bc975d37490f87c6f052c30e2a3507bb99266662036787b9cb19d9e6b"
+    },
+    {
+      "backend": "file",
+      "mode": "retained",
+      "case": "unsupported_plan",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-retained-unsupported_plan.json",
+      "started": 1792303258.387431,
+      "exit": 0,
+      "ended": 1792303260.888003,
+      "sha256": "3335acf82073e15bea15bfc81d20d8d754c0f644625b4971928298427fc2f8d0"
+    },
+    {
+      "backend": "file",
+      "mode": "arrow",
+      "case": "strict_source_reuse",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-arrow-strict_source_reuse.json",
+      "started": 1792303260.890232,
+      "exit": 0,
+      "ended": 1792303263.436379,
+      "sha256": "fdf845f285bbe253e063a7e79ae3644d22982bfaf348e1ae68045524bd475284"
+    },
+    {
+      "backend": "file",
+      "mode": "arrow",
+      "case": "row_ceiling",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-arrow-row_ceiling.json",
+      "started": 1792303263.4532979,
+      "exit": 0,
+      "ended": 1792303265.9776692,
+      "sha256": "3fcbfe8346debb55731ac7aa724f81f8028ff75c2c937aba1164a5db60ba5b4f"
+    },
+    {
+      "backend": "file",
+      "mode": "arrow",
+      "case": "unsupported_plan",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-arrow-unsupported_plan.json",
+      "started": 1792303265.985117,
+      "exit": 0,
+      "ended": 1792303268.542559,
+      "sha256": "e248eaf980d1f3559d58627ca7f945d806442449a39f184b81ded6489d3033db"
+    }
+  ],
+  "preserved_failed_probe": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-state.json",
+  "correction": "Use valid MATCH aggregate from existing unsupported-plan regression; RETURN-only previously failed parsing before plan eligibility.",
+  "ended": 1792303268.552465
+}

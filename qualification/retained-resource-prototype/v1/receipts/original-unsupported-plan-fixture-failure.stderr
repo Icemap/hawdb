@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/private/tmp/hawdb-wip-ready-20261015/probe-retained-exception-resources.py", line 56, in <module>
+    if args.backend:child(args.backend,args.mode,args.case)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/hawdb-wip-ready-20261015/probe-retained-exception-resources.py", line 40, in child
+    if case=='unsupported_plan':assert 'UnsupportedPlan' in r['error'] or 'unsupported' in r['error'].lower()
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

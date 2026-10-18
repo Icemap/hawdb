@@ -1,0 +1,38 @@
+{
+  "status": "failed",
+  "pid": 72611,
+  "started": 1792302884.291202,
+  "groups": [
+    {
+      "backend": "memory",
+      "mode": "retained",
+      "case": "strict_source_reuse",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes/memory-retained-strict_source_reuse.json",
+      "started": 1792302884.291723,
+      "exit": 0,
+      "ended": 1792302884.788255,
+      "sha256": "7d98d68fef13ddab187a485e29a334c963544ee48c493d2855c37cb05d1d3ac1"
+    },
+    {
+      "backend": "memory",
+      "mode": "retained",
+      "case": "row_ceiling",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes/memory-retained-row_ceiling.json",
+      "started": 1792302884.7944598,
+      "exit": 0,
+      "ended": 1792302885.158916,
+      "sha256": "f1b8b1ac7c1d4733758f49b2f46c8e356f2f8ae2306021bfcf1c641ccd82ebdb"
+    },
+    {
+      "backend": "memory",
+      "mode": "retained",
+      "case": "unsupported_plan",
+      "report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes/memory-retained-unsupported_plan.json",
+      "started": 1792302885.165567,
+      "exit": 1,
+      "ended": 1792302885.433645
+    }
+  ],
+  "error": "AssertionError(('memory-retained-unsupported_plan', PosixPath('/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes/memory-retained-unsupported_plan.stderr')))",
+  "ended": 1792302885.434298
+}

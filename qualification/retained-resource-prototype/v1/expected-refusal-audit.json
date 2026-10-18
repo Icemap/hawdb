@@ -1,0 +1,101 @@
+{
+  "status": "audited_private_prototype_only",
+  "counts": {
+    "measured_expected_refusals": 372,
+    "warmup_expected_refusals": 12,
+    "healthy_retries": 12,
+    "nonnull_measured_quota_snapshots": 124,
+    "absent_measured_quota_snapshots": 248
+  },
+  "groups": [
+    {
+      "backend": "memory",
+      "mode": "retained",
+      "case": "strict_source_reuse",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-retained-strict_source_reuse.json",
+      "sha256": "0e826de30d45684d326035975a2ce4b447154cf776e441b9c4b73a2d10c374e7"
+    },
+    {
+      "backend": "memory",
+      "mode": "retained",
+      "case": "row_ceiling",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-retained-row_ceiling.json",
+      "sha256": "3f626ca39363848d24477fbc9bef6b3cf03a8c685503baf3abb2df330bd57997"
+    },
+    {
+      "backend": "memory",
+      "mode": "retained",
+      "case": "unsupported_plan",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-retained-unsupported_plan.json",
+      "sha256": "e99a17cc28efc60d6c776066aa6f169d99b1b3bb831d155a5575dd354c49e962"
+    },
+    {
+      "backend": "memory",
+      "mode": "arrow",
+      "case": "strict_source_reuse",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-arrow-strict_source_reuse.json",
+      "sha256": "dbbb277596456ed40b641e821e69edbcfcab7dc752edc847ce8f1cdcdc2753ab"
+    },
+    {
+      "backend": "memory",
+      "mode": "arrow",
+      "case": "row_ceiling",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-arrow-row_ceiling.json",
+      "sha256": "cbe5f5b3c9db7dcfe019fdd8b31fdb4ecb762d5bf70cd6512c0f413282ff1525"
+    },
+    {
+      "backend": "memory",
+      "mode": "arrow",
+      "case": "unsupported_plan",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/memory-arrow-unsupported_plan.json",
+      "sha256": "e24af4ef89973565f0b2d0083d28a7d6bdca504970c1f7e93269774537cc2949"
+    },
+    {
+      "backend": "file",
+      "mode": "retained",
+      "case": "strict_source_reuse",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-retained-strict_source_reuse.json",
+      "sha256": "14c53e461949cd2b023ce4abec4ab3d6a4cd8e22ae9bd00cfe746ad26a324343"
+    },
+    {
+      "backend": "file",
+      "mode": "retained",
+      "case": "row_ceiling",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-retained-row_ceiling.json",
+      "sha256": "3b454a6bc975d37490f87c6f052c30e2a3507bb99266662036787b9cb19d9e6b"
+    },
+    {
+      "backend": "file",
+      "mode": "retained",
+      "case": "unsupported_plan",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-retained-unsupported_plan.json",
+      "sha256": "3335acf82073e15bea15bfc81d20d8d754c0f644625b4971928298427fc2f8d0"
+    },
+    {
+      "backend": "file",
+      "mode": "arrow",
+      "case": "strict_source_reuse",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-arrow-strict_source_reuse.json",
+      "sha256": "fdf845f285bbe253e063a7e79ae3644d22982bfaf348e1ae68045524bd475284"
+    },
+    {
+      "backend": "file",
+      "mode": "arrow",
+      "case": "row_ceiling",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-arrow-row_ceiling.json",
+      "sha256": "3fcbfe8346debb55731ac7aa724f81f8028ff75c2c937aba1164a5db60ba5b4f"
+    },
+    {
+      "backend": "file",
+      "mode": "arrow",
+      "case": "unsupported_plan",
+      "raw_report": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-v2/file-arrow-unsupported_plan.json",
+      "sha256": "e248eaf980d1f3559d58627ca7f945d806442449a39f184b81ded6489d3033db"
+    }
+  ],
+  "qualified_latency_samples": 0,
+  "source_extension_sha256": "f883c75a54000bae81107146dcc2f64912f63407e779cb85a379cccb8d9d9a7d",
+  "preserved_failed_setup_probe": "/private/tmp/hawdb-wip-ready-20261015/retained-exception-resource-probes-state.json",
+  "limits": "Default row cap 0; existing byte, runtime and mutation budgets unchanged. Absence of an early-refusal quota snapshot remains absence, not an observed zero.",
+  "scope": "12 additional diagnostics, 31 measured refusals each plus warmup and healthy retry. Not full original matrix, final-source qualification, or leak proof."
+}

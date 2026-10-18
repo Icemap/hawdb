@@ -1,0 +1,19 @@
+{
+  "status": "built_no_runtime_claim",
+  "pid": 28645,
+  "started": 1792297824.810524,
+  "scope": "Build the phase-only private Python extension; no query or performance experiment.",
+  "command": [
+    "bazel",
+    "build",
+    "//bindings/python:_hawdb_retained_phase_profile",
+    "--repo_env=CARGO_BAZEL_ISOLATED=false",
+    "--repo_env=CARGO_NET_OFFLINE=true",
+    "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/phase-prototype-extension-build.bep.json"
+  ],
+  "source_state": "/private/tmp/hawdb-wip-ready-20261015/phase-prototype-compile-state.json",
+  "exit": 0,
+  "extension": "/private/tmp/hawdb-wip-ready-20261015/qualify-phase-prototype-current/bazel-bin/bindings/python/lib_hawdb_retained_phase_profile.dylib",
+  "extension_sha256": "f883c75a54000bae81107146dcc2f64912f63407e779cb85a379cccb8d9d9a7d",
+  "ended": 1792297988.67819
+}

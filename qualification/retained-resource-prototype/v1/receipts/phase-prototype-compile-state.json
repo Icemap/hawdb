@@ -1,0 +1,117 @@
+{
+  "status": "passed_compile_and_lint_only",
+  "pid": 28000,
+  "head": "1569a189de70850a5bac154fb8ddaa8d86603325",
+  "started": 1792297726.027781,
+  "source_sha256": {
+    ".github/workflows/native-bindings.yml": "44e267ab6ee40fa07e00f5ad5e17d3184a0552f8592d37ee23c77aa1cae05a8b",
+    "BUILD.bazel": "b153b2f25197a92eeac2686d1630ada5d7154b45ff4af18444aa18f2ac906c1e",
+    "Cargo.toml": "933bd411729a2a3bb11386685e99e3a389c87a1d742035f34c04ee106233d6d7",
+    "bindings/python/BUILD.bazel": "fea88570aae46db037adda3b6147fa6004c56920673eba0b6c2a9f0cb3e098fd",
+    "bindings/python/Cargo.toml": "b58f6d320497eadcf108ce79a44b50f44d6e5b75e5823132a6e3796e8f180d27",
+    "bindings/python/src/database.rs": "47dd4908c03f7e6cc2a11f74cfcaf60de6cd59d83893d56857dd9a721221349d",
+    "bindings/python/src/lib.rs": "f4f40d2b0f6c590aa13e796af22ee3106213df446106e739fa47d798c7ed49c6",
+    "crates/core/BUILD.bazel": "841d75a3142f7346a36d6c899b90da55441911f057d73626bb6cf4263d158cbf",
+    "crates/executor/BUILD.bazel": "74c14a169fe332e7677618606f5c4995707ed79021462135423c4fe191ea05ec",
+    "crates/executor/src/numeric/retained.rs": "971f07cf4d08fbc621e0ec46870bdd084b65b9f07782a55259669d80f80cc219",
+    "crates/nowledge-contracts/BUILD.bazel": "c005b8c56957e764e1728f406500d1b3f018a3911ac11d337dd56a03576bb73e",
+    "crates/readiness/BUILD.bazel": "eca3dc72ef4259e0bbcedc4a74a29bd13d312035a9366fc3576faf8481a38407",
+    "crates/relational/BUILD.bazel": "97b4c99956384383e80f099ab0ae429588241cd89cc9ec30c2daf9e4ee51e0f5",
+    "crates/search/BUILD.bazel": "ffd8aca619fabe2b342af34048a6accc65b94f0dda36692d363546a1044f1d33",
+    "crates/vector-projection/BUILD.bazel": "1780ccfd59849e860a50d021860ade8ba8e12234898493be6121ba396a0f2a62",
+    "docs/QUERY_LIMIT_INVENTORY.md": "36bcd7fb0ec42a2a1cedb159565f754967eb8ff247d166bc0a260b9b4ff9fd01",
+    "docs/query-limit-reports.json": "c1d38a9d418ac07d430cf0736504488d5ad4ed419ec0a89643e3d5b8cfcdf68a",
+    "qualification/phases/consume.py": "e2d34df9d5a3544aa2b3bcac958db9356969c19ef18d8858b7cf7c023d766e13",
+    "qualification/resources/baseline-source.json": "d3e2c6bcc835f402ee724ad8f37ef3adc5a8df254984c6fb04e3d5d0918b1e13",
+    "qualification/resources/campaign.json": "db8fa9eb6f77d75415fd7de950036dde237cb3dee41955e560d5e87b96f1208a",
+    "qualification/resources/numeric.py": "2e557b27a9527b0cfcd2af9459b16935a255a5c471326c1a836f7ff9063fa780",
+    "qualification/resources/numeric_driver.py": "d7717186da9f42466f83ec094e086b8bd918d353bb625c95ed1f6dc98fb8b673",
+    "qualification/resources/run.py": "28078a100322de7b812260d1a7917b3356d0927ff90a2fbb620561aae03d8b48",
+    "qualification/retained/configured.py": "371ff7ded3312a45ec4deb4413fd83a751fded0bc6791d9fd6c8785fe3a6c4ac",
+    "qualification/retained/run.py": "6a261983ee20ebab780a74d8645945b901a7f8e591018f8945c29d2dc90e4714",
+    "scripts/check-query-limit-inventory.py": "386858b9a4930e5ab9f249eeaa171fa8517515c239c7b26adb9b10768b400cf5",
+    "scripts/check-query-limit-inventory.test.py": "417c3eac3c592286d74aefeb72da836c1eaca79e67eef8995fa2c18bacb82973",
+    "src/api/knowledge_graph_read.rs": "508e0ef23e836e34fe0e5bfb03e13c545553c61a68d987a949852a84e4a06ffc",
+    "src/api/mod.rs": "b6d964d292829e02d254b0350277cbe61e81a13edaaa9183f218983cf4e51063",
+    "src/api/retained_query.rs": "24977f1ab4bbd71c4500eab73d1c0df6b401cbea1556f57836b94a26dc882594",
+    "src/api/retained_query/arrow.rs": "33e3af887f578a209240f33a592dad6dd287721722817c84e9a5ac86dc129621",
+    "src/api/retained_query/arrow/stream.rs": "131c1cbbabf1fb3985c1e9199cb554ece38ac6d912bc1dff0ebebd9e9df3aef5",
+    "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100",
+    "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0",
+    "src/api/tests/knowledge_retrieval_graph_context.rs": "2827f744e940d3ece277ef0882ed104c7c158ea0c33e815e17d0caa6df31cba7",
+    "src/embedded.rs": "9d12a19eea495e76a85e96141e638e1fa5d8fa86c76b0bd5d802c136986d0b4d",
+    "src/lib.rs": "5fe798a6da5a62c00c7a36b8214428acf1d5a4972f3a3c5a408f9bc3b22e8aa4",
+    "src/retained_phase_profile.rs": "d4867892d4e2d86937da4d09a609196996c0309fa357140c345bc593f99f1bfa"
+  },
+  "tracked_diff_sha256": "cc7733c21a015a5695a38d897ab2a1804f4920240582e09f0e6cc2dfbddca0a2",
+  "steps": [
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/phase-prototype-compile-fmt.log",
+      "started": 1792297726.060362,
+      "exit": 0,
+      "ended": 1792297732.956501
+    },
+    {
+      "name": "native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/phase-prototype-compile-native.log",
+      "started": 1792297732.986034,
+      "exit": 0,
+      "ended": 1792297794.9320629
+    },
+    {
+      "name": "python-lock",
+      "command": [
+        "cargo",
+        "generate-lockfile",
+        "--offline",
+        "--manifest-path",
+        "bindings/python/Cargo.toml"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/phase-prototype-compile-python-lock.log",
+      "started": 1792297794.971526,
+      "exit": 0,
+      "ended": 1792297795.296436
+    },
+    {
+      "name": "python-native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/phase-prototype-compile-python-native.log",
+      "started": 1792297795.3356612,
+      "exit": 0,
+      "ended": 1792297850.92877
+    }
+  ],
+  "scope": "Isolated uncommitted phase-attribution prototype, latest-main integration and pending Arrow code fixes. Compile/lint only; no engine runtime or performance qualification.",
+  "python_lock_sha256": "26808b9f10311b321bccbcdda1298557c0e5f0ab2cc1f5f834f621a3dbfd545c",
+  "ended": 1792297850.963426
+}

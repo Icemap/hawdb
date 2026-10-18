@@ -1,0 +1,209 @@
+{
+  "status": "passed_source_profile_only",
+  "pid": 64702,
+  "started": 1792301636.465217,
+  "observations": [
+    {
+      "backend": "memory",
+      "actual_limits": [
+        0,
+        67108864,
+        268435456,
+        16777216,
+        32468934656,
+        16777216,
+        67108864
+      ],
+      "result": {
+        "rows": 1000,
+        "checksum": "b283e64104aa390d",
+        "retained_snapshot": {
+          "budget_bytes": 16777216,
+          "handle_limit": 1024,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 18207,
+          "buffer_owners": 0,
+          "view_handles": 0,
+          "peak_view_handles": 10,
+          "backpressure_events": 0
+        },
+        "status": "ok",
+        "parity": true
+      },
+      "profile": {
+        "before_pull": {
+          "status": "open",
+          "visited_rows": 0,
+          "native_emitted_rows": 0,
+          "source_constructed_bytes": 0,
+          "source_pinned_rows": 1000,
+          "source_pinned_pages": 3,
+          "source_pinned_capacity_bytes": 1070752,
+          "query_peak_bytes": 1073383,
+          "source_preflight_rows": 1000,
+          "outstanding_batches": 0,
+          "delivered_rows": 0,
+          "delivered_batches": 0
+        },
+        "maximum_observed": {
+          "visited_rows": 1000,
+          "native_emitted_rows": 1000,
+          "source_constructed_bytes": 16000,
+          "source_pinned_rows": 1000,
+          "source_pinned_pages": 3,
+          "source_pinned_capacity_bytes": 1070752,
+          "query_peak_bytes": 1088959,
+          "source_preflight_rows": 1000,
+          "outstanding_batches": 1,
+          "delivered_rows": 1000,
+          "delivered_batches": 4
+        },
+        "after_pull": {
+          "status": "open",
+          "visited_rows": 1000,
+          "native_emitted_rows": 1000,
+          "source_constructed_bytes": 16000,
+          "source_pinned_rows": 1000,
+          "source_pinned_pages": 3,
+          "source_pinned_capacity_bytes": 1070752,
+          "query_peak_bytes": 1088959,
+          "source_preflight_rows": 1000,
+          "outstanding_batches": 1,
+          "delivered_rows": 1000,
+          "delivered_batches": 4
+        },
+        "after_eof": {
+          "status": "completed",
+          "visited_rows": 1000,
+          "native_emitted_rows": 1000,
+          "source_constructed_bytes": 16000,
+          "source_pinned_rows": 0,
+          "source_pinned_pages": 0,
+          "source_pinned_capacity_bytes": 0,
+          "query_peak_bytes": 1088959,
+          "source_preflight_rows": 1000,
+          "outstanding_batches": 0,
+          "delivered_rows": 1000,
+          "delivered_batches": 4
+        },
+        "before_close": {
+          "status": "completed",
+          "visited_rows": 1000,
+          "native_emitted_rows": 1000,
+          "source_constructed_bytes": 16000,
+          "source_pinned_rows": 0,
+          "source_pinned_pages": 0,
+          "source_pinned_capacity_bytes": 0,
+          "query_peak_bytes": 1088959,
+          "source_preflight_rows": 1000,
+          "outstanding_batches": 0,
+          "delivered_rows": 1000,
+          "delivered_batches": 4
+        }
+      }
+    },
+    {
+      "backend": "file",
+      "actual_limits": [
+        0,
+        67108864,
+        268435456,
+        16777216,
+        32463360000,
+        16777216,
+        67108864
+      ],
+      "result": {
+        "rows": 1000,
+        "checksum": "b283e64104aa390d",
+        "retained_snapshot": {
+          "budget_bytes": 16777216,
+          "handle_limit": 1024,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 18207,
+          "buffer_owners": 0,
+          "view_handles": 0,
+          "peak_view_handles": 10,
+          "backpressure_events": 0
+        },
+        "status": "ok",
+        "parity": true
+      },
+      "profile": {
+        "before_pull": {
+          "status": "open",
+          "visited_rows": 0,
+          "native_emitted_rows": 0,
+          "source_constructed_bytes": 0,
+          "source_pinned_rows": 1000,
+          "source_pinned_pages": 3,
+          "source_pinned_capacity_bytes": 1070752,
+          "query_peak_bytes": 1073383,
+          "source_preflight_rows": 1000,
+          "outstanding_batches": 0,
+          "delivered_rows": 0,
+          "delivered_batches": 0
+        },
+        "maximum_observed": {
+          "visited_rows": 1000,
+          "native_emitted_rows": 1000,
+          "source_constructed_bytes": 16000,
+          "source_pinned_rows": 1000,
+          "source_pinned_pages": 3,
+          "source_pinned_capacity_bytes": 1070752,
+          "query_peak_bytes": 1088959,
+          "source_preflight_rows": 1000,
+          "outstanding_batches": 1,
+          "delivered_rows": 1000,
+          "delivered_batches": 4
+        },
+        "after_pull": {
+          "status": "open",
+          "visited_rows": 1000,
+          "native_emitted_rows": 1000,
+          "source_constructed_bytes": 16000,
+          "source_pinned_rows": 1000,
+          "source_pinned_pages": 3,
+          "source_pinned_capacity_bytes": 1070752,
+          "query_peak_bytes": 1088959,
+          "source_preflight_rows": 1000,
+          "outstanding_batches": 1,
+          "delivered_rows": 1000,
+          "delivered_batches": 4
+        },
+        "after_eof": {
+          "status": "completed",
+          "visited_rows": 1000,
+          "native_emitted_rows": 1000,
+          "source_constructed_bytes": 16000,
+          "source_pinned_rows": 0,
+          "source_pinned_pages": 0,
+          "source_pinned_capacity_bytes": 0,
+          "query_peak_bytes": 1088959,
+          "source_preflight_rows": 1000,
+          "outstanding_batches": 0,
+          "delivered_rows": 1000,
+          "delivered_batches": 4
+        },
+        "before_close": {
+          "status": "completed",
+          "visited_rows": 1000,
+          "native_emitted_rows": 1000,
+          "source_constructed_bytes": 16000,
+          "source_pinned_rows": 0,
+          "source_pinned_pages": 0,
+          "source_pinned_capacity_bytes": 0,
+          "query_peak_bytes": 1088959,
+          "source_preflight_rows": 1000,
+          "outstanding_batches": 0,
+          "delivered_rows": 1000,
+          "delivered_batches": 4
+        }
+      }
+    }
+  ],
+  "scope": "Source-profile diagnostics on the private frozen assembled prototype, default1000-row memory/file only. Original fixture and complete consumer bytes are unchanged. Read-only profile copies add overhead; all timing fields are discarded. No performance, final-head or full-matrix claim.",
+  "ended": 1792301639.1237261,
+  "extension_sha256": "f883c75a54000bae81107146dcc2f64912f63407e779cb85a379cccb8d9d9a7d",
+  "consumer_sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1"
+}

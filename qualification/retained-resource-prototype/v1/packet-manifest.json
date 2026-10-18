@@ -1,0 +1,193 @@
+{
+  "scope": "private resource instrumentation prototype; not final #986 acceptance",
+  "files": {
+    "source.patch": {
+      "bytes": 365448,
+      "sha256": "b2aa9795d7724e8ced4e7734af2f4549c40f0e0778a6ef810ae2f029f4d62c54"
+    },
+    "expected-refusal-audit.json": {
+      "bytes": 4630,
+      "sha256": "a2b43a6dfd255211ce0fcf236ec9e6aecdfbae7e02becc50b4101804297fe20e"
+    },
+    "README.md": {
+      "bytes": 2142,
+      "sha256": "49cf54977314fa7e5768b92f554d610dc566f5d5185f7736081ac18920786248"
+    },
+    "manifest.json": {
+      "bytes": 5094,
+      "sha256": "bdd30ee89bb3bf2ebf84b64465bd13c2e0ccda02fa2261b7ce02ba6eec1f5ca3"
+    },
+    "receipts/retained-source-profile-probe-v2-state.json": {
+      "bytes": 6748,
+      "sha256": "2ed8578331764634bf0301da22749a30fdfd9158635ff0fe1f0a29b6da69b179"
+    },
+    "receipts/phase-prototype-compile-state.json": {
+      "bytes": 6221,
+      "sha256": "11c8c7163d389e46bc5352ca626df1b1449a6ccaa3c1dc1529901d7479eb2b0e"
+    },
+    "receipts/phase-prototype-bazel-extension-state.json": {
+      "bytes": 861,
+      "sha256": "fd0ae989b75732374ef1bc5dd97085c0e31351d6c9cb12702a7e6ca5e3ddebfc"
+    },
+    "receipts/phase-prototype-callback-probes-state.json": {
+      "bytes": 10093,
+      "sha256": "e5405dddec06255a0774f3e7032dbaef529fd97822f565ae86ed700401593b97"
+    },
+    "receipts/retained-exception-resource-probes-state.json": {
+      "bytes": 1428,
+      "sha256": "0b5335463aafef14c46898f43464ec8bc9969aba5b694f4f8be146c2f91e4208"
+    },
+    "receipts/retained-exception-resource-probes-v2-state.json": {
+      "bytes": 5189,
+      "sha256": "965530d901398444ecdc47f1a7525acd0381ff889fcd5b4295e6e643148a42bf"
+    },
+    "receipts/original-unsupported-plan-fixture-failure.stderr": {
+      "bytes": 601,
+      "sha256": "4cec6e539f877c16dead073e88475341a6602166e702e68cf478bbf85128449a"
+    },
+    "receipts/phase-prototype-import-control-receipt.json": {
+      "bytes": 1610,
+      "sha256": "aabf70c35b52b3fad8829930496a43ab0e7b6cc9048266176d412f939474ef16"
+    },
+    "observers/retained_boundary.py": {
+      "bytes": 9945,
+      "sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1"
+    },
+    "observers/observer-outcome-preservation-receipt.json": {
+      "bytes": 754,
+      "sha256": "72edbfb181926a47515f2ed81c09f3ae9f61eb109fdbfa71acdb0ccae70d58a2"
+    },
+    "observers/timer_thread_affinity_compile_fail.rs": {
+      "bytes": 224,
+      "sha256": "fda64f006b09102bb84138a1c9d23f09d724fb27ef849b5d8bc547a1a4c535bb"
+    },
+    "observers/probe-retained-source-profile-v2.py": {
+      "bytes": 4656,
+      "sha256": "50148d87370222dcf1df6673aebf63cb1e271c458bddc0e49e7451215ef48cf0"
+    },
+    "observers/standalone_observer_checks.rs": {
+      "bytes": 4121,
+      "sha256": "ed3c2d6b9c508d213b069e85c321e2d4acd5e2593608b5cb65604013ebaf317a"
+    },
+    "observers/standalone-observer-verification.json": {
+      "bytes": 784,
+      "sha256": "8e9415d8edd52e41cf2034a79d046e56c0d5c6a0a573c49d9cdbcf10eac918e4"
+    },
+    "observers/probe-retained-exception-resources.py": {
+      "bytes": 5770,
+      "sha256": "1627c4aa8cc572aff621788e0ed89d363e049711b1b0b7e026dfe6fa68a9b045"
+    },
+    "observers/probe-retained-exception-resources-v2.py": {
+      "bytes": 6020,
+      "sha256": "8b98655f1f7caa34ac860dd5cf08c7bdb6b7c8d93186558cf05a0fd7bf12d057"
+    },
+    "observers/probe-phase-prototype-callbacks.py": {
+      "bytes": 4082,
+      "sha256": "c2e9e457e7cc83ae8461e736c7d5028612554066107dca3e8061d514ee3ab49c"
+    },
+    "observers/test_observer_control.py": {
+      "bytes": 3535,
+      "sha256": "19a74776a32040017981d7f0319a7f043f247f99af65616f59dc70f0a4ea2e21"
+    },
+    "observers/consume.py": {
+      "bytes": 10228,
+      "sha256": "e2d34df9d5a3544aa2b3bcac958db9356969c19ef18d8858b7cf7c023d766e13"
+    },
+    "reports/retained-exception-resource-probes-v2/memory-arrow-strict_source_reuse.json": {
+      "bytes": 15494,
+      "sha256": "dbbb277596456ed40b641e821e69edbcfcab7dc752edc847ce8f1cdcdc2753ab"
+    },
+    "reports/retained-exception-resource-probes-v2/file-retained-unsupported_plan.json": {
+      "bytes": 15675,
+      "sha256": "3335acf82073e15bea15bfc81d20d8d754c0f644625b4971928298427fc2f8d0"
+    },
+    "reports/retained-exception-resource-probes-v2/memory-arrow-row_ceiling.json": {
+      "bytes": 22705,
+      "sha256": "cbe5f5b3c9db7dcfe019fdd8b31fdb4ecb762d5bf70cd6512c0f413282ff1525"
+    },
+    "reports/retained-exception-resource-probes-v2/file-arrow-unsupported_plan.json": {
+      "bytes": 15674,
+      "sha256": "e248eaf980d1f3559d58627ca7f945d806442449a39f184b81ded6489d3033db"
+    },
+    "reports/retained-exception-resource-probes-v2/file-retained-row_ceiling.json": {
+      "bytes": 22650,
+      "sha256": "3b454a6bc975d37490f87c6f052c30e2a3507bb99266662036787b9cb19d9e6b"
+    },
+    "reports/retained-exception-resource-probes-v2/file-retained-strict_source_reuse.json": {
+      "bytes": 15485,
+      "sha256": "14c53e461949cd2b023ce4abec4ab3d6a4cd8e22ae9bd00cfe746ad26a324343"
+    },
+    "reports/retained-exception-resource-probes-v2/memory-retained-strict_source_reuse.json": {
+      "bytes": 15488,
+      "sha256": "0e826de30d45684d326035975a2ce4b447154cf776e441b9c4b73a2d10c374e7"
+    },
+    "reports/retained-exception-resource-probes-v2/memory-retained-unsupported_plan.json": {
+      "bytes": 15675,
+      "sha256": "e99a17cc28efc60d6c776066aa6f169d99b1b3bb831d155a5575dd354c49e962"
+    },
+    "reports/retained-exception-resource-probes-v2/memory-retained-row_ceiling.json": {
+      "bytes": 22672,
+      "sha256": "3f626ca39363848d24477fbc9bef6b3cf03a8c685503baf3abb2df330bd57997"
+    },
+    "reports/retained-exception-resource-probes-v2/memory-arrow-unsupported_plan.json": {
+      "bytes": 15677,
+      "sha256": "e24af4ef89973565f0b2d0083d28a7d6bdca504970c1f7e93269774537cc2949"
+    },
+    "reports/retained-exception-resource-probes-v2/file-arrow-strict_source_reuse.json": {
+      "bytes": 15488,
+      "sha256": "fdf845f285bbe253e063a7e79ae3644d22982bfaf348e1ae68045524bd475284"
+    },
+    "reports/retained-exception-resource-probes-v2/file-arrow-row_ceiling.json": {
+      "bytes": 22708,
+      "sha256": "3fcbfe8346debb55731ac7aa724f81f8028ff75c2c937aba1164a5db60ba5b4f"
+    },
+    "reports/phase-prototype-callback-probes/file-retained-progress.json": {
+      "bytes": 27739,
+      "sha256": "faeb4554c782ae07f9c0268a028a77427122ebe081c6e23c2d9fc8aadb79efbd"
+    },
+    "reports/phase-prototype-callback-probes/file-retained.json": {
+      "bytes": 27739,
+      "sha256": "faeb4554c782ae07f9c0268a028a77427122ebe081c6e23c2d9fc8aadb79efbd"
+    },
+    "reports/phase-prototype-callback-probes/memory-owned-progress.json": {
+      "bytes": 15475,
+      "sha256": "0ada1a7adbc7f37ac317a6e03cafdd5863fa5f6d6cf19eb4626e3a7331eaa0d8"
+    },
+    "reports/phase-prototype-callback-probes/memory-arrow-progress.json": {
+      "bytes": 27649,
+      "sha256": "33a1542b365f2ab8b70545402dd4dde8b4b19df239948a337a55342bbe096650"
+    },
+    "reports/phase-prototype-callback-probes/file-arrow.json": {
+      "bytes": 27701,
+      "sha256": "98a1b1b14f420241db8d2aa3f6850c6a1da60e9a1a832dcc0514aa1c0290cfa1"
+    },
+    "reports/phase-prototype-callback-probes/memory-owned.json": {
+      "bytes": 15475,
+      "sha256": "0ada1a7adbc7f37ac317a6e03cafdd5863fa5f6d6cf19eb4626e3a7331eaa0d8"
+    },
+    "reports/phase-prototype-callback-probes/memory-arrow.json": {
+      "bytes": 27649,
+      "sha256": "33a1542b365f2ab8b70545402dd4dde8b4b19df239948a337a55342bbe096650"
+    },
+    "reports/phase-prototype-callback-probes/file-owned.json": {
+      "bytes": 15473,
+      "sha256": "8ed4556afe7a784f792bc2be34945d96ac33d21601dfe659d3f6b5e4bf05d614"
+    },
+    "reports/phase-prototype-callback-probes/memory-retained-progress.json": {
+      "bytes": 27687,
+      "sha256": "c0d4ec5857aa4e48cab758bce0ca7e6e2aa059e0dfb0b6d0e22637093c6e17ad"
+    },
+    "reports/phase-prototype-callback-probes/file-owned-progress.json": {
+      "bytes": 15473,
+      "sha256": "8ed4556afe7a784f792bc2be34945d96ac33d21601dfe659d3f6b5e4bf05d614"
+    },
+    "reports/phase-prototype-callback-probes/file-arrow-progress.json": {
+      "bytes": 27701,
+      "sha256": "98a1b1b14f420241db8d2aa3f6850c6a1da60e9a1a832dcc0514aa1c0290cfa1"
+    },
+    "reports/phase-prototype-callback-probes/memory-retained.json": {
+      "bytes": 27687,
+      "sha256": "c0d4ec5857aa4e48cab758bce0ca7e6e2aa059e0dfb0b6d0e22637093c6e17ad"
+    }
+  }
+}

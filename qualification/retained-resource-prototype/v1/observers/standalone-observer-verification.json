@@ -1,0 +1,10 @@
+{
+  "status": "standalone_observer_checks_passed_integration_uncompiled",
+  "rust_toolchain": "1.97.1",
+  "checked_at": 1792296923.161495,
+  "module_sha256": "d4867892d4e2d86937da4d09a609196996c0309fa357140c345bc593f99f1bfa",
+  "behavioral_check": "Nested prepare entrypoints count once; panic unwinding releases pull depth so retry is counted; overflow leaves the counter intact and invalidates the snapshot. 1 test passed.",
+  "thread_affinity_check": "Moving a live timer into thread::spawn is rejected with E0277.",
+  "root_and_python_qualification_targets": "manual tags required by generator; dry run only.",
+  "limitations": "No HawDB feature integration, Python callback coverage, measured conversion or performance qualification is claimed. Active engine trees unchanged."
+}

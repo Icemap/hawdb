@@ -1,0 +1,11 @@
+{
+  "status": "observer_outcome_preservation_checks_passed",
+  "time": 1792297367.418088,
+  "tests_passed": 5,
+  "observer_sha256": "e2d34df9d5a3544aa2b3bcac958db9356969c19ef18d8858b7cf7c023d766e13",
+  "test_sha256": "19a74776a32040017981d7f0319a7f043f247f99af65616f59dc70f0a4ea2e21",
+  "fix": "Failure of the before-snapshot observer no longer prevents the unchanged original complete consumer from running. Observer errors invalidate attribution while retaining original results and errors.",
+  "engine_patch_frozen": true,
+  "integration_tree_unchanged": "ddaa5b64b12ff50f266d08de2fe7c66174e6eafb",
+  "scope": "Standalone observer controls and dry-run overlays only; no compiled HawDB phase feature, callback coverage or measured conversion costs."
+}
