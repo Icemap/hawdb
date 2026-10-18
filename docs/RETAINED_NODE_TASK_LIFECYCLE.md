@@ -59,6 +59,8 @@ database closure without cloning their property payload or label names.
 Snapshot queries do not publish into the live database's statement recorder,
 matching ordinary read-transaction observability; direct database cursors retain
 their existing success/failure observation contract.
+A direct database cursor closed or dropped after one delivery, before successful
+EOF, records a failed statement with `Closed` rather than a completed statement.
 
 Regressions compare original row/label addresses across a live mutation, check
 immediate reader-pin release and exclusion of an unrelated large row, exercise
