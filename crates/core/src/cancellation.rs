@@ -20,9 +20,13 @@ use std::fmt::{self, Display, Formatter};
 use std::future::Future;
 use std::num::NonZeroUsize;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll, Waker};
+
+const NOT_CANCELLED: u8 = 0;
+const CANCELLED: u8 = 1;
+const RESOURCE_EXHAUSTED: u8 = 2;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeCancellationToken {
@@ -31,7 +35,7 @@ pub struct RuntimeCancellationToken {
 
 #[derive(Debug)]
 struct RuntimeCancellationState {
-    cancelled: AtomicBool,
+    cancellation_reason: AtomicU8,
     parent: Option<RuntimeCancellationToken>,
     next_waiter_id: AtomicU64,
     waiters: Mutex<BTreeMap<u64, Waker>>,
@@ -41,7 +45,7 @@ impl Default for RuntimeCancellationToken {
     fn default() -> Self {
         Self {
             state: Arc::new(RuntimeCancellationState {
-                cancelled: AtomicBool::new(false),
+                cancellation_reason: AtomicU8::new(NOT_CANCELLED),
                 parent: None,
                 next_waiter_id: AtomicU64::new(1),
                 waiters: Mutex::new(BTreeMap::new()),
@@ -56,7 +60,23 @@ impl RuntimeCancellationToken {
     }
 
     pub fn cancel(&self) -> bool {
-        if self.state.cancelled.swap(true, Ordering::AcqRel) {
+        self.cancel_with_code(CANCELLED)
+    }
+
+    /// Stops cooperating siblings after an unrecoverable resource refusal.
+    /// The first local cancellation cause is retained. Cancelling a child does
+    /// not cancel its parent; the operation must still return its original error.
+    pub fn cancel_for_resource_exhaustion(&self) -> bool {
+        self.cancel_with_code(RESOURCE_EXHAUSTED)
+    }
+
+    fn cancel_with_code(&self, reason: u8) -> bool {
+        if self
+            .state
+            .cancellation_reason
+            .compare_exchange(NOT_CANCELLED, reason, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
             return false;
         }
         let waiters = {
@@ -74,18 +94,25 @@ impl RuntimeCancellationToken {
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self.state.cancelled.load(Ordering::Acquire)
-            || self
+        self.reason().is_some()
+    }
+
+    fn reason(&self) -> Option<RuntimeCancellationReason> {
+        match self.state.cancellation_reason.load(Ordering::Acquire) {
+            CANCELLED => Some(RuntimeCancellationReason::Cancelled),
+            RESOURCE_EXHAUSTED => Some(RuntimeCancellationReason::ResourceExhausted),
+            _ => self
                 .state
                 .parent
                 .as_ref()
-                .is_some_and(RuntimeCancellationToken::is_cancelled)
+                .and_then(RuntimeCancellationToken::reason),
+        }
     }
 
     pub fn child(&self) -> Self {
         Self {
             state: Arc::new(RuntimeCancellationState {
-                cancelled: AtomicBool::new(false),
+                cancellation_reason: AtomicU8::new(NOT_CANCELLED),
                 parent: Some(self.clone()),
                 next_waiter_id: AtomicU64::new(1),
                 waiters: Mutex::new(BTreeMap::new()),
@@ -459,8 +486,8 @@ impl RuntimeTaskContext {
     }
 
     pub fn checkpoint(&self) -> Result<(), RuntimeCancellationReason> {
-        if self.cancellation.is_cancelled() {
-            return Err(RuntimeCancellationReason::Cancelled);
+        if let Some(reason) = self.cancellation.reason() {
+            return Err(reason);
         }
         if self
             .deadline
@@ -482,6 +509,7 @@ impl Default for RuntimeTaskContext {
 pub enum RuntimeCancellationReason {
     Cancelled,
     DeadlineExceeded,
+    ResourceExhausted,
 }
 
 impl RuntimeCancellationReason {
@@ -489,6 +517,7 @@ impl RuntimeCancellationReason {
         match self {
             Self::Cancelled => "cancelled",
             Self::DeadlineExceeded => "deadline_exceeded",
+            Self::ResourceExhausted => "resource_exhausted",
         }
     }
 }
@@ -589,6 +618,33 @@ mod tests {
         assert!(sibling.checkpoint().is_err());
     }
 
+    #[test]
+    fn resource_exhaustion_keeps_its_cause_and_is_local_to_the_child() {
+        let parent = RuntimeTaskContext::default();
+        let child = parent.child();
+        let clone = child.clone();
+        let grandchild = child.child();
+        assert!(child.cancellation().cancel_for_resource_exhaustion());
+        assert!(!clone.cancellation().cancel());
+        assert!(!clone.cancellation().cancel_for_resource_exhaustion());
+        for context in [&child, &clone, &grandchild] {
+            assert_eq!(
+                context.checkpoint(),
+                Err(RuntimeCancellationReason::ResourceExhausted)
+            );
+        }
+        assert_eq!(parent.checkpoint(), Ok(()));
+        assert_eq!(parent.child().checkpoint(), Ok(()));
+
+        let cancelled = parent.child();
+        assert!(cancelled.cancellation().cancel());
+        assert!(!cancelled.cancellation().cancel_for_resource_exhaustion());
+        assert_eq!(
+            cancelled.checkpoint(),
+            Err(RuntimeCancellationReason::Cancelled)
+        );
+    }
+
     #[derive(Default)]
     struct WakeCounter(AtomicUsize);
 
@@ -611,6 +667,24 @@ mod tests {
         assert!(parent.cancel());
         assert_eq!(counter.0.load(Ordering::Acquire), 1);
         assert!(cancelled.as_mut().poll(&mut context).is_ready());
+    }
+
+    #[test]
+    fn resource_exhaustion_wakes_waiters_on_descendants() {
+        let parent = RuntimeTaskContext::default();
+        let child = parent.child();
+        let counter = Arc::new(WakeCounter::default());
+        let waker = Waker::from(Arc::clone(&counter));
+        let mut context = Context::from_waker(&waker);
+        let mut cancelled = Box::pin(child.cancellation().cancelled());
+        assert!(cancelled.as_mut().poll(&mut context).is_pending());
+        assert!(parent.cancellation().cancel_for_resource_exhaustion());
+        assert_eq!(counter.0.load(Ordering::Acquire), 1);
+        assert!(cancelled.as_mut().poll(&mut context).is_ready());
+        assert_eq!(
+            child.checkpoint(),
+            Err(RuntimeCancellationReason::ResourceExhausted)
+        );
     }
 
     #[test]

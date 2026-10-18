@@ -77,6 +77,29 @@ resource kind, refusing scope, owner, memory class, additional request, current
 usage, effective budget, and `budget_option`. Rejected reservations do not charge
 the account. Query-level ownership transfers report their net additional charge.
 
+When a typed resource refusal escapes a contextual morsel worker or its ordered
+consumer, the scheduler signals `RuntimeCancellationReason::ResourceExhausted`
+before joining its in-flight workers. Workers checking that same context stop
+cooperatively; the scheduler returns the original resource error and its metadata,
+not the secondary cancellation error. Memory, spill, descriptor exhaustion, read
+budgets, and graph expansion limits participate. Invalid resource configuration
+and ordinary callback errors do not signal resource exhaustion. A reservation
+refusal handled inside an operator (for example, by spilling) does not cancel it.
+The Tokio operation wrapper also preserves an operation error after a resource
+stop; an operation that returns success after that signal is still rejected.
+Explicit user cancellation and deadlines keep their existing precedence.
+
+The numeric parallel pipeline uses a child task context, including for raw calls
+without a host context, so sibling failure does not poison a reusable caller
+context. Direct scheduler users should likewise pass a child if the parent is
+reused. `cancel_for_resource_exhaustion` preserves the first local cancellation
+cause and wakes descendant waiters; generic cancellation telemetry includes it
+in the cancellation count. Generic `map_ordered` APIs still materialize every
+callback result; they do not interpret a nested `Result`. Callbacks that do not
+check a context cannot be interrupted while executing. Ordered streaming may
+already have delivered a validated prefix before failure; it never reports that
+prefix as a successful complete query.
+
 Classify errors by `resource` and `scope`. `budget_option` identifies the effective
 boundary's origin; it is an extensible diagnostic string, not a closed enum or
 an instruction to raise a setting automatically. The explicit
