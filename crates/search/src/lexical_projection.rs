@@ -1061,12 +1061,19 @@ impl LexicalCorpusStatistics {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ProducerReferences {
+    pub(super) manifest: hawdb_storage::immutable_object::ObjectReference,
+    pub(super) artifact: hawdb_storage::immutable_object::ObjectReference,
+}
+
 #[derive(Debug)]
 pub(super) struct LexicalProjectionReader {
     manifest: ManifestBody,
     file: Arc<File>,
     config: LexicalProjectionConfig,
     required_term_bytes: u64,
+    producer_references: Option<ProducerReferences>,
     // Only build-created readers retain an operation-owned metadata lease.
     _build_memory: Option<QueryMemoryLease>,
     // Admitted immutable readers retain capacity without construction execution.
@@ -1079,6 +1086,10 @@ enum ManifestFile<'a> {
 }
 
 impl LexicalProjectionReader {
+    pub(super) fn producer_references(&self) -> Option<ProducerReferences> {
+        self.producer_references
+    }
+
     /// Reconstruct a version's exact contribution with this reader's analyzer
     /// admission limits. Used before accepting an immutable mutation retraction.
     #[cfg(test)]
@@ -1280,6 +1291,7 @@ impl LexicalProjectionReader {
             file: Arc::new(file),
             config,
             required_term_bytes,
+            producer_references: None,
             _build_memory: build_memory,
             _reader_memory: None,
         })))
@@ -2623,6 +2635,7 @@ impl<'workspace> LexicalProjectionWriter<'workspace> {
             manifest,
             artifact.memory,
             &paths,
+            artifact.object,
             self.config,
             &memory,
             &task,

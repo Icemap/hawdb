@@ -21,10 +21,10 @@ use super::{
     decode_search_snapshot_text_bounded, decode_string, encode_embedding, encode_metadata,
     encode_search_snapshot_text, encode_string, lexical_analyzer_digest, lexical_documents_digest,
     matched_query_spans_bounded, matched_query_terms, ranked_scores,
-    read_search_segment_descriptor, retriever_candidate_set_report, rrf_child_score,
-    search_document_matches_predicates, search_empty_reason_codes, search_empty_reasons,
-    search_metadata_predicate_pushdown, top_ranked_candidates, top_ranked_ids, weighted_rrf_score,
-    window_ranks, CompressedVectorSearchMode, SearchAccessControlContext, SearchAnalyzerLexicon,
+    retriever_candidate_set_report, rrf_child_score, search_document_matches_predicates,
+    search_empty_reason_codes, search_empty_reasons, search_metadata_predicate_pushdown,
+    top_ranked_candidates, top_ranked_ids, weighted_rrf_score, window_ranks,
+    CompressedVectorSearchMode, SearchAccessControlContext, SearchAnalyzerLexicon,
     SearchCandidateSetReport, SearchDocument, SearchEmbeddingManifest, SearchFallbackReasonCode,
     SearchFieldPruningAccumulator, SearchHit, SearchIndex, SearchMode, SearchPageWindow,
     SearchPredicatePushdownReport, SearchProjectionFreshness, SearchQueryOptions, SearchResultSet,
@@ -3923,14 +3923,79 @@ fn artifact_generations(closure: &LoadedArtifactClosure) -> PublishedArtifactGen
     }
 }
 
-pub(super) fn publish_out_of_core_projection(
+struct ResidentProducerReferences {
+    descriptor: ArtifactObject,
+    payload: ArtifactObject,
+    lexical_generation: u64,
+    lexical: crate::lexical_projection::ProducerReferences,
+}
+
+pub(super) fn write_resident_artifacts(
     index: &SearchIndex,
     root: &Path,
     snapshot: &crate::snapshot_writer::SearchSnapshotWriteReport,
 ) -> Result<PublishedOutOfCoreProjection> {
-    let descriptor = read_search_segment_descriptor(root)?.ok_or_else(|| {
-        HawDBError::Storage("search segment descriptor is missing after checkpoint".to_string())
+    // This legacy checkpoint has no host task parameter. Reuse its existing
+    // native publication accounting through every producer and verification.
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let memory = crate::build_memory::BuildMemory::new(&task)?;
+    let io = generation_writer::io::GenerationIo::new(&memory, &task);
+    let mut descriptor = SearchSegmentDescriptor::build(&index.documents);
+    let payload =
+        super::write_search_segment_payloads(root, &index.documents, &mut descriptor, |file| {
+            ArtifactObject::from_reference(io.seal_file(file)?.reference)
+        })?;
+    let (descriptor_bytes, descriptor_object) =
+        super::write_search_segment_descriptor_output(root, &descriptor, u64::MAX, |file| {
+            ArtifactObject::from_reference(io.seal_file(file)?.reference)
+        })?;
+    let lexical_generation = next_generation(root, index.lexical_config.max_manifest_bytes.get())?;
+    let projection = super::LexicalProjectionWriter::new(index.lexical_config)
+        .with_context(memory.clone(), task.clone())
+        .write(
+            root,
+            lexical_generation,
+            index.source_graph_commit_epoch,
+            lexical_analyzer_digest(&index.analyzer_lexicon),
+            lexical_documents_digest(&index.documents),
+            index.documents.values(),
+            &index.analyzer_lexicon,
+        )?;
+    let lexical = projection.producer_references().ok_or_else(|| {
+        HawDBError::StorageIntegrity(
+            "resident checkpoint requires lexical producer references".into(),
+        )
     })?;
+    let producer_bytes = descriptor_bytes
+        .saturating_add(payload.byte_length)
+        .saturating_add(lexical.manifest.byte_length)
+        .saturating_add(lexical.artifact.byte_length);
+    index.replace_lexical_projection(Some(projection));
+    let mut published = publish_out_of_core_projection(
+        index,
+        root,
+        snapshot,
+        &descriptor,
+        ResidentProducerReferences {
+            descriptor: descriptor_object,
+            payload,
+            lexical_generation,
+            lexical,
+        },
+        &io,
+    )?;
+    published.bytes_written = published.bytes_written.saturating_add(producer_bytes);
+    Ok(published)
+}
+
+fn publish_out_of_core_projection(
+    index: &SearchIndex,
+    root: &Path,
+    snapshot: &crate::snapshot_writer::SearchSnapshotWriteReport,
+    descriptor: &SearchSegmentDescriptor,
+    producer: ResidentProducerReferences,
+    io: &generation_writer::io::GenerationIo<'_>,
+) -> Result<PublishedOutOfCoreProjection> {
     if !descriptor.matches_documents(&index.documents) {
         return Err(HawDBError::Storage(
             "search segment descriptor does not match checkpoint documents".to_string(),
@@ -3956,16 +4021,13 @@ pub(super) fn publish_out_of_core_projection(
         &root.join(&lexical_manifest_file),
     )?);
 
-    let task = hawdb_core::RuntimeTaskContext::default();
-    let memory = crate::build_memory::BuildMemory::new(&task)?;
-    let io = generation_writer::io::GenerationIo::new(&memory, &task);
     let (layout, metadata_object, vector_object) = write_out_of_core_sidecars(
         index,
-        &descriptor,
+        descriptor,
         generation,
         &root.join(&metadata_payload_file),
         &root.join(&vector_payload_file),
-        &io,
+        io,
     )?;
     let metadata_payload_len = metadata_object.byte_length;
     let vector_payload_len = vector_object.byte_length;
@@ -3981,10 +4043,22 @@ pub(super) fn publish_out_of_core_projection(
 
     let descriptor_bytes = fs::read(root.join(&descriptor_file))?;
     let lexical_manifest_bytes = fs::read(root.join(&lexical_manifest_file))?;
+    let lexical_payload_file =
+        crate::lexical_projection::artifact_file(producer.lexical_generation);
+    let lexical_manifest_object = ArtifactObject::from_reference(producer.lexical.manifest)?;
+    let lexical_payload_object = ArtifactObject::from_reference(producer.lexical.artifact)?;
     #[cfg(test)]
     AFTER_RESIDENT_SIDECARS.with(|hook| {
         if let Some(index) = hook.take() {
-            let name = [&metadata_payload_file, &vector_payload_file, &layout_file][index];
+            let name = [
+                &metadata_payload_file,
+                &vector_payload_file,
+                &layout_file,
+                &descriptor_file,
+                &payload_file,
+                &lexical_manifest_file,
+                &lexical_payload_file,
+            ][index];
             let path = root.join(name);
             let mut bytes = fs::read(&path).unwrap();
             bytes[0] ^= 1;
@@ -3995,30 +4069,22 @@ pub(super) fn publish_out_of_core_projection(
         (&metadata_payload_file, metadata_object),
         (&vector_payload_file, vector_object),
         (&layout_file, layout_object),
+        (&descriptor_file, producer.descriptor),
+        (&payload_file, producer.payload),
+        (&lexical_manifest_file, lexical_manifest_object),
+        (&lexical_payload_file, lexical_payload_object),
     ] {
         io.verify_object(&root.join(name), object)?;
     }
-    let seal = |name: &str| -> Result<ArtifactObject> {
-        ArtifactObject::from_reference(io.seal(&root.join(name))?.reference)
-    };
-    let lexical_generation = crate::lexical_projection::manifest_generation(
-        &root.join(MANIFEST_FILE),
-        DEFAULT_MAX_MANIFEST_BYTES,
-    )?
-    .ok_or_else(|| {
-        HawDBError::StorageIntegrity("resident checkpoint missing lexical manifest".into())
-    })?;
     let objects = SegmentObjects {
-        lexical_generation,
-        descriptor: seal(&descriptor_file)?,
-        payload: seal(&payload_file)?,
+        lexical_generation: producer.lexical_generation,
+        descriptor: producer.descriptor,
+        payload: producer.payload,
         metadata: metadata_object,
         vector: vector_object,
         layout: layout_object,
-        lexical_manifest: seal(&lexical_manifest_file)?,
-        lexical_payload: seal(&crate::lexical_projection::artifact_file(
-            lexical_generation,
-        ))?,
+        lexical_manifest: lexical_manifest_object,
+        lexical_payload: lexical_payload_object,
         rabitq: None,
     };
     let embedding = index.embedding_manifest.as_ref();
@@ -5214,7 +5280,16 @@ mod tests {
 
     #[test]
     fn resident_sidecar_producer_references_reject_installed_same_length_changes() {
-        for artifact in 0..3 {
+        check_resident_producer_changes(0..3);
+    }
+
+    #[test]
+    fn resident_segment_and_lexical_producer_references_reject_installed_same_length_changes() {
+        check_resident_producer_changes(3..7);
+    }
+
+    fn check_resident_producer_changes(artifacts: std::ops::Range<usize>) {
+        for artifact in artifacts {
             let path = test_dir("resident-sidecar-producer-reference");
             let mut index = SearchIndex::open(&path).unwrap();
             index.upsert(document(0, "team")).unwrap();
@@ -5240,7 +5315,16 @@ mod tests {
             let bytes = fs::read(path.join(OUT_OF_CORE_MANIFEST_FILE)).unwrap();
             let manifest = SearchOutOfCoreManifestBody::decode(&bytes).unwrap();
             let segment = &manifest.segments[0];
+            let lexical_payload =
+                crate::lexical_projection::artifact_file(segment.objects.lexical_generation);
             for (name, object) in [
+                (&segment.descriptor_file, segment.objects.descriptor),
+                (&segment.payload_file, segment.objects.payload),
+                (
+                    &segment.lexical_manifest_file,
+                    segment.objects.lexical_manifest,
+                ),
+                (&lexical_payload, segment.objects.lexical_payload),
                 (&segment.metadata_payload_file, segment.objects.metadata),
                 (&segment.vector_payload_file, segment.objects.vector),
                 (&segment.layout_file, segment.objects.layout),

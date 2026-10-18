@@ -152,15 +152,17 @@ jobs:
             --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/private-scratch.txt
 
-      - name: Test resident sidecar producer references
+      - name: Test resident producer references
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -euo pipefail
           bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
             -- resident_sidecar_producer_references_reject_installed_same_length_changes \
+            resident_segment_and_lexical_producer_references_reject_installed_same_length_changes \
+            lexical_projection::build_manifest::tests::verified_build_reader_retains_metadata_until_its_last_clone_drops \
             --nocapture --test-threads=1 \
-            2>&1 | tee captured-search-results/resident-sidecar-producer.txt
+            2>&1 | tee captured-search-results/resident-producer.txt
 
       - name: Test captured root, replacement namespace and resident retention
         if: ${{ !cancelled() }}

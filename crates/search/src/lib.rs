@@ -2565,16 +2565,13 @@ impl SearchIndex {
                 self.consumer_binding.as_ref(),
                 self.documents.values(),
             )?;
-            let segment_bytes_written = self.write_segment_artifacts(path)?;
-            let lexical_bytes_written = self.write_lexical_projection(path)?;
-            let publication = out_of_core::publish_out_of_core_projection(self, path, &snapshot)?;
+            let publication = out_of_core::write_resident_artifacts(self, path, &snapshot)?;
             #[cfg(feature = "vector-search")]
             let rabitq_bytes_written = self.write_rabitq_projection(path)?;
             #[cfg(not(feature = "vector-search"))]
             let rabitq_bytes_written = 0;
-            let projection_bytes_written = segment_bytes_written
-                .saturating_add(lexical_bytes_written)
-                .saturating_add(publication.bytes_written)
+            let projection_bytes_written = publication
+                .bytes_written
                 .saturating_add(rabitq_bytes_written);
             *self
                 .durable_source_graph_commit_epoch
@@ -2623,25 +2620,6 @@ impl SearchIndex {
             });
         }
         result
-    }
-
-    fn write_lexical_projection(&self, path: &Path) -> Result<u64> {
-        let generation =
-            out_of_core::next_generation(path, self.lexical_config.max_manifest_bytes.get())?;
-        let projection = LexicalProjectionWriter::new(self.lexical_config).write(
-            path,
-            generation,
-            self.source_graph_commit_epoch,
-            lexical_analyzer_digest(&self.analyzer_lexicon),
-            lexical_documents_digest(&self.documents),
-            self.documents.values(),
-            &self.analyzer_lexicon,
-        )?;
-        let bytes_written = projection
-            .artifact_len()
-            .saturating_add(fs::metadata(path.join(lexical_projection::MANIFEST_FILE))?.len());
-        self.replace_lexical_projection(Some(projection));
-        Ok(bytes_written)
     }
 
     #[cfg(feature = "vector-search")]
@@ -4084,15 +4062,6 @@ impl SearchIndex {
             }
         };
         Ok(())
-    }
-
-    fn write_segment_artifacts(&self, path: &Path) -> Result<u64> {
-        let mut descriptor = SearchSegmentDescriptor::build(&self.documents);
-        write_search_segment_payloads(path, &self.documents, &mut descriptor)?;
-        let descriptor_bytes =
-            write_search_segment_descriptor_bounded(path, &descriptor, u64::MAX)?;
-        let payload_bytes = fs::metadata(path.join(SEARCH_SEGMENT_PAYLOAD_FILE))?.len();
-        Ok(descriptor_bytes.saturating_add(payload_bytes))
     }
 
     fn marker_path(&self, name: &str) -> Option<PathBuf> {
@@ -7138,16 +7107,23 @@ fn decode_search_document_line(line: &str) -> Result<SearchDocument> {
     }
 }
 
-fn write_search_segment_payloads(
+fn write_search_segment_payloads<T>(
     path: &Path,
     documents: &BTreeMap<String, SearchDocument>,
     descriptor: &mut SearchSegmentDescriptor,
-) -> Result<()> {
+    finish: impl FnOnce(&mut File) -> Result<T>,
+) -> Result<T> {
     let artifact_path = path.join(SEARCH_SEGMENT_PAYLOAD_FILE);
     let tmp_path = artifact_path.with_extension("hawdb.tmp");
     let mut offset = 0u64;
+    let reference;
     {
-        let mut file = File::create(&tmp_path)?;
+        let mut file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&tmp_path)?;
         for segment in &mut descriptor.segments {
             let mut body = String::from("HAWDB_SEARCH_SEGMENT_V1\n");
             for document in documents
@@ -7175,9 +7151,10 @@ fn write_search_segment_payloads(
             })?;
         }
         file.sync_all()?;
+        reference = finish(&mut file)?;
     }
     durable_replace_file(&tmp_path, &artifact_path)?;
-    Ok(())
+    Ok(reference)
 }
 
 fn write_search_segment_descriptor(
@@ -7192,17 +7169,36 @@ fn write_search_segment_descriptor_bounded(
     descriptor: &SearchSegmentDescriptor,
     max_bytes: u64,
 ) -> Result<u64> {
+    write_search_segment_descriptor_output(path, descriptor, max_bytes, |_| Ok(()))
+        .map(|(length, ())| length)
+}
+
+fn write_search_segment_descriptor_output<T>(
+    path: &Path,
+    descriptor: &SearchSegmentDescriptor,
+    max_bytes: u64,
+    finish: impl FnOnce(&mut File) -> Result<T>,
+) -> Result<(u64, T)> {
     let encoding = document_encoding::DescriptorEncoding::new(descriptor, max_bytes)?;
     let descriptor_path = path.join(SEARCH_SEGMENT_DESCRIPTOR_FILE);
     let tmp_path = descriptor_path.with_extension("hawdb.tmp");
+    let reference;
     {
-        let mut file = std::io::BufWriter::new(File::create(&tmp_path)?);
+        let mut file = std::io::BufWriter::new(
+            fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&tmp_path)?,
+        );
         encoding.write_to(&mut file)?;
         file.flush()?;
         file.get_ref().sync_all()?;
+        reference = finish(file.get_mut())?;
     }
     durable_replace_file(&tmp_path, &descriptor_path)?;
-    Ok(encoding.len() as u64)
+    Ok((encoding.len() as u64, reference))
 }
 
 fn read_search_segment_descriptor(path: &Path) -> Result<Option<SearchSegmentDescriptor>> {

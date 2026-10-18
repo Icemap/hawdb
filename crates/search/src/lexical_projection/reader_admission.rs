@@ -153,6 +153,7 @@ impl LexicalProjectionReader {
             file: Arc::new(file),
             config,
             required_term_bytes,
+            producer_references: None,
             _build_memory: None,
             _reader_memory: Some(retained),
         }))

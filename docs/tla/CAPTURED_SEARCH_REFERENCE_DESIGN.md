@@ -311,3 +311,56 @@ with no failures or ignored selections. Strict Search Clippy passed. The native
 CI matrix selects the new corruption/retry regression independently and archives
 its log even if the Windows directory-move group fails. Native cross-platform
 execution of this follow-up remains pending.
+
+
+## Complete resident segment producer references
+
+The resident checkpoint coordinator now carries producer expectations for all
+seven segment families: descriptor, document payload, metadata, vector, layout,
+lexical manifest and lexical payload. Descriptor/document writers return their
+reference through the still-held output before replacement. The coordinator
+retains the actual descriptor instead of reparsing an installed alias, and uses
+the writer's lexical generation instead of rediscovering it from an alias.
+
+Lexical finalization hashes the existing still-held read/write output during its
+CRC pass, with exact expected length and original task/scratch admission. Its
+manifest reference comes from the admitted encoded buffer with chunked task
+checkpoints. Only a successful writer-created reader receives the two preserved
+references; ordinary and admitted reopened readers carry no producer receipt.
+The extra inline reader fields are included by the existing sizeof-based
+metadata admission. A reopened description cannot mint original write custody.
+
+The legacy native checkpoint's existing accounting context now spans the full
+coordinator and lexical writer. No governor, external FD domain or host task is
+fabricated. This API still has no caller task parameter and is not qualified as
+ordinary governed resident serving. Snapshot writes and standalone RaBitQ remain
+separate boundaries; no incremental E view, stationary Consumer selector or
+persistent incarnation/cleanup ledger is delivered by this reference wiring.
+
+Installed verification compares every family with its preserved original
+expectation before selector publication. Seven independently injected same-length
+changes require rejection, unchanged old selector, usable old immutable reader,
+and successful retry. The lexical build-memory regression also checks exact
+original references and proves reopening does not reproduce producer authority.
+These local selections passed 21 tests (0 failed/ignored); the seven-family TLC graph has 30 generated / 20 distinct states, depth 5.
+All four TLC build actions completed; four Bazel validation wrappers reused
+cached success receipts. Model/config/toolchain/full logs were archived and the
+actual checked module hash matches this source. A compiled installed-expectation
+counter-control failed the new descriptor/lexical regression as intended;
+restored source passed. The earlier 24/16
+model graph applies only to the five-family parent model, not this expansion.
+
+The descriptor/document sealing reads add I/O, while lexical sealing shares its
+existing CRC pass and does not reopen the producer file by pathname. The existing
+resident snapshot checkpoint remains a full-dataset operation and is not an
+after-E activation path. The finite sealing model assumes exclusive producer
+custody; complete source authority, lost/torn/reordered recovery, physical
+resource/performance qualification and the original Consumer/Mem gates remain.
+
+The expanded native selection passed 251 tests, with 0 failures and 10 existing
+developer measurements ignored. It covers lexical paths, captured roots and
+admission, Consumer operation exclusion, staged-file I/O, legacy checkpoint
+reports/watermarks and streaming snapshot encoding. A prior full Search adverse
+run remains separate; this targeted result does not supersede it. The CI step
+selects both corruption/retry tests plus the lexical writer/reopen provenance
+and retained-memory regression independently of the Windows relocation group.
