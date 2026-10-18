@@ -1723,7 +1723,9 @@ fn collect_projection_properties(
         ProjectionExpression::Coalesce(expressions) => expressions
             .iter()
             .all(|expression| collect_projection_properties(expression, variable, required)),
-        ProjectionExpression::Left { expression, .. } | ProjectionExpression::Lower(expression) => {
+        ProjectionExpression::Left { expression, .. }
+        | ProjectionExpression::Lower(expression)
+        | ProjectionExpression::JsonValue { expression, .. } => {
             collect_projection_properties(expression, variable, required)
         }
         ProjectionExpression::CaseCoalesceDifferenceFloorZero {

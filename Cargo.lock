@@ -480,6 +480,7 @@ dependencies = [
  "hawdb-qos",
  "hawdb-storage",
  "rayon",
+ "serde_json",
 ]
 
 [[package]]

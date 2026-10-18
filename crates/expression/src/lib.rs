@@ -157,6 +157,10 @@ pub enum ProjectionExpression {
     },
     Literal(Value),
     Coalesce(Vec<ProjectionExpression>),
+    JsonValue {
+        expression: Box<ProjectionExpression>,
+        path: String,
+    },
     Left {
         expression: Box<ProjectionExpression>,
         length: usize,
@@ -310,7 +314,8 @@ impl ProjectionExpression {
             Self::Not(expression)
             | Self::IsNull { expression, .. }
             | Self::Lower(expression)
-            | Self::Left { expression, .. } => visit(expression),
+            | Self::Left { expression, .. }
+            | Self::JsonValue { expression, .. } => visit(expression),
             Self::Coalesce(expressions) => expressions.iter().all(visit),
             _ => true,
         }
@@ -349,7 +354,8 @@ impl ProjectionExpression {
             Self::Not(expression)
             | Self::IsNull { expression, .. }
             | Self::Lower(expression)
-            | Self::Left { expression, .. } => visit(expression)?,
+            | Self::Left { expression, .. }
+            | Self::JsonValue { expression, .. } => visit(expression)?,
             Self::Coalesce(expressions) => {
                 for expression in expressions {
                     visit(expression)?;

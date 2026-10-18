@@ -153,6 +153,35 @@ pub(super) fn bind_non_negative_usize(
     }
 }
 
+fn bind_json_value_path(
+    expression: &ValueExpression,
+    parameters: &BTreeMap<String, Value>,
+) -> Result<String> {
+    let Value::String(path) = bind_value(expression, parameters)? else {
+        return Err(HawDBError::Semantic(
+            "JSON_VALUE path must be a string".into(),
+        ));
+    };
+    let Some(fields) = path.strip_prefix("$.") else {
+        return Err(HawDBError::Semantic(
+            "JSON_VALUE path must start with $.".into(),
+        ));
+    };
+    if path.len() > 256
+        || fields.split('.').any(|field| {
+            field.is_empty()
+                || !field
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        })
+    {
+        return Err(HawDBError::Semantic(
+            "JSON_VALUE path must contain bounded dotted field names".into(),
+        ));
+    }
+    Ok(path)
+}
+
 pub(super) fn bind_optional_f64(
     expression: &ValueExpression,
     parameters: &BTreeMap<String, Value>,
@@ -451,6 +480,18 @@ pub(super) fn plan_projection_with_columns(
                     .collect::<Result<Vec<_>>>()?,
             ),
             "coalesce".to_string(),
+        ),
+        ScalarExpressionKind::JsonValue { expression, path } => (
+            ProjectionExpression::JsonValue {
+                expression: Box::new(plan_scalar_expression_with_columns(
+                    scope,
+                    column_scope,
+                    expression,
+                    parameters,
+                )?),
+                path: bind_json_value_path(path, parameters)?,
+            },
+            "json_value".to_string(),
         ),
         ScalarExpressionKind::Left { expression, length } => (
             ProjectionExpression::Left {
@@ -1015,6 +1056,17 @@ pub(super) fn plan_scalar_expression_with_columns(
                 })
                 .collect::<Result<Vec<_>>>()?,
         )),
+        ScalarExpressionKind::JsonValue { expression, path } => {
+            Ok(ProjectionExpression::JsonValue {
+                expression: Box::new(plan_scalar_expression_with_columns(
+                    scope,
+                    column_scope,
+                    expression,
+                    parameters,
+                )?),
+                path: bind_json_value_path(path, parameters)?,
+            })
+        }
         ScalarExpressionKind::Left { expression, length } => Ok(ProjectionExpression::Left {
             expression: Box::new(plan_scalar_expression_with_columns(
                 scope,
