@@ -246,7 +246,10 @@ fn active_manifest_admission_covers_compact_untrusted_segment_sequences() {
         let (limited, task) = context(memory.ledger.snapshot().peak_bytes - 1);
         assert!(matches!(
             active_identity(&fixture.0, &limited, &task),
-            Err(HawDBError::Execution(_))
+            Err(HawDBError::ResourceBudgetExceeded(ref cause))
+                if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                    && cause.budget == limited.ledger.snapshot().budget_bytes as u64
+                    && cause.requested > cause.budget.saturating_sub(cause.used)
         ));
         assert_eq!(limited.ledger.snapshot().used_bytes, 0);
     }
@@ -282,7 +285,10 @@ fn active_manifest_admission_covers_compact_untrusted_mutation_sequences() {
         let (limited, task) = context(memory.ledger.snapshot().peak_bytes - 1);
         assert!(matches!(
             active_identity(&fixture.0, &limited, &task),
-            Err(HawDBError::Execution(_))
+            Err(HawDBError::ResourceBudgetExceeded(ref cause))
+                if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                    && cause.budget == limited.ledger.snapshot().budget_bytes as u64
+                    && cause.requested > cause.budget.saturating_sub(cause.used)
         ));
         assert_eq!(limited.ledger.snapshot().used_bytes, 0);
     }

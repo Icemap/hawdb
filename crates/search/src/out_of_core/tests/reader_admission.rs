@@ -124,7 +124,12 @@ fn assert_segment_refused_before_expansion(
             },
             selected,
         );
-        assert!(matches!(result, Err(HawDBError::Execution(_))));
+        assert!(
+            matches!(result, Err(HawDBError::ResourceBudgetExceeded(ref cause))
+            if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                && cause.budget == (2 << 20)
+                && cause.requested > cause.budget.saturating_sub(cause.used))
+        );
     });
     assert!(
         peak <= encoded_len + 65536,

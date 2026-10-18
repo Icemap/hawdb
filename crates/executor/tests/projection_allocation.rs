@@ -4350,7 +4350,13 @@ fn entity_functions_refuse_large_owned_outputs_before_payload_allocation() {
         let allocations = window.allocations();
         drop(window);
         assert!(
-            matches!(result, Err(HawDBError::Execution(_))),
+            matches!(&result, Err(HawDBError::ResourceBudgetExceeded(cause))
+                if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                    && cause.scope == hawdb_core::ResourceBudgetScope::Account
+                    && cause.owner == "ProjectExec expressions"
+                    && cause.budget == memory.query_memory_bytes.get() as u64
+                    && cause.budget_option == "ExecutionMemoryConfig.query_memory_bytes"
+                    && cause.requested > cause.budget.saturating_sub(cause.used)),
             "{mode}: {result:?}"
         );
         assert_eq!(allocations, 0, "{mode}: copied payload before admission");
