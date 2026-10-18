@@ -202,8 +202,10 @@ fn default_unlimited_and_explicit_read_row_limits_preserve_complete_delivery() {
         engine
             .query_admitted("CREATE PROPERTY ON NODE TABLE RowLimit(score) TYPE INT")
             .unwrap();
-        for start in (0..=cap).step_by(512) {
-            let values = (start..(start + 512).min(cap + 1))
+        // Build the full fixture in bounded batches using ordinary safe commits.
+        const FIXTURE_BATCH_ROWS: usize = 4096;
+        for start in (0..=cap).step_by(FIXTURE_BATCH_ROWS) {
+            let values = (start..(start + FIXTURE_BATCH_ROWS).min(cap + 1))
                 .map(|score| {
                     Value::Map(BTreeMap::from([(
                         "score".into(),
@@ -1131,8 +1133,10 @@ fn owned_default_and_explicit_row_limits_cross_the_former_boundary() {
         engine
             .query_admitted("CREATE PROPERTY ON NODE TABLE RowLimit(score) TYPE INT")
             .unwrap();
-        for start in (0..=cap).step_by(512) {
-            let values = (start..(start + 512).min(cap + 1))
+        // Build the full fixture in bounded batches using ordinary safe commits.
+        const FIXTURE_BATCH_ROWS: usize = 4096;
+        for start in (0..=cap).step_by(FIXTURE_BATCH_ROWS) {
+            let values = (start..(start + FIXTURE_BATCH_ROWS).min(cap + 1))
                 .map(|score| {
                     Value::Map(BTreeMap::from([("score".into(), Value::Int(score as i64))]))
                 })
