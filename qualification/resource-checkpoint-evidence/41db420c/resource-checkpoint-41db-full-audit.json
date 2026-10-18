@@ -1,0 +1,181 @@
+{
+  "engine": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "observer_head": "b9a5d167dc13ddbedb856965b9565b77be43e544",
+  "native_compiled_source": "061fc42bcaa6201b8fc59cfdc2242689f9053590",
+  "frozen_sha256": {
+    "retained_boundary.py": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+    "_hawdb.so": "d9d1c2bea0989d72f30af506e0e06bfe01a0d6f7e71521de92fabea60d348f77",
+    "numeric.py": "8b004e2910e23a6ddc5a150860227dd39b2289b38a37abeb6e7efd8faa8ee0c3",
+    "hawdb/magic.py": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+    "hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6",
+    "hawdb/__init__.py": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+    "hawdb/_display.py": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+    "hawdb/pydantic.py": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+    "hawdb/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hawdb/_hawdb.pyi": "6c84c802cae732f8446298f18d9901e111d20d9d573add30d10f04c2656cbaf2"
+  },
+  "groups": [
+    {
+      "rows": 1000,
+      "mode": "owned",
+      "query_success": true,
+      "row_boundary_proven": false,
+      "instrumented_windows": 31,
+      "ownership_released": true,
+      "nonzero_native_windows": [],
+      "counter_disagreements": [],
+      "arrow_pool_nonzero_windows": [],
+      "process_peak_rss_bytes": 64978944,
+      "observed_instrumented_latency": {
+        "samples": 31,
+        "median_ns": 3564959,
+        "nearest_rank_p95_ns": 45770084,
+        "maximum_ns": 46321833,
+        "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+      },
+      "report_sha256": "1d0363feb8f36303180cda939c6e832a0de8f4f9578f0d42b485ea2d717d061d"
+    },
+    {
+      "rows": 1000,
+      "mode": "retained",
+      "query_success": true,
+      "row_boundary_proven": false,
+      "instrumented_windows": 31,
+      "ownership_released": true,
+      "nonzero_native_windows": [],
+      "counter_disagreements": [],
+      "arrow_pool_nonzero_windows": [],
+      "process_peak_rss_bytes": 64438272,
+      "observed_instrumented_latency": {
+        "samples": 31,
+        "median_ns": 590709,
+        "nearest_rank_p95_ns": 757583,
+        "maximum_ns": 765624,
+        "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+      },
+      "report_sha256": "5b744b04697184f6cbf19bde846a7e2409aef15942e8de0bd88e58713920032b"
+    },
+    {
+      "rows": 1000,
+      "mode": "arrow",
+      "query_success": true,
+      "row_boundary_proven": false,
+      "instrumented_windows": 31,
+      "ownership_released": true,
+      "nonzero_native_windows": [],
+      "counter_disagreements": [],
+      "arrow_pool_nonzero_windows": [],
+      "process_peak_rss_bytes": 63832064,
+      "observed_instrumented_latency": {
+        "samples": 31,
+        "median_ns": 1551873,
+        "nearest_rank_p95_ns": 5720917,
+        "maximum_ns": 9904333,
+        "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+      },
+      "report_sha256": "a86f9d0efe817307048df56155c0187e4877659f5c21946d1731fdbcb5b45eaf"
+    },
+    {
+      "rows": 1000001,
+      "mode": "owned",
+      "query_success": false,
+      "row_boundary_proven": true,
+      "instrumented_windows": 31,
+      "ownership_released": true,
+      "nonzero_native_windows": [
+        {
+          "sample": 13,
+          "live_delta": -163808
+        },
+        {
+          "sample": 26,
+          "live_delta": 31728094
+        },
+        {
+          "sample": 27,
+          "live_delta": -28902344
+        },
+        {
+          "sample": 28,
+          "live_delta": 3081515
+        },
+        {
+          "sample": 29,
+          "live_delta": 131481
+        },
+        {
+          "sample": 30,
+          "live_delta": -4555712
+        }
+      ],
+      "counter_disagreements": [
+        {
+          "sample": 26,
+          "live_delta": 31728094,
+          "counter_net": 31728102
+        },
+        {
+          "sample": 29,
+          "live_delta": 131481,
+          "counter_net": 131506
+        },
+        {
+          "sample": 30,
+          "live_delta": -4555712,
+          "counter_net": -4555737
+        }
+      ],
+      "arrow_pool_nonzero_windows": [],
+      "process_peak_rss_bytes": 1447968768,
+      "observed_instrumented_latency": null,
+      "report_sha256": "7b33b88b427fb643432d26e47f7ef41a1c71e89eff8017dcac68eb9ff6e169b1"
+    },
+    {
+      "rows": 1000001,
+      "mode": "retained",
+      "query_success": false,
+      "row_boundary_proven": true,
+      "instrumented_windows": 31,
+      "ownership_released": true,
+      "nonzero_native_windows": [
+        {
+          "sample": 1,
+          "live_delta": 30641942
+        },
+        {
+          "sample": 2,
+          "live_delta": -31035560
+        }
+      ],
+      "counter_disagreements": [],
+      "arrow_pool_nonzero_windows": [],
+      "process_peak_rss_bytes": 1344995328,
+      "observed_instrumented_latency": null,
+      "report_sha256": "a903964303caa93c17e4b24c1aaa881feca75b0e736415ee2b50dcb19087dd5e"
+    },
+    {
+      "rows": 1000001,
+      "mode": "arrow",
+      "query_success": false,
+      "row_boundary_proven": true,
+      "instrumented_windows": 31,
+      "ownership_released": true,
+      "nonzero_native_windows": [
+        {
+          "sample": 4,
+          "live_delta": -164658
+        }
+      ],
+      "counter_disagreements": [],
+      "arrow_pool_nonzero_windows": [],
+      "process_peak_rss_bytes": 1351204864,
+      "observed_instrumented_latency": null,
+      "report_sha256": "8af1ba7d6892a8cc514aa0adbd3c5fe94bc700da5a1f0bfb019d9e60d5317a0a"
+    }
+  ],
+  "missing": [],
+  "errors": [],
+  "complete": true,
+  "acceptance_approved": false,
+  "scope": "Supplemental source-bound allocation/error control only. Original failed resource/phase groups retained. Process-global allocator windows are not per-query leak proofs; instrumented latency is separate from ordinary latency; RSS includes fixture/checkpoints. No full90/110 acceptance or whole-memory bound."
+}

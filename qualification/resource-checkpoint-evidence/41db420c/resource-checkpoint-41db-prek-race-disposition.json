@@ -1,0 +1,6 @@
+{
+  "premature_local_commit": "e137dcee4bcee524e45fc2f81eaae7604b137439",
+  "source_hashes_unchanged": true,
+  "failure": "Concurrent git staging/commit during prek all-files check; cargo-fmt --check reported index changes as hook modifications. Required fmt/Clippy and commit hooks had passed; no Rust source change.",
+  "correction": "Soft-reset unpublished isolated commit, then run all checks and commit sequentially."
+}

@@ -1,0 +1,56 @@
+{
+  "status": "failed",
+  "started": 1792340806.9891891,
+  "pid": 54033,
+  "base": "632d16a2f94e4082526e5b626ba960fdc6cc1929",
+  "changed_sha256": {
+    "qualification/resources/numeric.py": "8b004e2910e23a6ddc5a150860227dd39b2289b38a37abeb6e7efd8faa8ee0c3",
+    "qualification/resources/numeric_driver.py": "13836cefe3982f13929508a2c21e4792e03525c7433004c3b5125f281dcee2ac"
+  },
+  "steps": [
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "exit": 1
+    }
+  ],
+  "scope": "Opt-in supplemental allocation/error-path checkpoint setup; default fixture and all engine/native build inputs unchanged."
+}
