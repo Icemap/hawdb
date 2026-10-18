@@ -19,6 +19,13 @@ use super::*;
 #[path = "graph_mutation/checkpoint_capture.rs"]
 mod checkpoint_capture;
 
+#[cfg(test)]
+#[path = "graph_mutation/indexed_merge_tests.rs"]
+mod indexed_merge_tests;
+
+// Use the same bound for observed cold probes and estimated posting-list size.
+const MAX_COLD_MERGE_POINT_READS: usize = 32;
+
 fn wal_ops_contain_relational_transaction(ops: &[WalOp]) -> bool {
     ops.iter().any(|op| match op {
         WalOp::Relational { .. } => true,
@@ -67,7 +74,9 @@ impl GraphStore {
         post_merge_assignments: &[NodeSetAssignment],
     ) -> Result<(NodeId, bool)> {
         let label_id = catalog.get_or_create_label(label);
-        if let Some(id) = self.find_node_by_label_and_properties(label_id, &match_properties)? {
+        if let Some(id) =
+            self.find_node_by_label_and_properties(catalog, label_id, &match_properties)?
+        {
             if !on_match_assignments.is_empty() || !post_merge_assignments.is_empty() {
                 let mut assignments =
                     Vec::with_capacity(on_match_assignments.len() + post_merge_assignments.len());
@@ -1255,10 +1264,16 @@ impl GraphStore {
         let source_label_id = catalog.get_or_create_label(&request.source_label);
         let target_label_id = catalog.get_or_create_label(&request.target_label);
         let rel_type_id = catalog.get_or_create_rel_type(&request.rel_type);
-        let source =
-            self.find_node_by_label_and_properties(source_label_id, &request.source_properties)?;
-        let target =
-            self.find_node_by_label_and_properties(target_label_id, &request.target_properties)?;
+        let source = self.find_node_by_label_and_properties(
+            catalog,
+            source_label_id,
+            &request.source_properties,
+        )?;
+        let target = self.find_node_by_label_and_properties(
+            catalog,
+            target_label_id,
+            &request.target_properties,
+        )?;
         if let (Some(source), Some(target)) = (source, target)
             && let Some(relationship) = self.find_relationship_by_properties(
                 source,
@@ -1597,15 +1612,104 @@ impl GraphStore {
 
     pub(super) fn find_node_by_label_and_properties(
         &self,
+        catalog: &Catalog,
         label_id: LabelId,
         properties: &BTreeMap<String, Value>,
     ) -> Result<Option<NodeId>> {
+        let cold_projection = self
+            .canonical_base
+            .as_ref()
+            .zip(self.persistent_property_projection.as_ref());
+        // A newly declared index may cover the resident delta but not the
+        // canonical base. Only a complete checkpoint projection can exclude it.
+        // Choose the first eligible key in BTreeMap order; recheck every match property.
+        if let Some((property, value)) = properties.iter().find(|(property, _)| {
+            catalog.has_scalar_property_index(label_id, property)
+                && (!self.canonical_base_out_of_core
+                    || cold_projection.is_some_and(|(_, projection)| {
+                        projection.manifest().supports(
+                            label_id,
+                            property,
+                            PersistentPropertyProjectionKind::Equality,
+                        )
+                    }))
+        }) {
+            let mut found = self
+                .seek_nodes_by_property(label_id, property, value)
+                .find(|node| properties_contain_all(&node.properties, properties))
+                .map(|node| node.id);
+            let mut scan_fallback = false;
+            if self.canonical_base_out_of_core
+                && let Some((reader, projection)) = cold_projection
+            {
+                if !projection.is_poisoned()
+                    && self.cold_merge_index_is_low_selectivity(catalog, label_id, property)
+                {
+                    reader
+                        .scan_nodes_by_property_control(label_id, property, value, |node| {
+                            if found.is_some_and(|id| node.id >= id) {
+                                return Ok(CanonicalScanControl::Stop);
+                            }
+                            if !self.node_tombstones.contains(&node.id)
+                                && !self.nodes.contains_key(&node.id)
+                                && properties_contain_all(&node.properties, properties)
+                            {
+                                found = Some(node.id);
+                                return Ok(CanonicalScanControl::Stop);
+                            }
+                            Ok(CanonicalScanControl::Continue)
+                        })
+                        .map_err(canonical_segment_error)?;
+                    return Ok(found);
+                }
+                // Repeated point reads revisit canonical segment framing. Bound
+                // this work when selectivity statistics are missing or stale.
+                let mut point_reads = 0;
+                let (report, _) = projection
+                    .scan_equality_candidates(label_id, property, value, |node_id| {
+                        if self.node_tombstones.contains(&node_id)
+                            || self.nodes.contains_key(&node_id)
+                            || found.is_some_and(|id| node_id >= id)
+                        {
+                            return Ok(CanonicalScanControl::Continue);
+                        }
+                        if point_reads == MAX_COLD_MERGE_POINT_READS {
+                            scan_fallback = true;
+                            return Ok(CanonicalScanControl::Stop);
+                        }
+                        point_reads += 1;
+                        let node = reader.get_node(node_id)?.ok_or_else(|| {
+                            PersistentPropertyProjectionError::Corrupt(format!(
+                                "property projection references missing canonical node {}",
+                                node_id.0
+                            ))
+                        })?;
+                        if !node.labels.contains(&label_id)
+                            || node.properties.get(property) != Some(value)
+                        {
+                            return Err(PersistentPropertyProjectionError::Corrupt(format!(
+                                "property projection candidate {} fails its canonical equality predicate",
+                                node_id.0
+                            )));
+                        }
+                        // Preserve the scan's first match across base and delta
+                        // without collecting or sorting the candidate IDs.
+                        if properties_contain_all(&node.properties, properties) {
+                            found = Some(node_id);
+                        }
+                        Ok(CanonicalScanControl::Continue)
+                    })
+                    .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
+                self.graph_index_read_metrics
+                    .record_property(PersistentGraphIndexClass::NodeEquality, report);
+            }
+            if !scan_fallback {
+                return Ok(found);
+            }
+        }
         let mut found = None;
         self.visit_nodes_owned(Some(label_id), |node| {
-            if properties
-                .iter()
-                .all(|(key, value)| node.properties.get(key) == Some(value))
-            {
+            if properties_contain_all(&node.properties, properties) {
                 found = Some(node.id);
                 GraphScanControl::Stop
             } else {
@@ -1613,6 +1717,24 @@ impl GraphStore {
             }
         })?;
         Ok(found)
+    }
+
+    fn cold_merge_index_is_low_selectivity(
+        &self,
+        catalog: &Catalog,
+        label_id: LabelId,
+        property: &str,
+    ) -> bool {
+        // Statistics only select a scan; they never establish a match or miss.
+        // The canonical scan still uses its Bloom filter for absent keys.
+        catalog
+            .property_index_id(label_id, property)
+            .and_then(|index| self.checkpoint_statistics.index_samples.get(&index))
+            .is_some_and(|sample| {
+                sample.estimated_unique_values().is_some_and(|unique| {
+                    sample.index_size > unique.saturating_mul(MAX_COLD_MERGE_POINT_READS as u64)
+                })
+            })
     }
 
     pub(super) fn find_relationship_by_properties(
@@ -1730,6 +1852,51 @@ impl GraphStore {
         max_ids: usize,
         limit_name: &str,
     ) -> Result<Vec<NodeId>> {
+        if let Some(PropertyFilter::IdEq { value }) = filter {
+            let Value::Int(value) = value else {
+                return Ok(Vec::new());
+            };
+            // Preserve the signed ID representation used by property_filter_matches.
+            let id = NodeId(*value as u64);
+            let matches = self.node_owned(id)?.is_some_and(|node| {
+                label_id.is_none_or(|label_id| node.labels.contains(&label_id))
+            });
+            if !matches {
+                return Ok(Vec::new());
+            }
+            if max_ids == 0 {
+                return Err(HawDBError::Execution(format!(
+                    "mutation would exceed {limit_name} {max_ids}"
+                )));
+            }
+            return Ok(vec![id]);
+        }
+        if let Some(PropertyFilter::IdIn { values }) = filter {
+            let mut ids = BTreeSet::new();
+            for value in values {
+                let Value::Int(value) = value else {
+                    continue;
+                };
+                // Preserve the signed ID representation used by property_filter_matches.
+                let id = NodeId(*value as u64);
+                if ids.contains(&id) {
+                    continue;
+                }
+                let matches = self.node_owned(id)?.is_some_and(|node| {
+                    label_id.is_none_or(|label_id| node.labels.contains(&label_id))
+                });
+                if matches {
+                    if ids.len() == max_ids {
+                        return Err(HawDBError::Execution(format!(
+                            "mutation would exceed {limit_name} {max_ids}"
+                        )));
+                    }
+                    ids.insert(id);
+                }
+            }
+            // Match scan order without retaining an unbounded copy of the input IDs.
+            return Ok(ids.into_iter().collect());
+        }
         let mut ids = Vec::with_capacity(max_ids.min(1024));
         let mut exceeded = false;
         self.visit_nodes_owned(label_id, |node| {

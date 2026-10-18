@@ -4,6 +4,12 @@
 use super::*;
 use crate::{RuntimeMemorySnapshot, RuntimeResourceBudget};
 
+#[path = "arrow/tests.rs"]
+mod arrow;
+
+#[path = "arrow/stream_tests.rs"]
+mod arrow_stream;
+
 fn nz(n: usize) -> NonZeroUsize {
     NonZeroUsize::new(n).unwrap()
 }

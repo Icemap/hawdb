@@ -1,0 +1,239 @@
+{
+  "state": "passed",
+  "command": [
+    "/home/hawkingrei/devel/nowledge/skein/.scratch/issue-994-rabitq-artifacts/matrix-linux-1/candidate-scan",
+    "kernel::benchmark::candidate_scan_matrix",
+    "--exact",
+    "--ignored",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "environment": {
+    "HAWDB_RABITQ_BENCH_ARTIFACTS": "/home/hawkingrei/devel/nowledge/skein/.scratch/issue-994-rabitq-artifacts/matrix-linux-1/artifacts",
+    "HAWDB_RABITQ_BENCH_OUTPUT": "/home/hawkingrei/devel/nowledge/skein/.scratch/issue-994-rabitq-artifacts/matrix-linux-1/samples.jsonl",
+    "HAWDB_RABITQ_BENCH_BUILD": "1"
+  },
+  "source": "/home/hawkingrei/devel/nowledge/skein/.scratch/issue-994-rabitq-baseline",
+  "base": "4c32610910cc78771eeb23d729be7107ff769bf6",
+  "source_sha256": {
+    "Cargo.lock": "da456883c7fc4c06424344610b1929ed7dabccc406b61ac99242f4392e6f1c5d",
+    "Cargo.toml": "bb39a79474144f60a51edf2c45552ba468e59ca0dae84fa53c259576c55cb6fa",
+    "rust-toolchain.toml": "8e390d6a0838315f972690f46ef8bae8b7ecc9ee6c1ed70140ef852869c2482e",
+    "crates/vector-projection/src/kernel.rs": "54620a0192019215347de7edd8a2dc481abd38ca2ecd57afbc1357f4feb6e00e",
+    "crates/vector-projection/src/kernel/benchmark.rs": "4570d57ae60e4ab90f8a656507891d8293756cb2be93cdb961d5f24b51374b20",
+    "crates/vector-projection/src/kernel/benchmark/fixture.rs": "e7a24f61e3fbdf551b2d53d79916fe3ab7df90abfa18cd11f60d012ddafee417",
+    "crates/vector-projection/src/codec.rs": "0a842a1f848dca058fb80bf9c13ed684013f4bc2a559b2220c79f4ddc1f94705",
+    "crates/vector-projection/src/scan.rs": "91745b71cd2edc64043c1160e08e9aab5945284fb2c9b3e24a3f14ab1d41ae2e"
+  },
+  "binary_sha256": "fc3165def9ba2fd2ed1a9aec92493aa9d1312d892482b75fb1cd3539b184109f",
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "cpu": {
+    "lscpu": [
+      {
+        "field": "Architecture:",
+        "data": "x86_64"
+      },
+      {
+        "field": "CPU op-mode(s):",
+        "data": "32-bit, 64-bit"
+      },
+      {
+        "field": "Address sizes:",
+        "data": "48 bits physical, 48 bits virtual"
+      },
+      {
+        "field": "Byte Order:",
+        "data": "Little Endian"
+      },
+      {
+        "field": "CPU(s):",
+        "data": "16"
+      },
+      {
+        "field": "On-line CPU(s) list:",
+        "data": "0-15"
+      },
+      {
+        "field": "Vendor ID:",
+        "data": "AuthenticAMD"
+      },
+      {
+        "field": "Model name:",
+        "data": "AMD Ryzen 7 7735HS with Radeon Graphics"
+      },
+      {
+        "field": "CPU family:",
+        "data": "25"
+      },
+      {
+        "field": "Model:",
+        "data": "68"
+      },
+      {
+        "field": "Thread(s) per core:",
+        "data": "2"
+      },
+      {
+        "field": "Core(s) per socket:",
+        "data": "8"
+      },
+      {
+        "field": "Socket(s):",
+        "data": "1"
+      },
+      {
+        "field": "Stepping:",
+        "data": "1"
+      },
+      {
+        "field": "Microcode version:",
+        "data": "0xa404108"
+      },
+      {
+        "field": "Frequency boost:",
+        "data": "enabled"
+      },
+      {
+        "field": "CPU(s) scaling MHz:",
+        "data": "56%"
+      },
+      {
+        "field": "CPU max MHz:",
+        "data": "4830.6001"
+      },
+      {
+        "field": "CPU min MHz:",
+        "data": "407.4000"
+      },
+      {
+        "field": "BogoMIPS:",
+        "data": "6388.05"
+      },
+      {
+        "field": "Flags:",
+        "data": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 hw_pstate ssbd mba ibrs ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif v_spec_ctrl umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor smca fsrm debug_swap"
+      },
+      {
+        "field": "Virtualization:",
+        "data": "AMD-V"
+      },
+      {
+        "field": "L1d cache:",
+        "data": "256 KiB (8 instances)"
+      },
+      {
+        "field": "L1i cache:",
+        "data": "256 KiB (8 instances)"
+      },
+      {
+        "field": "L2 cache:",
+        "data": "4 MiB (8 instances)"
+      },
+      {
+        "field": "L3 cache:",
+        "data": "16 MiB (1 instance)"
+      },
+      {
+        "field": "NUMA node(s):",
+        "data": "1"
+      },
+      {
+        "field": "NUMA node0 CPU(s):",
+        "data": "0-15"
+      },
+      {
+        "field": "Vulnerability Gather data sampling:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Ghostwrite:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Indirect target selection:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Itlb multihit:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability L1tf:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Mds:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Meltdown:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Mmio stale data:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Old microcode:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Reg file data sampling:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Retbleed:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Spec rstack overflow:",
+        "data": "Mitigation; Safe RET"
+      },
+      {
+        "field": "Vulnerability Spec store bypass:",
+        "data": "Mitigation; Speculative Store Bypass disabled via prctl"
+      },
+      {
+        "field": "Vulnerability Spectre v1:",
+        "data": "Mitigation; usercopy/swapgs barriers and __user pointer sanitization"
+      },
+      {
+        "field": "Vulnerability Spectre v2:",
+        "data": "Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP always-on; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected"
+      },
+      {
+        "field": "Vulnerability Srbds:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Tsa:",
+        "data": "Mitigation; Clear CPU buffers"
+      },
+      {
+        "field": "Vulnerability Tsx async abort:",
+        "data": "Not affected"
+      },
+      {
+        "field": "Vulnerability Vmscape:",
+        "data": "Mitigation; IBPB before exit to userspace"
+      }
+    ]
+  },
+  "kernel": "Linux hawkingrei-ser 7.1.10-zen1-1-zen #1 ZEN SMP PREEMPT_DYNAMIC Sun, 23 Aug 2026 15:18:58 +0000 x86_64 GNU/Linux",
+  "filesystem": "btrfs",
+  "memory": "MemTotal:       29492464 kB\nMemFree:        10097844 kB\nMemAvailable:   18023832 kB\nBuffers:              16 kB\nCached:          7947680 kB\nSwapCached:       281308 kB\nActive:          2857164 kB\nInactive:        8044792 kB\nActive(anon):     923072 kB\nInactive(anon):  2438404 kB\nActive(file):    1934092 kB\nInactive(file):  5606388 kB\nUnevictable:      396284 kB\nMlocked:          287104 kB\nSwapTotal:      61948232 kB\nSwapFree:       46400760 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:            178028 kB\nWriteback:         18156 kB\nAnonPages:       3340528 kB\nMapped:          3068684 kB\nShmem:             10856 kB\nKReclaimable:     825520 kB\nSlab:            1630992 kB\nSReclaimable:     825520 kB\nSUnreclaim:       805472 kB\nKernelStack:       35964 kB\nPageTables:       114044 kB\nSecPageTables:      4456 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    76694464 kB\nCommitted_AS:   33833120 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:      270192 kB\nVmallocChunk:          0 kB\nPercpu:            16256 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:    438272 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:    133120 kB\nFilePmdMapped:    133120 kB\nCmaTotal:              0 kB\nCmaFree:               0 kB\nUnaccepted:            0 kB\nBalloon:               0 kB\nGPUActive:         69172 kB\nGPUReclaim:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      553084 kB\nDirectMap2M:    25397248 kB\nDirectMap1G:     4194304 kB\n",
+  "started_at": "2026-10-17T21:17:49.626759+00:00",
+  "load_before": [
+    1.83837890625,
+    2.74609375,
+    4.189453125
+  ],
+  "limitation": "Shared host, not idle-host qualified. Timed command does no compilation. Partial case runs are not full-matrix evidence.",
+  "exit_code": 0,
+  "finished_at": "2026-10-17T21:30:52.155038+00:00",
+  "load_after": [
+    1.86572265625,
+    2.21826171875,
+    3.0947265625
+  ]
+}

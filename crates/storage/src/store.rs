@@ -3427,6 +3427,8 @@ impl hawdb_storage::graph_engine::GraphReadEngine for GraphStore {
 
 #[cfg(test)]
 mod tests {
+    mod id_eq_mutation;
+    mod id_in_mutation;
     mod pending_node_ids;
 
     #[test]

@@ -1,0 +1,9 @@
+Events disabled
+Events enabled
+[ perf record: Woken up 9454 times to write data ]
+Warning:
+Processed 158719 events and lost 2 chunks!
+
+Check IO/CPU overload!
+
+[ perf record: Captured and wrote 2365.211 MB /home/hawkingrei/devel/nowledge/skein/.scratch/issue-994-rabitq-artifacts/profile-linux-2/perf.data (149183 samples) ]

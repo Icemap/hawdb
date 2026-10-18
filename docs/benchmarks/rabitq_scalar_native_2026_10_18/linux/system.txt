@@ -1,0 +1,61 @@
+Linux runnervm8k3b6 6.17.0-1022-azure #22-Ubuntu SMP Mon Jul 27 17:24:03 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       145G   60G   86G  42% /
+MemTotal:       16373452 kB
+MemFree:        12003728 kB
+MemAvailable:   14948672 kB
+Buffers:           88296 kB
+Cached:          3105400 kB
+SwapCached:            0 kB
+Active:           670760 kB
+Inactive:        2758532 kB
+Active(anon):     292004 kB
+Inactive(anon):        0 kB
+Active(file):     378756 kB
+Inactive(file):  2758532 kB
+Unevictable:       46760 kB
+Mlocked:           43688 kB
+SwapTotal:       3145724 kB
+SwapFree:        3145724 kB
+Zswap:                 0 kB
+Zswapped:              0 kB
+Dirty:           1404072 kB
+Writeback:             0 kB
+AnonPages:        281252 kB
+Mapped:           300076 kB
+Shmem:             47644 kB
+KReclaimable:     138032 kB
+Slab:             218980 kB
+SReclaimable:     138032 kB
+SUnreclaim:        80948 kB
+KernelStack:        4084 kB
+PageTables:         6076 kB
+SecPageTables:         0 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:    11332448 kB
+Committed_AS:    1927144 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:       39360 kB
+VmallocChunk:          0 kB
+Percpu:             2208 kB
+HardwareCorrupted:     0 kB
+AnonHugePages:     79872 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:    589824 kB
+FilePmdMapped:         0 kB
+CmaTotal:              0 kB
+CmaFree:               0 kB
+Unaccepted:            0 kB
+Balloon:               0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:      162944 kB
+DirectMap2M:     5074944 kB
+DirectMap1G:    13631488 kB
