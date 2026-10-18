@@ -445,6 +445,7 @@ pub struct RetainedQueryCursor {
     profile: RetainedQueryProfile,
     terminal_error: Option<RetainedQueryError>,
     result_allowance: u64,
+    result_memory_budget: NonZeroUsize,
     needs_ids: bool,
 }
 
@@ -587,6 +588,16 @@ impl RetainedQueryCursor {
         task_context: Option<RuntimeTaskContext>,
         mut options: RetainedQueryOptions,
     ) -> Result<Self> {
+        let query_budget = hawdb_executor::memory::enforced_query_memory_budget(
+            &config.execution_memory,
+            task_context.as_ref(),
+        )?
+        .min(config.execution_memory.query_memory_bytes);
+        let result_memory_budget = hawdb_executor::memory::enforced_result_memory_budget(
+            &config.execution_memory,
+            task_context.as_ref(),
+        )?
+        .min(query_budget);
         let governor = runtime
             .governor(options.minimum_shared_handles.get())?
             .clone();
@@ -612,11 +623,11 @@ impl RetainedQueryCursor {
         let work_bytes = retained_result_work_bytes(metadata, 0)?.min(result_allowance);
         let permit = governor
             .try_admit(RuntimeWorkRequest::foreground_query(0, work_bytes).with_blocking(false))?;
-        let ledger = QueryMemoryLedger::new(config.execution_memory.query_memory_bytes);
+        let ledger = QueryMemoryLedger::new(query_budget);
         let account = ledger.account(
             QueryMemoryClass::ResultMaterialization,
             "retained_query",
-            config.execution_memory.query_memory_bytes,
+            result_memory_budget,
         );
         let runtime = permit.reserve_retained_result(metadata as u64, 0)?;
         let memory = account.reserve(
@@ -686,7 +697,7 @@ impl RetainedQueryCursor {
         let source_account = ledger.account(
             QueryMemoryClass::ExternalRead,
             "retained_source",
-            config.execution_memory.query_memory_bytes,
+            query_budget,
         );
         let source_memory = source_account.reserve(source_bytes)?;
         let source_runtime = permit.reserve_retained_memory(
@@ -731,6 +742,7 @@ impl RetainedQueryCursor {
             profile,
             terminal_error: None,
             result_allowance,
+            result_memory_budget,
             needs_ids,
         })
     }
@@ -901,6 +913,13 @@ impl RetainedQueryCursor {
             .options
             .batch_bytes
             .get()
+            // Source capacity belongs to the query root. The cursor control
+            // alone is irreducible in the separate task result account.
+            .min(
+                self.result_memory_budget
+                    .get()
+                    .saturating_sub(self.shared._memory.bytes()),
+            )
             .min(
                 self.ledger
                     .snapshot()

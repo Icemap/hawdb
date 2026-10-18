@@ -1135,3 +1135,149 @@ fn result_ceiling_does_not_reserve_unused_memory_while_streaming() {
     drop(other_work);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
+
+#[test]
+fn consumed_numeric_task_reservations_never_widen_zero_or_tiny_caps() {
+    for (query_bytes, result_bytes) in [(65536, 0), (0, 65536), (1, 65536), (65536, 1)] {
+        let mut db = fixture();
+        let governor = governor_with_handles(32);
+        db.set_runtime_governor(governor.clone());
+        let context = RuntimeTaskContext::default().with_memory_reservation(
+            hawdb_core::RuntimeMemoryReservation::new(query_bytes, result_bytes),
+        );
+        let snapshot = db.begin_read_transaction_with_context(&context).unwrap();
+        match snapshot.into_retained_query(QUERY, &params(), options()) {
+            Err(_) => {}
+            Ok(cursor) => panic!(
+                "numeric cursor accepted task caps query={query_bytes}, result={result_bytes}; profile={:?}",
+                cursor.profile()
+            ),
+        }
+        let usage = governor.retained_result_snapshot();
+        assert_eq!(usage.retained_bytes, 0);
+        assert_eq!(usage.buffer_owners, 0);
+        assert_eq!(usage.view_handles, 0);
+    }
+}
+
+#[test]
+fn consumed_numeric_task_query_cap_includes_pinned_source() {
+    let db = fixture_with_unrequested_payload(256 * 1024);
+    let context = RuntimeTaskContext::default().with_memory_reservation(
+        hawdb_core::RuntimeMemoryReservation::new(16 * 1024, 16 * 1024 * 1024),
+    );
+    let snapshot = db.begin_read_transaction_with_context(&context).unwrap();
+    match snapshot.into_retained_query(QUERY, &params(), options()) {
+        Err(_) => {}
+        Ok(cursor) => panic!(
+            "numeric cursor exceeded task query cap with pinned source; profile={:?}",
+            cursor.profile()
+        ),
+    }
+}
+
+#[test]
+fn consumed_numeric_task_result_cap_has_an_exact_first_batch_boundary() {
+    for adapter_bytes in [0, 4096] {
+        let (control, _, output) = measured_first_batch_charges(adapter_bytes);
+        for fits in [false, true] {
+            let mut db = fixture_with_unrequested_payload(128 * 1024);
+            if fits {
+                db.query_with_params(
+                    "UNWIND $rows AS row CREATE (:Item {score: row.score})",
+                    &BTreeMap::from([(
+                        "rows".into(),
+                        Value::List(
+                            (9..1024)
+                                .map(|score| {
+                                    Value::Map(BTreeMap::from([(
+                                        "score".into(),
+                                        Value::Int(score),
+                                    )]))
+                                })
+                                .collect(),
+                        ),
+                    )]),
+                )
+                .unwrap();
+            }
+            let governor = governor_with_handles(32);
+            db.set_runtime_governor(governor.clone());
+            let result_cap = control + output - usize::from(!fits);
+            let context = RuntimeTaskContext::default().with_memory_reservation(
+                hawdb_core::RuntimeMemoryReservation::new(16 * 1024 * 1024, result_cap as u64),
+            );
+            let snapshot = db.begin_read_transaction_with_context(&context).unwrap();
+            let mut cursor = snapshot
+                .into_retained_query(
+                    QUERY,
+                    &BTreeMap::from([("min".into(), Value::Int(0))]),
+                    options(),
+                )
+                .unwrap();
+            if !fits {
+                for _ in 0..2 {
+                    assert!(matches!(
+                        cursor.next_batch_with_metadata(adapter_bytes),
+                        Err(RetainedQueryError::WorkingUnitTooLarge)
+                    ));
+                }
+                assert_eq!(cursor.status(), RetainedQueryStatus::Failed);
+                assert_eq!(cursor.profile().visited_rows, 0);
+                assert_eq!(cursor.profile().emitted_rows, 0);
+                assert_eq!(cursor.profile().source_pinned_rows, 0);
+                assert_eq!(cursor.profile().backpressure_events, 0);
+            } else {
+                let first = cursor
+                    .next_batch_with_metadata(adapter_bytes)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(scores(&first), vec![0]);
+                assert_eq!(cursor.profile().visited_rows, 1);
+                assert_eq!(
+                    governor.retained_result_snapshot().retained_bytes,
+                    result_cap as u64
+                );
+                assert!(matches!(
+                    cursor.next_batch_with_metadata(adapter_bytes),
+                    Err(RetainedQueryError::Backpressure { .. })
+                ));
+                assert_eq!(cursor.profile().visited_rows, 1);
+                drop(first);
+                let mut rows = 1;
+                while let Some(batch) = cursor.next_batch_with_metadata(adapter_bytes).unwrap() {
+                    rows += batch.selected_rows().len();
+                    drop(batch);
+                }
+                assert_eq!(rows, 1024);
+                assert_eq!(cursor.status(), RetainedQueryStatus::Completed);
+                assert!(cursor.profile().output_payload_bytes > result_cap);
+                assert!(cursor.profile().query_peak_bytes <= 16 * 1024 * 1024);
+            }
+            drop((cursor, db));
+            let usage = governor.retained_result_snapshot();
+            assert_eq!(usage.retained_bytes, 0);
+            assert_eq!(usage.buffer_owners, 0);
+            assert_eq!(usage.view_handles, 0);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
+    }
+}
+
+#[test]
+fn consumed_numeric_task_larger_allowance_never_raises_host_query_cap() {
+    let (control, source, _) = measured_first_batch_charges(0);
+    let mut db = fixture_with_unrequested_payload(128 * 1024);
+    db.config.execution_memory.query_memory_bytes = nz(control + source - 1);
+    let context = RuntimeTaskContext::default().with_memory_reservation(
+        hawdb_core::RuntimeMemoryReservation::new(16 * 1024 * 1024, 16 * 1024 * 1024),
+    );
+    let snapshot = db.begin_read_transaction_with_context(&context).unwrap();
+    assert!(matches!(
+        snapshot.into_retained_query(QUERY, &params(), options()),
+        Err(RetainedQueryError::Execution(_))
+    ));
+    let governor = db.retained_runtime.bound.get().unwrap();
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
