@@ -1438,6 +1438,19 @@ fn bind_predicate(
                 value: bind(value)?,
             }
         }
+        PropertyPredicate::ExpressionIn { expression, values } => {
+            match bind_value(values, parameters)? {
+                Value::List(values) => Predicate::ExpressionIn {
+                    expression: bind(expression)?,
+                    values,
+                },
+                value => {
+                    return Err(HawDBError::Semantic(format!(
+                        "IN predicate requires a list value, got {value:?}"
+                    )));
+                }
+            }
+        }
         PropertyPredicate::Eq {
             variable,
             property,

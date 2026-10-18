@@ -13,6 +13,72 @@
 // limitations under the License.
 
 use super::*;
+use crate::HawDBError;
+
+#[test]
+fn case_expression_in_parameter_list_uses_row_values_and_three_valued_logic() {
+    let mut db = Database::new();
+    for query in [
+        "CREATE (:Entity {id: 'legacy'})",
+        "CREATE (:Entity {id: 'blank', space_id: ''})",
+        "CREATE (:Entity {id: 'team', space_id: 'team'})",
+        "CREATE (:Entity {id: 'other', space_id: 'other'})",
+    ] {
+        db.query(query).unwrap();
+    }
+
+    let query = "MATCH (e:Entity) WHERE (CASE WHEN e.space_id IS NULL OR e.space_id = '' THEN $default_space ELSE e.space_id END) IN $space_ids RETURN e.id AS id ORDER BY id";
+    for (spaces, expected) in [
+        (
+            vec![Value::String("default".into())],
+            vec!["blank", "legacy"],
+        ),
+        (vec![Value::String("team".into())], vec!["team"]),
+        (
+            vec![Value::String("team".into()), Value::Null],
+            vec!["team"],
+        ),
+        (vec![], vec![]),
+    ] {
+        let params = BTreeMap::from([
+            ("default_space".into(), Value::String("default".into())),
+            ("space_ids".into(), Value::List(spaces)),
+        ]);
+        let result = db.query_with_params(query, &params).unwrap();
+        let ids = result
+            .rows
+            .iter()
+            .map(|row| match row.get("id").unwrap() {
+                Value::String(id) => id.as_str(),
+                value => panic!("unexpected id: {value:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(ids, expected);
+    }
+
+    let nullable_params = BTreeMap::from([
+        ("default_space".into(), Value::String("default".into())),
+        (
+            "space_ids".into(),
+            Value::List(vec![Value::String("team".into()), Value::Null]),
+        ),
+    ]);
+    let negated = "MATCH (e:Entity) WHERE NOT ((CASE WHEN e.space_id IS NULL OR e.space_id = '' THEN $default_space ELSE e.space_id END) IN $space_ids) RETURN e.id AS id";
+    assert!(db
+        .query_with_params(negated, &nullable_params)
+        .unwrap()
+        .rows
+        .is_empty());
+
+    let params = BTreeMap::from([
+        ("default_space".into(), Value::String("default".into())),
+        ("space_ids".into(), Value::String("team".into())),
+    ]);
+    assert!(matches!(
+        db.query_with_params(query, &params),
+        Err(HawDBError::Semantic(message)) if message.contains("IN predicate requires a list value")
+    ));
+}
 
 #[test]
 fn filters_with_null_predicates() {

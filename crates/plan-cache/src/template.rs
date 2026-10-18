@@ -457,6 +457,10 @@ fn marker_use_in_predicate(predicate: &Predicate, name: &str) -> MarkerUse {
             marker_use_in_projection_expression(expression, name, false)
                 .combine(marker_use_in_projection_expression(value, name, false))
         }
+        Predicate::ExpressionIn { expression, values } => {
+            marker_use_in_projection_expression(expression, name, false)
+                .combine(values_marker_use(values, name))
+        }
         Predicate::ExpressionCompare {
             expression, value, ..
         } => marker_use_in_projection_expression(expression, name, false)
@@ -931,6 +935,10 @@ fn bind_predicate(predicate: &mut Predicate, parameters: &BTreeMap<String, Value
         | Predicate::PropertyCompare { value, .. }
         | Predicate::PropertyListContains { value, .. } => bind_value(value, parameters)?,
         Predicate::IdIn { values, .. } | Predicate::PropertyIn { values, .. } => {
+            bind_values(values, parameters)?;
+        }
+        Predicate::ExpressionIn { expression, values } => {
+            bind_projection_expression(expression, parameters)?;
             bind_values(values, parameters)?;
         }
         Predicate::ExpressionEq { expression, value }
