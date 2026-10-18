@@ -43,4 +43,5 @@ jobs:
             ${{ runner.temp }}/fixture-diagnosis/*.log
             ${{ runner.temp }}/fixture-diagnosis/*/report.json
             ${{ runner.temp }}/fixture-diagnosis/*/progress.json
+            ${{ runner.temp }}/fixture-diagnosis/frozen
           if-no-files-found: error
