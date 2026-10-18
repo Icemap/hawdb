@@ -68,6 +68,8 @@ parameter inventories, outcomes, and waivers are unchanged.
 The `MIN` aggregate regression re-audits the `tests.rs` source pin and adds
 both its supported projection and unsupported `FILTER` input to the corpus.
 Existing test provenance lines after those inputs advance with the source.
+The creation-binder fixture pins the resulting corpus hash; its binding
+outcomes and PostgreSQL revision remain unchanged.
 
 The sqlparser 0.63 upgrade re-audits the `clause_tests.rs` source pin after
 updating AST constructors and adding rejection cases for new CREATE TABLE
