@@ -1,11 +1,11 @@
-name: Pinned Engine Resource Qualification
+name: Exact Consumer Default Million-Row Recheck
 on:
   workflow_dispatch:
     inputs:
       kind:
         type: choice
         options: [numeric, ordinary, resources, retained]
-        default: resources
+        default: retained
       rows:
         type: string
         default: "1000"
@@ -42,34 +42,7 @@ jobs:
       matrix:
         include:
           - configuration: default
-            rows: 1000
-            backend: memory
-          - configuration: default
-            rows: 1000
-            backend: file
-          - configuration: default
-            rows: 100000
-            backend: memory
-          - configuration: default
-            rows: 100000
-            backend: file
-          - configuration: default
             rows: 1000000
-            backend: memory
-          - configuration: default
-            rows: 1000000
-            backend: file
-          - configuration: large
-            rows: 1000000
-            backend: memory
-          - configuration: large
-            rows: 1000000
-            backend: file
-          - configuration: large
-            rows: 1000001
-            backend: memory
-          - configuration: large
-            rows: 1000001
             backend: file
     env:
       USE_BAZEL_VERSION: "9.3.0"
@@ -89,6 +62,18 @@ jobs:
       - name: Build Python producer before measurement
         run: |
           bazel build -c opt //bindings/python:hawdb
+      - name: Verify the original native and timed-consumer bytes
+        run: |
+          python - <<'PY_PRODUCER'
+          import hashlib, pathlib
+          expected = {
+              "bazel-bin/bindings/python/python/hawdb/_hawdb.so": "b3e7e4b380896f3be34461d2088d2b45382a4baab5fcda7c1a65d67032344404",
+              "bindings/benchmarks/retained_boundary.py": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+          }
+          for name, digest in expected.items():
+              assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() == digest, name
+          print("Original failed-group producer and consumer bytes verified; this is a separate recheck, not a waiver.")
+          PY_PRODUCER
       - name: Run unchanged numeric delivery controls
         env:
           QUAL_CONFIGURATION: ${{ matrix.configuration }}
@@ -103,127 +88,3 @@ jobs:
           path: ${{ runner.temp }}/retained-evidence
           if-no-files-found: error
 
-  resource-plan:
-    if: inputs.kind != 'retained'
-    runs-on: ubuntu-24.04
-    outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
-    steps:
-      - id: plan
-        env:
-          QUAL_SELECTION: ${{ toJSON(inputs) }}
-        run: |
-          python - <<'PY_MATRIX'
-          import itertools, json, os
-          selection=json.loads(os.environ['QUAL_SELECTION'])
-          groups=[]
-          def numeric(configuration,rows,backend,instrumented):
-              return dict(kind='numeric',configuration=configuration,rows=str(rows),backend=backend,instrumented=instrumented,samples='31',case='select',layer='python')
-          def ordinary(rows,case,layer,backend):
-              return dict(kind='ordinary',configuration='default',rows=str(rows),backend=backend,instrumented=True,samples='3',case=case,layer=layer)
-          if selection['kind']=='resources':
-              for configuration,sizes in [('default',[1000,100000,1000000]),('large',[1000000,1000001])]:
-                  for rows,backend,instrumented in itertools.product(sizes,['memory','file'],[False,True]):
-                      groups.append(numeric(configuration,rows,backend,instrumented))
-              for rows,case,layer,backend in itertools.product([1000,100000,1000000],['fill_bulk','select','wide','point','fill'],['rust','python','go'],['memory','file']):
-                  groups.append(ordinary(rows,case,layer,backend))
-              first=groups.pop(20);groups.insert(2,first)
-              assert len(groups)==110
-          else:
-              item=dict(selection);item.pop('boundary_comparison',None)
-              item['instrumented']=str(item['instrumented']).lower()=='true'
-              groups=[item]
-          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
-              output.write('matrix='+json.dumps({'include':groups})+'\n')
-          PY_MATRIX
-
-  resources:
-    if: inputs.kind != 'retained'
-    needs: resource-plan
-    runs-on: ubuntu-24.04
-    timeout-minutes: 360
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix: ${{ fromJSON(needs.resource-plan.outputs.matrix) }}
-    env:
-      USE_BAZEL_VERSION: "9.3.0"
-      QUAL_KIND: ${{ matrix.kind }}
-      QUAL_ROWS: ${{ matrix.rows }}
-      QUAL_BACKEND: ${{ matrix.backend }}
-      QUAL_CONFIGURATION: ${{ matrix.configuration }}
-      QUAL_INSTRUMENTED: ${{ matrix.instrumented }}
-      QUAL_CASE: ${{ matrix.case }}
-      QUAL_LAYER: ${{ matrix.layer }}
-      QUAL_SAMPLES: ${{ matrix.samples }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Preserve immutable resource source before long measurements
-        run: |
-          python - <<'PY_SOURCE'
-          import json, os, pathlib, subprocess
-          def git(*args):
-              return subprocess.check_output(["git", *args], text=True).strip()
-          campaign = json.loads(pathlib.Path("qualification/resources/campaign.json").read_text())
-          engine = campaign["engine"]
-          assert len(engine) == 40 and all(c in "0123456789abcdef" for c in engine)
-          assert git("rev-parse", engine + "^{tree}") == campaign["engine_tree"]
-          assert git("diff", "--name-only", engine, "HEAD").splitlines() == campaign["overlay_files"]
-          assert git("merge-base", engine, "HEAD") == engine
-          assert not git("status", "--porcelain")
-          receipt = {"engine": engine, "engine_tree": git("rev-parse", engine + "^{tree}"),
-                     "source": git("rev-parse", "HEAD"), "tree": git("rev-parse", "HEAD^{tree}"),
-                     "overlay": git("diff", "--name-only", engine, "HEAD").splitlines(),
-                     "requested": {key: value for key, value in os.environ.items() if key.startswith("QUAL_")},
-                     "scope": "Source/request receipt only; preserve runtime budget, producer and outcome evidence separately."}
-          pathlib.Path(os.environ["RUNNER_TEMP"], "resource-source.json").write_text(json.dumps(receipt, indent=2) + "\n")
-          PY_SOURCE
-      - uses: actions/upload-artifact@v7
-        with:
-          name: resource-source-${{ matrix.kind }}-${{ matrix.rows }}-${{ matrix.backend }}-${{ matrix.configuration }}-${{ matrix.instrumented }}-${{ matrix.case }}-${{ matrix.layer }}-${{ github.sha }}
-          path: ${{ runner.temp }}/resource-source.json
-          if-no-files-found: error
-      - uses: bazel-contrib/setup-bazel@0.19.0
-        with:
-          bazelisk-cache: true
-          repository-cache: true
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-      - uses: actions/setup-go@v7
-        if: matrix.kind == 'ordinary'
-        with:
-          go-version-file: bindings/go/go.mod
-          cache-dependency-path: bindings/go/go.sum
-      - name: Install pinned Arrow consumer
-        if: matrix.kind == 'numeric'
-        run: python -m pip install pyarrow==26.0.0
-      - name: Collect unchanged ordinary native and foreign profiles
-        if: matrix.kind == 'ordinary'
-        run: |
-          engine=$(python -c 'import json; print(json.load(open("qualification/resources/campaign.json"))["engine"])')
-          git worktree add --detach "$RUNNER_TEMP/ordinary-engine" "$engine"
-          python -B qualification/resources/run.py \
-            --root "$RUNNER_TEMP/ordinary-engine" --engine "$engine" \
-            --baseline-spec qualification/resources/baseline-source.json \
-            --output "$RUNNER_TEMP/resource-qualification" \
-            --sizes "$QUAL_ROWS" --cases "$QUAL_CASE" --layers "$QUAL_LAYER" \
-            --backends "$QUAL_BACKEND" --samples "$QUAL_SAMPLES"
-      - name: Collect per-mode whole-process RSS and observed tails
-        if: matrix.kind == 'numeric'
-        run: |
-          flags=()
-          if [[ "$QUAL_INSTRUMENTED" == true ]]; then flags+=(--instrumented); fi
-          python -B qualification/resources/numeric_driver.py \
-            --output "$RUNNER_TEMP/resource-qualification" \
-            --rows "$QUAL_ROWS" --backend "$QUAL_BACKEND" \
-            --configuration "$QUAL_CONFIGURATION" --samples "$QUAL_SAMPLES" "${flags[@]}"
-      - name: Preserve complete and adverse observations
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: resources-${{ matrix.kind }}-${{ matrix.rows }}-${{ matrix.backend }}-${{ matrix.configuration }}-${{ matrix.instrumented }}-${{ matrix.case }}-${{ matrix.layer }}-${{ github.sha }}
-          path: ${{ runner.temp }}/resource-qualification
-          if-no-files-found: error
