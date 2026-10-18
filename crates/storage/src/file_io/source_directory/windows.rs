@@ -171,6 +171,14 @@ pub(super) fn open_root(path: &Path) -> io::Result<std::fs::File> {
         .open(path)
 }
 
+pub(super) fn open_mutable_child(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+) -> io::Result<std::fs::File> {
+    // Existing regular child; GENERIC_WRITE also authorizes repair/set_len.
+    relative_open(root, name, READ_DATA | 0x4000_0000, false)
+}
+
 fn relative_open(
     root: &std::fs::File,
     name: ChildName<'_>,

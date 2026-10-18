@@ -65,6 +65,27 @@ pub(super) fn replace_control(
     }
 }
 
+pub(super) fn open_mutable_child(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+) -> io::Result<std::fs::File> {
+    let name = name_bytes(name);
+    // SAFETY: live root and terminated canonical component. No creation,
+    // truncation, symlink traversal or path lookup outside this capture.
+    let fd = unsafe {
+        libc::openat(
+            root.as_raw_fd(),
+            name.as_ptr().cast(),
+            libc::O_RDWR | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+        )
+    };
+    if fd == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: successful openat transferred one fresh owned descriptor.
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
 #[cfg(all(
     any(test, feature = "test-support"),
     any(target_os = "linux", target_vendor = "apple")

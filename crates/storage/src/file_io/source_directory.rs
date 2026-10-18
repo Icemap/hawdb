@@ -28,6 +28,12 @@ mod platform {
     ) -> io::Result<std::fs::File> {
         Err(unsupported())
     }
+    pub(super) fn open_mutable_child(
+        _root: &std::fs::File,
+        _name: ChildName<'_>,
+    ) -> io::Result<std::fs::File> {
+        Err(unsupported())
+    }
     pub(super) fn replace_control(
         _root: &std::fs::File,
         _file: &std::fs::File,
@@ -286,6 +292,61 @@ impl SourceDirectory {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "source child is not a regular file",
+            ));
+        }
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            Ok(counted_traced(inner, permit, trace))
+        }
+        #[cfg(not(any(test, feature = "test-support")))]
+        {
+            Ok(counted(inner, permit))
+        }
+    }
+
+    /// Catalog writer primitive, not a publication or immutable-file capability.
+    /// The catalog owns writer exclusion, sealing and recovery. Existing opens
+    /// never create/truncate; new opens are exclusive. Both are captured-relative.
+    pub(crate) fn open_mutable_child(
+        &self,
+        context: &FileOpenContext,
+        name: &str,
+        create_new: bool,
+    ) -> io::Result<File> {
+        self.require_context(context)?;
+        let name = ChildName::new(name)?;
+        let scope = native_scope(context)?;
+        self.require_scope(&scope)?;
+        let permit = context.acquire(DescriptorKind::Transient)?;
+        let open = || {
+            self.root
+                .with_native(|root| {
+                    if create_new {
+                        platform::create_control_candidate(root, name)
+                    } else {
+                        platform::open_mutable_child(root, name)
+                    }
+                })
+                .map_err(|error| context.map_open_error(error))
+        };
+        #[cfg(any(test, feature = "test-support"))]
+        let (inner, trace) = match self.trace.as_deref() {
+            Some(trace) => {
+                let (inner, trace) = if create_new {
+                    trace.create_file(Path::new(name.0), open)?
+                } else {
+                    trace.open_child(Path::new(name.0), open)?
+                };
+                (inner, Some(Box::new(trace)))
+            }
+            None => (open()?, None),
+        };
+        #[cfg(not(any(test, feature = "test-support")))]
+        let inner = open()?;
+        if !inner.metadata()?.is_file() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "mutable catalog child is not a regular file",
             ));
         }
         #[cfg(any(test, feature = "test-support"))]

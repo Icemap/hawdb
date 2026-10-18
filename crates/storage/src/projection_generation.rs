@@ -19,13 +19,18 @@
 //! readers can open only the selected head, so candidate batches never become
 //! partial logical changes.
 
-use crate::durability::{durable_replace_file, sync_directory, sync_parent_directory};
-use crate::file_io::{self as fs, File, OpenOptions};
+use crate::durability::sync_directory_ancestors;
+#[cfg(test)]
+use crate::file_io::OpenOptions;
+use crate::file_io::{self as fs, File};
+
+mod captured;
 use crate::relational::{decode_relational_primary_key, encode_relational_primary_key};
 use crate::relational::{
     decode_relational_row_payload, encode_relational_row_payload, validate_row, RelationalKey,
     RelationalRow, RelationalTableSchema,
 };
+use captured::{CapturedCatalog, CatalogIdentity};
 use hawdb_integrity::{crc32c, Crc32c, IntegrityDigest, IntegrityHasher, Sha256Digest};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter};
@@ -411,8 +416,11 @@ pub struct ProjectionGenerationGcReport {
 #[derive(Clone, Debug)]
 pub struct ProjectionGenerationStore {
     root: PathBuf,
-    read_only: bool,
+    // Final registry authority must die before its last native identity holder.
+    // Otherwise an opener could upgrade a stale weak key during FD closure/reuse.
     shared: Arc<Mutex<ProjectionGenerationShared>>,
+    captured: Arc<CapturedCatalog>,
+    read_only: bool,
 }
 
 #[derive(Debug, Default)]
@@ -422,11 +430,11 @@ struct ProjectionGenerationShared {
     temporary_sequence: u64,
 }
 
-type CatalogRegistry = BTreeMap<PathBuf, Weak<Mutex<ProjectionGenerationShared>>>;
+type CatalogRegistry = BTreeMap<CatalogIdentity, Weak<Mutex<ProjectionGenerationShared>>>;
 static CATALOGS: LazyLock<Mutex<CatalogRegistry>> = LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
 fn shared_catalog(
-    root: &Path,
+    identity: CatalogIdentity,
 ) -> Result<Arc<Mutex<ProjectionGenerationShared>>, ProjectionGenerationError> {
     let mut catalogs = CATALOGS.lock().map_err(|_| {
         ProjectionGenerationError::Corruption(
@@ -434,11 +442,11 @@ fn shared_catalog(
         )
     })?;
     catalogs.retain(|_, shared| shared.strong_count() > 0);
-    if let Some(shared) = catalogs.get(root).and_then(Weak::upgrade) {
+    if let Some(shared) = catalogs.get(&identity).and_then(Weak::upgrade) {
         return Ok(shared);
     }
     let shared = Arc::new(Mutex::new(ProjectionGenerationShared::default()));
-    catalogs.insert(root.to_path_buf(), Arc::downgrade(&shared));
+    catalogs.insert(identity, Arc::downgrade(&shared));
     Ok(shared)
 }
 
@@ -447,11 +455,15 @@ impl ProjectionGenerationStore {
         let root = root.as_ref().to_path_buf();
         fs::create_dir_all(root.join("generations"))?;
         fs::create_dir_all(root.join("heads"))?;
-        sync_directory(&root)?;
+        // Existence can be left over from an interrupted creation. Persist
+        // every containing name through the admitted project boundary.
+        sync_directory_ancestors(&root)?;
         let root = fs::canonicalize(root)?;
-        let shared = shared_catalog(&root)?;
+        let captured = Arc::new(CapturedCatalog::capture(&root)?);
+        let shared = shared_catalog(captured.identity())?;
         Ok(Self {
             root,
+            captured,
             read_only: false,
             shared,
         })
@@ -466,9 +478,11 @@ impl ProjectionGenerationStore {
             )));
         }
         let root = fs::canonicalize(root)?;
-        let shared = shared_catalog(&root)?;
+        let captured = Arc::new(CapturedCatalog::capture(&root)?);
+        let shared = shared_catalog(captured.identity())?;
         Ok(Self {
             root,
+            captured,
             read_only: true,
             shared,
         })
@@ -514,7 +528,7 @@ impl ProjectionGenerationStore {
                 "sealed generation belongs to a different catalog".into(),
             ));
         }
-        let manifest = read_manifest(&self.manifest_path(&sealed.manifest.begin.identity))?;
+        let manifest = self.read_manifest(&self.manifest_path(&sealed.manifest.begin.identity))?;
         if manifest != sealed.manifest {
             return Err(ProjectionGenerationError::Conflict(
                 "sealed generation token does not match durable candidate metadata".to_string(),
@@ -524,7 +538,7 @@ impl ProjectionGenerationStore {
             &manifest.begin.identity.projection,
             &manifest.begin.identity.owner_key,
         );
-        let current = read_optional_head(&head_path)?;
+        let current = self.read_optional_head(&head_path)?;
         if let Some(current) = &current {
             validate_head_owner(current, &manifest.begin.identity)?;
             if current.manifest.begin.identity.generation == manifest.begin.identity.generation {
@@ -534,6 +548,7 @@ impl ProjectionGenerationStore {
                             .to_string(),
                     ));
                 }
+                self.stabilize_selected_head(&head_path, current)?;
                 return Ok(ProjectionGenerationPublishReport {
                     identity: manifest.begin.identity,
                     previous_generation: Some(current.manifest.begin.identity.generation.clone()),
@@ -565,9 +580,7 @@ impl ProjectionGenerationStore {
             manifest: manifest.clone(),
         };
         let bytes = encode_head(&head)?;
-        let temporary = temporary_path(&head_path, &mut shared);
-        write_synchronized(&temporary, &bytes)?;
-        durable_replace_file(&temporary, &head_path)?;
+        self.write_control(&head_path, &bytes, &mut shared)?;
         Ok(ProjectionGenerationPublishReport {
             identity: manifest.begin.identity,
             previous_generation: current.map(|head| head.manifest.begin.identity.generation),
@@ -577,7 +590,9 @@ impl ProjectionGenerationStore {
     }
 
     /// Resolves an already selected operation without opening/scanning its data
-    /// reader. This is a committed receipt, not permission for a new publish.
+    /// reader. Completes the selected head's file/namespace barriers: an
+    /// observed rename alone is not a durable receipt after a lost response.
+    /// Resolution requires writable storage; this grants no new publication.
     pub fn published_receipt(
         &self,
         sealed: &SealedProjectionGeneration,
@@ -590,7 +605,7 @@ impl ProjectionGenerationStore {
         }
         let identity = &sealed.manifest.begin.identity;
         let Some(head) =
-            read_optional_head(&self.head_path(&identity.projection, &identity.owner_key))?
+            self.read_optional_head(&self.head_path(&identity.projection, &identity.owner_key))?
         else {
             return Ok(None);
         };
@@ -603,11 +618,10 @@ impl ProjectionGenerationStore {
                 "published generation identity was reused with different content".into(),
             ));
         }
-        if read_manifest(&self.manifest_path(identity))? != head.manifest {
-            return Err(ProjectionGenerationError::Corruption(
-                "active head does not match its immutable generation manifest".into(),
-            ));
-        }
+        self.stabilize_selected_head(
+            &self.head_path(&identity.projection, &identity.owner_key),
+            &head,
+        )?;
         Ok(Some(ProjectionGenerationPublishReport {
             identity: identity.clone(),
             previous_generation: Some(identity.generation.clone()),
@@ -621,12 +635,20 @@ impl ProjectionGenerationStore {
         projection: &str,
         owner_key: &[u8],
     ) -> Result<ProjectionGenerationReader, ProjectionGenerationError> {
+        let mut shared = self.lock_shared()?;
         let head_path = self.head_path(projection, owner_key);
-        let head = read_optional_head(&head_path)?.ok_or_else(|| {
+        let head = self.read_optional_head(&head_path)?.ok_or_else(|| {
             ProjectionGenerationError::NotFound(format!(
                 "projection {projection} has no active generation for the requested owner"
             ))
         })?;
+        #[cfg(test)]
+        AFTER_ACTIVE_HEAD.with(|hook| {
+            let callback = hook.borrow_mut().take();
+            if let Some(callback) = callback {
+                callback();
+            }
+        });
         if head.manifest.begin.identity.projection != projection
             || head.manifest.begin.identity.owner_key != owner_key
         {
@@ -634,7 +656,7 @@ impl ProjectionGenerationStore {
                 "owner head hash resolved to a different owner".to_string(),
             ));
         }
-        let manifest = read_manifest(&self.manifest_path(&head.manifest.begin.identity))?;
+        let manifest = self.read_manifest(&self.manifest_path(&head.manifest.begin.identity))?;
         if manifest != head.manifest {
             return Err(ProjectionGenerationError::Corruption(
                 "active head does not match its immutable generation manifest".to_string(),
@@ -642,7 +664,6 @@ impl ProjectionGenerationStore {
         }
         let key = identity_key(&manifest.begin.identity);
         {
-            let mut shared = self.lock_shared()?;
             let count = shared.pinned.entry(key.clone()).or_default();
             *count = count.checked_add(1).ok_or_else(|| {
                 ProjectionGenerationError::Admission(
@@ -650,6 +671,7 @@ impl ProjectionGenerationStore {
                 )
             })?;
         }
+        drop(shared);
         match ProjectionGenerationReader::open(
             self.clone(),
             head.publication_commit_epoch,
@@ -670,7 +692,9 @@ impl ProjectionGenerationStore {
         &self,
         identity: &ProjectionGenerationIdentity,
     ) -> Result<ProjectionGenerationStatus, ProjectionGenerationError> {
-        let head = read_optional_head(&self.head_path(&identity.projection, &identity.owner_key))?;
+        let shared = self.lock_shared()?;
+        let head =
+            self.read_optional_head(&self.head_path(&identity.projection, &identity.owner_key))?;
         let active_generation = head
             .as_ref()
             .map(|head| head.manifest.begin.identity.generation.clone());
@@ -678,8 +702,8 @@ impl ProjectionGenerationStore {
         let manifest_path = self.manifest_path(identity);
         let data_path = self.data_path(identity);
         let key = identity_key(identity);
-        let pinned = self.lock_shared()?.pinned.contains_key(&key);
-        match read_optional_manifest(&manifest_path) {
+        let pinned = shared.pinned.contains_key(&key);
+        match self.read_optional_manifest(&manifest_path) {
             Ok(Some(manifest)) => Ok(ProjectionGenerationStatus {
                 identity: identity.clone(),
                 state: if active_generation.as_deref() == Some(identity.generation.as_str()) {
@@ -695,9 +719,9 @@ impl ProjectionGenerationStore {
                 pinned,
                 blocker: None,
             }),
-            Ok(None) if data_path.exists() => Ok(ProjectionGenerationStatus {
+            Ok(None) if self.file_exists(&data_path)? => Ok(ProjectionGenerationStatus {
                 identity: identity.clone(),
-                state: if self.lock_shared()?.open_writers.contains(&key) {
+                state: if shared.open_writers.contains(&key) {
                     ProjectionGenerationState::Staging
                 } else {
                     ProjectionGenerationState::Abandoned
@@ -742,100 +766,41 @@ impl ProjectionGenerationStore {
         self.ensure_writable()?;
         let shared = self.lock_shared()?;
         let mut report = ProjectionGenerationGcReport::default();
-        let mut candidates = fs::read_dir(self.root.join("generations"))?;
-        while report.files_scanned < limits.max_files_to_scan.get() {
-            let Some(entry) = candidates.next() else {
-                break;
-            };
-            let entry = entry?;
-            report.files_scanned = report.files_scanned.saturating_add(1);
-            let path = entry.path();
-            if !path.exists() {
-                continue;
-            }
-            if path.extension().and_then(|value| value.to_str()) == Some(DATA_SUFFIX) {
-                if path.with_extension(MANIFEST_SUFFIX).exists() {
-                    continue;
+        let directory = &self.captured.generations;
+        let context = directory.operation_context();
+        let mut stopped = false;
+        let mut failure = None;
+        let scan = directory.visit_children(
+            &context,
+            limits.max_files_to_scan.get().saturating_add(1),
+            |name| {
+                if report.files_scanned == limits.max_files_to_scan.get() {
+                    report.backlog_remaining = true;
+                    stopped = true;
+                    return Err(io::Error::other("bounded catalog reclamation stopped"));
                 }
-                let bytes = {
-                    let mut file = OpenOptions::new().read(true).open(&path)?;
-                    let (begin, _) = match read_data_header(&mut file) {
-                        Ok(header) => header,
-                        Err(_) => continue,
-                    };
-                    let key = identity_key(&begin.identity);
-                    if shared.open_writers.contains(&key) {
-                        continue;
+                report.files_scanned += 1;
+                let path = self.root.join("generations").join(name);
+                match self.reclaim_entry(&path, limits, &shared, &mut report) {
+                    Ok(true) => Ok(()),
+                    Ok(false) => {
+                        stopped = true;
+                        Err(io::Error::other("bounded catalog reclamation stopped"))
                     }
-                    if report.generations_reclaimed >= limits.max_generations_to_reclaim.get() {
-                        report.backlog_remaining = true;
-                        break;
+                    Err(error) => {
+                        failure = Some(error);
+                        Err(io::Error::other("catalog reclamation failed"))
                     }
-                    let bytes = file.metadata()?.len();
-                    if report.bytes_reclaimed.saturating_add(bytes)
-                        > u64::try_from(limits.max_bytes_to_reclaim.get()).unwrap_or(u64::MAX)
-                    {
-                        report.backlog_remaining = true;
-                        break;
-                    }
-                    bytes
-                };
-                fs::remove_file(&path)?;
-                report.generations_reclaimed = report.generations_reclaimed.saturating_add(1);
-                report.bytes_reclaimed = report.bytes_reclaimed.saturating_add(bytes);
-                continue;
-            }
-            if path.extension().and_then(|value| value.to_str()) != Some(MANIFEST_SUFFIX) {
-                continue;
-            }
-            let manifest = match read_manifest(&path) {
-                Ok(manifest) => manifest,
-                Err(_) => continue,
-            };
-            let key = identity_key(&manifest.begin.identity);
-            let head = read_optional_head(&self.head_path(
-                &manifest.begin.identity.projection,
-                &manifest.begin.identity.owner_key,
-            ))?;
-            if head.as_ref().is_some_and(|head| {
-                head.manifest.begin.identity.generation == manifest.begin.identity.generation
-            }) {
-                report.active_generations_skipped =
-                    report.active_generations_skipped.saturating_add(1);
-                continue;
-            }
-            if shared.pinned.contains_key(&key) || shared.open_writers.contains(&key) {
-                report.pinned_generations_skipped =
-                    report.pinned_generations_skipped.saturating_add(1);
-                continue;
-            }
-            if report.generations_reclaimed >= limits.max_generations_to_reclaim.get() {
-                report.backlog_remaining = true;
-                break;
-            }
-            let data_path = self.data_path(&manifest.begin.identity);
-            let bytes = fs::metadata(&path)?.len().saturating_add(
-                fs::metadata(&data_path)
-                    .map(|metadata| metadata.len())
-                    .unwrap_or(0),
-            );
-            if report.bytes_reclaimed.saturating_add(bytes)
-                > u64::try_from(limits.max_bytes_to_reclaim.get()).unwrap_or(u64::MAX)
-            {
-                report.backlog_remaining = true;
-                break;
-            }
-            if data_path.exists() {
-                fs::remove_file(&data_path)?;
-            }
-            fs::remove_file(&path)?;
-            report.generations_reclaimed = report.generations_reclaimed.saturating_add(1);
-            report.bytes_reclaimed = report.bytes_reclaimed.saturating_add(bytes);
+                }
+            },
+        );
+        if let Some(error) = failure {
+            return Err(error);
         }
-        if candidates.next().is_some() {
-            report.backlog_remaining = true;
+        if !stopped {
+            scan?;
         }
-        sync_directory(&self.root.join("generations"))?;
+        directory.sync(&context)?;
         Ok(report)
     }
 
@@ -882,6 +847,14 @@ impl ProjectionGenerationStore {
     }
 }
 
+#[cfg(test)]
+type ActiveHeadHook = std::cell::RefCell<Option<Box<dyn FnOnce()>>>;
+#[cfg(test)]
+thread_local! {
+    static AFTER_ACTIVE_HEAD: ActiveHeadHook = const { std::cell::RefCell::new(None) };
+    static FAIL_SELECTION_BARRIER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 pub struct ProjectionGenerationWriter {
     store: ProjectionGenerationStore,
     begin: ProjectionGenerationBegin,
@@ -902,7 +875,7 @@ impl ProjectionGenerationWriter {
     ) -> Result<Self, ProjectionGenerationError> {
         let data_path = store.data_path(&begin.identity);
         let manifest_path = store.manifest_path(&begin.identity);
-        let sealed = read_optional_manifest(&manifest_path)?;
+        let sealed = store.read_optional_manifest(&manifest_path)?;
         if let Some(manifest) = &sealed
             && manifest.begin != begin
         {
@@ -910,10 +883,10 @@ impl ProjectionGenerationWriter {
                 "generation identity was reused with different begin metadata".to_string(),
             ));
         }
-        let state = if data_path.exists() {
-            scan_candidate(&data_path, true, limits.max_record_bytes())?
+        let state = if store.file_exists(&data_path)? {
+            scan_candidate(&store, &data_path, true, limits.max_record_bytes())?
         } else {
-            create_candidate(&data_path, &begin)?
+            create_candidate(&store, &data_path, &begin)?
         };
         if state.begin != begin {
             return Err(ProjectionGenerationError::Conflict(
@@ -986,7 +959,13 @@ impl ProjectionGenerationWriter {
             append_record(&record, &mut encoded)?;
             previous = Some(order);
         }
-        let mut file = OpenOptions::new().append(true).open(&self.data_path)?;
+        let mut file = self.store.open_mutable_file(&self.data_path, false)?;
+        if file.metadata()?.len() != self.state.valid_bytes {
+            return Err(ProjectionGenerationError::Conflict(
+                "candidate data changed after its validated boundary; reopen for recovery".into(),
+            ));
+        }
+        file.seek(SeekFrom::Start(self.state.valid_bytes))?;
         file.write_all(&encoded)?;
         file.sync_all()?;
         for member in members {
@@ -1049,7 +1028,10 @@ impl ProjectionGenerationWriter {
                 digest
             )));
         }
-        let seek_fences = build_seek_fences(&self.data_path, self.state.valid_bytes)?;
+        let seek_fences = build_seek_fences(
+            self.store.open_file(&self.data_path)?,
+            self.state.valid_bytes,
+        )?;
         let manifest = ProjectionGenerationManifest {
             begin: self.begin.clone(),
             member_count: self.state.member_count,
@@ -1084,18 +1066,15 @@ impl ProjectionGenerationWriter {
             } else {
                 let path = self.store.manifest_path(&self.begin.identity);
                 let bytes = encode_manifest(&manifest)?;
-                let temporary = temporary_path(&path, &mut shared);
-                write_synchronized(&temporary, &bytes)?;
-                if path.exists() {
-                    let existing = read_manifest(&path)?;
+                if self.store.file_exists(&path)? {
+                    let existing = self.store.read_manifest(&path)?;
                     if existing != manifest {
                         return Err(ProjectionGenerationError::Conflict(
                             "generation manifest appeared with different metadata".to_string(),
                         ));
                     }
-                    fs::remove_file(temporary)?;
                 } else {
-                    durable_replace_file(&temporary, &path)?;
+                    self.store.write_control(&path, &bytes, &mut shared)?;
                 }
                 false
             };
@@ -1153,7 +1132,7 @@ impl ProjectionGenerationReader {
         manifest: ProjectionGenerationManifest,
         key: String,
     ) -> Result<Self, ProjectionGenerationError> {
-        let mut file = File::open(store.data_path(&manifest.begin.identity))?;
+        let mut file = store.open_file(&store.data_path(&manifest.begin.identity))?;
         let file_bytes = file.metadata()?.len();
         let (begin, data_start) = read_data_header(&mut file)?;
         if begin != manifest.begin || file_bytes != manifest.data_bytes {
@@ -1237,7 +1216,9 @@ impl ProjectionGenerationReader {
                 "projection cursor offset is outside the pinned generation".to_string(),
             ));
         }
-        let mut file = File::open(self.store.data_path(&self.manifest.begin.identity))?;
+        let mut file = self
+            .store
+            .open_file(&self.store.data_path(&self.manifest.begin.identity))?;
         file.seek(SeekFrom::Start(offset))?;
         let mut members = Vec::new();
         let mut payload_bytes = 0usize;
@@ -1288,6 +1269,7 @@ impl ProjectionGenerationReader {
 
     pub fn scrub(&self) -> Result<(), ProjectionGenerationError> {
         let state = scan_candidate(
+            &self.store,
             &self.store.data_path(&self.manifest.begin.identity),
             false,
             MAX_ENCODED_MEMBER_BYTES,
@@ -1528,6 +1510,7 @@ fn validate_rollup(
 }
 
 fn create_candidate(
+    store: &ProjectionGenerationStore,
     path: &Path,
     begin: &ProjectionGenerationBegin,
 ) -> Result<CandidateScan, ProjectionGenerationError> {
@@ -1537,10 +1520,10 @@ fn create_candidate(
     push_u32(&mut bytes, PROTOCOL_VERSION);
     push_bytes(&mut bytes, &header)?;
     push_u32(&mut bytes, crc32c(&header).get());
-    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    let mut file = store.open_mutable_file(path, true)?;
     file.write_all(&bytes)?;
     file.sync_all()?;
-    sync_parent_directory(path)?;
+    store.sync_parent(path)?;
     Ok(CandidateScan {
         begin: begin.clone(),
         member_count: 0,
@@ -1555,14 +1538,16 @@ fn create_candidate(
 }
 
 fn scan_candidate(
+    store: &ProjectionGenerationStore,
     path: &Path,
     repair_torn_tail: bool,
     max_record_bytes: usize,
 ) -> Result<CandidateScan, ProjectionGenerationError> {
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(repair_torn_tail)
-        .open(path)?;
+    let mut file = if repair_torn_tail {
+        store.open_mutable_file(path, false)?
+    } else {
+        store.open_file(path)?
+    };
     let file_len = file.metadata()?.len();
     let (begin, data_start) = read_data_header(&mut file)?;
     let mut state = CandidateScan {
@@ -1655,10 +1640,14 @@ fn read_data_header(
 }
 
 fn build_seek_fences(
-    path: &Path,
+    mut file: File,
     data_bytes: u64,
 ) -> Result<Vec<ProjectionGenerationSeekFence>, ProjectionGenerationError> {
-    let mut file = File::open(path)?;
+    if file.metadata()?.len() != data_bytes {
+        return Err(ProjectionGenerationError::Corruption(
+            "candidate data does not end at its validated sealing boundary".into(),
+        ));
+    }
     let (_, data_start) = read_data_header(&mut file)?;
     if data_bytes < data_start {
         return Err(ProjectionGenerationError::Corruption(
@@ -1837,44 +1826,7 @@ fn release_pin(shared: &mut ProjectionGenerationShared, key: &str) {
     }
 }
 
-fn write_synchronized(path: &Path, bytes: &[u8]) -> Result<(), ProjectionGenerationError> {
-    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    Ok(())
-}
-
-fn read_optional_manifest(
-    path: &Path,
-) -> Result<Option<ProjectionGenerationManifest>, ProjectionGenerationError> {
-    match read_bounded_file(path, MAX_ENVELOPE_BYTES) {
-        Ok(bytes) => decode_manifest(&bytes).map(Some),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error.into()),
-    }
-}
-
-fn read_manifest(path: &Path) -> Result<ProjectionGenerationManifest, ProjectionGenerationError> {
-    read_optional_manifest(path)?.ok_or_else(|| {
-        ProjectionGenerationError::NotFound(format!(
-            "generation manifest {} is missing",
-            path.display()
-        ))
-    })
-}
-
-fn read_optional_head(
-    path: &Path,
-) -> Result<Option<ProjectionGenerationHead>, ProjectionGenerationError> {
-    match read_bounded_file(path, MAX_ENVELOPE_BYTES) {
-        Ok(bytes) => decode_head(&bytes).map(Some),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error.into()),
-    }
-}
-
-fn read_bounded_file(path: &Path, max_bytes: usize) -> io::Result<Vec<u8>> {
-    let file = File::open(path)?;
+fn read_bounded_file(file: File, path: &Path, max_bytes: usize) -> io::Result<Vec<u8>> {
     let file_len = file.metadata()?.len();
     if file_len > u64::try_from(max_bytes).unwrap_or(u64::MAX) {
         return Err(io::Error::new(
@@ -2294,6 +2246,8 @@ impl<'a> Decoder<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod captured_catalog;
 
     fn path(name: &str) -> PathBuf {
         let nonce = std::time::SystemTime::now()
