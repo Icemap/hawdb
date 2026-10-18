@@ -195,28 +195,15 @@ pub(super) struct KnowledgeReadEdge {
     _allocation: Box<dyn GraphReadAllocation>,
 }
 
-pub(super) struct KnowledgeReadEdges {
-    pub(super) edges: Vec<KnowledgeReadEdge>,
-    _allocation: QueryMemoryLease,
-}
-
-pub(super) fn expansion_edges(
+pub(super) fn visit_expansion_edges(
     store: &impl crate::executor::ExecutionStore,
     node_id: NodeId,
-    max_edges_per_direction: usize,
     budget_bytes: usize,
     account: &QueryMemoryAccount,
-) -> Result<KnowledgeReadEdges> {
-    let mut output = KnowledgeReadEdges {
-        edges: Vec::new(),
-        _allocation: account.reserve(0)?,
-    };
-    if max_edges_per_direction == 0 {
-        return Ok(output);
-    }
-    let mut seen = BTreeSet::new();
+    mut visit: impl FnMut(KnowledgeReadEdge) -> Result<ScanControl>,
+) -> Result<ScanControl> {
     for direction in [AdjacencyDirection::Outgoing, AdjacencyDirection::Incoming] {
-        let mut count = 0usize;
+        let mut stopped = false;
         store.visit_ordered_adjacent_relationships_with_allocation(
             node_id,
             None,
@@ -228,47 +215,24 @@ pub(super) fn expansion_edges(
             &mut |bytes| admit_graph_read(account, None, bytes).map(Some),
             &mut |relationship| {
                 let (relationship, allocation) = relationship.into_parts();
-                count += 1;
-                if !seen.contains(&relationship.id) {
-                    output
-                        ._allocation
-                        .grow(128 + 11 * std::mem::size_of::<RelId>())?;
-                    if output.edges.len() == output.edges.capacity() {
-                        let capacity = output
-                            .edges
-                            .capacity()
-                            .checked_mul(2)
-                            .map(|capacity| capacity.max(4))
-                            .ok_or_else(|| {
-                                HawDBError::Execution("knowledge edge capacity overflow".into())
-                            })?;
-                        let bytes = (capacity - output.edges.capacity())
-                            .checked_mul(std::mem::size_of::<KnowledgeReadEdge>())
-                            .ok_or_else(|| {
-                                HawDBError::Execution("knowledge edge capacity overflow".into())
-                            })?;
-                        output._allocation.grow(bytes)?;
-                        output.edges.reserve_exact(capacity - output.edges.len());
-                    }
-                    seen.insert(relationship.id);
-                    let next_node = match direction {
-                        AdjacencyDirection::Outgoing => relationship.target,
-                        AdjacencyDirection::Incoming => relationship.source,
-                    };
-                    output.edges.push(KnowledgeReadEdge {
-                        direction: knowledge_path_direction_for_adjacency(direction),
-                        next_node,
-                        relationship,
-                        _allocation: allocation,
-                    });
-                }
-                Ok(if count >= max_edges_per_direction {
-                    ScanControl::Stop
-                } else {
-                    ScanControl::Continue
-                })
+                let next_node = match direction {
+                    AdjacencyDirection::Outgoing => relationship.target,
+                    AdjacencyDirection::Incoming => relationship.source,
+                };
+                // The caller applies scope and deduplication before its output limit.
+                let control = visit(KnowledgeReadEdge {
+                    direction: knowledge_path_direction_for_adjacency(direction),
+                    next_node,
+                    relationship,
+                    _allocation: allocation,
+                })?;
+                stopped = control == ScanControl::Stop;
+                Ok(control)
             },
         )?;
+        if stopped {
+            return Ok(ScanControl::Stop);
+        }
     }
-    Ok(output)
+    Ok(ScanControl::Continue)
 }

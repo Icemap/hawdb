@@ -19,8 +19,8 @@ use crate::nowledge_mem::{
 use crate::store::DurabilityPolicy;
 use crate::{
     AdaptiveVectorBackendPolicy, Database, DatabaseConfig, DatabaseReadTransaction, HawDBError,
-    QueryOutput, QueryStreamOptions, Result, RuntimeCapabilities, SearchIndex,
-    SearchRangeReadConfig, Value,
+    QueryOutput, QueryStreamOptions, Result, RetainedQueryCursor, RetainedQueryError,
+    RetainedQueryOptions, RuntimeCapabilities, SearchIndex, SearchRangeReadConfig, Value,
 };
 use hawdb_core::{RuntimeCancellationReason, RuntimeTaskContext};
 use hawdb_qos::{
@@ -415,6 +415,24 @@ impl HawDBEmbedded {
         )
     }
 
+    /// Experimental immutable numeric batches under this facade's shared governor.
+    /// Source/planning workspace qualification remains incomplete.
+    pub fn query_with_params_retained(
+        &self,
+        cypher_text: &str,
+        parameters: &BTreeMap<String, Value>,
+        options: RetainedQueryOptions,
+    ) -> std::result::Result<RetainedQueryCursor, RetainedQueryError> {
+        if self.transaction.is_some() {
+            return Err(HawDBError::Execution(
+                "a user transaction is open on this database".into(),
+            )
+            .into());
+        }
+        self.database
+            .query_with_params_retained(cypher_text, parameters, options)
+    }
+
     pub fn query_with_params_admitted_context(
         &mut self,
         cypher_text: &str,
@@ -460,7 +478,7 @@ impl HawDBEmbedded {
                 &execution_task_context,
             )
         } else {
-            let max_rows = self.database.config().max_read_result_rows;
+            let max_rows = self.database.config().read_result_row_limit();
             let max_payload_bytes = usize::try_from(request.result_bytes).unwrap_or(usize::MAX);
             self.database
                 .begin_read_transaction_with_shared_plan_cache()?

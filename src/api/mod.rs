@@ -105,6 +105,12 @@ pub(crate) mod publication;
 pub use publication::{DatabasePublicationOwner, DatabasePublicationState};
 mod query_request;
 mod query_runtime;
+mod retained_query;
+pub use retained_query::{
+    RetainedColumnRole, RetainedColumnSchema, RetainedColumnType, RetainedColumnValues,
+    RetainedQueryBatch, RetainedQueryCursor, RetainedQueryError, RetainedQueryOptions,
+    RetainedQueryProfile, RetainedQueryStatus,
+};
 mod resource_profile;
 mod runtime_cell;
 mod schema_guidance;
@@ -291,6 +297,7 @@ pub struct Database {
         BTreeMap<u64, Option<Arc<hawdb_storage::branch_root_pins::RootPin>>>,
     telemetry: Option<Arc<dyn TelemetrySink>>,
     runtime_governor: Option<hawdb_qos::RuntimeGovernor>,
+    retained_runtime: Arc<retained_query::RetainedRuntime>,
 }
 
 pub(crate) struct DatabaseCheckpointSource {
@@ -343,6 +350,8 @@ pub struct DatabaseConfig {
     pub automatic_checkpoint_max_age: std::time::Duration,
     /// Bounded pending-child recovery during a writable project open.
     pub branch_create_recovery_limits: BranchCreateRecoveryLimits,
+    /// Optional host-wide read row ceiling. `Some(0)` and `None` (the default) mean unlimited.
+    /// Session settings may lower a positive ceiling, but cannot raise it.
     pub max_read_result_rows: Option<usize>,
     pub max_read_result_payload_bytes: Option<usize>,
     pub execution_memory: executor::ExecutionMemoryConfig,
@@ -413,7 +422,8 @@ pub struct DatabaseConfig {
     pub adaptive_vector_backend_policy: hawdb_optimizer::AdaptiveVectorBackendPolicy,
 }
 
-pub const DEFAULT_MAX_READ_RESULT_ROWS: usize = 100_000;
+/// Default host row-count ceiling: no ceiling. Byte budgets remain active.
+pub const DEFAULT_MAX_READ_RESULT_ROWS: Option<usize> = None;
 pub const DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES: usize = 64 * 1024 * 1024;
 
 fn restrictive_query_limit(configured: Option<usize>, requested: Option<usize>) -> Option<usize> {
@@ -430,13 +440,12 @@ fn relational_query_limits_with_payload(
     max_rows: Option<usize>,
     max_payload_bytes: Option<usize>,
 ) -> crate::relational_sql::RelationalQueryLimits {
-    let max_output_rows = max_rows.unwrap_or(DEFAULT_MAX_READ_RESULT_ROWS);
+    let max_output_rows =
+        restrictive_query_limit(config.read_result_row_limit(), max_rows).unwrap_or(usize::MAX);
     let max_output_payload_bytes =
         restrictive_query_limit(config.max_read_result_payload_bytes, max_payload_bytes)
             .unwrap_or(DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES);
-    let max_intermediate_rows = config
-        .max_read_result_rows
-        .unwrap_or(DEFAULT_MAX_READ_RESULT_ROWS);
+    let max_intermediate_rows = config.read_result_row_limit().unwrap_or(usize::MAX);
     // A blocking relational query first reads the bounded scan projection and
     // then re-reads at most `max_output_rows` selected locators with the final
     // output projection. Budget both phases explicitly so a scan that exactly
@@ -554,7 +563,33 @@ fn relational_index_read_mode<
     }
 }
 
+/// Per-session result policy. Independent sessions start with no row-count limit.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SessionConfig {
+    /// Maximum result rows; zero means no session row-count limit.
+    /// Payload, execution-memory and explicit host ceilings remain enforced.
+    /// A positive ceiling at or above usize::MAX imposes no additional bound:
+    /// no in-process result can exceed platform row capacity. On wasm32 this
+    /// includes values such as 5,000,000,000; positive host ceilings still apply.
+    pub max_result_rows: u64,
+}
+
+impl SessionConfig {
+    fn row_limit(self) -> Option<usize> {
+        // No representable result can exceed usize::MAX rows. Avoid asking
+        // the execution detector to add one to that effective infinity.
+        (self.max_result_rows != 0)
+            .then(|| usize::try_from(self.max_result_rows).unwrap_or(usize::MAX))
+            .filter(|rows| *rows != usize::MAX)
+    }
+}
+
 impl DatabaseConfig {
+    /// Effective host row-count ceiling. Both zero and `None` disable it.
+    pub fn read_result_row_limit(&self) -> Option<usize> {
+        self.max_read_result_rows.filter(|rows| *rows != 0)
+    }
+
     fn wal_replay_config(&self) -> WalReplayConfig {
         WalReplayConfig {
             max_open_files: self.max_open_files,
@@ -584,7 +619,7 @@ impl Default for DatabaseConfig {
             read_only: false,
             automatic_checkpoint_max_age: std::time::Duration::from_secs(60),
             branch_create_recovery_limits: BranchCreateRecoveryLimits::default(),
-            max_read_result_rows: Some(DEFAULT_MAX_READ_RESULT_ROWS),
+            max_read_result_rows: DEFAULT_MAX_READ_RESULT_ROWS,
             max_read_result_payload_bytes: Some(DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES),
             execution_memory: executor::ExecutionMemoryConfig::default(),
             mutation_limits: hawdb_storage::mutation::MutationLimits::default(),
@@ -651,7 +686,7 @@ pub(crate) fn system_runtime_snapshot(
 ) -> system_sql::SystemRuntimeSnapshot {
     system_sql::SystemRuntimeSnapshot::new(
         config.read_only,
-        config.max_read_result_rows,
+        config.read_result_row_limit(),
         config.max_read_result_payload_bytes,
         config.storage_residency_mode,
         config.relational_index_mode,
@@ -816,6 +851,7 @@ pub struct DatabaseTransaction<'a> {
 
 #[derive(Debug)]
 pub(super) struct DatabaseTransactionRuntime {
+    session_config: SessionConfig,
     optimizer: CascadesOptimizer,
     plan_cache: SharedState<PlanCache>,
     relational_plan_template_cache: Arc<crate::relational_sql::RelationalPlanTemplateCache>,
@@ -859,6 +895,7 @@ pub(super) struct GraphTransactionStatementOutcome {
 
 #[derive(Debug)]
 pub struct DatabaseSession<'a> {
+    config: SessionConfig,
     db: &'a mut Database,
     graph_transaction: Option<GraphMutationTransaction>,
     transaction_runtime: Option<DatabaseTransactionRuntime>,
@@ -884,6 +921,7 @@ impl std::ops::Deref for ReadPlanCache {
 
 #[derive(Debug)]
 pub struct DatabaseReadTransaction<S: crate::executor::ExecutionStore = GraphStore> {
+    session_config: SessionConfig,
     catalog: Catalog,
     store: S,
     published_read_view: PublishedReadView,
@@ -899,6 +937,7 @@ pub struct DatabaseReadTransaction<S: crate::executor::ExecutionStore = GraphSto
     projection_relational: Option<ProjectionRelationalReadSnapshot>,
     task_context: Option<hawdb_core::RuntimeTaskContext>,
     _pin: Arc<ReaderPin>,
+    retained_runtime: Arc<retained_query::RetainedRuntime>,
 }
 
 /// An immutable canonical view that can create independent query contexts.
@@ -929,6 +968,7 @@ impl DatabaseReadSnapshot {
         self.ensure_usable()?;
         let source = &self.0;
         Ok(DatabaseReadTransaction {
+            session_config: source.session_config,
             catalog: source.catalog.clone(),
             store: source.store.snapshot_for_read(),
             published_read_view: source.published_read_view,
@@ -946,6 +986,7 @@ impl DatabaseReadSnapshot {
             projection_relational: None,
             task_context,
             _pin: Arc::clone(&source._pin),
+            retained_runtime: Arc::clone(&source.retained_runtime),
         })
     }
 }
@@ -1044,6 +1085,7 @@ impl Default for Database {
             derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
+            retained_runtime: Arc::new(retained_query::RetainedRuntime::default()),
             branch_create_recovery: None,
         }
     }
@@ -1147,6 +1189,7 @@ impl Database {
             derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
+            retained_runtime: Arc::new(retained_query::RetainedRuntime::default()),
             branch_create_recovery: None,
         }
     }
@@ -1325,6 +1368,7 @@ impl Database {
             derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
+            retained_runtime: Arc::new(retained_query::RetainedRuntime::default()),
             branch_create_recovery: None,
         };
         if database.config.read_only {
@@ -1439,6 +1483,7 @@ impl Database {
             derived_artifact_root_pins: BTreeMap::new(),
             telemetry: None,
             runtime_governor: None,
+            retained_runtime: Arc::new(retained_query::RetainedRuntime::default()),
             branch_create_recovery,
         })
     }
@@ -1636,6 +1681,7 @@ impl Database {
     pub fn session(&mut self) -> DatabaseSession<'_> {
         let system_variables = self.system_variables.clone();
         DatabaseSession {
+            config: SessionConfig::default(),
             db: self,
             graph_transaction: None,
             transaction_runtime: None,
@@ -1750,6 +1796,7 @@ impl Database {
         Ok({
             let (published_read_view, pin) = Self::pin_runtime_read_view(&runtime);
             DatabaseReadTransaction {
+                session_config: SessionConfig::default(),
                 catalog: runtime.catalog.clone(),
                 store: runtime.store.snapshot_for_read(),
                 published_read_view,
@@ -1772,6 +1819,7 @@ impl Database {
                 projection_relational,
                 task_context,
                 _pin: Arc::new(pin),
+                retained_runtime: Arc::clone(&self.retained_runtime),
             }
         })
     }
@@ -1900,7 +1948,7 @@ impl Database {
                     &self.config.execution_memory,
                 )
                 .with_output_limits(
-                    self.config.max_read_result_rows,
+                    self.config.read_result_row_limit(),
                     self.config.max_read_result_payload_bytes,
                 ),
                 &mut external,
@@ -2085,7 +2133,7 @@ impl Database {
     ) -> Result<AppendSegmentReadOutput> {
         let max_rows = self
             .config
-            .max_read_result_rows
+            .read_result_row_limit()
             .map_or(max_rows, |configured| configured.min(max_rows));
         let max_payload_bytes = self
             .config
@@ -2104,7 +2152,7 @@ impl Database {
     ) -> Result<AppendSegmentReadOutput> {
         let max_rows = self
             .config
-            .max_read_result_rows
+            .read_result_row_limit()
             .map_or(max_rows, |configured| configured.min(max_rows));
         let max_payload_bytes = self
             .config
@@ -2424,6 +2472,7 @@ impl Database {
     /// embedding layers that own the governor (`HawDBEmbedded`,
     /// `NowledgeMemGraph`); a second governor is never constructed here.
     pub fn set_runtime_governor(&mut self, governor: hawdb_qos::RuntimeGovernor) {
+        self.retained_runtime.configure(governor.clone());
         if let Err(error) = self.runtime.set_automatic_governor(governor.clone())
             && let Some(runtime) = self.runtime.peek()
         {
@@ -5569,67 +5618,68 @@ impl<S: crate::executor::ExecutionStore> KnowledgeRetrievalPipelineContext<'_, S
                 &mut reported_dense_groups,
                 &mut fanout_reasons,
             );
-            let edges = knowledge_graph_read::expansion_edges(
+            let control = knowledge_graph_read::visit_expansion_edges(
                 self.store,
                 current_node,
-                graph_context_limit
-                    .saturating_sub(paths.len())
-                    .saturating_add(1),
                 self.query_memory_budget.get(),
                 self.account,
-            )?;
-            for edge in &edges.edges {
-                if !self.graph_expansion_node_is_authorized(edge.next_node, metadata_filters)? {
-                    continue;
-                }
-                let _lookup = self.account.reserve(seed_hit_id.len())?;
-                let relationship_key = (seed_hit_id.clone(), edge.relationship.id.0);
-                if seen_relationships.contains(&relationship_key) {
-                    continue;
-                }
-                temporary.reserve(
-                    seed_hit_id
-                        .len()
-                        .saturating_add(128 + 11 * std::mem::size_of::<(String, u64)>()),
-                )?;
-                seen_relationships.insert(relationship_key);
-                if paths.len() >= graph_context_limit {
-                    let detail = KnowledgeFanoutReasonDetail::graph_context_limit(
-                        graph_context_limit,
-                        &seed_hit_id,
-                    );
-                    truncation_reasons.push(detail.message.clone());
-                    fanout_reasons.push(detail);
-                    let expanded_relationship_count = paths.len();
-                    return Ok(KnowledgeGraphContextSearchOutput {
-                        paths,
-                        input_seed_count,
-                        expanded_relationship_count,
-                        fanout_reason_details: fanout_reasons,
-                        truncation_reasons,
+                |edge| {
+                    if !self.graph_expansion_node_is_authorized(edge.next_node, metadata_filters)? {
+                        return Ok(hawdb_executor::store::ScanControl::Continue);
+                    }
+                    let _lookup = self.account.reserve(seed_hit_id.len())?;
+                    let relationship_key = (seed_hit_id.clone(), edge.relationship.id.0);
+                    if seen_relationships.contains(&relationship_key) {
+                        return Ok(hawdb_executor::store::ScanControl::Continue);
+                    }
+                    temporary.reserve(
+                        seed_hit_id
+                            .len()
+                            .saturating_add(128 + 11 * std::mem::size_of::<(String, u64)>()),
+                    )?;
+                    seen_relationships.insert(relationship_key);
+                    if paths.len() >= graph_context_limit {
+                        let detail = KnowledgeFanoutReasonDetail::graph_context_limit(
+                            graph_context_limit,
+                            &seed_hit_id,
+                        );
+                        truncation_reasons.push(detail.message.clone());
+                        fanout_reasons.push(detail);
+                        return Ok(hawdb_executor::store::ScanControl::Stop);
+                    }
+                    self.owned.reserve_vec(&mut paths)?;
+                    self.owned.reserve(seed_hit_id.len())?;
+                    paths.push(KnowledgeGraphContextCandidate {
+                        seed_hit_id: seed_hit_id.clone(),
+                        hop: depth + 1,
+                        direction: edge.direction,
+                        relationship_id: edge.relationship.id,
+                        source_node_id: edge.relationship.source,
+                        target_node_id: edge.relationship.target,
                     });
-                }
-                self.owned.reserve_vec(&mut paths)?;
-                self.owned.reserve(seed_hit_id.len())?;
-                paths.push(KnowledgeGraphContextCandidate {
-                    seed_hit_id: seed_hit_id.clone(),
-                    hop: depth + 1,
-                    direction: edge.direction,
-                    relationship_id: edge.relationship.id,
-                    source_node_id: edge.relationship.source,
-                    target_node_id: edge.relationship.target,
+                    let _lookup = self.account.reserve(seed_hit_id.len())?;
+                    let frontier_key = (seed_hit_id.clone(), edge.next_node.0);
+                    if !seen_frontier_nodes.contains(&frontier_key) {
+                        temporary.reserve(seed_hit_id.len().saturating_mul(2).saturating_add(
+                            128 + 11 * std::mem::size_of::<(String, u64)>()
+                                + 2 * std::mem::size_of::<(String, NodeId, usize)>(),
+                        ))?;
+                        seen_frontier_nodes.insert(frontier_key);
+                        frontier.reserve_exact(1);
+                        frontier.push_back((seed_hit_id.clone(), edge.next_node, depth + 1));
+                    }
+                    Ok(hawdb_executor::store::ScanControl::Continue)
+                },
+            )?;
+            if control == hawdb_executor::store::ScanControl::Stop {
+                let expanded_relationship_count = paths.len();
+                return Ok(KnowledgeGraphContextSearchOutput {
+                    paths,
+                    input_seed_count,
+                    expanded_relationship_count,
+                    fanout_reason_details: fanout_reasons,
+                    truncation_reasons,
                 });
-                let _lookup = self.account.reserve(seed_hit_id.len())?;
-                let frontier_key = (seed_hit_id.clone(), edge.next_node.0);
-                if !seen_frontier_nodes.contains(&frontier_key) {
-                    temporary.reserve(seed_hit_id.len().saturating_mul(2).saturating_add(
-                        128 + 11 * std::mem::size_of::<(String, u64)>()
-                            + 2 * std::mem::size_of::<(String, NodeId, usize)>(),
-                    ))?;
-                    seen_frontier_nodes.insert(frontier_key);
-                    frontier.reserve_exact(1);
-                    frontier.push_back((seed_hit_id.clone(), edge.next_node, depth + 1));
-                }
             }
         }
 
@@ -20409,15 +20459,21 @@ impl<'a> NowledgeGraphAdapter<'a> {
 
 impl DatabaseTransactionRuntime {
     fn from_database(db: &Database) -> Result<Self> {
-        Self::from_database_with_system_variables(db, db.system_variables.clone())
+        Self::from_database_with_system_variables(
+            db,
+            db.system_variables.clone(),
+            SessionConfig::default(),
+        )
     }
 
     fn from_database_with_system_variables(
         db: &Database,
         system_variables: QuerySystemVariables,
+        session_config: SessionConfig,
     ) -> Result<Self> {
         let runtime = db.runtime.get()?;
         Ok(Self {
+            session_config,
             optimizer: runtime.optimizer.clone(),
             plan_cache: SharedState::new(PlanCache::new(db.config.max_plan_cache_entries)),
             relational_plan_template_cache: Arc::clone(&runtime.relational_plan_template_cache),
@@ -20429,6 +20485,39 @@ impl DatabaseTransactionRuntime {
             branch_catalog_path: db.branch_catalog_path_from_runtime(&runtime).ok(),
             current_branch: db.current_branch_from_runtime(&runtime),
         })
+    }
+
+    fn read_result_row_limit(&self) -> Option<usize> {
+        restrictive_query_limit(
+            self.config.read_result_row_limit(),
+            self.session_config.row_limit(),
+        )
+    }
+
+    fn validate_result_rows(&self, rows: usize) -> Result<()> {
+        if let Some(limit) = self.read_result_row_limit()
+            && rows > limit
+        {
+            return Err(HawDBError::read_budget_exceeded(
+                crate::ReadBudgetResource::Rows,
+                limit,
+                "session result exceeds the effective host/session row ceiling",
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_result_payload(&self, bytes: usize, ceiling: Option<usize>) -> Result<()> {
+        if let Some(limit) = ceiling
+            && bytes > limit
+        {
+            return Err(HawDBError::read_budget_exceeded(
+                crate::ReadBudgetResource::PayloadBytes,
+                limit,
+                "SQL mutation result exceeds the effective host/admitted payload ceiling",
+            ));
+        }
+        Ok(())
     }
 
     fn ensure_writable(&self, store: &GraphStore) -> Result<()> {
@@ -20651,10 +20740,10 @@ fn execute_graph_transaction_statement(
                 &summary.rows,
                 runtime.config.mutation_limits,
             )?;
+            let rows = returned_rows.unwrap_or_default();
+            runtime.validate_result_rows(rows.len())?;
             Ok((
-                QueryOutput {
-                    rows: returned_rows.unwrap_or_default().into(),
-                },
+                QueryOutput { rows: rows.into() },
                 transaction.lock_footprint_since(&statement_savepoint)?,
             ))
         })();
@@ -20681,7 +20770,7 @@ fn execute_graph_transaction_statement(
                 &runtime.config.execution_memory,
             )
             .with_output_limits(
-                runtime.config.max_read_result_rows,
+                runtime.read_result_row_limit(),
                 runtime.config.max_read_result_payload_bytes,
             )
             .with_optional_task_context(task_context),
@@ -20828,7 +20917,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
             "explicit transaction",
             statement,
             parameters,
-            runtime.config.max_read_result_rows,
+            runtime.read_result_row_limit(),
             max_read_result_payload_bytes,
         )
         .map(sql_query_result);
@@ -20855,7 +20944,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         return system_sql::query_sql_with_params(
             sql_text,
             parameters,
-            runtime.config.max_read_result_rows,
+            runtime.read_result_row_limit(),
             max_read_result_payload_bytes,
             &system_sql::SystemSqlContext {
                 catalog: graph_transaction.catalog(),
@@ -20894,7 +20983,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         &prepared.template,
         parameters,
         &state.append_state,
-        runtime.config.max_read_result_rows.unwrap_or(usize::MAX),
+        runtime.read_result_row_limit().unwrap_or(usize::MAX),
     )? {
         let store = state
             .graph_transaction
@@ -20917,7 +21006,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
         &prepared.template,
         parameters,
         &state.append_state,
-        runtime.config.max_read_result_rows.unwrap_or(usize::MAX),
+        runtime.read_result_row_limit().unwrap_or(usize::MAX),
     )? {
         let report = if plan.analyze {
             let store = state
@@ -20944,7 +21033,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
             crate::relational_sql::format_append_explain(&plan, report.as_ref()),
             &runtime.config,
             QueryStreamOptions {
-                max_rows: runtime.config.max_read_result_rows,
+                max_rows: runtime.read_result_row_limit(),
                 max_payload_bytes: max_read_result_payload_bytes,
             },
             options.task_context,
@@ -20995,7 +21084,7 @@ pub(super) fn execute_database_transaction_prepared_sql(
             crate::relational_sql::RelationalQueryReadModes::new(index_read_mode, row_read_mode),
             relational_query_resource_context(
                 &runtime.config,
-                runtime.config.max_read_result_rows,
+                runtime.read_result_row_limit(),
                 max_read_result_payload_bytes,
                 options.task_context,
             ),
@@ -21129,6 +21218,13 @@ pub(super) fn execute_database_transaction_prepared_sql(
             )
         })
         .transpose()?;
+    if let Some(mutation) = &mutation {
+        runtime.validate_result_rows(mutation.rows.len())?;
+        runtime.validate_result_payload(
+            mutation.rows.payload_bytes(),
+            max_read_result_payload_bytes,
+        )?;
+    }
     let next_relational_rows = if let Some(row_capture) = pending_row_capture {
         let rows = match &state.relational_rows {
             Ok(Some(rows)) => rows,
@@ -21440,6 +21536,10 @@ fn commit_database_transaction_state_inner(
 }
 
 impl DatabaseTransaction<'_> {
+    pub(crate) fn apply_session_config(&mut self, config: SessionConfig) {
+        self.runtime.session_config = config;
+    }
+
     pub fn query(&mut self, cypher_text: &str) -> Result<QueryOutput> {
         self.query_with_params(cypher_text, &BTreeMap::new())
     }
@@ -21529,6 +21629,23 @@ impl DatabaseTransaction<'_> {
 }
 
 impl DatabaseSession<'_> {
+    pub fn config(&self) -> &SessionConfig {
+        &self.config
+    }
+
+    /// Changes this session only. Active transactions retain the settings
+    /// captured at BEGIN; the next transaction inherits the new settings.
+    pub fn set_max_result_rows(&mut self, max_result_rows: u64) {
+        self.config.max_result_rows = max_result_rows;
+    }
+
+    fn row_limit(&self) -> Option<usize> {
+        restrictive_query_limit(
+            self.db.config.read_result_row_limit(),
+            self.config.row_limit(),
+        )
+    }
+
     pub fn query_sql(&mut self, sql_text: &str) -> Result<QueryOutput> {
         self.query_sql_with_params(sql_text, &[])
     }
@@ -21539,7 +21656,16 @@ impl DatabaseSession<'_> {
         parameters: &[Value],
     ) -> Result<QueryOutput> {
         if self.graph_transaction.is_none() {
-            return self.db.query_sql_with_params(sql_text, parameters);
+            let row_limit = self.row_limit();
+            return self.db.query_sql_with_params_options_and_system_variables(
+                sql_text,
+                parameters,
+                QueryStreamOptions {
+                    max_rows: row_limit,
+                    max_payload_bytes: self.db.config.max_read_result_payload_bytes,
+                },
+                self.system_variables.clone(),
+            );
         }
         let prepared = self
             .db
@@ -21558,13 +21684,29 @@ impl DatabaseSession<'_> {
                 "explicit transaction",
                 statement,
                 parameters,
-                runtime.config.max_read_result_rows,
+                runtime.read_result_row_limit(),
                 runtime.config.max_read_result_payload_bytes,
             );
         }
         Err(HawDBError::Execution(
             "SQL data statements are unavailable in an explicit Cypher session transaction".into(),
         ))
+    }
+
+    /// Opens a retained numeric cursor using this session's row ceiling.
+    pub fn query_with_params_retained(
+        &self,
+        cypher: &str,
+        parameters: &BTreeMap<String, Value>,
+        mut options: RetainedQueryOptions,
+    ) -> std::result::Result<RetainedQueryCursor, RetainedQueryError> {
+        if self.graph_transaction.is_some() {
+            return Err(RetainedQueryError::UnsupportedPlan);
+        }
+        options.max_result_rows =
+            restrictive_query_limit(self.row_limit(), options.max_result_rows);
+        self.db
+            .query_with_params_retained(cypher, parameters, options)
     }
 
     pub fn system_variables(&self) -> &QuerySystemVariables {
@@ -21632,6 +21774,7 @@ impl DatabaseSession<'_> {
                     DatabaseTransactionRuntime::from_database_with_system_variables(
                         self.db,
                         self.system_variables.clone(),
+                        self.config,
                     )?,
                 );
                 let branch_runtime = self.db.runtime.get()?;
@@ -21651,7 +21794,15 @@ impl DatabaseSession<'_> {
                         "COMMIT requires an active transaction".to_string(),
                     ));
                 };
-                self.transaction_runtime.take();
+                let runtime = self.transaction_runtime.take().ok_or_else(|| {
+                    HawDBError::StorageIntegrity("active session transaction has no runtime".into())
+                })?;
+                let mut mutation_limits = self.db.config.mutation_limits;
+                // Graph summaries keep the MutationLimits payload contract;
+                // storage's MutationCommitLimitTracker checks it before WAL publication.
+                if let Some(limit) = runtime.read_result_row_limit().and_then(NonZeroUsize::new) {
+                    mutation_limits.max_result_rows = mutation_limits.max_result_rows.min(limit);
+                }
                 self.db.ensure_writable()?;
                 let mut branch_runtime_access = self.db.runtime.get_mut()?;
                 let branch_runtime = &mut *branch_runtime_access;
@@ -21661,7 +21812,7 @@ impl DatabaseSession<'_> {
                         &mut branch_runtime.catalog,
                         transaction,
                         hawdb_storage::relational::RelationalTransaction::default(),
-                        self.db.config.mutation_limits,
+                        mutation_limits,
                     )?;
                 Ok(QueryOutput {
                     rows: summary.rows.into(),
@@ -21723,7 +21874,14 @@ impl DatabaseSession<'_> {
             }
             _ => {
                 query_work_request_for_statement(&self.system_variables, &statement)?;
-                self.db.query_with_params(cypher_text, parameters)
+                self.db.query_request(
+                    QueryRequest::new(cypher_text)
+                        .with_params(parameters)
+                        .with_output_limits(QueryStreamOptions {
+                            max_rows: self.row_limit(),
+                            max_payload_bytes: None,
+                        }),
+                )
             }
         }
     }
@@ -21739,7 +21897,8 @@ impl DatabaseSession<'_> {
         let optimized =
             self.db
                 .optimized_explain_query_plan(cypher_text, &explain.statement, parameters)?;
-        let options = query_runtime::QueryExecutionOptions::for_bounded_read(None, None, None);
+        let options =
+            query_runtime::QueryExecutionOptions::for_bounded_read(self.row_limit(), None, None);
         let inner_statement_kind = statement_kind(statement_body(&explain.statement));
         if explain.analyze {
             if executor::is_mutation_plan(&optimized.physical_plan)? {
@@ -21747,6 +21906,7 @@ impl DatabaseSession<'_> {
                     "EXPLAIN ANALYZE only supports read queries".to_string(),
                 ));
             }
+            let row_limit = self.row_limit();
             let mut external = executor::NoExternalReadOperator;
             let mut branch_runtime_access = self.db.runtime.get_mut()?;
             let branch_runtime = &mut *branch_runtime_access;
@@ -21756,10 +21916,7 @@ impl DatabaseSession<'_> {
                     parameters,
                     &self.db.config.execution_memory,
                 )
-                .with_output_limits(
-                    self.db.config.max_read_result_rows,
-                    self.db.config.max_read_result_payload_bytes,
-                ),
+                .with_output_limits(row_limit, self.db.config.max_read_result_payload_bytes),
                 executor::ExecutionResources::new(
                     &mut branch_runtime.catalog,
                     &mut branch_runtime.store,
@@ -21884,6 +22041,17 @@ struct DatabaseReadSqlOptions<'a> {
 }
 
 impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
+    fn read_result_row_limit(&self) -> Option<usize> {
+        restrictive_query_limit(
+            self.config.read_result_row_limit(),
+            self.session_config.row_limit(),
+        )
+    }
+
+    pub(crate) fn apply_session_config(&mut self, config: SessionConfig) {
+        self.session_config = config;
+    }
+
     pub fn commit_epoch(&self) -> u64 {
         self.published_read_view.visible_commit_epoch()
     }
@@ -21901,7 +22069,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> Result<QueryOutput> {
-        self.query_with_params_bounded(cypher_text, parameters, self.config.max_read_result_rows)
+        self.query_with_params_bounded(cypher_text, parameters, self.read_result_row_limit())
     }
 
     pub fn query_with_params_context(
@@ -21914,7 +22082,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             .query_with_params_bounded_profile_internal(
                 cypher_text,
                 parameters,
-                self.config.max_read_result_rows,
+                self.read_result_row_limit(),
                 None,
                 Some(task_context),
             )?
@@ -21954,7 +22122,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 &cypher_text,
                 prepared,
                 parameters,
-                self.config.max_read_result_rows,
+                self.read_result_row_limit(),
                 None,
                 Some(task_context),
             )?
@@ -21972,7 +22140,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
             &cypher_text,
             prepared,
             parameters,
-            self.config.max_read_result_rows,
+            self.read_result_row_limit(),
             None,
             task_context.as_ref(),
         )
@@ -21987,7 +22155,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         self.query_with_params_bounded_profile_access_control(
             cypher_text,
             parameters,
-            self.config.max_read_result_rows,
+            self.read_result_row_limit(),
             access_control,
         )
         .map(|output| output.output)
@@ -22142,7 +22310,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
         consumer: &mut impl FnMut(Row) -> Result<()>,
     ) -> Result<QueryStreamReport> {
         self.store.ensure_usable()?;
-        let max_rows = restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+        let max_rows = restrictive_query_limit(self.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
@@ -22286,7 +22454,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
     ) -> Result<BoundedReadQueryOutput> {
         self.store.ensure_usable()?;
         query_runtime::query_runtime_checkpoint(task_context)?;
-        let max_rows = restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+        let max_rows = restrictive_query_limit(self.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
@@ -22417,7 +22585,7 @@ impl<S: crate::executor::ExecutionStore> DatabaseReadTransaction<S> {
                 )
                 .with_output_limits(
                     restrictive_query_limit(
-                        self.config.max_read_result_rows,
+                        self.read_result_row_limit(),
                         options.output_limits.max_rows,
                     ),
                     restrictive_query_limit(
@@ -22468,7 +22636,7 @@ where
     S: crate::executor::ExecutionStore + hawdb_system_sql::SystemSqlStore,
 {
     pub fn query_sql(&self, sql_text: &str) -> Result<QueryOutput> {
-        self.query_sql_bounded(sql_text, self.config.max_read_result_rows)
+        self.query_sql_bounded(sql_text, self.read_result_row_limit())
     }
 
     pub fn query_sql_with_params(
@@ -22476,7 +22644,7 @@ where
         sql_text: &str,
         parameters: &[Value],
     ) -> Result<QueryOutput> {
-        self.query_sql_with_params_bounded(sql_text, parameters, self.config.max_read_result_rows)
+        self.query_sql_with_params_bounded(sql_text, parameters, self.read_result_row_limit())
     }
 
     pub fn query_sql_bounded(
@@ -22609,7 +22777,7 @@ where
     ) -> Result<ProfiledRelationalSqlQueryOutput> {
         self.store.ensure_usable()?;
         query_runtime::query_runtime_checkpoint(Some(task_context))?;
-        let max_rows = restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+        let max_rows = restrictive_query_limit(self.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
@@ -22665,7 +22833,7 @@ where
     ) -> Result<QueryOutput> {
         self.store.ensure_usable()?;
         query_runtime::query_runtime_checkpoint(Some(task_context))?;
-        let max_rows = restrictive_query_limit(self.config.max_read_result_rows, options.max_rows);
+        let max_rows = restrictive_query_limit(self.read_result_row_limit(), options.max_rows);
         let max_payload_bytes = restrictive_query_limit(
             self.config.max_read_result_payload_bytes,
             options.max_payload_bytes,
@@ -22699,7 +22867,7 @@ where
             parameters,
             prepared,
             DatabaseReadSqlOptions {
-                max_rows: self.config.max_read_result_rows,
+                max_rows: self.read_result_row_limit(),
                 max_payload_bytes: self.config.max_read_result_payload_bytes,
                 task_context,
                 join_planning: RelationalJoinPlanningDirective::Auto,

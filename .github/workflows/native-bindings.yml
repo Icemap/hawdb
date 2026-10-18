@@ -64,6 +64,22 @@ jobs:
       - name: Test Go against the Bazel-built C ABI
         run: bazel test --test_output=errors --test_arg=-test.v //bindings/go:hawdb_go_tests
 
+      - name: Test the retained C ABI contract
+        run: bazel test --test_output=errors //bindings/ffi:hawdb_ffi_tests
+
+      - name: Install Go for the race detector
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: bindings/go/go.mod
+          cache-dependency-path: bindings/go/go.sum
+
+      - name: Check retained read and close concurrency with the race detector
+        working-directory: bindings/go
+        env:
+          HAWDB_LIBRARY: ${{ github.workspace }}/bazel-bin/bindings/ffi/${{ runner.os == 'macOS' && 'libhawdb_ffi.dylib' || 'libhawdb_ffi.so' }}
+          CGO_ENABLED: "1"
+        run: go test -race -count=1 -run '^TestRetained' ./...
+
   windows-native-contracts:
     name: Windows native contracts
     runs-on: windows-2025
@@ -93,6 +109,28 @@ jobs:
           set -euo pipefail
           cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
             2>&1 | tee windows-native-results/clippy.txt
+
+      - name: Build and test the retained Windows C ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked --manifest-path bindings/ffi/Cargo.toml --lib
+          bash scripts/cargo-test-required.sh --locked --manifest-path bindings/ffi/Cargo.toml --lib retained:: -- --nocapture \
+            2>&1 | tee windows-native-results/retained-ffi.txt
+
+      - name: Install Go for Windows numeric bindings
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: bindings/go/go.mod
+          cache-dependency-path: bindings/go/go.sum
+
+      - name: Test Go against the Windows C ABI
+        shell: bash
+        working-directory: bindings/go
+        run: |
+          set -euo pipefail
+          HAWDB_LIBRARY="$GITHUB_WORKSPACE/bindings/ffi/target/debug/hawdb_ffi.dll" \
+            go test -count=1 -v ./... 2>&1 | tee ../../windows-native-results/go.txt
 
       - name: Test abandonment GC power-loss cuts
         shell: bash

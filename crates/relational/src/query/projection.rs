@@ -297,7 +297,11 @@ pub(super) fn execute_blocking_projection<'a>(
     let catalog = Catalog::default();
     let observer = RelationalBlockingObserver::default();
     let task_context = pipeline.task_context;
-    let mut output = Vec::with_capacity(detection_limit.min(limits.max_output_rows));
+    let mut output = Vec::with_capacity(
+        detection_limit
+            .min(limits.max_output_rows)
+            .min(pipeline.batch_rows),
+    );
     let mut payload_bytes = 0usize;
 
     if detection_limit == 0 {

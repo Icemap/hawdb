@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use hawdb_core::{HawDBError, Result};
+use hawdb_core::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExecutionLimit {
@@ -28,11 +28,10 @@ impl ExecutionLimit {
         let Some(max_rows) = max_rows else {
             return Ok(Self::unlimited());
         };
-        let output_rows = max_rows.checked_add(1).ok_or_else(|| {
-            HawDBError::Execution("read query row limit is too large".to_string())
-        })?;
+        // A usize::MAX ceiling cannot be exceeded by a representable result.
+        // There is no additional detection row to admit at that boundary.
         Ok(Self {
-            output_rows: Some(output_rows),
+            output_rows: max_rows.checked_add(1),
         })
     }
 

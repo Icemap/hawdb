@@ -3114,12 +3114,8 @@ impl NowledgeMemEmbeddedStoreHandle {
             .graph
             .database()
             .config()
-            .max_read_result_rows
-            .ok_or_else(|| {
-                HawDBError::Execution(
-                    "bounded read snapshot requires max_read_result_rows".to_string(),
-                )
-            })?;
+            .read_result_row_limit()
+            .unwrap_or(usize::MAX);
         if budget.max_rows > configured_rows {
             return Err(HawDBError::Execution(format!(
                 "bounded read snapshot row budget {} exceeds configured limit {configured_rows}",
@@ -3840,11 +3836,7 @@ impl NowledgeMemEmbeddedStoreHandle {
         published.snapshot.ensure_usable()?;
         let config = published.snapshot.config();
         if let Some(max_rows) = max_rows {
-            let configured_rows = config.max_read_result_rows.ok_or_else(|| {
-                HawDBError::Execution(
-                    "bounded read snapshot requires max_read_result_rows".to_string(),
-                )
-            })?;
+            let configured_rows = config.read_result_row_limit().unwrap_or(usize::MAX);
             if max_rows > configured_rows {
                 return Err(HawDBError::Execution(format!(
                     "bounded read snapshot row budget {max_rows} exceeds configured limit {configured_rows}"

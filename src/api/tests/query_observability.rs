@@ -948,8 +948,17 @@ fn cypher_explain_analyze_returns_execution_profile_row() {
     );
     assert_eq!(
         row.get("operator_row_cap_enabled"),
+        Some(&Value::Bool(false))
+    );
+    db.config.max_read_result_rows = Some(2);
+    let bounded = db
+        .query("EXPLAIN ANALYZE MATCH (m:Memory) WHERE m.kind = 'note' RETURN m.title AS title")
+        .unwrap();
+    assert_eq!(
+        bounded.rows[0].get("operator_row_cap_enabled"),
         Some(&Value::Bool(true))
     );
+    assert_eq!(bounded.rows[0].get("row_count"), Some(&Value::Int(2)));
 }
 
 #[test]

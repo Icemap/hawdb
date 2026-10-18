@@ -173,21 +173,26 @@ pub use api::{
     SearchProjectionConsumerError, SearchProjectionConsumerId, SearchProjectionConsumerOptions,
     SearchProjectionConsumerReadiness, SearchProjectionConsumerRebuildReason,
     SearchProjectionConsumerResult, SearchProjectionConsumerState, SearchProjectionConsumerStatus,
-    SearchProjectionGraphDeltaRequest, SearchProjectionRelationalDelta, SlowQueryLogExportOptions,
-    SlowQueryLogRecordSummary, SqlStatementResult, StorageResourceProfileLimits,
-    StorageResourceProfileReport, SystemSchemaMigration, SystemSchemaRegistry,
-    SystemSchemaUpgradeReport, TransactionCommitResult, WalGroupCommitActivation,
-    WalGroupCommitAdaptiveColdStartEvidence, WalGroupCommitAdaptivePolicyEvidence,
-    WalGroupCommitAdaptiveSteadyStateEvidence, WalGroupCommitConfig, WalGroupCommitDelayPolicy,
-    WalGroupCommitEvidence, WalGroupCommitSnapshot, WalGroupCommitTailLatencyEvidence,
-    WalGroupCommitWaitDecision, DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES,
-    DEFAULT_MAX_READ_RESULT_ROWS, DEFAULT_PESSIMISTIC_LOCK_TIMEOUT,
-    DEFAULT_WAL_GROUP_COMMIT_MAX_BYTES, DEFAULT_WAL_GROUP_COMMIT_MAX_DELAY,
-    DEFAULT_WAL_GROUP_COMMIT_MAX_ENTRIES, HAWDB_LIGHTNING_BOOTSTRAP_PROTOCOL_VERSION,
-    HAWDB_LIGHTNING_GRAPH_STREAM_FORMAT_VERSION,
+    SearchProjectionGraphDeltaRequest, SearchProjectionRelationalDelta, SessionConfig,
+    SlowQueryLogExportOptions, SlowQueryLogRecordSummary, SqlStatementResult,
+    StorageResourceProfileLimits, StorageResourceProfileReport, SystemSchemaMigration,
+    SystemSchemaRegistry, SystemSchemaUpgradeReport, TransactionCommitResult,
+    WalGroupCommitActivation, WalGroupCommitAdaptiveColdStartEvidence,
+    WalGroupCommitAdaptivePolicyEvidence, WalGroupCommitAdaptiveSteadyStateEvidence,
+    WalGroupCommitConfig, WalGroupCommitDelayPolicy, WalGroupCommitEvidence,
+    WalGroupCommitSnapshot, WalGroupCommitTailLatencyEvidence, WalGroupCommitWaitDecision,
+    DEFAULT_MAX_READ_RESULT_PAYLOAD_BYTES, DEFAULT_MAX_READ_RESULT_ROWS,
+    DEFAULT_PESSIMISTIC_LOCK_TIMEOUT, DEFAULT_WAL_GROUP_COMMIT_MAX_BYTES,
+    DEFAULT_WAL_GROUP_COMMIT_MAX_DELAY, DEFAULT_WAL_GROUP_COMMIT_MAX_ENTRIES,
+    HAWDB_LIGHTNING_BOOTSTRAP_PROTOCOL_VERSION, HAWDB_LIGHTNING_GRAPH_STREAM_FORMAT_VERSION,
     HAWDB_LIGHTNING_INITIAL_IMPORT_DURABLE_STATE_PROTOCOL,
     HAWDB_LIGHTNING_RELATIONAL_STREAM_FORMAT_VERSION, SLOW_QUERY_LOG_EVENT_PROTOCOL,
     STORAGE_RESOURCE_PROFILE_PROTOCOL,
+};
+pub use api::{
+    RetainedColumnRole, RetainedColumnSchema, RetainedColumnType, RetainedColumnValues,
+    RetainedQueryBatch, RetainedQueryCursor, RetainedQueryError, RetainedQueryOptions,
+    RetainedQueryProfile, RetainedQueryStatus,
 };
 pub use background_maintenance_evidence::nowledge_background_maintenance_evidence_json;
 pub use blackbox::{
@@ -299,7 +304,12 @@ pub use hawdb_core::{
     DEFAULT_GRAPH_RAG_MAX_PROPERTIES_PER_SUBJECT, DEFAULT_GRAPH_RAG_MAX_RELATIONSHIP_TYPES,
     DEFAULT_GRAPH_RAG_MAX_ROUTES, GRAPH_RAG_SCHEMA_CONTEXT_PROTOCOL, MAX_GRAPH_RAG_QUERY_LIMIT,
 };
+pub use hawdb_executor::numeric::retained::{
+    NumericBufferIdentity as RetainedBufferIdentity,
+    NumericBufferProvenance as RetainedBufferProvenance,
+};
 pub use hawdb_executor::scoring::{HostScorer, HostScorerBatch, HostScorerDescriptor};
+pub use hawdb_executor::ValidityView as RetainedValidityView;
 pub use hawdb_optimizer::{
     AdaptiveVectorBackendPolicy, Distribution, GroupId, Memo as OptimizerMemo,
     MemoGroup as OptimizerMemoGroup, PhysicalProperties, RequiredProperties,
@@ -311,9 +321,11 @@ pub use hawdb_qos::{
     RuntimeAdmissionError, RuntimeGovernor, RuntimeGovernorConfig, RuntimeGovernorLimits,
     RuntimeGovernorSnapshot, RuntimeIoReservationScope, RuntimeMaintenanceMemoryReport,
     RuntimeMaintenanceWork, RuntimeMemoryPressure, RuntimeMemorySnapshot, RuntimePermit,
-    RuntimeResourceBudget, RuntimeResourceSnapshot, RuntimeRetainedMemory, RuntimeTelemetryEvent,
-    RuntimeTelemetryEventKind, RuntimeTelemetrySink, RuntimeWorkKind, RuntimeWorkPriority,
-    RuntimeWorkRequest, StorageDeviceDiscoverySource, StorageDeviceProfile, StorageMediaKind,
+    RuntimeResourceBudget, RuntimeResourceSnapshot, RuntimeRetainedMemory, RuntimeRetainedResult,
+    RuntimeRetainedResultError, RuntimeRetainedResultResource, RuntimeRetainedResultSnapshot,
+    RuntimeTelemetryEvent, RuntimeTelemetryEventKind, RuntimeTelemetrySink, RuntimeWorkKind,
+    RuntimeWorkPriority, RuntimeWorkRequest, StorageDeviceDiscoverySource, StorageDeviceProfile,
+    StorageMediaKind,
 };
 pub use hawdb_readiness::embedded_query_path::{
     EmbeddedQueryEntrypoint, EmbeddedQueryPathReadiness, EMBEDDED_QUERY_PATH_READINESS_PROTOCOL,

@@ -61,7 +61,7 @@ impl DatabaseReadTransaction {
             .query_generated_graph_rag_bounded_profile(
                 query,
                 parameters,
-                self.config.max_read_result_rows,
+                self.config.read_result_row_limit(),
             )?
             .output)
     }
