@@ -258,3 +258,35 @@ The finite model assumes immutable artifact identities and cooperative native
 custody. It does not prove Rust refinement, logical incarnation persistence,
 no-overwrite/name ABA, physical crash durability, full memory/I/O accounting,
 writer fairness or Mem cutover. Those original MVCC gates remain required.
+
+## Native unlink and idle handles
+
+Captured unlink removes a name while an already opened reader can keep the old
+inode readable. On Windows, legacy `FileDispositionInfo` only marks the file for
+deletion until the last handle closes. That does not implement the file-only
+unlink event represented in the image engine and can leave obsolete mutation
+names visible while an idle immutable-file cache retains a handle.
+
+The Windows backend uses `FileDispositionInfoEx` with `DELETE | POSIX_SEMANTICS`
+and closes its relative DELETE-capable handle before acknowledging removal.
+Other share-delete handles continue reading their original bytes; a new file
+under the same component is a different object. Read-only, unsupported-operation
+and descriptor failures propagate without a pathname fallback or closing another
+owner's handles. No namespace fsync or power-loss durability follows from unlink
+alone. See [Microsoft's disposition contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/ns-ntddk-_file_disposition_information_ex).
+
+The native regression keeps a child open, replaces the original root pathname,
+unlinks through the held root and requires immediate name disappearance. It then
+recreates the name and checks old-handle/new-open separation and unchanged foreign
+bytes. The existing Search child-pin and final-owner reclamation assertions stay
+enabled. Native Windows execution is required to qualify this backend change;
+a passing Unix test or cross-target Clippy is insufficient.
+
+`HawDBCapturedUnlink` models only this observable unlink boundary: successful
+acknowledgment removes the old name, foreign B is untouched, and a held old
+handle continues reading its original inode when the name is reused. Delayed
+unlink, path-based unlink and rebinding a held handle each violate a separate
+invariant. The caller's publication/retention proof is a precondition; this model
+does not prove GC admission, native syscall behavior, scratch isolation or
+power-loss durability. The unchanged image-engine unlink already removes the
+namespace entry independently of retained inode data.

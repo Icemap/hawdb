@@ -346,15 +346,22 @@ pub(super) fn remove_child(
     // this extra handle before opening it, and close before returning capacity.
     let _permit = context.acquire(DescriptorKind::Transient)?;
     let file = relative_open(root, name, DELETE, false)?;
-    // FILE_DISPOSITION_INFO contains one Win32 BOOL, not a C++/Rust bool.
-    let delete_file: i32 = 1;
-    // SAFETY: class 4 is FileDispositionInfo and the repr(C)-equivalent BOOL
-    // buffer is exactly four bytes; the borrowed DELETE-capable handle is live.
+    // Remove the name when this DELETE handle closes, even while an immutable
+    // reader/cache retains another share-delete handle. Legacy disposition only
+    // marks delete-pending until all handles close, so a successful GC would
+    // leave the old dependency name visible and prevent safe name recreation.
+    // Do not bypass read-only attributes or retry through the original pathname.
+    const FILE_DISPOSITION_INFO_EX: i32 = 21;
+    const FILE_DISPOSITION_DELETE: u32 = 1;
+    const FILE_DISPOSITION_POSIX_SEMANTICS: u32 = 2;
+    let disposition = FILE_DISPOSITION_DELETE | FILE_DISPOSITION_POSIX_SEMANTICS;
+    // SAFETY: FileDispositionInfoEx takes one ULONG flags field (four bytes).
+    // The DELETE-capable relative handle and buffer outlive the synchronous call.
     let success = unsafe {
         set_file_information(
             file.as_raw_handle(),
-            4,
-            std::ptr::from_ref(&delete_file).cast(),
+            FILE_DISPOSITION_INFO_EX,
+            std::ptr::from_ref(&disposition).cast(),
             4,
         )
     };

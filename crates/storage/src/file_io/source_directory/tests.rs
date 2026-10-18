@@ -69,6 +69,49 @@ fn relative_read_and_delete_keep_captured_root_after_namespace_replacement() {
 }
 
 #[test]
+fn unlink_removes_captured_name_while_an_existing_child_handle_remains_readable() {
+    let fixture = Fixture::new(8);
+    let original = fixture.root.join("source");
+    let moved = fixture.root.join("moved");
+    fs::create_dir(&original).unwrap();
+    fs::write(original.join("payload.hawdb"), b"old captured bytes").unwrap();
+    let source = fixture.capture(&original);
+    let context = fixture.project.io_context();
+    let mut held = source.open_child(&context, "payload.hawdb").unwrap();
+    fs::rename(&original, &moved).unwrap();
+    fs::create_dir(&original).unwrap();
+    fs::write(original.join("payload.hawdb"), b"foreign bytes").unwrap();
+
+    source.remove_child(&context, "payload.hawdb").unwrap();
+    assert!(
+        !moved.join("payload.hawdb").exists(),
+        "successful unlink must remove the name before the old read handle closes"
+    );
+    assert_eq!(
+        source
+            .open_child(&context, "payload.hawdb")
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::NotFound
+    );
+    // This independent fixture write reuses the name, never the old inode.
+    fs::write(moved.join("payload.hawdb"), b"new captured bytes").unwrap();
+    let mut fresh = source.open_child(&context, "payload.hawdb").unwrap();
+    let mut old_bytes = String::new();
+    held.read_to_string(&mut old_bytes).unwrap();
+    let mut new_bytes = String::new();
+    fresh.read_to_string(&mut new_bytes).unwrap();
+    assert_eq!(old_bytes, "old captured bytes");
+    assert_eq!(new_bytes, "new captured bytes");
+    assert_eq!(
+        fs::read(original.join("payload.hawdb")).unwrap(),
+        b"foreign bytes"
+    );
+    drop((fresh, held, source));
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[test]
 fn child_handle_remains_usable_after_directory_authority_closes() {
     let fixture = Fixture::new(8);
     fs::write(fixture.root.join("payload.hawdb"), b"immutable child").unwrap();

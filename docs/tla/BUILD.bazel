@@ -826,3 +826,27 @@ tla_check(
     )
     for control in ["FreshLedger", "RelabelGovernor", "ExportRoot", "RefundBeforeFree"]
 ]
+
+[
+    genrule(
+        name = "HawDBCapturedUnlink" + control + "_config",
+        srcs = ["HawDBCapturedUnlink.cfg"],
+        outs = ["generated/HawDBCapturedUnlink" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBCapturedUnlink.cfg) > $@",
+        tags = ["manual"],
+    )
+    for control in ["DelayedUnlink", "PathUnlink", "RebindHeldHandle"]
+]
+
+[
+    tla_check(
+        name = "HawDBCapturedUnlink" + control + "_check",
+        module = "HawDBCapturedUnlink.tla",
+        config = ":HawDBCapturedUnlink" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["DelayedUnlink", "PathUnlink", "RebindHeldHandle"]
+]
