@@ -28,12 +28,20 @@ ordinary checkpoint still serializes the complete resident dataset. These are
 prerequisites, not the stationary MVCC activation path.
 
 The durable GraphStore currently exposes a registry path and a process ownership
-lease. `DatabaseDirectoryLease::owns_directory` compares canonical path spellings;
-it is not a captured physical-directory capability. A new ledger must receive
-qualified source-root custody from the kernel. Capturing whatever directory a
-saved label names later, even with a matching decoded database UUID, is not an
-acceptable substitute. Physical SourceDirectory identities are process-local
-keys and cannot be serialized as logical incarnations.
+lease. The native lease now retains its original SourceDirectory, opens the
+reserved owner lock relative to that capture, indexes process ownership by the
+live physical directory identity, and closes the lock before unregistering.
+`owns_directory` uses a physical binding fence rather than canonical spelling;
+branch catalog/root-pin guards already consume that fence. Initial directory
+capture and the owner lock each consume the existing project FD inventory.
+
+This does not migrate all GraphStore/registry I/O or implement the allocation
+journal. A new ledger must borrow qualified source/project/branch custody from
+the actual kernel owner. Capturing whatever directory a saved label names later,
+even with a matching decoded database UUID, is not an acceptable substitute.
+Physical SourceDirectory identities remain process-local keys, never serialized
+logical incarnations or durable birth receipts. The native ownership refinement
+and its limits are described in [the custody argument](../tla/ROOT_PROCESS_CUSTODY_PROOF.md#native-database-directory-ownership).
 
 ## Authorities and identity domains
 

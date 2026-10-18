@@ -241,3 +241,43 @@ this case; see [the scoped model/native correspondence](SOURCE_ROOT_CUSTODY_DESI
 The finite model assumes native unlock succeeds. Unlock errors fall back to
 close and may leave temporary exclusion until inherited descriptions close;
 no scheduling/latency guarantee or native refinement is claimed from this model.
+
+
+## Native database directory ownership
+
+`DatabaseDirectoryLease` now retains a counted captured directory and opens
+`owner.hawdb.lock` relative to that exact root. The reserved database lock name
+has a crate-private entry point; the public hidden-lock component validation
+remains unchanged. Both ownership descriptors use the original project domain.
+A live physical identity keys the process registry, so a renamed directory or
+alias cannot cause another local process-lock descriptor to be opened. Binding
+checks used by branch metadata/root-pin code compare the actual held directory,
+not a saved canonical string. That check is a fence, not permission to use paths
+afterward or proof of a persistent logical incarnation.
+
+A local registration guard handles all fallible initialization/unwind paths.
+Field/drop order is lock close, process unregistration, then directory close.
+The directory identity therefore stays pinned throughout registry membership;
+a late old process-lock close cannot release an admitted successor's lock.
+Explicit unlock still precedes close, preserving inherited-description behavior.
+
+The finite process-custody model's `CloseRetired` before `Unregister` ordering
+applies to this native close boundary. Positive and `UnregisterBeforeNativeClose`
+control were executed through their registered Bazel targets. This mapping does
+not claim that the model covers namespace aliases, FD budgets or the native OS
+syscall behavior; actual native regressions cover those separate obligations.
+
+Native tests exercise FD refusal before lock creation and retry in the same
+project; namespace replacement after capture but before lock open (including the
+Windows-compatible empty-directory move); real cross-process exclusion; alias
+refusal with a live renamed Unix directory; and injected unwind after actual
+lock close while registration still excludes reacquisition. The unwind test
+requires the exact injected panic payload so an assertion failure cannot count
+as its expected unwind. Full Storage and compiled counter-control results are
+recorded separately; narrow native passes do not qualify every platform.
+
+This is real adoption by durable store ownership and branch guards, not the
+Consumer allocation ledger, complete captured GraphStore data I/O or stationary
+activation. Those contracts, original resource/recovery/fairness gates and actual
+Mem adoption remain required. The extra retained directory FD is charged, not
+hidden in a separate allowance or removed to make a tiny budget pass.

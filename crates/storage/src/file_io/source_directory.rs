@@ -289,6 +289,28 @@ impl SourceDirectory {
                 "invalid source ownership lock name",
             ));
         }
+        self.open_named_lock(context, name, mode)
+    }
+
+    pub(crate) fn open_database_ownership_lock(
+        &self,
+        context: &FileOpenContext,
+        mode: SourceDirectoryLockMode,
+    ) -> io::Result<File> {
+        self.open_named_lock(
+            context,
+            ChildName::new(crate::ownership::DATABASE_DIRECTORY_LOCK_FILE)?,
+            mode,
+        )
+    }
+
+    fn open_named_lock(
+        &self,
+        context: &FileOpenContext,
+        name: ChildName<'_>,
+        mode: SourceDirectoryLockMode,
+    ) -> io::Result<File> {
+        self.require_context(context)?;
         let _native = native_scope(context)?;
         self.require_scope(&_native)?;
         let permit = context.acquire(DescriptorKind::OwnershipLock)?;

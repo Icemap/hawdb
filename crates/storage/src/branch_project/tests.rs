@@ -147,7 +147,9 @@ fn metadata_opens_while_main_is_busy_without_reading_its_wal() {
     .unwrap();
     let writer = DatabaseDirectoryLease::acquire(&main_directory).unwrap();
     let before = fixture.files.metrics();
-    assert_eq!(before.open, 1);
+    assert_eq!(before.open, 2);
+    assert_eq!(before.ownership_locks, 1);
+    assert_eq!(before.transient_handles, 1);
     let first = ProjectMetadata::open(fixture.root(), 4).unwrap();
     let second = ProjectMetadata::open(fixture.root(), 4).unwrap();
     assert_eq!(first.selector(), selector);

@@ -118,6 +118,15 @@ jobs:
             -- file_io::captured_immutable::tests:: --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/immutable-custody.txt
 
+      - name: Test captured database directory ownership
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            -- ownership::tests:: --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/database-directory-ownership.txt
+
       - name: Test captured cleanup and originating operation admission
         if: ${{ !cancelled() }}
         shell: bash
