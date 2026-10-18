@@ -70,6 +70,90 @@ fn consume_limit_arrow(cursor: hawdb::RetainedQueryCursor) -> Result<usize, (usi
     }
 }
 
+fn assert_foreground_admissions_released(governor: &hawdb::RuntimeGovernor) {
+    let runtime = governor.snapshot();
+    // Automatic maintenance may retain a background permit between queries.
+    // Every foreground permit must already be gone; the remaining admissions
+    // must correspond exactly to currently admitted background work.
+    assert_eq!(runtime.active_foreground_tasks, 0);
+    assert_eq!(runtime.active_foreground_io_slots, 0);
+    assert_eq!(
+        runtime.admissions,
+        runtime.completions + u64::try_from(runtime.active_background_tasks).unwrap()
+    );
+}
+
+fn assert_runtime_released_after_shutdown(governor: &hawdb::RuntimeGovernor) {
+    let runtime = governor.snapshot();
+    assert_eq!(runtime.admissions, runtime.completions);
+    assert_eq!(runtime.admitted_memory_bytes, 0);
+    assert_eq!(runtime.active_foreground_tasks, 0);
+    assert_eq!(runtime.active_background_tasks, 0);
+    assert_eq!(runtime.active_blocking_tasks, 0);
+    assert_eq!(runtime.active_cpu_slots, 0);
+    assert_eq!(runtime.active_foreground_io_slots, 0);
+    assert_eq!(runtime.active_background_io_slots, 0);
+    assert_eq!(runtime.queued_admission_waiters, 0);
+}
+
+#[test]
+fn foreground_read_cleanup_preserves_an_in_flight_background_admission() {
+    use hawdb::{
+        DatabaseConfig, EmbeddedQueryError, HawDBEmbedded, HawDBError, ReadBudgetResource,
+        RuntimeWorkKind, RuntimeWorkPriority, RuntimeWorkRequest,
+    };
+
+    let mut engine = HawDBEmbedded::open_in_memory_with_config(DatabaseConfig {
+        max_read_result_rows: Some(1),
+        ..DatabaseConfig::default()
+    });
+    for id in [1, 2] {
+        engine
+            .query_with_params_admitted(
+                "CREATE (:AdmissionRow {id: $id})",
+                &BTreeMap::from([("id".into(), Value::Int(id))]),
+            )
+            .unwrap();
+    }
+    let governor = engine.runtime_governor().clone();
+    // No CPU or I/O slots are occupied. The live 64-byte maintenance permit
+    // makes the accounting condition deterministic without sleeps or workers.
+    let background = governor
+        .try_admit(RuntimeWorkRequest {
+            memory_bytes: 64,
+            ..RuntimeWorkRequest::new(
+                RuntimeWorkPriority::Background,
+                RuntimeWorkKind::Maintenance,
+            )
+        })
+        .unwrap();
+    let refused = engine
+        .query_admitted("MATCH (n:AdmissionRow) RETURN n.id AS id")
+        .unwrap_err();
+    assert!(matches!(
+        refused,
+        EmbeddedQueryError::Database(HawDBError::ReadBudgetExceeded(cause))
+            if cause.resource == ReadBudgetResource::Rows && cause.limit == 1
+    ));
+    assert_foreground_admissions_released(&governor);
+    assert_eq!(governor.snapshot().active_background_tasks, 1);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 64);
+    let output = engine
+        .query_with_params_admitted(
+            "MATCH (n:AdmissionRow) WHERE n.id = $id RETURN n.id AS id",
+            &BTreeMap::from([("id".into(), Value::Int(2))]),
+        )
+        .unwrap();
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(output.rows[0].get("id"), Some(&Value::Int(2)));
+    assert_foreground_admissions_released(&governor);
+    assert_eq!(governor.snapshot().active_background_tasks, 1);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 64);
+    drop(background);
+    drop(engine);
+    assert_runtime_released_after_shutdown(&governor);
+}
+
 #[test]
 fn default_unlimited_and_explicit_read_row_limits_preserve_complete_delivery() {
     use hawdb::{
@@ -224,9 +308,7 @@ fn default_unlimited_and_explicit_read_row_limits_preserve_complete_delivery() {
             assert_eq!(retained.retained_bytes, 0);
             assert_eq!(retained.buffer_owners, 0);
             assert_eq!(retained.view_handles, 0);
-            let runtime = governor.snapshot();
-            assert_eq!(runtime.admissions, runtime.completions);
-            assert_eq!(runtime.admitted_memory_bytes, 0);
+            assert_foreground_admissions_released(governor);
         }
         let mut strict = engine
             .database()
@@ -285,6 +367,11 @@ fn default_unlimited_and_explicit_read_row_limits_preserve_complete_delivery() {
             output.rows[0].get("total"),
             Some(&Value::Int((cap + 2) as i64))
         );
+        let governor = engine.runtime_governor().clone();
+        drop(engine);
+        // Preserve the strict global zero checks after automatic workers have
+        // stopped and released their independently owned background permits.
+        assert_runtime_released_after_shutdown(&governor);
     }
 }
 
@@ -1782,10 +1869,10 @@ fn native_sql_returning_payload_control(route: &str, mutation: &str) {
         } else {
             if mutation == "insert" {
                 assert!(
-                matches!(result, Err(hawdb::HawDBError::ReadBudgetExceeded(ref cause))
+                    matches!(result, Err(hawdb::HawDBError::ReadBudgetExceeded(ref cause))
                     if cause.resource == hawdb::ReadBudgetResource::PayloadBytes && cause.limit == ceiling),
-                "{route}/{mutation}/{ceiling}: result={result:?}, epochs={epoch}->{observed_epoch}, stored={stored:?}"
-            );
+                    "{route}/{mutation}/{ceiling}: result={result:?}, epochs={epoch}->{observed_epoch}, stored={stored:?}"
+                );
             } else {
                 // UPDATE/DELETE RETURNING are outside the current SQL
                 // fragment. Preserve their fail-closed semantic refusal;
