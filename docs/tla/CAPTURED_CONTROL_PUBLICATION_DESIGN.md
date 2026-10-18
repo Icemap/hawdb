@@ -32,8 +32,18 @@ be regular files and must not alias the candidate; same-inode rename no-ops are
 refused consistently in native execution and the image model. Unix uses `renameat`
 with the same captured directory for both components. Windows exclusively
 creates a DELETE/write-capable candidate using root-relative `NtCreateFile`,
-then applies `FileRenameInfoEx` with replacement/POSIX semantics and the captured
-directory as `RootDirectory`. Old held readers retain their old inode.
+then calls `NtSetInformationFile(FileRenameInformationEx = 65)` with
+replacement/POSIX semantics and the captured directory as `RootDirectory`.
+The native interface is deliberate: the Win32
+`SetFileInformationByHandle(FileRenameInfoEx = 22)` call returned error 87
+(`ERROR_INVALID_PARAMETER`) in seven captured-publication tests on the Windows
+CI source at `1b6dacd`. Do not recover by resolving an absolute pathname or
+closing old readers or process locks. The NT buffer follows
+[`FILE_RENAME_INFORMATION`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)
+and the
+[`FILE_INFORMATION_CLASS`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ne-wdm-_file_information_class)
+enumeration. Old held readers retain their old inode; native runtime tests must
+prove that property for the selected interface.
 
 `select_head` returns a pending token that exclusively borrows the candidate.
 The coordinator must validate/exchange its read view under the same fence and

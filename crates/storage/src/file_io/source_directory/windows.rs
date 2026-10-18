@@ -59,6 +59,14 @@ unsafe extern "system" {
     ) -> i32;
     #[link_name = "RtlNtStatusToDosError"]
     fn status_to_error(status: i32) -> u32;
+    #[link_name = "NtSetInformationFile"]
+    fn nt_set_information_file(
+        file: *mut c_void,
+        io_status: *mut IoStatusBlock,
+        information: *const c_void,
+        bytes: u32,
+        class: i32,
+    ) -> i32;
 }
 #[link(name = "kernel32")]
 unsafe extern "system" {
@@ -124,20 +132,31 @@ pub(super) fn replace_control(
     for (slot, byte) in info.name.iter_mut().zip(target.0.bytes()) {
         *slot = u16::from(byte);
     }
-    let bytes = std::mem::offset_of!(RenameInfo, name) + target.0.len() * 2 + 2;
-    // SAFETY: class 22 is FileRenameInfoEx; repr(C) matches FILE_RENAME_INFO,
-    // including platform handle alignment. The live DELETE-capable candidate,
-    // captured directory and bounded UTF-16 component outlive the syscall.
+    let mut status = IoStatusBlock {
+        status_or_pointer: 0,
+        information: 0,
+    };
+    // Use the NT interface directly: the Win32 FileRenameInfoEx wrapper returned
+    // ERROR_INVALID_PARAMETER for this non-null RootDirectory on native CI.
+    // SAFETY: NT class 65 is FileRenameInformationEx; repr(C) matches
+    // FILE_RENAME_INFORMATION, including platform handle alignment. The entire
+    // bounded buffer, live DELETE-capable candidate, captured directory and
+    // IO_STATUS_BLOCK outlive the synchronous call. FileNameLength counts only
+    // the component's UTF-16 bytes; trailing zero capacity is not part of it.
     let result = unsafe {
-        set_file_information(
+        nt_set_information_file(
             file.as_raw_handle(),
-            22,
+            &mut status,
             std::ptr::from_ref(&info).cast(),
-            u32::try_from(bytes).expect("bounded rename buffer"),
+            u32::try_from(std::mem::size_of::<RenameInfo>()).expect("bounded rename buffer"),
+            65,
         )
     };
-    if result == 0 {
-        Err(io::Error::last_os_error())
+    if result < 0 {
+        // SAFETY: converts the returned NTSTATUS without dereferencing pointers.
+        Err(io::Error::from_raw_os_error(
+            unsafe { status_to_error(result) } as i32,
+        ))
     } else {
         Ok(())
     }

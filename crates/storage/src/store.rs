@@ -137,7 +137,10 @@ pub use immutable_root::{
     AdmittedBranchStore, BranchAdmissionError, BranchAdmissionRequest,
     PreparedImmutableRootHandoff, SealedBranchSource,
 };
+#[path = "store/pending_nodes.rs"]
+mod pending_nodes;
 mod projection_full_source;
+use pending_nodes::{PendingMatch, PendingNodes};
 #[path = "store/relational_index_shadow.rs"]
 mod relational_index_shadow;
 #[path = "store/relational_row_pages.rs"]
@@ -2848,6 +2851,13 @@ fn optional_label_id(catalog: &Catalog, label: &str) -> Option<LabelId> {
     }
 }
 
+fn pending_node_index(pending_nodes: &[PendingNode], id: NodeId) -> Option<usize> {
+    // Allocation appends increasing IDs; deletion retains the order and may leave gaps.
+    pending_nodes
+        .binary_search_by_key(&id, |(pending_id, _, _)| *pending_id)
+        .ok()
+}
+
 #[allow(clippy::too_many_arguments)]
 fn apply_set_relationship_properties_mutation(
     store: &GraphStore,
@@ -2979,9 +2989,8 @@ fn node_matches_label_and_filter(
                 .map(|filter| property_filter_matches(filter, id.0, &node.properties))
                 .unwrap_or(true));
     }
-    Ok(pending_nodes
-        .iter()
-        .find(|(pending_id, _, _)| *pending_id == id)
+    Ok(pending_node_index(pending_nodes, id)
+        .map(|index| &pending_nodes[index])
         .map(|(_, pending_label_id, properties)| {
             *pending_label_id == label_id
                 && filter
@@ -3080,9 +3089,8 @@ fn node_matches_optional_label_and_filter_checked(
                     .is_none_or(|filter| property_filter_matches(filter, id.0, &node.properties)),
         );
     }
-    Ok(pending_nodes
-        .iter()
-        .find(|(pending_id, _, _)| *pending_id == id)
+    Ok(pending_node_index(pending_nodes, id)
+        .map(|index| &pending_nodes[index])
         .is_some_and(|(_, pending_label_id, properties)| {
             label_id.is_none_or(|label_id| *pending_label_id == label_id)
                 && filter.is_none_or(|filter| property_filter_matches(filter, id.0, properties))
@@ -3117,8 +3125,8 @@ fn pending_relationship_ids_for_nodes(
         .collect()
 }
 
-fn remove_pending_node(ops: &mut Vec<WalOp>, pending_nodes: &mut Vec<PendingNode>, id: NodeId) {
-    pending_nodes.retain(|(node_id, _, _)| *node_id != id);
+fn remove_pending_node(ops: &mut Vec<WalOp>, pending_nodes: &mut PendingNodes, id: NodeId) {
+    pending_nodes.remove(id);
     ops.retain(|op| match op {
         WalOp::CreateNode { id: node_id, .. } | WalOp::SetNodeProperty { id: node_id, .. } => {
             *node_id != id
@@ -3487,6 +3495,7 @@ impl hawdb_storage::graph_engine::GraphReadEngine for GraphStore {
 
 #[cfg(test)]
 mod tests {
+    mod pending_node_ids;
 
     #[test]
     fn derived_repair_borrows_existing_custom_descriptor_budget() {

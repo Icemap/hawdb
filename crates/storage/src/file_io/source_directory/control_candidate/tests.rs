@@ -120,6 +120,46 @@ fn replacement_uses_the_capture_after_its_original_path_is_reused() {
 }
 
 #[test]
+fn replacement_accepts_minimum_and_maximum_component_lengths_with_old_readers() {
+    for length in [1, 255] {
+        let fixture = Fixture::new();
+        let project = ProjectFileDescriptors::acquire(&fixture.0, 8).unwrap();
+        let context = project.io_context();
+        let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
+        let target = "h".repeat(length);
+        let source = "c".repeat(length);
+        let mut initial = directory
+            .create_control_candidate(&context, &source)
+            .unwrap();
+        initial.write_all(b"old selected bytes").unwrap();
+        initial.seal().unwrap();
+        initial.replace_head(&context, &target).unwrap();
+        drop(initial);
+        let mut old = directory.open_child(&context, &target).unwrap();
+        let mut candidate = directory
+            .create_control_candidate(&context, &source)
+            .unwrap();
+        candidate.write_all(b"new selected bytes").unwrap();
+        candidate.seal().unwrap();
+        candidate
+            .select_head(&context, &target)
+            .unwrap()
+            .finish(&context)
+            .unwrap();
+        assert!(candidate.is_complete());
+        assert!(!fixture.0.join(&source).exists());
+        let mut old_bytes = Vec::new();
+        old.read_to_end(&mut old_bytes).unwrap();
+        assert_eq!(old_bytes, b"old selected bytes");
+        assert_eq!(read(&directory, &context, &target), b"new selected bytes");
+        drop(candidate);
+        drop(old);
+        drop(directory);
+        assert_eq!(project.metrics().open, 0);
+    }
+}
+
+#[test]
 fn exclusive_creation_rejects_existing_and_invalid_names_without_adopting_data() {
     let fixture = Fixture::new();
     let project = ProjectFileDescriptors::acquire(&fixture.0, 4).unwrap();

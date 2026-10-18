@@ -1418,6 +1418,32 @@ impl GraphStore {
         filter: Option<&PropertyFilter>,
         pending_nodes: &[PendingNode],
     ) -> Vec<NodeId> {
+        let match_id = |value: &Value| {
+            let Value::Int(value) = value else {
+                return None;
+            };
+            // Match the signed representation used by property_filter_matches.
+            let id = NodeId(*value as u64);
+            let index = pending_node_index(pending_nodes, id)?;
+            label_id
+                .is_none_or(|label_id| label_id == pending_nodes[index].1)
+                .then_some(id)
+        };
+        match filter {
+            Some(PropertyFilter::IdEq { value }) => {
+                return match_id(value).into_iter().collect();
+            }
+            Some(PropertyFilter::IdIn { values }) => {
+                // Retain only matching IDs and preserve the pending list's order.
+                return values
+                    .iter()
+                    .filter_map(match_id)
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect();
+            }
+            _ => {}
+        }
         pending_nodes
             .iter()
             .filter(|(id, pending_label_id, properties)| {

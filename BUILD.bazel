@@ -99,6 +99,29 @@ sh_test(
 )
 
 sh_test(
+    name = "query_limit_inventory_test",
+    size = "small",
+    srcs = ["scripts/check-query-limit-inventory.py"],
+    data = glob(["src/**/*.rs"]) + [
+        "docs/query-limit-reports.json",
+        "//crates/core:query_limit_inventory_sources",
+        "//crates/executor:query_limit_inventory_sources",
+        "//crates/search:query_limit_inventory_sources",
+        "//crates/relational:query_limit_inventory_sources",
+        "//crates/vector-projection:query_limit_inventory_sources",
+        "//crates/nowledge-contracts:query_limit_inventory_sources",
+        "//crates/readiness:query_limit_inventory_sources",
+    ],
+)
+
+sh_test(
+    name = "query_limit_inventory_script_test",
+    size = "small",
+    srcs = ["scripts/check-query-limit-inventory.test.py"],
+    data = ["scripts/check-query-limit-inventory.py"],
+)
+
+sh_test(
     name = "publish_crates_script_test",
     size = "small",
     srcs = ["scripts/publish-crates.test.sh"],
@@ -572,6 +595,8 @@ test_suite(
 test_suite(
     name = "hawdb_unit_tests",
     tests = [
+        ":query_limit_inventory_test",
+        ":query_limit_inventory_script_test",
         ":hawdb_in_memory_portable_tests",
         ":hawdb_mvcc_projection_publication_tests",
         ":hawdb_mvcc_projection_publication_minimal_tests",
