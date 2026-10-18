@@ -34,7 +34,7 @@ const MAX_NAME_BYTES: usize = 128;
 const MAX_OWNER_BYTES: usize = 256;
 const MAX_REQUEST_KEY_BYTES: usize = 256;
 const DIGEST_BYTES: usize = 32;
-const METADATA_LOCK_FILE: &str = "metadata.hawdb.lock";
+pub(crate) const METADATA_LOCK_FILE: &str = "metadata.hawdb.lock";
 static CANDIDATE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 /// Stable project-scoped branch identity.
@@ -1806,6 +1806,16 @@ impl CatalogMetadataLease {
             .create(true)
             .truncate(false)
             .open(project_directory.join(METADATA_LOCK_FILE))?;
+        Self::try_lock_file(file)
+    }
+
+    pub(crate) fn acquire_captured(
+        directory: &crate::file_io::SourceDirectory,
+    ) -> io::Result<Self> {
+        Self::try_lock_file(directory.open_catalog_metadata_lock(&directory.operation_context())?)
+    }
+
+    fn try_lock_file(file: File) -> io::Result<Self> {
         match file.try_lock() {
             Ok(()) => Ok(Self { file }),
             Err(TryLockError::WouldBlock) => Err(io::Error::new(

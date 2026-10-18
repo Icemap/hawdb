@@ -203,6 +203,33 @@ impl CapturedProject {
         Ok(metadata)
     }
 
+    pub(crate) fn locked_catalog(&self) -> Result<branch_catalog::Catalog> {
+        let context = self.files.io_context();
+        let branches = self.root.open_directory(&context, BRANCH_DIRECTORY)?;
+        let _lease = CatalogMetadataLease::acquire_captured(&branches).map_err(|error| {
+            if error.kind() == io::ErrorKind::WouldBlock {
+                HawDBError::BranchBusy {
+                    resource: "branch catalog metadata",
+                }
+            } else {
+                error.into()
+            }
+        })?;
+        if read_captured_selector(&self.root, &context)? != self.selector {
+            return Err(integrity("published project identity changed"));
+        }
+        let catalog =
+            branch_catalog::read_catalog_file(branches.open_child(&context, CATALOG_FILE)?)?;
+        validate_ready_catalog(self.selector, &catalog)?;
+        Ok(catalog)
+    }
+
+    pub(crate) fn capture_branch_directory(&self, branch: BranchId) -> io::Result<SourceDirectory> {
+        let context = self.files.io_context();
+        let branches = self.root.open_directory(&context, BRANCH_DIRECTORY)?;
+        branches.open_directory(&context, &branch.as_uuid().to_string())
+    }
+
     /// Fence legacy pathname entry points against an already replaced root.
     /// This is not a race-free authorization of subsequent pathname operations.
     pub fn require_original_namespace(&self) -> Result<()> {
@@ -230,20 +257,12 @@ impl ProjectMetadata {
 
     fn from_captured(files: ProjectFileDescriptors, root: Arc<SourceDirectory>) -> Result<Self> {
         let context = files.io_context();
-        let encoded = read_bounded_file(root.open_child(&context, MANIFEST_FILE)?)?;
-        let selector = match decode_project_manifest(&encoded)? {
-            ProjectManifest::Branch(selector) => selector,
-            _ => return Err(integrity("project selector has not been published")),
-        };
+        let selector = read_captured_selector(&root, &context)?;
         let catalog = {
             let branches = root.open_directory(&context, BRANCH_DIRECTORY)?;
             branch_catalog::read_catalog_file(branches.open_child(&context, CATALOG_FILE)?)?
         };
-        let main_index = validate_catalog_identity(selector, &catalog)?;
-        let main = &catalog.branches[main_index];
-        if main.state != BranchState::Ready || main.base_root_digest.is_none() {
-            return Err(integrity("project selector references an incomplete main"));
-        }
+        let main_index = validate_ready_catalog(selector, &catalog)?;
         Ok(Self {
             files,
             root,
@@ -271,6 +290,12 @@ impl ProjectMetadata {
         &self.catalog
     }
 
+    /// Move out the decoded description without cloning the catalog. The
+    /// returned catalog retains no native directory or allocation authority.
+    pub fn into_catalog(self) -> branch_catalog::Catalog {
+        self.catalog
+    }
+
     pub fn main(&self) -> &BranchRecord {
         &self.catalog.branches[self.main_index]
     }
@@ -289,6 +314,29 @@ impl ProjectMetadata {
         }
         Ok(refreshed)
     }
+}
+
+fn read_captured_selector(
+    root: &SourceDirectory,
+    context: &crate::file_descriptors::FileOpenContext,
+) -> Result<ProjectSelector> {
+    let encoded = read_bounded_file(root.open_child(context, MANIFEST_FILE)?)?;
+    match decode_project_manifest(&encoded)? {
+        ProjectManifest::Branch(selector) => Ok(selector),
+        _ => Err(integrity("project selector has not been published")),
+    }
+}
+
+fn validate_ready_catalog(
+    selector: ProjectSelector,
+    catalog: &branch_catalog::Catalog,
+) -> Result<usize> {
+    let main_index = validate_catalog_identity(selector, catalog)?;
+    let main = &catalog.branches[main_index];
+    if main.state != BranchState::Ready || main.base_root_digest.is_none() {
+        return Err(integrity("project selector references an incomplete main"));
+    }
+    Ok(main_index)
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 //! GraphStore integration for immutable-root publication and WAL handoff.
 
 use super::{GraphStore, MANIFEST_FILE};
+use crate::branch_project::CapturedProject;
 use crate::branch_root_pins::{RootPin, RootRegistry};
 use crate::checkpoint_closure::CheckpointArtifactInput;
 use crate::config::{DurabilityPolicy, RecoveryMode, WalReplayConfig};
@@ -137,6 +138,18 @@ pub struct BranchAdmissionRequest<'a> {
     pub immutable_store_root: &'a Path,
     pub durability: DurabilityPolicy,
     pub replay_config: WalReplayConfig,
+}
+
+/// A project-captured metadata/UUID-ownership entry into branch recovery.
+/// Remaining object/WAL/materialization paths are still fenced legacy paths.
+#[doc(hidden)]
+pub struct CapturedBranchAdmissionRequest<'a> {
+    pub project: &'a CapturedProject,
+    pub branch_id: branch_catalog::BranchId,
+    pub expected_metadata_revision: u64,
+    pub durability: DurabilityPolicy,
+    pub replay_config: WalReplayConfig,
+    pub read_only: bool,
 }
 
 /// A recovered branch runtime that retains the target branch writer lease.
@@ -844,6 +857,44 @@ impl GraphStore {
         })
     }
 
+    /// Recover with catalog reads, UUID ownership and head reads rooted in the
+    /// caller's retained project. This is not authority for a Consumer ledger:
+    /// immutable objects, WAL and runtime materialization still use paths.
+    #[doc(hidden)]
+    pub fn admit_captured_branch(
+        captured: CapturedBranchAdmissionRequest<'_>,
+    ) -> std::result::Result<AdmittedBranchStore, BranchAdmissionError> {
+        captured
+            .project
+            .require_original_namespace()
+            .map_err(BranchAdmissionError::Recovery)?;
+        let root = captured.project.file_descriptors().root();
+        let branches = root.join("branches");
+        let catalog_path = branches.join("catalog.hawdb");
+        let head_path = branches
+            .join(captured.branch_id.as_uuid().to_string())
+            .join("branch.head");
+        let objects = branches.join("objects");
+        Self::admit_branch_from_project_with_revalidation(
+            BranchAdmissionRequest {
+                catalog_path: &catalog_path,
+                branch_id: captured.branch_id,
+                expected_metadata_revision: captured.expected_metadata_revision,
+                head_path: &head_path,
+                immutable_store_root: &objects,
+                durability: captured.durability,
+                replay_config: captured.replay_config,
+            },
+            Some(captured.project),
+            captured.read_only,
+            false,
+            || {},
+            |runtime_directory| {
+                let _ = fs::remove_dir_all(runtime_directory);
+            },
+        )
+    }
+
     fn admit_branch_from_head_with_cleanup(
         request: BranchAdmissionRequest<'_>,
         read_only: bool,
@@ -885,6 +936,24 @@ impl GraphStore {
         before_revalidation: impl FnOnce(),
         cleanup: impl FnOnce(&Path),
     ) -> std::result::Result<AdmittedBranchStore, BranchAdmissionError> {
+        Self::admit_branch_from_project_with_revalidation(
+            request,
+            None,
+            read_only,
+            derived_repair,
+            before_revalidation,
+            cleanup,
+        )
+    }
+
+    fn admit_branch_from_project_with_revalidation(
+        request: BranchAdmissionRequest<'_>,
+        project: Option<&CapturedProject>,
+        read_only: bool,
+        derived_repair: bool,
+        before_revalidation: impl FnOnce(),
+        cleanup: impl FnOnce(&Path),
+    ) -> std::result::Result<AdmittedBranchStore, BranchAdmissionError> {
         let project_path =
             request
                 .catalog_path
@@ -892,11 +961,17 @@ impl GraphStore {
                 .ok_or(BranchAdmissionError::IdentityMismatch(
                     "catalog has no project directory",
                 ))?;
-        let project_files = crate::file_descriptors::ProjectFileDescriptors::acquire_containing(
-            project_path,
-            request.replay_config.max_open_files,
-        )
-        .map_err(BranchAdmissionError::Recovery)?;
+        let project_files = match project {
+            Some(project) => project
+                .file_descriptors()
+                .with_configured_limit(request.replay_config.max_open_files)
+                .map_err(BranchAdmissionError::Recovery)?,
+            None => crate::file_descriptors::ProjectFileDescriptors::acquire_containing(
+                project_path,
+                request.replay_config.max_open_files,
+            )
+            .map_err(BranchAdmissionError::Recovery)?,
+        };
         let _admission_resources = project_files
             .reserve_admission(MIN_BRANCH_ADMISSION_DESCRIPTORS)
             .map_err(|error| {
@@ -913,7 +988,8 @@ impl GraphStore {
                 "automatic WAL tail repair requires a writable database open".into(),
             )));
         }
-        let before = ready_branch_record(
+        let before = ready_branch_record_from_project(
+            project,
             request.catalog_path,
             request.branch_id,
             request.expected_metadata_revision,
@@ -926,16 +1002,41 @@ impl GraphStore {
                     "branch head has no branch directory",
                 ))?;
         let branch_lease = Arc::new(
-            DatabaseDirectoryLease::acquire(branch_directory)
-                .map_err(BranchAdmissionError::Lease)?,
+            match project {
+                Some(project) => {
+                    let directory = project
+                        .capture_branch_directory(request.branch_id)
+                        .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
+                    #[cfg(test)]
+                    if let Some(hook) =
+                        AFTER_ADMISSION_BRANCH_CAPTURE.with(|hook| hook.borrow_mut().take())
+                    {
+                        hook();
+                    }
+                    DatabaseDirectoryLease::from_captured(directory)
+                }
+                None => DatabaseDirectoryLease::acquire(branch_directory),
+            }
+            .map_err(BranchAdmissionError::Lease)?,
         );
+        let head = match project {
+            Some(_) => {
+                let directory = branch_lease.captured_directory();
+                let file = directory
+                    .open_child(&directory.operation_context(), "branch.head")
+                    .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
+                branch_head::read_branch_head_file(file)
+            }
+            None => branch_head::read_branch_head(request.head_path),
+        }
+        .map_err(|error| BranchAdmissionError::Recovery(HawDBError::from_storage_error(error)))?;
+        if let Some(project) = project {
+            validate_captured_admission_namespace(project, &branch_lease, branch_directory)?;
+        }
         if !derived_repair {
             super::derived_repair::reject_pending_derived_artifact_repair(branch_directory)
                 .map_err(BranchAdmissionError::Recovery)?;
         }
-        let head = branch_head::read_branch_head(request.head_path).map_err(|error| {
-            BranchAdmissionError::Recovery(HawDBError::from_storage_error(error))
-        })?;
         let objects =
             ImmutableObjectStore::open(request.immutable_store_root).map_err(|error| {
                 BranchAdmissionError::Recovery(HawDBError::from_storage_error(error))
@@ -972,6 +1073,9 @@ impl GraphStore {
         // Mutable WAL dependencies survive disposable-runtime cleanup. They
         // belong to this UUID, never to its parent or to the materialization.
         let artifact_directory = branch_directory.join("data");
+        if let Some(project) = project {
+            validate_captured_admission_namespace(project, &branch_lease, branch_directory)?;
+        }
         let result = (|| {
             mount_branch_runtime(
                 &objects,
@@ -1045,12 +1149,16 @@ impl GraphStore {
                 .saturating_add(super::elapsed_micros(activation_started));
 
             before_revalidation();
-            let after = ready_branch_record(
+            let after = ready_branch_record_from_project(
+                project,
                 request.catalog_path,
                 request.branch_id,
                 request.expected_metadata_revision,
             )?;
             validate_admission_binding(&after, &head, &root, root_reference)?;
+            if let Some(project) = project {
+                validate_captured_admission_namespace(project, &branch_lease, branch_directory)?;
+            }
             store.branch_root_pin =
                 Some(
                     RootRegistry::open(
@@ -1094,7 +1202,15 @@ impl GraphStore {
                 Ok(AdmittedBranchStore { store, catalog })
             }
             Err(error) => {
-                cleanup(&runtime_directory);
+                // A known replaced/uncertain locator cannot authorize unlink.
+                // Relative cleanup and the remaining runtime paths are still
+                // pending; retain this evidence when the legacy fence refuses.
+                if project.is_none_or(|project| {
+                    validate_captured_admission_namespace(project, &branch_lease, branch_directory)
+                        .is_ok()
+                }) {
+                    cleanup(&runtime_directory);
+                }
                 Err(error)
             }
         }
@@ -2158,6 +2274,49 @@ pub(super) fn ready_branch_record(
     )
 }
 
+fn validate_captured_admission_namespace(
+    project: &CapturedProject,
+    branch: &DatabaseDirectoryLease,
+    branch_directory: &Path,
+) -> std::result::Result<(), BranchAdmissionError> {
+    project
+        .require_original_namespace()
+        .map_err(BranchAdmissionError::Recovery)?;
+    if !branch
+        .owns_directory(branch_directory)
+        .map_err(|error| BranchAdmissionError::Recovery(error.into()))?
+    {
+        return Err(BranchAdmissionError::IdentityMismatch(
+            "captured branch directory was replaced",
+        ));
+    }
+    Ok(())
+}
+
+fn ready_branch_record_from_project(
+    project: Option<&CapturedProject>,
+    catalog_path: &Path,
+    branch_id: branch_catalog::BranchId,
+    expected_metadata_revision: u64,
+) -> std::result::Result<ReadyBranchRecord, BranchAdmissionError> {
+    match project {
+        Some(project) => {
+            let catalog = project.locked_catalog().map_err(|error| match error {
+                HawDBError::BranchBusy { resource } => BranchAdmissionError::Busy(resource),
+                error => BranchAdmissionError::Recovery(error),
+            })?;
+            ready_branch_record_from_catalog(catalog, branch_id, expected_metadata_revision)
+        }
+        None => ready_branch_record(catalog_path, branch_id, expected_metadata_revision),
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static AFTER_ADMISSION_BRANCH_CAPTURE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 fn ready_branch_record_with_metadata(
     catalog_path: &Path,
     branch_id: branch_catalog::BranchId,
@@ -2166,6 +2325,14 @@ fn ready_branch_record_with_metadata(
 ) -> std::result::Result<ReadyBranchRecord, BranchAdmissionError> {
     let catalog =
         branch_catalog::read_catalog(catalog_path).map_err(BranchAdmissionError::Catalog)?;
+    ready_branch_record_from_catalog(catalog, branch_id, expected_metadata_revision)
+}
+
+fn ready_branch_record_from_catalog(
+    catalog: branch_catalog::Catalog,
+    branch_id: branch_catalog::BranchId,
+    expected_metadata_revision: u64,
+) -> std::result::Result<ReadyBranchRecord, BranchAdmissionError> {
     let branch = catalog
         .branches
         .iter()
@@ -2611,6 +2778,23 @@ mod tests {
             fixture
         }
 
+        fn capture_project(&mut self, limit: usize) -> CapturedProject {
+            let objects = self.project.join("branches/objects");
+            std::fs::rename(&self.objects, &objects).unwrap();
+            self.objects = objects;
+            let files = crate::file_descriptors::ProjectFileDescriptors::acquire_existing(
+                &self.project,
+                limit,
+            )
+            .unwrap();
+            let selector =
+                crate::branch_project::ProjectSelector::new(branch_id(90), self.main).unwrap();
+            std::fs::write(self.project.join("manifest.hawdb"), selector.encode()).unwrap();
+            crate::branch_project::ProjectMetadata::from_files(files)
+                .unwrap()
+                .into_capture()
+        }
+
         fn head_path(&self, id: branch_catalog::BranchId) -> PathBuf {
             self.project
                 .join("branches")
@@ -2722,6 +2906,202 @@ mod tests {
 
     fn branch_id(value: u128) -> branch_catalog::BranchId {
         branch_catalog::BranchId::new(hawdb_core::Uuid::from_u128(value)).unwrap()
+    }
+
+    #[test]
+    fn captured_admission_locks_and_reads_original_uuid_before_refusing_replacement() {
+        let mut fixture = BranchFixture::new();
+        let project = fixture.capture_project(32);
+        let catalog = branch_catalog::read_catalog(&fixture.catalog_path).unwrap();
+        let revision = catalog
+            .branches
+            .iter()
+            .find(|record| record.id == fixture.main)
+            .unwrap()
+            .metadata_revision;
+        let directory = fixture
+            .head_path(fixture.main)
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let moved = directory.with_extension("held");
+        let original_head = std::fs::read(directory.join("branch.head")).unwrap();
+        let original_catalog = std::fs::read(&fixture.catalog_path).unwrap();
+        let source = directory.clone();
+        let retained = moved.clone();
+        AFTER_ADMISSION_BRANCH_CAPTURE.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                std::fs::rename(&source, &retained).unwrap();
+                std::fs::create_dir(&source).unwrap();
+                std::fs::write(
+                    source.join("branch.head"),
+                    b"replacement must not supply the head",
+                )
+                .unwrap();
+            }));
+        });
+        let request = || CapturedBranchAdmissionRequest {
+            project: &project,
+            branch_id: fixture.main,
+            expected_metadata_revision: revision,
+            durability: DurabilityPolicy::default(),
+            replay_config: WalReplayConfig {
+                max_open_files: 32,
+                ..Default::default()
+            },
+            read_only: false,
+        };
+        assert!(matches!(
+            GraphStore::admit_captured_branch(request()),
+            Err(BranchAdmissionError::IdentityMismatch(
+                "captured branch directory was replaced"
+            ))
+        ));
+        assert!(!directory
+            .join(crate::ownership::DATABASE_DIRECTORY_LOCK_FILE)
+            .exists());
+        assert!(!directory.join("runtime").exists());
+        assert!(!directory.join("data").exists());
+        assert_eq!(
+            std::fs::read(directory.join("branch.head")).unwrap(),
+            b"replacement must not supply the head"
+        );
+        assert_eq!(
+            std::fs::read(moved.join("branch.head")).unwrap(),
+            original_head
+        );
+        assert_eq!(
+            std::fs::read(&fixture.catalog_path).unwrap(),
+            original_catalog
+        );
+        let metrics = project.file_descriptors().metrics();
+        assert_eq!(
+            (
+                metrics.open,
+                metrics.reserved,
+                metrics.ownership_locks,
+                metrics.admitted_runtimes
+            ),
+            (1, 0, 0, 0)
+        );
+        std::fs::remove_dir_all(&directory).unwrap();
+        std::fs::rename(&moved, &directory).unwrap();
+        let admitted = GraphStore::admit_captured_branch(request()).unwrap();
+        assert_eq!(admitted.store().node_count_for_label(None), 2);
+        drop(admitted);
+    }
+
+    #[test]
+    fn captured_admission_keeps_metadata_exclusion_and_read_only_recovery() {
+        let mut fixture = BranchFixture::new();
+        let project = fixture.capture_project(32);
+        let catalog = branch_catalog::read_catalog(&fixture.catalog_path).unwrap();
+        let revision = catalog
+            .branches
+            .iter()
+            .find(|record| record.id == fixture.main)
+            .unwrap()
+            .metadata_revision;
+        let metadata_root = crate::file_io::SourceDirectory::capture(
+            fixture.catalog_path.parent().unwrap(),
+            &project.file_descriptors().io_context(),
+        )
+        .unwrap();
+        let branches = metadata_root;
+        let held = branch_catalog::CatalogMetadataLease::acquire_captured(&branches).unwrap();
+        let request = || CapturedBranchAdmissionRequest {
+            project: &project,
+            branch_id: fixture.main,
+            expected_metadata_revision: revision,
+            durability: DurabilityPolicy::default(),
+            replay_config: WalReplayConfig {
+                max_open_files: 32,
+                ..Default::default()
+            },
+            read_only: false,
+        };
+        let mut conflict = request();
+        conflict.replay_config.max_open_files = 31;
+        assert!(matches!(
+            GraphStore::admit_captured_branch(conflict),
+            Err(BranchAdmissionError::Recovery(HawDBError::FileDescriptors(
+                hawdb_core::error::FileDescriptorError::ConfigurationConflict {
+                    configured: 32,
+                    requested: 31
+                }
+            )))
+        ));
+        assert!(matches!(
+            GraphStore::admit_captured_branch(request()),
+            Err(BranchAdmissionError::Busy("branch catalog metadata"))
+        ));
+        drop(held);
+        drop(branches);
+        for read_only in [false, true] {
+            let mut request = request();
+            request.read_only = read_only;
+            let admitted = GraphStore::admit_captured_branch(request).unwrap();
+            assert_eq!(admitted.store().node_count_for_label(None), 2);
+            assert_eq!(
+                admitted.head().branch_id,
+                *fixture.main.as_uuid().as_bytes()
+            );
+            drop(admitted);
+        }
+    }
+
+    #[test]
+    fn captured_admission_revalidates_original_catalog_before_installing_runtime() {
+        let mut fixture = BranchFixture::new();
+        let project = fixture.capture_project(32);
+        let mut changed = branch_catalog::read_catalog(&fixture.catalog_path).unwrap();
+        let record = changed
+            .branches
+            .iter_mut()
+            .find(|record| record.id == fixture.main)
+            .unwrap();
+        let revision = record.metadata_revision;
+        record.metadata_revision += 1;
+        changed.revision += 1;
+        let head_path = fixture.head_path(fixture.main);
+        let original_head = std::fs::read(&head_path).unwrap();
+        let mut recovered = false;
+        let result = GraphStore::admit_branch_from_project_with_revalidation(
+            BranchAdmissionRequest {
+                catalog_path: &fixture.catalog_path,
+                branch_id: fixture.main,
+                expected_metadata_revision: revision,
+                head_path: &head_path,
+                immutable_store_root: &fixture.objects,
+                durability: DurabilityPolicy::default(),
+                replay_config: WalReplayConfig {
+                    max_open_files: 32,
+                    ..Default::default()
+                },
+            },
+            Some(&project),
+            false,
+            false,
+            || {
+                recovered = true;
+                branch_catalog::write_catalog(&fixture.catalog_path, &changed).unwrap();
+            },
+            |runtime| {
+                std::fs::remove_dir_all(runtime).unwrap();
+            },
+        );
+        assert!(recovered);
+        assert!(
+            matches!(result, Err(BranchAdmissionError::StaleMetadataRevision { expected, actual }) if expected == revision && actual == revision + 1)
+        );
+        assert_eq!(std::fs::read(head_path).unwrap(), original_head);
+        assert!(!fixture
+            .project
+            .join("branches")
+            .join(fixture.main.as_uuid().to_string())
+            .join("runtime")
+            .exists());
+        assert_eq!(project.file_descriptors().metrics().admitted_runtimes, 0);
     }
 
     #[test]

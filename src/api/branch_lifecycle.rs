@@ -2891,6 +2891,19 @@ impl Database {
         &self,
         record: &storage::BranchRecord,
     ) -> Result<hawdb_storage::store::AdmittedBranchStore, BranchLifecycleError> {
+        if let Some(project) = self.runtime.captured_project() {
+            return hawdb_storage::store::GraphStore::admit_captured_branch(
+                hawdb_storage::store::CapturedBranchAdmissionRequest {
+                    project,
+                    branch_id: record.id,
+                    expected_metadata_revision: record.metadata_revision,
+                    durability: self.durability,
+                    replay_config: self.branch_replay_config(),
+                    read_only: self.config.read_only,
+                },
+            )
+            .map_err(BranchLifecycleError::Admission);
+        }
         let catalog_path = self.branch_catalog_path()?;
         let head_path = self.branch_head_path(record.id.as_uuid())?;
         let objects = catalog_path
@@ -3050,6 +3063,12 @@ impl Database {
     }
 
     fn read_branch_catalog(&self) -> Result<storage::Catalog, BranchLifecycleError> {
+        if let Some(project) = self.runtime.captured_project() {
+            return project
+                .metadata()
+                .map(hawdb_storage::branch_project::ProjectMetadata::into_catalog)
+                .map_err(BranchLifecycleError::Runtime);
+        }
         storage::read_catalog(&self.branch_catalog_path()?).map_err(BranchLifecycleError::CatalogIo)
     }
 

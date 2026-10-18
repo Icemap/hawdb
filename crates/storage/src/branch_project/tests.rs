@@ -425,6 +425,7 @@ fn transferred_project_capture_rejects_same_uuid_replacement_without_recapture()
             if message == "captured project directory was replaced"
     ));
     assert_eq!(shared.metadata().unwrap().catalog().revision, 2);
+    assert_eq!(shared.locked_catalog().unwrap().revision, 2);
     assert_eq!(fixture.files.metrics().open, 1);
     assert_eq!(
         std::fs::read(catalog_path(fixture.root())).unwrap(),

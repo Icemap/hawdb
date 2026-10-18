@@ -459,25 +459,16 @@ fn recover_default_branch(
     let record = metadata.main().clone();
     drop(metadata);
     let root = project.file_descriptors().root();
-    let catalog_path = hawdb_storage::branch_project::catalog_path(root);
-    let directory = root.join("branches").join(record.id.as_uuid().to_string());
-    let head_path = directory.join("branch.head");
-    let objects = root.join("branches").join("objects");
-    let admit = if pending.config.read_only {
-        GraphStore::admit_read_only_branch_from_head
-    } else {
-        GraphStore::admit_branch_from_head
-    };
-    let admitted = admit(hawdb_storage::store::BranchAdmissionRequest {
-        catalog_path: &catalog_path,
-        branch_id: record.id,
-        expected_metadata_revision: record.metadata_revision,
-        head_path: &head_path,
-        immutable_store_root: &objects,
-        durability: pending.durability,
-        replay_config: pending.config.wal_replay_config(),
-    })
-    .map_err(|error| HawDBError::from(BranchLifecycleError::Admission(error)))?;
+    let admitted =
+        GraphStore::admit_captured_branch(hawdb_storage::store::CapturedBranchAdmissionRequest {
+            project,
+            branch_id: record.id,
+            expected_metadata_revision: record.metadata_revision,
+            durability: pending.durability,
+            replay_config: pending.config.wal_replay_config(),
+            read_only: pending.config.read_only,
+        })
+        .map_err(|error| HawDBError::from(BranchLifecycleError::Admission(error)))?;
     let (mut store, schema) = admitted.into_parts();
     configure_search_projection_changefeed(&mut store, &pending.config);
     configure_relational_fast_paths(&mut store, &pending.config);

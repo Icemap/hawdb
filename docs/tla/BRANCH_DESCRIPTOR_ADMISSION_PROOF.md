@@ -86,3 +86,14 @@ five-slot exhaustion while retaining its publication candidate through rename;
 [the metadata argument](PROJECT_METADATA_CAPTURE_PROOF.md) derives the platform
 peak and states its native qualification limits. This branch floor argument
 does not waive that recovery gate or change synchronization.
+
+## Captured metadata entry
+
+The captured branch entry borrows the original `ProjectFileDescriptors` and
+preserves its configured-limit conflict check without consulting a saved path.
+Its relative catalog lock/read reuses one branches-directory capture; selector
+and catalog files open sequentially. UUID ownership consumes its already captured
+directory instead of reopening it. These operations still charge the same global
+cap and reservation inventory. See the [separate custody argument](BRANCH_ADMISSION_CAPTURE_PROOF.md);
+this does not make the branch-admission floor a bound on arbitrary recovery or
+turn the remaining pathname effects into source-qualified operations.

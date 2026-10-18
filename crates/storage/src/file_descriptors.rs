@@ -421,6 +421,12 @@ impl ProjectFileDescriptors {
         })
     }
 
+    /// Borrow the same admitted domain, preserving the existing exact-config
+    /// conflict check without resolving a saved namespace again.
+    pub(crate) fn with_configured_limit(&self, limit: usize) -> Result<Self, HawDBError> {
+        configured_state(Arc::clone(&self.state), limit)
+    }
+
     pub fn root(&self) -> &Path {
         &self.state.root
     }

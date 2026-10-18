@@ -525,13 +525,22 @@ impl BranchHead {
 
 /// Reads a bounded, checksummed branch head.
 pub fn read_branch_head(path: &Path) -> Result<BranchHead, BranchHeadError> {
-    let length = map_io("read branch head metadata", fs::metadata(path))?.len();
+    read_branch_head_file(map_io("open branch head", File::open(path))?)
+}
+
+pub(crate) fn read_branch_head_file(file: File) -> Result<BranchHead, BranchHeadError> {
+    let length = map_io("read branch head metadata", file.metadata())?.len();
     if length > MAX_HEAD_BYTES {
         return Err(BranchHeadError::TooLarge);
     }
-    let mut file = map_io("open branch head", File::open(path))?;
     let mut bytes = Vec::with_capacity(usize::try_from(length).unwrap_or(usize::MAX));
-    map_io("read branch head", file.read_to_end(&mut bytes))?;
+    map_io(
+        "read branch head",
+        file.take(MAX_HEAD_BYTES + 1).read_to_end(&mut bytes),
+    )?;
+    if bytes.len() as u64 > MAX_HEAD_BYTES {
+        return Err(BranchHeadError::TooLarge);
+    }
     BranchHead::decode(&bytes)
 }
 
@@ -818,6 +827,42 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!("hawdb-head-{label}-{nanos}"))
+    }
+
+    #[test]
+    fn opened_head_reader_keeps_original_file_after_namespace_replacement() {
+        let path = path("held-reader");
+        let moved = path.with_extension("held");
+        let original = sample();
+        fs::write(&path, original.encode().unwrap()).unwrap();
+        let file = File::open(&path).unwrap();
+        std::fs::rename(&path, &moved).unwrap();
+        let mut replacement = original;
+        replacement.logical_commit_epoch += 1;
+        fs::write(&path, replacement.encode().unwrap()).unwrap();
+        assert_eq!(read_branch_head_file(file).unwrap(), original);
+        assert_eq!(read_branch_head(&path).unwrap(), replacement);
+        fs::remove_file(path).unwrap();
+        fs::remove_file(moved).unwrap();
+    }
+
+    #[test]
+    fn opened_head_reader_bounds_the_held_file_instead_of_replacement_length() {
+        let path = path("held-length");
+        let moved = path.with_extension("held");
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len(MAX_HEAD_BYTES + 1).unwrap();
+        drop(file);
+        let held = File::open(&path).unwrap();
+        std::fs::rename(&path, &moved).unwrap();
+        fs::write(&path, sample().encode().unwrap()).unwrap();
+        assert!(matches!(
+            read_branch_head_file(held),
+            Err(BranchHeadError::TooLarge)
+        ));
+        assert_eq!(read_branch_head(&path).unwrap(), sample());
+        fs::remove_file(path).unwrap();
+        fs::remove_file(moved).unwrap();
     }
 
     #[test]

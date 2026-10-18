@@ -48,6 +48,11 @@ same root and descriptor domain. It has no branch writer lease and does not
 make the remaining pathname kernel operations race-free. See the
 [metadata capture argument](../tla/PROJECT_METADATA_CAPTURE_PROOF.md) and the
 [deferred handoff argument](../tla/DEFERRED_PROJECT_CAPTURE_PROOF.md).
+Default/selected branch admission now also borrows that exact FD domain, reads
+both catalog images under the original relative metadata lock, acquires the UUID
+owner relative to that project, and reads its head through that owner. This does
+not migrate object/WAL/runtime/root-registry I/O or grant ledger authority; see
+[the kernel metadata boundary](../tla/BRANCH_ADMISSION_CAPTURE_PROOF.md).
 Pending-child completion with that capture needs five charged slots on Unix
 and six on Windows, whose policy retains a write-capable candidate through the
 separately admitted rename. Native Windows confirmed typed refusal at five in

@@ -304,6 +304,14 @@ impl SourceDirectory {
         )
     }
 
+    pub(crate) fn open_catalog_metadata_lock(&self, context: &FileOpenContext) -> io::Result<File> {
+        self.open_named_lock(
+            context,
+            ChildName::new(crate::branch_catalog::METADATA_LOCK_FILE)?,
+            SourceDirectoryLockMode::ReadWriteCreate,
+        )
+    }
+
     fn open_named_lock(
         &self,
         context: &FileOpenContext,

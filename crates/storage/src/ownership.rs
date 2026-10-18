@@ -97,6 +97,13 @@ impl DatabaseDirectoryLease {
             fs::canonicalize(path).map_err(DatabaseDirectoryLeaseError::Canonicalize)?;
         let directory = SourceDirectory::capture_for_path(&canonical_path)
             .map_err(DatabaseDirectoryLeaseError::OpenLockFile)?;
+        Self::from_captured(directory)
+    }
+
+    /// Acquire the native lock through an already admitted physical directory.
+    pub(crate) fn from_captured(
+        directory: SourceDirectory,
+    ) -> Result<Self, DatabaseDirectoryLeaseError> {
         #[cfg(test)]
         if let Some(hook) = AFTER_CAPTURE.with(|hook| hook.borrow_mut().take()) {
             hook();

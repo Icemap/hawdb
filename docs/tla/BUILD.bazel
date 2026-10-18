@@ -971,3 +971,27 @@ tla_check(
     )
     for control in ["DropOnTransfer", "RecaptureForAdmission", "SkipNamespaceFence"]
 ]
+
+# Captured project/UUID metadata entry into the still-path-based branch runtime.
+[
+    genrule(
+        name = "HawDBBranchAdmissionCapture" + control + "_config",
+        srcs = ["HawDBBranchAdmissionCapture.cfg"],
+        outs = ["generated/HawDBBranchAdmissionCapture" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBBranchAdmissionCapture.cfg) > $@",
+        tags = ["manual"],
+    )
+    for control in ["PathCatalog", "PathLease", "PathHead", "SkipFence"]
+]
+[
+    tla_check(
+        name = "HawDBBranchAdmissionCapture" + control + "_check",
+        module = "HawDBBranchAdmissionCapture.tla",
+        config = ":HawDBBranchAdmissionCapture" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["PathCatalog", "PathLease", "PathHead", "SkipFence"]
+]

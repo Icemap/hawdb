@@ -80,3 +80,9 @@ Consumer incarnation allocation, stationary publication, or power-loss proof is
 made here. Those require handle-relative kernel operations and the independent
 durable ledger described by the
 [stationary Consumer contract](../specs/CONSUMER_STATIONARY_PUBLICATION_SPEC.md).
+
+## Kernel metadata entry
+
+The follow-on [kernel metadata and UUID ownership argument](BRANCH_ADMISSION_CAPTURE_PROOF.md)
+covers original-domain admission, captured catalog locking, UUID ownership and
+head reads. Object/WAL/runtime/root-registry paths remain outside that refinement.
