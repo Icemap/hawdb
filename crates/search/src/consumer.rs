@@ -23,6 +23,8 @@ use std::io::Read;
 use std::path::Path;
 
 mod control;
+#[doc(hidden)]
+pub mod generation_metadata;
 mod operation;
 pub(crate) use control::require_unregistered_directory;
 pub use operation::ConsumerPreparationLease;
@@ -37,6 +39,14 @@ pub struct ConsumerBinding {
     pub checkpoint_uuid: Uuid,
 }
 
+fn valid_consumer_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+}
+
 impl ConsumerBinding {
     pub(super) fn parse(
         database: &str,
@@ -45,12 +55,7 @@ impl ConsumerBinding {
         registration: &str,
         checkpoint: &str,
     ) -> Result<Self> {
-        if id.is_empty()
-            || id.len() > 128
-            || !id
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
-        {
+        if !valid_consumer_id(id) {
             return Err(invalid("invalid consumer ID"));
         }
         Ok(Self {

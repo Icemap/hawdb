@@ -7,6 +7,12 @@ only target exclusion and clean-checkpoint admission. No consumer activation API
 or persistent head format is implemented here. The
 [acceptance ledger](../specs/MVCC_VERSIONED_PUBLICATION_SPEC.md) remains binding.
 
+The [generation metadata codec](CONSUMER_GENERATION_METADATA_DESIGN.md) now
+specifies a bounded, zero-copy indexed description of producer-supplied full
+artifact references, binding and generation identity. It does not seal writer
+outputs, authenticate their origin, mint incarnations or install a Consumer
+selector/view. A decoded description is not an activation capability.
+
 ## Why the existing prepared writer cannot be the consumer activation path
 
 [SearchIndex opening](../../crates/search/src/lib.rs) loads a complete resident
