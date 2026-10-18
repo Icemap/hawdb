@@ -34,7 +34,7 @@ def main():
     args = parser.parse_args()
     assert not (args.phase_only and args.instrumented)
     assert args.setup_checkpoint_rows >= 0
-    assert args.setup_checkpoint_rows == 0 or (args.phase_only and args.backend == "file")
+    assert args.setup_checkpoint_rows == 0 or args.backend == "file"
     assert not git("status", "--porcelain")
     assert git("merge-base", ENGINE, "HEAD") == ENGINE
     assert git("rev-parse", ENGINE + "^{tree}") == CAMPAIGN["engine_tree"]
@@ -86,6 +86,7 @@ def main():
             command += ["--consumer-sha256", digest(frozen / "retained_boundary.py"),
                         "--extension-sha256", digest(frozen / "_hawdb.so"),
                         "--progress-report", str(output / (mode + "-progress.json"))]
+        if args.setup_checkpoint_rows:
             command += ["--setup-checkpoint-rows", str(args.setup_checkpoint_rows)]
         if args.instrumented:
             command.append("--instrumented")

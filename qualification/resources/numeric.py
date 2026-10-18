@@ -23,8 +23,11 @@ def main():
     parser.add_argument("--mode", choices=("owned", "retained", "arrow"), required=True)
     parser.add_argument("--samples", type=int, default=31)
     parser.add_argument("--instrumented", action="store_true")
+    parser.add_argument("--setup-checkpoint-rows", type=int, default=0)
     args = parser.parse_args()
     assert args.rows > 0 and args.samples > 0
+    assert args.setup_checkpoint_rows >= 0
+    assert args.setup_checkpoint_rows == 0 or args.backend == "file"
     sys.path.insert(0, str(args.package))
     loader = ExtensionFileLoader("hawdb._hawdb", str(args.extension))
     spec = importlib.util.spec_from_file_location("hawdb._hawdb", args.extension, loader=loader)
@@ -38,6 +41,7 @@ def main():
     report = {"rows": args.rows, "backend": args.backend, "mode": args.mode,
               "configuration": args.configuration, "instrumented": args.instrumented,
               "samples": args.samples, "pyarrow": pa.__version__, "records": [],
+              "setup_checkpoint_rows": args.setup_checkpoint_rows, "setup_checkpoints": [],
               "scope": "One mode per fresh process; RSS includes fixture/setup/own-mode warmup/all samples; independent oracle instead of an owned reference. Instrumented timing is separate from uninstrumented tails. No whole-memory bound."}
     with tempfile.TemporaryDirectory(prefix="hawdb-numeric-resources-") as directory:
         path = None if args.backend == "memory" else Path(directory) / "db"
@@ -54,6 +58,15 @@ def main():
             for start in range(0, args.rows, 512):
                 db.execute("UNWIND $rows AS row CREATE (:Delivery {score: row.score})",
                            {"rows": [{"score": value} for value in range(start, min(start + 512, args.rows))]})
+                completed = min(start + 512, args.rows)
+                report["setup_completed_rows"] = completed
+                if (args.setup_checkpoint_rows and
+                        completed // args.setup_checkpoint_rows >
+                        start // args.setup_checkpoint_rows):
+                    checkpoint_started = time.perf_counter_ns()
+                    db.execute("CHECKPOINT")
+                    report["setup_checkpoints"].append(dict(
+                        completed_rows=completed, elapsed_ns=time.perf_counter_ns() - checkpoint_started))
             report["setup_ns"] = time.perf_counter_ns() - started
             expected = consumer.fixture_reference(args.rows); report["fixture_reference"] = expected
             report["warmup"] = consumer.attempt(db, args.mode, expected, {})
