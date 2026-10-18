@@ -536,6 +536,27 @@ their semantic meanings. A high-fanout query can now perform more work than the
 old implicit ceiling allowed; hosts requiring a traversal-work cap should set
 it explicitly rather than relying on an optimizer fanout heuristic.
 
+Memory admission does not bound elapsed time or cumulative traversal work.
+The intended elapsed-time boundary is a host-supplied `RuntimeTaskContext`
+deadline, observed cooperatively at the existing traversal and batch checkpoints.
+It is not an interrupt for a blocking OS call or a callback that never checks its
+context. `RuntimeTaskContext::default()` has no deadline. The bounded snapshot
+convenience methods use that default; hosts needing a deadline must use
+`with_bounded_read_snapshot_context` or
+`with_bounded_graph_read_snapshot_context`. Row/payload result budgets and
+semantic LIMIT do not substitute for this execution-time boundary.
+
+Mem integration audit at
+[`0b8fb240`](https://github.com/nowledge-co/mem/tree/0b8fb240e6847c642f3bace52e52d54be5d414bc):
+the embedded HawDB integration and server adapters do not set
+`graph_expansion_budget` or pass a `RuntimeTaskContext`. Community/content reads
+use the bounded snapshot convenience methods. Identity reads also check a
+two-second elapsed budget before and after each query, which cannot interrupt
+an in-flight query. Thus this revision has neither an explicit expansion-work
+cap nor an in-query deadline through these adapters. Host deadline adoption and
+its route-level qualification remain open under #996; this kernel change does
+not claim a bounded Mem query latency or authorize stable activation.
+
 Shared `binding_memory_bytes` now estimates retained resident ownership,
 including property-map container storage and nested List/Map values. Sort,
 TopN, joins, aggregation and owned batches all use that estimate. The same

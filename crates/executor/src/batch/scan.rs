@@ -807,15 +807,15 @@ impl crate::scan::ExpandedBindingConsumer for ExpandBatchConsumer<'_, '_> {
         if candidate_bytes > batch_payload_bytes {
             return Err(ResourceBudgetError {
                 resource: ResourceBudgetKind::MemoryBytes,
-                scope: ResourceBudgetScope::Account,
+                scope: ResourceBudgetScope::Operator,
                 owner: "AdjacencyExpandExec output".to_string(),
                 memory_class: Some(QueryMemoryClass::PipelineBatch.as_str()),
                 requested: candidate_bytes as u64,
-                used: self.output_lease.bytes() as u64,
+                used: 0,
                 budget: batch_payload_bytes as u64,
                 budget_option: "ExecutionMemoryConfig.batch_payload_bytes",
                 message: format!(
-                    "intermediate row uses {candidate_bytes} bytes, exceeding batch_payload_bytes {batch_payload_bytes}"
+                    "intermediate row uses {candidate_bytes} bytes, exceeding the per-row batch_payload_bytes ceiling {batch_payload_bytes}; releasing buffered rows cannot make this row fit"
                 ),
             }
             .into());
@@ -893,11 +893,12 @@ mod expand_output_tests {
 
     #[test]
     fn expand_output_admits_before_copy_and_respects_stop() {
-        for (stop, cancel, oversized) in [
-            (false, false, false),
-            (true, false, false),
-            (false, true, false),
-            (false, false, true),
+        for (stop, cancel, oversized, buffered) in [
+            (false, false, false, false),
+            (true, false, false, false),
+            (false, true, false, false),
+            (false, false, true, false),
+            (false, false, true, true),
         ] {
             let row = Binding::scalar("v", Value::String("x".repeat(4097)));
             let bytes = binding_memory_bytes(&row);
@@ -951,6 +952,13 @@ mod expand_output_tests {
             };
             let mut output = Vec::new();
             let mut output_bytes = 0;
+            if buffered {
+                let buffered_row = Binding::scalar("v", Value::Null);
+                output_bytes = binding_memory_bytes(&buffered_row);
+                lease.grow(output_bytes).unwrap();
+                output.push(buffered_row);
+            }
+            let buffered_bytes = output_bytes;
             let mut graph_expansion = GraphExpansionExecutionState::new(None, 0, 0);
             {
                 let mut sink = ExpandBatchConsumer {
@@ -989,7 +997,7 @@ mod expand_output_tests {
                         panic!("expected a typed oversized-row refusal");
                     };
                     assert_eq!(cause.resource, ResourceBudgetKind::MemoryBytes);
-                    assert_eq!(cause.scope, ResourceBudgetScope::Account);
+                    assert_eq!(cause.scope, ResourceBudgetScope::Operator);
                     assert_eq!(cause.owner, "AdjacencyExpandExec output");
                     assert_eq!(cause.memory_class, Some("pipeline_batch"));
                     assert_eq!(cause.requested, bytes as u64);
@@ -1001,7 +1009,10 @@ mod expand_output_tests {
                     );
                     assert_eq!(copies.get(), 0);
                     assert_eq!(flushes.get(), 0);
-                    assert_eq!(ledger.snapshot().used_bytes, 0);
+                    assert_eq!(ledger.snapshot().used_bytes, buffered_bytes);
+                    assert_eq!(sink.output.len(), usize::from(buffered));
+                    assert!(cause.message.contains("per-row"));
+                    assert!(cause.message.contains("releasing buffered rows cannot"));
                     continue;
                 }
                 assert_eq!(push().unwrap(), ScanControl::Continue);
