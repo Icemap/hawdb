@@ -1074,10 +1074,16 @@ mod tests {
             let error = engine
                 .query_admitted("MATCH (n:Item) RETURN n.id AS id")
                 .unwrap_err();
-            assert!(matches!(
-                &error,
-                EmbeddedQueryError::Database(HawDBError::Execution(_))
-            ));
+            let EmbeddedQueryError::Database(HawDBError::ResourceBudgetExceeded(cause)) = &error
+            else {
+                panic!("expected a typed result-memory refusal, got {error:?}");
+            };
+            assert_eq!(cause.resource, crate::ResourceBudgetKind::MemoryBytes);
+            assert_eq!(cause.scope, crate::ResourceBudgetScope::Account);
+            assert_eq!(cause.owner, "query result");
+            assert_eq!(cause.memory_class, Some("result_materialization"));
+            assert_eq!(cause.budget, payload_limit as u64);
+            assert!(cause.requested > cause.budget.saturating_sub(cause.used));
             assert!(error.to_string().contains("result_materialization"));
             let governor = engine.runtime_governor().snapshot();
             assert_eq!(governor.admissions, governor.completions);
