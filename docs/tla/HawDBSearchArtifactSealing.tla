@@ -3,7 +3,7 @@ EXTENDS FiniteSets
 CONSTANTS SkipDigestCheck, SealInstalledInstead, SelectBeforeVerify
 VARIABLE s
 vars == <<s>>
-Artifacts == {"document", "metadata", "vector", "lexical"}
+Artifacts == {"document", "metadata", "vector", "layout", "lexical"}
 Original == [a \in Artifacts |-> 0]
 Init == s = [phase |-> "seal", expected |-> Original, installed |-> Original,
              selected |-> FALSE, corrupted |-> FALSE]

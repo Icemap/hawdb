@@ -272,3 +272,42 @@ producer may have a zero-slot request in the existing API; do not invent a slot,
 clear its reservation or fail a valid publication merely because optional cleanup
 proof cannot run. Governed cleanup still requires its real I/O admission and
 reports deferral. Whole-producer physical-I/O qualification remains separate.
+
+
+## Resident sidecar producer custody follow-up
+
+The resident checkpoint prototype now derives metadata/vector references from
+its still-held private output files, after sync and before installation. The
+layout reference derives from the actual encoded buffer before writing. It
+carries those expectations across installation and verifies the installed files
+against them before selecting the manifest; it must never replace the expectation
+with a fresh description of the installed pathname. The shared sealing routine
+rewinds the held output and uses bounded admitted scratch, checks length/EOF and
+cancellation, and retains the existing domain-separated object identity.
+
+This follows `HawDBSearchArtifactSealing`: seal original bytes, install, validate
+against the preserved producer expectation, then select. The bounded artifact
+set now includes layout explicitly. The native regression independently changes
+one installed metadata/vector/layout byte without changing length, requires
+publication refusal with the previous selector unchanged, and checks recovery by
+retry plus successful reads. The native regression passed all three fault positions and retry reads. A
+separately compiled installed-expectation counter-control failed that regression;
+restored source passed again. The expanded positive TLC graph contains 24
+generated / 16 distinct states, depth 5; positive plus three intended-violation
+controls passed their registered Bazel targets. This is bounded safety evidence,
+not a durability/composed-MVCC proof. The earlier scratch-adoption evidence
+remains scoped to `ce514d5`.
+
+This adds a preinstallation read and installed verification for these two
+streamed files; it is correctness work, not an I/O or after-E optimization.
+Descriptor/document and lexical references still need actual producer custody;
+standalone resident vector references, durable Consumer ledgers/incarnations,
+stationary selection and composed recovery remain incomplete. Existing resident
+checkpoint writes are not made atomic by refusing the final selector: failed
+legacy snapshot writes and durable receipt readiness remain separate concerns.
+
+The combined local producer/admission/root regression selection passed 35 tests,
+with no failures or ignored selections. Strict Search Clippy passed. The native
+CI matrix selects the new corruption/retry regression independently and archives
+its log even if the Windows directory-move group fails. Native cross-platform
+execution of this follow-up remains pending.

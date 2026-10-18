@@ -28,7 +28,7 @@ use hawdb_storage::file_io::{self as fs, File, OpenOptions};
 use hawdb_storage::immutable_object::{ObjectKind, ObjectReference, ObjectReferenceWriter};
 #[cfg(test)]
 use std::cell::Cell;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
@@ -190,13 +190,25 @@ impl<'a> GenerationIo<'a> {
     pub(in crate::out_of_core) fn seal(&self, path: &Path) -> Result<ArtifactSeal> {
         let _buffer = self.memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
         let mut file = self.native(&[path], || File::open(path))??;
+        self.seal_file_admitted(&mut file)
+    }
+
+    /// Seal the producer's still-held candidate, before namespace installation.
+    /// The caller retains exclusive write custody; the cursor finishes at EOF.
+    pub(in crate::out_of_core) fn seal_file(&self, file: &mut File) -> Result<ArtifactSeal> {
+        let _buffer = self.memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
+        self.seal_file_admitted(file)
+    }
+
+    fn seal_file_admitted(&self, file: &mut File) -> Result<ArtifactSeal> {
+        file.seek(SeekFrom::Start(0))?;
         let expected = file.metadata()?.len();
         let mut hasher = ObjectReferenceWriter::new(ObjectKind::CheckpointArtifact, 1, expected)
             .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
         let mut buffer = [0u8; SPOOL_BUFFER_BYTES];
         let mut length = 0u64;
         loop {
-            let count = read_chunk(&mut file, &mut buffer, self.task)?;
+            let count = read_chunk(file, &mut buffer, self.task)?;
             if count == 0 {
                 break;
             }
@@ -222,7 +234,7 @@ impl<'a> GenerationIo<'a> {
         })
     }
 
-    pub(super) fn verify_object(
+    pub(in crate::out_of_core) fn verify_object(
         &self,
         path: &Path,
         object: super::super::ArtifactObject,

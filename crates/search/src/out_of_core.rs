@@ -3956,14 +3956,21 @@ pub(super) fn publish_out_of_core_projection(
         &root.join(&lexical_manifest_file),
     )?);
 
-    let (layout, metadata_payload_len, vector_payload_len) = write_out_of_core_sidecars(
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let memory = crate::build_memory::BuildMemory::new(&task)?;
+    let io = generation_writer::io::GenerationIo::new(&memory, &task);
+    let (layout, metadata_object, vector_object) = write_out_of_core_sidecars(
         index,
         &descriptor,
         generation,
         &root.join(&metadata_payload_file),
         &root.join(&vector_payload_file),
+        &io,
     )?;
+    let metadata_payload_len = metadata_object.byte_length;
+    let vector_payload_len = vector_object.byte_length;
     let layout_bytes = layout.encode()?;
+    let layout_object = ArtifactObject::for_bytes(&layout_bytes);
     bytes_written = bytes_written.saturating_add(write_generation_artifact(
         &root.join(&layout_file),
         &layout_bytes,
@@ -3974,9 +3981,23 @@ pub(super) fn publish_out_of_core_projection(
 
     let descriptor_bytes = fs::read(root.join(&descriptor_file))?;
     let lexical_manifest_bytes = fs::read(root.join(&lexical_manifest_file))?;
-    let task = hawdb_core::RuntimeTaskContext::default();
-    let memory = crate::build_memory::BuildMemory::new(&task)?;
-    let io = generation_writer::io::GenerationIo::new(&memory, &task);
+    #[cfg(test)]
+    AFTER_RESIDENT_SIDECARS.with(|hook| {
+        if let Some(index) = hook.take() {
+            let name = [&metadata_payload_file, &vector_payload_file, &layout_file][index];
+            let path = root.join(name);
+            let mut bytes = fs::read(&path).unwrap();
+            bytes[0] ^= 1;
+            fs::write(&path, bytes).unwrap();
+        }
+    });
+    for (name, object) in [
+        (&metadata_payload_file, metadata_object),
+        (&vector_payload_file, vector_object),
+        (&layout_file, layout_object),
+    ] {
+        io.verify_object(&root.join(name), object)?;
+    }
     let seal = |name: &str| -> Result<ArtifactObject> {
         ArtifactObject::from_reference(io.seal(&root.join(name))?.reference)
     };
@@ -3991,9 +4012,9 @@ pub(super) fn publish_out_of_core_projection(
         lexical_generation,
         descriptor: seal(&descriptor_file)?,
         payload: seal(&payload_file)?,
-        metadata: seal(&metadata_payload_file)?,
-        vector: seal(&vector_payload_file)?,
-        layout: seal(&layout_file)?,
+        metadata: metadata_object,
+        vector: vector_object,
+        layout: layout_object,
         lexical_manifest: seal(&lexical_manifest_file)?,
         lexical_payload: seal(&crate::lexical_projection::artifact_file(
             lexical_generation,
@@ -4069,13 +4090,19 @@ pub(super) fn publish_out_of_core_projection(
     })
 }
 
+#[cfg(test)]
+thread_local! {
+    static AFTER_RESIDENT_SIDECARS: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
 fn write_out_of_core_sidecars(
     index: &SearchIndex,
     descriptor: &SearchSegmentDescriptor,
     generation: u64,
     metadata_path: &Path,
     vector_path: &Path,
-) -> Result<(SearchOutOfCoreLayoutBody, u64, u64)> {
+    io: &generation_writer::io::GenerationIo<'_>,
+) -> Result<(SearchOutOfCoreLayoutBody, ArtifactObject, ArtifactObject)> {
     let metadata_tmp = temporary_artifact_path(metadata_path);
     let vector_tmp = temporary_artifact_path(vector_path);
     let mut metadata_guard = CandidateFileGuard::new(metadata_tmp.clone());
@@ -4084,9 +4111,19 @@ fn write_out_of_core_sidecars(
     let mut vector_offset = 0u64;
     let mut vector_ordinal = 0u64;
     let mut layouts = Vec::with_capacity(descriptor.segments.len());
+    let metadata_object;
+    let vector_object;
     {
-        let mut metadata_file = File::create(&metadata_tmp)?;
-        let mut vector_file = File::create(&vector_tmp)?;
+        let mut metadata_file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(&metadata_tmp)?;
+        let mut vector_file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(&vector_tmp)?;
 
         for segment in &descriptor.segments {
             let documents = index
@@ -4160,6 +4197,9 @@ fn write_out_of_core_sidecars(
 
         metadata_file.sync_all()?;
         vector_file.sync_all()?;
+        metadata_object =
+            ArtifactObject::from_reference(io.seal_file(&mut metadata_file)?.reference)?;
+        vector_object = ArtifactObject::from_reference(io.seal_file(&mut vector_file)?.reference)?;
     }
     durable_replace_file(&metadata_tmp, metadata_path)?;
     metadata_guard.disarm();
@@ -4172,8 +4212,8 @@ fn write_out_of_core_sidecars(
             document_count: descriptor.document_count,
             segments: layouts,
         },
-        metadata_offset,
-        vector_offset,
+        metadata_object,
+        vector_object,
     ))
 }
 
@@ -5169,6 +5209,53 @@ mod tests {
             fusion_weights: SearchFusionWeights::default(),
             metadata_filters: BTreeMap::new(),
             policy_epoch: None,
+        }
+    }
+
+    #[test]
+    fn resident_sidecar_producer_references_reject_installed_same_length_changes() {
+        for artifact in 0..3 {
+            let path = test_dir("resident-sidecar-producer-reference");
+            let mut index = SearchIndex::open(&path).unwrap();
+            index.upsert(document(0, "team")).unwrap();
+            index.checkpoint().unwrap();
+            let selected = fs::read(path.join(OUT_OF_CORE_MANIFEST_FILE)).unwrap();
+            AFTER_RESIDENT_SIDECARS.with(|hook| hook.set(Some(artifact)));
+            let error = index.checkpoint().unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("differs from its producer reference"),
+                "artifact {artifact}: {error}"
+            );
+            assert_eq!(
+                fs::read(path.join(OUT_OF_CORE_MANIFEST_FILE)).unwrap(),
+                selected
+            );
+            assert_eq!(
+                SearchOutOfCoreReader::open(&path).unwrap().document_count(),
+                1
+            );
+            index.checkpoint().unwrap();
+            let bytes = fs::read(path.join(OUT_OF_CORE_MANIFEST_FILE)).unwrap();
+            let manifest = SearchOutOfCoreManifestBody::decode(&bytes).unwrap();
+            let segment = &manifest.segments[0];
+            for (name, object) in [
+                (&segment.metadata_payload_file, segment.objects.metadata),
+                (&segment.vector_payload_file, segment.objects.vector),
+                (&segment.layout_file, segment.objects.layout),
+            ] {
+                assert_eq!(
+                    object,
+                    ArtifactObject::for_bytes(&fs::read(path.join(name)).unwrap())
+                );
+            }
+            assert_eq!(
+                SearchOutOfCoreReader::open(&path).unwrap().document_count(),
+                1
+            );
+            drop(index);
+            fs::remove_dir_all(path).unwrap();
         }
     }
 
