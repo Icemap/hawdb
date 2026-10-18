@@ -343,6 +343,49 @@ impl ImageEngine {
         Ok(())
     }
 
+    /// Replace a regular control entry atomically inside the captured directory.
+    pub fn replace_file_at(
+        &mut self,
+        directory: InodeId,
+        source: &Path,
+        target: &Path,
+    ) -> io::Result<()> {
+        let inode = self.child_inode(directory, source)?;
+        if self.is_directory(inode) {
+            return Err(invalid("control candidate is a directory"));
+        }
+        let target_name = child_name(target)?.to_os_string();
+        if let Some(existing) = self.current_directory(directory)?.get(&target_name)
+            && self.is_directory(*existing)
+        {
+            return Err(invalid("control head is a directory"));
+        }
+        let source_name = child_name(source)?.to_os_string();
+        if source_name == target_name {
+            return Ok(());
+        }
+        if self.current_directory(directory)?.get(&target_name) == Some(&inode) {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "control head aliases its candidate",
+            ));
+        }
+        self.admit_operation(0)?;
+        self.namespace(vec![
+            EntryChange {
+                directory,
+                name: source_name,
+                value: None,
+            },
+            EntryChange {
+                directory,
+                name: target_name,
+                value: Some(inode),
+            },
+        ])?;
+        Ok(())
+    }
+
     /// Unlink one file entry, preserving any other hard links to its inode.
     /// Directories are rejected even when empty, matching file-only unlink.
     pub fn remove_file_at(&mut self, directory: InodeId, name: &Path) -> io::Result<()> {

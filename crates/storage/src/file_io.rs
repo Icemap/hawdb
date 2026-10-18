@@ -30,7 +30,10 @@ mod source_directory;
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) use source_directory::PowerLossRoot;
 #[doc(hidden)]
-pub use source_directory::{SourceDirectory, SourceDirectoryIdentity, SourceDirectoryLockMode};
+pub use source_directory::{
+    CapturedControlCandidate, PendingControlPublication, SourceDirectory, SourceDirectoryIdentity,
+    SourceDirectoryLockMode,
+};
 
 mod read;
 #[doc(hidden)]

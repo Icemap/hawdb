@@ -614,3 +614,26 @@ tla_check(
     )
     for control in ["UseDirectoryMove", "ReleaseCustody", "SkipDataSync", "AckBeforeBarrier"]
 ]
+
+[
+    genrule(
+        name = "HawDBCapturedControlPublication" + control + "_config",
+        srcs = ["HawDBCapturedControlPublication.cfg"],
+        outs = ["generated/HawDBCapturedControlPublication" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBCapturedControlPublication.cfg) > $@",
+    )
+    for control in ["PathForCreate", "PathForReplace", "AllowLateWrites", "RetryFailed", "AckEarly", "SkipPostFileSync"]
+]
+
+[
+    tla_check(
+        name = "HawDBCapturedControlPublication" + control + "_check",
+        module = "HawDBCapturedControlPublication.tla",
+        config = ":HawDBCapturedControlPublication" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["PathForCreate", "PathForReplace", "AllowLateWrites", "RetryFailed", "AckEarly", "SkipPostFileSync"]
+]

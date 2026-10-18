@@ -12,6 +12,7 @@ STORAGE_MODELS = [
     "HawDBBorrowedQueryCursor",
     "HawDBBoundedMorselMerge",
     "HawDBBranchLifecycle",
+    "HawDBCapturedControlPublication",
     "HawDBCheckpointCleanupHeadroom",
     "HawDBColumnGroupManifest",
     "HawDBColumnarShadowIntegration",

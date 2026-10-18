@@ -10,6 +10,9 @@ use crate::file_descriptors::{DescriptorKind, DescriptorPermit, FileOpenContext}
 use std::io;
 use std::path::Path;
 
+mod control_candidate;
+pub use control_candidate::{CapturedControlCandidate, PendingControlPublication};
+
 #[cfg(unix)]
 #[path = "source_directory/unix.rs"]
 mod platform;
@@ -19,6 +22,20 @@ mod platform;
 #[cfg(not(any(unix, windows)))]
 mod platform {
     use super::*;
+    pub(super) fn create_control_candidate(
+        _root: &std::fs::File,
+        _name: ChildName<'_>,
+    ) -> io::Result<std::fs::File> {
+        Err(unsupported())
+    }
+    pub(super) fn replace_control(
+        _root: &std::fs::File,
+        _file: &std::fs::File,
+        _source: ChildName<'_>,
+        _target: ChildName<'_>,
+    ) -> io::Result<()> {
+        Err(unsupported())
+    }
     pub(super) fn open_root(_path: &Path) -> io::Result<std::fs::File> {
         Err(unsupported())
     }

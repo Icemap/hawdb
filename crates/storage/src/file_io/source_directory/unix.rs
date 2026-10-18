@@ -18,6 +18,53 @@ fn name_bytes(name: ChildName<'_>) -> [u8; 256] {
     bytes
 }
 
+pub(super) fn create_control_candidate(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+) -> io::Result<std::fs::File> {
+    let name = name_bytes(name);
+    // SAFETY: live root, terminated validated component, exclusive regular-file
+    // creation with a supplied mode. No existing entry or symlink is followed.
+    let fd = unsafe {
+        libc::openat(
+            root.as_raw_fd(),
+            name.as_ptr().cast(),
+            libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+            0o600,
+        )
+    };
+    if fd == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: successful openat transferred one fresh owned descriptor.
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
+pub(super) fn replace_control(
+    root: &std::fs::File,
+    _file: &std::fs::File,
+    source: ChildName<'_>,
+    target: ChildName<'_>,
+) -> io::Result<()> {
+    let source = name_bytes(source);
+    let target = name_bytes(target);
+    // SAFETY: both canonical components and the same borrowed native directory
+    // remain live. The caller excludes mutation/reuse of the private candidate.
+    let result = unsafe {
+        libc::renameat(
+            root.as_raw_fd(),
+            source.as_ptr().cast(),
+            root.as_raw_fd(),
+            target.as_ptr().cast(),
+        )
+    };
+    if result == -1 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(all(
     any(test, feature = "test-support"),
     any(target_os = "linux", target_vendor = "apple")

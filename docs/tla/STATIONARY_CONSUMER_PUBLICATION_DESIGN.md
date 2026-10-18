@@ -52,6 +52,12 @@ the same captured source and must not follow a replaced root label. That source
 binding refinement and its recorder/lost/torn/reordered-write qualification
 remain required.
 
+The [captured control publication primitive](CAPTURED_CONTROL_PUBLICATION_DESIGN.md)
+now implements a separate directory-relative candidate/selection/pending-barrier
+boundary. Its source-relative native and recorder qualification is distinct from
+this original stable-path availability probe. Consumer orchestration, first
+registration and actual view/receipt activation remain incomplete.
+
 Initial registration also needs a defined publication boundary. Do not merely
 initialize a visible destination in place, remove the stage move, or let ordinary
 readers interpret a missing selector as an empty projection. An initial target

@@ -81,6 +81,68 @@ const SYNCHRONOUS_NONALERT: u32 = 0x20;
 const OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 const ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 
+pub(super) fn create_control_candidate(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+) -> io::Result<std::fs::File> {
+    let mut encoded = [0_u16; 256];
+    for (slot, byte) in encoded.iter_mut().zip(name.0.bytes()) {
+        *slot = u16::from(byte);
+    }
+    // FILE_CREATE (2), not OPEN_IF: no existing entry may become writable.
+    // GENERIC_WRITE supports FlushFileBuffers; DELETE supports held-file rename.
+    relative_open_encoded(
+        root,
+        &mut encoded[..name.0.len()],
+        READ_DATA | 0x4000_0000 | DELETE,
+        2,
+        NON_DIRECTORY,
+    )
+}
+
+pub(super) fn replace_control(
+    root: &std::fs::File,
+    file: &std::fs::File,
+    _source: ChildName<'_>,
+    target: ChildName<'_>,
+) -> io::Result<()> {
+    #[repr(C)]
+    struct RenameInfo {
+        flags: u32,
+        root: *mut c_void,
+        length: u32,
+        name: [u16; 256],
+    }
+    let mut info = RenameInfo {
+        // REPLACE_IF_EXISTS | POSIX_SEMANTICS: held old head readers retain
+        // their inode. RootDirectory binds the destination to this capture.
+        flags: 3,
+        root: root.as_raw_handle(),
+        length: u32::try_from(target.0.len() * 2).expect("bounded component"),
+        name: [0; 256],
+    };
+    for (slot, byte) in info.name.iter_mut().zip(target.0.bytes()) {
+        *slot = u16::from(byte);
+    }
+    let bytes = std::mem::offset_of!(RenameInfo, name) + target.0.len() * 2 + 2;
+    // SAFETY: class 22 is FileRenameInfoEx; repr(C) matches FILE_RENAME_INFO,
+    // including platform handle alignment. The live DELETE-capable candidate,
+    // captured directory and bounded UTF-16 component outlive the syscall.
+    let result = unsafe {
+        set_file_information(
+            file.as_raw_handle(),
+            22,
+            std::ptr::from_ref(&info).cast(),
+            u32::try_from(bytes).expect("bounded rename buffer"),
+        )
+    };
+    if result == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
 pub(super) fn open_root(path: &Path) -> io::Result<std::fs::File> {
     const BACKUP_SEMANTICS: u32 = 0x0200_0000;
     std::fs::OpenOptions::new()

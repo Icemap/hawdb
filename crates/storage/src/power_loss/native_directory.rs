@@ -18,6 +18,42 @@ pub(crate) struct NativeDirectoryTrace {
 }
 
 impl NativeDirectoryTrace {
+    pub(crate) fn create_file(
+        &self,
+        name: &Path,
+        native: impl FnOnce() -> io::Result<std::fs::File>,
+    ) -> io::Result<(std::fs::File, NativeTrace)> {
+        let mut engine = self.core.lock()?;
+        let mut candidate = engine.clone();
+        let inode = candidate.create_file_at(self.inode, name)?;
+        let label = self.opened_path.join(name);
+        let event = Some((IoEvent::CreateFile, label.as_path()));
+        self.core
+            .observe_at(&engine, event, ObservationBoundary::Before)?;
+        let file = native()?;
+        require_file(&file)?;
+        *engine = candidate;
+        self.core
+            .observe_at(&engine, event, ObservationBoundary::After)?;
+        Ok((
+            file,
+            NativeTrace::from_directory(self.core.clone(), inode, label),
+        ))
+    }
+
+    pub(crate) fn replace_file(
+        &self,
+        source: &Path,
+        target: &Path,
+        native: impl FnOnce() -> io::Result<()>,
+    ) -> io::Result<()> {
+        let label = self.opened_path.join(source);
+        self.core.mutate_observed(
+            Some((IoEvent::Rename, &label)),
+            |engine| engine.replace_file_at(self.inode, source, target),
+            native,
+        )
+    }
     pub(crate) fn capture(
         core: Arc<ModelCore>,
         path: &Path,
