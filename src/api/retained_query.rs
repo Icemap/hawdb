@@ -38,6 +38,11 @@ use std::ops::Range;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
+mod arrow;
+pub use arrow::{
+    ArrowArray, ArrowArrayStream, ArrowSchema, RetainedArrowCodeOwner, RetainedArrowExport,
+    RetainedArrowSchema, RetainedArrowStream,
+};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RetainedQueryError {
     UnsupportedPlan,
@@ -279,6 +284,8 @@ struct CursorShared {
     outstanding: AtomicUsize,
     status: AtomicU8,
     limit: usize,
+    handle_limit: usize,
+    account: QueryMemoryAccount,
     _memory: QueryMemoryLease,
     _runtime: RuntimeRetainedResult,
 }
@@ -708,6 +715,8 @@ impl RetainedQueryCursor {
             outstanding: AtomicUsize::new(0),
             status: AtomicU8::new(0),
             limit: options.outstanding_batches.get(),
+            handle_limit: governor.retained_result_snapshot().handle_limit,
+            account: account.clone(),
             _memory: memory,
             _runtime: runtime,
         });
