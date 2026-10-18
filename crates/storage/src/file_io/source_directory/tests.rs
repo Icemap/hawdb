@@ -77,11 +77,15 @@ fn unlink_removes_captured_name_while_an_existing_child_handle_remains_readable(
     fs::write(original.join("payload.hawdb"), b"old captured bytes").unwrap();
     let source = fixture.capture(&original);
     let context = fixture.project.io_context();
-    let mut held = source.open_child(&context, "payload.hawdb").unwrap();
     fs::rename(&original, &moved).unwrap();
     fs::create_dir(&original).unwrap();
     fs::write(original.join("payload.hawdb"), b"foreign bytes").unwrap();
 
+    // Capture precedes namespace drift, but open the child afterwards. Windows
+    // refuses moving a directory containing an open child; that independent
+    // publication limitation must not prevent this unlink contract from running.
+    // The old handle remains live across unlink and same-name recreation.
+    let mut held = source.open_child(&context, "payload.hawdb").unwrap();
     source.remove_child(&context, "payload.hawdb").unwrap();
     assert!(
         !moved.join("payload.hawdb").exists(),

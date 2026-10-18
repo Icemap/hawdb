@@ -275,12 +275,16 @@ and descriptor failures propagate without a pathname fallback or closing another
 owner's handles. No namespace fsync or power-loss durability follows from unlink
 alone. See [Microsoft's disposition contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/ns-ntddk-_file_disposition_information_ex).
 
-The native regression keeps a child open, replaces the original root pathname,
-unlinks through the held root and requires immediate name disappearance. It then
+The native regression captures the root, replaces its original pathname, opens
+an old child through that same capture and keeps the child open across unlink.
+It requires immediate name disappearance. It then
 recreates the name and checks old-handle/new-open separation and unchanged foreign
 bytes. The existing Search child-pin and final-owner reclamation assertions stay
 enabled. Native Windows execution is required to qualify this backend change;
-a passing Unix test or cross-target Clippy is insufficient.
+a passing Unix test or cross-target Clippy is insufficient. The child is opened
+after the directory move because native Windows refuses moving a directory with
+open children. The separate Search namespace/publication move regressions remain
+enabled and failing; this fixture ordering does not qualify that protocol.
 
 `HawDBCapturedUnlink` models only this observable unlink boundary: successful
 acknowledgment removes the old name, foreign B is untouched, and a held old
