@@ -1,0 +1,36 @@
+INFO: Invocation ID: 50933dca-a3d7-414c-a815-6b5f5ebe563a
+INFO: Reading 'startup' options from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc:
+  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc:
+  'test' options: --local_test_jobs=HOST_CPUS*0.5
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //:hawdb_branch_project_open_tests (0 packages loaded, 0 targets configured)
+Analyzing: target //:hawdb_branch_project_open_tests (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:hawdb_branch_project_open_tests (0 packages loaded, 1 target configured).
+[7 / 8] Testing //:hawdb_branch_project_open_tests; 1s disk-cache, darwin-sandbox
+[7 / 8] Testing //:hawdb_branch_project_open_tests; 11s disk-cache, darwin-sandbox
+[7 / 8] Testing //:hawdb_branch_project_open_tests; 41s disk-cache, darwin-sandbox
+[7 / 8] Testing //:hawdb_branch_project_open_tests; 101s disk-cache, darwin-sandbox
+[7 / 8] Testing //:hawdb_branch_project_open_tests; 130s disk-cache, darwin-sandbox
+INFO: Found 1 test target...
+Target //:hawdb_branch_project_open_tests up-to-date:
+  bazel-bin/hawdb_branch_project_open_tests
+INFO: Elapsed time: 131.557s, Critical Path: 131.34s
+INFO: 7 processes: 1 action cache hit, 5 internal, 3 darwin-sandbox.
+INFO: Build completed successfully, 7 total actions
+INFO: 
+//:hawdb_branch_project_open_tests                                       PASSED in 130.3s
+
+Executed 1 out of 1 test: 1 test passes.
+INFO: Build Event Protocol files produced successfully.

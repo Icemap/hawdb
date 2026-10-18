@@ -1,0 +1,71 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_branch_project_open_minimal_tests
+-----------------------------------------------------------------------------
+
+running 47 tests
+
+running 1 test
+test default_project_remains_usable_under_a_host_owned_descriptor_limit ... test metadata_open_obeys_small_fd_limit_without_admitting_main ... ok
+test cold_sql_drop_does_not_admit_busy_main_and_root_delete_is_immutable ... ok
+test deferred_recovery_callback_can_read_the_published_database ... ok
+test metadata_open_and_show_survive_busy_main_and_data_admission_can_retry ... ok
+test concurrent_pending_reports_and_retries_preserve_deferred_main_admission ... ok
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 9.79s
+
+
+running 1 test
+test default_project_remains_usable_under_a_host_owned_descriptor_limit ... test ordinary_open_adopts_legacy_acknowledged_rows_without_copying_directory ... ok
+test database_instance_identity_changes_on_branch_selection_and_reopen ... ok
+test concurrent_reclamation_preserves_active_readers_without_retaining_unrelated_orphans ... ok
+test name_reuse::reused_branch_name_inspection_prefers_current_identity_in_both_uuid_orders ... ok
+test abandonment::abandonment_rejects_stale_ownership_and_changed_sources_before_writing_intent ... ok
+test name_reuse::reused_branch_name_create_parent_uses_current_identity_in_both_uuid_orders ... ok
+test abandonment::quarantine_evidence_uses_an_independent_retryable_budget ... ok
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 14.99s
+
+test default_project_remains_usable_under_a_host_owned_descriptor_limit ... ok
+test abandonment::abandonment_never_authorizes_reclaiming_corrupt_live_dependencies ... ok
+test published_project_never_falls_back_after_selector_or_catalog_damage ... ok
+test published_metadata_can_open_damaged_main_without_recreating_it ... ok
+test name_reuse::reused_branch_name_inspection_preserves_pending_delete_over_older_receipts ... ok
+test name_reuse::reused_branch_name_typed_delete_targets_current_identity_in_both_uuid_orders ... ok
+test pending_main_repair_blocks_only_its_data_admission ... ok
+test pending_main_can_select_another_branch_while_main_is_busy ... ok
+test name_reuse::reused_branch_name_selection_admits_current_identity_in_both_uuid_orders ... ok
+test readonly_pending_open_does_not_recreate_missing_directories_or_repair_receipts ... ok
+test reclamation_defers_for_a_live_pending_creator_without_a_head ... ok
+test retained_pending_create_blocks_reclamation_without_deleting_evidence ... ok
+test ordinary_open_bootstraps_main_and_reopens_its_private_wal ... ok
+test pending_recovery_preserves_live_creators_and_never_admits_busy_main ... ok
+test live_writer_reclamation_retains_readers_descendants_and_budget_retries ... ok
+test read_only_admission_and_use_preserve_unpublished_checkpoint_evidence ... ok
+test runtime_roots::corrupt_or_missing_live_root_declarations_prevent_every_unlink ... ok
+test reclamation_rejects_corrupt_inventory_while_an_unrelated_writer_remains_active ... ok
+test shared_runtime_rejects_use_before_main_admission_and_can_show_catalog ... ok
+test slow_query_export_uses_source_budget_without_admitting_deferred_runtime ... ok
+test stale_pending_recovery_does_not_recreate_a_reclaimed_successful_child ... ok
+test abandonment::abandonment_damaged_quarantine_blocks_complete_sweep has been running for over 60 seconds
+test abandonment::abandonment_preserves_evidence_and_replays_after_reclamation has been running for over 60 seconds
+test runtime_roots::pending_and_failed_jobs_pin_their_source_without_blocking_unrelated_reclamation ... ok
+test storage_inventory_tracks_selection_and_retries_budget_exhaustion ... ok
+test runtime_roots::foreign_writer_and_historical_reader_allow_exact_project_reclamation ... ok
+test sql_create_from_cold_main_and_bootstrap_retry_keep_data_runtime_closed ... ok
+test qualification::branch_fork_excludes_rolled_back_schema_and_data ... ok
+test pending_recovery_retains_corruption_and_aborts_only_known_missing_head_or_wal ... ok
+test pending_reclamation_attributes_root_failures_without_blaming_unrelated_inventory has been running for over 60 seconds
+test runtime_roots::historical_reader_roots_survive_new_heads_and_retire_only_after_the_reader ... ok
+test unopened_catalog_scale_keeps_native_and_project_descriptors_bounded ... ok
+test qualification::branch_read_snapshot_keeps_schema_and_data_after_ddl_data_commit ... ok
+test writable_open_recovers_pending_children_with_aggregate_limits_and_no_runtime ... ok
+test qualification::branch_schema_constraints_indexes_and_migrations_survive_every_reopen_order has been running for over 60 seconds
+test pending_reclamation_attributes_root_failures_without_blaming_unrelated_inventory ... ok
+test abandonment::abandonment_damaged_quarantine_blocks_complete_sweep ... ok
+test abandonment::abandonment_preserves_evidence_and_replays_after_reclamation ... ok
+test qualification::branch_schema_constraints_indexes_and_migrations_survive_every_reopen_order ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 119.73s
+

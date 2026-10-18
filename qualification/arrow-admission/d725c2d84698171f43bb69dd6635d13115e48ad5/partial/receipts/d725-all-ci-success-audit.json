@@ -1,0 +1,84 @@
+{
+  "head": "d725c2d84698171f43bb69dd6635d13115e48ad5",
+  "observed": 1792312489.7953432,
+  "checks": [
+    {
+      "name": "ci/skein-storage-crash-recovery",
+      "id": 117620668929,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1071/pull-skein-storage-crash-recovery/2111725417378353152"
+    },
+    {
+      "name": "ci/skein-bazel-test-root",
+      "id": 117620667684,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1071/pull-skein-bazel-test-root/2111725333324500992"
+    },
+    {
+      "name": "ci/skein-bazel-test-crates",
+      "id": 117620666230,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1071/pull-skein-bazel-test-crates/2111725333576159232"
+    },
+    {
+      "name": "ci/skein-bazel-test-analytics-dense",
+      "id": 117620664759,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1071/pull-skein-bazel-test-analytics-dense/2111725333404192768"
+    },
+    {
+      "name": "ci/skein-bazel-build",
+      "id": 117620662876,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/1071/pull-skein-bazel-build/2111725333240614912"
+    },
+    {
+      "name": "Bazel native bindings (macos-latest)",
+      "id": 117620453908,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39108859085/job/117620453908"
+    },
+    {
+      "name": "Bazel native bindings (ubuntu-24.04)",
+      "id": 117620453740,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39108859085/job/117620453740"
+    },
+    {
+      "name": "Bazel build and test (macos-latest)",
+      "id": 117620453706,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39108859090/job/117620453706"
+    },
+    {
+      "name": "Build and test",
+      "id": 117620453681,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39108859090/job/117620453681"
+    },
+    {
+      "name": "Windows native contracts",
+      "id": 117620453630,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39108859085/job/117620453630"
+    },
+    {
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "id": 117620453575,
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39108859090/job/117620453575"
+    }
+  ],
+  "scope": "All eligible current-head checks passed. Does not close preserved local general failures or final PR986 performance/resource/approval gates."
+}

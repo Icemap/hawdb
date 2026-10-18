@@ -1,5 +1,5 @@
 {
-  "status": "partial_local_staging_only",
+  "status": "partial_current_source_general_and_full986_gates_open",
   "files": {
     "source.json": {
       "bytes": 17570,
@@ -10,8 +10,8 @@
       "sha256": "26808b9f10311b321bccbcdda1298557c0e5f0ab2cc1f5f834f621a3dbfd545c"
     },
     "README.md": {
-      "bytes": 1856,
-      "sha256": "52b7b002c6707981bc0400ef4f4bf213419b42819c2123a35c5251d4d2b93149"
+      "bytes": 2753,
+      "sha256": "081ab9e5e67b1ce7506a2e4e7e1eea47c3a1c477cb809af66bca709b4207a01a"
     },
     "float-identity-fixture.rs": {
       "bytes": 5090,
@@ -24,6 +24,10 @@
     "receipts/arrow-review-main-da58476d-general-failure-audit.json": {
       "bytes": 2037,
       "sha256": "f8104732d8cc9c434e125451b6d1cfc9a31e3ea884a93031b60d0fdb4067c788"
+    },
+    "receipts/d725-all-ci-check-runs.json": {
+      "bytes": 171533,
+      "sha256": "5e3246e0dc8d1654d09848b7c945022158fbe513b218acba8bf125926b9daff3"
     },
     "receipts/idle-checkpoint-main-control-v1-state.json": {
       "bytes": 2937,
@@ -49,9 +53,17 @@
       "bytes": 988,
       "sha256": "bf0d998bd55bbcd08845da68f161ee4cbcf3b54afaa97fac4a0db4f5b0a9db78"
     },
+    "receipts/arrow-d725c2d8-remaining-v3-v3-validation-state.json": {
+      "bytes": 38908,
+      "sha256": "533d6599fe745cdaef0cabb034885ef13086e230e13d6e170a9eb7a4a948a04e"
+    },
     "receipts/arrow-review-main-da58476d-preparation-state.json": {
       "bytes": 17698,
       "sha256": "ad7cfefb5789e3054d44e591d92bff031d88350292481b05c7d57588f679e93f"
+    },
+    "receipts/d725-all-ci-success-audit.json": {
+      "bytes": 3400,
+      "sha256": "55b34b42b9a5f34f84e8e07b322f08e37f7b8eb2d5a1eea01439732cc6f41911"
     },
     "receipts/arrow-main-da58476d-draft-publication-state.json": {
       "bytes": 28100,
@@ -61,6 +73,10 @@
       "bytes": 528,
       "sha256": "dcd6293d990506516c5ee01b80e6f054c9309b0c147735d415efc64e13a8727b"
     },
+    "logs/arrow-d725c2d8-remaining-v3-branch-minimal-_hawdb_branch_project_open_minimal_tests-test.log": {
+      "bytes": 5191,
+      "sha256": "40b8ff66725aab9e459c1a6f401ecd33dbb74579838321cfd880d011c4f09518"
+    },
     "logs/idle-checkpoint-main-control-v1-integrated.log": {
       "bytes": 2470,
       "sha256": "f6a18992c5ddc19e98364712592c7da48074fc8ba0901927ec2d6f97b782e3ff"
@@ -69,6 +85,26 @@
       "bytes": 5773,
       "sha256": "cbdac98213e8e88b7fd05f9bcedd45de47dce9259b4820eceb67811b5da544fb"
     },
+    "logs/arrow-d725c2d8-remaining-v3-branch-minimal.log": {
+      "bytes": 3231,
+      "sha256": "47b5a17cd76d5e553ce475ecde603814cc3c7dc37cf3ec5d082359cb3c5588a1"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-search-text-vector.log": {
+      "bytes": 3001,
+      "sha256": "d2d7bff3091220c4f6ec4e56c78f7f01ce6df91d8dc97aaa420cc30c0bef9cca"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-search.log": {
+      "bytes": 2876,
+      "sha256": "019b83f1bac7498d5f3f30fef847f745982a02c940b3c90e0108d8a58eaf44af"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-branch-_hawdb_branch_project_open_tests-test.log": {
+      "bytes": 5306,
+      "sha256": "929efb7c98f4354a5fd96168c6573ec5bd1605a492f57316e182c84faf170ba0"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-search-crates_search_hawdb_search_tests-test.log": {
+      "bytes": 93705,
+      "sha256": "39b5af31908cdd714ca224d0604dec273edb316a9e5072ddb3b26444f64fa3b2"
+    },
     "logs/arrow-review-main-da58476d-prek.log": {
       "bytes": 160,
       "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
@@ -76,6 +112,14 @@
     "logs/arrow-d725c2d8-remaining-v3-python-bindings_python_hawdb_python_tests-test.log": {
       "bytes": 2026,
       "sha256": "8b80b734b55bbc07518cc62d1a4d7a66d95f56090f261639715a09950c014aa3"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-contract.log": {
+      "bytes": 2652,
+      "sha256": "bd933973628ac312719a5ca5a08b2f1a272993add1c6085e052c4ae039e490c0"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-search-text-vector-crates_search_hawdb_search_text_vector_tests-test.log": {
+      "bytes": 92054,
+      "sha256": "a0670c1c3af11ae596ab348ebebb38ced06133e36a895f10cc3dbe5de4e8654d"
     },
     "logs/arrow-d725c2d8-remaining-v3-go.log": {
       "bytes": 2427,
@@ -101,9 +145,17 @@
       "bytes": 3400,
       "sha256": "76b910e0de88f8aef3a06566cfe82dd3f0ccbae891f6070924e50b425c4ea1b7"
     },
+    "logs/arrow-d725c2d8-remaining-v3-concurrent.log": {
+      "bytes": 3147,
+      "sha256": "21cc5181da648f2a0603195d72e5546ddd7386f8afe3424d511d2e8c34dec45e"
+    },
     "logs/arrow-d725c2d8-remaining-v3-python.log": {
       "bytes": 6416,
       "sha256": "ab7f27475e6ac76bbcf76b89c549155e38b38d7fbb7cf622b2e266ccdc81506d"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-concurrent-_hawdb_unit_concurrent_tests-test.log": {
+      "bytes": 15460,
+      "sha256": "81ed46a5a3c941bc3c7874fff90383b8084994a91f88b53683db3c1639f87043"
     },
     "logs/arrow-review-main-da58476d-wasm.log": {
       "bytes": 5022,
@@ -116,6 +168,10 @@
     "logs/arrow-d725c2d8-remaining-v3-public-consumer.log": {
       "bytes": 98,
       "sha256": "e7b6c317f8c6c6476f4aef4a87dcff0a7034f6005426590510b48d574c904f1c"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-contract-_hawdb_execution_request_contract_tests-test.log": {
+      "bytes": 3334,
+      "sha256": "baa00a3e4a8b72e2b748fbd08be4daabe1dda7412810b77fbd996c236d432add"
     },
     "logs/arrow-review-main-da58476d-python-native.log": {
       "bytes": 8737,
@@ -144,6 +200,10 @@
     "logs/arrow-d725c2d8-remaining-v3-pydantic-bindings_python_hawdb_python_pydantic_tests-test.log": {
       "bytes": 10498,
       "sha256": "9b7693298033f723e9e42b122d97f4f16199237f9ea27f274085b58dfecfe329"
+    },
+    "logs/arrow-d725c2d8-remaining-v3-branch.log": {
+      "bytes": 2625,
+      "sha256": "64e9a1e89aa93f9515b0fde68bf224edcf159b493de2b0162841aa8a66a0cb3b"
     },
     "logs/arrow-review-main-da58476d-retained-_hawdb_unit_general_tests-test.log": {
       "bytes": 9222,

@@ -1,0 +1,42 @@
+INFO: Invocation ID: 34e800b5-9cbd-4bbf-bc5a-0c535aec581d
+INFO: Reading 'startup' options from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'common' options: --repository_cache=~/tmp/bazel/repositories --experimental_install_base_gc_max_age=4d
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc:
+  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config
+INFO: Reading rc options for 'test' from /Users/hawkingrei/.bazelrc:
+  Inherited 'build' options: --disk_cache=~/tmp/bazel/action-cache --experimental_disk_cache_gc_max_size=150G
+INFO: Reading rc options for 'test' from /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc:
+  'test' options: --local_test_jobs=HOST_CPUS*0.5
+INFO: Found applicable config definition build:macos in file /private/tmp/hawdb-wip-ready-20261015/integrate-arrow-review-main-da58476d/.bazelrc: --@rules_rust//rust/settings:extra_exec_rustc_flags=-Cstrip=none
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //:hawdb_branch_project_open_minimal_tests (0 packages loaded, 0 targets configured)
+Analyzing: target //:hawdb_branch_project_open_minimal_tests (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:hawdb_branch_project_open_minimal_tests (0 packages loaded, 11 targets configured).
+[4 / 11] Compiling Rust rlib hawdb_search_minimal (216 files); 1s disk-cache, darwin-sandbox
+[5 / 11] [Prepa] Compiling Rust rlib hawdb_bootstrap_minimal (7 files) ... (2 actions, 0 running)
+[7 / 11] Compiling Rust rlib hawdb_readiness_minimal (35 files); 0s disk-cache, darwin-sandbox
+[8 / 11] Compiling Rust rlib hawdb_minimal (276 files); 0s disk-cache, darwin-sandbox
+[9 / 11] [Prepa] Compiling Rust bin hawdb_branch_project_open_minimal_tests (5 files)
+[10 / 11] [Prepa] runfiles for //:hawdb_branch_project_open_minimal_tests
+[11 / 12] Testing //:hawdb_branch_project_open_minimal_tests; 1s disk-cache, darwin-sandbox
+[11 / 12] Testing //:hawdb_branch_project_open_minimal_tests; 10s disk-cache, darwin-sandbox
+[11 / 12] Testing //:hawdb_branch_project_open_minimal_tests; 40s disk-cache, darwin-sandbox
+[11 / 12] Testing //:hawdb_branch_project_open_minimal_tests; 101s disk-cache, darwin-sandbox
+[11 / 12] Testing //:hawdb_branch_project_open_minimal_tests; 120s disk-cache, darwin-sandbox
+INFO: Found 1 test target...
+Target //:hawdb_branch_project_open_minimal_tests up-to-date:
+  bazel-bin/hawdb_branch_project_open_minimal_tests
+INFO: Elapsed time: 131.612s, Critical Path: 131.36s
+INFO: 12 processes: 5 internal, 8 darwin-sandbox.
+INFO: Build completed successfully, 12 total actions
+INFO: 
+//:hawdb_branch_project_open_minimal_tests                               PASSED in 121.0s
+
+Executed 1 out of 1 test: 1 test passes.
+INFO: Build Event Protocol files produced successfully.
