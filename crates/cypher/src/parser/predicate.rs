@@ -405,7 +405,8 @@ impl Parser<'_> {
                         return rest.starts_with('=')
                             || rest.starts_with('<')
                             || rest.starts_with('>')
-                            || keyword_matches_at(rest, 0, "CONTAINS");
+                            || keyword_matches_at(rest, 0, "CONTAINS")
+                            || keyword_matches_at(rest, 0, "IN");
                     }
                 }
                 _ => {}
@@ -518,6 +519,12 @@ impl Parser<'_> {
         expression: ScalarExpression,
     ) -> Result<PropertyPredicate> {
         self.skip_ws();
+        if self.consume_keyword("IN") {
+            return Ok(PropertyPredicate::ExpressionIn {
+                expression,
+                values: self.parse_value()?,
+            });
+        }
         if self.consume_char('<') {
             if self.consume_char('>') {
                 return Ok(PropertyPredicate::ExpressionNotEq {

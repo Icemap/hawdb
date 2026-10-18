@@ -209,6 +209,16 @@ pub(super) fn write_predicate(output: &mut String, predicate: &Predicate) {
             write_projection_expression(output, value);
             output.push(')');
         }
+        Predicate::ExpressionIn { expression, values } => {
+            output.push_str("ExpressionIn(");
+            write_projection_expression(output, expression);
+            output.push_str(" in [");
+            for value in values {
+                write_value(output, value);
+                output.push(',');
+            }
+            output.push_str("])");
+        }
         Predicate::PropertyListContains {
             variable,
             property,

@@ -438,6 +438,7 @@ fn reorderable_filter(predicate: &Predicate) -> bool {
         | Predicate::ExpressionNotEq { .. }
         | Predicate::ExpressionCompare { .. }
         | Predicate::ExpressionContains { .. } => false,
+        Predicate::ExpressionIn { .. } => false,
     }
 }
 

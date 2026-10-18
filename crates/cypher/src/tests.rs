@@ -3204,6 +3204,35 @@ fn parses_lower_contains_expression_predicates() {
 }
 
 #[test]
+fn parses_case_expression_in_parameter_list() {
+    for expression in [
+        "CASE WHEN e.space_id IS NULL OR e.space_id = '' THEN $default_space ELSE e.space_id END",
+        "(CASE WHEN e.space_id IS NULL OR e.space_id = '' THEN $default_space ELSE e.space_id END)",
+    ] {
+        let statement = parse(&format!(
+            "MATCH (e:Entity) WHERE {expression} IN $space_ids RETURN e.id"
+        ))
+        .unwrap();
+        let Statement::Pipeline(query) = statement else {
+            panic!("expected pipeline");
+        };
+        let Some(PropertyPredicate::ExpressionIn { expression, values }) =
+            pipeline_predicate(&query, 0)
+        else {
+            panic!("expected expression IN predicate");
+        };
+        assert!(matches!(
+            expression.kind,
+            ScalarExpressionKind::DefaultIfNullOrEq { .. }
+        ));
+        assert!(matches!(
+            values.kind,
+            ValueExpressionKind::Parameter(ref name) if name == "space_ids"
+        ));
+    }
+}
+
+#[test]
 fn parses_lower_equality_expression_predicates() {
     let statement =
         parse("MATCH (e:Entity) WHERE LOWER(e.name) = LOWER($mention) RETURN e.id").unwrap();

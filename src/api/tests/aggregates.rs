@@ -15,6 +15,36 @@
 use super::*;
 
 #[test]
+fn scoped_community_aggregate_accepts_case_membership() {
+    let mut db = Database::new();
+    for query in [
+        "CREATE (:Memory {id: 'm1'})-[:MENTIONS]->(:Entity {community_id: 'alpha'})",
+        "CREATE (:Memory {id: 'm2', space_id: ''})-[:MENTIONS]->(:Entity {community_id: 'alpha'})",
+        "CREATE (:Memory {id: 'm3', space_id: 'team'})-[:MENTIONS]->(:Entity {community_id: 'beta'})",
+        "CREATE (:Community {community_id: 'alpha', name: 'Alpha'})",
+        "CREATE (:Community {community_id: 'beta', name: 'Beta'})",
+    ] {
+        db.query(query).unwrap();
+    }
+    let query = "MATCH (m:Memory)-[:MENTIONS]->(e:Entity) WHERE (CASE WHEN m.space_id IS NULL OR m.space_id = '' THEN $default_space ELSE m.space_id END) IN $space_ids AND e.community_id IS NOT NULL WITH e.community_id AS community_id, COUNT(DISTINCT m) AS members OPTIONAL MATCH (c:Community) WHERE c.community_id = community_id RETURN c.name AS name, members ORDER BY members DESC, community_id ASC LIMIT $limit";
+    let params = BTreeMap::from([
+        ("default_space".into(), Value::String("default".into())),
+        (
+            "space_ids".into(),
+            Value::List(vec![Value::String("default".into())]),
+        ),
+        ("limit".into(), Value::Int(5)),
+    ]);
+    let result = db.query_with_params(query, &params).unwrap();
+    assert_eq!(result.rows.len(), 1);
+    assert_eq!(
+        result.rows[0].get("name"),
+        Some(&Value::String("Alpha".into()))
+    );
+    assert_eq!(result.rows[0].get("members"), Some(&Value::Int(2)));
+}
+
+#[test]
 fn with_window_precedes_count_of_groups() {
     let mut db = Database::new();
     db.query("CREATE (:Entity {kind: 'a'})").unwrap();
