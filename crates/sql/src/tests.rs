@@ -344,6 +344,32 @@ fn parses_aggregate_projection_and_distinct_argument() {
 }
 
 #[test]
+fn parses_min_aggregate_and_rejects_unsupported_filter() {
+    let statement = parse_postgres_sql("SELECT MIN(sequence) AS first_sequence FROM obligations")
+        .expect("MIN aggregate SELECT");
+    let SqlStatement::Select(select) = statement else {
+        panic!("expected SELECT statement");
+    };
+    assert!(matches!(
+        &select.projection[0],
+        SelectProjection::Expression {
+            expression: Expr {
+                kind: ExprKind::Function {
+                    name, arguments, distinct: false, filter: None,
+                },
+                ..
+            },
+            alias: Some(alias),
+        } if name == "min" && alias == "first_sequence"
+            && matches!(arguments.as_slice(), [SqlFunctionArgument::Expression(_)])
+    ));
+    let error =
+        parse_postgres_sql("SELECT MIN(sequence) FILTER (WHERE sequence > 0) FROM obligations")
+            .expect_err("unsupported MIN filter must fail");
+    assert!(error.to_string().contains("FILTER"));
+}
+
+#[test]
 fn parses_aggregate_filter_predicate_and_parameters() {
     let prepared = prepare_postgres_sql(
         "SELECT COUNT(*) FILTER (WHERE is_read = $1) AS unread_count FROM entries",

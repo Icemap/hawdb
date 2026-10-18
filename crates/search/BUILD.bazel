@@ -4,6 +4,12 @@ load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 package(default_visibility = ["//visibility:public"])
 
 filegroup(
+    name = "query_limit_inventory_sources",
+    srcs = glob(["src/**/*.rs"]),
+    visibility = ["//:__pkg__"],
+)
+
+filegroup(
     name = "candidate_probe_test_fixtures",
     srcs = ["src/candidate_evidence/tests/probe_fixtures.rs"],
     visibility = ["//:__pkg__"],

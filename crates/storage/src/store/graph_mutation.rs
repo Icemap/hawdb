@@ -23,6 +23,7 @@ mod checkpoint_capture;
 #[path = "graph_mutation/indexed_merge_tests.rs"]
 mod indexed_merge_tests;
 
+// Use the same bound for observed cold probes and estimated posting-list size.
 const MAX_COLD_MERGE_POINT_READS: usize = 32;
 
 fn wal_ops_contain_relational_transaction(ops: &[WalOp]) -> bool {
@@ -1621,6 +1622,7 @@ impl GraphStore {
             .zip(self.persistent_property_projection.as_ref());
         // A newly declared index may cover the resident delta but not the
         // canonical base. Only a complete checkpoint projection can exclude it.
+        // Choose the first eligible key in BTreeMap order; recheck every match property.
         if let Some((property, value)) = properties.iter().find(|(property, _)| {
             catalog.has_scalar_property_index(label_id, property)
                 && (!self.canonical_base_out_of_core
@@ -1897,6 +1899,32 @@ impl GraphStore {
         filter: Option<&PropertyFilter>,
         pending_nodes: &[PendingNode],
     ) -> Vec<NodeId> {
+        let match_id = |value: &Value| {
+            let Value::Int(value) = value else {
+                return None;
+            };
+            // Match the signed representation used by property_filter_matches.
+            let id = NodeId(*value as u64);
+            let index = pending_node_index(pending_nodes, id)?;
+            label_id
+                .is_none_or(|label_id| label_id == pending_nodes[index].1)
+                .then_some(id)
+        };
+        match filter {
+            Some(PropertyFilter::IdEq { value }) => {
+                return match_id(value).into_iter().collect();
+            }
+            Some(PropertyFilter::IdIn { values }) => {
+                // Retain only matching IDs and preserve the pending list's order.
+                return values
+                    .iter()
+                    .filter_map(match_id)
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect();
+            }
+            _ => {}
+        }
         pending_nodes
             .iter()
             .filter(|(id, pending_label_id, properties)| {

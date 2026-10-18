@@ -29,6 +29,8 @@ HARNESS = (
     "benches/host_boundary/checksum.rs", "bindings/benchmarks/run.py",
     "bindings/benchmarks/checksum.py", "bindings/benchmarks/python_boundary.py",
     "bindings/go/cmd/boundary/BUILD.bazel", "bindings/go/cmd/boundary/main.go",
+    "bindings/go/cmd/boundary/host_profile_disabled.go",
+    "bindings/go/cmd/boundary/host_profile_enabled.go",
     "bindings/go/cmd/boundary/profile_unix.go", "bindings/go/cmd/boundary/profile_windows.go",
 )
 BASELINE_BUILD = '''load("@rules_python//python:defs.bzl", "py_binary", "py_library")

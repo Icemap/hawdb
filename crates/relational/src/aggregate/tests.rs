@@ -36,7 +36,7 @@ fn ordinary_states_preserve_empty_null_distinct_and_coalesce_results() {
 }
 
 #[test]
-fn distinct_memory_is_charged_once_and_max_replacements_release_bytes() {
+fn distinct_memory_is_charged_once_and_extrema_replacements_release_bytes() {
     for function in ["COUNT(DISTINCT n)", "SUM(DISTINCT n)"] {
         let mut state = AggregateExpressionState::new(&expr(function), &[]).unwrap();
         let null = RelationalValue::Null;
@@ -81,6 +81,22 @@ fn distinct_memory_is_charged_once_and_max_replacements_release_bytes() {
         .unwrap();
     assert_eq!((second.added_bytes, second.released_bytes), (0, 99));
     assert_eq!(state.finish().unwrap(), Value::String("z".into()));
+
+    let mut state = AggregateExpressionState::new(&expr("MIN(body)"), &[]).unwrap();
+    let long = RelationalValue::Text("z".repeat(100));
+    let short = RelationalValue::Text("a".into());
+    let first = state
+        .update(&|_| Ok((&long, RelationalScalarType::Text)), &[])
+        .unwrap();
+    assert_eq!(
+        (first.added_bytes, first.released_bytes),
+        (value_bytes(&long), 0)
+    );
+    let second = state
+        .update(&|_| Ok((&short, RelationalScalarType::Text)), &[])
+        .unwrap();
+    assert_eq!((second.added_bytes, second.released_bytes), (0, 99));
+    assert_eq!(state.finish().unwrap(), Value::String("a".into()));
 }
 
 #[test]
@@ -213,6 +229,10 @@ fn constructor_rejections_keep_exact_aggregate_errors() {
         ),
         (
             function("sum", vec![SqlFunctionArgument::Wildcard], false),
+            "numeric aggregate requires exactly one expression",
+        ),
+        (
+            function("min", vec![SqlFunctionArgument::Wildcard], false),
             "numeric aggregate requires exactly one expression",
         ),
         (

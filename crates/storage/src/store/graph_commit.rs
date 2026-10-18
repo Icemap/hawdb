@@ -219,7 +219,7 @@ impl GraphStore {
         let mut ops = Vec::new();
         let mut rows = Vec::new();
         let mut limit_tracker = crate::mutation::MutationCommitLimitTracker::default();
-        let mut pending_nodes = Vec::new();
+        let mut pending_nodes = PendingNodes::default();
         let mut pending_relationships = Vec::new();
 
         for mutation in mutations {
@@ -637,13 +637,6 @@ impl GraphStore {
                         label_id,
                         &match_properties,
                     )?;
-                    let pending = pending_nodes
-                        .iter()
-                        .find(|(_, pending_label, pending_properties)| {
-                            *pending_label == label_id
-                                && properties_contain_all(pending_properties, &match_properties)
-                        })
-                        .map(|(id, _, _)| *id);
                     if let Some(id) = current {
                         if !on_match_assignments.is_empty() || !post_merge_assignments.is_empty() {
                             let mut assignments = Vec::with_capacity(
@@ -658,7 +651,11 @@ impl GraphStore {
                             ("node_id".to_string(), Value::Int(id.0 as i64)),
                             ("created".to_string(), Value::Bool(false)),
                         ]));
-                    } else if let Some(id) = pending {
+                    } else if let Some(id) = pending_nodes.find_by_properties(
+                        label_id,
+                        &match_properties,
+                        PendingMatch::Subset,
+                    ) {
                         if !on_match_assignments.is_empty() || !post_merge_assignments.is_empty() {
                             let mut assignments = Vec::with_capacity(
                                 on_match_assignments.len() + post_merge_assignments.len(),
@@ -715,22 +712,20 @@ impl GraphStore {
                         target_label_id,
                         &request.target_properties,
                     )?;
-                    let pending_source = pending_nodes
-                        .iter()
-                        .find(|(_, pending_label, pending_properties)| {
-                            *pending_label == source_label_id
-                                && pending_properties == &request.source_properties
-                        })
-                        .map(|(id, _, _)| *id);
-                    let pending_target = pending_nodes
-                        .iter()
-                        .find(|(_, pending_label, pending_properties)| {
-                            *pending_label == target_label_id
-                                && pending_properties == &request.target_properties
-                        })
-                        .map(|(id, _, _)| *id);
-                    let source = current_source.or(pending_source);
-                    let target = current_target.or(pending_target);
+                    let source = current_source.or_else(|| {
+                        pending_nodes.find_by_properties(
+                            source_label_id,
+                            &request.source_properties,
+                            PendingMatch::Exact,
+                        )
+                    });
+                    let target = current_target.or_else(|| {
+                        pending_nodes.find_by_properties(
+                            target_label_id,
+                            &request.target_properties,
+                            PendingMatch::Exact,
+                        )
+                    });
                     if let (Some(source), Some(target)) = (source, target) {
                         let current_relationship = self.find_relationship_by_properties(
                             source,
@@ -1129,11 +1124,7 @@ impl GraphStore {
                     let pending_ids = ids
                         .iter()
                         .copied()
-                        .filter(|id| {
-                            pending_nodes
-                                .iter()
-                                .any(|(pending_id, _, _)| pending_id == id)
-                        })
+                        .filter(|id| pending_node_index(&pending_nodes, *id).is_some())
                         .collect::<Vec<_>>();
                     let incident_pending_relationship_ids =
                         pending_relationship_ids_for_nodes(&pending_relationships, &ids);
@@ -2049,19 +2040,16 @@ impl GraphStore {
 
     fn apply_pending_node_assignments(
         ops: &mut [WalOp],
-        pending_nodes: &mut [PendingNode],
+        pending_nodes: &mut PendingNodes,
         id: NodeId,
         assignments: &[NodeSetAssignment],
     ) -> Result<()> {
-        let Some((_, _, properties)) = pending_nodes
-            .iter_mut()
-            .find(|(pending_id, _, _)| *pending_id == id)
-        else {
+        let Some(index) = pending_node_index(pending_nodes, id) else {
             return Ok(());
         };
         for assignment in assignments {
-            let value = evaluate_node_set_value(properties, assignment)?;
-            properties.insert(assignment.property.clone(), value.clone());
+            let value = evaluate_node_set_value(&pending_nodes[index].2, assignment)?;
+            pending_nodes.set_property(index, assignment.property.clone(), value.clone());
             for op in ops.iter_mut() {
                 if let WalOp::CreateNode {
                     id: create_id,
@@ -2083,7 +2071,7 @@ impl GraphStore {
         &self,
         ops: &mut Vec<WalOp>,
         rows: &mut Vec<BTreeMap<String, Value>>,
-        pending_nodes: &mut [PendingNode],
+        pending_nodes: &mut PendingNodes,
         label_id: Option<LabelId>,
         filter: Option<&PropertyFilter>,
         assignments: &[NodeSetAssignment],
