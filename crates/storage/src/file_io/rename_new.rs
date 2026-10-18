@@ -376,6 +376,92 @@ mod tests {
     }
 
     #[test]
+    fn stationary_selector_replacement_keeps_child_custody() {
+        use crate::durability::{durable_replace_file, sync_directory};
+        use crate::file_io::{SourceDirectory, SourceDirectoryLockMode};
+        use std::fs::TryLockError;
+        use std::io::{Read, Write};
+
+        let fixture = Fixture::new();
+        let project = ProjectFileDescriptors::acquire(&fixture.0, 16).unwrap();
+        let context = project.io_context();
+        let directory = SourceDirectory::capture(&fixture.0, &context).unwrap();
+        let owner = directory
+            .open_lock_file(
+                &context,
+                ".search-source-process.lock",
+                SourceDirectoryLockMode::ReadWriteCreate,
+            )
+            .unwrap()
+            .try_lock_owned()
+            .unwrap();
+        // Immutable dependencies and their namespace precede head publication.
+        for (name, bytes) in [
+            ("old.hawdb", b"old payload".as_slice()),
+            ("new.hawdb", b"new payload".as_slice()),
+            ("selector.hawdb", b"old.hawdb".as_slice()),
+        ] {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(fixture.0.join(name))
+                .unwrap();
+            file.write_all(bytes).unwrap();
+            file.sync_all().unwrap();
+        }
+        sync_directory(&fixture.0).unwrap();
+        let mut old_head = directory.open_child(&context, "selector.hawdb").unwrap();
+        let mut old_payload = directory.open_child(&context, "old.hawdb").unwrap();
+        let candidate = fixture.0.join("selector.candidate.hawdb");
+        {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&candidate)
+                .unwrap();
+            file.write_all(b"new.hawdb").unwrap();
+            file.sync_all().unwrap();
+        }
+        durable_replace_file(&candidate, &fixture.0.join("selector.hawdb")).unwrap();
+        assert!(!candidate.exists());
+        let mut old_bytes = Vec::new();
+        old_head.read_to_end(&mut old_bytes).unwrap();
+        assert_eq!(old_bytes, b"old.hawdb");
+        old_bytes.clear();
+        old_payload.read_to_end(&mut old_bytes).unwrap();
+        assert_eq!(old_bytes, b"old payload");
+        let mut selected = directory.open_child(&context, "selector.hawdb").unwrap();
+        let mut selected_bytes = Vec::new();
+        selected.read_to_end(&mut selected_bytes).unwrap();
+        assert_eq!(selected_bytes, b"new.hawdb");
+        let mut new_payload = directory
+            .open_child(&context, std::str::from_utf8(&selected_bytes).unwrap())
+            .unwrap();
+        let mut new_bytes = Vec::new();
+        new_payload.read_to_end(&mut new_bytes).unwrap();
+        assert_eq!(new_bytes, b"new payload");
+        let current = SourceDirectory::capture(&fixture.0, &context).unwrap();
+        assert!(directory.same_directory(&current));
+        let peer = directory
+            .open_lock_file(
+                &context,
+                ".search-source-process.lock",
+                SourceDirectoryLockMode::ReadWriteCreate,
+            )
+            .unwrap();
+        assert!(matches!(peer.try_lock(), Err(TryLockError::WouldBlock)));
+        drop(peer);
+        drop(current);
+        drop(new_payload);
+        drop(selected);
+        drop(old_payload);
+        drop(old_head);
+        drop(owner);
+        drop(directory);
+        assert_eq!(project.metrics().open, 0);
+    }
+
+    #[test]
     fn same_target_is_not_a_successful_exclusive_move() {
         let fixture = Fixture::new();
         assert!(fs::rename_directory_new(&fixture.0, &fixture.0).is_err());

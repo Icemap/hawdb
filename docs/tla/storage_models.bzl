@@ -120,6 +120,7 @@ STORAGE_MODELS = [
     "HawDBSparseRelationalRecovery",
     "HawDBSparseWritableRelationalRecovery",
     "HawDBStableIdentityPublication",
+    "HawDBStationaryConsumerPublication",
     "HawDBStatisticsEligibility",
     "HawDBStorageDurability",
     "HawDBSystemSchemaUpgrade",

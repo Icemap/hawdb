@@ -25,6 +25,11 @@ Keep that rejection. Retaining the resident checkpoint format for the new path
 would require full-N serialization after E capture and full-N reload, conflicting
 with the intended incremental and memory bounds.
 
+The [stationary publication availability gate](STATIONARY_CONSUMER_PUBLICATION_DESIGN.md)
+now separately checks the native operation assumed at selection. Held descendant
+files block Windows directory movement even without byte-range locks; choosing
+an executable selector-file transition is required in addition to failure safety.
+
 The new path needs a generation-backed consumer read view, a small selector and
 its operation receipt, plus matching registry/recovery/GC behavior. This can be
 an additive typed library path; it must not silently make existing resident

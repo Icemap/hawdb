@@ -590,3 +590,27 @@ tla_check(
     )
     for control in ["ReplaceDestination", "ReleaseBeforeSourceSync", "SyncSourceFirst"]
 ]
+
+# Native availability is a temporal obligation in addition to publication safety.
+[
+    genrule(
+        name = "HawDBStationaryConsumerPublication" + control + "_config",
+        srcs = ["HawDBStationaryConsumerPublication.cfg"],
+        outs = ["generated/HawDBStationaryConsumerPublication" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBStationaryConsumerPublication.cfg) > $@",
+    )
+    for control in ["UseDirectoryMove", "ReleaseCustody", "SkipDataSync", "AckBeforeBarrier"]
+]
+
+[
+    tla_check(
+        name = "HawDBStationaryConsumerPublication" + control + "_check",
+        module = "HawDBStationaryConsumerPublication.tla",
+        config = ":HawDBStationaryConsumerPublication" + control + "_config",
+        expect = "temporal_violation" if control == "UseDirectoryMove" else "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["UseDirectoryMove", "ReleaseCustody", "SkipDataSync", "AckBeforeBarrier"]
+]
