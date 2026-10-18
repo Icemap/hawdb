@@ -44,6 +44,7 @@ fn fast_path_shape_gates_do_not_reserve_memory_on_fallback() {
         "n",
         "42",
         "MAX(n)",
+        "MIN(n)",
         "SUM(ratio)",
         "SUM(body)",
         "SUM(*)",

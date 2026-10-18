@@ -294,7 +294,7 @@ impl<'a> HavingBindings<'a> {
                         self.column_type(column, false)?;
                         Ok(Some(RelationalScalarType::BigInt))
                     }
-                    ("sum" | "max", SqlFunctionArgument::Expression(expression)) => {
+                    ("sum" | "min" | "max", SqlFunctionArgument::Expression(expression)) => {
                         let scalar_type = self.aggregate_input_type(expression)?;
                         if name == "sum"
                             && scalar_type.is_some_and(|scalar_type| {
