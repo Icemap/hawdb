@@ -240,7 +240,8 @@ a configured maximum does not widen a smaller runtime grant. For filesystem
 free-space refusals, `budget` is the usable space after preserving
 `min_spill_free_bytes`; that option is a minimum reserve, not a maximum to raise.
 File-descriptor failures retain `DescriptorError`. Other execution checks may
-still raise the general `ExecutionError`.
+still raise the general `ExecutionError`. The [resource metadata contract](../../docs/EXECUTION_REQUEST_CONTRACT.md#resource-refusal-metadata)
+lists built-in budget origins and explains how to handle caller-defined origins.
 
 ## Pydantic rows (optional)
 

@@ -55,7 +55,9 @@ prebuilt Cargo artifact is required.
   The option names the effective host limit, runtime grant, or constructor
   argument. Filesystem failures report usable space after the configured
   minimum free-space reserve, so raising that minimum reduces usable space.
-  Existing descriptor errors and ordinary error JSON remain unchanged.
+  Existing descriptor errors and ordinary error JSON remain unchanged. The
+  [resource metadata contract](../../docs/EXECUTION_REQUEST_CONTRACT.md#resource-refusal-metadata)
+  lists built-in budget origins; hosts must tolerate caller-defined origins.
 - **The handle is thread-safe**: calls on one `HawdbDatabase` are
   serialized internally. Callers that want per-thread parallelism open
   multiple handles.

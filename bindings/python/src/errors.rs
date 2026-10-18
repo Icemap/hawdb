@@ -130,6 +130,7 @@ pub fn format_hawdb_error(error: &HawDBError) -> PyErr {
                 value.setattr("budget", budget.budget)?;
                 value.setattr("budget_option", budget.budget_option)
             })();
+            // Preserve installation failures instead of returning an incomplete resource error.
             attributes.err().unwrap_or(exception)
         }),
         HawDBError::Execution(_)

@@ -69,6 +69,47 @@ that snapshot, not a promise of ongoing host-result accounting. A successful
 request consumer has a zero completion charge after validated delivery. Neither
 counter bounds process RSS or memory subsequently retained by host callbacks.
 
+## Resource refusal metadata
+
+Memory-ledger and spill-quota admission failures expose
+`HawDBError::ResourceBudgetExceeded`. Rust, FFI JSON, and Python preserve the
+resource kind, refusing scope, owner, memory class, additional request, current
+usage, effective budget, and `budget_option`. Rejected reservations do not charge
+the account. Query-level ownership transfers report their net additional charge.
+
+Classify errors by `resource` and `scope`. `budget_option` identifies the effective
+boundary's origin; it is an extensible diagnostic string, not a closed enum or
+an instruction to raise a setting automatically. The explicit
+`new_with_budget_option` and `account_with_budget_option` constructors also accept
+caller-defined static strings. Hosts must tolerate unknown origins while retaining
+the typed classification and numeric fields. These are the current built-in
+origins:
+
+| `budget_option` | Effective boundary |
+| --- | --- |
+| `ExecutionMemoryConfig.query_memory_bytes` | Configured query root or source account limit. |
+| `RuntimeTaskContext.memory_reservation.memory_bytes` | Runtime-admitted query root; increasing configuration does not widen this grant. |
+| `ExecutionMemoryConfig.blocking_operator_bytes` | Configured blocking-state account limit. |
+| `QueryMemoryLedger::new(budget_bytes)` | Explicit query-root constructor argument. |
+| `QueryMemoryLedger::account(budget_bytes)` | Explicit account constructor argument, including derived limits. |
+| `QueryMemoryAccount::sub_account(budget)` | Child allowance reserved in its parent before dispatch. |
+| `QueryMemoryAccount::sibling(budget_bytes)` | Explicit sibling account allowance. |
+| `ExecutionMemoryConfig.max_spill_bytes` | Cumulative bytes written by one spill operator. |
+| `ExecutionMemoryConfig.max_spill_runs` | Cumulative runs created by one spill operator. |
+| `ExecutionMemoryConfig.max_total_spill_bytes` | Shared live spill bytes, including pending reservations. |
+| `ExecutionMemoryConfig.max_total_spill_runs` | Shared live spill runs. |
+| `ExecutionMemoryConfig.min_spill_free_bytes` | Filesystem reserve to preserve; `budget` reports probed available space minus this reserve. |
+
+Shared limits may have been tightened by another query using the same spill
+directory. Filesystem `used` counts reservations not reflected in the space
+probe, rather than all occupied disk space. Raising the minimum reserve reduces
+usable space. `used + requested` can overflow `u64`; hosts must not rely on an
+unchecked sum to interpret the refusal.
+
+Existing descriptor errors retain their separate type. Operator-local checks
+that have not been converted may still return `Execution`; this metadata contract
+does not claim that every execution limit uses the new variant.
+
 ## Model and evidence boundaries
 
 `HawDBValidatedResultDelivery.tla` models collection, whole-input validation,
