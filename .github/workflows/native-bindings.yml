@@ -3,6 +3,14 @@ name: Native Bindings
 on:
   workflow_dispatch:
     inputs:
+      qualification_selection:
+        description: "JSON overrides for a single numeric/ordinary qualification shard"
+        type: string
+        default: "{}"
+      kind:
+        type: choice
+        options: [none, numeric, ordinary, resources, retained, phases]
+        default: none
       boundary_comparison:
         description: "Run the manual Linux ordinary-boundary comparison instead of binding tests"
         type: boolean
@@ -64,12 +72,12 @@ on:
       - ".github/workflows/native-bindings.yml"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.boundary_comparison }}-${{ inputs.benchmark_sizes }}-${{ inputs.benchmark_cases }}-${{ inputs.benchmark_layers }}-${{ inputs.benchmark_backends }}-${{ inputs.benchmark_samples }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.boundary_comparison }}-${{ inputs.benchmark_sizes }}-${{ inputs.benchmark_cases }}-${{ inputs.benchmark_layers }}-${{ inputs.benchmark_backends }}-${{ inputs.benchmark_samples }}-${{ inputs.kind }}-${{ inputs.qualification_selection }}
+  cancel-in-progress: false
 
 jobs:
   bazel:
-    if: github.event_name != 'workflow_dispatch' || (!inputs.boundary_comparison && !inputs.rabitq_baseline)
+    if: github.event_name != 'workflow_dispatch' || (!inputs.boundary_comparison && !inputs.rabitq_baseline && (!inputs.kind || inputs.kind == 'none'))
     name: Bazel native bindings (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -118,7 +126,7 @@ jobs:
         run: go test -race -count=1 -run '^TestRetained' ./...
 
   windows-native-contracts:
-    if: github.event_name != 'workflow_dispatch' || (!inputs.boundary_comparison && !inputs.rabitq_baseline)
+    if: github.event_name != 'workflow_dispatch' || (!inputs.boundary_comparison && !inputs.rabitq_baseline && (!inputs.kind || inputs.kind == 'none'))
     name: Windows native contracts
     runs-on: windows-2025
     timeout-minutes: 120
@@ -317,3 +325,213 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+  retained:
+    if: github.event_name == 'workflow_dispatch' && inputs.kind == 'retained'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - configuration: default
+            rows: 1000
+            backend: memory
+          - configuration: default
+            rows: 1000
+            backend: file
+          - configuration: default
+            rows: 100000
+            backend: memory
+          - configuration: default
+            rows: 100000
+            backend: file
+          - configuration: default
+            rows: 1000000
+            backend: memory
+          - configuration: default
+            rows: 1000000
+            backend: file
+          - configuration: large
+            rows: 1000000
+            backend: memory
+          - configuration: large
+            rows: 1000000
+            backend: file
+          - configuration: large
+            rows: 1000001
+            backend: memory
+          - configuration: large
+            rows: 1000001
+            backend: file
+    env:
+      USE_BAZEL_VERSION: "9.3.0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Install explicit Arrow consumer
+        run: python -m pip install pyarrow==26.0.0
+      - name: Build Python producer before measurement
+        run: |
+          bazel build -c opt //bindings/python:hawdb
+      - name: Run unchanged numeric delivery controls
+        env:
+          QUAL_CONFIGURATION: ${{ matrix.configuration }}
+          QUAL_ROWS: ${{ matrix.rows }}
+          QUAL_BACKEND: ${{ matrix.backend }}
+        run: python -B qualification/retained/run.py --output "$RUNNER_TEMP/retained-evidence"
+      - name: Preserve all outcomes including refusals
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: session-retained-${{ matrix.configuration }}-${{ matrix.rows }}-${{ matrix.backend }}-${{ github.sha }}
+          path: ${{ runner.temp }}/retained-evidence
+          if-no-files-found: error
+
+  resource-plan:
+    if: github.event_name == 'workflow_dispatch' && inputs.kind != 'none' && inputs.kind != 'retained'
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - id: plan
+        env:
+          QUAL_SELECTION: ${{ toJSON(inputs) }}
+        run: |
+          python - <<'PY_MATRIX'
+          import itertools, json, os
+          selection=json.loads(os.environ['QUAL_SELECTION'])
+          overrides=json.loads(selection.get('qualification_selection') or '{}')
+          assert isinstance(overrides,dict)
+          assert set(overrides) <= {'rows','backend','configuration','instrumented','case','layer','samples'}
+          selection=dict(kind=selection['kind'],rows='1000',backend='memory',configuration='default',instrumented=False,case='select',layer='rust',samples='31')
+          selection.update(overrides)
+          groups=[]
+          def numeric(configuration,rows,backend,instrumented):
+              return dict(kind='numeric',configuration=configuration,rows=str(rows),backend=backend,instrumented=instrumented,samples='31',case='select',layer='python')
+          def ordinary(rows,case,layer,backend):
+              return dict(kind='ordinary',configuration='default',rows=str(rows),backend=backend,instrumented=True,samples='3',case=case,layer=layer)
+          if selection['kind']=='phases':
+              for configuration,sizes in [('default',[1000,100000,1000000]),('large',[1000000,1000001])]:
+                  for rows,backend in itertools.product(sizes,['memory','file']):
+                      item=numeric(configuration,rows,backend,False)
+                      item['phase_only']=True
+                      groups.append(item)
+              assert len(groups)==10
+          elif selection['kind']=='resources':
+              for configuration,sizes in [('default',[1000,100000,1000000]),('large',[1000000,1000001])]:
+                  for rows,backend,instrumented in itertools.product(sizes,['memory','file'],[False,True]):
+                      groups.append(numeric(configuration,rows,backend,instrumented))
+              for rows,case,layer,backend in itertools.product([1000,100000,1000000],['fill_bulk','select','wide','point','fill'],['rust','python','go'],['memory','file']):
+                  groups.append(ordinary(rows,case,layer,backend))
+              first=groups.pop(20);groups.insert(2,first)
+              assert len(groups)==110
+          else:
+              item=dict(selection);item.pop('boundary_comparison',None)
+              item['instrumented']=str(item['instrumented']).lower()=='true'
+              groups=[item]
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('matrix='+json.dumps({'include':groups})+'\n')
+          PY_MATRIX
+
+  resources:
+    if: github.event_name == 'workflow_dispatch' && inputs.kind != 'none' && inputs.kind != 'retained'
+    needs: resource-plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.resource-plan.outputs.matrix) }}
+    env:
+      USE_BAZEL_VERSION: "9.3.0"
+      QUAL_KIND: ${{ matrix.kind }}
+      QUAL_ROWS: ${{ matrix.rows }}
+      QUAL_BACKEND: ${{ matrix.backend }}
+      QUAL_CONFIGURATION: ${{ matrix.configuration }}
+      QUAL_INSTRUMENTED: ${{ matrix.instrumented }}
+      QUAL_PHASE_ONLY: ${{ matrix.phase_only || false }}
+      QUAL_CASE: ${{ matrix.case }}
+      QUAL_LAYER: ${{ matrix.layer }}
+      QUAL_SAMPLES: ${{ matrix.samples }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Preserve immutable resource source before long measurements
+        run: |
+          python - <<'PY_SOURCE'
+          import json, os, pathlib, subprocess
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          campaign = json.loads(pathlib.Path("qualification/resources/campaign.json").read_text())
+          engine = campaign["engine"]
+          assert len(engine) == 40 and all(c in "0123456789abcdef" for c in engine)
+          assert git("rev-parse", engine + "^{tree}") == campaign["engine_tree"]
+          assert git("diff", "--name-only", engine, "HEAD").splitlines() == campaign["overlay_files"]
+          assert git("merge-base", engine, "HEAD") == engine
+          assert not git("status", "--porcelain")
+          receipt = {"engine": engine, "engine_tree": git("rev-parse", engine + "^{tree}"),
+                     "source": git("rev-parse", "HEAD"), "tree": git("rev-parse", "HEAD^{tree}"),
+                     "overlay": git("diff", "--name-only", engine, "HEAD").splitlines(),
+                     "requested": {key: value for key, value in os.environ.items() if key.startswith("QUAL_")},
+                     "scope": "Source/request receipt only; preserve runtime budget, producer and outcome evidence separately."}
+          pathlib.Path(os.environ["RUNNER_TEMP"], "resource-source.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          PY_SOURCE
+      - uses: actions/upload-artifact@v7
+        with:
+          name: resource-source-${{ matrix.kind }}-${{ matrix.rows }}-${{ matrix.backend }}-${{ matrix.configuration }}-${{ matrix.instrumented }}-${{ matrix.case }}-${{ matrix.layer }}-${{ github.sha }}
+          path: ${{ runner.temp }}/resource-source.json
+          if-no-files-found: error
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-go@v7
+        if: matrix.kind == 'ordinary'
+        with:
+          go-version-file: bindings/go/go.mod
+          cache-dependency-path: bindings/go/go.sum
+      - name: Install pinned Arrow consumer
+        if: matrix.kind == 'numeric'
+        run: python -m pip install pyarrow==26.0.0
+      - name: Collect unchanged ordinary native and foreign profiles
+        if: matrix.kind == 'ordinary'
+        run: |
+          engine=$(python -c 'import json; print(json.load(open("qualification/resources/campaign.json"))["engine"])')
+          git worktree add --detach "$RUNNER_TEMP/ordinary-engine" "$engine"
+          python -B qualification/resources/run.py \
+            --root "$RUNNER_TEMP/ordinary-engine" --engine "$engine" \
+            --baseline-spec qualification/resources/baseline-source.json \
+            --output "$RUNNER_TEMP/resource-qualification" \
+            --sizes "$QUAL_ROWS" --cases "$QUAL_CASE" --layers "$QUAL_LAYER" \
+            --backends "$QUAL_BACKEND" --samples "$QUAL_SAMPLES"
+      - name: Collect per-mode whole-process RSS and observed tails
+        if: matrix.kind == 'numeric'
+        run: |
+          flags=()
+          if [[ "$QUAL_INSTRUMENTED" == true ]]; then flags+=(--instrumented); fi
+          if [[ "$QUAL_PHASE_ONLY" == true ]]; then flags+=(--phase-only); fi
+          python -B qualification/resources/numeric_driver.py \
+            --output "$RUNNER_TEMP/resource-qualification" \
+            --rows "$QUAL_ROWS" --backend "$QUAL_BACKEND" \
+            --configuration "$QUAL_CONFIGURATION" --samples "$QUAL_SAMPLES" "${flags[@]}"
+      - name: Preserve complete and adverse observations
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: resources-${{ matrix.kind }}-${{ matrix.rows }}-${{ matrix.backend }}-${{ matrix.configuration }}-${{ matrix.instrumented }}-${{ matrix.case }}-${{ matrix.layer }}-${{ github.sha }}
+          path: ${{ runner.temp }}/resource-qualification
+          if-no-files-found: error

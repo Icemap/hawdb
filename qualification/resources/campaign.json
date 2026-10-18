@@ -1,0 +1,28 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+  "overlay_files": [
+    ".github/workflows/native-bindings.yml",
+    "BUILD.bazel",
+    "Cargo.toml",
+    "bindings/python/BUILD.bazel",
+    "bindings/python/Cargo.toml",
+    "bindings/python/src/database.rs",
+    "bindings/python/src/lib.rs",
+    "qualification/phases/consume.py",
+    "qualification/resources/baseline-source.json",
+    "qualification/resources/campaign.json",
+    "qualification/resources/numeric.py",
+    "qualification/resources/numeric_driver.py",
+    "qualification/resources/run.py",
+    "qualification/retained/configured.py",
+    "qualification/retained/run.py",
+    "src/api/retained_query.rs",
+    "src/embedded.rs",
+    "src/lib.rs",
+    "src/retained_phase_profile.rs"
+  ],
+  "numeric_adapter_sha256": "8084dc739a6fa09d83ea61a7ba89d360f6ec65b6868eb493cb7201b047b87af7",
+  "scope": "Original90 ordinary/110 resource/10 retained groups remain unchanged. An additional10-group phase-only campaign uses the unchanged complete consumer,31 samples, default and explicit-large limits. Source binding permits only the19 declared qualification overlays; any other production change must belong to the explicit engine commit before qualification.",
+  "phase_only_groups": 10
+}

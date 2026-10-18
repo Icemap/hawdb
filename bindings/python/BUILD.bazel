@@ -136,3 +136,32 @@ rust_shared_library(
         "@python_crates//:pyo3",
     ],
 )
+
+# Phase-only qualification: allocation/tracemalloc instrumentation is absent.
+rust_shared_library(
+    name = "_hawdb_retained_phase_profile",
+    srcs = glob(["src/**/*.rs"]),
+    crate_features = ["abi3", "retained-phase-profiling"],
+    crate_name = "_hawdb_retained_phase_profile",
+    crate_root = "src/lib.rs",
+    edition = "2024",
+    # Python supplies its symbols when importing an extension on macOS.
+    rustc_flags = select({
+        "@platforms//os:macos": [
+            "-Cstrip=none",
+            "-C",
+            "link-arg=-undefined",
+            "-C",
+            "link-arg=dynamic_lookup",
+            "-C",
+            "link-arg=-Wl,-no_fixup_chains",
+        ],
+        "//conditions:default": [],
+    }),
+    tags = ["manual"],
+    version = "0.10.0",
+    deps = [
+        "//:hawdb_retained_phase_profile",
+        "@python_crates//:pyo3",
+    ],
+)
