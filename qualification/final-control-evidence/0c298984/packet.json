@@ -983,6 +983,192 @@
       "sha256": "3c4947dc68b58d1e0e457b4104a35e1a449b9101efbca87cb5cfd732ae52d6e9",
       "bytes": 1912,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-phase-0c298984-github-collection/artifact-12147597587.json"
+    },
+    {
+      "path": "held-write/reports/node-10000-64-file-instrumented.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-10000-64-file-instrumented.stderr"
+    },
+    {
+      "path": "held-write/reports/node-10000-64-memory-instrumented.json",
+      "sha256": "9dd61a76f135601f661e58f6e15128a50f9766db1d64e70c4ffff90368bf9f96",
+      "bytes": 87084,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-10000-64-memory-instrumented.json"
+    },
+    {
+      "path": "held-write/reports/numeric-10000-64-memory-ordinary.json",
+      "sha256": "81447bd3a2f6b4af6c4078c5790a94a32de19bb84ba070b4e8bb13d575e6a437",
+      "bytes": 13314,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/numeric-10000-64-memory-ordinary.json"
+    },
+    {
+      "path": "held-write/reports/numeric-10000-64-file-ordinary.json",
+      "sha256": "65ece49af71f79ddb3f62a7f889bfc17bdb3ae15ba0c327ebf153684af94282c",
+      "bytes": 13313,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/numeric-10000-64-file-ordinary.json"
+    },
+    {
+      "path": "held-write/reports/node-1000-4096-memory-ordinary.json",
+      "sha256": "4d078e50b72247d50056763449524a983e677980fe4d461208c55d30a0b9871e",
+      "bytes": 49222,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-1000-4096-memory-ordinary.json"
+    },
+    {
+      "path": "held-write/reports/numeric-10000-64-memory-ordinary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/numeric-10000-64-memory-ordinary.stderr"
+    },
+    {
+      "path": "held-write/reports/numeric-1000-4096-file-ordinary.json",
+      "sha256": "04fc93ace4dff2e1284a0f85b9ba3920afcd32270deda73688e4189d532464d8",
+      "bytes": 13195,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/numeric-1000-4096-file-ordinary.json"
+    },
+    {
+      "path": "held-write/reports/node-1000-4096-file-instrumented.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-1000-4096-file-instrumented.stderr"
+    },
+    {
+      "path": "held-write/reports/node-1000-4096-memory-instrumented.json",
+      "sha256": "c04c11813ef61acddde1dfcde3944a6215134053ff3925f42a0e1bc37ad7d728",
+      "bytes": 85617,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-1000-4096-memory-instrumented.json"
+    },
+    {
+      "path": "held-write/reports/node-10000-64-memory-ordinary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-10000-64-memory-ordinary.stderr"
+    },
+    {
+      "path": "held-write/reports/node-1000-4096-memory-instrumented.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-1000-4096-memory-instrumented.stderr"
+    },
+    {
+      "path": "held-write/reports/numeric-10000-64-file-ordinary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/numeric-10000-64-file-ordinary.stderr"
+    },
+    {
+      "path": "held-write/reports/node-1000-4096-file-ordinary.json",
+      "sha256": "bf5d1f7d6944d080e43544c0f6ed4c8495bec4298b34d426b7a5f5e8f74d805b",
+      "bytes": 49691,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-1000-4096-file-ordinary.json"
+    },
+    {
+      "path": "held-write/reports/node-1000-4096-file-ordinary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-1000-4096-file-ordinary.stderr"
+    },
+    {
+      "path": "held-write/reports/node-10000-64-memory-instrumented.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-10000-64-memory-instrumented.stderr"
+    },
+    {
+      "path": "held-write/reports/node-1000-4096-file-instrumented.json",
+      "sha256": "74d535182cd7255e47fb80101afe49c605543912d41842a67a01bba8fe5888e4",
+      "bytes": 86779,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-1000-4096-file-instrumented.json"
+    },
+    {
+      "path": "held-write/reports/node-10000-64-memory-ordinary.json",
+      "sha256": "48fcde91421007fc05ce10d386c4d62567d96b511d6216797e78b2f8e9337e8a",
+      "bytes": 49460,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-10000-64-memory-ordinary.json"
+    },
+    {
+      "path": "held-write/reports/numeric-1000-4096-memory-ordinary.json",
+      "sha256": "d8c73d0821a13f0f442e0f825d720cd47f03b5fbc934180efc57c546ff711ddb",
+      "bytes": 13197,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/numeric-1000-4096-memory-ordinary.json"
+    },
+    {
+      "path": "held-write/reports/node-10000-64-file-ordinary.json",
+      "sha256": "5803ba7b9e3f26d1045cf7d23134a5ba1e982afc41073f17b2b2c4b0dc25583a",
+      "bytes": 50627,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-10000-64-file-ordinary.json"
+    },
+    {
+      "path": "held-write/reports/node-10000-64-file-instrumented.json",
+      "sha256": "2e96b92df919ba23f41e0f4e8326c62fbe0ef8357ec51c5b1d77f46ceb92dbd5",
+      "bytes": 88235,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-10000-64-file-instrumented.json"
+    },
+    {
+      "path": "held-write/reports/node-10000-64-file-ordinary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-10000-64-file-ordinary.stderr"
+    },
+    {
+      "path": "held-write/reports/numeric-1000-4096-file-ordinary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/numeric-1000-4096-file-ordinary.stderr"
+    },
+    {
+      "path": "held-write/reports/node-1000-4096-memory-ordinary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/node-1000-4096-memory-ordinary.stderr"
+    },
+    {
+      "path": "held-write/reports/numeric-1000-4096-memory-ordinary.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-controls-0c298984-results/numeric-1000-4096-memory-ordinary.stderr"
+    },
+    {
+      "path": "held-write/source-state.json",
+      "sha256": "007267a4420f9d9413c7433ff6838b515c54a96843a609ef8323b63ecc14a97a",
+      "bytes": 16963,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-final-held-write-controls-0c298984-state.json"
+    },
+    {
+      "path": "held-write/audit.json",
+      "sha256": "a18fe81a0103eb838008014374276e0363c1c613c1c8a3dd012bb1f4da0087c9",
+      "bytes": 35288,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-final-held-write-controls-0c298984-audit.json"
+    },
+    {
+      "path": "held-write/native-build.log",
+      "sha256": "546cb030122b4b4369d1fb86d74f7f2d68f792bb652b25acb6da454d2da5460f",
+      "bytes": 2086,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-final-held-write-controls-0c298984-build.log"
+    },
+    {
+      "path": "held-write/run.py",
+      "sha256": "a47e61c44d6bda0d46ab3191cc6f7f2e92e45be5cafe04d9040f43a021620b0b",
+      "bytes": 5446,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/run-final-held-write-controls-0c298984.py"
+    },
+    {
+      "path": "held-write/audit.py",
+      "sha256": "5f2ccdf7f6181b68018090a72bd684428dc9a7d7a1b177ead8d23f1fbf31bf59",
+      "bytes": 6360,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-final-held-write-controls-0c298984.py"
+    },
+    {
+      "path": "held-write/consumers/retained_node_write_control.py",
+      "sha256": "a06bb1f1a004246adf509c598188f20d985bf297ffad96ed9893730e1851da15",
+      "bytes": 12460,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-ordinary-0c298984-frozen/retained_node_write_control.py"
+    },
+    {
+      "path": "held-write/consumers/retained_write_control.py",
+      "sha256": "4b83e1e954e79f6b7a5d987c0961bddc08fa2ed49cfd56107eaca878f7633de8",
+      "bytes": 6149,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-ordinary-0c298984-frozen/retained_write_control.py"
     }
   ],
   "created_at": 1792351101.2527812,
@@ -1004,5 +1190,14 @@
   },
   "original_phase_groups": 10,
   "original_phase_measured_attempt_records": 930,
-  "original_phase_scope": "Original unchanged setup,6positive/2defaultmemory/2exactrow-refusal groups,31samples per mode plus warmup. Prior41db fixture failure remains preserved, no causal claim or90/110 substitution."
+  "original_phase_scope": "Original unchanged setup,6positive/2defaultmemory/2exactrow-refusal groups,31samples per mode plus warmup. Prior41db fixture failure remains preserved, no causal claim or90/110 substitution.",
+  "held_write_controls": {
+    "node_children": 8,
+    "numeric_children": 4,
+    "node_measured_rounds": 256,
+    "node_measured_point_writes": 8192,
+    "numeric_measured_writes": 84,
+    "all_retained_quotas_released": true,
+    "scope": "Exact existing consumers, all historical fixtures at final0c. Same-source held/no-reader comparisons, not an uncached-prototype or cross-revision comparison. Instrumented results separate; process RSS includes every fixture/setup; no production-tail, pure-copy, causality, universal COW, memory-bound or leak-absence claim."
+  }
 }
