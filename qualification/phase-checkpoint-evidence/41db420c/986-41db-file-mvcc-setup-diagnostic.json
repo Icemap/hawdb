@@ -1,0 +1,25 @@
+{
+  "engine": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "extension_sha256": "df65e2b59a544c773d0def2594c496a4def0eaf5ea35d5c962884844df93a5e0",
+  "scope": "Untimed fixture-failure diagnostic only. Original failed campaign preserved; not matrix acceptance.",
+  "started": 1792337503.2073238,
+  "created_rows": 762368,
+  "status": "setup_failed",
+  "limits": [
+    1000000,
+    1073741824,
+    1073741824,
+    1073741824,
+    2147483648,
+    268435456,
+    67108864
+  ],
+  "attempted_start": 762368,
+  "error": {
+    "type": "StorageError",
+    "message": "storage error: MVCC version index estimated payload budget exhausted; release old snapshots and checkpoint before retrying"
+  },
+  "before_close": 1792337547.4942799,
+  "ended": 1792337547.576108,
+  "process_peak_rss_bytes": 888193024
+}

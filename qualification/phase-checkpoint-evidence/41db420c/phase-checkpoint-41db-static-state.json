@@ -1,0 +1,63 @@
+{
+  "status": "passed",
+  "started": 1792337825.183616,
+  "steps": [
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792337828.297525,
+      "exit": 0,
+      "ended": 1792337835.524162
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792337835.524657,
+      "exit": 0,
+      "ended": 1792337836.9738722
+    },
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792337836.974278,
+      "exit": 0,
+      "ended": 1792337837.0731862
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792337837.073546,
+      "exit": 0,
+      "ended": 1792337844.8054001
+    }
+  ],
+  "scope": "Supplemental explicit CHECKPOINT fixture qualification only; no engine/native producer changes or replacement of original failures.",
+  "changed_files": {
+    "qualification/phases/consume.py": "1fa8de3575a4476487baf81a4753ddadd3bee450f989cae5960283c4ed426032",
+    "qualification/resources/numeric_driver.py": "c4d7cd3bf98461af6a6f94085e216d8aed8921f5ca66afbe105c09172c9a7a9b"
+  },
+  "ended": 1792337844.8057432
+}

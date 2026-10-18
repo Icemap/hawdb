@@ -1,0 +1,18 @@
+{
+  "engine": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "qualification_base": "061fc42bcaa6201b8fc59cfdc2242689f9053590",
+  "file_sha256": {
+    "retained_boundary.py": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+    "consume.py": "1fa8de3575a4476487baf81a4753ddadd3bee450f989cae5960283c4ed426032",
+    "hawdb/magic.py": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+    "hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6",
+    "hawdb/__init__.py": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+    "hawdb/_display.py": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+    "hawdb/_hawdb.so": "df65e2b59a544c773d0def2594c496a4def0eaf5ea35d5c962884844df93a5e0",
+    "hawdb/pydantic.py": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+    "hawdb/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hawdb/_hawdb.pyi": "6c84c802cae732f8446298f18d9901e111d20d9d573add30d10f04c2656cbaf2"
+  },
+  "setup_checkpoint_rows": 65536,
+  "scope": "Supplemental fixture intervention. Native producer identical to source515; default setup campaign and failures preserved independently."
+}

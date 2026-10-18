@@ -1,0 +1,35 @@
+{
+  "head": "632d16a2f94e4082526e5b626ba960fdc6cc1929",
+  "tree": "e90b8ca46849cc4420c70219070cafa8831bce70",
+  "parent": "061fc42bcaa6201b8fc59cfdc2242689f9053590",
+  "changed_from_parent": [
+    "qualification/phases/consume.py",
+    "qualification/resources/numeric_driver.py"
+  ],
+  "engine": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "engine_diff_paths": [
+    ".github/workflows/native-bindings.yml",
+    "BUILD.bazel",
+    "Cargo.toml",
+    "bindings/python/BUILD.bazel",
+    "bindings/python/Cargo.toml",
+    "bindings/python/src/database.rs",
+    "bindings/python/src/lib.rs",
+    "qualification/phases/consume.py",
+    "qualification/resources/baseline-source.json",
+    "qualification/resources/campaign.json",
+    "qualification/resources/numeric.py",
+    "qualification/resources/numeric_driver.py",
+    "qualification/resources/run.py",
+    "qualification/retained/configured.py",
+    "qualification/retained/run.py",
+    "src/api/retained_query.rs",
+    "src/embedded.rs",
+    "src/lib.rs",
+    "src/retained_phase_profile.rs"
+  ],
+  "static_receipt": "phase-checkpoint-41db-static-state.json",
+  "automatic_commit_hooks": "passed",
+  "original_campaign": "preserved, no dispatch or test rerun",
+  "superseded_build": "Bazel client71995 interrupted intentionally after discovering CHECKPOINT already exists; no native interface or build change required. Not a failed test or timeout recovery."
+}

@@ -1,0 +1,68 @@
+{
+  "engine": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "source": "061fc42bcaa6201b8fc59cfdc2242689f9053590",
+  "run": 39135991764,
+  "status": "complete_observations_not_full_performance_acceptance",
+  "observed": 10,
+  "positive_groups": [
+    [
+      "default",
+      1000,
+      "file"
+    ],
+    [
+      "default",
+      1000,
+      "memory"
+    ],
+    [
+      "default",
+      100000,
+      "file"
+    ],
+    [
+      "default",
+      100000,
+      "memory"
+    ],
+    [
+      "large",
+      1000000,
+      "file"
+    ],
+    [
+      "large",
+      1000000,
+      "memory"
+    ]
+  ],
+  "row_boundary_groups": [
+    [
+      "large",
+      1000001,
+      "file"
+    ],
+    [
+      "large",
+      1000001,
+      "memory"
+    ]
+  ],
+  "default_memory_budget_refusal_groups": [
+    [
+      "default",
+      1000000,
+      "file"
+    ],
+    [
+      "default",
+      1000000,
+      "memory"
+    ]
+  ],
+  "all_observed_ownership_released": true,
+  "samples_per_mode": 7,
+  "timed_consumer_sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+  "audit_file_sha256": "464dc820d0ee7881a916424745eeaf02b27f38e986ea4133cf22e64e1d77f73b",
+  "scope": "Original normal retained controls fully observed, with six positive groups and four deliberate refusal groups. Independent phase/file fixture failure remains preserved; ordinary90/resource110 and review still open."
+}
