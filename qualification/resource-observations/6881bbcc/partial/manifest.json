@@ -1,0 +1,29 @@
+{
+  "status": "partial_predecessor_observations_final986_open",
+  "files": {
+    "audit.py": {
+      "bytes": 6594,
+      "sha256": "bf9086ee14b612465b89ac8e5788b2da1c4a5f4aefbba4a218b940756e61a4b4"
+    },
+    "comparisons.json": {
+      "bytes": 219190,
+      "sha256": "dc1ceacddd5475defeb3ab5a04df0a0a13f4bfd926825cf5d38f806e4729199d"
+    },
+    "README.md": {
+      "bytes": 3724,
+      "sha256": "0648af973c67981aec5eff80c513c8a21b2e42859e0992d1a07e569f78e5e360"
+    },
+    "inputs.json": {
+      "bytes": 502023,
+      "sha256": "b1437b95779a4cbac13cf4cd50351ffc2ae27d57299f9eb2c2b622ecc8cd855a"
+    },
+    "audited-summary.json": {
+      "bytes": 240338,
+      "sha256": "8abe306fe26c9e9e64417ed575799d06508ff2cf693bfb6fd6e10479791cba20"
+    },
+    "ordinary-paired.tsv": {
+      "bytes": 3003,
+      "sha256": "43018d750c0f89f7a09e585dc4c8d676e18acd9646369020932b91fdc64db77a"
+    }
+  }
+}
