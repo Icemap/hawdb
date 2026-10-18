@@ -202,7 +202,12 @@ fn root_admission_counts_incoming_analyzer_capacity_before_any_path_lookup() {
             .expect("oversized incoming ownership must refuse")
     });
     assert!(
-        matches!(&error, HawDBError::Execution(message) if message.contains("memory")),
+        matches!(&error, HawDBError::ResourceBudgetExceeded(cause)
+            if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                && cause.scope == hawdb_core::ResourceBudgetScope::Account
+                && cause.owner == "search build state"
+                && cause.budget == (2 << 20)
+                && cause.requested > cause.budget.saturating_sub(cause.used)),
         "{error:?}"
     );
     assert!(
@@ -291,7 +296,12 @@ fn root_preflight_refuses_checksum_valid_compact_runs_before_owned_expansion() {
             .expect("must refuse before expanding declared runs")
     });
     assert!(
-        matches!(&error, HawDBError::Execution(message) if message.contains("memory")),
+        matches!(&error, HawDBError::ResourceBudgetExceeded(cause)
+            if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                && cause.scope == hawdb_core::ResourceBudgetScope::Account
+                && cause.owner == "search build state"
+                && cause.budget == (2 << 20)
+                && cause.requested > cause.budget.saturating_sub(cause.used)),
         "{error:?}"
     );
     assert!(

@@ -163,7 +163,15 @@ fn target_validation_refuses_current_task_budget_despite_large_legacy_config() {
             },
         )
         .unwrap_err();
-    assert!(matches!(error, HawDBError::Execution(_)), "{error:?}");
+    assert!(
+        matches!(&error, HawDBError::ResourceBudgetExceeded(cause)
+            if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                && cause.scope == hawdb_core::ResourceBudgetScope::Account
+                && cause.budget == 1
+                && cause.used == 0
+                && cause.requested > 1),
+        "{error:?}"
+    );
     assert_eq!(memory.ledger.snapshot().used_bytes, 0);
     assert_eq!(governor.snapshot().active_background_io_slots, 0);
     drop(memory);
@@ -330,7 +338,11 @@ fn admitted_cjk_target_reanalysis_borrows_execution_until_worker_join_and_refund
         })
         .unwrap_err();
     assert!(
-        matches!(&error, HawDBError::Execution(message) if message.contains("query memory")),
+        matches!(&error, HawDBError::ResourceBudgetExceeded(cause)
+            if cause.resource == hawdb_core::ResourceBudgetKind::MemoryBytes
+                && cause.scope == hawdb_core::ResourceBudgetScope::Query
+                && cause.budget == (8 << 20)
+                && cause.requested > cause.budget.saturating_sub(cause.used)),
         "{error:?}"
     );
     observe.assert_joined(0);
