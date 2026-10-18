@@ -871,47 +871,69 @@ mod tests {
     #[test]
     fn blocking_execution_respects_governor_parallelism() {
         let governor = governor(2);
+        governor.pin_resources();
         let telemetry = Arc::new(RecordingRuntimeTelemetry::default());
         governor.set_telemetry_sink(Some(telemetry.clone()));
-        let adapter = Arc::new(
-            TokioRuntimeAdapter::owned(
-                governor,
-                TokioRuntimeConfig {
-                    max_blocking_threads: NonZeroUsize::new(8),
-                    ..TokioRuntimeConfig::default()
-                },
-            )
-            .unwrap(),
-        );
+        let adapter = TokioRuntimeAdapter::owned(
+            governor,
+            TokioRuntimeConfig {
+                max_blocking_threads: NonZeroUsize::new(8),
+                ..TokioRuntimeConfig::default()
+            },
+        )
+        .unwrap();
         let active = Arc::new(AtomicUsize::new(0));
         let peak = Arc::new(AtomicUsize::new(0));
-        let workers = (0..6)
-            .map(|_| {
-                let adapter = Arc::clone(&adapter);
-                let active = Arc::clone(&active);
-                let peak = Arc::clone(&peak);
-                std::thread::spawn(move || {
-                    adapter
-                        .block_on(adapter.execute_blocking(
+        adapter
+            .block_on(async {
+                let (entered, started) = std::sync::mpsc::channel();
+                let mut releases = Vec::new();
+                let mut executions = (0..6)
+                    .map(|_| {
+                        let active = Arc::clone(&active);
+                        let peak = Arc::clone(&peak);
+                        let entered = entered.clone();
+                        let (release, released) = std::sync::mpsc::channel::<()>();
+                        releases.push(release);
+                        Box::pin(adapter.execute_blocking(
                             RuntimeWorkRequest::blocking_cpu(RuntimeWorkPriority::Foreground, 0),
                             RuntimeTaskContext::default(),
                             move |_| {
                                 let current = active.fetch_add(1, Ordering::SeqCst) + 1;
                                 peak.fetch_max(current, Ordering::SeqCst);
-                                std::thread::sleep(Duration::from_millis(10));
+                                let _ = entered.send(());
+                                // Dropping the senders also releases work if an assertion fails.
+                                let _ = released.recv();
                                 active.fetch_sub(1, Ordering::SeqCst);
                                 Ok::<_, Infallible>(())
                             },
                         ))
-                        .unwrap()
-                        .unwrap();
+                    })
+                    .collect::<Vec<_>>();
+                // Poll every request while admitted work is held: contenders must
+                // reach the admission wait, independent of OS thread scheduling.
+                poll_fn(|context| {
+                    for execution in &mut executions {
+                        assert!(execution.as_mut().poll(context).is_pending());
+                    }
+                    Poll::Ready(())
                 })
+                .await;
+                let snapshot = adapter.governor_snapshot();
+                assert_eq!(snapshot.active_cpu_slots, 2);
+                assert_eq!(snapshot.queued_admission_waiters, 4);
+                assert!(snapshot.retryable_admission_rejections >= 4);
+                let both_started =
+                    (0..2).all(|_| started.recv_timeout(Duration::from_secs(5)).is_ok());
+                drop(releases);
+                for execution in executions {
+                    execution.await.unwrap();
+                }
+                assert!(both_started, "both admitted blocking operations must start");
             })
-            .collect::<Vec<_>>();
-        for worker in workers {
-            worker.join().unwrap();
-        }
-        assert!(peak.load(Ordering::SeqCst) <= 2);
+            .unwrap();
+        assert_eq!(peak.load(Ordering::SeqCst), 2);
+        assert_eq!(active.load(Ordering::SeqCst), 0);
         assert_eq!(adapter.governor_snapshot().completions, 6);
         assert!(adapter.governor_snapshot().admission_waits > 0);
         assert!(adapter.governor_snapshot().retryable_admission_rejections > 0);
