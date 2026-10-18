@@ -184,6 +184,7 @@ fn active_manifest_admission_covers_compact_untrusted_segment_sequences() {
         "segment_id",
         "level",
         "generation",
+        "objects",
         "descriptor_file",
         "descriptor_len",
         "descriptor_checksum",
@@ -264,8 +265,18 @@ fn active_manifest_admission_covers_compact_untrusted_mutation_sequences() {
     let original: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     for count in [65, 513] {
         let mut value = original.clone();
-        value["body"]["mutation_runs"] =
-            serde_json::Value::Array(vec![serde_json::json!([1, "", 1, 0, 1, 0]); count]);
+        value["body"]["mutation_runs"] = serde_json::Value::Array(vec![
+            serde_json::json!([
+                1,
+                original["body"]["segments"][0]["objects"]["payload"],
+                "",
+                1,
+                0,
+                1,
+                0
+            ]);
+            count
+        ]);
         let bytes = serde_json::to_vec(&value).unwrap();
         let decoded: SearchOutOfCoreManifestEnvelope = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(decoded.body.mutation_runs.len(), count);

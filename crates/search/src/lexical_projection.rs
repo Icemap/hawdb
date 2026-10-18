@@ -1071,6 +1071,11 @@ pub(super) struct LexicalProjectionReader {
     _reader_memory: Option<crate::build_memory::read::ReaderMemory>,
 }
 
+enum ManifestFile<'a> {
+    Path(&'a Path),
+    Held(File),
+}
+
 impl LexicalProjectionReader {
     /// Reconstruct a version's exact contribution with this reader's analyzer
     /// admission limits. Used before accepting an immutable mutation retraction.
@@ -1163,7 +1168,39 @@ impl LexicalProjectionReader {
         let manifest = ManifestBody::decode(bytes)?;
         let artifact_path = root.join(&manifest.artifact_file);
         Self::load_decoded_manifest(
-            &artifact_path,
+            ManifestFile::Path(&artifact_path),
+            manifest,
+            expected_source_epoch,
+            expected_analyzer_digest,
+            expected_documents_digest,
+            config,
+            None,
+            None,
+        )
+    }
+
+    pub(super) fn load_captured_manifest_bytes(
+        bytes: &[u8],
+        expected_source_epoch: Option<u64>,
+        expected_analyzer_digest: u64,
+        expected_documents_digest: u64,
+        config: LexicalProjectionConfig,
+        file: File,
+        generation: u64,
+    ) -> Result<Option<Arc<Self>>> {
+        if bytes.len() as u64 > config.max_manifest_bytes.get() {
+            return Err(HawDBError::Execution(
+                "captured lexical manifest exceeds read ceiling".into(),
+            ));
+        }
+        let manifest = ManifestBody::decode(bytes)?;
+        if manifest.generation != generation {
+            return Err(HawDBError::StorageIntegrity(
+                "captured lexical generation mismatch".into(),
+            ));
+        }
+        Self::load_decoded_manifest(
+            ManifestFile::Held(file),
             manifest,
             expected_source_epoch,
             expected_analyzer_digest,
@@ -1176,7 +1213,7 @@ impl LexicalProjectionReader {
 
     #[allow(clippy::too_many_arguments)]
     fn load_decoded_manifest(
-        artifact_path: &Path,
+        artifact_file: ManifestFile<'_>,
         decoded: ManifestBody,
         expected_source_epoch: Option<u64>,
         expected_analyzer_digest: u64,
@@ -1206,7 +1243,10 @@ impl LexicalProjectionReader {
                 ));
             }
         }
-        let file = File::open(artifact_path)?;
+        let file = match artifact_file {
+            ManifestFile::Path(path) => File::open(path)?,
+            ManifestFile::Held(file) => file,
+        };
         if file.metadata()?.len() != manifest.artifact_len {
             return Err(HawDBError::Storage(
                 "lexical projection artifact length mismatch".to_string(),

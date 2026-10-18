@@ -100,7 +100,7 @@ fn target_validation_uses_one_admission_for_probe_hydration_and_stored_terms() {
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let run = fixture.open_run(&admission);
     let baseline = memory.ledger.snapshot().used_bytes;
@@ -142,7 +142,7 @@ fn target_validation_refuses_current_task_budget_despite_large_legacy_config() {
     let run = fixture.open_run(&ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     });
     drop(memory);
     drop(task);
@@ -159,7 +159,7 @@ fn target_validation_refuses_current_task_budget_despite_large_legacy_config() {
             &ReadAdmission {
                 memory: &memory,
                 task: &task,
-                permit: &permit,
+                permit: crate::build_memory::read::ReadPermit::Governed(&permit),
             },
         )
         .unwrap_err();
@@ -194,7 +194,7 @@ fn target_hydration_cancellation_during_selected_physical_read_refunds_io_and_me
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let artifact = &fixture.reader.segments[0];
     let segment = &artifact.descriptor.segments[0];
@@ -254,7 +254,7 @@ fn admitted_target_validation_rejects_checksum_valid_wrong_retractions_without_p
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         };
         let run = fixture.open_run(&admission);
         let baseline = memory.ledger.snapshot().used_bytes;
@@ -291,7 +291,7 @@ fn admitted_cjk_target_reanalysis_borrows_execution_until_worker_join_and_refund
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let run = fixture.open_run(&admission);
     let artifact = &fixture.reader.segments[0];

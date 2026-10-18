@@ -185,6 +185,7 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
     drop(bytes);
     let closure = load_artifact_closure_with_context(
         ClosureLoadContext {
+            cleanup_source: None,
             capture: capture.as_ref(),
             root: &root,
             config: &config,

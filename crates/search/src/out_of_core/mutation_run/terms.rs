@@ -31,6 +31,11 @@ pub(crate) struct TermFile {
     _reader_memory: Option<crate::build_memory::read::ReaderMemory>,
 }
 impl TermFile {
+    pub(super) fn requires_execution(&self) -> bool {
+        self._reader_memory
+            .as_ref()
+            .is_some_and(|memory| memory.requires_execution())
+    }
     pub(super) fn requires_context(&self) -> bool {
         self._reader_memory.is_some()
     }

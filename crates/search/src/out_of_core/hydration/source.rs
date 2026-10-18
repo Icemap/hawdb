@@ -201,7 +201,7 @@ impl<'execution> Source<'execution> {
                 offset: 0,
                 remaining: self.bytes,
                 context,
-                require_execution: true,
+                require_execution: context.execution.is_some(),
             }),
             None => SourceReader::Legacy(RangeReader {
                 file: &self.body,

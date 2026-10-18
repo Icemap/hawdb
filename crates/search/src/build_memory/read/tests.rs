@@ -88,7 +88,7 @@ fn bounded_input_keeps_the_opened_file_after_path_replacement() {
     let input = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     }
     .read_bound(
         &path,
@@ -138,7 +138,7 @@ fn cancellation_after_native_open_precedes_large_buffer_allocation() {
         let result = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         }
         .read_bound(&path, bytes.len() as u64, 0, 4 << 20);
         assert!(matches!(result, Err(HawDBError::Execution(_))));
@@ -187,7 +187,7 @@ fn streamed_artifact_uses_bounded_scratch_and_cancellation_refunds_it() {
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let mut visited = 0;
     let (_, peak) = allocation::measure(|| {
@@ -259,7 +259,7 @@ fn borrowed_reader_refuses_an_unbound_task_before_range_allocation_or_io() {
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let (error, peak) = allocation::measure(|| {
         admission
@@ -311,7 +311,7 @@ fn unknown_length_head_keeps_the_opened_file_across_path_replacement() {
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let file = {
         let _io = admission.io().unwrap();
@@ -354,7 +354,7 @@ fn unknown_length_head_limit_and_open_cancellation_precede_large_buffer_allocati
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         };
         let (error, peak) = allocation::measure(|| {
             let file = {

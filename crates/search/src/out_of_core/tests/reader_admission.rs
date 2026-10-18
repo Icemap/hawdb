@@ -108,10 +108,11 @@ fn assert_segment_refused_before_expansion(
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         };
         let result = SearchOutOfCoreSegmentReader::open_with_read_admission(
             SegmentOpenContext {
+                cleanup_source: None,
                 capture: None,
                 root,
                 config: &reader.config,
@@ -274,10 +275,11 @@ fn assert_admitted_segment_lifetime(with_vectors: bool) {
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         };
         SearchOutOfCoreSegmentReader::open_with_read_admission(
             SegmentOpenContext {
+                cleanup_source: None,
                 capture: None,
                 root: &root,
                 config: &ordinary.config,

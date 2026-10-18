@@ -20,13 +20,24 @@ use hawdb_qos::RuntimeWorkRequest;
 struct Fixture {
     root: PathBuf,
     reader: SearchOutOfCoreReader,
+    // Last owner: the shared native cache and its platform lock backing must
+    // close with this fixture, rather than a thread-local test-dir registry.
+    _project: ProjectFileDescriptors,
 }
 impl Fixture {
     fn new() -> Self {
         Self::new_with_chinese(false)
     }
     fn new_with_chinese(chinese: bool) -> Self {
-        let root = super::super::tests::test_dir("private-admitted-root");
+        let root = crate::test_temp_dir().join(format!(
+            "hawdb-private-admitted-root-{}",
+            hawdb_core::generate_uuidv7().unwrap()
+        ));
+        let project = ProjectFileDescriptors::acquire(
+            &root,
+            hawdb_storage::file_descriptors::DEFAULT_MAX_OPEN_FILES,
+        )
+        .unwrap();
         let mut writer =
             SearchOutOfCoreGenerationWriter::create(&root, Default::default()).unwrap();
         for id in ["a", "b"] {
@@ -61,7 +72,11 @@ impl Fixture {
             !reader.manifest.mutation_runs.is_empty(),
             "exercise complete retraction validation"
         );
-        Self { root, reader }
+        Self {
+            root,
+            reader,
+            _project: project,
+        }
     }
     fn context<'a, 'execution>(
         &'a self,
@@ -100,7 +115,7 @@ fn private_root_constructs_full_mutation_closure_and_releases_producer_execution
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let context = fixture.context(&admission);
     let input_bytes = root_bytes(
@@ -158,7 +173,7 @@ fn admitted_root_cannot_convert_into_an_unguarded_public_reader() {
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let error = open(fixture.context(&admission))
         .unwrap()
@@ -187,7 +202,7 @@ fn root_admission_counts_incoming_analyzer_capacity_before_any_path_lookup() {
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let mut input = String::with_capacity(4 << 20);
     input.push('a');
@@ -231,9 +246,13 @@ fn root_preflight_refuses_checksum_valid_compact_runs_before_owned_expansion() {
     assert_eq!(allocation::live(), 0);
     let fixture = Fixture::new();
     let mut body = fixture.reader.manifest.clone();
-    body.generation = 11_001;
-    body.mutation_runs = (1..=11_000)
+    // V4's mandatory fixed digest record makes each compact row wider. Keep
+    // the malicious frame below the unchanged encoded ceiling while still
+    // exceeding the unchanged 2MiB construction grant on owned expansion.
+    body.generation = 5_001;
+    body.mutation_runs = (1..=5_000)
         .map(|generation| SearchOutOfCoreMutationRunManifest {
+            object: crate::out_of_core::ArtifactObject::for_bytes(&[0]),
             generation,
             file: mutation_run::artifact_file(generation),
             len: 1,
@@ -250,6 +269,7 @@ fn root_preflight_refuses_checksum_valid_compact_runs_before_owned_expansion() {
             .map(|run| {
                 serde_json::json!([
                     run.generation,
+                    run.object,
                     run.file,
                     run.len,
                     run.checksum,
@@ -287,7 +307,7 @@ fn root_preflight_refuses_checksum_valid_compact_runs_before_owned_expansion() {
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let context = fixture.context(&admission);
     let (error, peak) = allocation::measure(|| {
@@ -333,7 +353,7 @@ fn private_root_requires_existing_matching_project_and_refunds_on_mismatch() {
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     for missing in [true, false] {
         let mut context = fixture.context(&admission);
@@ -392,7 +412,7 @@ fn private_root_joins_cjk_target_validation_before_releasing_borrowed_execution(
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let observe = crate::analyzer_workspace::observation::Observe::new();
     let opened = open(fixture.context(&admission)).unwrap();
@@ -421,7 +441,7 @@ fn complete_private_root_can_take_publisher_custody_without_retaining_the_lease(
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let mut publication =
         SearchProjectionPublishLease::acquire_for_consumer(&fixture.root).unwrap();
@@ -458,7 +478,7 @@ fn publisher_from_another_directory_in_the_same_project_cannot_supply_reader_cus
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let mut publication =
         SearchProjectionPublishLease::acquire_for_consumer(&fixture.root).unwrap();
@@ -500,19 +520,68 @@ fn replace_twice(fixture: &Fixture) {
     }
 }
 
-fn sweep_current(
-    fixture: &Fixture,
-    retry: bool,
-    state: &mut crate::generation_cleanup::SearchProjectionCleanupState,
-    memory: &BuildMemory,
-    task: &hawdb_core::RuntimeTaskContext,
-) {
+// Keep this probe in the unpublished source-GC worktree until production
+// discovery, candidate enumeration and unlink all use the captured authority.
+fn cleanup_uses_one_captured_namespace(retry: bool) {
+    cleanup_uses_one_captured_namespace_with_scratch_probe(retry, false);
+}
+
+fn cleanup_uses_one_captured_namespace_with_scratch_probe(retry: bool, check_scratch: bool) {
     use crate::generation_cleanup::{once::PreparedCleanup, SearchProjectionGenerations};
+    struct Replacement {
+        named: PathBuf,
+        captured: PathBuf,
+    }
+    impl Drop for Replacement {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.named).unwrap();
+            std::fs::rename(&self.captured, &self.named).unwrap();
+        }
+    }
+
+    let fixture = Fixture::new();
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let memory = BuildMemory::new(&task).unwrap();
+    let active_name = fixture.reader.manifest.segments[0].payload_file.clone();
+    let obsolete_name = "search_projection_segment_payloads.0.hawdb";
+    std::fs::write(
+        fixture.root.join(obsolete_name),
+        b"captured obsolete source",
+    )
+    .unwrap();
     let publication = SearchProjectionPublishLease::acquire_for_cleanup(&fixture.root).unwrap();
+    let captured = fixture.root.with_extension("captured-gc-source");
+    std::fs::rename(&fixture.root, &captured).unwrap();
+    let replacement = Replacement {
+        named: fixture.root.clone(),
+        captured,
+    };
+    for number in 1..=6 {
+        let mut writer =
+            SearchOutOfCoreGenerationWriter::create(&fixture.root, Default::default()).unwrap();
+        writer
+            .push(SearchDocument {
+                id: format!("foreign:{number}"),
+                title: "foreign namespace".into(),
+                content: "independent published closure".into(),
+                embedding: None,
+                metadata: BTreeMap::new(),
+            })
+            .unwrap();
+        writer.finish().unwrap();
+    }
+    let foreign_bytes = b"foreign obsolete evidence must remain untouched";
+    std::fs::write(fixture.root.join(obsolete_name), foreign_bytes).unwrap();
+    let overlapping_foreign_bytes = b"foreign artifact sharing the captured active name";
+    std::fs::write(fixture.root.join(&active_name), overlapping_foreign_bytes).unwrap();
+    // This is deliberately the current production discovery call. Merely
+    // changing the final unlink to be relative will still use this foreign
+    // head's retention set and delete the captured active generation.
     let current = published_artifact_generations(&fixture.root, &fixture.reader.analyzer_lexicon)
         .unwrap()
         .unwrap();
-    let generations = SearchProjectionGenerations {
+    assert_eq!(current.active_generation, 6);
+    let _foreign_generations = SearchProjectionGenerations {
         lexical: current.lexical_generations.last().copied(),
         out_of_core: Some(current.active_generation),
         rabitq: current.rabitq_generations.last().copied(),
@@ -521,18 +590,108 @@ fn sweep_current(
         retained_out_of_core: current.out_of_core_generations,
         retained_rabitq: current.rabitq_generations,
         out_of_core_discovery_failed: false,
+        rabitq_discovery_failed: false,
     };
+    let foreign_directory_before = std::fs::metadata(&fixture.root)
+        .unwrap()
+        .modified()
+        .unwrap();
     if retry {
-        state.run_under_publication(&fixture.root, generations, Default::default(), &publication);
+        crate::generation_cleanup::SearchProjectionCleanupState::default().run_under_publication(
+            &fixture.root,
+            Default::default(),
+            &publication,
+            &fixture.reader.analyzer_lexicon,
+            None,
+        );
+    } else {
+        PreparedCleanup::prepare(&fixture.root, &memory, &task)
+            .unwrap()
+            .run_under_publication(
+                &fixture.root,
+                Default::default(),
+                &task,
+                &publication,
+                &fixture.reader.analyzer_lexicon,
+                None,
+            );
+    }
+    let foreign_directory_after = std::fs::metadata(&fixture.root)
+        .unwrap()
+        .modified()
+        .unwrap();
+    let active_survives = replacement.captured.join(&active_name).is_file();
+    let captured_obsolete_removed = !replacement.captured.join(obsolete_name).exists();
+    let foreign_untouched = std::fs::read(fixture.root.join(obsolete_name))
+        .is_ok_and(|bytes| bytes == foreign_bytes)
+        && std::fs::read(fixture.root.join(&active_name))
+            .is_ok_and(|bytes| bytes == overlapping_foreign_bytes);
+    drop(publication);
+    drop(replacement);
+    assert!(
+        active_survives,
+        "foreign discovery must not retire a captured active source"
+    );
+    assert!(
+        foreign_untouched,
+        "cleanup must not unlink the replacement directory"
+    );
+    assert!(
+        captured_obsolete_removed,
+        "cleanup must reclaim the captured obsolete source"
+    );
+    if check_scratch {
+        assert_eq!(
+            foreign_directory_before, foreign_directory_after,
+            "validation scratch must not create/remove entries in the replacement namespace"
+        );
+    }
+}
+
+#[test]
+fn immediate_cleanup_keeps_discovery_and_unlink_on_the_captured_namespace() {
+    cleanup_uses_one_captured_namespace(false);
+}
+
+#[test]
+fn queued_cleanup_keeps_discovery_and_unlink_on_the_captured_namespace() {
+    cleanup_uses_one_captured_namespace(true);
+}
+
+#[test]
+fn validation_scratch_keeps_all_operations_off_the_replacement_namespace() {
+    cleanup_uses_one_captured_namespace_with_scratch_probe(false, true);
+}
+
+fn sweep_current(
+    fixture: &Fixture,
+    retry: bool,
+    state: &mut crate::generation_cleanup::SearchProjectionCleanupState,
+    memory: &BuildMemory,
+    task: &hawdb_core::RuntimeTaskContext,
+    admission: &ReadAdmission<'_>,
+) {
+    use crate::generation_cleanup::once::PreparedCleanup;
+    let mut publication = SearchProjectionPublishLease::acquire_for_cleanup(&fixture.root).unwrap();
+    publication.admit_cleanup_resources(admission).unwrap();
+    if retry {
+        state.run_under_publication(
+            &fixture.root,
+            Default::default(),
+            &publication,
+            &fixture.reader.analyzer_lexicon,
+            Some(admission),
+        );
     } else {
         PreparedCleanup::prepare(&fixture.root, memory, task)
             .unwrap()
             .run_under_publication(
                 &fixture.root,
-                generations,
                 Default::default(),
                 task,
                 &publication,
+                &fixture.reader.analyzer_lexicon,
+                Some(admission),
             );
     }
 }
@@ -550,7 +709,7 @@ fn admitted_segment_pin_survives_parent_and_real_generation_cleanup() {
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         };
         let opened = open(fixture.context(&admission)).unwrap();
         let child = opened.reader.segments[0].clone();
@@ -564,7 +723,7 @@ fn admitted_segment_pin_survives_parent_and_real_generation_cleanup() {
         drop(opened);
         replace_twice(&fixture);
         let mut state = crate::generation_cleanup::SearchProjectionCleanupState::default();
-        sweep_current(&fixture, retry, &mut state, &memory, &task);
+        sweep_current(&fixture, retry, &mut state, &memory, &task, &admission);
         assert!(payload.exists() && lexical.exists());
         assert!(
             !mutation.exists(),
@@ -576,7 +735,7 @@ fn admitted_segment_pin_survives_parent_and_real_generation_cleanup() {
         assert_eq!(&*bytes, expected.as_slice());
         drop(bytes);
         drop(child);
-        sweep_current(&fixture, retry, &mut state, &memory, &task);
+        sweep_current(&fixture, retry, &mut state, &memory, &task, &admission);
         assert!(
             !payload.exists() && !lexical.exists(),
             "final segment owner permits reclamation"
@@ -597,7 +756,7 @@ fn admitted_stored_terms_pin_survives_parent_and_real_generation_cleanup() {
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         };
         let opened = open(fixture.context(&admission)).unwrap();
         let terms = opened
@@ -639,10 +798,10 @@ fn admitted_stored_terms_pin_survives_parent_and_real_generation_cleanup() {
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         };
         let mut state = crate::generation_cleanup::SearchProjectionCleanupState::default();
-        sweep_current(&fixture, retry, &mut state, &memory, &task);
+        sweep_current(&fixture, retry, &mut state, &memory, &task, &admission);
         assert!(mutation.exists());
         assert!(
             !unrelated.exists(),
@@ -660,11 +819,157 @@ fn admitted_stored_terms_pin_survives_parent_and_real_generation_cleanup() {
             .unwrap();
         assert_eq!(actual, expected);
         drop(terms);
-        sweep_current(&fixture, retry, &mut state, &memory, &task);
+        sweep_current(&fixture, retry, &mut state, &memory, &task, &admission);
         assert!(
             !mutation.exists(),
             "final stored-term owner permits reclamation"
         );
         assert_eq!(memory.ledger.snapshot().used_bytes, 0);
     }
+}
+
+#[derive(Clone, Copy)]
+enum CleanupRefusal {
+    ByteLimit,
+    FileLimit,
+    MissingDependency,
+    ReplacedWarmDependency,
+}
+
+fn cleanup_refuses_before_unlink(refusal: CleanupRefusal) {
+    use crate::generation_cleanup::{once::PreparedCleanup, SearchProjectionCleanupState};
+    for governed in [false, true] {
+        for retry in [false, true] {
+            let fixture = Fixture::new();
+            let governor = governor();
+            let permit = governor
+                .try_admit(
+                    RuntimeWorkRequest::background_maintenance(8 << 20).with_io_wave_slots(1),
+                )
+                .unwrap();
+            let task = if governed {
+                permit.bind_task_context(Default::default())
+            } else {
+                Default::default()
+            };
+            let memory = BuildMemory::new(&task).unwrap();
+            let admission = ReadAdmission {
+                memory: &memory,
+                task: &task,
+                permit: crate::build_memory::read::ReadPermit::Governed(&permit),
+            };
+            // Warm the actual captured cache before replacing the name. The
+            // cached inode remains readable, but cannot authenticate the new
+            // dependency required by the persisted head for recovery.
+            let opened = governed.then(|| open(fixture.context(&admission)).unwrap());
+            let segment = &fixture.reader.manifest.segments[0];
+            let path = fixture.root.join(&segment.payload_file);
+            let original = std::fs::read(&path).unwrap();
+            if let Some(opened) = &opened {
+                let bytes = admission
+                    .read_unbound_file(&opened.reader.segments[0].payload, segment.payload_len)
+                    .unwrap();
+                assert_eq!(&*bytes, original.as_slice());
+            }
+            let obsolete = fixture
+                .root
+                .join("search_projection_segment_payloads.0.hawdb");
+            std::fs::write(&obsolete, b"obsolete evidence").unwrap();
+            let mut options = crate::SearchProjectionCleanupOptions::default();
+            match refusal {
+                CleanupRefusal::ByteLimit => {
+                    options.max_verification_bytes = std::num::NonZeroU64::MIN
+                }
+                CleanupRefusal::FileLimit => {
+                    options.max_verification_files = std::num::NonZeroUsize::MIN
+                }
+                CleanupRefusal::MissingDependency => std::fs::remove_file(&path).unwrap(),
+                CleanupRefusal::ReplacedWarmDependency => {
+                    let mut changed = original.clone();
+                    changed[0] ^= 1;
+                    std::fs::remove_file(&path).unwrap();
+                    std::fs::write(&path, changed).unwrap();
+                }
+            }
+            let mut publication =
+                SearchProjectionPublishLease::acquire_for_cleanup(&fixture.root).unwrap();
+            if governed {
+                publication.admit_cleanup_resources(&admission).unwrap();
+            }
+            let read = governed.then_some(&admission);
+            let result = crate::generation_cleanup::source::VerifiedRetention::verify(
+                &fixture.root,
+                &publication,
+                &fixture.reader.analyzer_lexicon,
+                options,
+                &task,
+                read,
+            );
+            assert!(
+                result.is_err(),
+                "incomplete or over-budget closure must not authorize cleanup"
+            );
+            if retry {
+                let report = SearchProjectionCleanupState::default().run_under_publication(
+                    &fixture.root,
+                    options,
+                    &publication,
+                    &fixture.reader.analyzer_lexicon,
+                    read,
+                );
+                assert!(report.retry_required);
+                assert_eq!(report.scanned_entries, 0);
+                assert_eq!(report.delete_attempts, 0);
+            } else {
+                let report = PreparedCleanup::prepare(&fixture.root, &memory, &task)
+                    .unwrap()
+                    .run_under_publication(
+                        &fixture.root,
+                        options,
+                        &task,
+                        &publication,
+                        &fixture.reader.analyzer_lexicon,
+                        read,
+                    );
+                assert!(report.retry_required);
+                assert_eq!(report.deleted_files, 0);
+            }
+            assert_eq!(std::fs::read(&obsolete).unwrap(), b"obsolete evidence");
+            if matches!(refusal, CleanupRefusal::ReplacedWarmDependency)
+                && let Some(opened) = &opened
+            {
+                let bytes = admission
+                    .read_unbound_file(&opened.reader.segments[0].payload, segment.payload_len)
+                    .unwrap();
+                assert_eq!(
+                    &*bytes,
+                    original.as_slice(),
+                    "held old inode is not current-name evidence"
+                );
+            }
+            drop(publication);
+            drop(opened);
+            assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+        }
+    }
+}
+
+#[test]
+fn captured_cleanup_byte_ceiling_refuses_before_any_unlink() {
+    cleanup_refuses_before_unlink(CleanupRefusal::ByteLimit);
+}
+
+#[test]
+fn captured_cleanup_file_ceiling_refuses_before_any_unlink() {
+    cleanup_refuses_before_unlink(CleanupRefusal::FileLimit);
+}
+
+#[test]
+fn captured_cleanup_missing_dependency_refuses_before_any_unlink() {
+    cleanup_refuses_before_unlink(CleanupRefusal::MissingDependency);
+}
+
+#[test]
+fn captured_cleanup_checks_fresh_names_even_with_a_warm_managed_cache() {
+    cleanup_refuses_before_unlink(CleanupRefusal::ReplacedWarmDependency);
 }

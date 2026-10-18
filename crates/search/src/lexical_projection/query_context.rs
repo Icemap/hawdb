@@ -33,7 +33,7 @@ impl<'a> QueryContext<'a> {
         Self {
             memory: &admission.memory.spool,
             task: admission.task,
-            execution: Some(admission.permit),
+            execution: admission.runtime_permit(),
         }
     }
 }

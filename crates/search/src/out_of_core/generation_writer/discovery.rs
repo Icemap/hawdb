@@ -30,6 +30,8 @@ use std::path::Path;
 pub(super) struct ActiveIdentity {
     pub(super) generation: u64,
     pub(super) source_graph_commit_epoch: Option<u64>,
+    pub(super) resident_snapshot: Option<super::super::ResidentSnapshot>,
+    pub(super) resident_snapshot_absent: bool,
 }
 
 pub(super) fn active(
@@ -70,6 +72,8 @@ pub(super) fn active_identity(
     Ok(Some(ActiveIdentity {
         generation: envelope.body.generation,
         source_graph_commit_epoch: envelope.body.source_graph_commit_epoch,
+        resident_snapshot: envelope.body.resident_snapshot,
+        resident_snapshot_absent: envelope.body.resident_snapshot_absent,
     }))
 }
 

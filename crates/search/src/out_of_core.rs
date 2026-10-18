@@ -45,7 +45,7 @@ use hawdb_storage::file_io::{self as fs, File, OpenOptions};
 use serde::{Deserialize, Serialize};
 use std::cmp::{Ordering as CmpOrdering, Reverse};
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -91,7 +91,7 @@ use vector_serving::vector_projection_error;
 use vector_serving::VectorScoreScan;
 
 const OUT_OF_CORE_MANIFEST_FILE: &str = "search_projection.out_of_core.manifest.hawdb";
-const OUT_OF_CORE_FORMAT: &str = "HAWDB_SEARCH_OUT_OF_CORE_V3";
+const OUT_OF_CORE_FORMAT: &str = "HAWDB_SEARCH_OUT_OF_CORE_V4";
 const OUT_OF_CORE_LAYOUT_FORMAT: &str = "HAWDB_SEARCH_OUT_OF_CORE_LAYOUT_V1";
 const MAX_OUT_OF_CORE_MANIFEST_BYTES: u64 = 1024 * 1024;
 const MAX_MARKER_BYTES: u64 = 64 * 1024;
@@ -271,6 +271,7 @@ pub(super) struct SegmentReaderContents {
 }
 
 struct SegmentOpenContext<'a> {
+    cleanup_source: Option<&'a captured_cleanup::Source<'a>>,
     capture: Option<&'a root_registry::PendingCapture<'a, 'a>>,
     root: &'a Path,
     config: &'a SearchOutOfCoreConfig,
@@ -296,11 +297,17 @@ pub(super) struct PublishedOutOfCoreProjection {
     pub(super) bytes_written: u64,
 }
 
+mod artifact_reference;
+mod captured_cleanup;
+use artifact_reference::{ArtifactObject, ResidentSnapshot, SegmentObjects};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SearchOutOfCoreManifestBody<S = String> {
     format: S,
     generation: u64,
+    resident_snapshot: Option<ResidentSnapshot>,
+    resident_snapshot_absent: bool,
     segments: Vec<SearchOutOfCoreSegmentManifest<S>>,
     #[serde(default)]
     mutation_runs: Vec<SearchOutOfCoreMutationRunManifest<S>>,
@@ -324,6 +331,7 @@ struct SearchOutOfCoreSegmentManifest<S = String> {
     segment_id: u64,
     level: u32,
     generation: u64,
+    objects: SegmentObjects,
     descriptor_file: S,
     descriptor_len: u64,
     descriptor_checksum: u64,
@@ -367,6 +375,7 @@ struct SearchOutOfCoreSegmentManifest<S = String> {
 #[serde(deny_unknown_fields, bound(deserialize = "S: Deserialize<'de>"))]
 struct SearchOutOfCoreMutationRunManifest<S = String> {
     generation: u64,
+    object: ArtifactObject,
     file: S,
     len: u64,
     checksum: u64,
@@ -531,6 +540,11 @@ impl<S: AsRef<str>> SearchOutOfCoreManifestBody<S> {
                 "search out-of-core manifest header or segment set is invalid".to_string(),
             ));
         }
+        if self.resident_snapshot_absent && self.resident_snapshot.is_some() {
+            return Err(HawDBError::StorageIntegrity(
+                "conflicting resident snapshot ownership states".into(),
+            ));
+        }
         let mut ids = BTreeSet::new();
         let mut content_document_count = 0usize;
         for segment in &self.segments {
@@ -574,7 +588,11 @@ impl<S: AsRef<str>> SearchOutOfCoreManifestBody<S> {
 
 impl<S: AsRef<str>> SearchOutOfCoreMutationRunManifest<S> {
     fn validate_names(&self) -> Result<()> {
-        if self.generation == 0 || self.len == 0 || self.entry_count == 0 {
+        if self.generation == 0
+            || self.len == 0
+            || self.entry_count == 0
+            || self.object.byte_length != self.len
+        {
             return Err(HawDBError::Storage(
                 "search out-of-core mutation-run manifest metadata is invalid".to_string(),
             ));
@@ -594,6 +612,7 @@ impl<S: AsRef<str>> SearchOutOfCoreMutationRunManifest<S> {
 
 impl<S: AsRef<str>> SearchOutOfCoreSegmentManifest<S> {
     fn validate_names(&self) -> Result<()> {
+        self.objects.validate(self)?;
         if self.generation == 0 {
             return Err(HawDBError::Storage(
                 "search out-of-core segment generation is invalid".to_string(),
@@ -834,6 +853,7 @@ impl SearchOutOfCoreSegmentReader {
         Ok(())
     }
 
+    #[cfg(test)]
     fn open(
         root: &Path,
         config: &SearchOutOfCoreConfig,
@@ -845,6 +865,7 @@ impl SearchOutOfCoreSegmentReader {
     ) -> Result<Self> {
         Self::open_with_read_admission(
             SegmentOpenContext {
+                cleanup_source: None,
                 capture: None,
                 root,
                 config,
@@ -864,6 +885,7 @@ impl SearchOutOfCoreSegmentReader {
         manifest: &SearchOutOfCoreSegmentManifest,
     ) -> Result<Self> {
         let SegmentOpenContext {
+            cleanup_source,
             capture,
             root,
             config,
@@ -874,6 +896,19 @@ impl SearchOutOfCoreSegmentReader {
             admission,
             max_artifact_read_bytes,
         } = context;
+        if cleanup_source.is_some()
+            && (capture.is_some() || admission.is_some_and(|admission| !admission.is_synchronous()))
+        {
+            return Err(HawDBError::Execution(
+                "incompatible captured cleanup/read admission modes".into(),
+            ));
+        }
+        if admission.is_some_and(|admission| admission.is_synchronous()) && cleanup_source.is_none()
+        {
+            return Err(HawDBError::Execution(
+                "synchronous metadata requires captured publication custody".into(),
+            ));
+        }
         let reader_memory = admission
             .map(|context| {
                 use crate::build_memory::{
@@ -895,6 +930,22 @@ impl SearchOutOfCoreSegmentReader {
         };
         #[cfg(not(feature = "vector-search"))]
         let _ = active_manifest;
+        let read_captured = |name: &str, object: ArtifactObject, checksum: u64, maximum: u64| {
+            let capture = capture.expect("captured branch owns source custody");
+            let admission = admission.expect("captured branch owns read admission");
+            admission.require_read_limit(object.byte_length, max_artifact_read_bytes)?;
+            let file = capture.open_artifact(name, object.reference())?;
+            admission.read_file_range(
+                &file,
+                object.byte_length,
+                maximum,
+                crate::build_memory::read::FileRange {
+                    offset: 0,
+                    length: object.byte_length,
+                    checksum,
+                },
+            )
+        };
         let descriptor_path = match admission {
             Some(context) => Some(crate::build_memory::path::OwnedPath::join(
                 root,
@@ -905,6 +956,19 @@ impl SearchOutOfCoreSegmentReader {
             None => None,
         };
         let descriptor_bytes = match admission {
+            Some(_) if capture.is_some() => read_captured(
+                &manifest.descriptor_file,
+                manifest.objects.descriptor,
+                manifest.descriptor_checksum,
+                config.max_descriptor_bytes.get(),
+            )?,
+            Some(context) if cleanup_source.is_some() => cleanup_source.unwrap().read_admitted(
+                &manifest.descriptor_file,
+                manifest.objects.descriptor,
+                manifest.descriptor_checksum,
+                config.max_descriptor_bytes.get(),
+                context,
+            )?,
             Some(context) => {
                 context.require_read_limit(manifest.descriptor_len, max_artifact_read_bytes)?;
                 context.read_bound(
@@ -915,6 +979,14 @@ impl SearchOutOfCoreSegmentReader {
                 )?
             }
 
+            None if cleanup_source.is_some() => {
+                crate::build_memory::read::ReadBytes::unaccounted(cleanup_source.unwrap().read(
+                    &manifest.descriptor_file,
+                    manifest.objects.descriptor,
+                    manifest.descriptor_checksum,
+                    config.max_descriptor_bytes.get(),
+                )?)
+            }
             None => crate::build_memory::read::ReadBytes::unaccounted(read_bound_artifact(
                 &root.join(&manifest.descriptor_file),
                 manifest.descriptor_len,
@@ -958,6 +1030,17 @@ impl SearchOutOfCoreSegmentReader {
         }
 
         let payload = match admission {
+            Some(context) if capture.is_some() => {
+                context.require_read_limit(manifest.payload_len, max_artifact_read_bytes)?;
+                capture
+                    .unwrap()
+                    .open_artifact(&manifest.payload_file, manifest.objects.payload.reference())?
+            }
+            Some(context) if cleanup_source.is_some() => cleanup_source.unwrap().open_admitted(
+                &manifest.payload_file,
+                manifest.objects.payload,
+                context,
+            )?,
             Some(context) => {
                 let path = crate::build_memory::path::OwnedPath::join(
                     root,
@@ -967,6 +1050,9 @@ impl SearchOutOfCoreSegmentReader {
                 )?;
                 context.open_bound_length(&path, manifest.payload_len, max_artifact_read_bytes)?
             }
+            None if cleanup_source.is_some() => cleanup_source
+                .unwrap()
+                .open(&manifest.payload_file, manifest.objects.payload)?,
             None => open_exact_length_artifact(
                 &root.join(&manifest.payload_file),
                 manifest.payload_len,
@@ -984,6 +1070,19 @@ impl SearchOutOfCoreSegmentReader {
             None => None,
         };
         let layout_bytes = match admission {
+            Some(_) if capture.is_some() => read_captured(
+                &manifest.layout_file,
+                manifest.objects.layout,
+                manifest.layout_checksum,
+                config.max_descriptor_bytes.get(),
+            )?,
+            Some(context) if cleanup_source.is_some() => cleanup_source.unwrap().read_admitted(
+                &manifest.layout_file,
+                manifest.objects.layout,
+                manifest.layout_checksum,
+                config.max_descriptor_bytes.get(),
+                context,
+            )?,
             Some(context) => {
                 context.require_read_limit(manifest.layout_len, max_artifact_read_bytes)?;
                 context.read_bound(
@@ -994,6 +1093,14 @@ impl SearchOutOfCoreSegmentReader {
                 )?
             }
 
+            None if cleanup_source.is_some() => {
+                crate::build_memory::read::ReadBytes::unaccounted(cleanup_source.unwrap().read(
+                    &manifest.layout_file,
+                    manifest.objects.layout,
+                    manifest.layout_checksum,
+                    config.max_descriptor_bytes.get(),
+                )?)
+            }
             None => crate::build_memory::read::ReadBytes::unaccounted(read_bound_artifact(
                 &root.join(&manifest.layout_file),
                 manifest.layout_len,
@@ -1049,8 +1156,16 @@ impl SearchOutOfCoreSegmentReader {
             ));
         }
 
-        let open_payload = |name: &str, len: u64, label: &str| -> Result<File> {
+        let open_payload = |name: &str, object: ArtifactObject, label: &str| -> Result<File> {
+            let len = object.byte_length;
             match admission {
+                Some(context) if capture.is_some() => {
+                    context.require_read_limit(len, max_artifact_read_bytes)?;
+                    capture.unwrap().open_artifact(name, object.reference())
+                }
+                Some(context) if cleanup_source.is_some() => {
+                    cleanup_source.unwrap().open_admitted(name, object, context)
+                }
                 Some(context) => {
                     let path = crate::build_memory::path::OwnedPath::join(
                         root,
@@ -1060,17 +1175,18 @@ impl SearchOutOfCoreSegmentReader {
                     )?;
                     context.open_bound_length(&path, len, max_artifact_read_bytes)
                 }
+                None if cleanup_source.is_some() => cleanup_source.unwrap().open(name, object),
                 None => open_exact_length_artifact(&root.join(name), len, label),
             }
         };
         let metadata_payload = open_payload(
             &manifest.metadata_payload_file,
-            manifest.metadata_payload_len,
+            manifest.objects.metadata,
             "search out-of-core metadata payload",
         )?;
         let vector_payload = open_payload(
             &manifest.vector_payload_file,
-            manifest.vector_payload_len,
+            manifest.objects.vector,
             "search out-of-core vector payload",
         )?;
         let lexical_path = admission
@@ -1084,6 +1200,19 @@ impl SearchOutOfCoreSegmentReader {
             })
             .transpose()?;
         let lexical_manifest_bytes = match admission {
+            Some(_) if capture.is_some() => read_captured(
+                &manifest.lexical_manifest_file,
+                manifest.objects.lexical_manifest,
+                manifest.lexical_manifest_checksum,
+                config.max_lexical_manifest_bytes.get(),
+            )?,
+            Some(context) if cleanup_source.is_some() => cleanup_source.unwrap().read_admitted(
+                &manifest.lexical_manifest_file,
+                manifest.objects.lexical_manifest,
+                manifest.lexical_manifest_checksum,
+                config.max_lexical_manifest_bytes.get(),
+                context,
+            )?,
             Some(context) => {
                 context
                     .require_read_limit(manifest.lexical_manifest_len, max_artifact_read_bytes)?;
@@ -1095,6 +1224,14 @@ impl SearchOutOfCoreSegmentReader {
                 )?
             }
 
+            None if cleanup_source.is_some() => {
+                crate::build_memory::read::ReadBytes::unaccounted(cleanup_source.unwrap().read(
+                    &manifest.lexical_manifest_file,
+                    manifest.objects.lexical_manifest,
+                    manifest.lexical_manifest_checksum,
+                    config.max_lexical_manifest_bytes.get(),
+                )?)
+            }
             None => crate::build_memory::read::ReadBytes::unaccounted(read_bound_artifact(
                 &root.join(&manifest.lexical_manifest_file),
                 manifest.lexical_manifest_len,
@@ -1115,6 +1252,41 @@ impl SearchOutOfCoreSegmentReader {
         let lexical_projection = match admission {
             Some(context) => LexicalProjectionReader::load_admitted_manifest_bytes(
                 crate::lexical_projection::ReaderOpenContext {
+                    captured_file: if let Some(source) = cleanup_source {
+                        let _name = context.scratch(3 * 128)?;
+                        let name = crate::lexical_projection::artifact_file(
+                            manifest.objects.lexical_generation,
+                        );
+                        Some((
+                            manifest.objects.lexical_generation,
+                            source.open_admitted(
+                                &name,
+                                manifest.objects.lexical_payload,
+                                context,
+                            )?,
+                        ))
+                    } else {
+                        capture
+                            .map(|capture| -> Result<_> {
+                                let _name_memory = context.scratch(3 * 128)?;
+                                let name = crate::lexical_projection::artifact_file(
+                                    manifest.objects.lexical_generation,
+                                );
+                                if name.capacity() > 128 {
+                                    return Err(HawDBError::Execution(
+                                        "lexical name exceeds admission".into(),
+                                    ));
+                                }
+                                Ok((
+                                    manifest.objects.lexical_generation,
+                                    capture.open_artifact(
+                                        &name,
+                                        manifest.objects.lexical_payload.reference(),
+                                    )?,
+                                ))
+                            })
+                            .transpose()?
+                    },
                     root,
                     identity: crate::lexical_projection::ReaderIdentity {
                         source_epoch: manifest.source_graph_commit_epoch,
@@ -1130,6 +1302,28 @@ impl SearchOutOfCoreSegmentReader {
                 },
                 &lexical_manifest_bytes,
             )?,
+            None if cleanup_source.is_some() => {
+                LexicalProjectionReader::load_captured_manifest_bytes(
+                    &lexical_manifest_bytes,
+                    manifest.source_graph_commit_epoch,
+                    lexical_analyzer_digest(analyzer_lexicon),
+                    manifest.documents_digest,
+                    lexical_config,
+                    cleanup_source.unwrap().open(
+                        &crate::lexical_projection::artifact_file(
+                            manifest.objects.lexical_generation,
+                        ),
+                        manifest.objects.lexical_payload,
+                    )?,
+                    manifest.objects.lexical_generation,
+                )?
+                .map(|reader| {
+                    Arc::into_inner(reader).ok_or_else(|| {
+                        HawDBError::Storage("captured lexical reader unexpectedly shared".into())
+                    })
+                })
+                .transpose()?
+            }
             None => LexicalProjectionReader::load_manifest_bytes(
                 root,
                 &lexical_manifest_bytes,
@@ -1151,14 +1345,11 @@ impl SearchOutOfCoreSegmentReader {
                     .into(),
             )
         })?;
-        if capture.is_some()
-            && artifact_key::ArtifactKey::from_file_name(&manifest.lexical_manifest_file)
-                != Some(artifact_key::ArtifactKey::Lexical(
-                    lexical_projection.generation(),
-                ))
+        if lexical_projection.generation() != manifest.objects.lexical_generation
+            || lexical_projection.artifact_len() != manifest.objects.lexical_payload.byte_length
         {
             return Err(HawDBError::StorageIntegrity(
-                "captured lexical data does not match its registered artifact family".into(),
+                "lexical data differs from its producer reference".into(),
             ));
         }
         drop(lexical_manifest_bytes);
@@ -1172,6 +1363,34 @@ impl SearchOutOfCoreSegmentReader {
             config.max_vector_search_working_bytes.get(),
             admission,
             max_artifact_read_bytes,
+            match (
+                capture,
+                cleanup_source,
+                manifest.rabitq_artifact_file.as_deref(),
+            ) {
+                (Some(capture), _, Some(name)) => Some(
+                    capture.open_artifact(
+                        name,
+                        manifest
+                            .objects
+                            .rabitq
+                            .expect("validated vector reference")
+                            .reference(),
+                    )?,
+                ),
+                (_, Some(source), Some(name)) => Some(match admission {
+                    Some(admission) => source.open_admitted(
+                        name,
+                        manifest.objects.rabitq.expect("validated vector reference"),
+                        admission,
+                    )?,
+                    None => source.open(
+                        name,
+                        manifest.objects.rabitq.expect("validated vector reference"),
+                    )?,
+                }),
+                _ => None,
+            },
         )?;
         #[cfg(not(feature = "vector-search"))]
         if let Some(context) = admission {
@@ -1182,19 +1401,54 @@ impl SearchOutOfCoreSegmentReader {
                     context.memory,
                     context.task,
                 )?;
-                drop(
-                    context.visit_bound(
-                        &path,
-                        manifest
-                            .rabitq_artifact_len
-                            .expect("validated vector length"),
-                        manifest
-                            .rabitq_artifact_checksum
-                            .expect("validated vector checksum"),
+                let length = manifest
+                    .rabitq_artifact_len
+                    .expect("validated vector length");
+                let checksum = manifest
+                    .rabitq_artifact_checksum
+                    .expect("validated vector checksum");
+                let file = match (capture, cleanup_source) {
+                    (Some(capture), _) => context.visit_file_bound(
+                        capture.open_artifact(
+                            name,
+                            manifest
+                                .objects
+                                .rabitq
+                                .expect("validated vector reference")
+                                .reference(),
+                        )?,
+                        length,
+                        checksum,
                         max_artifact_read_bytes,
                         |_| Ok(()),
                     )?,
-                );
+                    (None, Some(source)) => context.visit_file_bound(
+                        source.open_admitted(
+                            name,
+                            manifest.objects.rabitq.expect("validated vector reference"),
+                            context,
+                        )?,
+                        length,
+                        checksum,
+                        max_artifact_read_bytes,
+                        |_| Ok(()),
+                    )?,
+                    (None, None) => context.visit_bound(
+                        &path,
+                        length,
+                        checksum,
+                        max_artifact_read_bytes,
+                        |_| Ok(()),
+                    )?,
+                };
+                drop(file);
+            }
+        } else if let Some(source) = cleanup_source {
+            if let Some(name) = manifest.rabitq_artifact_file.as_deref() {
+                drop(source.open(
+                    name,
+                    manifest.objects.rabitq.expect("validated vector reference"),
+                )?);
             }
         } else {
             verify_rabitq_artifact(root, manifest)?;
@@ -3011,8 +3265,11 @@ fn open_rabitq_projection(
     active_manifest: &SearchOutOfCoreManifestBody,
     manifest: &SearchOutOfCoreSegmentManifest,
     max_working_bytes: usize,
+    captured_file: Option<File>,
 ) -> Result<Option<hawdb_vector_projection::FileProjection>> {
-    verify_rabitq_artifact(root, manifest)?;
+    if captured_file.is_none() {
+        verify_rabitq_artifact(root, manifest)?;
+    }
     let Some(file_name) = manifest.rabitq_artifact_file.as_deref() else {
         return Ok(None);
     };
@@ -3024,8 +3281,21 @@ fn open_rabitq_projection(
             "search RaBitQ artifact requires {peak_build_working_bytes} build bytes, exceeding the serving admission {max_working_bytes}"
         )));
     }
-    let projection = hawdb_vector_projection::FileProjection::open(root.join(file_name))
-        .map_err(vector_projection_error)?;
+    let projection = match captured_file {
+        Some(mut file) => {
+            let (length, checksum) = file_len_checksum_held(&mut file)?;
+            if Some(length) != manifest.rabitq_artifact_len
+                || Some(checksum) != manifest.rabitq_artifact_checksum
+            {
+                return Err(HawDBError::StorageIntegrity(
+                    "captured vector CRC mismatch".into(),
+                ));
+            }
+            hawdb_vector_projection::FileProjection::open_file(file, &root.join(file_name))
+        }
+        None => hawdb_vector_projection::FileProjection::open(root.join(file_name)),
+    }
+    .map_err(vector_projection_error)?;
     let artifact_manifest = projection.manifest();
     let expected_identity = hawdb_vector_projection::ProjectionIdentity {
         generation: manifest.generation,
@@ -3048,6 +3318,11 @@ fn open_rabitq_projection(
 
 fn file_len_checksum_streaming(path: &Path) -> Result<(u64, u64)> {
     let mut file = File::open(path)?;
+    file_len_checksum_held(&mut file)
+}
+
+fn file_len_checksum_held(file: &mut File) -> Result<(u64, u64)> {
+    file.seek(SeekFrom::Start(0))?;
     let expected_len = file.metadata()?.len();
     let mut hasher = hawdb_integrity::Crc32cHasher::new();
     let mut actual_len = 0u64;
@@ -3061,11 +3336,11 @@ fn file_len_checksum_streaming(path: &Path) -> Result<(u64, u64)> {
         actual_len = actual_len.saturating_add(read as u64);
     }
     if actual_len != expected_len {
-        return Err(HawDBError::Storage(format!(
-            "search artifact {} changed while checksumming",
-            path.display()
-        )));
+        return Err(HawDBError::Storage(
+            "held search artifact changed while checksumming".into(),
+        ));
     }
+    file.seek(SeekFrom::Start(0))?;
     Ok((actual_len, hasher.finish()))
 }
 
@@ -3080,6 +3355,7 @@ struct LoadedArtifactClosure {
 }
 
 struct ClosureLoadContext<'a, 'execution> {
+    cleanup_source: Option<&'a captured_cleanup::Source<'a>>,
     capture: Option<&'a root_registry::PendingCapture<'a, 'execution>>,
     root: &'a Path,
     config: &'a SearchOutOfCoreConfig,
@@ -3113,6 +3389,7 @@ fn load_artifact_closure_for_manifest(
 ) -> Result<LoadedArtifactClosure> {
     load_artifact_closure_with_context(
         ClosureLoadContext {
+            cleanup_source: None,
             capture: None,
             root,
             config,
@@ -3132,6 +3409,7 @@ fn load_artifact_closure_with_context(
     manifest: SearchOutOfCoreManifestBody,
 ) -> Result<LoadedArtifactClosure> {
     let ClosureLoadContext {
+        cleanup_source,
         capture,
         root,
         config,
@@ -3142,6 +3420,20 @@ fn load_artifact_closure_with_context(
         admission,
         max_artifact_read_bytes,
     } = context;
+    if cleanup_source.is_some()
+        && (capture.is_some()
+            || previous.is_some()
+            || admission.is_some_and(|admission| !admission.is_synchronous()))
+    {
+        return Err(HawDBError::Execution(
+            "captured cleanup cannot use path-based reader reuse".into(),
+        ));
+    }
+    if admission.is_some_and(|admission| admission.is_synchronous()) && cleanup_source.is_none() {
+        return Err(HawDBError::Execution(
+            "synchronous closure requires captured publication custody".into(),
+        ));
+    }
     let checkpoint = || {
         admission.map_or(Ok(()), |admission| {
             crate::build_control::checkpoint(admission.task)
@@ -3200,6 +3492,7 @@ fn load_artifact_closure_with_context(
         match admission {
             Some(_) => SearchOutOfCoreSegmentReader::open_with_read_admission(
                 SegmentOpenContext {
+                    cleanup_source,
                     capture,
                     root,
                     config,
@@ -3212,13 +3505,19 @@ fn load_artifact_closure_with_context(
                 },
                 segment,
             ),
-            None => SearchOutOfCoreSegmentReader::open(
-                root,
-                config,
-                analyzer_lexicon,
-                lexical_source_policy,
-                lexical_term_policy,
-                &manifest,
+            None => SearchOutOfCoreSegmentReader::open_with_read_admission(
+                SegmentOpenContext {
+                    cleanup_source,
+                    capture: None,
+                    root,
+                    config,
+                    analyzer_lexicon,
+                    lexical_source_policy,
+                    lexical_term_policy,
+                    active_manifest: &manifest,
+                    admission: None,
+                    max_artifact_read_bytes,
+                },
                 segment,
             ),
         }
@@ -3294,6 +3593,17 @@ fn load_artifact_closure_with_context(
                 capture,
                 max_artifact_read_bytes,
             ),
+            (Some(admission), None) if cleanup_source.is_some() => {
+                mutation_run::SearchMutationRun::open_for_cleanup(
+                    root,
+                    run,
+                    &mut mutation_budget,
+                    cleanup_source.unwrap(),
+                    admission,
+                    (config.max_mutation_run_bytes.get(), max_artifact_read_bytes),
+                    analyzer_digest,
+                )
+            }
             (Some(_), None) => mutation_run::SearchMutationRun::open_with_read_admission(
                 root,
                 run,
@@ -3303,6 +3613,20 @@ fn load_artifact_closure_with_context(
                 admission,
                 max_artifact_read_bytes,
             ),
+            (None, _) if cleanup_source.is_some() => {
+                if run.len > config.max_mutation_run_bytes.get() {
+                    return Err(HawDBError::Execution(
+                        "captured cleanup mutation exceeds read ceiling".into(),
+                    ));
+                }
+                mutation_run::SearchMutationRun::open_ordinary_file(
+                    cleanup_source.unwrap().open(&run.file, run.object)?,
+                    run,
+                    config.max_mutation_run_bytes.get(),
+                    analyzer_digest,
+                    &mut mutation_budget,
+                )
+            }
             (None, _) => mutation_run::SearchMutationRun::open(
                 root,
                 run,
@@ -3419,70 +3743,187 @@ pub(super) fn validate_resident_snapshot_identity(index: &SearchIndex, root: &Pa
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn published_artifact_generations(
     root: &Path,
     analyzer_lexicon: &SearchAnalyzerLexicon,
-) -> Result<Option<PublishedArtifactGenerations>> {
-    published_artifact_generations_with_reuse(root, analyzer_lexicon, None)
-}
-
-fn published_artifact_generations_with_reuse(
-    root: &Path,
-    analyzer_lexicon: &SearchAnalyzerLexicon,
-    previous: Option<&reuse::ValidatedArtifacts>,
 ) -> Result<Option<PublishedArtifactGenerations>> {
     let manifest_path = root.join(OUT_OF_CORE_MANIFEST_FILE);
     if !fs::try_exists(&manifest_path)? {
         return Ok(None);
     }
-    let manifest_bytes = read_bounded_file(&manifest_path, MAX_OUT_OF_CORE_MANIFEST_BYTES)?;
-    let manifest = SearchOutOfCoreManifestBody::decode(&manifest_bytes)?;
-    let view = previous.map(reuse::ValidatedArtifacts::view);
-    if let Some(view) = view
-        && (manifest.generation < view.manifest.generation
-            || (manifest.generation == view.manifest.generation && &manifest != view.manifest))
-    {
-        return Err(HawDBError::Storage(
-            "search cleanup head regressed or changed an existing generation".into(),
-        ));
-    }
-    let default_config = SearchOutOfCoreConfig::default();
+    let bytes = read_bounded_file(&manifest_path, MAX_OUT_OF_CORE_MANIFEST_BYTES)?;
+    let manifest = SearchOutOfCoreManifestBody::decode(&bytes)?;
     let closure = load_artifact_closure_for_manifest(
         root,
-        previous.map_or(&default_config, |previous| &previous.config),
+        &SearchOutOfCoreConfig::default(),
         analyzer_lexicon,
-        previous.map_or(SearchLexicalTermPolicy::default(), |previous| {
-            previous.term_policy
-        }),
-        previous.map_or(SearchLexicalSourcePolicy::default(), |previous| {
-            previous.source_policy
-        }),
+        Default::default(),
+        Default::default(),
         manifest,
-        view,
+        None,
     )?;
+    Ok(Some(artifact_generations(&closure)))
+}
+
+pub(super) struct CapturedGenerations {
+    pub(super) generations: Option<PublishedArtifactGenerations>,
+    pub(super) memory: Option<crate::build_memory::read::ReaderMemory>,
+    pub(super) resident_vector_absence_verified: bool,
+}
+
+pub(super) fn captured_artifact_generations(
+    root_label: &Path,
+    publication: &SearchProjectionPublishLease,
+    analyzer_lexicon: &SearchAnalyzerLexicon,
+    task: &hawdb_core::RuntimeTaskContext,
+    options: crate::SearchProjectionCleanupOptions,
+    admission: Option<&crate::build_memory::read::ReadAdmission<'_>>,
+) -> Result<CapturedGenerations> {
+    let task = admission.map_or(task, |admission| admission.task);
+    let limits = captured_cleanup::Limits {
+        artifact_bytes: options.max_verification_bytes.get(),
+        total_bytes: options.max_verification_bytes.get(),
+        files: options.max_verification_files.get(),
+    };
+    let source = captured_cleanup::Source::new(publication, task, limits);
+    let config = SearchOutOfCoreConfig::default();
+    match admission {
+        Some(admission) => {
+            let capture = if admission.is_synchronous() {
+                None
+            } else {
+                Some(publication.cleanup_capture(admission)?)
+            };
+            let Some(file) = source.head_file(Some(admission))? else {
+                source.prove_no_projection_files(root_label, Some(admission))?;
+                return Ok(CapturedGenerations {
+                    generations: None,
+                    memory: None,
+                    resident_vector_absence_verified: true,
+                });
+            };
+            let bytes = admission.read_unbound_file(
+                &file,
+                MAX_OUT_OF_CORE_MANIFEST_BYTES.min(limits.total_bytes),
+            )?;
+            let _decode =
+                admission.retained(SearchOutOfCoreManifestBody::decode_capacity(&bytes, task)?)?;
+            let manifest = SearchOutOfCoreManifestBody::decode_with_context(&bytes, Some(task))?;
+            // Fresh relative names must match the selected references even if
+            // the shared FD cache already holds an older unlinked native file.
+            if !admission.is_synchronous() {
+                source.verify_manifest(&manifest, Some(admission))?;
+            }
+            let resident_vector_absence_verified = source.verify_resident_vector_absence(
+                manifest.resident_snapshot,
+                manifest.resident_snapshot_absent,
+                Some(admission),
+            )?;
+            let records = manifest
+                .segments
+                .len()
+                .checked_mul(4)
+                .and_then(|n| n.checked_add(manifest.mutation_runs.len()))
+                .ok_or_else(|| HawDBError::Execution("cleanup retention size overflow".into()))?;
+            let memory = admission.retained(crate::build_memory::checked_mul(
+                records,
+                crate::build_memory::SET_ENTRY_BYTES,
+            )?)?;
+            let closure = load_artifact_closure_with_context(
+                ClosureLoadContext {
+                    cleanup_source: admission.is_synchronous().then_some(&source),
+                    capture: capture.as_ref(),
+                    root: root_label,
+                    config: &config,
+                    analyzer_lexicon,
+                    lexical_term_policy: Default::default(),
+                    lexical_source_policy: Default::default(),
+                    previous: None,
+                    admission: Some(admission),
+                    max_artifact_read_bytes: limits.artifact_bytes,
+                },
+                manifest,
+            )?;
+            Ok(CapturedGenerations {
+                generations: Some(artifact_generations(&closure)),
+                memory: Some(memory),
+                resident_vector_absence_verified,
+            })
+        }
+        None => {
+            if task.memory_reservation().is_some() {
+                return Err(HawDBError::Execution(
+                    "bound cleanup requires the originating admission".into(),
+                ));
+            }
+            let _io = task
+                .acquire_io_wave(std::num::NonZeroUsize::MIN)
+                .map_err(|error| HawDBError::Execution(error.to_string()))?;
+            let Some(bytes) = source.head()? else {
+                source.prove_no_projection_files(root_label, None)?;
+                return Ok(CapturedGenerations {
+                    generations: None,
+                    memory: None,
+                    resident_vector_absence_verified: true,
+                });
+            };
+            let manifest = SearchOutOfCoreManifestBody::decode_with_context(&bytes, Some(task))?;
+            let resident_vector_absence_verified = source.verify_resident_vector_absence(
+                manifest.resident_snapshot,
+                manifest.resident_snapshot_absent,
+                None,
+            )?;
+            let closure = load_artifact_closure_with_context(
+                ClosureLoadContext {
+                    cleanup_source: Some(&source),
+                    capture: None,
+                    root: root_label,
+                    config: &config,
+                    analyzer_lexicon,
+                    lexical_term_policy: Default::default(),
+                    lexical_source_policy: Default::default(),
+                    previous: None,
+                    admission: None,
+                    max_artifact_read_bytes: limits.artifact_bytes,
+                },
+                manifest,
+            )?;
+            Ok(CapturedGenerations {
+                generations: Some(artifact_generations(&closure)),
+                memory: None,
+                resident_vector_absence_verified,
+            })
+        }
+    }
+}
+
+fn artifact_generations(closure: &LoadedArtifactClosure) -> PublishedArtifactGenerations {
     let manifest = &closure.manifest;
     let mut lexical_generations = BTreeSet::new();
     let mut out_of_core_generations = BTreeSet::new();
     let mut rabitq_generations = BTreeSet::new();
     for artifact in &manifest.segments {
         lexical_generations.insert(artifact.generation);
+        lexical_generations.insert(artifact.objects.lexical_generation);
         out_of_core_generations.insert(artifact.generation);
         if artifact.rabitq_artifact_file.is_some() {
             rabitq_generations.insert(artifact.generation);
         }
     }
     out_of_core_generations.extend(manifest.mutation_runs.iter().map(|run| run.generation));
-    Ok(Some(PublishedArtifactGenerations {
+    PublishedArtifactGenerations {
         active_generation: manifest.generation,
         lexical_generations,
         out_of_core_generations,
         rabitq_generations,
-    }))
+    }
 }
 
 pub(super) fn publish_out_of_core_projection(
     index: &SearchIndex,
     root: &Path,
+    snapshot: &crate::snapshot_writer::SearchSnapshotWriteReport,
 ) -> Result<PublishedOutOfCoreProjection> {
     let descriptor = read_search_segment_descriptor(root)?.ok_or_else(|| {
         HawDBError::Storage("search segment descriptor is missing after checkpoint".to_string())
@@ -3530,11 +3971,43 @@ pub(super) fn publish_out_of_core_projection(
 
     let descriptor_bytes = fs::read(root.join(&descriptor_file))?;
     let lexical_manifest_bytes = fs::read(root.join(&lexical_manifest_file))?;
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let memory = crate::build_memory::BuildMemory::new(&task)?;
+    let io = generation_writer::io::GenerationIo::new(&memory, &task);
+    let seal = |name: &str| -> Result<ArtifactObject> {
+        ArtifactObject::from_reference(io.seal(&root.join(name))?.reference)
+    };
+    let lexical_generation = crate::lexical_projection::manifest_generation(
+        &root.join(MANIFEST_FILE),
+        DEFAULT_MAX_MANIFEST_BYTES,
+    )?
+    .ok_or_else(|| {
+        HawDBError::StorageIntegrity("resident checkpoint missing lexical manifest".into())
+    })?;
+    let objects = SegmentObjects {
+        lexical_generation,
+        descriptor: seal(&descriptor_file)?,
+        payload: seal(&payload_file)?,
+        metadata: seal(&metadata_payload_file)?,
+        vector: seal(&vector_payload_file)?,
+        layout: seal(&layout_file)?,
+        lexical_manifest: seal(&lexical_manifest_file)?,
+        lexical_payload: seal(&crate::lexical_projection::artifact_file(
+            lexical_generation,
+        ))?,
+        rabitq: None,
+    };
     let embedding = index.embedding_manifest.as_ref();
     let manifest = SearchOutOfCoreManifestBody {
         format: OUT_OF_CORE_FORMAT.to_string(),
         generation,
+        resident_snapshot: Some(ResidentSnapshot {
+            object: ArtifactObject::from_reference(snapshot.encoded_object)?,
+            vector_document_count: snapshot.vector_document_count,
+        }),
+        resident_snapshot_absent: false,
         segments: vec![SearchOutOfCoreSegmentManifest {
+            objects,
             segment_id: 0,
             level: 0,
             generation,
@@ -5375,6 +5848,7 @@ mod tests {
         let run_file = mutation_run::artifact_file(run_generation);
         fs::write(path.join(&run_file), &run_bytes).unwrap();
         manifest.mutation_runs = vec![SearchOutOfCoreMutationRunManifest {
+            object: ArtifactObject::for_bytes(&run_bytes),
             generation: manifest.generation,
             file: run_file,
             len: run_bytes.len() as u64,
@@ -5435,6 +5909,7 @@ mod tests {
         let run_file = mutation_run::artifact_file(manifest.generation);
         fs::write(path.join(&run_file), &run_bytes).unwrap();
         manifest.mutation_runs = vec![SearchOutOfCoreMutationRunManifest {
+            object: ArtifactObject::for_bytes(&run_bytes),
             generation: manifest.generation,
             file: run_file,
             len: run_bytes.len() as u64,
@@ -5736,6 +6211,7 @@ mod tests {
         // the immutable run fingerprint changes in this corruption fixture.
         fs::write(path.join(&reference.file), &bytes).unwrap();
         reference.len = bytes.len() as u64;
+        reference.object = ArtifactObject::for_bytes(&bytes);
         reference.checksum = checksum_bytes(&bytes);
         manifest.generation += 1;
         fs::write(
@@ -5769,6 +6245,7 @@ mod tests {
         let mut manifest = reader.manifest.clone();
         manifest.generation += 1;
         manifest.segments[0].payload_len += 1;
+        manifest.segments[0].objects.payload.byte_length += 1;
         fs::write(
             path.join(OUT_OF_CORE_MANIFEST_FILE),
             manifest.encode().unwrap(),

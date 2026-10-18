@@ -18,9 +18,7 @@ use crate::build_memory::{
 };
 use crate::document_encoding::{DocumentEncoding, Header, HeaderSource};
 use crate::error::{HawDBError, Result};
-use crate::generation_cleanup::{
-    once::PreparedCleanup, SearchProjectionCleanupOptions, SearchProjectionGenerations,
-};
+use crate::generation_cleanup::{once::PreparedCleanup, SearchProjectionCleanupOptions};
 #[cfg(test)]
 use crate::lexical_projection::artifact_file as lexical_artifact_file;
 use crate::lexical_projection::{
@@ -59,7 +57,7 @@ mod delta;
 mod discovery;
 mod governed;
 mod initial;
-mod io;
+pub(super) mod io;
 mod mutations;
 mod unordered;
 pub use unordered::{
@@ -253,7 +251,8 @@ pub struct SearchOutOfCoreGenerationWriter {
     metadata_field_bytes: u64,
     expected_active_generation: Option<u64>,
     active_manifest_update: Option<ActiveManifestUpdate>,
-    cleanup_reuse: Option<super::reuse::ValidatedArtifacts>,
+    resident_snapshot: Option<super::ResidentSnapshot>,
+    resident_snapshot_absent: bool,
     mutations: Option<delta::mutation::Prepared>,
     poisoned: bool,
     needs_chinese_analyzer: bool,
@@ -467,7 +466,8 @@ impl SearchOutOfCoreGenerationWriter {
             metadata_field_bytes,
             expected_active_generation: None,
             active_manifest_update: None,
-            cleanup_reuse: None,
+            resident_snapshot: None,
+            resident_snapshot_absent: false,
             mutations: None,
             poisoned: false,
             needs_chinese_analyzer: false,
@@ -858,6 +858,8 @@ impl SearchOutOfCoreGenerationWriter {
             PublishGenerationInput {
                 root: &self.root,
                 stage: &self.stage.path,
+                resident_snapshot: self.resident_snapshot,
+                resident_snapshot_absent: self.resident_snapshot_absent,
                 generation,
                 document_count: self.document_count,
                 documents_digest: self.documents_digest.finish(),
@@ -900,48 +902,21 @@ impl SearchOutOfCoreGenerationWriter {
                 &self.memory,
             );
         }
+        let cleanup_admission = self.memory.host_admission.as_deref().map(|permit| {
+            crate::build_memory::read::ReadAdmission {
+                memory: &self.memory,
+                task: &self.task_context,
+                permit: crate::build_memory::read::ReadPermit::Governed(permit),
+            }
+        });
         let cleanup = cleanup.map(|cleanup| {
-            let cleanup_generations = if self.active_manifest_update.is_some() {
-                match super::published_artifact_generations_with_reuse(
-                    &self.root,
-                    &self.options.analyzer_lexicon,
-                    self.cleanup_reuse.as_ref(),
-                ) {
-                    Ok(Some(retained)) => SearchProjectionGenerations {
-                        lexical: Some(lexical_generation),
-                        out_of_core: Some(retained.active_generation),
-                        rabitq: retained.rabitq_generations.last().copied(),
-                        rabitq_remove_all: retained.rabitq_generations.is_empty(),
-                        retained_lexical: retained.lexical_generations,
-                        retained_out_of_core: retained.out_of_core_generations,
-                        retained_rabitq: retained.rabitq_generations,
-                        out_of_core_discovery_failed: false,
-                    },
-                    Ok(None) | Err(_) => SearchProjectionGenerations {
-                        lexical: Some(lexical_generation),
-                        out_of_core: Some(generation),
-                        rabitq: rabitq.as_ref().map(|_| generation),
-                        rabitq_remove_all: false,
-                        out_of_core_discovery_failed: true,
-                        ..Default::default()
-                    },
-                }
-            } else {
-                SearchProjectionGenerations {
-                    lexical: Some(lexical_generation),
-                    out_of_core: Some(generation),
-                    rabitq: rabitq.as_ref().map(|_| generation),
-                    rabitq_remove_all: rabitq.is_none(),
-                    out_of_core_discovery_failed: false,
-                    ..Default::default()
-                }
-            };
             cleanup.run_under_publication(
                 &self.root,
-                cleanup_generations,
                 self.options.cleanup_options,
                 &self.task_context,
                 publication,
+                &self.options.analyzer_lexicon,
+                cleanup_admission.as_ref(),
             )
         });
 

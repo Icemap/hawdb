@@ -19,8 +19,6 @@ use crate::out_of_core::{SearchOutOfCoreManifestBody, SearchOutOfCoreSegmentMani
 
 pub(super) struct InstalledInitial {
     head: json::EncodedManifest,
-    generations: SearchProjectionGenerations,
-    retention_memory: QueryMemoryLease,
     published_bytes: u64,
     document_count: usize,
     documents_digest: u64,
@@ -32,7 +30,7 @@ impl InstalledInitial {
         writer: &SearchOutOfCoreGenerationWriter,
         active: Option<u64>,
         report: &mut SearchOutOfCoreGenerationBuildReport,
-    ) -> Result<(SearchProjectionGenerations, u64, QueryMemoryLease)> {
+    ) -> Result<u64> {
         check_active(writer, active)?;
         let io = io::GenerationIo::new(&writer.memory, &writer.task_context);
         io.write(
@@ -42,11 +40,7 @@ impl InstalledInitial {
         report.generation_bytes = self.published_bytes;
         report.document_count = self.document_count;
         report.documents_digest = self.documents_digest;
-        Ok((
-            self.generations,
-            self.head.bytes.len() as u64,
-            self.retention_memory,
-        ))
+        Ok(self.head.bytes.len() as u64)
     }
 }
 
@@ -55,7 +49,7 @@ pub(super) fn publish(
     private: &Path,
     active: Option<u64>,
     report: &mut SearchOutOfCoreGenerationBuildReport,
-) -> Result<(SearchProjectionGenerations, u64, QueryMemoryLease)> {
+) -> Result<u64> {
     install(writer, private, active, report)?.publish(writer, active, report)
 }
 
@@ -125,25 +119,18 @@ pub(super) fn install(
             "complete initial generation exceeds publication admission".into(),
         ));
     }
-    let count = checked_add(
-        checked_mul(3, manifest.segments.len())?,
-        manifest.mutation_runs.len(),
-    )?;
-    let retained = memory
-        .retained
-        .reserve(checked_mul(count, SET_ENTRY_BYTES)?)?;
-    let mut generations = SearchProjectionGenerations {
-        lexical: Some(report.lexical_generation),
-        out_of_core: Some(report.generation),
-        rabitq_remove_all: true,
-        ..Default::default()
-    };
     let mut complete_content_bytes = 0_u64;
     for (offset, segment) in manifest.segments.iter().enumerate() {
         checkpoint(task)?;
         if offset >= update.old_segments {
-            let bytes = dependencies(writer, private, segment, |source, _, length, checksum| {
-                io.verify(source, length, checksum, "staged initial dependency")
+            let bytes = dependencies(writer, private, segment, |source, _, object, checksum| {
+                io.verify(
+                    source,
+                    object.byte_length,
+                    checksum,
+                    "staged initial dependency",
+                )?;
+                io.verify_object(source, object)
             })?;
             if segment.document_count > writer.options.max_content_documents.get()
                 || (segment.document_count > 1
@@ -157,17 +144,7 @@ pub(super) fn install(
                 .checked_add(bytes)
                 .ok_or_else(|| HawDBError::Storage("initial content size overflows".into()))?;
         }
-        generations.retained_lexical.insert(segment.generation);
-        generations.retained_out_of_core.insert(segment.generation);
-        if segment.rabitq_artifact_file.is_some() {
-            generations.retained_rabitq.insert(segment.generation);
-            generations.rabitq = Some(segment.generation);
-            generations.rabitq_remove_all = false;
-        }
     }
-    generations
-        .retained_out_of_core
-        .extend(manifest.mutation_runs.iter().map(|run| run.generation));
     if complete_content_bytes != report.generation_bytes {
         return Err(HawDBError::Storage(
             "initial dependency lengths differ from the complete publication report".into(),
@@ -183,19 +160,22 @@ pub(super) fn install(
             writer,
             private,
             segment,
-            |source, target, length, checksum| {
+            |source, target, object, checksum| {
                 io.link(source, target)?;
-                io.verify(target, length, checksum, "initial dependency")
+                io.verify(target, object.byte_length, checksum, "initial dependency")?;
+                io.verify_object(target, object)
             },
         )?;
     }
     if let Some((name, encoded)) = &update.mutation {
         io.write(&io.path(&writer.root, name.as_ref())?, &encoded.bytes)?;
+        io.verify_object(
+            &io.path(&writer.root, name.as_ref())?,
+            crate::out_of_core::ArtifactObject::for_bytes(&encoded.bytes),
+        )?;
     }
     Ok(InstalledInitial {
         head: final_head,
-        generations,
-        retention_memory: retained,
         published_bytes,
         document_count: manifest.document_count,
         documents_digest: manifest.documents_digest,
@@ -218,16 +198,16 @@ fn dependencies(
     writer: &SearchOutOfCoreGenerationWriter,
     private: &Path,
     segment: &SearchOutOfCoreSegmentManifest,
-    mut visit: impl FnMut(&Path, &Path, u64, Option<u64>) -> Result<()>,
+    mut visit: impl FnMut(&Path, &Path, crate::out_of_core::ArtifactObject, Option<u64>) -> Result<()>,
 ) -> Result<u64> {
     let io = io::GenerationIo::new(&writer.memory, &writer.task_context);
     let lexical = artifact_name::Name::generated(
         "search_lexical.",
-        segment.generation,
+        segment.objects.lexical_generation,
         &writer.memory,
         &writer.task_context,
     )?;
-    let lexical_len = io.length(&io.path(private, lexical.as_ref())?)?;
+    let lexical_len = segment.objects.lexical_payload.byte_length;
     let mut content_bytes = 0_u64;
     for (file, length, checksum) in [
         (
@@ -269,10 +249,18 @@ fn dependencies(
         content_bytes = content_bytes
             .checked_add(length)
             .ok_or_else(|| HawDBError::Storage("initial content size overflows".into()))?;
+        let object = segment.object_for(file).ok_or_else(|| {
+            HawDBError::StorageIntegrity("missing initial dependency reference".into())
+        })?;
+        if object.byte_length != length {
+            return Err(HawDBError::StorageIntegrity(
+                "initial dependency reference length mismatch".into(),
+            ));
+        }
         visit(
             &io.path(private, Path::new(file))?,
             &io.path(&writer.root, Path::new(file))?,
-            length,
+            object,
             checksum,
         )?;
     }
@@ -379,7 +367,7 @@ mod tests {
                     1
                 );
             } else {
-                let (_generations, _bytes, _retention) = installed
+                let _bytes = installed
                     .publish(&writer, Some(baseline.generation), &mut report)
                     .unwrap();
                 let reader = SearchOutOfCoreReader::open(&root).unwrap();

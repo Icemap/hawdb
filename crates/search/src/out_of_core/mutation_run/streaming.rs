@@ -171,14 +171,27 @@ pub(super) fn preflight_admitted(
     manifest: &SearchOutOfCoreMutationRunManifest,
     admission: &crate::build_memory::read::ReadAdmission<'_>,
     maximum: u64,
+    captured_file: Option<File>,
 ) -> Result<(File, usize)> {
     let mut scan = ScalarScan::default();
-    let file = admission.visit_bound(path, manifest.len, manifest.checksum, maximum, |chunk| {
+    let mut visit = |chunk: &[u8]| {
         for &byte in chunk {
             scan.byte(byte)?;
         }
         Ok(())
-    })?;
+    };
+    let file = match captured_file {
+        Some(file) => admission.visit_file_bound(
+            file,
+            manifest.len,
+            manifest.checksum,
+            maximum,
+            &mut visit,
+        )?,
+        None => {
+            admission.visit_bound(path, manifest.len, manifest.checksum, maximum, &mut visit)?
+        }
+    };
     Ok((file, scan.largest.max(8)))
 }
 

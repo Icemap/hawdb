@@ -26,7 +26,7 @@ impl GovernedSearchGenerationWriter {
         ReadAdmission {
             memory: &self.writer.memory,
             task: &self.writer.task_context,
-            permit: &self.admission.permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&self.admission.permit),
         }
     }
 }

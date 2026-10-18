@@ -18,7 +18,7 @@ use hawdb_storage::file_io::{
 use std::collections::LinkedList;
 use std::mem::size_of;
 use std::path::Path;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 mod gate;
 mod pins;
@@ -86,7 +86,7 @@ impl PublicationRegistration {
         crate::build_control::checkpoint(task)?;
         let charge = memory
             .retained
-            .reserve(size_of::<PublisherEntry>() + 2 * size_of::<usize>())?;
+            .reserve(size_of::<PublisherEntry>() + 2 * size_of::<usize>() + directory_bytes())?;
         let identity = directory.identity();
         let borrowed = {
             let mut registry = registry();
@@ -154,7 +154,7 @@ impl PublicationRegistration {
                 })?;
                 PublicationCustody::Native(NativeResources {
                     process_lock: Some(file),
-                    directory,
+                    directory: Arc::new(directory),
                 })
             }
         };
@@ -195,6 +195,25 @@ impl PublicationRegistration {
         }
     }
 
+    pub(super) fn borrow_admitted_root(&self, admission: &ReadAdmission<'_>) -> Result<RootRef> {
+        match &self.custody {
+            PublicationCustody::Borrowed(root)
+                if root
+                    .state()
+                    ._memory
+                    .shares_governor_with(admission.require_governor()?) =>
+            {
+                Ok(root.clone())
+            }
+            PublicationCustody::Borrowed(_) => Err(HawDBError::Execution(
+                "cleanup root belongs to another governor".into(),
+            )),
+            PublicationCustody::Native(_) => Err(HawDBError::Execution(
+                "cleanup needs resource-admitted native custody".into(),
+            )),
+        }
+    }
+
     /// Promote an exclusively borrowed publisher's existing native resources.
     /// Admission and cancellation happen before mutation; failure leaves the
     /// original process lock and directory in the publisher. No close/reopen,
@@ -213,14 +232,19 @@ impl PublicationRegistration {
             ));
         }
         if let PublicationCustody::Borrowed(root) = &self.custody {
-            if !root.state()._memory.shares_governor_with(admission.permit) {
+            if !root
+                .state()
+                ._memory
+                .shares_governor_with(admission.require_governor()?)
+            {
                 return Err(HawDBError::Storage(
                     "source root belongs to another runtime governor".into(),
                 ));
             }
             return Ok(root.clone());
         }
-        let state_memory = admission.retained(size_of::<State>() + 2 * size_of::<usize>())?;
+        admission.require_governor()?;
+        let state_memory = admission.retained(state_bytes())?;
         let entry_memory =
             admission.retained(size_of::<Entry>() + 2 * size_of::<usize>() + pins::BASE_BYTES)?;
         let state = Shared::new(State {
@@ -302,7 +326,26 @@ struct Entry {
 struct NativeResources {
     // Closing the process lock must precede dropping its captured directory.
     process_lock: Option<hawdb_storage::file_io::PublicationLockGuard>,
-    directory: SourceDirectory,
+    // Shared only with logical files whose exact artifact pin retains State.
+    directory: Arc<SourceDirectory>,
+}
+impl Drop for NativeResources {
+    fn drop(&mut self) {
+        // Keys retain memory only. Close idle native children before releasing
+        // process custody; all in-flight/logical users must retain a root pin.
+        self.directory.retire_cached_children();
+        #[cfg(test)]
+        if self.process_lock.is_some() {
+            tests::hook(&tests::BEFORE_PROCESS_UNLOCK);
+        }
+    }
+}
+
+const fn directory_bytes() -> usize {
+    size_of::<SourceDirectory>() + 2 * size_of::<usize>()
+}
+const fn state_bytes() -> usize {
+    size_of::<State>() + 2 * size_of::<usize>() + directory_bytes()
 }
 
 struct State {
@@ -359,7 +402,8 @@ impl RootRef {
         context: &FileOpenContext,
         admission: &ReadAdmission<'_>,
     ) -> Result<Self> {
-        let state_memory = admission.retained(size_of::<State>() + 2 * size_of::<usize>())?;
+        admission.require_governor()?;
+        let state_memory = admission.retained(state_bytes())?;
         let entry_memory =
             admission.retained(size_of::<Entry>() + 2 * size_of::<usize>() + pins::BASE_BYTES)?;
         let directory = {
@@ -373,7 +417,7 @@ impl RootRef {
             identity,
             native: RwLock::new(Some(NativeResources {
                 process_lock: None,
-                directory,
+                directory: Arc::new(directory),
             })),
             _memory: state_memory,
         });
@@ -395,7 +439,11 @@ impl RootRef {
                             "source root belongs to another project descriptor domain".into(),
                         ));
                     }
-                    if !entry.state._memory.shares_governor_with(admission.permit) {
+                    if !entry
+                        .state
+                        ._memory
+                        .shares_governor_with(admission.require_governor()?)
+                    {
                         return Err(HawDBError::Storage(
                             "source root belongs to another runtime governor".into(),
                         ));

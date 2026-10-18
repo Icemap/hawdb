@@ -75,13 +75,14 @@ impl File {
     #[doc(hidden)]
     pub fn pin_admitted(mut self, control: &mut impl ReadAdmissionControl) -> io::Result<Self> {
         control.checkpoint()?;
-        if let FileBacking::Immutable(file) = &mut self.backing
-            && file.pinned.is_none()
-        {
-            let (lease, _) = file
-                .handles
-                .get_controlled(&file.binding, &file.context, control)?;
-            file.pinned = Some(lease);
+        match &mut self.backing {
+            FileBacking::Immutable(file) if file.pinned.is_none() => {
+                file.pinned = Some(file.get_controlled(control)?.0);
+            }
+            FileBacking::Captured { file, pinned } if pinned.is_none() => {
+                *pinned = Some(file.get_controlled(control)?.0);
+            }
+            _ => {}
         }
         control.checkpoint()?;
         Ok(self)
@@ -97,14 +98,12 @@ impl File {
         operation: impl FnOnce(&mut AdmittedFileRead<'_>) -> io::Result<T>,
     ) -> io::Result<(T, u64)> {
         control.checkpoint()?;
-        let (lease, validation_bytes) = match &self.backing {
-            FileBacking::Native(_) => (None, 0),
-            FileBacking::Immutable(file) => {
-                let (lease, bytes) = match &file.pinned {
+        let (lease, validation_bytes) = match self.immutable() {
+            None => (None, 0),
+            Some((file, pinned)) => {
+                let (lease, bytes) = match pinned {
                     Some(lease) => (lease.clone(), 0),
-                    None => file
-                        .handles
-                        .get_controlled(&file.binding, &file.context, control)?,
+                    None => file.get_controlled(control)?,
                 };
                 (Some(lease), bytes)
             }

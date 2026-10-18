@@ -72,6 +72,7 @@ impl Fixture {
             encoded
         };
         let manifest = SearchOutOfCoreMutationRunManifest {
+            object: crate::out_of_core::ArtifactObject::for_bytes(&bytes),
             generation: 3,
             file: artifact_file(3),
             len: bytes.len() as u64,
@@ -116,7 +117,7 @@ fn admitted_mutation_terms_keep_capacity_and_require_fresh_execution_after_produ
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         };
         SearchMutationRun::open_with_read_admission(
             &fixture.root,
@@ -176,7 +177,7 @@ fn admitted_mutation_terms_keep_capacity_and_require_fresh_execution_after_produ
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let context = QueryContext::from_read_admission(&admission);
     let baseline = memory.ledger.snapshot().used_bytes;
@@ -251,7 +252,7 @@ fn canonical_mutation_checksum_preserves_budget_refusal_type() {
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let mut budget = MutationRunBudget::new(16 << 20, 1, 1).unwrap();
     let run = SearchMutationRun::open_with_read_admission(

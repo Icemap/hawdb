@@ -15,6 +15,7 @@
 //! Shared immutable handles. Logical references survive idle descriptor eviction.
 
 use crate::file_descriptors::{BudgetState, DescriptorCache, DescriptorKind, FileOpenContext};
+use crate::file_io::captured_immutable::{CacheKey, CapturedIdentity, CapturedSource};
 use crate::file_io::{self as fs, File, OpenOptions};
 use crate::immutable_object::ObjectReference;
 use std::collections::BTreeMap;
@@ -68,7 +69,7 @@ struct CachedHandle {
 #[derive(Debug)]
 pub(crate) struct ImmutableFileHandles {
     state: Arc<BudgetState>,
-    handles: Mutex<BTreeMap<ObjectReference, CachedHandle>>,
+    handles: Mutex<BTreeMap<CacheKey, CachedHandle>>,
     access_tick: AtomicU64,
     bindings: Mutex<BTreeMap<PathBuf, ImmutableFileBinding>>,
     opening: Mutex<()>,
@@ -134,25 +135,20 @@ impl ImmutableFileHandles {
                 ));
             }
         };
-        let mut handles = self
+        let handles = self
             .handles
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        if handles
-            .get(&reference)
-            .is_some_and(|handle| Arc::strong_count(&handle.file) != 1)
-        {
+        if handles.iter().any(|(key, handle)| {
+            key.reference() == Some(reference) && Arc::strong_count(&handle.file) != 1
+        }) {
             return Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
                 "unreachable immutable object still has an active read",
             ));
         }
-        let removed = handles.remove(&reference);
         drop(handles);
-        if removed.is_some() {
-            drop(removed);
-            self.state.record_cache_evictions(1);
-        }
+        self.remove_idle_matching(|key| key.reference() == Some(reference), usize::MAX);
         self.bindings
             .lock()
             .unwrap_or_else(|error| error.into_inner())
@@ -263,8 +259,48 @@ impl ImmutableFileHandles {
         context: &FileOpenContext,
         control: &mut impl crate::file_io::ReadAdmissionControl,
     ) -> io::Result<(Arc<File>, u64)> {
+        self.get_controlled_from(Some(binding), None, context, control)
+    }
+
+    pub(crate) fn get_captured_controlled(
+        &self,
+        binding: Option<&ImmutableFileBinding>,
+        source: &CapturedSource,
+        context: &FileOpenContext,
+        control: &mut impl crate::file_io::ReadAdmissionControl,
+    ) -> io::Result<(Arc<File>, u64)> {
+        self.get_controlled_from(binding, Some(source), context, control)
+    }
+
+    fn get_controlled_from(
+        &self,
+        binding: Option<&ImmutableFileBinding>,
+        source: Option<&CapturedSource>,
+        context: &FileOpenContext,
+        control: &mut impl crate::file_io::ReadAdmissionControl,
+    ) -> io::Result<(Arc<File>, u64)> {
+        // Keep retirement from racing the gap between cache lookup and the
+        // returned lease. A held native Arc then provides the in-flight proof.
+        let _validation = match self.checkpoint_validation.try_read() {
+            Ok(guard) => guard,
+            Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "immutable retirement is active",
+                ))
+            }
+        };
+        let key = match source {
+            Some(source) => CacheKey::Captured(source.key.clone()),
+            None => CacheKey::Managed(
+                binding
+                    .ok_or_else(|| io::Error::other("missing managed binding"))?
+                    .reference,
+            ),
+        };
         control.checkpoint()?;
-        if let Some(file) = self.cached(binding.reference) {
+        if let Some(file) = self.cached_key(&key) {
             self.state.record_cache_hit();
             return Ok((file, 0));
         }
@@ -275,13 +311,14 @@ impl ImmutableFileHandles {
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         control.checkpoint()?;
-        if let Some(file) = self.cached(binding.reference) {
+        if let Some(file) = self.cached_key(&key) {
             self.state.record_cache_hit();
             return Ok((file, 0));
         }
         self.state.record_cache_miss();
-        let file = Arc::new(Self::open_verified_object_controlled(
+        let file = Arc::new(Self::open_verified_object_controlled_from(
             binding,
+            source,
             context,
             DescriptorKind::ImmutableCache,
             control,
@@ -290,13 +327,14 @@ impl ImmutableFileHandles {
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .insert(
-                binding.reference,
+                key,
                 CachedHandle {
                     file: file.clone(),
                     last_used: self.next_tick(),
                 },
             );
-        Ok((file, binding.reference.byte_length))
+        let validated = binding.map_or(0, |binding| binding.reference.byte_length);
+        Ok((file, validated))
     }
 
     fn next_tick(&self) -> u64 {
@@ -308,11 +346,20 @@ impl ImmutableFileHandles {
     }
 
     fn cached(&self, reference: ObjectReference) -> Option<Arc<File>> {
+        let _validation = match self.checkpoint_validation.try_read() {
+            Ok(guard) => guard,
+            Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return None,
+        };
+        self.cached_key(&CacheKey::Managed(reference))
+    }
+
+    fn cached_key(&self, key: &CacheKey) -> Option<Arc<File>> {
         let mut handles = self
             .handles
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        let handle = handles.get_mut(&reference)?;
+        let handle = handles.get_mut(key)?;
         handle.last_used = self.next_tick();
         Some(handle.file.clone())
     }
@@ -345,12 +392,48 @@ impl ImmutableFileHandles {
         kind: DescriptorKind,
         control: &mut impl crate::file_io::ReadAdmissionControl,
     ) -> io::Result<File> {
+        Self::open_verified_object_controlled_from(Some(binding), None, context, kind, control)
+    }
+
+    fn open_verified_object_controlled_from(
+        binding: Option<&ImmutableFileBinding>,
+        source: Option<&CapturedSource>,
+        context: &FileOpenContext,
+        kind: DescriptorKind,
+        control: &mut impl crate::file_io::ReadAdmissionControl,
+    ) -> io::Result<File> {
         control.checkpoint()?;
-        let mut file = OpenOptions::new()
-            .read(true)
-            .descriptor_kind(kind)
-            .open_with_context(&binding.object_path, context)?;
+        let mut file = match source {
+            Some(source) => source
+                .directory
+                .open_child_kind(context, &source.key.name, kind)?,
+            None => OpenOptions::new()
+                .read(true)
+                .descriptor_kind(kind)
+                .open_with_context(
+                    &binding
+                        .ok_or_else(|| io::Error::other("missing managed binding"))?
+                        .object_path,
+                    context,
+                )?,
+        };
         let metadata = file.metadata()?;
+        if let Some(source) = source
+            && let CapturedIdentity::Native { identity, length } = source.key.identity
+        {
+            control.checkpoint()?;
+            if !metadata.is_file()
+                || metadata.len() != length
+                || file.with_native(crate::native_file_identity::of_file)? != identity
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "captured native identity mismatch",
+                ));
+            }
+            return Ok(file);
+        }
+        let binding = binding.ok_or_else(|| io::Error::other("missing managed binding"))?;
         if !metadata.is_file() || metadata.len() != binding.reference.byte_length {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -397,28 +480,61 @@ impl ImmutableFileHandles {
     }
 }
 
-impl DescriptorCache for ImmutableFileHandles {
-    fn evict_idle(&self, requested: usize) -> usize {
-        let removed = {
-            let mut handles = self
-                .handles
-                .lock()
-                .unwrap_or_else(|error| error.into_inner());
-            let mut idle = handles
-                .iter()
-                .filter(|(_, handle)| Arc::strong_count(&handle.file) == 1)
-                .map(|(key, handle)| (handle.last_used, *key))
-                .collect::<Vec<_>>();
-            idle.sort_unstable();
-            idle.into_iter()
-                .take(requested)
-                .filter_map(|(_, key)| handles.remove(&key))
-                .collect::<Vec<_>>()
-        };
-        let count = removed.len();
-        drop(removed);
+impl ImmutableFileHandles {
+    // No temporary key vectors: the cloned key keeps its metadata admitted
+    // through native close and empty BTree node deallocation outside the lock.
+    fn remove_idle_matching(
+        &self,
+        eligible: impl Fn(&CacheKey) -> bool,
+        requested: usize,
+    ) -> usize {
+        let mut count = 0;
+        while count < requested {
+            let removed = {
+                let mut handles = self.handles.lock().unwrap_or_else(|e| e.into_inner());
+                let key = handles
+                    .iter()
+                    .filter(|(key, handle)| eligible(key) && Arc::strong_count(&handle.file) == 1)
+                    .min_by_key(|(_, handle)| handle.last_used)
+                    .map(|(key, _)| key.clone());
+                key.map(|key| {
+                    let handle = handles.remove(&key).expect("selected idle handle exists");
+                    let empty = handles.is_empty().then(|| std::mem::take(&mut *handles));
+                    (key, handle, empty)
+                })
+            };
+            let Some((key, handle, empty)) = removed else {
+                break;
+            };
+            drop(handle);
+            drop(empty);
+            drop(key);
+            count += 1;
+        }
         self.state.record_cache_evictions(count);
         count
+    }
+
+    pub(crate) fn retire_source(&self, capture: u64) {
+        self.remove_idle_matching(|key| key.capture() == Some(capture), usize::MAX);
+    }
+}
+
+impl DescriptorCache for ImmutableFileHandles {
+    fn evict_idle(&self, requested: usize) -> usize {
+        self.remove_idle_matching(|_| true, requested)
+    }
+}
+
+impl Drop for ImmutableFileHandles {
+    fn drop(&mut self) {
+        let handles = self.handles.get_mut().unwrap_or_else(|e| e.into_inner());
+        while let Some((key, handle)) = handles.pop_first() {
+            let empty = handles.is_empty().then(|| std::mem::take(handles));
+            drop(handle);
+            drop(empty);
+            drop(key);
+        }
     }
 }
 

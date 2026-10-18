@@ -187,11 +187,11 @@ use analyzer_lexicon::{CORE_SEMANTIC_ALIAS_RULES, NOWLEDGE_MEMORY_SEMANTIC_ALIAS
 use analyzer_stream::{document_token_fields, visit_token_list, TokenOccurrence};
 #[cfg(test)]
 use cjk_tokenizer::is_cjk_search_char;
+use generation_cleanup::SearchProjectionCleanupState;
 pub use generation_cleanup::{
     SearchProjectionCleanupOptions, SearchProjectionCleanupReport,
     SEARCH_PROJECTION_CLEANUP_PROTOCOL,
 };
-use generation_cleanup::{SearchProjectionCleanupState, SearchProjectionGenerations};
 pub use knowledge_retrieval_pipeline::{KnowledgeRetrievalPipelineReport, KnowledgeRetrievalStage};
 use lexical_projection::{
     analyzer_digest as lexical_analyzer_digest, documents_digest as lexical_documents_digest,
@@ -2523,68 +2523,10 @@ impl SearchIndex {
         let Some(path) = &self.path else {
             return self.projection_cleanup_report();
         };
-        let (published, out_of_core_discovery_failed) =
-            match out_of_core::published_artifact_generations(path, &self.analyzer_lexicon) {
-                Ok(generations) => (generations, false),
-                Err(_) => (None, true),
-            };
-        #[cfg(feature = "vector-search")]
-        let resident_rabitq = self
-            .rabitq_projection()
-            .map(|projection| projection.manifest().identity.generation);
-        #[cfg(not(feature = "vector-search"))]
-        let resident_rabitq = None;
-        let resident_remove_all = self
-            .documents
-            .values()
-            .all(|document| document.embedding.is_none());
-        // A peer's published references override stale resident hints. Resident
-        // checkpoints also write standalone RaBitQ files, outside the manifest;
-        // an empty manifest reference set does not prove those files obsolete.
-        let lexical = published
-            .as_ref()
-            .and_then(|current| current.lexical_generations.last().copied())
-            .or_else(|| {
-                self.lexical_projection
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .as_ref()
-                    .map(|projection| projection.generation())
-            });
-        let published_rabitq = published
-            .as_ref()
-            .and_then(|current| current.rabitq_generations.last().copied());
-        // Standalone resident hints are usable only for the current published
-        // snapshot. A stale handle cannot authorize removal of a peer's files.
-        let resident_matches_published = published.is_none()
-            || out_of_core::validate_resident_snapshot_identity(self, path).is_ok();
-        let rabitq = published_rabitq.or_else(|| {
-            resident_matches_published
-                .then_some(resident_rabitq)
-                .flatten()
-        });
-        let rabitq_remove_all =
-            published_rabitq.is_none() && resident_matches_published && resident_remove_all;
-        let generations = SearchProjectionGenerations {
-            lexical,
-            out_of_core: published.as_ref().map(|value| value.active_generation),
-            rabitq,
-            rabitq_remove_all,
-            out_of_core_discovery_failed,
-            retained_lexical: published
-                .as_ref()
-                .map_or_else(Default::default, |value| value.lexical_generations.clone()),
-            retained_out_of_core: published.as_ref().map_or_else(Default::default, |value| {
-                value.out_of_core_generations.clone()
-            }),
-            retained_rabitq: published
-                .as_ref()
-                .map_or_else(Default::default, |value| value.rabitq_generations.clone()),
-        };
         self.cleanup_state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .run_under_publication(path, generations, options, publication)
+            .run_under_publication(path, options, publication, &self.analyzer_lexicon, None)
     }
 
     pub fn checkpoint(&self) -> Result<()> {
@@ -2625,7 +2567,7 @@ impl SearchIndex {
             )?;
             let segment_bytes_written = self.write_segment_artifacts(path)?;
             let lexical_bytes_written = self.write_lexical_projection(path)?;
-            let publication = out_of_core::publish_out_of_core_projection(self, path)?;
+            let publication = out_of_core::publish_out_of_core_projection(self, path, &snapshot)?;
             #[cfg(feature = "vector-search")]
             let rabitq_bytes_written = self.write_rabitq_projection(path)?;
             #[cfg(not(feature = "vector-search"))]

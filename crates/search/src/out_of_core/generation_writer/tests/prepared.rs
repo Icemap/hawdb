@@ -333,8 +333,9 @@ fn selector_decode_refusal_does_not_become_a_damaged_replacement_base() {
     let mut manifest: serde_json::Value =
         serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     let segment = manifest["body"]["segments"][0].clone();
-    manifest["body"]["segments"] = serde_json::Value::Array(vec![segment; 513]);
+    manifest["body"]["segments"] = serde_json::Value::Array(vec![segment; 385]);
     let bytes = serde_json::to_vec(&manifest).unwrap();
+    assert!(bytes.len() as u64 <= super::super::super::MAX_OUT_OF_CORE_MANIFEST_BYTES);
     fs::write(&path, &bytes).unwrap();
     let decode_bytes = crate::out_of_core::SearchOutOfCoreManifestBody::decode_capacity(
         &bytes,

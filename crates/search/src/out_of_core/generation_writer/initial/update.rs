@@ -37,9 +37,11 @@ impl Prepared {
 
 pub(super) fn prepare(
     writer: &SearchOutOfCoreGenerationWriter,
-    manifest: SearchOutOfCoreManifestBody,
+    mut manifest: SearchOutOfCoreManifestBody,
     input_memory: QueryMemoryLease,
 ) -> Result<Prepared> {
+    manifest.resident_snapshot = writer.resident_snapshot;
+    manifest.resident_snapshot_absent = writer.resident_snapshot_absent;
     let mut prepared = Prepared {
         manifest,
         old_segments: 0,
@@ -209,6 +211,7 @@ pub(super) fn prepare(
             manifest
                 .mutation_runs
                 .push(SearchOutOfCoreMutationRunManifest {
+                    object: crate::out_of_core::ArtifactObject::for_bytes(&encoded.bytes),
                     generation: manifest.generation,
                     file: name.as_str().into(),
                     len: encoded.bytes.len() as u64,

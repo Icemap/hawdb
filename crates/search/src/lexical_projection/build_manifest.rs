@@ -205,7 +205,7 @@ pub(super) fn finish(
     drop(decode_scratch);
     drop(encoded);
     let reader = LexicalProjectionReader::load_decoded_manifest(
-        &paths.artifact_tmp,
+        super::ManifestFile::Path(&paths.artifact_tmp),
         decoded,
         identity.0,
         identity.1,

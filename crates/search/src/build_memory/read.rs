@@ -26,13 +26,47 @@ use hawdb_qos::{RuntimePermit, RuntimeRetainedMemory};
 pub struct ReaderMemory {
     // The query lease's account reference must die before the host reservation.
     _query: QueryMemoryLease,
-    _host: RuntimeRetainedMemory,
+    _host: ReadMemoryFunding,
+}
+
+impl hawdb_core::RuntimeMemoryPermit for ReaderMemory {
+    fn bytes(&self) -> u64 {
+        self._query.bytes() as u64
+    }
 }
 
 impl ReaderMemory {
     pub(crate) fn shares_governor_with(&self, permit: &RuntimePermit) -> bool {
-        self._host.shares_governor_with(permit)
+        matches!(&self._host, ReadMemoryFunding::Retained(host) if host.shares_governor_with(permit))
     }
+}
+
+enum ReadMemoryFunding {
+    Retained(RuntimeRetainedMemory),
+    Scoped {
+        _working: Option<Box<dyn hawdb_core::RuntimeMemoryPermit>>,
+    },
+}
+impl std::fmt::Debug for ReadMemoryFunding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Retained(_) => "retained governor capacity",
+            Self::Scoped { .. } => "scoped operation capacity",
+        })
+    }
+}
+impl ReaderMemory {
+    pub(crate) fn requires_execution(&self) -> bool {
+        matches!(self._host, ReadMemoryFunding::Retained(_))
+    }
+}
+
+/// Synchronous metadata may borrow an actual publication, but cannot mint a
+/// persistent root/view or select another governor. Its accounts stay original.
+#[derive(Clone, Copy)]
+pub(crate) enum ReadPermit<'a> {
+    Governed(&'a RuntimePermit),
+    Synchronous(&'a crate::out_of_core::SearchProjectionPublishLease),
 }
 
 /// Borrow execution only while constructing a reader. Returned memory owners
@@ -40,7 +74,7 @@ impl ReaderMemory {
 pub(crate) struct ReadAdmission<'a> {
     pub(crate) memory: &'a BuildMemory,
     pub(crate) task: &'a RuntimeTaskContext,
-    pub(crate) permit: &'a RuntimePermit,
+    pub(crate) permit: ReadPermit<'a>,
 }
 
 mod query;
@@ -77,15 +111,37 @@ pub(crate) struct FileRange {
 }
 
 impl ReadAdmission<'_> {
+    pub(crate) fn validate_mode(&self) -> Result<()> {
+        if self.is_synchronous()
+            && (self.task.has_resource_controllers()
+                || self.memory.host_admission.is_some()
+                || self.task.memory_reservation().is_none())
+        {
+            return Err(HawDBError::Execution(
+                "governed cleanup requires its originating runtime permit".into(),
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn retained(&self, bytes: usize) -> Result<ReaderMemory> {
+        self.validate_mode()?;
         let query = self.memory.retained.reserve(bytes)?;
         let host_bytes = checked_add(bytes, ACCOUNT_METADATA_BYTES)?;
         let host_bytes = u64::try_from(host_bytes)
             .map_err(|_| HawDBError::Execution("reader capacity exceeds u64".into()))?;
-        let host = self
-            .permit
-            .reserve_retained_memory(host_bytes)
-            .map_err(|error| HawDBError::Execution(error.to_string()))?;
+        let host = match self.permit {
+            ReadPermit::Governed(permit) => ReadMemoryFunding::Retained(
+                permit
+                    .reserve_retained_memory(host_bytes)
+                    .map_err(|error| HawDBError::Execution(error.to_string()))?,
+            ),
+            ReadPermit::Synchronous(_) => ReadMemoryFunding::Scoped {
+                _working: self
+                    .task
+                    .reserve_working_memory(host_bytes)
+                    .map_err(|error| HawDBError::Execution(error.to_string()))?,
+            },
+        };
         Ok(ReaderMemory {
             _query: query,
             _host: host,
@@ -93,6 +149,7 @@ impl ReadAdmission<'_> {
     }
 
     pub(crate) fn scratch(&self, bytes: usize) -> Result<QueryMemoryLease> {
+        self.validate_mode()?;
         self.memory.spool.reserve(bytes)
     }
 
@@ -100,14 +157,46 @@ impl ReadAdmission<'_> {
         &self,
     ) -> std::result::Result<Option<Box<dyn hawdb_core::RuntimeIoWavePermit>>, RuntimeIoWaveError>
     {
-        let permit = self
-            .task
-            .acquire_io_wave(std::num::NonZeroUsize::MIN)?
-            .ok_or(RuntimeIoWaveError::ReservationExceeded {
+        if self.validate_mode().is_err() {
+            return Err(RuntimeIoWaveError::ReservationExceeded {
                 requested_slots: 1,
                 reserved_slots: 0,
-            })?;
-        Ok(Some(permit))
+            });
+        }
+        let permit = self.task.acquire_io_wave(std::num::NonZeroUsize::MIN)?;
+        if permit.is_none() && self.runtime_permit().is_some() {
+            return Err(RuntimeIoWaveError::ReservationExceeded {
+                requested_slots: 1,
+                reserved_slots: 0,
+            });
+        }
+        Ok(permit)
+    }
+
+    pub(crate) fn runtime_permit(&self) -> Option<&RuntimePermit> {
+        match self.permit {
+            ReadPermit::Governed(permit) => Some(permit),
+            ReadPermit::Synchronous(_) => None,
+        }
+    }
+    pub(crate) fn require_governor(&self) -> Result<&RuntimePermit> {
+        self.runtime_permit().ok_or_else(|| {
+            HawDBError::Execution(
+                "synchronous cleanup cannot construct persistent root custody".into(),
+            )
+        })
+    }
+    pub(crate) fn is_synchronous(&self) -> bool {
+        self.runtime_permit().is_none()
+    }
+    pub(crate) fn matches_publication(
+        &self,
+        publication: &crate::out_of_core::SearchProjectionPublishLease,
+    ) -> bool {
+        match self.permit {
+            ReadPermit::Governed(_) => true,
+            ReadPermit::Synchronous(actual) => std::ptr::eq(actual, publication),
+        }
     }
 
     pub(crate) fn checkpoint(&self) -> std::result::Result<(), RuntimeCancellationReason> {
@@ -265,40 +354,64 @@ impl<'execution> ReadAdmission<'execution> {
         maximum: u64,
         mut visitor: impl FnMut(&[u8]) -> Result<()>,
     ) -> Result<hawdb_storage::file_io::File> {
-        use std::io::Read;
-        self.require_read_limit(expected_len, maximum)?;
         let _buffer = self.scratch(super::SPOOL_BUFFER_BYTES)?;
         let (file, ()) = self.with_bound_file(path, expected_len, maximum, |reader| {
-            let mut buffer = [0; super::SPOOL_BUFFER_BYTES];
-            let mut checksum = hawdb_integrity::Crc32cHasher::new();
-            let mut length = 0u64;
-            loop {
-                crate::build_control::checkpoint(self.task)?;
-                let read = match reader.read(&mut buffer) {
-                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
-                    result => result?,
-                };
-                crate::build_control::checkpoint(self.task)?;
-                if read == 0 {
-                    break;
-                }
-                if read as u64 > expected_len - length {
-                    return Err(HawDBError::Storage(
-                        "reader artifact grew during read".into(),
-                    ));
-                }
-                length += read as u64;
-                checksum.update(&buffer[..read]);
-                visitor(&buffer[..read])?;
-            }
-            if length != expected_len || checksum.finish() != expected_checksum {
-                return Err(HawDBError::Storage(
-                    "reader artifact length or checksum mismatch".into(),
-                ));
-            }
-            Ok(())
+            self.visit_reader_bound(reader, expected_len, expected_checksum, &mut visitor)
         })?;
         Ok(file)
+    }
+
+    pub(crate) fn visit_file_bound(
+        &self,
+        file: hawdb_storage::file_io::File,
+        expected_len: u64,
+        expected_checksum: u64,
+        maximum: u64,
+        mut visitor: impl FnMut(&[u8]) -> Result<()>,
+    ) -> Result<hawdb_storage::file_io::File> {
+        self.require_read_limit(expected_len, maximum)?;
+        let _buffer = self.scratch(super::SPOOL_BUFFER_BYTES)?;
+        self.with_read_scope(&file, expected_len, maximum, |reader| {
+            self.visit_reader_bound(reader, expected_len, expected_checksum, &mut visitor)
+        })?;
+        Ok(file)
+    }
+
+    fn visit_reader_bound(
+        &self,
+        reader: &mut impl std::io::Read,
+        expected_len: u64,
+        expected_checksum: u64,
+        mut visitor: impl FnMut(&[u8]) -> Result<()>,
+    ) -> Result<()> {
+        let mut buffer = [0; super::SPOOL_BUFFER_BYTES];
+        let mut checksum = hawdb_integrity::Crc32cHasher::new();
+        let mut length = 0u64;
+        loop {
+            crate::build_control::checkpoint(self.task)?;
+            let read = match reader.read(&mut buffer) {
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                result => result?,
+            };
+            crate::build_control::checkpoint(self.task)?;
+            if read == 0 {
+                break;
+            }
+            if read as u64 > expected_len - length {
+                return Err(HawDBError::Storage(
+                    "reader artifact grew during read".into(),
+                ));
+            }
+            length += read as u64;
+            checksum.update(&buffer[..read]);
+            visitor(&buffer[..read])?;
+        }
+        if length != expected_len || checksum.finish() != expected_checksum {
+            return Err(HawDBError::Storage(
+                "reader artifact length or checksum mismatch".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Bind length and managed cold identity; block payload checksums remain

@@ -55,10 +55,11 @@ fn admitted_lexical_manifest_refuses_compact_directory_before_record_allocation(
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         };
         let error = LexicalProjectionReader::load_admitted_manifest_bytes(
             OpenContext {
+                captured_file: None,
                 root: Path::new("unused-no-artifact-open"),
                 identity: Identity {
                     source_epoch: body.source_graph_commit_epoch,
@@ -111,7 +112,7 @@ fn lexical_identity_mismatch_and_read_limit_release_retained_admission_without_o
     let admission = ReadAdmission {
         memory: &memory,
         task: &task,
-        permit: &permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&permit),
     };
     let root =
         crate::test_temp_dir().join(format!("missing-lexical-admission-{}", std::process::id()));
@@ -119,6 +120,7 @@ fn lexical_identity_mismatch_and_read_limit_release_retained_admission_without_o
     for mismatch in [true, false] {
         let result = LexicalProjectionReader::load_admitted_manifest_bytes(
             OpenContext {
+                captured_file: None,
                 root: &root,
                 identity: Identity {
                     source_epoch: body.source_graph_commit_epoch,

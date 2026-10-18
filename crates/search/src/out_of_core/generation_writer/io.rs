@@ -22,9 +22,10 @@ use crate::build_memory::{
 use crate::{HawDBError, Result};
 use hawdb_core::RuntimeTaskContext;
 use hawdb_executor::QueryMemoryLease;
-use hawdb_integrity::{Crc32cHasher, IntegrityHasher, Sha256Digest};
+use hawdb_integrity::Crc32cHasher;
 use hawdb_storage::durability::durable_replace_file;
 use hawdb_storage::file_io::{self as fs, File, OpenOptions};
+use hawdb_storage::immutable_object::{ObjectKind, ObjectReference, ObjectReferenceWriter};
 #[cfg(test)]
 use std::cell::Cell;
 use std::io::{Read, Write};
@@ -80,21 +81,24 @@ fn should_abort_replace() -> bool {
     })
 }
 
-pub(super) struct GenerationIo<'a> {
+pub(in crate::out_of_core) struct GenerationIo<'a> {
     memory: &'a BuildMemory,
     task: &'a RuntimeTaskContext,
 }
 
-// A private, in-process byte seal. It is not an ObjectReference, persisted
-// manifest, source authority or durability/activation receipt.
+// A producer-captured full object reference. It describes the bytes but
+// establishes no source authority or durability/activation receipt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct ArtifactSeal {
-    pub(super) length: u64,
-    sha256: Sha256Digest,
+pub(in crate::out_of_core) struct ArtifactSeal {
+    pub(in crate::out_of_core) length: u64,
+    pub(in crate::out_of_core) reference: ObjectReference,
 }
 
 impl<'a> GenerationIo<'a> {
-    pub(super) fn new(memory: &'a BuildMemory, task: &'a RuntimeTaskContext) -> Self {
+    pub(in crate::out_of_core) fn new(
+        memory: &'a BuildMemory,
+        task: &'a RuntimeTaskContext,
+    ) -> Self {
         Self { memory, task }
     }
 
@@ -183,11 +187,12 @@ impl<'a> GenerationIo<'a> {
     /// Read one held file to EOF under admitted bounded scratch. The producer
     /// seals staged bytes before installation; verification must not recompute
     /// its expectation from an installed pathname or an alias inventory.
-    pub(super) fn seal(&self, path: &Path) -> Result<ArtifactSeal> {
+    pub(in crate::out_of_core) fn seal(&self, path: &Path) -> Result<ArtifactSeal> {
         let _buffer = self.memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
         let mut file = self.native(&[path], || File::open(path))??;
         let expected = file.metadata()?.len();
-        let mut hasher = IntegrityHasher::new();
+        let mut hasher = ObjectReferenceWriter::new(ObjectKind::CheckpointArtifact, 1, expected)
+            .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
         let mut buffer = [0u8; SPOOL_BUFFER_BYTES];
         let mut length = 0u64;
         loop {
@@ -201,7 +206,7 @@ impl<'a> GenerationIo<'a> {
                 .ok_or_else(|| {
                     HawDBError::StorageIntegrity("search artifact grew while sealing".into())
                 })?;
-            hasher.update(&buffer[..count]);
+            hasher.write_all(&buffer[..count])?;
         }
         checkpoint(self.task)?;
         if length != expected {
@@ -211,8 +216,23 @@ impl<'a> GenerationIo<'a> {
         }
         Ok(ArtifactSeal {
             length,
-            sha256: hasher.finish().sha256,
+            reference: hasher
+                .finish()
+                .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?,
         })
+    }
+
+    pub(super) fn verify_object(
+        &self,
+        path: &Path,
+        object: super::super::ArtifactObject,
+    ) -> Result<()> {
+        if self.seal(path)?.reference != object.reference() {
+            return Err(HawDBError::StorageIntegrity(
+                "installed Search artifact differs from its producer reference".into(),
+            ));
+        }
+        Ok(())
     }
 
     pub(super) fn verify_seal(

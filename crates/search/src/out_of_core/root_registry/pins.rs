@@ -45,11 +45,24 @@ impl RootRef {
         publication: &mut SearchProjectionPublishLease,
         admission: &'a ReadAdmission<'execution>,
     ) -> Result<PendingCapture<'a, 'execution>> {
+        self.begin_cleanup_capture(publication, admission)
+    }
+
+    /// Synchronous cleanup holds the publication borrow through validation and
+    /// sweep; no read/serving capability is returned to its caller.
+    pub(in crate::out_of_core) fn begin_cleanup_capture<'a, 'execution>(
+        self,
+        publication: &SearchProjectionPublishLease,
+        admission: &'a ReadAdmission<'execution>,
+    ) -> Result<PendingCapture<'a, 'execution>> {
         admission
             .checkpoint()
             .map_err(|e| HawDBError::Execution(e.to_string()))?;
         if self.state().identity != publication.source_identity()
-            || !self.state()._memory.shares_governor_with(admission.permit)
+            || !self
+                .state()
+                ._memory
+                .shares_governor_with(admission.require_governor()?)
         {
             return Err(HawDBError::StorageIntegrity(
                 "capture source authority does not match its root".into(),
@@ -74,7 +87,59 @@ impl RootRef {
     }
 }
 
+#[derive(Debug)]
+struct FileCustody {
+    _pin: ArtifactPin,
+    memory: ReaderMemory,
+}
+impl hawdb_core::RuntimeMemoryPermit for FileCustody {
+    fn bytes(&self) -> u64 {
+        hawdb_core::RuntimeMemoryPermit::bytes(&self.memory)
+    }
+}
+
 impl PendingCapture<'_, '_> {
+    /// Every lazy child owns an exact pin and retained memory, while cache keys
+    /// own memory only. No execution/publication permit escapes this borrow.
+    pub(in crate::out_of_core) fn open_artifact(
+        &self,
+        name: &str,
+        reference: hawdb_storage::immutable_object::ObjectReference,
+    ) -> Result<File> {
+        let key = ArtifactKey::from_file_name(name)
+            .ok_or_else(|| HawDBError::StorageIntegrity("invalid captured artifact name".into()))?;
+        let pin = self.pin(key)?;
+        let directory = {
+            let native = self
+                .root
+                .state()
+                .native
+                .read()
+                .unwrap_or_else(|p| p.into_inner());
+            Arc::clone(
+                &native
+                    .as_ref()
+                    .expect("live root owns native resources")
+                    .directory,
+            )
+        };
+        let key_memory = self
+            .admission
+            .retained(File::captured_immutable_key_bytes::<ReaderMemory>(name)?)?;
+        let memory = self
+            .admission
+            .retained(File::captured_immutable_binding_bytes::<FileCustody>())?;
+        let context = directory.operation_context();
+        Ok(File::open_captured_immutable(
+            directory,
+            &context,
+            name,
+            reference,
+            key_memory,
+            FileCustody { _pin: pin, memory },
+        )?)
+    }
+
     pub(in crate::out_of_core) fn root(&self) -> &RootRef {
         &self.root
     }

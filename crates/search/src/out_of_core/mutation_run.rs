@@ -447,12 +447,43 @@ impl SearchMutationRun {
             })?;
         Self::open_admitted(
             reader_admission::OpenContext {
+                captured_file: Some(
+                    capture.open_artifact(&manifest.file, manifest.object.reference())?,
+                ),
                 source_pin: Some(capture.pin(key)?),
                 root,
                 admission: capture.admission(),
                 maximum_encoded_bytes: max_bytes,
                 maximum_artifact_bytes,
                 analyzer_digest: expected_analyzer_digest,
+                budget,
+            },
+            manifest,
+        )
+    }
+
+    pub(super) fn open_for_cleanup(
+        root: &Path,
+        manifest: &SearchOutOfCoreMutationRunManifest,
+        budget: &mut MutationRunBudget,
+        source: &super::captured_cleanup::Source<'_>,
+        admission: &crate::build_memory::read::ReadAdmission<'_>,
+        limits: (u64, u64),
+        analyzer_digest: u64,
+    ) -> Result<Self> {
+        Self::open_admitted(
+            reader_admission::OpenContext {
+                captured_file: Some(source.open_admitted(
+                    &manifest.file,
+                    manifest.object,
+                    admission,
+                )?),
+                source_pin: None,
+                root,
+                admission,
+                maximum_encoded_bytes: limits.0,
+                maximum_artifact_bytes: limits.1,
+                analyzer_digest,
                 budget,
             },
             manifest,
@@ -471,6 +502,7 @@ impl SearchMutationRun {
         if let Some(admission) = admission {
             return Self::open_admitted(
                 reader_admission::OpenContext {
+                    captured_file: None,
                     source_pin: None,
                     root,
                     admission,
@@ -489,6 +521,22 @@ impl SearchMutationRun {
         }
         budget.check(8192)?;
         let file = hawdb_storage::file_io::File::open(root.join(&manifest.file))?;
+        Self::open_ordinary_file(file, manifest, max_bytes, expected_analyzer_digest, budget)
+    }
+
+    pub(super) fn open_ordinary_file(
+        file: hawdb_storage::file_io::File,
+        manifest: &SearchOutOfCoreMutationRunManifest,
+        max_bytes: u64,
+        expected_analyzer_digest: u64,
+        budget: &mut MutationRunBudget,
+    ) -> Result<Self> {
+        if manifest.len > max_bytes {
+            return Err(HawDBError::Execution(
+                "captured mutation exceeds read ceiling".into(),
+            ));
+        }
+        budget.check(8192)?;
         let scalar = streaming::preflight(&file, manifest)?;
         let working_bytes = streaming::working_bytes(manifest.entry_count, scalar)?;
         budget.check(working_bytes)?;
@@ -838,6 +886,7 @@ mod tests {
         let path = root.join(artifact_file(3));
         std::fs::write(&path, text.as_bytes()).unwrap();
         let manifest = SearchOutOfCoreMutationRunManifest {
+            object: crate::out_of_core::ArtifactObject::for_bytes(text.as_bytes()),
             generation: 3,
             file: artifact_file(3),
             len: text.len() as u64,
@@ -940,6 +989,7 @@ mod tests {
             phases.push(streaming::working_bytes(1, 30).unwrap());
             assert!(*phases.last().unwrap() < bytes.len() as u64);
             manifests.push(SearchOutOfCoreMutationRunManifest {
+                object: crate::out_of_core::ArtifactObject::for_bytes(&bytes),
                 generation,
                 file,
                 len: bytes.len() as u64,

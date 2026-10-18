@@ -113,6 +113,20 @@ impl<T: Serialize> PreparedEnvelope<'_, T> {
         self.checksum
     }
 
+    pub(crate) fn artifact_reference(
+        &self,
+        task: &RuntimeTaskContext,
+    ) -> Result<hawdb_storage::immutable_object::ObjectReference> {
+        use hawdb_storage::immutable_object::{ObjectKind, ObjectReferenceWriter};
+        let mut writer =
+            ObjectReferenceWriter::new(ObjectKind::CheckpointArtifact, 1, self.length as u64)
+                .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
+        self.write_to(&mut writer, task)?;
+        writer
+            .finish()
+            .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))
+    }
+
     pub(crate) fn write_to(
         &self,
         output: &mut impl Write,

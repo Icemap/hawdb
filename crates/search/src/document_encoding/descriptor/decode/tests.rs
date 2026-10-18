@@ -79,7 +79,7 @@ fn descriptor_memory_survives_producer_without_holding_execution() {
             Some(&ReadAdmission {
                 memory: &memory,
                 task: &task,
-                permit: &permit,
+                permit: crate::build_memory::read::ReadPermit::Governed(&permit),
             }),
         )
         .unwrap()
@@ -129,7 +129,7 @@ fn descriptor_refuses_map_expansion_before_owned_metadata_allocation() {
             Some(&ReadAdmission {
                 memory: &memory,
                 task: &task,
-                permit: &permit,
+                permit: crate::build_memory::read::ReadPermit::Governed(&permit),
             }),
         );
         assert!(
@@ -171,7 +171,7 @@ fn cancelled_descriptor_preflight_keeps_both_ledgers_unchanged() {
         Some(&ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         }),
     );
     assert!(result.unwrap_err().to_string().contains("cancel"));

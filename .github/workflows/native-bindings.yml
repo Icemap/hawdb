@@ -86,6 +86,67 @@ jobs:
           CGO_ENABLED: "1"
         run: go test -race -count=1 -run '^TestRetained' ./...
 
+  captured-search-integration:
+    if: github.event_name != 'workflow_dispatch' || !inputs.rabitq_baseline
+    name: Captured Search integration (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-2025]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.97.1
+
+      - name: Record tested source and toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p captured-search-results
+          git log -1 --format='%H%n%T%n%P' > captured-search-results/source.txt
+          rustc --version --verbose > captured-search-results/toolchain.txt
+
+      - name: Test captured immutable file custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
+            -- file_io::captured_immutable::tests:: --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/immutable-custody.txt
+
+      - name: Test captured cleanup and originating operation admission
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            -- out_of_core::captured_cleanup::admission_tests:: \
+            out_of_core::generation_writer::tests::initial::initial_artifact_admission_splits_oversized_candidates_without_recapturing_bodies \
+            generation_cleanup::tests:: --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/cleanup-admission.txt
+
+      - name: Test captured root, replacement namespace and resident retention
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            -- out_of_core::admitted_root::tests:: out_of_core::root_registry::tests:: \
+            build_memory::read::tests:: --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/root-and-namespace.txt
+
+      - name: Preserve captured Search integration evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: captured-search-integration-${{ matrix.os }}-${{ github.sha }}
+          path: captured-search-results
+          if-no-files-found: error
+
   windows-native-contracts:
     if: github.event_name != 'workflow_dispatch' || !inputs.rabitq_baseline
     name: Windows native contracts

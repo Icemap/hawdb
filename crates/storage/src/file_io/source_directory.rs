@@ -132,6 +132,8 @@ pub struct SourceDirectory {
     root: File,
     context: FileOpenContext,
     identity: SourceDirectoryIdentity,
+    capture_id: u64,
+    cached_children: std::sync::atomic::AtomicBool,
     #[cfg(any(test, feature = "test-support"))]
     trace: Option<Box<crate::power_loss::NativeDirectoryTrace>>,
 }
@@ -177,6 +179,8 @@ impl SourceDirectory {
         let identity = SourceDirectoryIdentity(crate::native_file_identity::of_file(&inner)?);
         Ok(Self {
             identity,
+            capture_id: next_capture_id()?,
+            cached_children: std::sync::atomic::AtomicBool::new(false),
             root: counted(inner, permit),
             // Keep the project domain, not a producer's reservation inventory.
             // Future operations supply their own fresh reserved capacity.
@@ -199,6 +203,21 @@ impl SourceDirectory {
     /// Pure domain comparison; does not open a file or consume FD inventory.
     pub fn shares_project_context(&self, context: &FileOpenContext) -> bool {
         std::sync::Arc::ptr_eq(&self.context.state, &context.state)
+    }
+
+    /// Check an initial/legacy namespace label against this held directory.
+    /// This is a binding fence, not logical incarnation or an ABA proof; child
+    /// operations must still use the captured directory after the fence.
+    #[doc(hidden)]
+    pub fn matches_namespace(&self, path: &Path) -> io::Result<bool> {
+        #[cfg(windows)]
+        {
+            // A directory requires BACKUP_SEMANTICS; File::open is for regular
+            // files. The fresh capture uses the same counted descriptor domain.
+            Ok(self.same_directory(&Self::capture(path, &self.operation_context())?))
+        }
+        #[cfg(not(windows))]
+        self.root.matches_native_path(path)
     }
 
     /// Opens only a hidden `.lock` control file, never truncating an existing
@@ -271,11 +290,20 @@ impl SourceDirectory {
     /// A fresh operation context supplies its reserved FD capacity; the
     /// directory capture context is never reused for child admission.
     pub fn open_child(&self, context: &FileOpenContext, name: &str) -> io::Result<File> {
+        self.open_child_kind(context, name, DescriptorKind::Transient)
+    }
+
+    pub(crate) fn open_child_kind(
+        &self,
+        context: &FileOpenContext,
+        name: &str,
+        kind: DescriptorKind,
+    ) -> io::Result<File> {
         self.require_context(context)?;
         let name = ChildName::new(name)?;
         let _native = native_scope(context)?;
         self.require_scope(&_native)?;
-        let permit = context.acquire(DescriptorKind::Transient)?;
+        let permit = context.acquire(kind)?;
         let open = || {
             self.root
                 .with_native(|root| platform::open_child(root, name))
@@ -425,6 +453,8 @@ impl SourceDirectory {
             root: counted(inner, permit),
             context: context.without_inventory(),
             identity,
+            capture_id: next_capture_id()?,
+            cached_children: std::sync::atomic::AtomicBool::new(false),
             #[cfg(any(test, feature = "test-support"))]
             trace,
         })
@@ -508,6 +538,28 @@ impl SourceDirectory {
             .map_err(|error| context.map_open_error(error))
     }
 
+    pub(super) fn capture_id(&self) -> u64 {
+        self.capture_id
+    }
+
+    pub(super) fn mark_cached_child(&self) {
+        self.cached_children
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Close idle captured-source cache leases before releasing cooperative
+    /// process custody. Does not revoke any live logical file or read.
+    #[doc(hidden)]
+    pub fn retire_cached_children(&self) {
+        if self
+            .cached_children
+            .load(std::sync::atomic::Ordering::Relaxed)
+            && let Some(handles) = self.context.state.existing_immutable_handles()
+        {
+            handles.retire_source(self.capture_id);
+        }
+    }
+
     fn require_context(&self, context: &FileOpenContext) -> io::Result<()> {
         if self.shares_project_context(context) {
             Ok(())
@@ -535,6 +587,26 @@ impl SourceDirectory {
         let _ = scope;
         Ok(())
     }
+}
+
+impl Drop for SourceDirectory {
+    fn drop(&mut self) {
+        self.retire_cached_children();
+    }
+}
+
+fn next_capture_id() -> io::Result<u64> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_update(
+        std::sync::atomic::Ordering::Relaxed,
+        std::sync::atomic::Ordering::Relaxed,
+        |value| value.checked_add(1),
+    )
+    .map_err(|_| io::Error::other("source capture identity exhausted"))
+}
+
+pub(super) fn validate_child_name(name: &str) -> io::Result<()> {
+    ChildName::new(name).map(|_| ())
 }
 
 #[cfg(any(test, feature = "test-support"))]

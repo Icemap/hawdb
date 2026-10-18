@@ -13,6 +13,7 @@ use std::sync::{Arc, Barrier};
 type Hook = RefCell<Option<Box<dyn FnOnce()>>>;
 type ProcessOpenHook = RefCell<Option<Box<dyn FnOnce(&File)>>>;
 thread_local! {
+    pub(super) static BEFORE_PROCESS_UNLOCK: Hook = const { RefCell::new(None) };
     pub(super) static AFTER_PROCESS_OPEN: ProcessOpenHook = RefCell::new(None);
     pub(super) static AFTER_INITIALIZING: Hook = const { RefCell::new(None) };
     pub(super) static AFTER_RETIRING: Hook = const { RefCell::new(None) };
@@ -66,7 +67,7 @@ impl Fixture {
         ReadAdmission {
             memory: &self.memory,
             task: &self.task,
-            permit: &self.permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&self.permit),
         }
     }
     fn open(&self) -> Result<RootRef> {
@@ -313,7 +314,7 @@ fn cancelled_initialization_closes_before_unregistering_and_allows_retry() {
     let admission = ReadAdmission {
         memory: &fixture.memory,
         task: &task,
-        permit: &fixture.permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&fixture.permit),
     };
     drop(RootRef::acquire(&fixture.root, &fixture.project.io_context(), &admission).unwrap());
 }
@@ -333,7 +334,7 @@ fn retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close()
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         };
         let result = RootRef::acquire(Path::new(&root), &project.io_context(), &admission);
         if std::env::var_os(BUSY).is_some() {
@@ -366,7 +367,7 @@ fn retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close()
             &ReadAdmission {
                 memory: &memory,
                 task: &task,
-                permit: &permit,
+                permit: crate::build_memory::read::ReadPermit::Governed(&permit),
             },
         )
         .unwrap()
@@ -393,7 +394,7 @@ fn retained_root_releases_execution_but_keeps_peer_exclusion_until_final_close()
             &ReadAdmission {
                 memory: &memory,
                 task: &task,
-                permit: &permit,
+                permit: crate::build_memory::read::ReadPermit::Governed(&permit),
             },
         )
         .unwrap();
@@ -521,7 +522,7 @@ fn a_shared_descriptor_domain_does_not_allow_foreign_governor_borrowing() {
         &ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&permit),
         },
     );
     assert!(
@@ -597,7 +598,7 @@ fn publisher_promotion_admission_failure_preserves_original_custody_and_retry() 
             &fixture.root,
         )
         .unwrap();
-    for limit in [1, size_of::<State>() + 2 * size_of::<usize>()] {
+    for limit in [1, state_bytes()] {
         let task = RuntimeTaskContext::default()
             .with_memory_reservation(RuntimeMemoryReservation::new(limit as u64, 0));
         let memory = BuildMemory::new(&task).unwrap();
@@ -605,7 +606,7 @@ fn publisher_promotion_admission_failure_preserves_original_custody_and_retry() 
         let admission = ReadAdmission {
             memory: &memory,
             task: &task,
-            permit: &fixture.permit,
+            permit: crate::build_memory::read::ReadPermit::Governed(&fixture.permit),
         };
         assert!(publisher
             .admit_source_root(&fixture.project.io_context(), &admission)
@@ -622,7 +623,7 @@ fn publisher_promotion_admission_failure_preserves_original_custody_and_retry() 
     let admission = ReadAdmission {
         memory: &memory,
         task: &cancelled,
-        permit: &fixture.permit,
+        permit: crate::build_memory::read::ReadPermit::Governed(&fixture.permit),
     };
     assert!(publisher
         .admit_source_root(&fixture.project.io_context(), &admission)
@@ -705,7 +706,7 @@ fn exact_pins_protect_each_cleanup_path_until_the_last_independent_owner_closes(
                 ..Default::default()
             };
             if retry {
-                state.run_under_publication(
+                state.run_with_bound_test_generations(
                     &fixture.root,
                     generations,
                     Default::default(),
@@ -714,7 +715,7 @@ fn exact_pins_protect_each_cleanup_path_until_the_last_independent_owner_closes(
             } else {
                 PreparedCleanup::prepare(&fixture.root, &fixture.memory, &fixture.task)
                     .unwrap()
-                    .run_under_publication(
+                    .run_with_bound_test_generations(
                         &fixture.root,
                         generations,
                         Default::default(),
@@ -774,7 +775,7 @@ fn pending_capture_defers_both_cleanup_paths_before_exact_keys_are_known() {
                 ..Default::default()
             };
             if retry {
-                state.run_under_publication(
+                state.run_with_bound_test_generations(
                     &fixture.root,
                     generations,
                     Default::default(),
@@ -783,7 +784,7 @@ fn pending_capture_defers_both_cleanup_paths_before_exact_keys_are_known() {
             } else {
                 PreparedCleanup::prepare(&fixture.root, &fixture.memory, &fixture.task)
                     .unwrap()
-                    .run_under_publication(
+                    .run_with_bound_test_generations(
                         &fixture.root,
                         generations,
                         Default::default(),
@@ -854,4 +855,115 @@ fn final_root_unlocks_before_an_inherited_description_closes() {
 #[test]
 fn native_publisher_unlocks_before_an_inherited_description_closes() {
     assert_inherited_description_released(true);
+}
+
+#[test]
+fn captured_native_file_keeps_exact_pin_and_retires_cache_before_process_unlock() {
+    use crate::out_of_core::artifact_key::ArtifactKey;
+    use hawdb_core::RuntimeMemoryPermit;
+    #[derive(Debug)]
+    struct Custody {
+        _pin: ArtifactPin,
+        memory: ReaderMemory,
+    }
+    impl RuntimeMemoryPermit for Custody {
+        fn bytes(&self) -> u64 {
+            self.memory.bytes()
+        }
+    }
+    struct Control;
+    impl hawdb_storage::file_io::ReadAdmissionControl for Control {
+        fn checkpoint(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+        fn admit_validation(&mut self, _: u64) -> std::io::Result<()> {
+            panic!("native identity acquisition must not read payload")
+        }
+    }
+    let fixture = Fixture::new(8);
+    let baseline = fixture.memory.ledger.snapshot().used_bytes;
+    let name = "search_projection_segment_payloads.17.hawdb";
+    std::fs::write(fixture.root.join(name), b"captured payload").unwrap();
+    let mut publication =
+        super::super::publish_lease::SearchProjectionPublishLease::acquire_for_consumer(
+            &fixture.root,
+        )
+        .unwrap();
+    let admission = fixture.admission();
+    let capture = publication
+        .capture_source_root(&fixture.project.io_context(), &admission)
+        .unwrap();
+    let pin = capture.pin(ArtifactKey::Content(17)).unwrap();
+    let directory = capture
+        .root()
+        .state()
+        .native
+        .read()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .directory
+        .clone();
+    let key_memory = admission
+        .retained(File::captured_immutable_key_bytes::<ReaderMemory>(name).unwrap())
+        .unwrap();
+    let custody = Custody {
+        _pin: pin.clone(),
+        memory: admission
+            .retained(File::captured_immutable_binding_bytes::<Custody>())
+            .unwrap(),
+    };
+    let file = {
+        let _io = admission.io().unwrap();
+        File::open_captured_native_immutable(
+            directory,
+            &fixture.project.io_context(),
+            name,
+            key_memory,
+            custody,
+            &mut Control,
+        )
+        .unwrap()
+    };
+    drop(pin);
+    drop(capture);
+    drop(publication);
+    assert_eq!(fixture.project.metrics().open, 2);
+    peer_root_probe(&fixture.root, true);
+    let bytes = admission.read_unbound_file(&file, 1024).unwrap();
+    assert_eq!(&*bytes, b"captured payload");
+    drop(bytes);
+    assert_eq!(fixture.project.metrics().cached_handles, 1);
+    let pressure = fixture.project.reserve(6).unwrap();
+    assert_eq!(fixture.project.metrics().cached_handles, 0);
+    drop(pressure);
+    let bytes = admission.read_unbound_file(&file, 1024).unwrap();
+    assert_eq!(&*bytes, b"captured payload");
+    drop(bytes);
+    assert_eq!(fixture.project.metrics().cached_handles, 1);
+    let project = fixture.project.clone();
+    let root = fixture.root.clone();
+    BEFORE_PROCESS_UNLOCK.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move || {
+            assert_eq!(
+                project.metrics().cached_handles,
+                0,
+                "idle children must close before unlock"
+            );
+            assert_eq!(project.metrics().open, 2);
+            peer_root_probe(&root, true);
+        }));
+    });
+    let project = fixture.project.clone();
+    AFTER_NATIVE_CLOSE.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move || {
+            assert_eq!(project.metrics().cached_handles, 0);
+            assert_eq!(project.metrics().open, 0);
+        }))
+    });
+    drop(file);
+    assert!(!fixture.is_registered());
+    assert_eq!(fixture.project.metrics().open, 0);
+    assert_eq!(fixture.memory.ledger.snapshot().used_bytes, baseline);
+    peer_root_probe(&fixture.root, false);
 }

@@ -20,6 +20,7 @@ use crate::build_memory::{
 use crate::lexical_projection::QueryContext;
 
 pub(super) struct OpenContext<'a, 'execution> {
+    pub(super) captured_file: Option<hawdb_storage::file_io::File>,
     pub(super) source_pin: Option<super::super::root_registry::ArtifactPin>,
     pub(super) root: &'a Path,
     pub(super) admission: &'a ReadAdmission<'execution>,
@@ -35,6 +36,7 @@ impl SearchMutationRun {
         manifest: &SearchOutOfCoreMutationRunManifest,
     ) -> Result<Self> {
         let OpenContext {
+            captured_file,
             source_pin,
             root,
             admission,
@@ -43,6 +45,11 @@ impl SearchMutationRun {
             analyzer_digest,
             budget,
         } = context;
+        if admission.is_synchronous() && captured_file.is_none() {
+            return Err(HawDBError::Execution(
+                "synchronous decoding requires a source-held file".into(),
+            ));
+        }
         crate::build_control::checkpoint(admission.task)?;
         if manifest.len > maximum_encoded_bytes {
             return Err(HawDBError::Storage(
@@ -55,8 +62,13 @@ impl SearchMutationRun {
             admission.memory,
             admission.task,
         )?;
-        let (file, scalar) =
-            streaming::preflight_admitted(&path, manifest, admission, maximum_artifact_bytes)?;
+        let (file, scalar) = streaming::preflight_admitted(
+            &path,
+            manifest,
+            admission,
+            maximum_artifact_bytes,
+            captured_file,
+        )?;
         let working = streaming::working_bytes(manifest.entry_count, scalar)?;
         budget
             .check(working)

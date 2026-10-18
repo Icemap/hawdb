@@ -35,6 +35,7 @@ pub(crate) struct Identity {
 }
 
 pub(crate) struct OpenContext<'a, 'execution> {
+    pub(crate) captured_file: Option<(u64, hawdb_storage::file_io::File)>,
     pub(crate) root: &'a Path,
     pub(crate) identity: Identity,
     pub(crate) config: LexicalProjectionConfig,
@@ -53,12 +54,18 @@ impl LexicalProjectionReader {
         bytes: &[u8],
     ) -> Result<Option<Self>> {
         let OpenContext {
+            captured_file,
             root,
             identity,
             config,
             admission,
             max_artifact_read_bytes,
         } = context;
+        if admission.is_synchronous() && captured_file.is_none() {
+            return Err(HawDBError::Execution(
+                "synchronous decoding requires a source-held file".into(),
+            ));
+        }
         checkpoint(admission.task)?;
         if bytes.len() as u64 > config.max_manifest_bytes.get() {
             return Err(HawDBError::Storage(
@@ -103,18 +110,35 @@ impl LexicalProjectionReader {
         )?;
         let mut header = [0u8; 24];
         let mut prefix = 0;
-        let file = admission.visit_bound(
-            &path,
-            manifest.artifact_len,
-            manifest.artifact_checksum,
-            max_artifact_read_bytes,
-            |chunk| {
-                let count = (header.len() - prefix).min(chunk.len());
-                header[prefix..prefix + count].copy_from_slice(&chunk[..count]);
-                prefix += count;
-                Ok(())
-            },
-        )?;
+        let mut visitor = |chunk: &[u8]| {
+            let count = (header.len() - prefix).min(chunk.len());
+            header[prefix..prefix + count].copy_from_slice(&chunk[..count]);
+            prefix += count;
+            Ok(())
+        };
+        let file = match captured_file {
+            Some((generation, file)) => {
+                if generation != manifest.generation {
+                    return Err(HawDBError::StorageIntegrity(
+                        "captured lexical generation differs from its producer reference".into(),
+                    ));
+                }
+                admission.visit_file_bound(
+                    file,
+                    manifest.artifact_len,
+                    manifest.artifact_checksum,
+                    max_artifact_read_bytes,
+                    &mut visitor,
+                )?
+            }
+            None => admission.visit_bound(
+                &path,
+                manifest.artifact_len,
+                manifest.artifact_checksum,
+                max_artifact_read_bytes,
+                &mut visitor,
+            )?,
+        };
         if prefix != header.len()
             || &header[..16] != ARTIFACT_HEADER
             || u64::from_le_bytes(header[16..24].try_into().expect("fixed header"))

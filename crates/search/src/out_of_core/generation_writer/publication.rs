@@ -61,6 +61,8 @@ pub(super) enum ActiveManifestUpdate {
 pub(super) struct PublishGenerationInput<'a> {
     pub(super) root: &'a Path,
     pub(super) stage: &'a Path,
+    pub(super) resident_snapshot: Option<super::super::ResidentSnapshot>,
+    pub(super) resident_snapshot_absent: bool,
     pub(super) generation: u64,
     pub(super) document_count: usize,
     pub(super) documents_digest: u64,
@@ -262,6 +264,8 @@ pub(super) fn install_generation(
     // the final manifest. This guard precedes every payload it accounts for.
     let mut _active_decode = None;
     let mut mutation_runs = Vec::new();
+    let resident_snapshot = input.resident_snapshot;
+    let resident_snapshot_absent = input.resident_snapshot_absent;
     let (mut segments, document_count, documents_digest, segment_id, level, compact_range) =
         match input.active_manifest_update {
             Some(ActiveManifestUpdate::Mutate {
@@ -472,6 +476,40 @@ pub(super) fn install_generation(
             ),
         };
     let new_segment = SearchOutOfCoreSegmentManifest {
+        objects: super::super::SegmentObjects {
+            lexical_generation: match super::super::artifact_key::ArtifactKey::from_file_name(
+                input.lexical_artifact_name,
+            ) {
+                Some(super::super::artifact_key::ArtifactKey::Lexical(generation)) => generation,
+                _ => {
+                    return Err(HawDBError::StorageIntegrity(
+                        "invalid staged lexical name".into(),
+                    ))
+                }
+            },
+            descriptor: super::super::ArtifactObject::from_reference(
+                io.seal(&descriptor_source)?.reference,
+            )?,
+            payload: super::super::ArtifactObject::from_reference(payload_seal.reference)?,
+            metadata: super::super::ArtifactObject::from_reference(metadata_seal.reference)?,
+            vector: super::super::ArtifactObject::from_reference(vector_seal.reference)?,
+            layout: super::super::ArtifactObject::from_reference(layout.artifact_reference(task)?)?,
+            lexical_manifest: super::super::ArtifactObject::from_reference(
+                io.seal(&lexical_manifest_source)?.reference,
+            )?,
+            lexical_payload: super::super::ArtifactObject::from_reference(
+                lexical_artifact_seal.reference,
+            )?,
+            rabitq: input
+                .rabitq
+                .map(|artifact| -> Result<_> {
+                    super::super::ArtifactObject::from_reference(
+                        io.seal(&io.path(input.stage, artifact.file_name.as_ref())?)?
+                            .reference,
+                    )
+                })
+                .transpose()?,
+        },
         segment_id,
         level,
         generation,
@@ -505,6 +543,7 @@ pub(super) fn install_generation(
         documents_digest: input.documents_digest,
         source_graph_commit_epoch: input.source_graph_commit_epoch,
     };
+    let objects = new_segment.objects;
     let publish_content = input.mutations.is_none() || input.document_count != 0;
     if !publish_content {
         // Delete-only/no-op mutation publication reuses all immutable content.
@@ -534,6 +573,9 @@ pub(super) fn install_generation(
                 ));
             }
             mutation_runs.push(super::super::SearchOutOfCoreMutationRunManifest {
+                object: super::super::ArtifactObject::from_reference(
+                    encoded.artifact_reference(task)?,
+                )?,
                 generation,
                 file: name.as_str().to_owned(),
                 len: encoded.len() as u64,
@@ -548,6 +590,8 @@ pub(super) fn install_generation(
     let manifest = SearchOutOfCoreManifestBody {
         format: OUT_OF_CORE_FORMAT.to_string(),
         generation,
+        resident_snapshot,
+        resident_snapshot_absent,
         segments,
         mutation_runs,
         document_count,
@@ -701,6 +745,19 @@ pub(super) fn install_generation(
             lexical_artifact_seal,
             "lexical artifact",
         )?;
+        for (name, object) in [
+            (descriptor_file.as_str(), objects.descriptor),
+            (layout_file.as_str(), objects.layout),
+            (lexical_manifest_file.as_str(), objects.lexical_manifest),
+        ] {
+            io.verify_object(&io.path(input.root, Path::new(name))?, object)?;
+        }
+        if let Some(artifact) = input.rabitq {
+            io.verify_object(
+                &io.path(input.root, artifact.file_name.as_ref())?,
+                objects.rabitq.expect("validated vector reference"),
+            )?;
+        }
     }
     if let (Some(name), Some(encoded)) = (&mutation_name, &mutation_bytes) {
         let staged = io.path(input.stage, name.as_ref())?;
@@ -720,6 +777,10 @@ pub(super) fn install_generation(
             encoded.len() as u64,
             Some(encoded.checksum()),
             "mutation run",
+        )?;
+        io.verify_object(
+            &published,
+            super::super::ArtifactObject::from_reference(encoded.artifact_reference(task)?)?,
         )?;
     }
 

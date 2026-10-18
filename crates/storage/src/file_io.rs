@@ -35,6 +35,8 @@ pub use source_directory::{
     SourceDirectoryLockMode,
 };
 
+pub(crate) mod captured_immutable;
+
 mod read;
 #[doc(hidden)]
 pub use read::{AdmittedFileRead, ReadAdmissionControl};
@@ -78,6 +80,11 @@ impl Drop for PublicationLockGuard {
 enum FileBacking {
     Native(NativeFile),
     Immutable(Box<ImmutableFile>),
+    Captured {
+        // A pinned native lease closes before its logical custody can retire.
+        pinned: Option<Arc<File>>,
+        file: hawdb_core::SharedAllocation<ImmutableFile>,
+    },
 }
 
 #[derive(Debug)]
@@ -101,7 +108,7 @@ impl NativeFile {
 
 #[derive(Debug, Clone)]
 struct ImmutableFile {
-    binding: crate::immutable_files::ImmutableFileBinding,
+    binding: Option<crate::immutable_files::ImmutableFileBinding>,
     handles: Arc<crate::immutable_files::ImmutableFileHandles>,
     context: FileOpenContext,
     // Explicit construction scopes can pin an admitted native lease. Ordinary
@@ -110,9 +117,19 @@ struct ImmutableFile {
     // Match File::try_clone: clones share the logical sequential cursor. All
     // positioned reads bypass it and retain a cache lease for the entire read.
     cursor: Arc<std::sync::Mutex<u64>>,
+    // Last: all logical-file metadata dies before custody/memory receipts.
+    source: Option<hawdb_core::SharedAllocation<captured_immutable::CapturedSource>>,
 }
 
 impl File {
+    fn immutable(&self) -> Option<(&ImmutableFile, Option<&Arc<File>>)> {
+        match &self.backing {
+            FileBacking::Native(_) => None,
+            FileBacking::Immutable(file) => Some((file, file.pinned.as_ref())),
+            FileBacking::Captured { file, pinned } => Some((file, pinned.as_ref())),
+        }
+    }
+
     pub fn options() -> OpenOptions {
         OpenOptions::new()
     }
@@ -159,6 +176,10 @@ impl File {
     pub fn try_clone(&self) -> io::Result<Self> {
         let backing = match &self.backing {
             FileBacking::Immutable(file) => FileBacking::Immutable(file.clone()),
+            FileBacking::Captured { file, pinned } => FileBacking::Captured {
+                file: file.clone(),
+                pinned: pinned.clone(),
+            },
             FileBacking::Native(file) => {
                 let permit = file.permit.context.acquire(file.permit.kind())?;
                 let inner = file
@@ -182,11 +203,12 @@ impl File {
     ) -> io::Result<T> {
         match &self.backing {
             FileBacking::Native(file) => file.io(operation),
-            FileBacking::Immutable(file) => {
-                if let Some(lease) = &file.pinned {
+            _ => {
+                let (file, pinned) = self.immutable().expect("logical immutable file");
+                if let Some(lease) = pinned {
                     lease.with_native(operation)
                 } else {
-                    let lease = file.handles.get(&file.binding, &file.context)?;
+                    let lease = file.get()?;
                     lease.with_native(operation)
                 }
             }
@@ -201,15 +223,12 @@ impl File {
     ) -> io::Result<(T, u64)> {
         match &self.backing {
             FileBacking::Native(file) => file.io(operation).map(|value| (value, 0)),
-            FileBacking::Immutable(file) => {
-                if let Some(lease) = &file.pinned {
+            _ => {
+                let (file, pinned) = self.immutable().expect("logical immutable file");
+                if let Some(lease) = pinned {
                     lease.with_native(operation).map(|value| (value, 0))
                 } else {
-                    let (lease, validation_bytes) = file.handles.get_admitted(
-                        &file.binding,
-                        &file.context,
-                        admit_validation,
-                    )?;
+                    let (lease, validation_bytes) = file.get_admitted(admit_validation)?;
                     lease
                         .with_native(operation)
                         .map(|value| (value, validation_bytes))
@@ -221,7 +240,7 @@ impl File {
     fn writable_native(&self) -> io::Result<&std::fs::File> {
         match &self.backing {
             FileBacking::Native(file) => Ok(&file.inner),
-            FileBacking::Immutable(_) => Err(io::Error::new(
+            _ => Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
                 "immutable logical file cannot be modified",
             )),
@@ -313,19 +332,20 @@ impl File {
     fn read_sequential(&self, buffer: &mut [u8]) -> io::Result<usize> {
         match &self.backing {
             FileBacking::Native(file) => file.io(|mut inner| inner.read(buffer)),
-            FileBacking::Immutable(file) => {
+            _ => {
+                let (file, pinned) = self.immutable().expect("logical immutable file");
                 let mut cursor = file
                     .cursor
                     .lock()
                     .unwrap_or_else(|error| error.into_inner());
-                let available = file.binding.reference.byte_length.saturating_sub(*cursor);
+                let available = file.byte_length().saturating_sub(*cursor);
                 let length = buffer
                     .len()
                     .min(usize::try_from(available).unwrap_or(usize::MAX));
                 if length == 0 {
                     return Ok(0);
                 }
-                let read = if file.pinned.is_some() {
+                let read = if pinned.is_some() {
                     // A controlled constructor must observe short reads and
                     // EINTR between its own cancellation checkpoints.
                     self.with_native(|native| {
@@ -344,8 +364,7 @@ impl File {
     fn read_sequential_vectored(&self, buffers: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
         match &self.backing {
             FileBacking::Native(file) => file.io(|mut inner| inner.read_vectored(buffers)),
-            FileBacking::Immutable(_) => match buffers.iter_mut().find(|buffer| !buffer.is_empty())
-            {
+            _ => match buffers.iter_mut().find(|buffer| !buffer.is_empty()) {
                 Some(buffer) => self.read_sequential(buffer),
                 None => Ok(0),
             },
@@ -355,7 +374,8 @@ impl File {
     fn seek_sequential(&self, position: SeekFrom) -> io::Result<u64> {
         match &self.backing {
             FileBacking::Native(file) => file.io(|mut inner| inner.seek(position)),
-            FileBacking::Immutable(file) => {
+            _ => {
+                let (file, _) = self.immutable().expect("logical immutable file");
                 let mut cursor = file
                     .cursor
                     .lock()
@@ -363,9 +383,7 @@ impl File {
                 let next = match position {
                     SeekFrom::Start(offset) => i128::from(offset),
                     SeekFrom::Current(offset) => i128::from(*cursor) + i128::from(offset),
-                    SeekFrom::End(offset) => {
-                        i128::from(file.binding.reference.byte_length) + i128::from(offset)
-                    }
+                    SeekFrom::End(offset) => i128::from(file.byte_length()) + i128::from(offset),
                 };
                 *cursor = u64::try_from(next).map_err(|_| {
                     io::Error::new(
@@ -394,13 +412,13 @@ impl File {
                 }
                 sync()
             }
-            FileBacking::Immutable(file) => match &file.pinned {
-                Some(lease) => lease.synchronize(data_only),
-                None => file
-                    .handles
-                    .get(&file.binding, &file.context)?
-                    .synchronize(data_only),
-            },
+            _ => {
+                let (file, pinned) = self.immutable().expect("logical immutable file");
+                match pinned {
+                    Some(lease) => lease.synchronize(data_only),
+                    None => file.get()?.synchronize(data_only),
+                }
+            }
         }
     }
 
@@ -566,11 +584,12 @@ impl OpenOptions {
         {
             return Ok(File {
                 backing: FileBacking::Immutable(Box::new(ImmutableFile {
-                    binding,
+                    binding: Some(binding),
                     handles: handles.clone(),
                     context: context.clone(),
                     pinned: None,
                     cursor: Arc::new(std::sync::Mutex::new(0)),
+                    source: None,
                 })),
             });
         }

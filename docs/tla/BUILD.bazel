@@ -509,6 +509,8 @@ tla_check(
         "PinWholeManifest",
         "UnlockBeforePin",
         "IgnorePendingCapture",
+        "PathForOnceDiscovery",
+        "PathForRetryDiscovery",
     ]
 ]
 
@@ -566,6 +568,30 @@ tla_check(
     )
     for control in ["DuplicateProcessHandle", "IgnorePublisherDuringInit", "ReopenOnPromotion",
         "CloseWithoutUnlock", "UnregisterEarly"]
+]
+
+# Generate one-constant negative controls from the checked positive config.
+[
+    genrule(
+        name = "HawDBCapturedFileCustody" + control + "_config",
+        srcs = ["HawDBCapturedFileCustody.cfg"],
+        outs = ["generated/HawDBCapturedFileCustody" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBCapturedFileCustody.cfg) > $@",
+    )
+    for control in ["DropRootOnParent", "UnlockBeforeCacheClose", "RefundBeforeDirectoryClose"]
+]
+
+[
+    tla_check(
+        name = "HawDBCapturedFileCustody" + control + "_check",
+        module = "HawDBCapturedFileCustody.tla",
+        config = ":HawDBCapturedFileCustody" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["DropRootOnParent", "UnlockBeforeCacheClose", "RefundBeforeDirectoryClose"]
 ]
 
 [
@@ -729,4 +755,74 @@ tla_check(
         tlc_args = ["-cleanup", "-workers", "auto"],
     )
     for control in ["SkipDigestCheck", "SealInstalledInstead", "SelectBeforeVerify"]
+]
+
+# Captured retention verification must precede either production sweep.
+[
+    genrule(
+        name = "HawDBCapturedRetention" + control + "_config",
+        srcs = ["HawDBCapturedRetention.cfg"],
+        outs = ["generated/HawDBCapturedRetention" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBCapturedRetention.cfg) > $@",
+    )
+    for control in ["PathDiscovery", "TrustWarmCache", "PartialClosure", "IgnoreBudget", "IgnoreChild"]
+]
+
+[
+    tla_check(
+        name = "HawDBCapturedRetention" + control + "_check",
+        module = "HawDBCapturedRetention.tla",
+        config = ":HawDBCapturedRetention" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["PathDiscovery", "TrustWarmCache", "PartialClosure", "IgnoreBudget", "IgnoreChild"]
+]
+
+[
+    genrule(
+        name = "HawDBResidentVectorAbsence" + control + "_config",
+        srcs = ["HawDBResidentVectorAbsence.cfg"],
+        outs = ["generated/HawDBResidentVectorAbsence" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBResidentVectorAbsence.cfg) > $@",
+    )
+    for control in ["MissingExpectedAsAbsent", "ExpectedFromInstalled", "TrustDeclaredCount"]
+]
+
+[
+    tla_check(
+        name = "HawDBResidentVectorAbsence" + control + "_check",
+        module = "HawDBResidentVectorAbsence.tla",
+        config = ":HawDBResidentVectorAbsence" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["MissingExpectedAsAbsent", "ExpectedFromInstalled", "TrustDeclaredCount"]
+]
+
+[
+    genrule(
+        name = "HawDBScopedCleanupAdmission" + control + "_config",
+        srcs = ["HawDBScopedCleanupAdmission.cfg"],
+        outs = ["generated/HawDBScopedCleanupAdmission" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBScopedCleanupAdmission.cfg) > $@",
+    )
+    for control in ["FreshLedger", "RelabelGovernor", "ExportRoot", "RefundBeforeFree"]
+]
+
+[
+    tla_check(
+        name = "HawDBScopedCleanupAdmission" + control + "_check",
+        module = "HawDBScopedCleanupAdmission.tla",
+        config = ":HawDBScopedCleanupAdmission" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["FreshLedger", "RelabelGovernor", "ExportRoot", "RefundBeforeFree"]
 ]

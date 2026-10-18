@@ -104,3 +104,30 @@ their named violations. Generated `ReplaceDestination`,
 `ReleaseBeforeSourceSync` and `SyncSourceFirst` configs independently violate
 NoTargetClobber, PublishedBothParents and SourceSyncFollowsDestination.
 See [directory publication](../CONSUMER_DIRECTORY_RELOCATION_DESIGN.md).
+Source-root GC also has independent `PathForOnceDiscovery` and
+`PathForRetryDiscovery` controls. Each keeps captured-relative unlink correct but
+reads the replacement directory's retention head. Both must violate
+PublishedClosureLive: pin checks alone cannot protect an active published
+artifact with no retained reader. `PathForUnlink` resolves its wrong path at the
+actual unlink action, including replacement after candidate selection.
+
+`HawDBCapturedFileCustody` uses generated configs, rather than checked-in copies,
+for `DropRootOnParent`, `UnlockBeforeCacheClose` and
+`RefundBeforeDirectoryClose`. They independently require violations of
+LogicalSourceOwnsCustody, NativeChildOwnsCustody and DirectoryCapacityOwned.
+The native pre-unlock cache-retirement control exercises the second boundary;
+see [captured file ownership](../CAPTURED_ARTIFACT_IO_DESIGN.md#shared-directory-and-cache-retirement-order).
+
+`HawDBCapturedRetention` controls are generated from its positive configuration:
+`PathDiscovery` violates `DiscoveryUsesCapturedRoot`; `TrustWarmCache` and
+`PartialClosure` violate `CompleteFreshClosure`; `IgnoreBudget` violates
+`BudgetBeforeUnlink`; `IgnoreChild` violates `IndependentChildLive`. They isolate
+the captured synchronous retention boundary and do not qualify the complete
+Consumer producer/publication/recovery protocol.
+
+`HawDBResidentVectorAbsence` preserves the initial model-found lost-snapshot plus
+missing-receipt counterexample. The corrected model requires a persisted absence
+witness. Generated controls `MissingExpectedAsAbsent`, `ExpectedFromInstalled`
+and `TrustDeclaredCount` must violate `AbsenceIsSourceBound`. Namespace custody
+is separately checked by the captured-retention/source-root models. This model
+does not qualify resident vector selection/fallback or stationary activation.

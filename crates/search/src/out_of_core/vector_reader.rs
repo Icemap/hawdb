@@ -59,11 +59,20 @@ pub(super) fn open(
     max_working_bytes: usize,
     admission: Option<&ReadAdmission<'_>>,
     max_artifact_read_bytes: u64,
+    captured_file: Option<hawdb_storage::file_io::File>,
 ) -> Result<Option<Projection>> {
     let Some(admission) = admission else {
-        return open_rabitq_projection(root, active, manifest, max_working_bytes)
+        return open_rabitq_projection(root, active, manifest, max_working_bytes, captured_file)
             .map(|value| value.map(Projection::Ordinary));
     };
+    if admission.is_synchronous()
+        && manifest.rabitq_artifact_file.is_some()
+        && captured_file.is_none()
+    {
+        return Err(HawDBError::Execution(
+            "synchronous vector decoding requires a source-held file".into(),
+        ));
+    }
     let Some(name) = manifest.rabitq_artifact_file.as_deref() else {
         return Ok(None);
     };
@@ -83,8 +92,15 @@ pub(super) fn open(
         .rabitq_artifact_checksum
         .expect("validated vector checksum");
     let path = OwnedPath::join(root, Path::new(name), admission.memory, admission.task)?;
-    let file =
-        admission.visit_bound(&path, length, checksum, max_artifact_read_bytes, |_| Ok(()))?;
+    let file = match captured_file {
+        Some(file) => {
+            admission
+                .visit_file_bound(file, length, checksum, max_artifact_read_bytes, |_| Ok(()))?
+        }
+        None => {
+            admission.visit_bound(&path, length, checksum, max_artifact_read_bytes, |_| Ok(()))?
+        }
+    };
     // A logical File alone could be evicted and cold-validated inside vector
     // metadata()/read()/map(). Keep its admitted native lease until mapping and
     // metadata construction finish; the projection retains the map, not the FD.

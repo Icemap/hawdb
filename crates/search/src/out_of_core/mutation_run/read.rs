@@ -49,7 +49,7 @@ impl Read for Range<'_> {
                 offset: self.offset,
                 remaining: self.remaining,
                 context,
-                require_execution: self.file.requires_context(),
+                require_execution: self.file.requires_execution(),
             }
             .read(&mut output[..count])?,
         };

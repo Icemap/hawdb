@@ -118,7 +118,7 @@ impl SearchProjectionPublishLease {
         Self::acquire_lock_with_context(root, memory, task)
     }
 
-    pub(super) fn source_identity(&self) -> hawdb_storage::file_io::SourceDirectoryIdentity {
+    pub(crate) fn source_identity(&self) -> hawdb_storage::file_io::SourceDirectoryIdentity {
         self.root.identity()
     }
 
@@ -156,6 +156,101 @@ impl SearchProjectionPublishLease {
         })
     }
 
+    /// Establish genesis absence from the actual source, or revalidate an
+    /// existing persisted absence witness. Unknown prior ownership is never
+    /// upgraded by a missing file. Optional proof denial remains unknown.
+    pub(super) fn prove_resident_absence(
+        &self,
+        root_label: &Path,
+        initial: bool,
+        memory: &BuildMemory,
+        task: &RuntimeTaskContext,
+    ) -> Result<bool> {
+        crate::build_control::checkpoint(task)?;
+        let _io = match task.acquire_io_wave(std::num::NonZeroUsize::MIN) {
+            Ok(io) => io,
+            // Optional ownership proof cannot manufacture an I/O grant or turn
+            // its denial into a failure of an otherwise valid publication.
+            // Persist Unknown and let cleanup report/defer its unproven family.
+            Err(_) => return Ok(false),
+        };
+        match self.open_captured_child(crate::SEARCH_SNAPSHOT_FILE) {
+            Ok(file) => {
+                drop(file);
+                return Ok(false);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        if !initial {
+            return Ok(true);
+        }
+        let Ok(_scan) = memory
+            .spool
+            .reserve(crate::build_memory::directory::scan_bytes(root_label)?)
+        else {
+            return Ok(false);
+        };
+        let source = super::captured_cleanup::Source::new(
+            self,
+            task,
+            super::captured_cleanup::Limits {
+                artifact_bytes: u64::MAX,
+                total_bytes: u64::MAX,
+                files: 4096,
+            },
+        );
+        Ok(source.prove_no_projection_files(root_label, None).is_ok())
+    }
+
+    pub(super) fn cleanup_capture<'a, 'execution>(
+        &self,
+        admission: &'a crate::build_memory::read::ReadAdmission<'execution>,
+    ) -> Result<super::root_registry::PendingCapture<'a, 'execution>> {
+        self.root
+            .borrow_admitted_root(admission)?
+            .begin_cleanup_capture(self, admission)
+    }
+
+    pub(super) fn prepare_cleanup_resources(
+        &mut self,
+        memory: &BuildMemory,
+        task: &RuntimeTaskContext,
+    ) -> Result<()> {
+        if let Some(permit) = memory.host_admission.as_deref() {
+            let admission = crate::build_memory::read::ReadAdmission {
+                memory,
+                task,
+                permit: crate::build_memory::read::ReadPermit::Governed(permit),
+            };
+            self.admit_cleanup_resources(&admission)?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn admit_cleanup_resources(
+        &mut self,
+        admission: &crate::build_memory::read::ReadAdmission<'_>,
+    ) -> Result<()> {
+        let context = self
+            .root
+            .with_directory(|directory| directory.operation_context());
+        drop(self.root.admit_root(&context, admission)?);
+        Ok(())
+    }
+
+    pub(crate) fn with_captured_directory<T>(
+        &self,
+        action: impl FnOnce(&SourceDirectory) -> T,
+    ) -> T {
+        self.root.with_directory(action)
+    }
+
+    pub(super) fn open_captured_child(&self, name: &str) -> std::io::Result<File> {
+        self.root
+            .with_directory(|directory| directory.open_child(&directory.operation_context(), name))
+    }
+
     pub(crate) fn matches_source_directory(&self, path: &Path) -> Result<bool> {
         self.root.with_directory(|directory| {
             match SourceDirectory::capture(path, &directory.operation_context()) {
@@ -172,6 +267,35 @@ impl SearchProjectionPublishLease {
         admission: &crate::build_memory::read::ReadAdmission<'_>,
     ) -> Result<super::root_registry::RootRef> {
         self.root.admit_root(context, admission)
+    }
+
+    /// Transitional fences around complete legacy closure discovery. This
+    /// preserves managed hashing but is not a same-source/namespace ABA proof.
+    #[cfg(test)]
+    pub(crate) fn with_cleanup_discovery<T>(
+        &self,
+        root: &Path,
+        discover: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
+        self.root.with_directory(|directory| {
+            crate::generation_cleanup::source::CleanupSource::new(root, directory, self)?;
+            let result = discover()?;
+            crate::generation_cleanup::source::CleanupSource::new(root, directory, self)?;
+            Ok(result)
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_cleanup_source<T>(
+        &self,
+        root: &Path,
+        action: impl FnOnce(crate::generation_cleanup::source::CleanupSource<'_>) -> T,
+    ) -> Result<T> {
+        self.root.with_directory(|directory| {
+            let source =
+                crate::generation_cleanup::source::CleanupSource::new(root, directory, self)?;
+            Ok(action(source))
+        })
     }
 
     fn require_current_binding(&self, root: &Path, lock_path: &Path) -> Result<()> {

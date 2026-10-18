@@ -253,12 +253,18 @@ impl FileProjection {
         Self::open_named(path, path)
     }
 
+    /// Open an already selected native file. The path is display metadata;
+    /// callers retain the source authority and immutable lifetime separately.
+    pub fn open_file(input: File, identity_path: &Path) -> Result<Self> {
+        Self::open_admitted_file(input, identity_path, &admission::Unaccounted)
+    }
+
     fn open_named(source: &Path, identity_path: &Path) -> Result<Self> {
         #[cfg(all(test, feature = "storage-io"))]
         if let Some(callback) = BEFORE_PROJECTION_OPEN.with(|slot| slot.replace(None)) {
             callback();
         }
-        Self::open_admitted_file(File::open(source)?, identity_path, &admission::Unaccounted)
+        Self::open_file(File::open(source)?, identity_path)
     }
 
     /// Constructs shared metadata under caller-supplied admission. The supplied

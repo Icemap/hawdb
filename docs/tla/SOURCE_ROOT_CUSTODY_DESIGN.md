@@ -295,12 +295,15 @@ Those limitations remain part of the required end state below.
 three artifact identities, one producer/parent, an independent child and an
 in-flight read. One publication makes the selected child source reclaimable
 without its registration. Namespace replacement does not change captured native
-authority. Separate selection/unlink actions share publication exclusion. Both
-cleanup kinds are independently selectable. The current and preceding artifacts
+authority. Separate discovery/selection and unlink actions share publication exclusion. Both
+cleanup kinds are independently selectable. Discovery must use the same captured
+root as unlink: a replacement root can have a newer independent head and classify
+the captured current source as obsolete. PublishedClosureLive checks the active
+closure independently of retained reader pins. The current and preceding artifacts
 are abstracted; the model is not a recovery-format or durability specification.
 
 The pending-capture refinement has 267 generated / 84 distinct states, depth 11,
-with an empty remaining queue. Its registered positive check and ten independent
+with an empty remaining queue. Its registered positive check and twelve independent
 negative controls pass with complete input/log evidence. OpenBegin retains the
 fence until InstallPending; InstallPin may complete while cleanup is active,
 transferring protection before clearing the pending root. AbortCapture clears
@@ -320,6 +323,8 @@ exercise these boundaries:
 | PinWholeManifest | ChildPinIsExact |
 | UnlockBeforePin (release before pending registration) | SourcesLive |
 | IgnorePendingCapture | SourcesLive |
+| PathForOnceDiscovery (relative unlink retained) | PublishedClosureLive |
+| PathForRetryDiscovery (relative unlink retained) | PublishedClosureLive |
 
 `ReaderDoesNotExcludeWriter` forbids retaining the reader's publication-busy
 reference after installation. It is a structural safety condition, **not** a
@@ -329,14 +334,22 @@ does not establish physical reclamation latency or allocator bounds.
 
 ## Required native refinement and remaining gates
 
-Current native cleanup uses generation sets and path-based discovery/unlink,
-and now consults the live private-reader registry. Ordinary serving/refresh
-constructors and all captured-relative I/O paths still need adoption. Current admitted construction checks project
-containment, which does not prove source incarnation or namespace authority.
-Before exposing governed serving, complete captured-directory discovery,
-validation/hydration/reopen and unlink, ordinary reader/refresh capture and
-logical incarnation validation. Preserve the existing registration consultation
-in both cleanup paths. Native controls must reproduce
+The captured-artifact I/O integration contract is specified in
+[CAPTURED_ARTIFACT_IO_DESIGN.md](CAPTURED_ARTIFACT_IO_DESIGN.md). Its unpublished
+namespace-replacement regressions exercise both real cleanup policies; they must
+pass before claiming the new model corresponds to native GC.
+
+The current unpublished native cleanup requires complete captured retention
+verification before either relative sweep. It consults the live private-reader
+registry and preserves independent child/term pins. The two namespace-replacement
+probes and fresh-name/budget refusal probes are described in
+[the Search reference integration contract](CAPTURED_SEARCH_REFERENCE_DESIGN.md).
+The old caller-supplied generation/fenced-path entry points are synthetic tests
+only. Ordinary serving/refresh constructors still need capture adoption; project
+containment does not prove source incarnation or namespace authority. Before
+exposing governed serving, complete originating-output receipts, ordinary
+reader/refresh capture, resident-vector retention and logical incarnation
+validation. Preserve registration consultation in both cleanup paths. Native controls must reproduce
 stale-root replacement, final-drop/read races, producer close, segment reuse,
 last-owner removal, cancellation and publication concurrent with retained views.
 
