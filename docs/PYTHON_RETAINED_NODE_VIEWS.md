@@ -5,8 +5,10 @@ It accepts an equality-index point plan returning one node variable. An existing
 index alone is insufficient: the optimizer may choose a scan for a tiny label,
 which refuses explicitly. The API does not force index selection or secretly
 materialize an owned fallback. Missing
-matches complete with no row owner. Multi-match seeks, scans, computed node
-projections, and layouts requiring hydration refuse explicitly. An open user
+matches complete with no row owner. A multi-match seek raises a non-retryable
+`RetainedError` with `kind="multiple_matches"`; unsupported query shapes retain
+`kind="unsupported_plan"`. Scans, computed node projections, and layouts requiring
+hydration refuse explicitly. An open user
 transaction is rejected by the embedded facade, as for numeric retained queries.
 
 ```python

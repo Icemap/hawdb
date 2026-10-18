@@ -112,6 +112,57 @@ fn bytes(value: HawdbRetainedNodeV1) -> Vec<u8> {
 }
 
 #[test]
+fn multiple_index_matches_refuse_with_empty_outputs_and_no_retained_owners() {
+    let (db, governor) = fixture(4);
+    {
+        let database = unsafe { &*db };
+        let mut database = database.inner.lock().unwrap();
+        database.query_admitted("CREATE (:Item {id: 37})").unwrap();
+        assert_eq!(
+            database
+                .database_mut()
+                .query_with_params(QUERY, &BTreeMap::from([("id".into(), Value::Int(37))]),)
+                .unwrap()
+                .rows
+                .len(),
+            2
+        );
+    }
+    let request = request(QUERY, r#"{"id":37}"#);
+    for _ in 0..2 {
+        let mut out = HawdbRetainedCursorV1 {
+            owner_namespace: 17,
+            owner_id: 23,
+            ..Default::default()
+        };
+        assert_eq!(
+            unsafe {
+                hawdb_retained_node_query(
+                    db,
+                    &request,
+                    size::<HawdbRetainedQueryV1>(),
+                    &mut out,
+                    size::<HawdbRetainedCursorV1>(),
+                )
+            },
+            HAWDB_RETAINED_MULTIPLE_MATCHES
+        );
+        assert_eq!(
+            (
+                out.abi_version,
+                out.struct_size,
+                out.owner_namespace,
+                out.owner_id
+            ),
+            (0, 0, 0, 0)
+        );
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+    unsafe { super::super::super::hawdb_close(db) };
+}
+
+#[test]
 fn original_node_buffers_survive_write_and_all_parent_releases() {
     let (db, governor) = fixture(32);
     let cursor = cursor(db, 1);

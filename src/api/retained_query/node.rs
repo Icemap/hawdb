@@ -700,20 +700,17 @@ impl RetainedNodeCursor {
         if let Some(context) = context {
             context.checkpoint().map_err(RetainedQueryError::Stopped)?;
         }
-        let query_budget = hawdb_executor::memory::enforced_query_memory_budget(
-            &config.execution_memory,
-            context,
-        )?
-        .min(config.execution_memory.query_memory_bytes);
-        let result_budget = hawdb_executor::memory::enforced_result_memory_budget(
-            &config.execution_memory,
-            context,
-        )?;
-        let ledger = QueryMemoryLedger::new(query_budget);
-        let account = ledger.account(
+        let ledger = QueryMemoryLedger::for_query(&config.execution_memory, context)?;
+        let (result_budget, result_budget_option) =
+            hawdb_executor::memory::enforced_result_memory_budget_with_option(
+                &config.execution_memory,
+                context,
+            )?;
+        let account = ledger.account_with_budget_option(
             QueryMemoryClass::ResultMaterialization,
             "retained_node",
-            result_budget.min(query_budget),
+            result_budget,
+            result_budget_option,
         );
         let observation_bytes = std::mem::size_of::<RetainedNodeCursor>()
             .checked_add(cursor_metadata_bytes)
@@ -778,7 +775,7 @@ impl RetainedNodeCursor {
                 None => None,
                 Some(row) => {
                     if found.next().is_some() {
-                        return Err(RetainedQueryError::UnsupportedPlan);
+                        return Err(RetainedQueryError::MultipleMatches);
                     }
                     Some(admit_node(
                         store,
@@ -843,7 +840,12 @@ fn admit_node(
         account,
         control_bytes,
     } = admission;
-    let row = store.node(id).ok_or(RetainedQueryError::UnsupportedPlan)?;
+    let row = store.node(id).ok_or_else(|| {
+        HawDBError::StorageIntegrity(format!(
+            "retained node index lookup references missing node {}",
+            id.0
+        ))
+    })?;
     let symbol_bytes = row.labels.iter().try_fold(0usize, |total, id| {
         total
             .checked_add(
@@ -1295,20 +1297,22 @@ mod tests {
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 
-    fn assert_node_memory_budget_refusal(error: RetainedQueryError, budget: u64) {
+    fn assert_node_memory_budget_refusal(
+        error: RetainedQueryError,
+        budget: u64,
+        scope: hawdb_core::ResourceBudgetScope,
+        budget_option: &str,
+    ) {
         let RetainedQueryError::Execution(HawDBError::ResourceBudgetExceeded(error)) = error else {
             panic!("expected structured retained-node memory refusal, got {error:?}");
         };
         assert_eq!(error.resource, hawdb_core::ResourceBudgetKind::MemoryBytes);
-        assert_eq!(error.scope, hawdb_core::ResourceBudgetScope::Account);
+        assert_eq!(error.scope, scope);
         assert_eq!(error.owner, "retained_node");
         assert_eq!(error.memory_class, Some("result_materialization"));
         assert_eq!(error.budget, budget);
         assert!(u128::from(error.used) + u128::from(error.requested) > u128::from(budget));
-        assert_eq!(
-            error.budget_option,
-            "QueryMemoryLedger::account(budget_bytes)"
-        );
+        assert_eq!(error.budget_option, budget_option);
     }
 
     fn assert_task_reservation_refusal(
@@ -1331,7 +1335,18 @@ mod tests {
                 )))
             );
         } else {
-            assert_node_memory_budget_refusal(error, query_bytes.min(result_bytes));
+            let (scope, origin) = if query_bytes < result_bytes {
+                (
+                    hawdb_core::ResourceBudgetScope::Query,
+                    "RuntimeTaskContext.memory_reservation.memory_bytes",
+                )
+            } else {
+                (
+                    hawdb_core::ResourceBudgetScope::Account,
+                    "RuntimeTaskContext.memory_reservation.result_bytes",
+                )
+            };
+            assert_node_memory_budget_refusal(error, query_bytes.min(result_bytes), scope, origin);
         }
     }
 
@@ -1573,11 +1588,85 @@ mod tests {
         ));
         assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
         db.query("CREATE (:Item {score: 37})").unwrap();
-        assert!(matches!(
-            db.query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default()),
-            Err(RetainedQueryError::UnsupportedPlan)
-        ));
+        let error = db
+            .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap_err();
+        assert_eq!(error, RetainedQueryError::MultipleMatches);
+        assert!(!error.is_retryable());
         assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        assert_eq!(
+            db.query_with_params(QUERY, &params()).unwrap().rows.len(),
+            2
+        );
+    }
+
+    #[test]
+    fn missing_indexed_node_is_storage_integrity_failure_before_admission() {
+        let (db, governor) = fixture(4);
+        let state = db.runtime.get().unwrap();
+        let ledger = QueryMemoryLedger::for_query(&db.config.execution_memory, None).unwrap();
+        let account = ledger.account_with_budget_option(
+            QueryMemoryClass::ResultMaterialization,
+            "retained_node",
+            db.config.execution_memory.query_memory_bytes,
+            "ExecutionMemoryConfig.query_memory_bytes",
+        );
+        let mut profile = RetainedQueryProfile::default();
+        let error = admit_node(
+            &state.store,
+            &state.catalog,
+            NodeId(u64::MAX),
+            "node",
+            NodeAdmission {
+                config: &db.config,
+                runtime: &db.retained_runtime,
+                options: RetainedQueryOptions::default(),
+                ledger: &ledger,
+                account: &account,
+                control_bytes: 0,
+            },
+            &mut profile,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            RetainedQueryError::Execution(HawDBError::StorageIntegrity(_))
+        ));
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+        assert_eq!(profile, RetainedQueryProfile::default());
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+
+    #[test]
+    fn configured_node_budget_keeps_its_origin_with_a_larger_runtime_grant() {
+        for reservation in [
+            None,
+            Some(hawdb_core::RuntimeMemoryReservation::new(8192, 8192)),
+        ] {
+            let (mut db, governor) = fixture(4);
+            db.config.execution_memory.query_memory_bytes = NonZeroUsize::new(1).unwrap();
+            let context = reservation.map(|reservation| {
+                RuntimeTaskContext::default().with_memory_reservation(reservation)
+            });
+            let error = db
+                .query_with_params_retained_node_inner(
+                    QUERY,
+                    &params(),
+                    RetainedQueryOptions::default(),
+                    context.as_ref(),
+                )
+                .unwrap_err();
+            assert_node_memory_budget_refusal(
+                error,
+                1,
+                hawdb_core::ResourceBudgetScope::Account,
+                "ExecutionMemoryConfig.query_memory_bytes",
+            );
+            assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+            assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        }
     }
 
     #[test]
@@ -2007,7 +2096,12 @@ mod tests {
         let view = cursor.next_node().unwrap().unwrap();
         assert!(cursor.profile().query_peak_bytes <= 8192);
         let retained_before = governor.retained_result_snapshot();
-        assert_node_memory_budget_refusal(view.try_retain_with_metadata(8192).unwrap_err(), 8192);
+        assert_node_memory_budget_refusal(
+            view.try_retain_with_metadata(8192).unwrap_err(),
+            8192,
+            hawdb_core::ResourceBudgetScope::Account,
+            "RuntimeTaskContext.memory_reservation.result_bytes",
+        );
         let retained_after = governor.retained_result_snapshot();
         assert_eq!(
             retained_after.retained_bytes,

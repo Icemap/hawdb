@@ -5,48 +5,84 @@ Issue Number: ref #987, ref #976
 This records the bounded review fixes and remaining decisions. It does not
 constitute independent approval of the retained implementation.
 
-## Current delivery state
+## Current delivery and qualification snapshots
 
-The policy and ordinary-tooling prerequisites have landed on main:
+The ordinary tooling, session policy, numeric ownership/bindings and Arrow
+prerequisites have landed on main. These actual commits are ancestors of the
+observed main e864272e:
 
 | Delivery | Actual main commit |
 | --- | --- |
-| #1050 session result policy and native SQL RETURNING payload guard | a1012720decca3844864c910360057a5c71dddd8 |
+| #1050 session result policy and native SQL RETURNING guard | a1012720 |
 | #1051 checkpoint-release capacity and retry boundaries | a7900428 |
-| #1052 reusable ordinary qualification and optional profiling tools | 1f2cad50 |
+| #1052 ordinary qualification and optional profiling tools | 1f2cad50 |
 | #1055 Go host conversion/call/free observation | 020f1746 |
+| #1059 admitted retained numeric cursor ownership | 4c326109 |
+| #1063 retained numeric foreign bindings | 923879de |
+| #1065 retained snapshot task reservations | ac8c0555 |
+| #1070 Python read budgets and plans | da58476d |
+| #1071 admitted retained Arrow handoff | 6db1c013 |
 
-Merge 3793274a integrates actual main a1012720 and resolves its five conflicts.
-There is one canonical SessionConfig and one effective native SQL RETURNING
-payload guard. Retained-specific cursor, Arrow, ownership and reporting
-extensions remain in this branch. Commit af1d4bb5 corrects a stale default-value
-test assertion and adds independent None/Some(0)/Some(100000) memory/file
-controls. Its complete execution-request contract passes 32/32, with no failed,
-ignored or filtered tests, in 122.97 seconds. These are source-qualified
-results, not a claim that every remaining acceptance gate has passed.
+PR986 remains the indexed-node composition and final qualification delivery,
+directly against main. Node component #1082 is Ready against main at ecb9202d;
+its current twelve execution checks pass, with approval still outstanding.
+Its accepted changes `4e78f6d6`/`ecb9202d` preserve configured/runtime budget
+origins, report missing indexed rows as storage-integrity failures and document
+close-before-EOF observation. This branch also distinguishes data-dependent
+multiple matches from unsupported plan shapes across Rust/C/Go/Python:
+`MultipleMatches`, C/Go status19 and Python `kind="multiple_matches"`.
+Existing C descriptor layouts, signatures and status values0..18 are unchanged.
+Rust exhaustive matches on `RetainedQueryError` must handle the new variant.
+These changes do not constitute independent approval.
 
-The first retained cut is [#1059](https://github.com/nowledge-co/hawdb/pull/1059),
-directly against main: storage COW/source capacity, executor numeric ownership,
-shared admission and the Rust numeric cursor. At 14e852d4, its complete core,
-QoS, executor and storage targets pass; storage reports 1,912 passed and 30
-existing ignored cases. Its nine CI checks pass. The initial combined local
-root invocation has three timeouts plus incomplete targets and reported
-checkpoint/concurrency failures. A complete unchanged general-partition replay
-passes 1,711 tests, with one existing ignore, in 438.13 seconds. The failed run
-remains recorded; neither that pass nor CI success establishes its cause or
-waives the remaining local checks. The PR description tracks complete main
-comparisons, other root partitions, mandatory fuzz and direct Windows numeric
-qualification. No independent approval or readiness is implied here.
+The Node review source passed the unchanged complete local general selection
+(1781passed/0failed/1existingignored/322filtered,427.72s within900s), contracts33,
+fuzz98, C20, Go, Python357+7skip and Pydantic43+1skip. The first complete general
+attempt on the same source failed
+`pending_idle_owner_blocks_pressure_growth_before_admission` with
+`BranchBusy { resource: "automatic checkpoint capacity" }`. Its complete failure
+is preserved; the isolated case and subsequent complete replay passed without
+changing deadlines, concurrency or assertions. The cause remains unproved and
+requires independent disposition. These local results do not establish new-head
+CI, performance qualification or approval.
 
-After that cut actually lands, the next main-based deliveries cover retained
-numeric foreign bindings and Arrow. Keep #986 as the final indexed-node-view
-and full-qualification delivery; merging prerequisites alone does not complete
-this PR. Its original 90-group ordinary and 110-group resource matrices,
-explicit-large/default-refusal controls, allocation/conversion costs,
-whole-operation RSS, tail latency and exception paths remain required on the
-final source. Preserve the original 3cdb2610 baseline and the additional
-integrated-main a1012720 control separately. Independent review and genuine
-maintainer/Tide approval remain required.
+The completed correctness evidence is for engine snapshot `41db420c`, tree
+`d386d053`, integrating
+main e864272e. Its local general1779/contracts33/fuzz98/C19/Go/Python355+7skip/
+Pydantic43+1skip and all twelve eligible CI checks pass. The root scheduling
+resource declaration is800MB; the original300-second contract deadline and
+35root-suite members remain unchanged. Earlier checkpoint progress failures
+remain preserved for independent disposition; later passes do not establish
+their cause. Review follow-ups require final-head validation before Draft exit.
+
+The original90ordinary and110resource campaigns on engine41db retain their
+source identities and complete cases, rows, samples and deadlines. They remain
+incomplete. Neither supplementary controls nor later source changes relabel
+predecessor results as final-source acceptance. Preserve baseline3cdb2610 and
+the separate integrated-main a1012720 control. Actual relevant build-input
+equivalence must be proved before reusing evidence across source updates.
+
+Source-bound supplementary evidence is available independently:
+
+- [File positive/row-boundary controls](https://github.com/nowledge-co/hawdb/tree/6200d31b39f773756fe3cac2c578cbdfad283908/qualification/phase-checkpoint-evidence/41db420c).
+- [Recovered complete producer/resource comparison](https://github.com/nowledge-co/hawdb/tree/3491c1d037cbeb273a11d5fe8a8ba83a0c5a2a9f/qualification/resource-recovery-evidence/41db420c).
+- [Six allocation/error controls,186measured windows](https://github.com/nowledge-co/hawdb/tree/12cd676e6cf3e0bb92276ebaec6b6db77b640043/qualification/resource-checkpoint-evidence/41db420c).
+
+Explicit fixture checkpoints in supplementary file controls do not replace
+the original MVCC-budget setup failures or ordinary latency measurements.
+Native allocation snapshots are process-global, independently read atomics;
+preserve arithmetic differences and do not infer exact per-operation ledgers,
+leak absence or whole-process memory bounds.
+
+All original gates remain required: final-head correctness; complete90/110
+performance/resource matrices; allocation/conversion/source-construction/RSS/
+tail/error evidence; session0/unlimited plus independent default-budget and
+explicit-large controls; and genuine independent review, approval and Tide merge.
+Keep Draft until acceptance completes. Squash is required to exclude historical
+raw reports from main history; verify current Tide policy/labels and the actual
+merged commit rather than treating approval as proof of merge. The PR description
+tracks later campaign evidence; historical dispositions below keep their
+original source and do not supersede final-head gates.
 
 ## Historical follow-up on 9bdea658
 
@@ -118,9 +154,9 @@ remaining retained/Arrow/node harness or qualify its measurements.
 | Release-capacity boundary and expiry | Tests derive the threshold from STORAGE_PRESSURE_DEFER_RATIO_PER_MILLION and limit/10, checking one byte below and exactly at the inclusive boundary. Preparing/Releasing expiry preserves retryable BranchBusy and one five-second deadline despite repeated notifications. An Idle transition remains reusable and release-before-deadline wakes the waiter. All five capacity-wait cases pass. |
 | PR description history | The prior body, comments and merge resolution patch are archived with byte verification. The PR body now describes the current implementation, source-qualified validation and remaining gates. |
 
-## Main merge conflict resolutions
+## Historical main merge conflict resolutions
 
-Latest integration 3793274a merges actual main a1012720 after #1050 landed.
+At that review snapshot, integration3793274a merged actual main a1012720 after #1050 landed.
 The five conflicted files are docs/READ_RESULT_LIMITS.md, src/api/mod.rs,
 src/api/observability.rs, src/api/query_runtime.rs and
 tests/execution_request_contract.rs. Resolution retains main's canonical

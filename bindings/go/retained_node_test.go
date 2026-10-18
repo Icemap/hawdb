@@ -4,6 +4,8 @@
 package hawdb
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"math"
 	"path/filepath"
@@ -222,6 +224,29 @@ func TestRetainedNodeRefusalsAndEmptySeek(t *testing.T) {
 		t.Fatalf("unfinished close: %+v %v", state, err)
 	}
 }
+func TestRetainedNodeMultipleMatchesAreDistinctFromUnsupportedPlans(t *testing.T) {
+	for _, persistent := range []bool{false, true} {
+		t.Run(fmt.Sprintf("persistent=%v", persistent), func(t *testing.T) {
+			db := nodeFixture(t, persistent)
+			if err := db.Exec("CREATE (:Item {id: $id})", map[string]any{"id": int64(37)}); err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < 2; i++ {
+				cursor, err := db.QueryRetainedNode(retainedNodeQuery, map[string]any{"id": 37}, RetainedOptions{})
+				assertRetainedCode(t, err, RetainedMultipleMatches)
+				if cursor != nil {
+					cursor.Close()
+					t.Fatal("multi-match refusal returned a cursor")
+				}
+				var failure *RetainedError
+				if !errors.As(err, &failure) || failure.Retryable() || failure.Error() != "hawdb: retained multiple_matches" {
+					t.Fatalf("multi-match error: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestRetainedNodeReadAndCloseConcurrent(t *testing.T) {
 	db := nodeFixture(t, false)
 	cursor := nodeCursor(t, db, 1)

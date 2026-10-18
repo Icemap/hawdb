@@ -23,10 +23,12 @@ Exported `RetainedNodeView` owners can outlive both cursor and context: their
 independent query/runtime leases continue charging original row/catalog data
 and foreign metadata until their final release.
 
-An existing `RuntimeMemoryReservation` limits the retained ledger to the smaller
-of configured and admitted query memory. Its admitted result reservation caps
-the result account, including cursor control, source ownership and duplicate
-view metadata. Zero reservations fail, and smaller admissions are never raised
+An existing `RuntimeMemoryReservation` supplies the retained ledger's query limit.
+The result account uses the smaller of configured query memory and admitted
+result memory, including cursor control, source ownership and duplicate view
+metadata. Every charge must fit both limits. Typed refusals identify the actual
+configuration option or runtime reservation and distinguish account from query
+exhaustion. Zero reservations fail, and smaller admissions are never raised
 to a configured floor. Runtime retained reservations remain independently
 required; an existing host reservation does not exempt these owners from
 runtime admission. Conservative overlap is allowed.
@@ -57,6 +59,8 @@ database closure without cloning their property payload or label names.
 Snapshot queries do not publish into the live database's statement recorder,
 matching ordinary read-transaction observability; direct database cursors retain
 their existing success/failure observation contract.
+A direct database cursor closed or dropped after one delivery, before successful
+EOF, records a failed statement with `Closed` rather than a completed statement.
 
 Regressions compare original row/label addresses across a live mutation, check
 immediate reader-pin release and exclusion of an unrelated large row, exercise

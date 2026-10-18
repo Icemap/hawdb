@@ -175,6 +175,18 @@ def test_fixed_width_fields_export_original_read_only_scalar_storage(db):
     assert_empty(db)
 
 
+def test_multiple_matches_are_not_an_unsupported_plan_or_partial_result(db):
+    seed(db)
+    db.execute("CREATE (:Item {id: 1})")
+    assert len(db.execute(QUERY, {"id": 1}).fetchall()) == 2
+    for _ in range(2):
+        with pytest.raises(hawdb.exceptions.RetainedError) as failure:
+            db.execute_retained_node(QUERY, {"id": 1})
+        assert failure.value.kind == "multiple_matches"
+        assert failure.value.retryable is False
+        assert_empty(db)
+
+
 def test_tiny_cost_selected_scan_refuses_without_owned_fallback(db):
     db.execute("CREATE NODE TABLE Item")
     db.execute("CREATE INDEX ON :Item(id)")

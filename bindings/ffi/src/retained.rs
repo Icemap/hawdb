@@ -41,6 +41,7 @@ pub const HAWDB_RETAINED_INVALID_COLUMN: u32 = 15;
 pub const HAWDB_RETAINED_SIZE_OVERFLOW: u32 = 16;
 pub const HAWDB_RETAINED_STOPPED: u32 = 17;
 pub const HAWDB_RETAINED_ADMISSION_ERROR: u32 = 18;
+pub const HAWDB_RETAINED_MULTIPLE_MATCHES: u32 = 19;
 pub const HAWDB_RETAINED_INT64: u32 = 1;
 pub const HAWDB_RETAINED_FLOAT64: u32 = 2;
 pub const HAWDB_RETAINED_UINT64: u32 = 3;
@@ -280,6 +281,7 @@ fn error_code(error: &RetainedQueryError) -> u32 {
     }
     match error {
         RetainedQueryError::UnsupportedPlan => HAWDB_RETAINED_UNSUPPORTED_PLAN,
+        RetainedQueryError::MultipleMatches => HAWDB_RETAINED_MULTIPLE_MATCHES,
         RetainedQueryError::UnsupportedLayout => HAWDB_RETAINED_UNSUPPORTED_LAYOUT,
         RetainedQueryError::UnsupportedType => HAWDB_RETAINED_UNSUPPORTED_TYPE,
         RetainedQueryError::CopyRequired => HAWDB_RETAINED_COPY_REQUIRED,

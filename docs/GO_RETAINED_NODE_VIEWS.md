@@ -8,8 +8,10 @@ Issue Number: ref #987, ref #1008
 node runtime. The eligible physical plan is a materialized, single-match index
 seek returning one complete node, optionally with the exact predicate and a
 zero-offset limit. An index existing in the catalog is insufficient: a tiny
-label can cost-select a scan. Unsupported plans, nonunique multi-match seeks,
-hydrated/out-of-core rows, open user transactions, and writable requests refuse
+label can cost-select a scan. An eligible seek that matches multiple rows returns
+`RetainedMultipleMatches` (`HAWDB_RETAINED_MULTIPLE_MATCHES`, code 19), distinct
+from `RetainedUnsupportedPlan` for unsupported query shapes. Neither refusal is
+retryable. Hydrated/out-of-core rows, open user transactions, and writable requests refuse
 explicitly. There is no JSON result fallback or copied Arrow packing.
 
 The node remains row-oriented. Its immutable native row owns properties and
