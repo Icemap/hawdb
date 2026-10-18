@@ -81,7 +81,7 @@ The scoped grammar includes:
 
 - table and column aliases, `INNER JOIN`, and `LEFT JOIN`;
 - boolean predicates with SQL three-valued null behavior;
-- `DISTINCT`, `GROUP BY`, `COUNT`, `SUM`, `MAX`, `COALESCE`, and
+- `DISTINCT`, `GROUP BY`, `COUNT`, `SUM`, `MIN`, `MAX`, `COALESCE`, and
   `OCTET_LENGTH`;
 - deterministic PostgreSQL null ordering, `LIMIT`, and `OFFSET`;
 - `INSERT`, multi-row `VALUES`, `ON CONFLICT`, column-only `RETURNING`,
@@ -328,7 +328,7 @@ complete posting list. The selected path is reported separately for every
 join. Predicates that cannot prove a safe right-side key fall back to a direct,
 non-collecting table scan.
 
-Relational aggregate groups retain incremental `COUNT`, `SUM`, `MAX`, and
+Relational aggregate groups retain incremental `COUNT`, `SUM`, `MIN`, `MAX`, and
 `COALESCE` state instead of a second copy of every qualified binding. Ordinary
 ordering and grouped aggregation send typed sort keys plus compact row locators
 through the executor-owned external-order implementation. Statement `DISTINCT`
