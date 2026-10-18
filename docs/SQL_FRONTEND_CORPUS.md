@@ -8,12 +8,12 @@ Creation-binder outcomes are maintained separately in `frontend_create_bindings_
 
 ## Inventory
 
-`crates/sql/fixtures/frontend_corpus_v1.jsonl` contains 1,007 concrete cases.
+`crates/sql/fixtures/frontend_corpus_v1.jsonl` contains 1,009 concrete cases.
 Each has a stable ID, statement family, source path/symbol, adaptation, expected
 outcome for each frontend, and an optional named divergence waiver.
 `frontend_corpus_manifest_v1.json` pins source hashes, case membership, family
 coverage and waiver scope. `frontend_source_inventory_v1.json` classifies all
-187 SQL-prefixed Rust string literals found in the ten audited source files.
+189 SQL-prefixed Rust string literals found in the ten audited source files.
 
 The audit starts at `1977888050c405adc873ebcccfec77c3352f4659`.
 The first #157 CROSS JOIN slice added 13 cases without changing the original 981
@@ -28,7 +28,7 @@ changes track test registration and the two moved inputs.
 
 | Source | Concrete cases |
 | --- | ---: |
-| `crates/sql/src/tests.rs` | 31 |
+| `crates/sql/src/tests.rs` | 33 |
 | `crates/sql/src/tests/cross_join.rs` | 11 |
 | `crates/sql/src/tests/having_from.rs` | 15 |
 | `crates/sql/src/tests/clause_diagnostics.rs` | 7 |
@@ -65,6 +65,10 @@ frontend comparison. The source pin for `tests.rs` was reviewed after removing
 its obsolete rejection of `SHOW CURRENT BRANCH`. Existing corpus SQL, case IDs,
 parameter inventories, outcomes, and waivers are unchanged.
 
+The `MIN` aggregate regression re-audits the `tests.rs` source pin and adds
+both its supported projection and unsupported `FILTER` input to the corpus.
+Existing test provenance lines after those inputs advance with the source.
+
 The sqlparser 0.63 upgrade re-audits the `clause_tests.rs` source pin after
 updating AST constructors and adding rejection cases for new CREATE TABLE
 fields. Its SQL literals and generated source-contract inputs are unchanged;
@@ -95,7 +99,7 @@ All three owned statement families (`select`, `select_graph_table`, and
 Any accept/reject disagreement requires a waiver with the matching family and
 direction, a reason, and an issue link. Unexpected outcomes, missing waivers,
 waivers on converged cases, unknown waivers and unreferenced waivers fail.
-The current matrix has 42 cases accepted by both frontends and 333 rejected by
+The current matrix has 43 cases accepted by both frontends and 334 rejected by
 both. The remaining 632 cases use these ten explicit waivers:
 
 | Waiver | Cases | Recorded gap |

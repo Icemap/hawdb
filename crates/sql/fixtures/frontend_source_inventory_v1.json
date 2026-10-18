@@ -146,8 +146,30 @@
   },
   {
     "formatted": false,
+    "function": "parses_min_aggregate_and_rejects_unsupported_filter",
+    "line": 348,
+    "path": "crates/sql/src/tests.rs",
+    "sql": "SELECT MIN(sequence) AS first_sequence FROM obligations",
+    "cases": [
+      "case-1008"
+    ],
+    "exclusion": ""
+  },
+  {
+    "formatted": false,
+    "function": "parses_min_aggregate_and_rejects_unsupported_filter",
+    "line": 367,
+    "path": "crates/sql/src/tests.rs",
+    "sql": "SELECT MIN(sequence) FILTER (WHERE sequence > 0) FROM obligations",
+    "cases": [
+      "case-1009"
+    ],
+    "exclusion": ""
+  },
+  {
+    "formatted": false,
     "function": "parses_strict_append_table_storage",
-    "line": 354,
+    "line": 380,
     "path": "crates/sql/src/tests.rs",
     "sql": "CREATE TABLE events (stream_id TEXT NOT NULL, sequence BIGINT NOT NULL, payload BYTEA NOT NULL) WITH (storage_mode = 'strict_append', partition_key = 'stream_id', order_key = 'sequence')",
     "cases": [
@@ -158,7 +180,7 @@
   {
     "formatted": false,
     "function": "parses_commit_sequence_strict_append_storage",
-    "line": 381,
+    "line": 407,
     "path": "crates/sql/src/tests.rs",
     "sql": "CREATE TABLE events (stream_id TEXT NOT NULL, sequence BIGINT NOT NULL) WITH (storage_mode = 'strict_append', partition_key = 'stream_id', order_key = 'sequence', generated_order = 'commit_sequence')",
     "cases": [
@@ -169,7 +191,7 @@
   {
     "formatted": false,
     "function": "rejects_incomplete_strict_append_table_storage",
-    "line": 401,
+    "line": 427,
     "path": "crates/sql/src/tests.rs",
     "sql": "CREATE TABLE events (stream_id TEXT NOT NULL, sequence BIGINT NOT NULL) WITH (storage_mode = 'strict_append', partition_key = 'stream_id')",
     "cases": [
@@ -180,7 +202,7 @@
   {
     "formatted": false,
     "function": "parses_insert_on_conflict_update",
-    "line": 411,
+    "line": 437,
     "path": "crates/sql/src/tests.rs",
     "sql": "INSERT INTO content_migration_state (key, value, updated_at) VALUES ($1, $2, $3), ($4, $5, $6) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at",
     "cases": [
@@ -191,7 +213,7 @@
   {
     "formatted": false,
     "function": "parses_prepared_bigint_update_arithmetic",
-    "line": 430,
+    "line": 456,
     "path": "crates/sql/src/tests.rs",
     "sql": "UPDATE feeds SET failure_count = failure_count + $2, retry_count = $3 + retry_count, success_count = success_count - $4 WHERE id = $1",
     "cases": [
@@ -202,7 +224,7 @@
   {
     "formatted": false,
     "function": "parses_prepared_bigint_update_arithmetic",
-    "line": 471,
+    "line": 497,
     "path": "crates/sql/src/tests.rs",
     "sql": "UPDATE feeds SET failure_count = 1 - failure_count WHERE id = $1",
     "cases": [
@@ -213,7 +235,7 @@
   {
     "formatted": false,
     "function": "parses_prepared_bigint_update_arithmetic",
-    "line": 472,
+    "line": 498,
     "path": "crates/sql/src/tests.rs",
     "sql": "UPDATE feeds SET failure_count = failure_count * 2 WHERE id = $1",
     "cases": [
@@ -224,7 +246,7 @@
   {
     "formatted": false,
     "function": "parses_insert_on_conflict_do_nothing_returning",
-    "line": 482,
+    "line": 508,
     "path": "crates/sql/src/tests.rs",
     "sql": "INSERT INTO raw_turns (org_id, request_id, raw_turn_id) VALUES ($1, $2, $3) ON CONFLICT (org_id, request_id) DO NOTHING RETURNING raw_turn_id",
     "cases": [
@@ -235,7 +257,7 @@
   {
     "formatted": false,
     "function": "rejects_insert_returning_expression",
-    "line": 503,
+    "line": 529,
     "path": "crates/sql/src/tests.rs",
     "sql": "INSERT INTO raw_turns (raw_turn_id) VALUES ($1) RETURNING upper(raw_turn_id)",
     "cases": [
@@ -246,7 +268,7 @@
   {
     "formatted": false,
     "function": "rejects_insert_returning_expression",
-    "line": 508,
+    "line": 534,
     "path": "crates/sql/src/tests.rs",
     "sql": "INSERT RETURNING supports column references only",
     "cases": [],
@@ -255,7 +277,7 @@
   {
     "formatted": false,
     "function": "prepares_dense_repeated_postgres_parameters",
-    "line": 514,
+    "line": 540,
     "path": "crates/sql/src/tests.rs",
     "sql": "SELECT * FROM thread_messages WHERE thread_storage_id = $1 OR message_id = $1 LIMIT $2",
     "cases": [
@@ -266,7 +288,7 @@
   {
     "formatted": false,
     "function": "parses_explain_and_preserves_inner_parameters",
-    "line": 531,
+    "line": 557,
     "path": "crates/sql/src/tests.rs",
     "sql": "EXPLAIN ANALYZE SELECT id FROM content_documents WHERE id = $1 LIMIT $2",
     "cases": [
@@ -277,7 +299,7 @@
   {
     "formatted": false,
     "function": "rejects_unsupported_explain_options_and_mutations",
-    "line": 551,
+    "line": 577,
     "path": "crates/sql/src/tests.rs",
     "sql": "EXPLAIN VERBOSE SELECT id FROM content_documents",
     "cases": [
@@ -288,7 +310,7 @@
   {
     "formatted": false,
     "function": "rejects_unsupported_explain_options_and_mutations",
-    "line": 552,
+    "line": 578,
     "path": "crates/sql/src/tests.rs",
     "sql": "EXPLAIN VERBOSE must remain outside the supported contract",
     "cases": [],
@@ -297,7 +319,7 @@
   {
     "formatted": false,
     "function": "rejects_unsupported_explain_options_and_mutations",
-    "line": 558,
+    "line": 584,
     "path": "crates/sql/src/tests.rs",
     "sql": "EXPLAIN UPDATE content_documents SET content = 'changed' WHERE id = 'doc-1'",
     "cases": [
@@ -308,7 +330,7 @@
   {
     "formatted": false,
     "function": "rejects_unsupported_explain_options_and_mutations",
-    "line": 560,
+    "line": 586,
     "path": "crates/sql/src/tests.rs",
     "sql": "EXPLAIN only supports read statements",
     "cases": [],
@@ -317,7 +339,7 @@
   {
     "formatted": false,
     "function": "rejects_unsupported_explain_options_and_mutations",
-    "line": 563,
+    "line": 589,
     "path": "crates/sql/src/tests.rs",
     "sql": "EXPLAIN only supports relational SELECT",
     "cases": [],
@@ -326,7 +348,7 @@
   {
     "formatted": false,
     "function": "rejects_gapped_postgres_parameters",
-    "line": 569,
+    "line": 595,
     "path": "crates/sql/src/tests.rs",
     "sql": "SELECT * FROM thread_messages WHERE thread_storage_id = $1 LIMIT $3",
     "cases": [
@@ -337,7 +359,7 @@
   {
     "formatted": false,
     "function": "parses_nested_octet_length_aggregate",
-    "line": 577,
+    "line": 603,
     "path": "crates/sql/src/tests.rs",
     "sql": "SELECT COALESCE(SUM(OCTET_LENGTH(content)), 0) AS payload_bytes FROM thread_messages",
     "cases": [
@@ -348,7 +370,7 @@
   {
     "formatted": false,
     "function": "parses_like_and_ilike_predicates_with_parameters_and_escape",
-    "line": 595,
+    "line": 621,
     "path": "crates/sql/src/tests.rs",
     "sql": "SELECT id FROM documents WHERE title LIKE $1 ESCAPE '!' OR title NOT ILIKE 'guide%'",
     "cases": [
