@@ -91,8 +91,10 @@ pub(crate) use hawdb_executor::binding::map_payload_bytes;
 use hawdb_executor::binding::Binding;
 pub use hawdb_executor::execution_request::ExecutionRequest;
 pub use hawdb_executor::external::NoExternalReadOperator;
+#[cfg(test)]
+use hawdb_executor::memory::enforced_result_memory_budget;
 pub(crate) use hawdb_executor::memory::{
-    enforced_query_memory_budget, enforced_result_memory_budget, estimated_execution_memory,
+    enforced_result_memory_budget_with_option, estimated_execution_memory,
     estimated_mutation_memory_bytes, max_external_read_parallelism,
 };
 use hawdb_executor::pipeline::{runtime_checkpoint, BatchControl};

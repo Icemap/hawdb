@@ -3,6 +3,12 @@ load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
+filegroup(
+    name = "query_limit_inventory_sources",
+    srcs = glob(["src/**/*.rs"]),
+    visibility = ["//:__pkg__"],
+)
+
 _READINESS_TEST_DATA = glob(["src/**/*.json", "src/**/*.jsonl"])
 _READINESS_TEST_DEPS = all_crate_deps(normal_dev = True) + [
     "//crates/search:hawdb_search",

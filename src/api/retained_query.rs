@@ -292,6 +292,13 @@ struct CursorShared {
     _runtime: RuntimeRetainedResult,
 }
 impl CursorShared {
+    fn effective_runtime_capacity(&self, memory_capacity_bytes: u64) -> u64 {
+        self.governor
+            .process_memory_policy_snapshot()
+            .map_or(memory_capacity_bytes, |policy| {
+                memory_capacity_bytes.min(policy.resident_limit_bytes)
+            })
+    }
     fn status(&self) -> RetainedQueryStatus {
         match self.status.load(Ordering::Acquire) {
             0 => RetainedQueryStatus::Open,
@@ -855,14 +862,6 @@ impl RetainedQueryCursor {
             .ok_or(RetainedQueryError::SizeOverflow)
     }
 
-    fn effective_runtime_capacity(&self, memory_capacity_bytes: u64) -> u64 {
-        self.governor
-            .process_memory_policy_snapshot()
-            .map_or(memory_capacity_bytes, |policy| {
-                memory_capacity_bytes.min(policy.resident_limit_bytes)
-            })
-    }
-
     fn adapter_irreducible_bytes(&self, adapter_bytes: usize) -> Result<(usize, usize)> {
         // Source pins belong only to the query root; control and compulsory
         // adapter descriptors also occupy the separate live-result allowance.
@@ -891,7 +890,10 @@ impl RetainedQueryCursor {
         if result > self.result_memory_budget.get()
             || result_runtime > snapshot.budget_bytes
             || query > self.ledger.snapshot().budget_bytes
-            || query_runtime > self.effective_runtime_capacity(runtime.limits.memory_capacity_bytes)
+            || query_runtime
+                > self
+                    .shared
+                    .effective_runtime_capacity(runtime.limits.memory_capacity_bytes)
         {
             return Err(RetainedQueryError::WorkingUnitTooLarge);
         }
@@ -949,7 +951,9 @@ impl RetainedQueryCursor {
                 .ok_or(RetainedQueryError::SizeOverflow)?;
         let snapshot = self.governor.retained_result_snapshot();
         let runtime = self.governor.snapshot();
-        let capacity = self.effective_runtime_capacity(runtime.limits.memory_capacity_bytes);
+        let capacity = self
+            .shared
+            .effective_runtime_capacity(runtime.limits.memory_capacity_bytes);
         if required_one
             > self.complete_output_allowance(
                 adapter_irreducible_bytes,
@@ -965,8 +969,9 @@ impl RetainedQueryCursor {
     fn admitted_rows(&self, adapter_metadata_bytes: usize) -> Result<NonZeroUsize> {
         let snapshot = self.governor.retained_result_snapshot();
         let runtime = self.governor.snapshot();
-        let runtime_capacity =
-            self.effective_runtime_capacity(runtime.limits.memory_capacity_bytes);
+        let runtime_capacity = self
+            .shared
+            .effective_runtime_capacity(runtime.limits.memory_capacity_bytes);
         let available = self
             .options
             .batch_bytes

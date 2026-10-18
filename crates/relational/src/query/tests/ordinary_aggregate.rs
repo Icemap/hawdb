@@ -22,10 +22,63 @@ fn read_modes() -> RelationalQueryReadModes<'static> {
 }
 
 #[test]
+fn count_min_max_returns_null_extrema_for_empty_input() {
+    let mut state = RelationalState::default();
+    let create = compile_relational_statement_sql(
+        "CREATE TABLE sample_sequence (sequence BIGINT PRIMARY KEY)",
+        &[],
+        &state,
+    )
+    .unwrap();
+    state = state
+        .stage_transaction(create, Default::default(), Default::default())
+        .unwrap();
+    let query = "SELECT COUNT(*) AS row_count, MIN(sequence) AS first_sequence, MAX(sequence) AS last_sequence FROM sample_sequence";
+    let run = |state: &RelationalState| {
+        execute_relational_query_sql_with_runtime(
+            query,
+            &[],
+            state,
+            read_modes(),
+            batched_index_join_limits(),
+            &hawdb_executor::ExecutionMemoryConfig::default(),
+            None,
+        )
+        .unwrap()
+        .rows
+    };
+    assert_eq!(
+        run(&state),
+        vec![Row::from([
+            ("row_count".into(), Value::Int(0)),
+            ("first_sequence".into(), Value::Null),
+            ("last_sequence".into(), Value::Null),
+        ])]
+    );
+    let insert = compile_relational_statement_sql(
+        "INSERT INTO sample_sequence (sequence) VALUES (2), (1)",
+        &[],
+        &state,
+    )
+    .unwrap();
+    state = state
+        .stage_transaction(insert, Default::default(), Default::default())
+        .unwrap();
+    assert_eq!(
+        run(&state),
+        vec![Row::from([
+            ("row_count".into(), Value::Int(2)),
+            ("first_sequence".into(), Value::Int(1)),
+            ("last_sequence".into(), Value::Int(2)),
+        ])]
+    );
+}
+
+#[test]
 fn grouped_having_preserves_nullable_join_bindings_and_distinct_results() {
     let state = batched_index_join_state();
     let memory = hawdb_executor::ExecutionMemoryConfig::default();
-    let sql = "SELECT o.join_key AS bucket, COUNT(i.id) AS matches, COUNT(DISTINCT i.value) AS distinct_values, MAX(i.value) AS largest FROM batch_outer o LEFT JOIN batch_inner i ON o.join_key = i.join_key GROUP BY o.join_key HAVING COUNT(i.id) >= $1";
+    let sql = "SELECT o.join_key AS bucket, COUNT(i.id) AS matches, COUNT(DISTINCT i.value) AS distinct_values, MIN(i.value) AS smallest, MAX(i.value) AS largest FROM batch_outer o LEFT JOIN batch_inner i ON o.join_key = i.join_key GROUP BY o.join_key HAVING COUNT(i.id) >= $1";
     for minimum in [0, 1, 3, 5] {
         let output = execute_relational_query_sql_with_runtime(
             sql,
@@ -38,11 +91,12 @@ fn grouped_having_preserves_nullable_join_bindings_and_distinct_results() {
         )
         .unwrap();
         let expected = [
-            (Value::Null, 0, 0, Value::Null),
+            (Value::Null, 0, 0, Value::Null, Value::Null),
             (
                 Value::String("shared".into()),
                 4,
                 2,
+                Value::String("first".into()),
                 Value::String("second".into()),
             ),
             (
@@ -50,15 +104,17 @@ fn grouped_having_preserves_nullable_join_bindings_and_distinct_results() {
                 1,
                 1,
                 Value::String("only".into()),
+                Value::String("only".into()),
             ),
         ]
         .into_iter()
-        .filter(|(_, matches, _, _)| *matches >= minimum)
-        .map(|(key, matches, distinct, largest)| {
+        .filter(|(_, matches, _, _, _)| *matches >= minimum)
+        .map(|(key, matches, distinct, smallest, largest)| {
             Row::from([
                 ("bucket".into(), key),
                 ("matches".into(), Value::Int(matches)),
                 ("distinct_values".into(), Value::Int(distinct)),
+                ("smallest".into(), smallest),
                 ("largest".into(), largest),
             ])
         })

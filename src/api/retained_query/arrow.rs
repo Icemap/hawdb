@@ -209,12 +209,7 @@ fn require_descriptor_capacity(
         .ok_or(RetainedQueryError::SizeOverflow)?;
     let required_runtime = u64::try_from(required).map_err(|_| RetainedQueryError::SizeOverflow)?;
     let runtime_capacity = shared.governor.snapshot().limits.memory_capacity_bytes;
-    let runtime_capacity = shared
-        .governor
-        .process_memory_policy_snapshot()
-        .map_or(runtime_capacity, |policy| {
-            runtime_capacity.min(policy.resident_limit_bytes)
-        });
+    let runtime_capacity = shared.effective_runtime_capacity(runtime_capacity);
     if required > shared.result_memory_budget.get()
         || required_runtime > shared.governor.retained_result_snapshot().budget_bytes
         || required_runtime > runtime_capacity
@@ -280,13 +275,21 @@ fn schema_parent_capacity(count: usize, wrapper_bytes: usize) -> Result<usize> {
         .ok_or(RetainedQueryError::SizeOverflow)?;
     capacity::<SchemaOwner>(extra)
 }
+// Arrow metadata encodes the pair count, key length and value length as i32,
+// followed by the exact key/value bytes emitted by schema() below.
+const NODE_IDENTITY_METADATA_BYTES: usize =
+    3 * std::mem::size_of::<i32>() + b"hawdb:role".len() + b"node_identity".len();
+
 fn schema_child_capacity(column: &RetainedColumnSchema) -> Result<usize> {
     let extra = column
         .name
         .len()
         .checked_add(1)
         .and_then(|n| {
-            n.checked_add(35 * usize::from(column.role == RetainedColumnRole::NodeIdentity))
+            n.checked_add(
+                NODE_IDENTITY_METADATA_BYTES
+                    * usize::from(column.role == RetainedColumnRole::NodeIdentity),
+            )
         })
         .ok_or(RetainedQueryError::SizeOverflow)?;
     capacity::<SchemaOwner>(extra)
@@ -338,7 +341,7 @@ fn schema(
                 CString::new(column.name.as_bytes())
                     .map_err(|_| RetainedQueryError::UnsupportedLayout)?,
             ),
-            metadata: Vec::with_capacity(35 * usize::from(identity)),
+            metadata: Vec::with_capacity(NODE_IDENTITY_METADATA_BYTES * usize::from(identity)),
             children: Vec::new(),
             pointers: Vec::new(),
             _lease: lease,

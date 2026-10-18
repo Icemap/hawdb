@@ -1,0 +1,20 @@
+{
+  "binary": "/home/hawkingrei/devel/nowledge/skein/.scratch/issue-1067-vector-artifacts/selected-vector-decoder-final",
+  "binary_sha256": "dadf336c8340ef63b0d4d39edad57286f44069de1d2961eb1716313dd9cc5114",
+  "source_sha256": {
+    "crates/search/src/out_of_core.rs": "2b378e7d2607f85607b5ab47f9c64b22b9e39c49aaeb40f60108b4324027808e",
+    "crates/search/src/out_of_core/vector_serving.rs": "18519fc01de176e2e4ee358bf0cab8beda8e13fb6cbe2e5869e7cfd2aa0ea1e1",
+    "crates/search/src/out_of_core/vector_selection_tests.rs": "f4b4b03f59429afe01ac42a4dd7dca7a58735d83c8b3d00229d38a607fc0da87"
+  },
+  "base": "4c32610910cc78771eeb23d729be7107ff769bf6",
+  "build_log": "/tmp/hawdb-raw-vector-preparation/manual-final-build.jsonl",
+  "build_command": "cargo test --locked --release -p hawdb-search --all-features --lib --no-run --message-format=json",
+  "run_command": [
+    "/home/hawkingrei/devel/nowledge/skein/.scratch/issue-1067-vector-artifacts/selected-vector-decoder-final",
+    "out_of_core::vector_selection_tests::selected_vector_decode_matrix",
+    "--exact",
+    "--ignored",
+    "--nocapture",
+    "--test-threads=1"
+  ]
+}

@@ -925,7 +925,8 @@ impl RuntimeGovernor {
         {
             let mut state = mutex_lock(&self.inner.state);
             match reason {
-                RuntimeCancellationReason::Cancelled => {
+                RuntimeCancellationReason::Cancelled
+                | RuntimeCancellationReason::ResourceExhausted => {
                     state.cancellations = state.cancellations.saturating_add(1);
                 }
                 RuntimeCancellationReason::DeadlineExceeded => {
@@ -935,7 +936,10 @@ impl RuntimeGovernor {
         }
         self.inner.record(RuntimeTelemetryEvent {
             kind: match reason {
-                RuntimeCancellationReason::Cancelled => RuntimeTelemetryEventKind::Cancelled,
+                RuntimeCancellationReason::Cancelled
+                | RuntimeCancellationReason::ResourceExhausted => {
+                    RuntimeTelemetryEventKind::Cancelled
+                }
                 RuntimeCancellationReason::DeadlineExceeded => {
                     RuntimeTelemetryEventKind::DeadlineExceeded
                 }
@@ -2322,6 +2326,7 @@ mod tests {
             .unwrap_err();
         governor.record_admission_wait(permit.request(), error.code, 37);
         governor.record_cancellation(RuntimeCancellationReason::Cancelled);
+        governor.record_cancellation(RuntimeCancellationReason::ResourceExhausted);
         drop(permit);
 
         let events = mutex_lock(&telemetry.events);
@@ -2348,6 +2353,7 @@ mod tests {
             .any(|event| event.kind == RuntimeTelemetryEventKind::Completed));
         let snapshot = governor.snapshot();
         assert_eq!(snapshot.admission_rejections, 1);
+        assert_eq!(snapshot.cancellations, 2);
         assert_eq!(snapshot.retryable_admission_rejections, 1);
     }
 

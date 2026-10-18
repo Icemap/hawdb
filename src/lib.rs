@@ -253,7 +253,10 @@ pub use embedded::{
 pub use embedded_tokio::{
     HawDBTokioEmbedded, HawDBTokioEmbeddedError, TokioQueryBatchStream, TokioQueryStreamOptions,
 };
-pub use error::{FileDescriptorError, HawDBError, ReadBudgetError, ReadBudgetResource, Result};
+pub use error::{
+    FileDescriptorError, HawDBError, ReadBudgetError, ReadBudgetResource, ResourceBudgetError,
+    ResourceBudgetKind, ResourceBudgetScope, Result,
+};
 pub use executor::{
     QueryRow, QueryRowRef, QueryRows, QuerySchema, ReadExecutionProfile, Row, RowRef,
 };

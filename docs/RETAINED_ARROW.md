@@ -36,6 +36,15 @@ earlier array remains readable but is a partial result. Errno 12 covers both
 retryable pressure and terminal capacity/budget failures; inspect the diagnostic
 and typed status rather than inferring retryability from errno alone.
 
+Rust hosts should use `RetainedQueryError::is_retryable()`. In particular,
+`RetainedQueryError::RetainedAdmission(RuntimeRetainedResultError::Capacity {
+retryable: true, .. })` represents releasable pressure. Release other live
+owners before retrying; repeated calls cannot cure an intrinsically oversized
+working unit. `RetainedQueryError::WorkingUnitTooLarge` is nonretryable.
+`get_schema` and `get_next` latch nonretryable errors and abort delivery on an
+open cursor; already completed EOF remains completed. Earlier arrays keep their
+payload owners but do not establish successful completion after an error.
+
 The existing native retained C ABI and Go numeric API remain independent of
 these Rust descriptors and Python protocols. No Arrow library is required by
 HawDB or the default Python extension. Optional public-consumer tests provision

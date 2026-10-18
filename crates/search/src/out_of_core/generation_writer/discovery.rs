@@ -65,7 +65,11 @@ pub(super) fn next(
     let active = match active(root, memory, task) {
         Ok(None) => return Ok(1),
         Ok(Some(generation)) => generation,
-        Err(error @ HawDBError::Execution(_)) => return Err(error),
+        Err(
+            error @ (HawDBError::Execution(_)
+            | HawDBError::ResourceBudgetExceeded(_)
+            | HawDBError::FileDescriptors(_)),
+        ) => return Err(error),
         Err(_) => {
             checkpoint(task)?;
             latest_lexical(root, max_lexical_manifest_bytes, memory, task)?

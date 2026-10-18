@@ -5,6 +5,11 @@ use super::*;
 use std::ffi::c_int;
 use std::fmt::Write;
 
+// get_next wraps its native batch in Arc<RetainedQueryBatch>: two usize
+// reference counters, plus the same conservative 64-byte allocation allowance
+// used by capacity(). The batch itself is charged by next_batch_with_metadata.
+const STREAM_PULL_WRAPPER_BYTES: usize = 2 * std::mem::size_of::<usize>() + 64;
+
 /// Standard Arrow C Stream layout. The raw consumer owns one active descriptor
 /// and must release it once; arrays/schemas outlive the stream independently.
 #[repr(C)]
@@ -66,10 +71,7 @@ impl RetainedArrowStream {
         // required during a pull, while continuing that same pull. Include
         // both in the minimum working unit before taking the caller's cursor.
         // Releasable schemas/arrays/other cursors remain temporary pressure.
-        native.require_adapter_output_capacity(
-            2 * std::mem::size_of::<usize>() + 64,
-            protocol_metadata,
-        )?;
+        native.require_adapter_output_capacity(STREAM_PULL_WRAPPER_BYTES, protocol_metadata)?;
         let lease = admit(&native.shared, stream_capacity, &code)?;
         let mut owner = Box::new(StreamOwner {
             state: Mutex::new(StreamState {
@@ -345,12 +347,11 @@ unsafe extern "C" fn get_next(stream: *mut ArrowArrayStream, output: *mut ArrowA
                 0,
             )?)
             .ok_or(RetainedQueryError::SizeOverflow)?;
-        cursor.require_adapter_output_capacity(2 * std::mem::size_of::<usize>() + 64, metadata)?;
+        cursor.require_adapter_output_capacity(STREAM_PULL_WRAPPER_BYTES, metadata)?;
         // Every array/child descriptor handle is admitted before native pull.
         // The native batch admits its own Arc/header before advancing source.
         let reservation = ArrayReservation::new(&cursor.shared, 0, &owner._lease._code)?;
-        let Some(batch) = cursor.next_batch_with_metadata(2 * std::mem::size_of::<usize>() + 64)?
-        else {
+        let Some(batch) = cursor.next_batch_with_metadata(STREAM_PULL_WRAPPER_BYTES)? else {
             return Ok(None);
         };
         let batch = Arc::new(batch);

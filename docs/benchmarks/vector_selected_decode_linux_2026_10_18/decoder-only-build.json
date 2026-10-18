@@ -1,0 +1,30 @@
+{
+  "base": "4c32610910cc78771eeb23d729be7107ff769bf6",
+  "branch": "perf/1067-selected-vector-decoding",
+  "profile": {
+    "opt_level": "3",
+    "debuginfo": 0,
+    "debug_assertions": false,
+    "overflow_checks": false,
+    "test": true
+  },
+  "features": [
+    "acl",
+    "background-maintenance",
+    "default",
+    "full-text-search",
+    "graph-analytics",
+    "qualification",
+    "vector-search"
+  ],
+  "binary_sha256": "29a53d7d1b3df774ee10b37e112ddca05b984672c1c7fda0a77e9c7cc34e6d37",
+  "source_sha256": {
+    "Cargo.toml": "bb39a79474144f60a51edf2c45552ba468e59ca0dae84fa53c259576c55cb6fa",
+    "Cargo.lock": "da456883c7fc4c06424344610b1929ed7dabccc406b61ac99242f4392e6f1c5d",
+    "rust-toolchain.toml": "8e390d6a0838315f972690f46ef8bae8b7ecc9ee6c1ed70140ef852869c2482e",
+    "crates/search/src/out_of_core.rs": "2b378e7d2607f85607b5ab47f9c64b22b9e39c49aaeb40f60108b4324027808e",
+    "crates/search/src/out_of_core/vector_serving.rs": "18519fc01de176e2e4ee358bf0cab8beda8e13fb6cbe2e5869e7cfd2aa0ea1e1",
+    "crates/search/src/out_of_core/vector_selection_tests.rs": "d7e9c614cb26c09685c22f321fcd33255da507356b47b5d78aa0727812e36798"
+  },
+  "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n"
+}

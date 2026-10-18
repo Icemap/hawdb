@@ -396,8 +396,10 @@ fn validity_view(rows: usize, words: &[u64]) -> ValidityView<'_> {
 }
 
 impl RetainedNumericBatch {
-    /// Charged storage/owner and this view's metadata, excluding other views.
-    /// Adapters use these live leases as an irreducible input working unit.
+    /// Internal HawDB facade contract for Arrow admission preflight across crates.
+    /// Reports charged storage/owner and this view's metadata, excluding other
+    /// views, so the facade can include live leases in its irreducible input.
+    /// This observation is not a stable host API or a process-memory bound.
     #[doc(hidden)]
     pub fn retained_memory_bytes(&self) -> Option<usize> {
         self.storage
