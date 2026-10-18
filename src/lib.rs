@@ -33,6 +33,9 @@ pub mod embedded;
 #[cfg(feature = "tokio-runtime")]
 pub mod embedded_tokio;
 pub mod executor;
+#[doc(hidden)]
+#[cfg(feature = "retained-phase-profiling")]
+pub mod retained_phase_profile;
 pub mod expression {
     pub use hawdb_expression::*;
 }

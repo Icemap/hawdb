@@ -53,6 +53,31 @@ fn _boundary_profile_snapshot(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     Ok(result)
 }
 
+/// Private qualification hook; absent from ordinary/default/lite builds.
+#[cfg(feature = "retained-phase-profiling")]
+#[pyfunction]
+fn _retained_phase_snapshot(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    let snapshot = hawdb::retained_phase_profile::snapshot();
+    let result = PyDict::new(py);
+    result.set_item("protocol", "hawdb-retained-phase-v2")?;
+    result.set_item(
+        "allocation_instrumented",
+        cfg!(feature = "boundary-profiling"),
+    )?;
+    result.set_item("overflowed", snapshot.overflowed)?;
+    for (key, value) in [
+        ("prepare_calls", snapshot.prepare_calls),
+        ("prepare_ns", snapshot.prepare_ns),
+        ("pull_calls", snapshot.pull_calls),
+        ("pull_ns", snapshot.pull_ns),
+        ("owned_calls", snapshot.owned_calls),
+        ("owned_ns", snapshot.owned_ns),
+    ] {
+        result.set_item(key, value)?;
+    }
+    Ok(result)
+}
+
 /// Report the engine capabilities compiled into this extension.
 ///
 /// Returns a read-only mapping of capability name to availability. Hosts
@@ -80,7 +105,13 @@ fn _hawdb(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = module.py();
 
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    #[cfg(feature = "retained-phase-profiling")]
+    module.add_function(wrap_pyfunction!(_retained_phase_snapshot, module)?)?;
     module.add_class::<Database>()?;
+    module.add_function(wrap_pyfunction!(
+        database::_open_large_result_qualification,
+        module
+    )?)?;
     #[cfg(feature = "boundary-profiling")]
     module.add_function(wrap_pyfunction!(_boundary_profile_snapshot, module)?)?;
     module.add_class::<QueryResult>()?;
