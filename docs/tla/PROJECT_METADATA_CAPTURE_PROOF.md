@@ -17,7 +17,8 @@ It may observe a newly atomically published catalog within its actual root.
 The initial locator still chooses which directory is captured; this is not a
 proof of every facade open/admission transition or all project mutations.
 
-The physical project root stays pinned until the last metadata snapshot drops.
+The physical project root stays pinned until the last snapshot or transferred
+capture drops.
 Independent opens each pay for one directory FD. A refresh shares its existing
 root; opening the branches directory and catalog requires two transient FDs at
 peak. The two-snapshot/busy-main fixture therefore needs six descriptors: two
@@ -55,9 +56,11 @@ The facade pair requires every budget from four up to the platform peak to
 retain unchanged catalog/head evidence through retry, then requires completion
 of the same receipt at five on Unix or six on Windows, with inherited data.
 Aggregate recovery limits use the same platform funding. Initial five-slot
-Windows refusal is not counted as a pass, and native six-slot confirmation
-remains necessary. The persistent default and all synchronization barriers are
-unchanged.
+Windows refusal is not counted as a pass. Native CI 39167950514 for head
+`3261af9f` subsequently passed the held-publication policy and recovery-boundary
+selections on all three platforms, confirming six-slot Windows completion.
+Its separate Windows directory-move groups still failed three cases each.
+The persistent default and all synchronization barriers are unchanged.
 
 ## Safety argument and finite check
 
@@ -109,3 +112,10 @@ custody through every later branch-admission path, migrate catalog writers or
 GraphStore data I/O, implement the Consumer allocator/birth/debt journal, or
 activate stationary Consumer serving. Those remain required by the
 [stationary implementation contract](../specs/CONSUMER_STATIONARY_PUBLICATION_SPEC.md).
+
+## Deferred facade handoff
+
+The facade now transfers its original root into a catalog-free capture retained
+by deferred admission. See [the handoff argument](DEFERRED_PROJECT_CAPTURE_PROOF.md)
+for its separate model, slot cost, native regressions and remaining pathname
+race. The metadata model above continues to cover metadata reads only.

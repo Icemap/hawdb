@@ -28,10 +28,8 @@ use super::{
     OptimizerPlanningCache, PlanCache, ReaderPins, SharedState, TelemetrySink,
 };
 use crate::error::{HawDBError, Result};
-use hawdb_storage::branch_project::{ProjectMetadata, ProjectSelector};
-use hawdb_storage::file_descriptors::{
-    FileDescriptorMetrics, FileOpenContext, ProjectFileDescriptors,
-};
+use hawdb_storage::branch_project::CapturedProject;
+use hawdb_storage::file_descriptors::{FileDescriptorMetrics, FileOpenContext};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
@@ -55,8 +53,6 @@ pub(super) struct AdmittedBranchRuntime {
 
 #[derive(Debug)]
 pub(super) struct DeferredBranchAdmission {
-    pub(super) files: ProjectFileDescriptors,
-    pub(super) selector: ProjectSelector,
     pub(super) config: DatabaseConfig,
     pub(super) durability: DurabilityPolicy,
     pub(super) scheduler: LocalQosScheduler,
@@ -68,6 +64,7 @@ pub(super) struct DeferredBranchAdmission {
 pub(super) struct BranchRuntimeCell {
     admitted: Arc<SharedBranchRuntime>,
     pending: Option<DeferredBranchAdmission>,
+    project: Option<CapturedProject>,
     admission: Mutex<()>,
     instance_identity: DatabaseInstanceIdentity,
     // Mutations and background selector publication share this barrier.
@@ -156,6 +153,7 @@ impl BranchRuntimeCell {
         Self {
             admitted,
             pending: None,
+            project: None,
             admission: Mutex::new(()),
             publication,
             automatic: OnceLock::new(),
@@ -164,13 +162,14 @@ impl BranchRuntimeCell {
         }
     }
 
-    pub(super) fn deferred(pending: DeferredBranchAdmission) -> Self {
+    pub(super) fn deferred(pending: DeferredBranchAdmission, project: CapturedProject) -> Self {
         let admitted = Arc::new(SharedBranchRuntime::default());
         let publication = Arc::new(Control::default());
         publication.attach_frontend(&admitted);
         Self {
             admitted,
             pending: Some(pending),
+            project: Some(project),
             admission: Mutex::new(()),
             publication,
             automatic: OnceLock::new(),
@@ -206,7 +205,10 @@ impl BranchRuntimeCell {
         let pending = self.pending.as_ref().ok_or_else(|| {
             HawDBError::StorageIntegrity("database has no branch admission identity".into())
         })?;
-        let candidate = recover_default_branch(pending)?;
+        let project = self.project.as_ref().ok_or_else(|| {
+            HawDBError::StorageIntegrity("database has no captured project".into())
+        })?;
+        let candidate = recover_default_branch(pending, project)?;
         self.admitted.initialize(candidate)?;
         drop(admission);
         self.arm_automatic(
@@ -362,6 +364,14 @@ impl BranchRuntimeCell {
         self.publication.release_suspended_source()
     }
 
+    pub(super) fn captured_project(&self) -> Option<&CapturedProject> {
+        self.project.as_ref()
+    }
+
+    pub(super) fn retain_project_capture(&mut self, project: Option<CapturedProject>) {
+        self.project = project;
+    }
+
     pub(super) fn pending_mut(&mut self) -> Option<&mut DeferredBranchAdmission> {
         self.pending.as_mut()
     }
@@ -369,16 +379,20 @@ impl BranchRuntimeCell {
     pub(super) fn file_descriptor_metrics(&self) -> Option<FileDescriptorMetrics> {
         self.peek()
             .and_then(|runtime| runtime.store.file_descriptor_metrics())
-            .or_else(|| self.pending.as_ref().map(|pending| pending.files.metrics()))
+            .or_else(|| {
+                self.project
+                    .as_ref()
+                    .map(|project| project.file_descriptors().metrics())
+            })
     }
 
     pub(super) fn file_descriptor_context(&self) -> Option<FileOpenContext> {
         self.peek()
             .and_then(|runtime| runtime.store.file_descriptor_context())
             .or_else(|| {
-                self.pending
+                self.project
                     .as_ref()
-                    .map(|pending| pending.files.io_context())
+                    .map(|project| project.file_descriptors().io_context())
             })
     }
 
@@ -388,10 +402,11 @@ impl BranchRuntimeCell {
         if let Some(runtime) = self.peek() {
             return runtime.store.reserve_branch_admission_resources();
         }
-        let pending = self.pending.as_ref().ok_or_else(|| {
+        let project = self.project.as_ref().ok_or_else(|| {
             HawDBError::StorageIntegrity("database has no project admission domain".into())
         })?;
-        GraphStore::reserve_project_branch_admission_resources(&pending.files)
+        project.require_original_namespace()?;
+        GraphStore::reserve_project_branch_admission_resources(project.file_descriptors())
     }
 
     pub(super) fn into_admitted(mut self) -> Result<AdmittedBranchRuntime> {
@@ -433,17 +448,17 @@ pub(super) fn record_recovery_telemetry(store: &GraphStore, telemetry: &dyn Tele
     }
 }
 
-fn recover_default_branch(pending: &DeferredBranchAdmission) -> Result<AdmittedBranchRuntime> {
-    let _resources = GraphStore::reserve_project_branch_admission_resources(&pending.files)?;
-    let metadata = ProjectMetadata::from_files(pending.files.clone())?;
-    if metadata.selector() != pending.selector {
-        return Err(HawDBError::StorageIntegrity(
-            "default branch project identity changed before admission".into(),
-        ));
-    }
+fn recover_default_branch(
+    pending: &DeferredBranchAdmission,
+    project: &CapturedProject,
+) -> Result<AdmittedBranchRuntime> {
+    let _resources =
+        GraphStore::reserve_project_branch_admission_resources(project.file_descriptors())?;
+    project.require_original_namespace()?;
+    let metadata = project.metadata()?;
     let record = metadata.main().clone();
     drop(metadata);
-    let root = pending.files.root();
+    let root = project.file_descriptors().root();
     let catalog_path = hawdb_storage::branch_project::catalog_path(root);
     let directory = root.join("branches").join(record.id.as_uuid().to_string());
     let head_path = directory.join("branch.head");

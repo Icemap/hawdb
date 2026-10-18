@@ -495,7 +495,9 @@ fn slow_query_export_uses_source_budget_without_admitting_deferred_runtime() {
     std::fs::write(&destination, b"retain on admission failure").unwrap();
     let mut options = OpenOptions::new();
     options.read(true);
-    let held = (0..32)
+    let retained = files.metrics().open;
+    assert_eq!(retained, 1);
+    let held = (retained..32)
         .map(|_| {
             files
                 .io_context()
@@ -529,7 +531,7 @@ fn slow_query_export_uses_source_budget_without_admitting_deferred_runtime() {
         std::fs::read_to_string(&destination).unwrap(),
         database.slow_query_log_jsonl().unwrap()
     );
-    assert_eq!(files.metrics().open, 0);
+    assert_eq!(files.metrics().open, retained);
     assert_no_runtime(&database);
 }
 
@@ -681,6 +683,94 @@ fn read_only_admission_and_use_preserve_unpublished_checkpoint_evidence() {
     }
 }
 
+fn copy_tree(source: &std::path::Path, destination: &std::path::Path) {
+    std::fs::create_dir(destination).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let target = destination.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+#[test]
+fn deferred_admission_rejects_cloned_project_namespace_and_retries_original() {
+    let project = Project::new();
+    let mut writer = Database::open(&project.0).unwrap();
+    writer.query("CREATE (:Memory {id: 'original'})").unwrap();
+    writer.checkpoint().unwrap();
+    drop(writer);
+    let mut database = Database::open(&project.0).unwrap();
+    assert_no_runtime(&database);
+    let moved = project.0.with_extension("held");
+    std::fs::rename(&project.0, &moved).unwrap();
+    // A complete, valid clone carries the same project/main UUIDs and data.
+    // Recovering it successfully would still violate physical source custody.
+    copy_tree(&moved, &project.0);
+    let catalog = project.0.join("branches/catalog.hawdb");
+    let before = std::fs::read(&catalog).unwrap();
+    for _ in 0..2 {
+        assert!(matches!(
+            database.query("MATCH (m:Memory) RETURN m.id"),
+            Err(HawDBError::StorageIntegrity(message))
+                if message == "captured project directory was replaced"
+        ));
+        assert_no_runtime(&database);
+        assert_eq!(std::fs::read(&catalog).unwrap(), before);
+    }
+    std::fs::remove_dir_all(&project.0).unwrap();
+    std::fs::rename(&moved, &project.0).unwrap();
+    assert_eq!(
+        values(&mut database),
+        vec![BTreeMap::from([(
+            "id".into(),
+            Value::String("original".into())
+        )])]
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn captured_project_survives_branch_selection_and_refuses_replaced_namespace() {
+    let project = Project::new();
+    let mut writer = Database::open(&project.0).unwrap();
+    writer.query("CREATE (:Memory {id: 'original'})").unwrap();
+    writer
+        .create_branch(BranchCreateRequest {
+            name: Some("child".into()),
+            parent: BranchSelector::Name("main".into()),
+            expected_source_commit_epoch: writer.commit_epoch().unwrap(),
+            owner: None,
+            idempotency_key: "retained-project-switch".into(),
+        })
+        .unwrap();
+    drop(writer);
+    let mut database = Database::open(&project.0).unwrap();
+    database.query_sql("USE BRANCH NAME 'child'").unwrap();
+    assert_eq!(values(&mut database).len(), 1);
+    let moved = project.0.with_extension("selected");
+    // Unix permits this with a live branch lease. Windows rejects enclosing
+    // directory moves; its deferred-only boundary is covered separately.
+    std::fs::rename(&project.0, &moved).unwrap();
+    copy_tree(&moved, &project.0);
+    let catalog = project.0.join("branches/catalog.hawdb");
+    let before = std::fs::read(&catalog).unwrap();
+    assert!(matches!(
+        database.recover_pending_branch_creates(Default::default()),
+        Err(HawDBError::StorageIntegrity(message))
+            if message == "captured project directory was replaced"
+    ));
+    assert_eq!(std::fs::read(catalog).unwrap(), before);
+    drop(database);
+    std::fs::remove_dir_all(&project.0).unwrap();
+    std::fs::rename(moved, &project.0).unwrap();
+    let mut reopened = Database::open(&project.0).unwrap();
+    assert_eq!(values(&mut reopened).len(), 1);
+}
+
 #[test]
 fn metadata_open_and_show_survive_busy_main_and_data_admission_can_retry() {
     let project = Project::new();
@@ -690,7 +780,7 @@ fn metadata_open_and_show_survive_busy_main_and_data_admission_can_retry() {
     let mut metadata = Database::open(&project.0).unwrap();
     assert_eq!(
         metadata.file_descriptor_metrics().unwrap().open,
-        before.open
+        before.open + 1
     );
     assert_eq!(
         metadata
@@ -1073,8 +1163,9 @@ fn unopened_catalog_scale_keeps_native_and_project_descriptors_bounded() {
             .len(),
         1
     );
-    assert_eq!(native_count(), before);
+    assert_eq!(native_count(), before + 1);
     drop(rejected);
+    assert_eq!(native_count(), before);
     // Eight descriptors cannot fund the native admission floor. The separate
     // twelve-descriptor success test covers the newly usable small budget;
     // 32 here qualifies many unopened branches without retaining native FDs.
@@ -1108,10 +1199,14 @@ fn unopened_catalog_scale_keeps_native_and_project_descriptors_bounded() {
         assert!(database.query_sql_with_params(sql, &conflicting).is_err());
         assert_no_runtime(&database);
         let metrics = database.file_descriptor_metrics().unwrap();
-        assert_eq!(metrics.open, 0);
+        assert_eq!(metrics.open, 1);
         assert_eq!(metrics.reserved, 0);
         assert!(metrics.high_water <= 32);
-        assert_eq!(native_count(), before, "branch {id} retained a native FD");
+        assert_eq!(
+            native_count(),
+            before + 1,
+            "branch {id} retained a native FD"
+        );
     }
     for _ in 0..8 {
         assert_eq!(
@@ -1122,10 +1217,11 @@ fn unopened_catalog_scale_keeps_native_and_project_descriptors_bounded() {
                 .len(),
             65
         );
-        assert_eq!(native_count(), before);
+        assert_eq!(native_count(), before + 1);
         assert_no_runtime(&database);
     }
     drop(database);
+    assert_eq!(native_count(), before);
     let mut reopened = Database::open_with_config(&project.0, config).unwrap();
     assert_eq!(
         reopened
@@ -1136,6 +1232,8 @@ fn unopened_catalog_scale_keeps_native_and_project_descriptors_bounded() {
         65
     );
     assert_no_runtime(&reopened);
+    assert_eq!(native_count(), before + 1);
+    drop(reopened);
     assert_eq!(native_count(), before);
 }
 
@@ -2098,7 +2196,7 @@ fn cold_branch_creation_uses_actual_admission_inventory_with_twelve_descriptors(
         2
     );
     let metrics = database.file_descriptor_metrics().unwrap();
-    assert_eq!(metrics.open, 0);
+    assert_eq!(metrics.open, 1);
     assert_eq!(metrics.reserved, 0);
     assert!(metrics.high_water <= 12);
 }

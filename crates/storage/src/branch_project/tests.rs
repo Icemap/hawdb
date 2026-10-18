@@ -402,6 +402,45 @@ fn metadata_capture_and_refresh_ignore_replacement_even_with_matching_selector()
 }
 
 #[test]
+fn transferred_project_capture_rejects_same_uuid_replacement_without_recapture() {
+    let fixture = Fixture::new(4);
+    let selector = identity(151, 152);
+    fixture.publish_metadata(selector);
+    let metadata = ProjectMetadata::open(fixture.root(), 4).unwrap();
+    let capture = metadata.into_capture();
+    let shared = capture.clone();
+    assert_eq!(fixture.files.metrics().open, 1);
+    capture.require_original_namespace().unwrap();
+    let moved = fixture.root().with_extension("transferred");
+    std::fs::rename(fixture.root(), &moved).unwrap();
+    std::fs::create_dir_all(fixture.root().join(BRANCH_DIRECTORY)).unwrap();
+    std::fs::write(fixture.root().join(MANIFEST_FILE), selector.encode()).unwrap();
+    let mut replacement = branch_catalog::read_catalog(&catalog_path(&moved)).unwrap();
+    replacement.revision = 900;
+    let replacement = replacement.encode().unwrap();
+    std::fs::write(catalog_path(fixture.root()), &replacement).unwrap();
+    assert!(matches!(
+        capture.require_original_namespace(),
+        Err(HawDBError::StorageIntegrity(message))
+            if message == "captured project directory was replaced"
+    ));
+    assert_eq!(shared.metadata().unwrap().catalog().revision, 2);
+    assert_eq!(fixture.files.metrics().open, 1);
+    assert_eq!(
+        std::fs::read(catalog_path(fixture.root())).unwrap(),
+        replacement
+    );
+    std::fs::remove_dir_all(fixture.root()).unwrap();
+    std::fs::rename(&moved, fixture.root()).unwrap();
+    capture.require_original_namespace().unwrap();
+    drop(capture);
+    assert_eq!(fixture.files.metrics().open, 1);
+    assert_eq!(shared.metadata().unwrap().catalog().revision, 2);
+    drop(shared);
+    assert_eq!(fixture.files.metrics().open, 0);
+}
+
+#[test]
 fn captured_metadata_descriptor_refusal_preserves_original_and_retries() {
     let fixture = Fixture::new(4);
     let selector = identity(141, 142);

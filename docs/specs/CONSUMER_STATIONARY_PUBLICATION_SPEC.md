@@ -41,13 +41,18 @@ candidate. See [the admission accounting argument](../tla/BRANCH_DESCRIPTOR_ADMI
 
 `ProjectMetadata` now captures its actual project root before selector/catalog
 reads and shares that root across refresh. Equal selector UUIDs in a replacement
-namespace cannot retarget it. This metadata-only capture has no branch writer
-lease and is not yet handed through every later runtime-admission transition.
-See [the metadata capture argument](../tla/PROJECT_METADATA_CAPTURE_PROOF.md).
+namespace cannot retarget it. The facade transfers a catalog-free capture into
+its runtime cell, retains it through deferred admission and shares it before
+branch-runtime exchange. Explicit recovery/abandonment metadata shares that
+same root and descriptor domain. It has no branch writer lease and does not
+make the remaining pathname kernel operations race-free. See the
+[metadata capture argument](../tla/PROJECT_METADATA_CAPTURE_PROOF.md) and the
+[deferred handoff argument](../tla/DEFERRED_PROJECT_CAPTURE_PROOF.md).
 Pending-child completion with that capture needs five charged slots on Unix
 and six on Windows, whose policy retains a write-capable candidate through the
-separately admitted rename. Native Windows confirmed typed refusal at five;
-the six-slot completion path still needs its native CI result. The lower-budget
+separately admitted rename. Native Windows confirmed typed refusal at five in
+CI 39165974322 and six-slot completion in CI 39167950514 for head `3261af9f`.
+The separate three directory-move failures remain. The lower-budget
 refusal/retry and old-reader assertions remain; no owner or barrier is dropped.
 
 This does not migrate all GraphStore/registry I/O or implement the allocation

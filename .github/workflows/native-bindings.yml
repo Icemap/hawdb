@@ -136,6 +136,18 @@ jobs:
             -- branch_project::tests:: --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/project-metadata.txt
 
+      - name: Test deferred project capture and original namespace retry
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --test branch_project_open \
+            -- deferred_admission_rejects_cloned_project_namespace_and_retries_original \
+            captured_project_survives_branch_selection_and_refuses_replaced_namespace \
+            metadata_open_and_show_survive_busy_main_and_data_admission_can_retry \
+            --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/deferred-project-capture.txt
+
       - name: Test held Windows publication descriptor policy
         if: ${{ !cancelled() }}
         shell: bash

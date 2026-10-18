@@ -179,6 +179,40 @@ pub struct ProjectMetadata {
     main_index: usize,
 }
 
+/// Retained physical project authority without a cached catalog snapshot.
+/// Clones share one counted directory and its original descriptor domain.
+/// This does not authorize path-based branch writers or replace their leases.
+#[derive(Debug, Clone)]
+pub struct CapturedProject {
+    files: ProjectFileDescriptors,
+    root: Arc<SourceDirectory>,
+    selector: ProjectSelector,
+}
+
+impl CapturedProject {
+    pub fn file_descriptors(&self) -> &ProjectFileDescriptors {
+        &self.files
+    }
+
+    /// Decode fresh metadata through the retained root, never its old pathname.
+    pub fn metadata(&self) -> Result<ProjectMetadata> {
+        let metadata = ProjectMetadata::from_captured(self.files.clone(), Arc::clone(&self.root))?;
+        if metadata.selector != self.selector {
+            return Err(integrity("published project identity changed"));
+        }
+        Ok(metadata)
+    }
+
+    /// Fence legacy pathname entry points against an already replaced root.
+    /// This is not a race-free authorization of subsequent pathname operations.
+    pub fn require_original_namespace(&self) -> Result<()> {
+        if !self.root.matches_namespace(self.files.root())? {
+            return Err(integrity("captured project directory was replaced"));
+        }
+        Ok(())
+    }
+}
+
 impl ProjectMetadata {
     pub fn open(root: &Path, max_open_files: usize) -> Result<Self> {
         let files = ProjectFileDescriptors::acquire_existing(root, max_open_files)?;
@@ -217,6 +251,16 @@ impl ProjectMetadata {
             catalog,
             main_index,
         })
+    }
+
+    /// Transfer the existing capture without reopening a directory or retaining
+    /// the decoded catalog. The returned authority outlives this snapshot.
+    pub fn into_capture(self) -> CapturedProject {
+        CapturedProject {
+            files: self.files,
+            root: self.root,
+            selector: self.selector,
+        }
     }
 
     pub fn selector(&self) -> ProjectSelector {
