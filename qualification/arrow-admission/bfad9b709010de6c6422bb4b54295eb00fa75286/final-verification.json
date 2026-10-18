@@ -1,0 +1,851 @@
+{
+  "status": "passed",
+  "pid": 46190,
+  "base": "b16de232531a3ed1c44ead8fcf37c45c4ad8b584",
+  "tree": "00371bda1e5b341ad745bfb70e2c67045f39a0fa",
+  "steps": [
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-install.log",
+      "started": 1792295795.560884,
+      "exit": 0,
+      "ended": 1792295795.686164,
+      "reused_from": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-state.json"
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-fmt.log",
+      "started": 1792295795.7347069,
+      "exit": 0,
+      "ended": 1792295802.5199082,
+      "reused_from": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-state.json"
+    },
+    {
+      "name": "native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-native.log",
+      "started": 1792295802.569623,
+      "exit": 0,
+      "ended": 1792295819.225279,
+      "reused_from": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-state.json"
+    },
+    {
+      "name": "wasm",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "hawdb",
+        "--no-default-features",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--lib",
+        "--test",
+        "in_memory_portable",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-wasm.log",
+      "started": 1792295819.3241951,
+      "exit": 0,
+      "ended": 1792295829.15815,
+      "reused_from": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-state.json"
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-prek.log",
+      "started": 1792295829.2125802,
+      "exit": 0,
+      "ended": 1792295835.418516,
+      "reused_from": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-state.json"
+    },
+    {
+      "name": "ffi",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/ffi:hawdb_ffi_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-ffi.bep.json"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-ffi.log",
+      "started": 1792295835.462934,
+      "exit": 0,
+      "ended": 1792295844.895761,
+      "targets": [
+        {
+          "label": "//bindings/ffi:hawdb_ffi_tests",
+          "status": "PASSED"
+        }
+      ],
+      "copied_test_logs": [
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-ffi-test-bindings_ffi_hawdb_ffi_tests.log"
+      ],
+      "reused_from": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-state.json"
+    },
+    {
+      "name": "go",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/go:hawdb_go_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-go.bep.json"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-go.log",
+      "started": 1792295844.960423,
+      "exit": 0,
+      "ended": 1792295862.921406,
+      "targets": [
+        {
+          "label": "//bindings/go:hawdb_go_tests",
+          "status": "PASSED"
+        }
+      ],
+      "copied_test_logs": [
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-go-test-bindings_go_hawdb_go_tests.log"
+      ],
+      "reused_from": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-state.json"
+    },
+    {
+      "name": "python",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/python:hawdb_python_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-python.bep.json"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-python.log",
+      "started": 1792295862.990643,
+      "exit": 0,
+      "ended": 1792296114.468946,
+      "targets": [
+        {
+          "label": "//bindings/python:hawdb_python_tests",
+          "status": "PASSED"
+        }
+      ],
+      "copied_test_logs": [
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-python-test-bindings_python_hawdb_python_tests.log"
+      ],
+      "reused_from": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-state.json"
+    },
+    {
+      "name": "pydantic",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/python:hawdb_python_pydantic_tests",
+        "--test_arg=-vv",
+        "--test_arg=--durations=44",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-pydantic-exit-fixed.bep.json"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-pydantic-exit-fixed.log",
+      "exit": 0,
+      "started": 1792299602.153496,
+      "ended": 1792299655.833934,
+      "targets": [
+        {
+          "label": "//bindings/python:hawdb_python_pydantic_tests",
+          "status": "PASSED"
+        }
+      ],
+      "copied_test_logs": [
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-pydantic-exit-fixed-test.log"
+      ],
+      "reused_from": "/private/tmp/hawdb-wip-ready-20261015/arrow-pydantic-exit-diagnosis-state.json",
+      "scope": "Complete43 passed/1 skipped, unchanged60s target; verbose/duration output and one native sample. Three earlier timeouts remain unwaived observations; cause unproven."
+    },
+    {
+      "name": "general",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-general.bep.json"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-general.log",
+      "started": 1792299808.374788,
+      "exit": 0,
+      "ended": 1792300266.680913,
+      "targets": [
+        {
+          "label": "//:hawdb_unit_general_tests",
+          "status": "PASSED"
+        }
+      ],
+      "copied_test_logs": [
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-general-test-_hawdb_unit_general_tests.log"
+      ]
+    },
+    {
+      "name": "fuzz",
+      "command": [
+        "bazel",
+        "test",
+        "//crates/fuzz:hawdb_fuzz_tests",
+        "//crates/fuzz:hawdb_fuzz_cli_tests",
+        "//:hawdb_linux_ci_fuzz_smoke_test",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz.bep.json"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz.log",
+      "started": 1792300266.747872,
+      "exit": 0,
+      "ended": 1792301353.007493,
+      "targets": [
+        {
+          "label": "//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_graph_overlay_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_relational_index_view_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_execution_lifecycle_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_transform_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/fuzz:hawdb_parser_fuzz_cli_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_compression_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_artifact_binding_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_candidate_evidence_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/optimizer-graph:hawdb_optimizer_trace_cost_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/evidence:hawdb_resource_profile_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_document_frequency_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_transaction_locks_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_graph_constraints_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_concurrent_read_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_block_encoding_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_spool_encoding_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/relational:hawdb_relational_field_plan_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//:hawdb_concurrent_key_range_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/cypher:hawdb_cypher_backtracking_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/evidence:hawdb_inventory_health_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/optimizer-graph:hawdb_optimizer_full_text_cost_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_hex_decoding_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_batch_dispatch_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_result_delivery_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_vector_seed_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_source_scan_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/compat:hawdb_compat_contract_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_file_lock_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_bounded_file_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/optimizer-graph:hawdb_optimizer_cardinality_defaults_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_morsel_oracle_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_durable_manifest_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_projected_artifact_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/relational:hawdb_relational_explain_report_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_durable_envelope_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_append_reader_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_spool_decoding_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_positioned_read_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/relational:hawdb_relational_index_runtime_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_sort_merge_account_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/fuzz:hawdb_storage_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/relational:hawdb_relational_row_runtime_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_sharded_cache_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/evidence:hawdb_source_inventory_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/relational:hawdb_relational_statement_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/fuzz:hawdb_fuzz_append_replay_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_text_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/relational:hawdb_relational_aggregate_state_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//:hawdb_scan_callback_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/fuzz:hawdb_fuzz_append_seed_7_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/relational:hawdb_relational_qualification_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_document_analysis_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_query_observer_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_term_policy_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_set_value_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_mutation_lowering_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/fuzz:hawdb_fuzz_cli_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/sql:hawdb_sql_create_binding_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/readiness:hawdb_integration_bundle_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_graph_algorithm_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_hydration_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/fuzz:hawdb_append_fuzz_cli_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/storage:hawdb_storage_backup_hex_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_projection_evidence_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_manifest_encoding_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_execution_report_value_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_mutation_preflight_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/fuzz:hawdb_fuzz_relational_join_rewrite_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/readiness:hawdb_graph_route_readiness_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_numeric_execution_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/relational:hawdb_relational_physical_plan_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/readiness:hawdb_replacement_summary_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_manifest_budget_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/fuzz:hawdb_fuzz_fast_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/search:hawdb_search_lexical_spill_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_graph_hash_join_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//:hawdb_linux_ci_fuzz_smoke_test",
+          "status": "PASSED"
+        },
+        {
+          "label": "//crates/executor:hawdb_spill_compaction_fuzz_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//:hawdb_graph_projection_residency_fuzz_second_half_tests",
+          "status": "PASSED"
+        },
+        {
+          "label": "//:hawdb_graph_projection_residency_fuzz_first_half_tests",
+          "status": "PASSED"
+        }
+      ],
+      "copied_test_logs": [
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_transaction_compaction_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_graph_overlay_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_relational_index_view_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_execution_lifecycle_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_transform_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_fuzz_hawdb_parser_fuzz_cli_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_compression_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_artifact_binding_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_candidate_evidence_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_optimizer-graph_hawdb_optimizer_trace_cost_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_evidence_hawdb_resource_profile_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_document_frequency_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_transaction_locks_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_graph_constraints_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_concurrent_read_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_block_encoding_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_spool_encoding_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_relational_hawdb_relational_field_plan_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-_hawdb_concurrent_key_range_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_cypher_hawdb_cypher_backtracking_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_plan-cypher_hawdb_plan_cypher_explain_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_sql-syntax_hawdb_sql_alias_boundary_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_evidence_hawdb_inventory_health_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_mini_delta_snapshot_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_optimizer-graph_hawdb_optimizer_full_text_cost_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_hex_decoding_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_batch_dispatch_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_result_delivery_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_optimizer-graph_hawdb_optimizer_cardinality_metadata_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_vector_seed_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_source_scan_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_compat_hawdb_compat_contract_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_optimizer-graph_hawdb_optimizer_ddl_command_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_file_lock_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_bounded_file_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_optimizer-graph_hawdb_optimizer_cardinality_defaults_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_morsel_oracle_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_durable_manifest_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_projected_artifact_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_route-ownership_hawdb_graph_route_ownership_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_shadow_metadata_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_statistics_refresh_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_checkpoint_wal_verbatim_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_relational_hawdb_relational_explain_report_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_durable_envelope_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_property_projection_hex_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_optimizer-graph_hawdb_optimizer_candidate_fingerprint_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_append_reader_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_spool_decoding_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_optimizer-relational_hawdb_optimizer_access_cost_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_positioned_read_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_relational_hawdb_relational_index_runtime_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_sql_hawdb_sql_clause_diagnostics_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_sql_hawdb_sql_frontend_corpus_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_sort_merge_account_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_fuzz_hawdb_storage_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_relational_hawdb_relational_row_runtime_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_sharded_cache_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_evidence_hawdb_source_inventory_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_relational_hawdb_relational_statement_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_fuzz_hawdb_fuzz_append_replay_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_text_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_relational_hawdb_relational_aggregate_state_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-_hawdb_scan_callback_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_fuzz_hawdb_fuzz_append_seed_7_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_relational_hawdb_relational_qualification_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_document_analysis_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_query_observer_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_term_policy_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_set_value_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_mutation_lowering_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_readiness_hawdb_source_mutation_readiness_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_fuzz_hawdb_fuzz_cli_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_sql_hawdb_sql_create_binding_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_readiness_hawdb_integration_bundle_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_graph_algorithm_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_relational_row_workspace_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_hydration_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_fuzz_hawdb_append_fuzz_cli_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_storage_hawdb_storage_backup_hex_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_projection_evidence_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_manifest_encoding_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_execution_report_value_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_mutation_preflight_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_fuzz_hawdb_fuzz_relational_join_rewrite_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_relational_hawdb_relational_columnar_aggregate_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_readiness_hawdb_graph_route_readiness_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_numeric_execution_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_relational_hawdb_relational_physical_plan_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_readiness_hawdb_replacement_summary_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_manifest_budget_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_fuzz_hawdb_fuzz_fast_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_search_hawdb_search_lexical_spill_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_graph_hash_join_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-_hawdb_linux_ci_fuzz_smoke_test.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-crates_executor_hawdb_spill_compaction_fuzz_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-_hawdb_graph_projection_residency_fuzz_second_half_tests.log",
+        "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-fuzz-test-_hawdb_graph_projection_residency_fuzz_first_half_tests.log"
+      ]
+    },
+    {
+      "name": "python-lock",
+      "command": [
+        "cargo",
+        "generate-lockfile",
+        "--offline",
+        "--manifest-path",
+        "bindings/python/Cargo.toml"
+      ],
+      "started": 1792301365.8931708,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-python-lock.log",
+      "exit": 0,
+      "ended": 1792301366.2471821
+    },
+    {
+      "name": "python-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792301366.296352,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-python-clippy.log",
+      "exit": 0,
+      "ended": 1792301399.9098408
+    }
+  ],
+  "started": 1792299808.122406,
+  "scope": "Pending complete C Data working-unit classification fix on b16de232. Exact modified source identified by hashes until commit. Counterfactual already covers all 67 retained/Arrow tests; current complete-general replay is recorded separately, preserving predecessor successes/adverses independently. Original #986 performance, final CI and genuine approval gates remain open.",
+  "unstaged_diff_sha256": "21beda508ca44615d05368b7b7ce951331cc527b472d8d75be91d6cb0a276032",
+  "source_sha256": {
+    "crates/executor/src/numeric/retained.rs": "971f07cf4d08fbc621e0ec46870bdd084b65b9f07782a55259669d80f80cc219",
+    "docs/RETAINED_ARROW.md": "be5652c084be36ba2dac53722ee8d4f9a909efcb978c81698f474fd2907a8ab0",
+    "src/api/retained_query.rs": "6d9cfe00605796e7489a6384127c542438264cdbd45596f1eaab4653d500bb75",
+    "src/api/retained_query/arrow.rs": "33e3af887f578a209240f33a592dad6dd287721722817c84e9a5ac86dc129621",
+    "src/api/retained_query/arrow/stream.rs": "131c1cbbabf1fb3985c1e9199cb554ece38ac6d912bc1dff0ebebd9e9df3aef5",
+    "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100",
+    "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0"
+  },
+  "same_test_counterfactual": {
+    "status": "passed",
+    "pid": 6324,
+    "base": "b16de232531a3ed1c44ead8fcf37c45c4ad8b584",
+    "stages": [
+      {
+        "stage": "red",
+        "exit_code": 3,
+        "command": [
+          "bazel",
+          "test",
+          "//:hawdb_unit_general_tests",
+          "--test_arg=api::retained_query",
+          "--test_arg=--nocapture",
+          "--repo_env=CARGO_BAZEL_ISOLATED=false",
+          "--repo_env=CARGO_NET_OFFLINE=true",
+          "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-same-tests-v3-red.bep.json"
+        ],
+        "summary": "test result: FAILED. 61 passed; 6 failed;",
+        "raw_test_sha256": "cf130df1f6c43c88d82da4fad2f4cf6a5689d4dfa706005c0a19c30d50f81a73",
+        "test_files_sha256": {
+          "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0",
+          "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100"
+        }
+      },
+      {
+        "stage": "green",
+        "exit_code": 0,
+        "command": [
+          "bazel",
+          "test",
+          "//:hawdb_unit_general_tests",
+          "--test_arg=api::retained_query",
+          "--test_arg=--nocapture",
+          "--repo_env=CARGO_BAZEL_ISOLATED=false",
+          "--repo_env=CARGO_NET_OFFLINE=true",
+          "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-same-tests-v3-green.bep.json"
+        ],
+        "summary": "test result: ok. 67 passed; 0 failed;",
+        "raw_test_sha256": "dda20a14577ba3ff4d3abd03205a7c65b91403ff1bfd8f9f3a4e092c8d107605",
+        "test_files_sha256": {
+          "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0",
+          "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100"
+        }
+      }
+    ],
+    "fixed_production_sha256": {
+      "crates/executor/src/numeric/retained.rs": "971f07cf4d08fbc621e0ec46870bdd084b65b9f07782a55259669d80f80cc219",
+      "src/api/retained_query.rs": "6d9cfe00605796e7489a6384127c542438264cdbd45596f1eaab4653d500bb75",
+      "src/api/retained_query/arrow.rs": "33e3af887f578a209240f33a592dad6dd287721722817c84e9a5ac86dc129621",
+      "src/api/retained_query/arrow/stream.rs": "131c1cbbabf1fb3985c1e9199cb554ece38ac6d912bc1dff0ebebd9e9df3aef5"
+    },
+    "test_files_sha256": {
+      "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0",
+      "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100"
+    },
+    "test_sha256": "b704b2a377f6f9e9ee8d293c55168e215fa7267fd5fdac4b4de296f0794e5385",
+    "ended": 1792295709.02
+  },
+  "predecessor_validation_state": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-state.json",
+  "preserved_adverse_receipt": "/private/tmp/hawdb-wip-ready-20261015/arrow-pydantic-timeout-diagnostic-receipt.json",
+  "pydantic_preserved_adverse_states": [
+    "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v3-state.json",
+    "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v5-state.json",
+    "/private/tmp/hawdb-wip-ready-20261015/arrow-pydantic-timeout-diagnostic-receipt.json"
+  ],
+  "public_consumer": {
+    "passed": 8,
+    "extension": "/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/bazel-bin/bindings/python/hawdb_python_tests.runfiles/_main/bindings/python/python/hawdb/_hawdb.so",
+    "sha256": "08fb8b5c94f6bd43832542d4e084cd8095671523f3b88e2f3e5f91e50f2c76f3",
+    "versions": {
+      "python": "3.11.15 (main, Apr 14 2026, 14:45:51) [Clang 22.1.3 ]",
+      "pyarrow": "26.0.0"
+    },
+    "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-public-consumer.log"
+  },
+  "ended": 1792301399.9501052
+}

@@ -1,0 +1,59 @@
+{
+  "status": "passed",
+  "pid": 6324,
+  "base": "b16de232531a3ed1c44ead8fcf37c45c4ad8b584",
+  "stages": [
+    {
+      "stage": "red",
+      "exit_code": 3,
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--test_arg=api::retained_query",
+        "--test_arg=--nocapture",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-same-tests-v3-red.bep.json"
+      ],
+      "summary": "test result: FAILED. 61 passed; 6 failed;",
+      "raw_test_sha256": "cf130df1f6c43c88d82da4fad2f4cf6a5689d4dfa706005c0a19c30d50f81a73",
+      "test_files_sha256": {
+        "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0",
+        "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100"
+      }
+    },
+    {
+      "stage": "green",
+      "exit_code": 0,
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--test_arg=api::retained_query",
+        "--test_arg=--nocapture",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-same-tests-v3-green.bep.json"
+      ],
+      "summary": "test result: ok. 67 passed; 0 failed;",
+      "raw_test_sha256": "dda20a14577ba3ff4d3abd03205a7c65b91403ff1bfd8f9f3a4e092c8d107605",
+      "test_files_sha256": {
+        "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0",
+        "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100"
+      }
+    }
+  ],
+  "fixed_production_sha256": {
+    "crates/executor/src/numeric/retained.rs": "971f07cf4d08fbc621e0ec46870bdd084b65b9f07782a55259669d80f80cc219",
+    "src/api/retained_query.rs": "6d9cfe00605796e7489a6384127c542438264cdbd45596f1eaab4653d500bb75",
+    "src/api/retained_query/arrow.rs": "33e3af887f578a209240f33a592dad6dd287721722817c84e9a5ac86dc129621",
+    "src/api/retained_query/arrow/stream.rs": "131c1cbbabf1fb3985c1e9199cb554ece38ac6d912bc1dff0ebebd9e9df3aef5"
+  },
+  "test_files_sha256": {
+    "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0",
+    "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100"
+  },
+  "test_sha256": "b704b2a377f6f9e9ee8d293c55168e215fa7267fd5fdac4b4de296f0794e5385",
+  "ended": 1792295709.02
+}

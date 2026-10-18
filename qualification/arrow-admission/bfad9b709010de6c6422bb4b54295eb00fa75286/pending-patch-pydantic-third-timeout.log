@@ -1,0 +1,11 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //bindings/python:hawdb_python_pydantic_tests
+-----------------------------------------------------------------------------
+============================= test session starts ==============================
+platform darwin -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/6d0b08a3bec00fe290239cfeb69f3876/sandbox/darwin-sandbox/633/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_pydantic_tests.runfiles/_main
+collected 44 items
+
+bindings/python/tests/test_pydantic.py ................................. [ 75%]
+........                                                                 [ 93%]
+bindings/python/tests/test_pydantic_extra.py ..s                         [100%]-- Test timed out at 2026-10-18 04:52:53 UTC --

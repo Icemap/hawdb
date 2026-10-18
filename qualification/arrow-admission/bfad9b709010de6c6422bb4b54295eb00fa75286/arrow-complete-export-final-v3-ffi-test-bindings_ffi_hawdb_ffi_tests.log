@@ -1,0 +1,20 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //bindings/ffi:hawdb_ffi_tests
+-----------------------------------------------------------------------------
+
+running 12 tests
+test retained::tests::panic_is_contained_and_output_is_already_empty ... ok
+test retained::tests::misaligned_retained_inputs_and_outputs_refuse_before_typed_access ... ok
+test retained::tests::descriptor_versions_sizes_flags_and_handles_refuse_with_empty_outputs ... ok
+test retained::tests::independent_column_lifetime_identity_and_exact_final_release ... ok
+test retained::tests::inadequate_protocol_handle_limit_refuses_before_binding_and_can_be_corrected ... ok
+test retained::tests::nullable_float_bits_and_node_identity_are_exposed_without_casting ... ok
+test retained::tests::handles_are_shared_across_cursors_and_borrowing_needs_no_additional_owner ... ok
+test retained::tests::slots_backpressure_before_advance_and_retry_after_last_column_release ... ok
+test retained::tests::closed_cursor_refuses_pull_without_recording_a_terminal_failure ... ok
+test retained::tests::selection_limit_shares_the_original_range_and_empty_eof_keeps_fixed_schema ... ok
+test retained::tests::late_budget_failure_is_repeated_and_visible_to_earlier_readable_columns ... ok
+test retained::tests::registration_panic_after_pull_is_terminal_and_preserves_previous_batch ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

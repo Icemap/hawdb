@@ -1,0 +1,53 @@
+{
+  "status": "diagnosis_complete",
+  "pid": 44417,
+  "started": 1792299602.148389,
+  "stages": [
+    {
+      "name": "fixed",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/python:hawdb_python_pydantic_tests",
+        "--test_arg=-vv",
+        "--test_arg=--durations=44",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-pydantic-exit-fixed.bep.json"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-pydantic-exit-fixed.log",
+      "started": 1792299602.153496,
+      "samples": [
+        {
+          "process": 44438,
+          "age_seconds": 35,
+          "sample": "/private/tmp/hawdb-wip-ready-20261015/arrow-pydantic-exit-fixed-sample-35.txt",
+          "exit": 0
+        }
+      ],
+      "pid": 44419,
+      "exit": 0,
+      "ended": 1792299655.833934,
+      "targets": [
+        {
+          "label": "//bindings/python:hawdb_python_pydantic_tests",
+          "status": "PASSED"
+        }
+      ],
+      "test_log": "/private/tmp/hawdb-wip-ready-20261015/arrow-pydantic-exit-fixed-test.log",
+      "test_log_sha256": "062774c98c2558a701d9278eeae7170c34e1a1fed4457f7cfac705ea6ad778a3"
+    }
+  ],
+  "fixed_source_sha256": {
+    "crates/executor/src/numeric/retained.rs": "971f07cf4d08fbc621e0ec46870bdd084b65b9f07782a55259669d80f80cc219",
+    "docs/RETAINED_ARROW.md": "be5652c084be36ba2dac53722ee8d4f9a909efcb978c81698f474fd2907a8ab0",
+    "src/api/retained_query.rs": "6d9cfe00605796e7489a6384127c542438264cdbd45596f1eaab4653d500bb75",
+    "src/api/retained_query/arrow.rs": "33e3af887f578a209240f33a592dad6dd287721722817c84e9a5ac86dc129621",
+    "src/api/retained_query/arrow/stream.rs": "131c1cbbabf1fb3985c1e9199cb554ece38ac6d912bc1dff0ebebd9e9df3aef5",
+    "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100",
+    "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0"
+  },
+  "scope": "Pydantic full-target diagnostics with unchanged cases/features/60s deadline and verbose output. Native samples are diagnostic overhead. Conditional b16 production control retains identical final test files. No source cause or passing gate is inferred from TIMEOUT.",
+  "ended": 1792299655.863507,
+  "fixed_source_restored_and_verified": true
+}

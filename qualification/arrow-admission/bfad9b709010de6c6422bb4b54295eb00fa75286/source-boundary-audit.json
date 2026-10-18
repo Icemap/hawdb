@@ -1,0 +1,41 @@
+{
+  "source": "bfad9b709010de6c6422bb4b54295eb00fa75286",
+  "tree": "be056a432fc6af5c3f8803038eb9424767f63ecd",
+  "main_parent": "ac8c0555a3fabe09e7e577cb499e8b5ca337a8f6",
+  "changed_paths": {
+    ".github/workflows/native-bindings.yml": "05287f772360a42719518037ec3fe5be7fd6907869286aa2a6667623ac1183d4",
+    ".github/workflows/python-bindings.yml": "d0b065b2564bd4f652baf71ff42cd0fb02d1da8d421de4b017b0a755555e4e73",
+    "bindings/ffi/README.md": "f77d82aed033dc9c8ee9cb8414b6a85be5c9c5e4129b687f6986687693b27d82",
+    "bindings/python/README.md": "8009e3b54e9eb769d3496c0a23f08e569016c0e261b0e2ecc3caec67427a550d",
+    "bindings/python/python/hawdb/_hawdb.pyi": "9e721757ff1aaf76a6bf200a0eb050490719a387c962801d05fbbeb08b4f6046",
+    "bindings/python/src/retained.rs": "ea1add9dc23fb7721d59779a19791f68c00b2ec6e2ae664ec43735ec80aa7b14",
+    "bindings/python/src/retained/arrow.rs": "710210d0ca8869df15769e9b70b1a1d9dbefa46a7fda94fa53af70dea4ee8a82",
+    "bindings/python/tests/test_arrow.py": "eac596cca327e5da2b781f7eb585549f25cbcc01c4c746f971997f4ed2a8bb6b",
+    "bindings/python/tests/test_arrow_consumer.py": "7b22f691a590dd4ad9d7397abd2a0c926eb55ee8671ce10bc8bb2e9973567748",
+    "bindings/python/tests/test_stubs.py": "eb3a38ea60587cdbcf5c262d2679084b5bebd903f701605fbeb9de7075ebefb5",
+    "crates/executor/src/numeric/retained.rs": "971f07cf4d08fbc621e0ec46870bdd084b65b9f07782a55259669d80f80cc219",
+    "docs/RETAINED_ARROW.md": "be5652c084be36ba2dac53722ee8d4f9a909efcb978c81698f474fd2907a8ab0",
+    "src/api/mod.rs": "17b01b91dbf21ee202ef972279d6419bd97e5a89a624bea2a1d45ff162a6c076",
+    "src/api/retained_query.rs": "6d9cfe00605796e7489a6384127c542438264cdbd45596f1eaab4653d500bb75",
+    "src/api/retained_query/arrow.rs": "33e3af887f578a209240f33a592dad6dd287721722817c84e9a5ac86dc129621",
+    "src/api/retained_query/arrow/stream.rs": "131c1cbbabf1fb3985c1e9199cb554ece38ac6d912bc1dff0ebebd9e9df3aef5",
+    "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100",
+    "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0",
+    "src/api/retained_query/tests.rs": "31e1c2811f565c6068360c1c3c5b8519c20ba0f5cfeed3d9f28cc3430f5820eb",
+    "src/lib.rs": "6ca4684e45b8632bcb11dddb4e96f24146b4cf194439d504890d8df1867bc55b"
+  },
+  "final_fix_files": {
+    "crates/executor/src/numeric/retained.rs": "971f07cf4d08fbc621e0ec46870bdd084b65b9f07782a55259669d80f80cc219",
+    "docs/RETAINED_ARROW.md": "be5652c084be36ba2dac53722ee8d4f9a909efcb978c81698f474fd2907a8ab0",
+    "src/api/retained_query.rs": "6d9cfe00605796e7489a6384127c542438264cdbd45596f1eaab4653d500bb75",
+    "src/api/retained_query/arrow.rs": "33e3af887f578a209240f33a592dad6dd287721722817c84e9a5ac86dc129621",
+    "src/api/retained_query/arrow/stream.rs": "131c1cbbabf1fb3985c1e9199cb554ece38ac6d912bc1dff0ebebd9e9df3aef5",
+    "src/api/retained_query/arrow/stream_tests.rs": "64b7168117bd5756241deea0cbd27aac85782b9ddc587a1d053f95507af22100",
+    "src/api/retained_query/arrow/tests.rs": "4822f8a4aa047e81323ea94124eeff20fc42fef52a5a5dd32dc667dd46a7a7e0"
+  },
+  "diff_commands": [
+    "git diff b16de232531a3ed1c44ead8fcf37c45c4ad8b584 bfad9b709010de6c6422bb4b54295eb00fa75286",
+    "git diff --stat ac8c0555a3fabe09e7e577cb499e8b5ca337a8f6 bfad9b709010de6c6422bb4b54295eb00fa75286"
+  ],
+  "scope": "Actual published source hashes. Earlier seven-file equality with 6881 is superseded by admission fixes."
+}

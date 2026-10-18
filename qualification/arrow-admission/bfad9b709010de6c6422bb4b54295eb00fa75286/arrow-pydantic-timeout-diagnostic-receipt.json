@@ -1,0 +1,13 @@
+{
+  "status": "timeout_reproduced",
+  "time": 1792296571.197817,
+  "source": "b16de232 with unchanged frozen seven-file complete-export patch",
+  "original_result": "39/44 completed before 60s timeout",
+  "diagnostic_result": "4/44 completed before unchanged 60s timeout",
+  "native_sample": "arrow-pydantic-timeout-native-sample.txt",
+  "observation": "Sample contains Database::open, checkpoint closure publication and durability directory synchronization with fcntl. Test progress varies substantially. This does not establish the causal role of host contention or exonerate implementation.",
+  "changed_deadlines": false,
+  "changed_durability": false,
+  "raw_test_sha256": "7dc44c20f0fd44640b58c3135961104bf16daa95d23eed763f73e0d726cea3e6",
+  "gate": "Pydantic remains unpassed; publication remains stopped."
+}

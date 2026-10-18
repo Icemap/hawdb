@@ -1,0 +1,23 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //bindings/python:hawdb_python_tests
+-----------------------------------------------------------------------------
+============================= test session starts ==============================
+platform darwin -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/6d0b08a3bec00fe290239cfeb69f3876/sandbox/darwin-sandbox/627/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_tests.runfiles/_main
+collected 233 items / 2 skipped
+
+bindings/python/tests/test_arrow.py ...............                      [  6%]
+bindings/python/tests/test_file.py .....                                 [  8%]
+bindings/python/tests/test_lite.py .ss                                   [  9%]
+bindings/python/tests/test_memory.py .....                               [ 12%]
+bindings/python/tests/test_notebook.py ................................. [ 26%]
+................................                                         [ 39%]
+bindings/python/tests/test_params.py ....................ss........      [ 52%]
+bindings/python/tests/test_pydantic_extra.py .s.                         [ 54%]
+bindings/python/tests/test_retained.py ...........................       [ 65%]
+bindings/python/tests/test_smoke.py ..............                       [ 71%]
+bindings/python/tests/test_stubs.py .................................... [ 87%]
+....                                                                     [ 88%]
+bindings/python/tests/test_transactions.py ..........................    [100%]
+
+================== 228 passed, 7 skipped in 241.92s (0:04:01) ==================

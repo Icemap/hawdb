@@ -1,0 +1,18 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_general_tests
+-----------------------------------------------------------------------------
+
+running 1 test
+
+thread 'api::retained_query::tests::arrow::complete_export_wrapper_impossibility_is_not_temporary_pressure' (81012394) panicked at src/api/retained_query/arrow/tests.rs:352:5:
+complete schema and array wrapper metadata alone exceeds the whole result budget: RetainedAdmission(Capacity { resource: Bytes, requested: 33856, available: 28385, retryable: true })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test api::retained_query::tests::arrow::complete_export_wrapper_impossibility_is_not_temporary_pressure ... FAILED
+
+failures:
+
+failures:
+    api::retained_query::tests::arrow::complete_export_wrapper_impossibility_is_not_temporary_pressure
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2064 filtered out; finished in 0.02s
+

@@ -1,0 +1,9 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_general_tests
+-----------------------------------------------------------------------------
+
+running 1 test
+test api::automatic_checkpoint::tests::coalesced_capture::a_shared_read_guard_allows_refresh_of_a_suffix_after_prefix_sealing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2063 filtered out; finished in 7.33s
+

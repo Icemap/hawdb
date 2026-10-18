@@ -1,0 +1,18 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.15, pytest-9.1.1, pluggy-1.7.0 -- /private/tmp/hawdb-wip-ready-20261015/resource-qualification/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit
+configfile: bindings/python/pyproject.toml
+collecting ... collected 8 items
+
+bindings/python/tests/test_arrow_consumer.py::test_public_record_batch_preserves_native_addresses_offsets_and_lifetime[file] PASSED [ 12%]
+bindings/python/tests/test_arrow_consumer.py::test_public_record_batch_preserves_native_addresses_offsets_and_lifetime[memory] PASSED [ 25%]
+bindings/python/tests/test_arrow_consumer.py::test_public_stream_reader_backpressure_is_error_and_release_allows_retry[file] PASSED [ 37%]
+bindings/python/tests/test_arrow_consumer.py::test_public_stream_reader_backpressure_is_error_and_release_allows_retry[memory] PASSED [ 50%]
+bindings/python/tests/test_arrow_consumer.py::test_public_empty_schema_and_sparse_refusal[file] PASSED [ 62%]
+bindings/python/tests/test_arrow_consumer.py::test_public_empty_schema_and_sparse_refusal[memory] PASSED [ 75%]
+bindings/python/tests/test_arrow_consumer.py::test_public_numeric_bits_and_schema_cast_refusal[file] PASSED [ 87%]
+bindings/python/tests/test_arrow_consumer.py::test_public_numeric_bits_and_schema_cast_refusal[memory] PASSED [100%]
+
+- generated xml file: /private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-public-consumer.xml -
+============================== 8 passed in 11.23s ==============================

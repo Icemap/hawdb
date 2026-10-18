@@ -1,0 +1,30 @@
+{
+  "issue": 987,
+  "pr": 1071,
+  "source": "bfad9b709010de6c6422bb4b54295eb00fa75286",
+  "tree": "be056a432fc6af5c3f8803038eb9424767f63ecd",
+  "counterfactual": {
+    "red": "61 passed, 6 failed",
+    "green": "67 passed, 0 failed",
+    "test_set_sha256": "b704b2a377f6f9e9ee8d293c55168e215fa7267fd5fdac4b4de296f0794e5385"
+  },
+  "public_consumer": {
+    "passed": 8,
+    "extension": "/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/bazel-bin/bindings/python/hawdb_python_tests.runfiles/_main/bindings/python/python/hawdb/_hawdb.so",
+    "sha256": "08fb8b5c94f6bd43832542d4e084cd8095671523f3b88e2f3e5f91e50f2c76f3",
+    "versions": {
+      "python": "3.11.15 (main, Apr 14 2026, 14:45:51) [Clang 22.1.3 ]",
+      "pyarrow": "26.0.0"
+    },
+    "log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-final-v6-public-consumer.log"
+  },
+  "native_binary_archived": false,
+  "raw_bep_archived": false,
+  "approval": "Not requested or inferred by this packet.",
+  "remaining": [
+    "Exact-head platform/Prow checks",
+    "Independent review and genuine maintainer approval",
+    "Full original #986 matrices/resources/conversion attribution/write/RSS/tail/exceptions",
+    "Remaining node delivery and final #986 source integration/approval/Tide"
+  ]
+}

@@ -1,0 +1,727 @@
+[
+  {
+    "label": "//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300267802",
+    "lastStopTimeMillis": "1792300275501"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_graph_overlay_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300303476",
+    "lastStopTimeMillis": "1792300319353"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_relational_index_view_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300303514",
+    "lastStopTimeMillis": "1792300404482"
+  },
+  {
+    "label": "//crates/executor:hawdb_execution_lifecycle_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300303561",
+    "lastStopTimeMillis": "1792300304676"
+  },
+  {
+    "label": "//crates/executor:hawdb_transform_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300301753",
+    "lastStopTimeMillis": "1792300304949"
+  },
+  {
+    "label": "//crates/fuzz:hawdb_parser_fuzz_cli_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300304899",
+    "lastStopTimeMillis": "1792300305392"
+  },
+  {
+    "label": "//crates/search:hawdb_search_compression_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300323926",
+    "lastStopTimeMillis": "1792300325439"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_artifact_binding_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300325627",
+    "lastStopTimeMillis": "1792300327367"
+  },
+  {
+    "label": "//crates/search:hawdb_search_candidate_evidence_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300324493",
+    "lastStopTimeMillis": "1792300325740"
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_trace_cost_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300327998",
+    "lastStopTimeMillis": "1792300328338"
+  },
+  {
+    "label": "//crates/evidence:hawdb_resource_profile_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300330802",
+    "lastStopTimeMillis": "1792300331828"
+  },
+  {
+    "label": "//crates/search:hawdb_search_document_frequency_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300325662",
+    "lastStopTimeMillis": "1792300353138"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_transaction_locks_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300357119",
+    "lastStopTimeMillis": "1792300358714"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_graph_constraints_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300357159",
+    "lastStopTimeMillis": "1792300358398"
+  },
+  {
+    "label": "//crates/search:hawdb_search_concurrent_read_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300358687",
+    "lastStopTimeMillis": "1792300362204"
+  },
+  {
+    "label": "//crates/search:hawdb_search_block_encoding_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300357243",
+    "lastStopTimeMillis": "1792300364180"
+  },
+  {
+    "label": "//crates/search:hawdb_search_spool_encoding_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300362425",
+    "lastStopTimeMillis": "1792300367728"
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_field_plan_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300363820",
+    "lastStopTimeMillis": "1792300369983"
+  },
+  {
+    "label": "//:hawdb_concurrent_key_range_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300371558",
+    "lastStopTimeMillis": "1792300374563"
+  },
+  {
+    "label": "//crates/cypher:hawdb_cypher_backtracking_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300375096",
+    "lastStopTimeMillis": "1792300376122"
+  },
+  {
+    "label": "//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300375264",
+    "lastStopTimeMillis": "1792300375588"
+  },
+  {
+    "label": "//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300375449",
+    "lastStopTimeMillis": "1792300376041"
+  },
+  {
+    "label": "//crates/evidence:hawdb_inventory_health_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300375472",
+    "lastStopTimeMillis": "1792300380990"
+  },
+  {
+    "label": "//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300370294",
+    "lastStopTimeMillis": "1792300375260"
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_full_text_cost_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300376827",
+    "lastStopTimeMillis": "1792300377385"
+  },
+  {
+    "label": "//crates/search:hawdb_search_hex_decoding_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300375578",
+    "lastStopTimeMillis": "1792300376788"
+  },
+  {
+    "label": "//crates/executor:hawdb_batch_dispatch_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300377106",
+    "lastStopTimeMillis": "1792300378879"
+  },
+  {
+    "label": "//crates/executor:hawdb_result_delivery_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300377529",
+    "lastStopTimeMillis": "1792300379497"
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300380110",
+    "lastStopTimeMillis": "1792300381697"
+  },
+  {
+    "label": "//crates/executor:hawdb_vector_seed_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300379620",
+    "lastStopTimeMillis": "1792300381145"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_source_scan_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300381581",
+    "lastStopTimeMillis": "1792300406096"
+  },
+  {
+    "label": "//crates/compat:hawdb_compat_contract_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300380294",
+    "lastStopTimeMillis": "1792300381111"
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300381732",
+    "lastStopTimeMillis": "1792300382154"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_file_lock_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300381927",
+    "lastStopTimeMillis": "1792300384388"
+  },
+  {
+    "label": "//crates/search:hawdb_search_bounded_file_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300381796",
+    "lastStopTimeMillis": "1792300383127"
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_cardinality_defaults_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300383766",
+    "lastStopTimeMillis": "1792300384285"
+  },
+  {
+    "label": "//crates/executor:hawdb_morsel_oracle_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300381355",
+    "lastStopTimeMillis": "1792300384540"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_durable_manifest_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300385145",
+    "lastStopTimeMillis": "1792300392929"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_projected_artifact_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300385305",
+    "lastStopTimeMillis": "1792300413974"
+  },
+  {
+    "label": "//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300385481",
+    "lastStopTimeMillis": "1792300390694"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300386345",
+    "lastStopTimeMillis": "1792300388200"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300386964",
+    "lastStopTimeMillis": "1792300390506"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300387093",
+    "lastStopTimeMillis": "1792300390735"
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_explain_report_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300382177",
+    "lastStopTimeMillis": "1792300391417"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_durable_envelope_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300392087",
+    "lastStopTimeMillis": "1792300397285"
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300392267",
+    "lastStopTimeMillis": "1792300392935"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300392267",
+    "lastStopTimeMillis": "1792300393716"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_append_reader_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300392425",
+    "lastStopTimeMillis": "1792300405962"
+  },
+  {
+    "label": "//crates/search:hawdb_search_spool_decoding_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300383913",
+    "lastStopTimeMillis": "1792300396205"
+  },
+  {
+    "label": "//crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300401282",
+    "lastStopTimeMillis": "1792300408854"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_positioned_read_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300411234",
+    "lastStopTimeMillis": "1792300412406"
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_index_runtime_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300375638",
+    "lastStopTimeMillis": "1792300414906"
+  },
+  {
+    "label": "//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300416485",
+    "lastStopTimeMillis": "1792300418983"
+  },
+  {
+    "label": "//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300416699",
+    "lastStopTimeMillis": "1792300420234"
+  },
+  {
+    "label": "//crates/executor:hawdb_sort_merge_account_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300385230",
+    "lastStopTimeMillis": "1792300421693"
+  },
+  {
+    "label": "//crates/fuzz:hawdb_storage_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300376976",
+    "lastStopTimeMillis": "1792300427286"
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_row_runtime_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300387939",
+    "lastStopTimeMillis": "1792300406964"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_sharded_cache_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300434890",
+    "lastStopTimeMillis": "1792300438049"
+  },
+  {
+    "label": "//crates/evidence:hawdb_source_inventory_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300435140",
+    "lastStopTimeMillis": "1792300437667"
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_statement_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300396707",
+    "lastStopTimeMillis": "1792300398106"
+  },
+  {
+    "label": "//crates/fuzz:hawdb_fuzz_append_replay_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300387248",
+    "lastStopTimeMillis": "1792300432213"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_text_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300437072",
+    "lastStopTimeMillis": "1792300438417"
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_aggregate_state_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300392430",
+    "lastStopTimeMillis": "1792300409840"
+  },
+  {
+    "label": "//:hawdb_scan_callback_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300392620",
+    "lastStopTimeMillis": "1792300410196"
+  },
+  {
+    "label": "//crates/fuzz:hawdb_fuzz_append_seed_7_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300387716",
+    "lastStopTimeMillis": "1792300436607"
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_qualification_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300417121",
+    "lastStopTimeMillis": "1792300418639"
+  },
+  {
+    "label": "//crates/search:hawdb_search_document_analysis_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300416913",
+    "lastStopTimeMillis": "1792300424032"
+  },
+  {
+    "label": "//crates/executor:hawdb_query_observer_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300435325",
+    "lastStopTimeMillis": "1792300436285"
+  },
+  {
+    "label": "//crates/search:hawdb_search_term_policy_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300363495",
+    "lastStopTimeMillis": "1792300448189"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_set_value_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300448478",
+    "lastStopTimeMillis": "1792300450019"
+  },
+  {
+    "label": "//crates/executor:hawdb_mutation_lowering_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300437195",
+    "lastStopTimeMillis": "1792300438052"
+  },
+  {
+    "label": "//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300436144",
+    "lastStopTimeMillis": "1792300443710"
+  },
+  {
+    "label": "//crates/fuzz:hawdb_fuzz_cli_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300443896",
+    "lastStopTimeMillis": "1792300444350"
+  },
+  {
+    "label": "//crates/sql:hawdb_sql_create_binding_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300456661",
+    "lastStopTimeMillis": "1792300457164"
+  },
+  {
+    "label": "//crates/readiness:hawdb_integration_bundle_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300427950",
+    "lastStopTimeMillis": "1792300454786"
+  },
+  {
+    "label": "//crates/executor:hawdb_graph_algorithm_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300446918",
+    "lastStopTimeMillis": "1792300449582"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300477344",
+    "lastStopTimeMillis": "1792300512530"
+  },
+  {
+    "label": "//crates/search:hawdb_search_hydration_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300447279",
+    "lastStopTimeMillis": "1792300448598"
+  },
+  {
+    "label": "//crates/fuzz:hawdb_append_fuzz_cli_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300446527",
+    "lastStopTimeMillis": "1792300471902"
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_backup_hex_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "totalNumCached": 1,
+    "firstStartTimeMillis": "1792300483359",
+    "lastStopTimeMillis": "1792300484461"
+  },
+  {
+    "label": "//crates/search:hawdb_search_projection_evidence_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300328075",
+    "lastStopTimeMillis": "1792300483107"
+  },
+  {
+    "label": "//crates/search:hawdb_search_manifest_encoding_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300448269",
+    "lastStopTimeMillis": "1792300450140"
+  },
+  {
+    "label": "//crates/executor:hawdb_execution_report_value_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300448568",
+    "lastStopTimeMillis": "1792300450384"
+  },
+  {
+    "label": "//crates/executor:hawdb_mutation_preflight_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300456083",
+    "lastStopTimeMillis": "1792300457445"
+  },
+  {
+    "label": "//crates/fuzz:hawdb_fuzz_relational_join_rewrite_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300456821",
+    "lastStopTimeMillis": "1792300461410"
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300474421",
+    "lastStopTimeMillis": "1792300478479"
+  },
+  {
+    "label": "//crates/readiness:hawdb_graph_route_readiness_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300422482",
+    "lastStopTimeMillis": "1792300472524"
+  },
+  {
+    "label": "//crates/executor:hawdb_numeric_execution_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300477520",
+    "lastStopTimeMillis": "1792300478756"
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_physical_plan_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300478869",
+    "lastStopTimeMillis": "1792300482363"
+  },
+  {
+    "label": "//crates/readiness:hawdb_replacement_summary_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300447376",
+    "lastStopTimeMillis": "1792300519629"
+  },
+  {
+    "label": "//crates/search:hawdb_search_manifest_budget_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300401398",
+    "lastStopTimeMillis": "1792300569319"
+  },
+  {
+    "label": "//crates/fuzz:hawdb_fuzz_fast_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300364375",
+    "lastStopTimeMillis": "1792300617185"
+  },
+  {
+    "label": "//crates/search:hawdb_search_lexical_spill_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300449336",
+    "lastStopTimeMillis": "1792300625698"
+  },
+  {
+    "label": "//crates/executor:hawdb_graph_hash_join_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300440289",
+    "lastStopTimeMillis": "1792300662601"
+  },
+  {
+    "label": "//:hawdb_linux_ci_fuzz_smoke_test",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300483446",
+    "lastStopTimeMillis": "1792300701255"
+  },
+  {
+    "label": "//crates/executor:hawdb_spill_compaction_fuzz_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300415518",
+    "lastStopTimeMillis": "1792300718234"
+  },
+  {
+    "label": "//:hawdb_graph_projection_residency_fuzz_second_half_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792300739663",
+    "lastStopTimeMillis": "1792301050593"
+  },
+  {
+    "label": "//:hawdb_graph_projection_residency_fuzz_first_half_tests",
+    "overallStatus": "PASSED",
+    "totalRunCount": 1,
+    "firstStartTimeMillis": "1792301050921",
+    "lastStopTimeMillis": "1792301352743"
+  }
+]

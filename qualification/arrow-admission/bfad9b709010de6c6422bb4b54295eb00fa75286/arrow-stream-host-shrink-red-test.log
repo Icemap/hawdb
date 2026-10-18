@@ -1,0 +1,20 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_general_tests
+-----------------------------------------------------------------------------
+
+running 1 test
+
+thread 'api::retained_query::tests::arrow_stream::stream_host_capacity_shrink_is_terminal_before_schema_or_array_adoption' (81280809) panicked at src/api/retained_query/arrow/stream_tests.rs:93:9:
+assertion `left == right` failed
+  left: Open
+ right: Failed
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test api::retained_query::tests::arrow_stream::stream_host_capacity_shrink_is_terminal_before_schema_or_array_adoption ... FAILED
+
+failures:
+
+failures:
+    api::retained_query::tests::arrow_stream::stream_host_capacity_shrink_is_terminal_before_schema_or_array_adoption
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2070 filtered out; finished in 0.02s
+

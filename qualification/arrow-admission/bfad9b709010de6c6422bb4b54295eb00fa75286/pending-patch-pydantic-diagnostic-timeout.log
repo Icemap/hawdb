@@ -1,0 +1,14 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //bindings/python:hawdb_python_pydantic_tests
+-----------------------------------------------------------------------------
+============================= test session starts ==============================
+platform darwin -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0 -- /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/6d0b08a3bec00fe290239cfeb69f3876/sandbox/darwin-sandbox/631/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_pydantic_tests.runfiles/_main/bindings/python/_hawdb_python_pydantic_tests.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/6d0b08a3bec00fe290239cfeb69f3876/sandbox/darwin-sandbox/631/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_pydantic_tests.runfiles/_main
+collecting ... collected 44 items
+
+bindings/python/tests/test_pydantic.py::test_parse_scalar_rows[file] PASSED [  2%]
+bindings/python/tests/test_pydantic.py::test_parse_scalar_rows[memory] PASSED [  4%]
+bindings/python/tests/test_pydantic.py::test_parse_consumes_only_remaining_rows[file] PASSED [  6%]
+bindings/python/tests/test_pydantic.py::test_parse_consumes_only_remaining_rows[memory] PASSED [  9%]
+bindings/python/tests/test_pydantic.py::test_parse_binds_property_columns_through_aliases[file] -- Test timed out at 2026-10-18 04:08:59 UTC --

@@ -1,0 +1,7 @@
+{
+  "arrow_patch": "Same seven repair-file hashes as the current published fix; Pydantic reached its unchanged 60s deadline three times: after 39/44, 4/44, then after printing all44 outcomes without completing process exit.",
+  "root_cause_proven": false,
+  "final_replay": "Original Pydantic target/deadline passes in final-verification.json; prior timeout logs are retained.",
+  "separate_986_integration": "The latest-main combined #986 tree ddaa5b64 also reached its unchanged contract 300s deadline after 23/32 cases, then passed all32 in155.1s. This is a separate assembled source, not standalone Arrow evidence.",
+  "no_causal_claim": "Observed concurrency and native synchronization samples do not establish that host contention caused either timeout. No source/assertion/deadline/durability change was used to obtain the replays."
+}

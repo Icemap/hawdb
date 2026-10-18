@@ -1,0 +1,113 @@
+exec ${PAGER:-/usr/bin/less} "$0" || exit 1
+Executing tests from //:hawdb_unit_general_tests
+-----------------------------------------------------------------------------
+
+running 67 tests
+
+thread 'api::retained_query::tests::arrow::direct_export_neighboring_intrinsic_boundary_is_permanent_without_partial_adoption' (81310469) panicked at src/api/retained_query/arrow/tests.rs:394:5:
+assertion failed: matches!(batch.export_arrow(boundary + 1),
+    Err(RetainedQueryError::WorkingUnitTooLarge))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'api::retained_query::tests::arrow::complete_export_wrapper_impossibility_is_not_temporary_pressure' (81310466) panicked at src/api/retained_query/arrow/tests.rs:355:9:
+assertion `left == right` failed
+  left: RuntimeRetainedResultSnapshot { budget_bytes: 65536, handle_limit: 1024, retained_bytes: 2639, peak_retained_bytes: 2639, buffer_owners: 2, view_handles: 2, peak_view_handles: 2, backpressure_events: 0 }
+ right: RuntimeRetainedResultSnapshot { budget_bytes: 65536, handle_limit: 1024, retained_bytes: 2639, peak_retained_bytes: 37151, buffer_owners: 2, view_handles: 2, peak_view_handles: 6, backpressure_events: 1 }
+test api::retained_query::tests::arrow::impossible_protocol_and_wrapper_overflow_refuse_without_partial_ownership ... ok
+
+thread 'api::retained_query::tests::arrow::direct_schema_export_includes_its_borrowed_input_in_the_complete_allowance' (81310472) panicked at src/api/retained_query/arrow/tests.rs:445:5:
+assertion failed: matches!(batch.export_arrow_schema(boundary + 1),
+    Err(RetainedQueryError::WorkingUnitTooLarge))
+
+thread 'api::retained_query::tests::arrow::direct_export_query_ledger_pressure_clears_when_the_source_cursor_closes' (81310470) panicked at src/api/retained_query/arrow/tests.rs:495:5:
+Execution(Execution("query memory ledger would use 65538 bytes while charging retained_query (result_materialization), exceeding query_memory_bytes 65536"))
+test api::retained_query::tests::adapter_delivery_failure_is_sticky_and_drops_source_without_revoking_views ... ok
+test api::retained_query::tests::an_impossible_batch_is_terminal_even_while_another_cursor_retains_data ... ok
+test api::retained_query::tests::arrow::contiguous_export_shares_values_with_nonzero_child_offsets_and_survives_close ... ok
+test api::retained_query::tests::arrow::schema_ownership_does_not_keep_a_result_slot ... ok
+test api::retained_query::tests::arrow::direct_export_source_pins_remain_separate_from_the_result_allowance ... ok
+test api::retained_query::tests::arrow::earlier_arrow_export_observes_late_failure_and_keeps_payload_readable ... ok
+test api::retained_query::tests::arrow::moved_child_remains_valid_after_record_batch_release ... ok
+test api::retained_query::tests::adapter_capacity_is_admitted_before_source_work_and_stays_with_the_view ... ok
+test api::retained_query::tests::adapter_minimum_handles_refuse_before_binding_and_allow_host_correction ... ok
+test api::retained_query::tests::arrow::direct_export_live_array_byte_pressure_remains_retryable_after_intrinsic_preflight ... ok
+test api::retained_query::tests::arrow::direct_export_neighboring_intrinsic_boundary_is_permanent_without_partial_adoption ... FAILED
+test api::retained_query::tests::arrow::nullable_float_bits_and_all_null_empty_selection_survive_arrow_layout ... ok
+test api::retained_query::tests::arrow::direct_schema_export_includes_its_borrowed_input_in_the_complete_allowance ... FAILED
+test api::retained_query::tests::arrow::complete_export_wrapper_impossibility_is_not_temporary_pressure ... FAILED
+test api::retained_query::tests::arrow::direct_export_query_ledger_pressure_clears_when_the_source_cursor_closes ... FAILED
+test api::retained_query::tests::arrow::temporary_handle_pressure_rolls_back_and_release_allows_export_retry ... ok
+test api::retained_query::tests::arrow_stream::completed_stream_remains_eof_after_a_later_schema_capacity_failure ... ok
+test api::retained_query::tests::arrow_stream::exhausted_stream_confirms_eof_at_the_exact_handle_cap_with_live_arrays ... ok
+test api::retained_query::tests::arrow_stream::child_handle_admission_failure_precedes_source_and_original_cursor_take_is_atomic ... ok
+test api::retained_query::tests::arrow::sparse_selection_refuses_without_charging_or_copying ... ok
+test api::retained_query::tests::arrow_stream::empty_selected_batch_is_not_arrow_eof_and_invalid_outputs_do_not_advance ... ok
+
+thread 'api::retained_query::tests::arrow_stream::stream_host_capacity_shrink_is_terminal_before_schema_adoption' (81310491) panicked at src/api/retained_query/arrow/stream_tests.rs:94:5:
+assertion `left == right` failed
+  left: Open
+ right: Failed
+test api::retained_query::tests::arrow_stream::later_sparse_selection_keeps_earlier_arrays_provisional_and_readable ... 
+thread 'api::retained_query::tests::arrow_stream::stream_host_capacity_shrink_is_terminal_before_array_adoption' (81310490) panicked at src/api/retained_query/arrow/stream_tests.rs:94:5:
+assertion `left == right` failed
+  left: Open
+ right: Failed
+ok
+own-wrapper-boundary=51489 code=0 status=Open retained=RuntimeRetainedResultSnapshot { budget_bytes: test api::retained_query::tests::arrow_stream::module_owner_survives_moved_stream_and_independent_array_schema_release ... ok
+65536, handle_limit: 1024, retained_bytes: 65536, peak_retained_bytes: 65536test api::retained_query::tests::arrow_stream::stream_creation_schema_and_stopped_consumer_do_not_pull_or_prefetch ... ok
+, test api::retained_query::tests::arrow_stream::stream_metadata_byte_pressure_from_a_live_array_remains_retryable ... ok
+test api::retained_query::tests::arrow_stream::stream_metadata_does_not_charge_source_pins_to_the_result_allowance ... ok
+buffer_owners: 2, view_handles: 7, peak_view_handles: 7, backpressure_events: 0 }
+test api::retained_query::tests::arrow_stream::sparse_selection_and_late_budget_remain_terminal_after_schema_requests ... ok
+test api::retained_query::tests::bytes_too_small_fail_before_visiting_a_source_row ... ok
+test api::retained_query::tests::cancellation_is_terminal_without_revoking_a_previous_batch_or_source_pin ... ok
+test api::retained_query::tests::arrow_stream::two_slot_backpressure_is_error_before_advancement_and_release_allows_retry ... ok
+test api::retained_query::tests::arrow_stream::stream_metadata_one_byte_over_intrinsic_allowance_preserves_cursor ... ok
+test api::retained_query::tests::arrow_stream::unusable_stream_protocol_preserves_cursor_and_concurrent_pulls_serialize ... ok
+test api::retained_query::tests::consumed_numeric_task_larger_allowance_never_raises_host_query_cap ... ok
+test api::retained_query::tests::arrow_stream::stream_host_capacity_shrink_is_terminal_before_schema_adoption ... FAILED
+test api::retained_query::tests::arrow_stream::stream_host_capacity_shrink_is_terminal_before_array_adoption ... FAILED
+test api::retained_query::tests::arrow_stream::stream_metadata_long_schema_and_empty_source_fit_the_complete_protocol ... ok
+test api::retained_query::tests::arrow_stream::stream_own_metadata_cannot_create_permanent_retryable_pressure ... ok
+test api::retained_query::tests::empty_typed_source_has_a_schema_and_completes_on_demand ... ok
+test api::retained_query::tests::cumulative_budget_failure_remains_terminal_and_marks_earlier_batches_failed ... ok
+test api::retained_query::tests::consumed_numeric_task_query_cap_includes_pinned_source ... ok
+test api::retained_query::tests::demanded_eof_releases_source_capacity_while_last_batch_remains_owned ... ok
+test api::retained_query::tests::heap_source_continues_after_database_close_without_retaining_its_read_pin ... ok
+test api::retained_query::tests::incompatible_requests_refuse_before_creating_owners ... ok
+test api::retained_query::tests::different_cursors_share_the_configured_handle_limit_and_release_every_charge ... ok
+test api::retained_query::tests::distinct_pinned_source_generations_share_aggregate_memory_admission ... ok
+test api::retained_query::tests::consumed_numeric_task_reservations_never_widen_zero_or_tiny_caps ... ok
+test api::retained_query::tests::offset_and_limit_preserve_physical_values_and_selection_range ... ok
+test api::retained_query::tests::more_slots_still_obey_shared_handles_and_never_prefetch ... ok
+test api::retained_query::tests::oversized_adapter_cursor_capacity_fails_without_retaining_control_or_source ... ok
+test api::retained_query::tests::nullable_float_schema_and_ieee_bits_do_not_depend_on_the_first_row ... ok
+test api::retained_query::tests::larger_cursor_options_cannot_bypass_database_row_or_payload_limits ... ok
+test api::retained_query::tests::replacing_the_ordinary_governor_cannot_multiply_a_bound_retained_allowance ... ok
+test api::retained_query::tests::snapshot_isolation_and_cursor_database_close_do_not_revoke_batches ... ok
+test api::retained_query::tests::result_ceiling_does_not_reserve_unused_memory_while_streaming ... ok
+test api::retained_query::tests::one_shared_handle_cannot_fit_a_cursor_and_its_first_batch ... ok
+test api::retained_query::tests::snapshot_created_before_runtime_configuration_uses_the_shared_host_owner ... ok
+test api::retained_query::tests::precreated_read_snapshots_reuse_the_same_source_capacity_bound ... ok
+test api::retained_query::tests::pinned_source_temporary_shared_work_remains_retryable_without_advancing ... ok
+test api::retained_query::tests::source_capacity_charge_survives_database_close_and_ends_without_revoking_views ... ok
+test api::retained_query::tests::sparse_labels_bound_source_work_and_empty_batch_is_not_eof ... ok
+test api::retained_query::tests::two_slots_apply_before_source_work_and_last_view_release_allows_retry ... ok
+test api::retained_query::tests::unrequested_source_capacity_refuses_before_pinning_and_rolls_back_admission ... ok
+test api::retained_query::tests::pinned_source_runtime_boundary_is_terminal_and_neighboring_budget_progresses ... ok
+test api::retained_query::tests::pinned_source_is_separate_from_the_result_ceiling_and_held_views_are_retryable ... ok
+test api::retained_query::tests::pinned_source_query_boundary_is_terminal_and_neighboring_budget_progresses ... ok
+test api::retained_query::tests::consumed_numeric_task_result_cap_has_an_exact_first_batch_boundary ... ok
+
+failures:
+
+failures:
+    api::retained_query::tests::arrow::complete_export_wrapper_impossibility_is_not_temporary_pressure
+    api::retained_query::tests::arrow::direct_export_neighboring_intrinsic_boundary_is_permanent_without_partial_adoption
+    api::retained_query::tests::arrow::direct_export_query_ledger_pressure_clears_when_the_source_cursor_closes
+    api::retained_query::tests::arrow::direct_schema_export_includes_its_borrowed_input_in_the_complete_allowance
+    api::retained_query::tests::arrow_stream::stream_host_capacity_shrink_is_terminal_before_array_adoption
+    api::retained_query::tests::arrow_stream::stream_host_capacity_shrink_is_terminal_before_schema_adoption
+
+test result: FAILED. 61 passed; 6 failed; 0 ignored; 0 measured; 2006 filtered out; finished in 0.26s
+

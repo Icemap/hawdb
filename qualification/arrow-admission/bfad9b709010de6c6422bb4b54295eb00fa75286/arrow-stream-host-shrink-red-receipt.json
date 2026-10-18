@@ -1,0 +1,9 @@
+{
+  "base": "b16de232531a3ed1c44ead8fcf37c45c4ad8b584",
+  "production_diff_sha256": "92cd867f6a8e7e0c8a85460af8bacb9d88e0c283380e39fc68fa37b554cacecc",
+  "regression": "stream_host_capacity_shrink_is_terminal_before_schema_or_array_adoption",
+  "result": "semantic RED; 0 passed, 1 failed; actual Open instead of Failed after erroneous first callback",
+  "setup_assertions_passed": true,
+  "test_log_sha256": "9cc91cbd2343d96f51b9d94a82a189dcc55436584d8471b577f8ecd116be9fce",
+  "scope": "Direct-export fix in progress plus additive stream regression; published b16 constructor preflight alone is insufficient after public update_resources lowers hard memory capacity."
+}

@@ -1,0 +1,22 @@
+{
+  "status": "terminal",
+  "pid": 25200,
+  "source": "b16de232531a3ed1c44ead8fcf37c45c4ad8b584",
+  "source_tree": "00371bda1e5b341ad745bfb70e2c67045f39a0fa",
+  "added_test_sha256": "140d61cc62bf333a879326935bb0a2527c0b2b5483675c2f9b432701e5d6f35b",
+  "exit_code": 3,
+  "command": [
+    "bazel",
+    "test",
+    "//:hawdb_unit_general_tests",
+    "--test_arg=api::retained_query::tests::arrow::complete_export_wrapper_impossibility_is_not_temporary_pressure",
+    "--test_arg=--exact",
+    "--test_arg=--nocapture",
+    "--repo_env=CARGO_BAZEL_ISOLATED=false",
+    "--repo_env=CARGO_NET_OFFLINE=true",
+    "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-unit-diagnostic.bep.json"
+  ],
+  "raw_log": "/private/tmp/hawdb-wip-ready-20261015/arrow-complete-export-unit-diagnostic-test.log",
+  "ended": 1792292523.265074,
+  "scope": "Diagnostic only. A compile/setup failure is not a semantic RED. No production source, current published test or deadline changed."
+}

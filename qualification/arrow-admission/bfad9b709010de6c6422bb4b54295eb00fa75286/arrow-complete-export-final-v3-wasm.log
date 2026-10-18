@@ -1,0 +1,13 @@
+    Checking hawdb-executor v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/executor)
+    Checking hawdb-search v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/search)
+    Checking hawdb-system-sql v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/system-sql)
+    Checking hawdb-relational v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/relational)
+    Checking hawdb-compat v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/compat)
+    Checking hawdb-artifact v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/artifact)
+    Checking hawdb-explain v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/explain)
+    Checking hawdb-resource-profile v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/resource-profile)
+    Checking hawdb-nowledge-contracts v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/nowledge-contracts)
+    Checking hawdb-bootstrap v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/bootstrap)
+    Checking hawdb-readiness v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit/crates/readiness)
+    Checking hawdb v0.9.0 (/private/tmp/hawdb-wip-ready-20261015/diagnose-arrow-complete-export-unit)
+    Finished `dev` profile [unoptimized] target(s) in 9.75s

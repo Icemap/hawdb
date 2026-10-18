@@ -1,0 +1,9 @@
+{
+  "source": "b16de232531a3ed1c44ead8fcf37c45c4ad8b584",
+  "tree": "00371bda1e5b341ad745bfb70e2c67045f39a0fa",
+  "general": "1741 passed, 1 ignored",
+  "earlier_adverse": "1740 passed, 1 failed, 1 ignored; checkpoint observed Retiring",
+  "focused_replay": "unchanged exact case passed",
+  "root_cause_proven": false,
+  "scope": "Predecessor evidence only. No current-source complete-general claim."
+}
