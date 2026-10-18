@@ -119,6 +119,11 @@ mod graph_indexes;
 mod graph_mutation;
 #[path = "store/graph_read.rs"]
 mod graph_read;
+#[doc(hidden)]
+pub use graph_read::{
+    MaterializedNodePointRead, MaterializedNodePointSource, MaterializedNodeReadSource,
+    MaterializedReadHealth,
+};
 #[path = "store/graph_recovery.rs"]
 mod graph_recovery;
 #[path = "store/immutable_root.rs"]
@@ -128,6 +133,9 @@ pub use immutable_root::{
     AdmittedBranchStore, BranchAdmissionError, BranchAdmissionRequest,
     PreparedImmutableRootHandoff, SealedBranchSource,
 };
+#[path = "store/pending_nodes.rs"]
+mod pending_nodes;
+use pending_nodes::{PendingMatch, PendingNodes};
 #[path = "store/relational_index_shadow.rs"]
 mod relational_index_shadow;
 #[path = "store/relational_row_pages.rs"]
@@ -805,7 +813,7 @@ pub struct GraphStore {
     version_index: hawdb_storage::version::VersionIndex,
     version_snapshot_pins: hawdb_storage::version::VersionSnapshotPins,
     version_snapshot_pin: Option<hawdb_storage::version::VersionSnapshotPin>,
-    nodes: CowSegmentedMap<NodeId, NodeRecord>,
+    nodes: crate::cow::CowNodeMap,
     relationships: CowSegmentedMap<RelId, RelRecord>,
     basic_statistics: BasicStatisticsState,
     checkpoint_statistics: CheckpointStatisticsState,
@@ -1475,6 +1483,25 @@ fn record_relationship_endpoint_locks(
         });
 }
 
+fn ensure_graph_read_flags_usable(
+    integrity_poisoned: &AtomicBool,
+    post_wal_apply_poisoned: &AtomicBool,
+) -> Result<()> {
+    if integrity_poisoned.load(AtomicOrdering::Acquire) {
+        return Err(HawDBError::Storage(
+            "database handle is poisoned after a runtime storage integrity failure; close and reopen the database before issuing more operations"
+                .to_string(),
+        ));
+    }
+    if post_wal_apply_poisoned.load(AtomicOrdering::Acquire) {
+        return Err(HawDBError::Storage(
+            "database handle is poisoned after a durable WAL batch failed during in-memory apply; close and reopen the database before issuing more operations"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
 impl GraphStore {
     pub fn in_memory() -> Self {
         Self::default()
@@ -1482,18 +1509,7 @@ impl GraphStore {
 
     #[doc(hidden)]
     pub fn ensure_usable(&self) -> Result<()> {
-        if self.integrity_poisoned.load(AtomicOrdering::Acquire) {
-            return Err(HawDBError::Storage(
-                "database handle is poisoned after a runtime storage integrity failure; close and reopen the database before issuing more operations"
-                    .to_string(),
-            ));
-        }
-        if self.post_wal_apply_poisoned.load(AtomicOrdering::Acquire) {
-            return Err(HawDBError::Storage(
-                "database handle is poisoned after a durable WAL batch failed during in-memory apply; close and reopen the database before issuing more operations"
-                    .to_string(),
-            ));
-        }
+        ensure_graph_read_flags_usable(&self.integrity_poisoned, &self.post_wal_apply_poisoned)?;
         self.validate_authoritative_relational_index_open()?;
         Ok(())
     }
@@ -1738,7 +1754,7 @@ impl GraphStore {
             version_index: hawdb_storage::version::VersionIndex::default(),
             version_snapshot_pins: Default::default(),
             version_snapshot_pin: None,
-            nodes: CowSegmentedMap::default(),
+            nodes: crate::cow::CowNodeMap::default(),
             relationships: CowSegmentedMap::default(),
             basic_statistics: BasicStatisticsState::default(),
             checkpoint_statistics: CheckpointStatisticsState::default(),
@@ -2767,6 +2783,13 @@ fn optional_label_id(catalog: &Catalog, label: &str) -> Option<LabelId> {
     }
 }
 
+fn pending_node_index(pending_nodes: &[PendingNode], id: NodeId) -> Option<usize> {
+    // Allocation appends increasing IDs; deletion retains the order and may leave gaps.
+    pending_nodes
+        .binary_search_by_key(&id, |(pending_id, _, _)| *pending_id)
+        .ok()
+}
+
 #[allow(clippy::too_many_arguments)]
 fn apply_set_relationship_properties_mutation(
     store: &GraphStore,
@@ -2898,9 +2921,8 @@ fn node_matches_label_and_filter(
                 .map(|filter| property_filter_matches(filter, id.0, &node.properties))
                 .unwrap_or(true));
     }
-    Ok(pending_nodes
-        .iter()
-        .find(|(pending_id, _, _)| *pending_id == id)
+    Ok(pending_node_index(pending_nodes, id)
+        .map(|index| &pending_nodes[index])
         .map(|(_, pending_label_id, properties)| {
             *pending_label_id == label_id
                 && filter
@@ -2999,9 +3021,8 @@ fn node_matches_optional_label_and_filter_checked(
                     .is_none_or(|filter| property_filter_matches(filter, id.0, &node.properties)),
         );
     }
-    Ok(pending_nodes
-        .iter()
-        .find(|(pending_id, _, _)| *pending_id == id)
+    Ok(pending_node_index(pending_nodes, id)
+        .map(|index| &pending_nodes[index])
         .is_some_and(|(_, pending_label_id, properties)| {
             label_id.is_none_or(|label_id| *pending_label_id == label_id)
                 && filter.is_none_or(|filter| property_filter_matches(filter, id.0, properties))
@@ -3036,8 +3057,8 @@ fn pending_relationship_ids_for_nodes(
         .collect()
 }
 
-fn remove_pending_node(ops: &mut Vec<WalOp>, pending_nodes: &mut Vec<PendingNode>, id: NodeId) {
-    pending_nodes.retain(|(node_id, _, _)| *node_id != id);
+fn remove_pending_node(ops: &mut Vec<WalOp>, pending_nodes: &mut PendingNodes, id: NodeId) {
+    pending_nodes.remove(id);
     ops.retain(|op| match op {
         WalOp::CreateNode { id: node_id, .. } | WalOp::SetNodeProperty { id: node_id, .. } => {
             *node_id != id
@@ -3407,6 +3428,7 @@ impl hawdb_storage::graph_engine::GraphReadEngine for GraphStore {
 #[cfg(test)]
 mod tests {
     mod id_in_mutation;
+    mod pending_node_ids;
 
     #[test]
     fn derived_repair_borrows_existing_custom_descriptor_budget() {
@@ -14145,7 +14167,7 @@ mod tests {
 
     #[test]
     fn statistics_track_path_source_and_target_coverage() {
-        let nodes = [
+        let nodes: crate::cow::CowNodeMap = [
             (0, LabelId(0)),
             (1, LabelId(0)),
             (10, LabelId(1)),
