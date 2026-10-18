@@ -1,0 +1,12 @@
+{
+  "observer_control_tests_passed": 7,
+  "rust_nested_unwind_overflow_tests_passed": 1,
+  "timer_thread_affinity": "compile rejection verified on pinnedRust1.97.1",
+  "source_sha256": {
+    "test_observer_control.py": "b3a365f5de1c3984d5f8b49a11630205d7a025ff39ac09370e3fc07e7067dc96",
+    "standalone_observer_checks.rs": "8c0db48ab6ab8417a408846db632244093306f7d80c6155f23e4e2f605efbc01",
+    "retained_phase_profile.rs": "edc025eeea53bf94ee108642cef2f6205f2fd6e4ac2c1eccd81f2ebfe35d1f75",
+    "timer_thread_affinity_compile_fail.rs": "aa1b8f0ce84b509fcbc821ff727c2526a9a2803b0cd1f0fba40ed3ee96903293"
+  },
+  "scope": "Standalone observer invariants; real callback qualification is independently recorded."
+}

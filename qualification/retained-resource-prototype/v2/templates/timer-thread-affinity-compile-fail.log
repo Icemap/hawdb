@@ -1,0 +1,40 @@
+error[E0277]: `Rc<()>` cannot be sent between threads safely
+   --> /private/tmp/hawdb-wip-ready-20261015/phase-attribution-stage-v2/timer_thread_affinity_compile_fail.rs:5:21
+    |
+  5 |  std::thread::spawn(move || drop(timer));
+    |  ------------------ -------^^^^^^^^^^^^
+    |  |                  |
+    |  |                  `Rc<()>` cannot be sent between threads safely
+    |  |                  within this `{closure@timer_thread_affinity_compile_fail.rs:5:21}`
+    |  required by a bound introduced by this call
+    |
+    = help: within `{closure@timer_thread_affinity_compile_fail.rs:5:21}`, the trait `Send` is not implemented for `Rc<()>`
+note: required because it appears within the type `PhantomData<Rc<()>>`
+   --> /Users/hawkingrei/.rustup/toolchains/1.97.1-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/marker.rs:811:12
+    |
+811 | pub struct PhantomData<T: PointeeSized>;
+    |            ^^^^^^^^^^^
+note: required because it appears within the type `Timer`
+   --> /private/tmp/hawdb-wip-ready-20261015/phase-attribution-stage-v2/retained_phase_profile.rs:71:12
+    |
+ 71 | pub struct Timer {
+    |            ^^^^^
+note: required because it's used within this closure
+   --> /private/tmp/hawdb-wip-ready-20261015/phase-attribution-stage-v2/timer_thread_affinity_compile_fail.rs:5:21
+    |
+  5 |  std::thread::spawn(move || drop(timer));
+    |                     ^^^^^^^
+note: required by a bound in `spawn`
+   --> /Users/hawkingrei/.rustup/toolchains/1.97.1-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/thread/functions.rs:128:8
+    |
+125 | pub fn spawn<F, T>(f: F) -> JoinHandle<T>
+    |        ----- required by a bound in this function
+...
+128 |     F: Send + 'static,
+    |        ^^^^ required by this bound in `spawn`
+    = note: the full name for the type has been written to '/private/tmp/hawdb-wip-ready-20261015/phase-attribution-stage-v2/timer_must_not_build.long-type-13599377887734662247.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.

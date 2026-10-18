@@ -1,0 +1,210 @@
+--- a/bindings/python/src/lib.rs
++++ b/bindings/python/src/lib.rs
+@@ -59,7 +59,7 @@
+ fn _retained_phase_snapshot(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+     let snapshot = hawdb::retained_phase_profile::snapshot();
+     let result = PyDict::new(py);
+-    result.set_item("protocol", "hawdb-retained-phase-v1")?;
++    result.set_item("protocol", "hawdb-retained-phase-v2")?;
+     result.set_item(
+         "allocation_instrumented",
+         cfg!(feature = "boundary-profiling"),
+@@ -70,6 +70,8 @@
+         ("prepare_ns", snapshot.prepare_ns),
+         ("pull_calls", snapshot.pull_calls),
+         ("pull_ns", snapshot.pull_ns),
++        ("owned_calls", snapshot.owned_calls),
++        ("owned_ns", snapshot.owned_ns),
+     ] {
+         result.set_item(key, value)?;
+     }
+--- a/qualification/phases/consume.py
++++ b/qualification/phases/consume.py
+@@ -1,6 +1,6 @@
+ """Phase-only qualification around the unchanged complete numeric consumer.
+ 
+-Native prepare/pull are measured inside the library. The existing boundary
++Native owned execution and retained prepare/pull are measured inside the library. The existing boundary
+ timer includes construction, pulls, descriptors and release, excluding checksum
+ iteration. Its residual is handoff/host/teardown overhead, not pure conversion.
+ """
+@@ -18,12 +18,12 @@
+ import time
+ import tracemalloc
+ 
+-METRICS = ("prepare_calls", "prepare_ns", "pull_calls", "pull_ns")
++METRICS = ("prepare_calls", "prepare_ns", "pull_calls", "pull_ns", "owned_calls", "owned_ns")
+ 
+ 
+ def snapshot(native):
+     value = native._retained_phase_snapshot()
+-    assert value["protocol"] == "hawdb-retained-phase-v1"
++    assert value["protocol"] == "hawdb-retained-phase-v2"
+     assert value["allocation_instrumented"] is False
+     assert value["overflowed"] is False
+     assert all(type(value[key]) is int and value[key] >= 0 for key in METRICS)
+@@ -45,7 +45,7 @@
+     complete_ns = time.perf_counter_ns() - started
+     result.update(complete_attempt_ns=complete_ns, native_phases=None,
+                   phase_control_valid=False, phase_attribution_valid=False,
+-                  handoff_boundary_residual_ns=None)
++                  handoff_boundary_residual_ns=None, native_work_ns=None)
+     if before_error is not None:
+         result["phase_validation_error"] = before_error
+         return result
+@@ -55,24 +55,29 @@
+         result["native_phases"] = phases
+         assert all(value >= 0 for value in phases.values())
+         if mode == "owned":
+-            # This feature deliberately does not instrument owned execution.
+-            assert all(value == 0 for value in phases.values())
+-            result["phase_scope"] = "Owned native phase attribution is unavailable."
+-        elif result.get("status") == "ok":
+-            assert phases["prepare_calls"] == 1, phases
+-            assert phases["pull_calls"] > 0 and phases["prepare_ns"] > 0 and phases["pull_ns"] > 0
+-            native_ns = phases["prepare_ns"] + phases["pull_ns"]
++            assert all(phases[k] == 0 for k in ("prepare_calls", "prepare_ns", "pull_calls", "pull_ns"))
++        else:
++            assert phases["owned_calls"] == 0 and phases["owned_ns"] == 0
++        if result.get("status") == "ok":
++            if mode == "owned":
++                assert phases["owned_calls"] == 1 and phases["owned_ns"] > 0, phases
++                native_ns = phases["owned_ns"]
++                native_scope = "Rust admitted owned facade call, including native materialization."
++            else:
++                assert phases["prepare_calls"] == 1 and phases["pull_calls"] > 0, phases
++                assert phases["prepare_ns"] > 0 and phases["pull_ns"] > 0, phases
++                native_ns = phases["prepare_ns"] + phases["pull_ns"]
++                native_scope = "Rust retained preparation plus demanded native pulls."
+             residual = result["query_boundary_ns"] - native_ns
+-            # Invalid clock/scope evidence is never clamped to zero overhead.
+             assert residual >= 0, (result["query_boundary_ns"], phases)
+-            result.update(phase_attribution_valid=True, handoff_boundary_residual_ns=residual)
+-            result["phase_scope"] = (
+-                "Library prepare plus demanded native pull. Residual includes ABI/metadata, "
+-                "Python/PyArrow wrapper work, release and timing overhead; it excludes the "
+-                "original checksum loop and is not pure per-value conversion."
+-            )
++            result.update(phase_attribution_valid=True, native_work_ns=native_ns,
++                          handoff_boundary_residual_ns=residual)
++            result["phase_scope"] = (native_scope +
++                " Residual includes parameters, ABI/metadata, host materialization/wrappers, "
++                "release and timing overhead; checksum iteration is excluded. "
++                "It is not pure per-value conversion or a storage-to-host copy claim.")
+         else:
+-            result["phase_scope"] = "Failed/refused complete consumer; no boundary residual qualifies."
++            result["phase_scope"] = "Failed/refused original consumer; no boundary residual qualifies."
+         result["phase_control_valid"] = True
+     except Exception as error:
+         # Preserve the complete consumer's original result/error and ownership
+@@ -177,12 +182,13 @@
+             and report.get("warmup", {}).get("phase_control_valid") is True
+             and all(r.get("status") == "ok" and r.get("parity") is True
+                     and r["phase_control_valid"] for r in report["records"]))
+-    if args.mode != "owned":
+-        good = good and all(r["phase_attribution_valid"] for r in report["records"])
++    good = (good and report.get("warmup", {}).get("phase_attribution_valid") is True
++            and all(r["phase_attribution_valid"] for r in report["records"]))
+     report["all_paths_succeeded"] = good
+-    if good and args.mode != "owned":
++    if good:
+         report["observed_phase_costs"] = {}
+-        for key in ("query_boundary_ns", "elapsed_ns", "handoff_boundary_residual_ns", *METRICS):
++        measured = ("owned_calls", "owned_ns") if args.mode == "owned" else METRICS[:4]
++        for key in ("query_boundary_ns", "elapsed_ns", "native_work_ns", "handoff_boundary_residual_ns", *measured):
+             values = sorted(r["native_phases"][key] if key in METRICS else r[key]
+                             for r in report["records"])
+             report["observed_phase_costs"][key] = dict(
+--- a/qualification/resources/numeric_driver.py
++++ b/qualification/resources/numeric_driver.py
+@@ -66,7 +66,7 @@
+     manifest["phase_instrumented"] = args.phase_only
+     manifest["driver_sha256"] = digest(Path(__file__))
+     if args.phase_only:
+-        manifest["scope"] = "Phase-only prepare/pull and boundary residual. Separate from ordinary and allocation-instrumented measurements; no pure-conversion or whole-memory bound."
++        manifest["scope"] = "Phase-only owned-native or retained prepare/pull and boundary residual. Separate from ordinary and allocation-instrumented measurements; no pure-conversion or whole-memory bound."
+     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+     outcomes = []
+     for mode in ("owned", "retained", "arrow"):
+--- a/src/embedded.rs
++++ b/src/embedded.rs
+@@ -435,6 +435,10 @@
+         cypher_text: &str,
+         parameters: &BTreeMap<String, Value>,
+     ) -> std::result::Result<QueryOutput, EmbeddedQueryError> {
++        #[cfg(feature = "retained-phase-profiling")]
++        let _retained_phase = crate::retained_phase_profile::Timer::start(
++            crate::retained_phase_profile::Phase::Owned,
++        );
+         self.query_with_params_admitted_context(
+             cypher_text,
+             parameters,
+@@ -487,6 +491,10 @@
+         parameters: &BTreeMap<String, Value>,
+         task_context: &RuntimeTaskContext,
+     ) -> std::result::Result<QueryOutput, EmbeddedQueryError> {
++        #[cfg(feature = "retained-phase-profiling")]
++        let _retained_phase = crate::retained_phase_profile::Timer::start(
++            crate::retained_phase_profile::Phase::Owned,
++        );
+         if self.transaction.is_some() {
+             return Err(EmbeddedQueryError::Database(HawDBError::Execution(
+                 "a user transaction is open on this database".into(),
+--- a/src/retained_phase_profile.rs
++++ b/src/retained_phase_profile.rs
+@@ -2,7 +2,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ 
+ //! Qualification-only counters. No allocator or runtime control plane.
+-//! Prepare and pull are disjoint. Nested calls in one phase count once.
++//! Owned execution, prepare and pull are disjoint. Nested calls in one phase count once.
+ //! Snapshots are cumulative; qualification uses a fresh, serial consumer.
+ 
+ use std::cell::Cell;
+@@ -11,23 +11,25 @@
+ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+ use std::time::Instant;
+ 
+-static CALLS: [AtomicU64; 2] = [const { AtomicU64::new(0) }; 2];
+-static NANOS: [AtomicU64; 2] = [const { AtomicU64::new(0) }; 2];
++static CALLS: [AtomicU64; 3] = [const { AtomicU64::new(0) }; 3];
++static NANOS: [AtomicU64; 3] = [const { AtomicU64::new(0) }; 3];
+ static OVERFLOWED: AtomicBool = AtomicBool::new(false);
+ thread_local! {
+-    static DEPTH: Cell<[u32; 2]> = const { Cell::new([0; 2]) };
++    static DEPTH: Cell<[u32; 3]> = const { Cell::new([0; 3]) };
+ }
+ 
+ #[derive(Clone, Copy, Debug)]
+ pub enum Phase {
+     Prepare,
+     Pull,
++    Owned,
+ }
+ impl Phase {
+     fn index(self) -> usize {
+         match self {
+             Self::Prepare => 0,
+             Self::Pull => 1,
++            Self::Owned => 2,
+         }
+     }
+ }
+@@ -38,6 +40,8 @@
+     pub prepare_ns: u64,
+     pub pull_calls: u64,
+     pub pull_ns: u64,
++    pub owned_calls: u64,
++    pub owned_ns: u64,
+     pub overflowed: bool,
+ }
+ 
+@@ -47,6 +51,8 @@
+         prepare_ns: NANOS[0].load(Ordering::Relaxed),
+         pull_calls: CALLS[1].load(Ordering::Relaxed),
+         pull_ns: NANOS[1].load(Ordering::Relaxed),
++        owned_calls: CALLS[2].load(Ordering::Relaxed),
++        owned_ns: NANOS[2].load(Ordering::Relaxed),
+         overflowed: OVERFLOWED.load(Ordering::Relaxed),
+     }
+ }

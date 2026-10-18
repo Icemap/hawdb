@@ -1,0 +1,7 @@
+{
+  "status": "failed",
+  "pid": 39910,
+  "scope": "One parsing refusal followed by the unchanged successful owned consumer, validating real native timer/error unwinding. Not a performance sample or full exception matrix.",
+  "error": "AssertionError('Traceback (most recent call last):\\n  File \"<string>\", line 14, in <module>\\nhawdb.exceptions.ParseError: parse error: expected identifier at byte 7 line 1 column 8 near ``\\n\\nDuring handling of the above exception, another exception occurred:\\n\\nTraceback (most recent call last):\\n  File \"<string>\", line 15, in <module>\\n  File \"/private/tmp/hawdb-wip-ready-20261015/phase-owned-v2-frozen-package/hawdb/__init__.py\", line 45, in __getattr__\\n    raise AttributeError(f\"module \\'hawdb\\' has no attribute {name!r}\")\\nAttributeError: module \\'hawdb\\' has no attribute \\'ParseError\\'\\n')",
+  "ended": 1792317140.117266
+}

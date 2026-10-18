@@ -1,0 +1,38 @@
+{
+  "status": "passed_error_and_healthy_retry",
+  "pid": 41778,
+  "preserved_setup_failure": "phase-owned-v2-error-unwind-state.json",
+  "scope": "One parsing refusal followed by the unchanged successful owned consumer, validating real native timer/error unwinding. Not a performance sample or full exception matrix.",
+  "result": {
+    "rejected": {
+      "type": "ParseError",
+      "message": "parse error: expected identifier at byte 7 line 1 column 8 near ``"
+    },
+    "error_owned_calls": 1,
+    "retry": {
+      "rows": 1,
+      "checksum": "d94d12186c0f2fb7",
+      "query_boundary_ns": 398126,
+      "elapsed_ns": 401625,
+      "retained_snapshot": null,
+      "status": "ok",
+      "parity": true,
+      "complete_attempt_ns": 405000,
+      "native_phases": {
+        "prepare_calls": 0,
+        "prepare_ns": 0,
+        "pull_calls": 0,
+        "pull_ns": 0,
+        "owned_calls": 1,
+        "owned_ns": 390458
+      },
+      "phase_control_valid": true,
+      "phase_attribution_valid": true,
+      "handoff_boundary_residual_ns": 7668,
+      "native_work_ns": 390458,
+      "phase_scope": "Rust admitted owned facade call, including native materialization. Residual includes parameters, ABI/metadata, host materialization/wrappers, release and timing overhead; checksum iteration is excluded. It is not pure per-value conversion or a storage-to-host copy claim."
+    },
+    "scope": "Expected parse failure and complete healthy original consumer; no timing ratio."
+  },
+  "ended": 1792317224.7935722
+}

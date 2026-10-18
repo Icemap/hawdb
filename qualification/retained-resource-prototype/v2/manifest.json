@@ -1,0 +1,161 @@
+{
+  "status": "private_predecessor_collector_qualified_final986_open",
+  "files": {
+    "observer-control-receipt.json": {
+      "bytes": 712,
+      "sha256": "e0caab54996d6b11e4ff9c704a86c34b86fe70cd6290b4b9aa7d20cb6bda36bf"
+    },
+    "owned-v2-on-v1.patch": {
+      "bytes": 10230,
+      "sha256": "5d1d64e28da714d8d083a7c0b594ecedaca7cea555c3c00a246589d39593794a"
+    },
+    "README.md": {
+      "bytes": 3246,
+      "sha256": "e586b1f3468e10eca168f4e5b74506772046f0925eed63d79a405533bb60bff2"
+    },
+    "receipts/phase-owned-v2-frozen-source.json": {
+      "bytes": 4677,
+      "sha256": "f02ba6cfb5084eea344d31169059722fca936cc255b3f393aa1bc7a0ffbf963c"
+    },
+    "receipts/phase-owned-v2-python-clippy.log": {
+      "bytes": 8163,
+      "sha256": "916a0bc19fb914c247dfcbfcd38335c789cac0e50284ea532e5495c7eec39546"
+    },
+    "receipts/phase-owned-v2-qualification-state.json": {
+      "bytes": 10945,
+      "sha256": "a5089d49af6da0cc70b7970e482d21ba80d3803adb28a1cd56eee00f8c3c1ba2"
+    },
+    "receipts/phase-owned-v2-error-unwind-state.json": {
+      "bytes": 897,
+      "sha256": "4279c153f918e45c2f7d179c9bfd03c0c5c66380020a75856ce45258a6b0d2ae"
+    },
+    "receipts/phase-owned-v2-error-unwind.stderr": {
+      "bytes": 567,
+      "sha256": "2a93400da50d08044556f33e26eb5c9d59e9ee07e85e7dfc53f5954befe2b353"
+    },
+    "receipts/phase-owned-v2-native-clippy.log": {
+      "bytes": 4976,
+      "sha256": "9fc69e69984d62266f15d4d1f43d7cc16d5c0f33717742c1cdfca2a290b375dc"
+    },
+    "receipts/phase-owned-v2-error-unwind-corrected.stdout": {
+      "bytes": 970,
+      "sha256": "d26da938d2d284e827860f738b83a70f0890750a7801671178706857f52674f0"
+    },
+    "receipts/phase-owned-v2-import-control.json": {
+      "bytes": 1710,
+      "sha256": "66cc63c0b857680009bfa78eaf1fe1a51c4f0e408f6bf9b80bcd089e564d6b14"
+    },
+    "receipts/phase-owned-v2-error-unwind-corrected-state.json": {
+      "bytes": 1518,
+      "sha256": "30947634014b1bd238a187631ba76645b6ed519aa9fbf20f692366c689e18b23"
+    },
+    "receipts/phase-owned-v2-extension-build.log": {
+      "bytes": 9812,
+      "sha256": "6e6649e4831fe694fb2c73c251e0b6d4261196d89fa838c03c94b7a8a5b8b06c"
+    },
+    "receipts/phase-owned-v2-error-unwind-corrected.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "receipts/phase-owned-v2-source-preparation.json": {
+      "bytes": 4515,
+      "sha256": "553e18457fe52c6556703cd5c5acc9733c63e556c13fdf51482504b8005f2d85"
+    },
+    "templates/probe-owned-v2-error-unwind-corrected.py": {
+      "bytes": 3056,
+      "sha256": "0dc7d356b36bc922dad1631bf7eb4bc4951f6a53b9b2b47aa09da52d4c91146c"
+    },
+    "templates/retained_phase_profile.rs": {
+      "bytes": 3209,
+      "sha256": "edc025eeea53bf94ee108642cef2f6205f2fd6e4ac2c1eccd81f2ebfe35d1f75"
+    },
+    "templates/qualify-owned-phase-v2.py": {
+      "bytes": 5866,
+      "sha256": "3bdad58e9e34d9cb8bb54743fb8bf6714e20102a20d1952ea929a79afd6b1f82"
+    },
+    "templates/timer_thread_affinity_compile_fail.rs": {
+      "bytes": 227,
+      "sha256": "aa1b8f0ce84b509fcbc821ff727c2526a9a2803b0cd1f0fba40ed3ee96903293"
+    },
+    "templates/standalone_observer_checks.rs": {
+      "bytes": 4827,
+      "sha256": "8c0db48ab6ab8417a408846db632244093306f7d80c6155f23e4e2f605efbc01"
+    },
+    "templates/probe-owned-v2-error-unwind.py": {
+      "bytes": 2925,
+      "sha256": "2fbd960db53ceb5168401b711b471a9bf4644132ce0f687401c1b03be6f16ca8"
+    },
+    "templates/timer-thread-affinity-compile-fail.log": {
+      "bytes": 2145,
+      "sha256": "a8157cea5a0b091593390bfe26412fd98475bffb7520bb8ff28fa6cd8f817321"
+    },
+    "templates/test_observer_control.py": {
+      "bytes": 4547,
+      "sha256": "b3a365f5de1c3984d5f8b49a11630205d7a025ff39ac09370e3fc07e7067dc96"
+    },
+    "templates/prepare_campaign.py": {
+      "bytes": 5545,
+      "sha256": "45c2719f34c88b3de5fc4ae0b59d004c16d4fe1e3b2347a8bc183a525380b1ec"
+    },
+    "templates/consume.py": {
+      "bytes": 10761,
+      "sha256": "30be4cf3c40205ca27d5ed2190319b842795b692a2a10cacc882858a6363b668"
+    },
+    "templates/apply.py": {
+      "bytes": 10004,
+      "sha256": "419b362aae8cbb30daa61c25b27fee0cdb70adedc44c98059a458f662694c449"
+    },
+    "templates/python_hook.rs": {
+      "bytes": 897,
+      "sha256": "1dca36c9952ad494181de193f277eb893fc24a1ac05c23f0b61a5109d06a0e11"
+    },
+    "observations/memory-arrow.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "observations/memory-owned.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "observations/file-retained.json": {
+      "bytes": 31073,
+      "sha256": "fa7337087d29c0989c41a3f8753237839a27f0932f1ec1fadc069929e62999d7"
+    },
+    "observations/file-arrow.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "observations/file-owned.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "observations/file-arrow.json": {
+      "bytes": 31038,
+      "sha256": "7e95b148c62a4adad87ffbe0ad7d1edff907f5148b82ccf2964ba86de8a75335"
+    },
+    "observations/memory-owned.json": {
+      "bytes": 25374,
+      "sha256": "8904abaf9a57f6e5f075e8f65236e2470991c7415d929fb1a5d568e6fb7cb740"
+    },
+    "observations/file-retained.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "observations/memory-retained.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "observations/memory-arrow.json": {
+      "bytes": 31045,
+      "sha256": "738d45d4a3a760ed375b0a9ff85d95bd1759905b2384e33b55b5291f63185fa2"
+    },
+    "observations/file-owned.json": {
+      "bytes": 25391,
+      "sha256": "b47ff25e7ed4a0c2dc61c464255881cdf15cb1b2558ed3e9570996eb45c9e7d1"
+    },
+    "observations/memory-retained.json": {
+      "bytes": 31078,
+      "sha256": "5618e934d53b46319f0e97ced1e3b8bddb0ac168b26d2ae92b78ab88bae6d4f4"
+    }
+  }
+}
