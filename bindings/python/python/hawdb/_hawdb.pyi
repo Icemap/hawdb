@@ -24,7 +24,9 @@ class Database:
     """An open HawDB database."""
 
     def __init__(
-        self, path: Optional[str] = None, read_only: bool = False
+        self, path: Optional[str] = None, read_only: bool = False,
+        *, max_read_result_rows: Optional[int] = None,
+        max_read_result_payload_bytes: Optional[int] = None,
     ) -> None: ...
     @property
     def path(self) -> Optional[str]: ...
@@ -33,6 +35,9 @@ class Database:
     def execute(
         self, cypher: str, params: Optional[Dict[str, Any]] = None
     ) -> QueryResult: ...
+    def explain(
+        self, cypher: str, params: Optional[Dict[str, Any]] = None
+    ) -> str: ...
     def execute_sql(
         self, sql: str, params: Optional[List[Any]] = None
     ) -> QueryResult: ...
@@ -74,7 +79,11 @@ class ReadTransaction:
     def __enter__(self) -> "ReadTransaction": ...
     def __exit__(self, *args: object) -> bool: ...
 
-def open(path: Optional[str] = None, read_only: bool = False) -> Database: ...
+def open(
+    path: Optional[str] = None, read_only: bool = False,
+    *, max_read_result_rows: Optional[int] = None,
+    max_read_result_payload_bytes: Optional[int] = None,
+) -> Database: ...
 def capabilities() -> Mapping[str, bool]:
     """Engine capabilities compiled into this extension (read-only)."""
 

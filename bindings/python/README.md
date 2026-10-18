@@ -11,6 +11,34 @@ Development phase. The API surface is intentionally small (`open`, `execute`,
 `execute_sql`, `QueryResult`) while it proves out against real host
 workloads. It is not yet published to PyPI.
 
+## Read budgets and query plans
+
+`open`, `connect` and `Database` accept the keyword-only options
+`max_read_result_rows` and `max_read_result_payload_bytes`. They configure the
+engine's read ceilings for in-memory, file-backed and read-only databases.
+Exceeding a ceiling raises `hawdb.exceptions.ExecutionError`; the binding does
+not return a shortened result. A later read can still succeed within the budget.
+
+```python
+with hawdb.open(max_read_result_rows=1000, max_read_result_payload_bytes=1048576) as db:
+    plan = db.explain(
+        "MATCH (m:Memory) WHERE m.id = $id RETURN m.title",
+        {"id": "memory-1"},
+    )
+    print(plan)
+```
+
+Omitted options and `None` preserve engine defaults: no host row ceiling and a
+64 MiB result payload ceiling. Zero rows follows `DatabaseConfig` semantics and
+disables the host row ceiling; zero payload bytes remains a zero-byte ceiling.
+Other engine memory and session limits still apply. These options do not expose
+the rest of `DatabaseConfig` or change durability.
+
+`db.explain(cypher, params=None)` returns the existing physical plan text without
+executing the statement. Parameters use the same conversion as `execute`.
+Closed handles and an active write transaction reject this database-level call.
+SQL `EXPLAIN` continues through `execute_sql`.
+
 ## Experimental retained numeric buffers
 
 `execute_retained` is an opt-in numeric query surface over the embedded Rust

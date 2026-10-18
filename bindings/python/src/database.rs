@@ -41,7 +41,21 @@ pub struct Database {
 }
 
 impl Database {
-    fn open_impl(path: Option<PathBuf>, read_only: bool) -> PyResult<Self> {
+    fn open_impl(
+        path: Option<PathBuf>,
+        read_only: bool,
+        max_read_result_rows: Option<usize>,
+        max_read_result_payload_bytes: Option<usize>,
+    ) -> PyResult<Self> {
+        let with_read_limits = |mut config: DatabaseConfig| {
+            if let Some(rows) = max_read_result_rows {
+                config.max_read_result_rows = Some(rows);
+            }
+            if let Some(bytes) = max_read_result_payload_bytes {
+                config.max_read_result_payload_bytes = Some(bytes);
+            }
+            config
+        };
         let Some(path) = path else {
             if read_only {
                 return Err(pyo3::exceptions::PyValueError::new_err(
@@ -49,15 +63,17 @@ impl Database {
                 ));
             }
             return Ok(Self {
-                inner: Some(HawDBEmbedded::open_in_memory()),
+                inner: Some(HawDBEmbedded::open_in_memory_with_config(with_read_limits(
+                    DatabaseConfig::default(),
+                ))),
                 path: None,
             });
         };
         let inner = if read_only {
-            let config = DatabaseConfig {
+            let config = with_read_limits(DatabaseConfig {
                 read_only: true,
                 ..Default::default()
-            };
+            });
             HawDBEmbedded::open_with_options(HawDBEmbeddedOpenOptions {
                 path: path.clone(),
                 config,
@@ -69,7 +85,9 @@ impl Database {
                 runtime_governor_config: None,
             })
         } else {
-            HawDBEmbedded::open(&path)
+            let options = HawDBEmbeddedOpenOptions::new(path.clone());
+            let config = with_read_limits(options.config);
+            HawDBEmbedded::open_with_options(HawDBEmbeddedOpenOptions { config, ..options })
         };
         match inner {
             Ok(inner) => Ok(Self {
@@ -90,9 +108,19 @@ impl Database {
 #[pymethods]
 impl Database {
     #[new]
-    #[pyo3(signature = (path = None, read_only = false))]
-    fn new(path: Option<PathBuf>, read_only: bool) -> PyResult<Self> {
-        Self::open_impl(path, read_only)
+    #[pyo3(signature = (path = None, read_only = false, *, max_read_result_rows = None, max_read_result_payload_bytes = None))]
+    fn new(
+        path: Option<PathBuf>,
+        read_only: bool,
+        max_read_result_rows: Option<usize>,
+        max_read_result_payload_bytes: Option<usize>,
+    ) -> PyResult<Self> {
+        Self::open_impl(
+            path,
+            read_only,
+            max_read_result_rows,
+            max_read_result_payload_bytes,
+        )
     }
 
     /// Project path this database is bound to, or None for an in-memory
@@ -138,6 +166,33 @@ impl Database {
         #[cfg(feature = "boundary-profiling")]
         drop(engine);
         QueryResult::from_output(py, output)
+    }
+
+    /// Returns the physical Cypher plan without executing the statement.
+    #[pyo3(signature = (cypher, params = None))]
+    fn explain(
+        &mut self,
+        py: Python<'_>,
+        cypher: &str,
+        params: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<String> {
+        let params = params
+            .map(py_dict_to_params)
+            .transpose()?
+            .unwrap_or_default();
+        let database = self.required()?;
+        if database.transaction_active() {
+            return Err(PyRuntimeError::new_err(
+                "a transaction is open on this database",
+            ));
+        }
+        py.detach(move || {
+            database
+                .database()
+                .explain_query_with_params(cypher, &params)
+                .map(|output| output.physical_plan.explain(0))
+        })
+        .map_err(|error| format_hawdb_error(&error))
     }
 
     /// Experimental retained numeric query; unsupported shapes refuse without
@@ -656,9 +711,15 @@ impl ReadTransaction {
 /// Called without `path` it returns an empty in-memory database: no project
 /// directory is created and closing the handle discards all data.
 /// `read_only=True` requires a path and opens an existing database read-only.
+/// Optional read budgets pass through to the engine; None keeps its defaults.
 #[pyfunction]
-#[pyo3(signature = (path = None, read_only = false))]
-pub fn open(path: Option<PathBuf>, read_only: bool) -> PyResult<Database> {
+#[pyo3(signature = (path = None, read_only = false, *, max_read_result_rows = None, max_read_result_payload_bytes = None))]
+pub fn open(
+    path: Option<PathBuf>,
+    read_only: bool,
+    max_read_result_rows: Option<usize>,
+    max_read_result_payload_bytes: Option<usize>,
+) -> PyResult<Database> {
     if let Some(path) = &path
         && !read_only
         && !path.exists()
@@ -675,5 +736,10 @@ pub fn open(path: Option<PathBuf>, read_only: bool) -> PyResult<Database> {
             )));
         }
     }
-    Database::open_impl(path, read_only)
+    Database::open_impl(
+        path,
+        read_only,
+        max_read_result_rows,
+        max_read_result_payload_bytes,
+    )
 }
