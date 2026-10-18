@@ -1295,6 +1295,46 @@ mod tests {
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 
+    fn assert_node_memory_budget_refusal(error: RetainedQueryError, budget: u64) {
+        let RetainedQueryError::Execution(HawDBError::ResourceBudgetExceeded(error)) = error else {
+            panic!("expected structured retained-node memory refusal, got {error:?}");
+        };
+        assert_eq!(error.resource, hawdb_core::ResourceBudgetKind::MemoryBytes);
+        assert_eq!(error.scope, hawdb_core::ResourceBudgetScope::Account);
+        assert_eq!(error.owner, "retained_node");
+        assert_eq!(error.memory_class, Some("result_materialization"));
+        assert_eq!(error.budget, budget);
+        assert!(u128::from(error.used) + u128::from(error.requested) > u128::from(budget));
+        assert_eq!(
+            error.budget_option,
+            "QueryMemoryLedger::account(budget_bytes)"
+        );
+    }
+
+    fn assert_task_reservation_refusal(
+        error: RetainedQueryError,
+        query_bytes: u64,
+        result_bytes: u64,
+    ) {
+        let zero_owner = if query_bytes == 0 {
+            Some("query memory")
+        } else if result_bytes == 0 {
+            Some("query result")
+        } else {
+            None
+        };
+        if let Some(owner) = zero_owner {
+            assert_eq!(
+                error,
+                RetainedQueryError::Execution(HawDBError::Execution(format!(
+                    "runtime-admitted {owner} reservation must be non-zero"
+                )))
+            );
+        } else {
+            assert_node_memory_budget_refusal(error, query_bytes.min(result_bytes));
+        }
+    }
+
     #[test]
     fn consumed_snapshot_never_widens_task_reservations_and_completed_eof_is_stable() {
         for (query_bytes, result_bytes) in [(0, 8192), (8192, 0), (1, 8192), (8192, 1)] {
@@ -1303,14 +1343,10 @@ mod tests {
                 hawdb_core::RuntimeMemoryReservation::new(query_bytes, result_bytes),
             );
             let snapshot = db.begin_read_transaction_with_context(&context).unwrap();
-            assert!(matches!(
-                snapshot.into_retained_node_query(
-                    QUERY,
-                    &params(),
-                    RetainedQueryOptions::default(),
-                ),
-                Err(RetainedQueryError::Execution(HawDBError::Execution(_)))
-            ));
+            let error = snapshot
+                .into_retained_node_query(QUERY, &params(), RetainedQueryOptions::default())
+                .unwrap_err();
+            assert_task_reservation_refusal(error, query_bytes, result_bytes);
             assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
         }
         let (db, governor) = fixture(4);
@@ -1953,10 +1989,7 @@ mod tests {
                     &context,
                 )
                 .unwrap_err();
-            assert!(matches!(
-                error,
-                RetainedQueryError::Execution(HawDBError::Execution(_))
-            ));
+            assert_task_reservation_refusal(error, query_bytes, result_bytes);
             assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
             assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
         }
@@ -1973,10 +2006,14 @@ mod tests {
             .unwrap();
         let view = cursor.next_node().unwrap().unwrap();
         assert!(cursor.profile().query_peak_bytes <= 8192);
-        assert!(matches!(
-            view.try_retain_with_metadata(8192),
-            Err(RetainedQueryError::Execution(HawDBError::Execution(_)))
-        ));
+        let retained_before = governor.retained_result_snapshot();
+        assert_node_memory_budget_refusal(view.try_retain_with_metadata(8192).unwrap_err(), 8192);
+        let retained_after = governor.retained_result_snapshot();
+        assert_eq!(
+            retained_after.retained_bytes,
+            retained_before.retained_bytes
+        );
+        assert_eq!(retained_after.view_handles, retained_before.view_handles);
         assert!(cursor.next_node().unwrap().is_none());
         context.cancellation().cancel();
         assert!(cursor.next_node().unwrap().is_none());
