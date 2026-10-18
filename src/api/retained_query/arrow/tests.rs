@@ -332,3 +332,190 @@ fn nullable_float_bits_and_all_null_empty_selection_survive_arrow_layout() {
     drop(cursor);
     assert_eq!(db.retained_result_snapshot().unwrap().retained_bytes, 0);
 }
+
+#[test]
+fn complete_export_wrapper_impossibility_is_not_temporary_pressure() {
+    for (query_bytes, memory_bytes, result_bytes, wrapper_bytes) in [
+        (256 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024, 32 * 1024),
+        (64 * 1024, 64 * 1024 * 1024, 256 * 1024, 32 * 1024),
+        (256 * 1024 * 1024, 128 * 1024, 1024 * 1024, 64 * 1024),
+    ] {
+        let mut config = crate::DatabaseConfig::default();
+        config.execution_memory.query_memory_bytes = nz(query_bytes);
+        let mut db = fixture_with_config(config);
+        let governor = governor_with_result_ceiling(1024, memory_bytes, result_bytes);
+        db.set_runtime_governor(governor.clone());
+        let mut cursor = db
+            .query_with_params_retained(QUERY, &params(), options())
+            .unwrap();
+        let batch = cursor.next_batch().unwrap().unwrap();
+        let before = governor.retained_result_snapshot();
+        let error = batch.export_arrow(wrapper_bytes).unwrap_err();
+        let after = governor.retained_result_snapshot();
+        assert_eq!(before, after);
+        assert_eq!(scores(&batch), vec![2]);
+        assert!(
+            matches!(error, RetainedQueryError::WorkingUnitTooLarge),
+            "{error:?}"
+        );
+        assert!(!error.is_retryable());
+    }
+}
+
+fn largest_admitted_export_wrapper(
+    mut export: impl FnMut(usize) -> Result<()>,
+    ceiling: usize,
+) -> usize {
+    let mut low = 0;
+    let mut high = ceiling;
+    while low < high {
+        let bytes = low + (high - low).div_ceil(2);
+        if export(bytes).is_ok() {
+            low = bytes;
+        } else {
+            high = bytes - 1;
+        }
+    }
+    low
+}
+
+#[test]
+fn direct_export_neighboring_intrinsic_boundary_is_permanent_without_partial_adoption() {
+    let mut db = fixture();
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let boundary =
+        largest_admitted_export_wrapper(|bytes| batch.export_arrow(bytes).map(drop), 64 * 1024);
+    let before = governor.retained_result_snapshot();
+    assert!(matches!(
+        batch.export_arrow(boundary + 1),
+        Err(RetainedQueryError::WorkingUnitTooLarge)
+    ));
+    assert_eq!(before, governor.retained_result_snapshot());
+    assert_eq!(scores(&batch), vec![2]);
+    drop(batch.export_arrow(boundary).unwrap());
+    drop((batch, cursor, db));
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
+#[test]
+fn direct_export_live_array_byte_pressure_remains_retryable_after_intrinsic_preflight() {
+    let mut db = fixture();
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let boundary =
+        largest_admitted_export_wrapper(|bytes| batch.export_arrow(bytes).map(drop), 64 * 1024);
+    let held = batch.export_arrow(boundary).unwrap();
+    let before = governor.retained_result_snapshot();
+    let error = batch.export_arrow(0).unwrap_err();
+    assert!(error.is_retryable(), "{error:?}");
+    let after = governor.retained_result_snapshot();
+    assert_eq!(before.retained_bytes, after.retained_bytes);
+    assert_eq!(before.buffer_owners, after.buffer_owners);
+    assert_eq!(before.view_handles, after.view_handles);
+    assert_eq!(scores(&batch), vec![2]);
+    drop(held);
+    drop(batch.export_arrow(0).unwrap());
+    drop((batch, cursor, db));
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
+#[test]
+fn direct_schema_export_includes_its_borrowed_input_in_the_complete_allowance() {
+    let mut db = fixture();
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let boundary = largest_admitted_export_wrapper(
+        |bytes| batch.export_arrow_schema(bytes).map(drop),
+        64 * 1024,
+    );
+    let before = governor.retained_result_snapshot();
+    assert!(matches!(
+        batch.export_arrow_schema(boundary + 1),
+        Err(RetainedQueryError::WorkingUnitTooLarge)
+    ));
+    assert_eq!(before, governor.retained_result_snapshot());
+    drop(batch.export_arrow_schema(boundary).unwrap());
+    assert_eq!(scores(&batch), vec![2]);
+    drop((batch, cursor, db));
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
+#[test]
+fn direct_export_source_pins_remain_separate_from_the_result_allowance() {
+    let mut db = fixture_with_unrequested_payload(128 * 1024);
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    assert!(cursor.profile().source_pinned_capacity_bytes > 64 * 1024);
+    let batch = cursor.next_batch().unwrap().unwrap();
+    let export = batch.export_arrow(0).unwrap();
+    assert_eq!(scores(&batch), vec![2]);
+    drop(cursor);
+    drop(db);
+    assert_eq!(export.column_provenance(0).unwrap().byte_length, 8);
+    drop((export, batch));
+    let released = governor.retained_result_snapshot();
+    assert_eq!(released.retained_bytes, 0);
+    assert_eq!(released.buffer_owners, 0);
+    assert_eq!(released.view_handles, 0);
+}
+
+#[test]
+fn direct_export_query_ledger_pressure_clears_when_the_source_cursor_closes() {
+    let mut config = crate::DatabaseConfig::default();
+    config.execution_memory.query_memory_bytes = nz(64 * 1024);
+    let mut db = fixture_with_config(config);
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 256 * 1024);
+    db.set_runtime_governor(governor.clone());
+    let mut cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let batch = cursor.next_batch().unwrap().unwrap();
+    assert!(cursor.profile().source_pinned_capacity_bytes > 0);
+    let boundary =
+        largest_admitted_export_wrapper(|bytes| batch.export_arrow(bytes).map(drop), 64 * 1024);
+    let before = governor.retained_result_snapshot();
+    let visited = cursor.profile().visited_rows;
+    let error = batch.export_arrow(boundary + 1).unwrap_err();
+    assert!(
+        matches!(
+            error,
+            RetainedQueryError::RetainedAdmission(
+                hawdb_qos::RuntimeRetainedResultError::Capacity {
+                    resource: hawdb_qos::RuntimeRetainedResultResource::QueryBytes,
+                    retryable: true,
+                    ..
+                }
+            )
+        ),
+        "{error:?}"
+    );
+    let after = governor.retained_result_snapshot();
+    assert_eq!(before.retained_bytes, after.retained_bytes);
+    assert_eq!(before.buffer_owners, after.buffer_owners);
+    assert_eq!(before.view_handles, after.view_handles);
+    assert_eq!(cursor.profile().visited_rows, visited);
+    cursor.close();
+    let export = batch.export_arrow(boundary + 1).unwrap();
+    assert_eq!(scores(&batch), vec![2]);
+    drop((export, batch, cursor, db));
+    let released = governor.retained_result_snapshot();
+    assert_eq!(released.retained_bytes, 0);
+    assert_eq!(released.buffer_owners, 0);
+    assert_eq!(released.view_handles, 0);
+}

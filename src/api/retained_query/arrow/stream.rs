@@ -97,6 +97,7 @@ impl RetainedArrowStream {
     }
     /// Metadata observation does not request/prefetch another batch.
     pub fn profile(&self) -> RetainedQueryProfile {
+        // into_cursor consumes self, so a live typed stream retains its cursor.
         let owner = unsafe { &*self.0.private_data.cast::<StreamOwner>() };
         let state = owner
             .state
@@ -105,6 +106,7 @@ impl RetainedArrowStream {
         state.cursor.as_ref().expect("active stream").profile()
     }
     pub fn status(&self) -> RetainedQueryStatus {
+        // into_cursor consumes self, so a live typed stream retains its cursor.
         let owner = unsafe { &*self.0.private_data.cast::<StreamOwner>() };
         let state = owner
             .state
@@ -261,6 +263,14 @@ unsafe extern "C" fn get_schema(stream: *mut ArrowArrayStream, output: *mut Arro
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     let result = catch_unwind(AssertUnwindSafe(|| {
         let cursor = state.cursor.as_ref().expect("active stream");
+        // Host resource refresh may tighten capacity after stream adoption.
+        let metadata = owner
+            ._lease
+            ._memory
+            .bytes()
+            .checked_add(schema_metadata_bytes(&cursor.shared, 0)?)
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        cursor.require_adapter_metadata_capacity(metadata)?;
         schema(&cursor.shared, 0, &owner._lease._code)
     }));
     match result {
@@ -269,7 +279,23 @@ unsafe extern "C" fn get_schema(stream: *mut ArrowArrayStream, output: *mut Arro
             unsafe { output.write(schema.into_raw()) };
             0
         }
-        Ok(Err(error)) => state.message.set(&error),
+        Ok(Err(error)) => {
+            let code = state.message.set(&error);
+            if !error.is_retryable()
+                && state.cursor.as_ref().expect("active stream").status()
+                    == RetainedQueryStatus::Open
+            {
+                state
+                    .cursor
+                    .as_mut()
+                    .expect("active stream")
+                    .abort_delivery();
+                if state.terminal.is_none() {
+                    state.terminal = Some(state.message.clone());
+                }
+            }
+            code
+        }
         Err(_) => {
             state
                 .cursor
@@ -310,6 +336,16 @@ unsafe extern "C" fn get_next(stream: *mut ArrowArrayStream, output: *mut ArrowA
         if cursor.can_complete_without_output() {
             return cursor.next_batch().map(|_| None);
         }
+        let metadata = owner
+            ._lease
+            ._memory
+            .bytes()
+            .checked_add(ArrayReservation::required_metadata_bytes(
+                &cursor.shared,
+                0,
+            )?)
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        cursor.require_adapter_output_capacity(2 * std::mem::size_of::<usize>() + 64, metadata)?;
         // Every array/child descriptor handle is admitted before native pull.
         // The native batch admits its own Arc/header before advancing source.
         let reservation = ArrayReservation::new(&cursor.shared, 0, &owner._lease._code)?;

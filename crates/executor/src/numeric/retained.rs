@@ -396,6 +396,16 @@ fn validity_view(rows: usize, words: &[u64]) -> ValidityView<'_> {
 }
 
 impl RetainedNumericBatch {
+    /// Charged storage/owner and this view's metadata, excluding other views.
+    /// Adapters use these live leases as an irreducible input working unit.
+    #[doc(hidden)]
+    pub fn retained_memory_bytes(&self) -> Option<usize> {
+        self.storage
+            ._memory
+            .bytes()
+            .checked_add(self._view_memory.bytes())
+    }
+
     /// Values, optional node IDs, optional validity, and selection, in order.
     pub fn buffer_provenance(&self) -> [Option<NumericBufferProvenance>; 4] {
         buffer_provenance(

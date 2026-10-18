@@ -127,10 +127,15 @@ impl RetainedArrowExport {
     /// Allocation identity and selected value range, without allocating metadata.
     pub fn column_provenance(&self, index: usize) -> Result<NumericBufferProvenance> {
         let mut view = self.batch.column_provenance(index)?;
+        let width = match self.batch.schema()[index].data_type {
+            RetainedColumnType::Int64 => std::mem::size_of::<i64>(),
+            RetainedColumnType::Float64 => std::mem::size_of::<f64>(),
+            RetainedColumnType::UInt64 => std::mem::size_of::<u64>(),
+        };
         let (offset, length) = range(&self.batch)?;
         let offset = usize::try_from(offset)
             .ok()
-            .and_then(|n| n.checked_mul(8))
+            .and_then(|n| n.checked_mul(width))
             .ok_or(RetainedQueryError::SizeOverflow)?;
         view.byte_offset = view
             .byte_offset
@@ -138,7 +143,7 @@ impl RetainedArrowExport {
             .ok_or(RetainedQueryError::SizeOverflow)?;
         view.byte_length = usize::try_from(length)
             .ok()
-            .and_then(|n| n.checked_mul(8))
+            .and_then(|n| n.checked_mul(width))
             .ok_or(RetainedQueryError::SizeOverflow)?;
         Ok(view)
     }
@@ -188,6 +193,48 @@ fn retained_metadata_bytes(bytes: usize) -> Result<usize> {
                 .map_err(|_| RetainedQueryError::SizeOverflow)?,
         )
         .ok_or(RetainedQueryError::SizeOverflow)
+}
+fn require_descriptor_capacity(
+    shared: &CursorShared,
+    input_bytes: usize,
+    metadata_bytes: usize,
+) -> Result<()> {
+    // The borrowed input and shared control cannot be released while this
+    // export is being constructed. Other arrays/schemas/source cursors can.
+    let required = shared
+        ._memory
+        .bytes()
+        .checked_add(input_bytes)
+        .and_then(|bytes| bytes.checked_add(metadata_bytes))
+        .ok_or(RetainedQueryError::SizeOverflow)?;
+    let required_runtime = u64::try_from(required).map_err(|_| RetainedQueryError::SizeOverflow)?;
+    let runtime_capacity = shared.governor.snapshot().limits.memory_capacity_bytes;
+    let runtime_capacity = shared
+        .governor
+        .process_memory_policy_snapshot()
+        .map_or(runtime_capacity, |policy| {
+            runtime_capacity.min(policy.resident_limit_bytes)
+        });
+    if required > shared.result_memory_budget.get()
+        || required_runtime > shared.governor.retained_result_snapshot().budget_bytes
+        || required_runtime > runtime_capacity
+    {
+        return Err(RetainedQueryError::WorkingUnitTooLarge);
+    }
+    let available = shared.account.available_bytes();
+    if metadata_bytes > available {
+        return Err(RetainedQueryError::RetainedAdmission(
+            hawdb_qos::RuntimeRetainedResultError::Capacity {
+                resource: hawdb_qos::RuntimeRetainedResultResource::QueryBytes,
+                requested: u64::try_from(metadata_bytes)
+                    .map_err(|_| RetainedQueryError::SizeOverflow)?,
+                available: u64::try_from(available)
+                    .map_err(|_| RetainedQueryError::SizeOverflow)?,
+                retryable: true,
+            },
+        ));
+    }
+    Ok(())
 }
 fn handles(shared: &CursorShared, count: usize) -> Result<()> {
     if count > shared.handle_limit {
@@ -260,6 +307,7 @@ fn schema(
     wrapper_bytes: usize,
     code: &CodeOwner,
 ) -> Result<RetainedArrowSchema> {
+    require_descriptor_capacity(shared, 0, schema_metadata_bytes(shared, wrapper_bytes)?)?;
     if shared
         .schema
         .iter()
@@ -516,9 +564,30 @@ impl RetainedQueryBatch {
                 .and_then(|n| n.checked_add(5))
                 .ok_or(RetainedQueryError::SizeOverflow)?,
         )?;
+        // Match the extra native view admitted by self.try_retain below.
+        let adapter_metadata = capacity::<Arc<RetainedQueryBatch>>(0)?;
+        let view_metadata = std::mem::size_of::<RetainedQueryBatch>()
+            .checked_add(std::mem::size_of::<RetainedNumericBatch>())
+            .and_then(|bytes| bytes.checked_add(adapter_metadata))
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        let view_metadata = retained_metadata_bytes(view_metadata)?;
+        let metadata = schema_metadata_bytes(shared, wrapper_bytes)?
+            .checked_add(ArrayReservation::required_metadata_bytes(
+                shared,
+                wrapper_bytes,
+            )?)
+            .and_then(|bytes| bytes.checked_add(view_metadata))
+            .ok_or(RetainedQueryError::SizeOverflow)?;
+        require_descriptor_capacity(
+            shared,
+            self.numeric
+                .retained_memory_bytes()
+                .ok_or(RetainedQueryError::SizeOverflow)?,
+            metadata,
+        )?;
         let schema = schema(shared, wrapper_bytes, &code)?;
         let reservation = ArrayReservation::new(shared, wrapper_bytes, &code)?;
-        let batch = Arc::new(self.try_retain(capacity::<Arc<RetainedQueryBatch>>(0)?)?);
+        let batch = Arc::new(self.try_retain(adapter_metadata)?);
         let array = reservation.build(Arc::clone(&batch))?;
         Ok(RetainedArrowExport {
             schema,
@@ -531,6 +600,13 @@ impl RetainedQueryBatch {
         wrapper_bytes: usize,
         code: Option<Arc<dyn RetainedArrowCodeOwner>>,
     ) -> Result<RetainedArrowSchema> {
+        require_descriptor_capacity(
+            &self.slot.shared,
+            self.numeric
+                .retained_memory_bytes()
+                .ok_or(RetainedQueryError::SizeOverflow)?,
+            schema_metadata_bytes(&self.slot.shared, wrapper_bytes)?,
+        )?;
         handles(
             &self.slot.shared,
             self.schema()
@@ -542,6 +618,13 @@ impl RetainedQueryBatch {
     }
     /// Independently admitted metadata export without retaining the result slot.
     pub fn export_arrow_schema(&self, wrapper_bytes: usize) -> Result<RetainedArrowSchema> {
+        require_descriptor_capacity(
+            &self.slot.shared,
+            self.numeric
+                .retained_memory_bytes()
+                .ok_or(RetainedQueryError::SizeOverflow)?,
+            schema_metadata_bytes(&self.slot.shared, wrapper_bytes)?,
+        )?;
         handles(
             &self.slot.shared,
             self.schema()

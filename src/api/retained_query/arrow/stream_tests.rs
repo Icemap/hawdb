@@ -54,6 +54,104 @@ fn largest_admitted_stream_wrapper(
     low
 }
 
+fn shrink_host_below_live_stream(governor: &RuntimeGovernor) {
+    let snapshot = governor.snapshot();
+    let irreducible = governor.retained_result_snapshot().retained_bytes;
+    assert!(irreducible > 1);
+    let fraction = u64::from(RuntimeGovernorConfig::shared_host().memory_fraction_per_million);
+    assert!(fraction > 0);
+    let limit = (irreducible - 1).checked_mul(1_000_000).unwrap() / fraction;
+    let mut resources = snapshot.resources;
+    resources.memory =
+        RuntimeMemorySnapshot::from_limits(Some(limit), Some(limit), None, None, None);
+    assert!(governor.update_resources(resources));
+    assert!(governor.snapshot().limits.memory_capacity_bytes < irreducible);
+}
+
+fn assert_stream_host_capacity_shrink_is_terminal(schema_first: bool) {
+    let mut db = fixture();
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    governor.pin_resources();
+    db.set_runtime_governor(governor.clone());
+    let cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let stream = cursor.into_arrow_stream(32 * 1024).unwrap();
+    shrink_host_below_live_stream(&governor);
+    let code = if schema_first {
+        let mut schema = ArrowSchema::default();
+        let code =
+            unsafe { stream.descriptor().get_schema.unwrap()(pointer(&stream), &mut schema) };
+        assert!(schema.release.is_none());
+        code
+    } else {
+        let (code, array) = pull(&stream);
+        assert!(array.release.is_none());
+        code
+    };
+    assert_ne!(code, 0);
+    assert_eq!(stream.profile().visited_rows, 0);
+    assert_eq!(stream.status(), RetainedQueryStatus::Failed);
+    let (again, array) = pull(&stream);
+    assert_eq!(again, code);
+    assert!(array.release.is_none());
+    assert_eq!(stream.profile().visited_rows, 0);
+    drop(stream);
+    let released = governor.retained_result_snapshot();
+    assert_eq!(released.retained_bytes, 0);
+    assert_eq!(released.buffer_owners, 0);
+    assert_eq!(released.view_handles, 0);
+}
+
+#[test]
+fn stream_host_capacity_shrink_is_terminal_before_array_adoption() {
+    assert_stream_host_capacity_shrink_is_terminal(false);
+}
+
+#[test]
+fn stream_host_capacity_shrink_is_terminal_before_schema_adoption() {
+    assert_stream_host_capacity_shrink_is_terminal(true);
+}
+
+#[test]
+fn completed_stream_remains_eof_after_a_later_schema_capacity_failure() {
+    let mut db = fixture();
+    let governor = governor_with_result_ceiling(1024, 64 * 1024 * 1024, 64 * 1024);
+    governor.pin_resources();
+    db.set_runtime_governor(governor.clone());
+    let cursor = db
+        .query_with_params_retained(QUERY, &params(), options())
+        .unwrap();
+    let stream = cursor.into_arrow_stream(0).unwrap();
+    let mut output = Vec::new();
+    loop {
+        let (code, mut array) = pull(&stream);
+        assert_eq!(code, 0);
+        if array.release.is_none() {
+            break;
+        }
+        output.extend(values(&array));
+        release_array(&mut array);
+    }
+    assert_eq!(output, (2..9).collect::<Vec<_>>());
+    assert_eq!(stream.status(), RetainedQueryStatus::Completed);
+    let visited = stream.profile().visited_rows;
+    shrink_host_below_live_stream(&governor);
+    let mut schema = ArrowSchema::default();
+    assert_ne!(
+        unsafe { stream.descriptor().get_schema.unwrap()(pointer(&stream), &mut schema) },
+        0
+    );
+    assert!(schema.release.is_none());
+    assert_eq!(stream.status(), RetainedQueryStatus::Completed);
+    let (code, array) = pull(&stream);
+    assert_eq!(code, 0);
+    assert!(array.release.is_none());
+    assert_eq!(stream.profile().visited_rows, visited);
+    drop(stream);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+}
+
 #[test]
 fn stream_own_metadata_cannot_create_permanent_retryable_pressure() {
     let mut db = fixture();

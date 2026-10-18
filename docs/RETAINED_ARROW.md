@@ -19,6 +19,11 @@ Stream adoption checks the irreducible metadata for its descriptor, schema and
 minimum demanded batch against the existing allowances. An impossible working
 unit refuses before taking the caller's cursor; releasable arrays and schemas
 can still cause retryable pressure. Empty sources can complete without a batch.
+Direct C Data export also checks the borrowed native batch plus its complete
+schema, array and retained-view metadata before constructing descriptors. A
+schema-only export checks the input it must keep alive during that call.
+Stream callbacks recheck their working unit after a host resource refresh;
+permanent schema or array admission failures terminate without source advance.
 Export may refuse before adoption when byte, slot or handle capacity is missing.
 It does not increase those allowances, prefetch data or silently gather rows.
 Successful EOF is required before treating all earlier batches as a complete
