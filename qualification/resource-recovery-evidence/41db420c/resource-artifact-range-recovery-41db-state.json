@@ -1,0 +1,19 @@
+{
+  "status": "failed",
+  "pid": 75207,
+  "started": 1792338226.878104,
+  "artifacts": [
+    {
+      "id": 12139463897,
+      "name": "resources-ordinary-1000-memory-default-true-fill_bulk-rust-515a1e5bdc63394a11f0a5fe35794438be52aa45",
+      "size_in_bytes": 301985942,
+      "url_refreshes": 3,
+      "head_verified": true,
+      "verified_range_bytes": 54647866
+    }
+  ],
+  "scope": "Read-only recovery of existing current515 resource artifact. No test dispatch, rerun, workload/sample/budget change or replacement of adverse results. Signed URLs and credentials remain memory-only.",
+  "error": "timeout",
+  "http_status": null,
+  "ended": 1792339457.143164
+}

@@ -1,0 +1,7 @@
+{
+  "previous_status": "failed",
+  "verified_cache_ranges": 166,
+  "verified_cache_bytes": 67230778,
+  "new_script_sha256": "5e8982a4e5d4491ffd6cea1a14fd8a32626e8f510517523dc2d3ba6a8903f1c2",
+  "change": "Catch Python3.9 socket.timeout and HTTP IncompleteRead, same retry/deadline/integrity policy. No benchmark dispatch."
+}

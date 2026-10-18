@@ -1,0 +1,82 @@
+{
+  "engine": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "source": "515a1e5bdc63394a11f0a5fe35794438be52aa45",
+  "run": 39133555481,
+  "artifact": 12139463897,
+  "producer_archive_verification": true,
+  "verified_files": [
+    "baseline-producer/hawdb_bench_host_boundary_allocations",
+    "baseline-producer/python_boundary",
+    "baseline-producer/libhawdb_ffi_boundary_profile.so",
+    "baseline-producer/lib_hawdb_boundary_profile.so",
+    "baseline-producer/boundary_profile",
+    "baseline-producer/python_boundary.runfiles_manifest",
+    "candidate-producer/hawdb_bench_host_boundary_allocations",
+    "candidate-producer/python_boundary",
+    "candidate-producer/libhawdb_ffi_boundary_profile.so",
+    "candidate-producer/lib_hawdb_boundary_profile.so",
+    "candidate-producer/boundary_profile",
+    "candidate-producer/python_boundary.runfiles_manifest"
+  ],
+  "baseline_observer_patch_verified": true,
+  "matches_prior_report_preview": true,
+  "bundle_sha256": "14eacebd7a375eab80e98e466fdb3def0106850a101aaeee0579b9f14bb34f19",
+  "observed_at": 1792339820.145578,
+  "audit": {
+    "group": [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    "run": 39133555481,
+    "complete": true,
+    "verified_files": 12,
+    "sides": {
+      "baseline": {
+        "success": true,
+        "adverse": [],
+        "observed_medians": {
+          "process_peak_rss_bytes": 21176320,
+          "query_boundary_ns": 29551296,
+          "consumer_ns": 74440,
+          "native_profile": {
+            "allocated_bytes": 39922402,
+            "allocation_calls": 154418,
+            "deallocated_bytes": 38588082,
+            "deallocation_calls": 144587,
+            "live_requested_bytes_after": 2111441,
+            "live_requested_bytes_before": 777121,
+            "process_peak_requested_bytes": 5337531,
+            "reallocation_calls": 2476
+          }
+        }
+      },
+      "candidate": {
+        "success": true,
+        "adverse": [],
+        "observed_medians": {
+          "process_peak_rss_bytes": 22421504,
+          "query_boundary_ns": 26455973,
+          "consumer_ns": 74560,
+          "native_profile": {
+            "allocated_bytes": 37470225,
+            "allocation_calls": 135326,
+            "deallocated_bytes": 36109581,
+            "deallocation_calls": 124430,
+            "live_requested_bytes_after": 2234511,
+            "live_requested_bytes_before": 873867,
+            "process_peak_requested_bytes": 5433179,
+            "reallocation_calls": 2171
+          }
+        }
+      }
+    },
+    "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification."
+  },
+  "acceptance_approved": false,
+  "scope": "Independent full producer-byte and result/resource audit of recovered existing artifact. Original download timeout retained. No benchmark rerun or full-matrix claim."
+}

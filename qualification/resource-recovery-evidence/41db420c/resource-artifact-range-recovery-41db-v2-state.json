@@ -1,0 +1,23 @@
+{
+  "status": "recovered_producer_bytes_verified",
+  "pid": 16085,
+  "started": 1792339652.644487,
+  "artifacts": [
+    {
+      "id": 12139463897,
+      "name": "resources-ordinary-1000-memory-default-true-fill_bulk-rust-515a1e5bdc63394a11f0a5fe35794438be52aa45",
+      "size_in_bytes": 301985942,
+      "url_refreshes": 1,
+      "head_verified": true,
+      "verified_range_bytes": 85483367,
+      "status": "producer_bytes_verified",
+      "bundle": "/private/tmp/hawdb-wip-ready-20261015/resource-artifact-range-recovery-41db/artifact-12139463897.json",
+      "bundle_sha256": "14eacebd7a375eab80e98e466fdb3def0106850a101aaeee0579b9f14bb34f19",
+      "verified_producer_files": 12
+    }
+  ],
+  "scope": "Read-only recovery of existing current515 resource artifact. No test dispatch, rerun, workload/sample/budget change or replacement of adverse results. Signed URLs and credentials remain memory-only.",
+  "prior_failed_receipt": "resource-artifact-range-recovery-41db-state.json",
+  "recovery_change": "Handle Python3.9 socket.timeout and incomplete HTTP reads; reuse only SHA256-verified ranges. Same artifact, three retries/range, original120sec read timeout.",
+  "ended": 1792339706.461649
+}

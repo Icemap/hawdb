@@ -1,0 +1,116 @@
+{
+  "engine_source": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+  "engine_tree": "d386d053f89ae7d2955b57da6da39208ddc616c4",
+  "sources": {
+    "baseline": {
+      "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+      "tree": "4a235b06362ae6306a300e45d5974495c1229c2b"
+    },
+    "candidate": {
+      "head": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+      "tree": "d386d053f89ae7d2955b57da6da39208ddc616c4"
+    }
+  },
+  "producers": {
+    "baseline": {
+      "rust": {
+        "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/hawdb_bench_host_boundary_allocations",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary_allocations",
+        "sha256": "0f4c8d1aa04d77d8065937228ff316ac6454f231a9260085f74f580739bc3a3c"
+      },
+      "python": {
+        "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+        "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+        "runfiles": {
+          "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary.runfiles",
+          "sha256": "b2a5d5145e944e2a4cfcb91e3dc5fbc202a1ac974db389d9297146568185dac0",
+          "entries": 2517
+        },
+        "runfiles_manifest_sha256": "90004839edb125783b74e5a1a75aa1a5ff67835f1269bcedb987f20297f1b009"
+      },
+      "library": {
+        "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/libhawdb_ffi_boundary_profile.so",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi_boundary_profile.so",
+        "sha256": "1de1fe544214b32958874b5441b709edd2eeac640ffae6549acc69664dd81bec"
+      },
+      "python_extension": {
+        "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/lib_hawdb_boundary_profile.so",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/lib_hawdb_boundary_profile.so",
+        "sha256": "15545f2921adc8fc016db7d14c93bfdc4f2fda882153bbcc141c6db304485af1"
+      },
+      "go": {
+        "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/boundary_profile",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+        "sha256": "e5a8f9e4731ef8aaaa016bcca3c2a067aae54021dff6166985626f00a1dfd0e8"
+      }
+    },
+    "candidate": {
+      "rust": {
+        "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/hawdb_bench_host_boundary_allocations",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary_allocations",
+        "sha256": "51f06ebd10be2b294a5f4cb79359b7452211d93b3d1cd37a51dcbc32edc38a95"
+      },
+      "python": {
+        "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+        "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+        "runfiles": {
+          "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary.runfiles",
+          "sha256": "293dd98faee7a7705b5ee9abcfaf466254caf6c977580a9280b0f20bfab7e205",
+          "entries": 2517
+        },
+        "runfiles_manifest_sha256": "f7a86d5a01951cb4e801741f57d0709e145dfaee0e9f78ce79e2a87bda2efab9"
+      },
+      "library": {
+        "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/libhawdb_ffi_boundary_profile.so",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi_boundary_profile.so",
+        "sha256": "480250a55a939c0bbc4a6afdf441d7a852527427ae2e5b333a8020ed182785db"
+      },
+      "python_extension": {
+        "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/lib_hawdb_boundary_profile.so",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/lib_hawdb_boundary_profile.so",
+        "sha256": "7d37b3a7ca74a12f28d4d2679dc80d925590ba0b6a7fca10aff19151840452b0"
+      },
+      "go": {
+        "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+        "sha256": "e5a8f9e4731ef8aaaa016bcca3c2a067aae54021dff6166985626f00a1dfd0e8"
+      }
+    }
+  },
+  "shared_go_source": {
+    "head": "41db420c5d5caaeeaac640cc66c96bda9a19de8c",
+    "tree": "d386d053f89ae7d2955b57da6da39208ddc616c4"
+  },
+  "shared_go_producer": {
+    "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+    "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+    "sha256": "e5a8f9e4731ef8aaaa016bcca3c2a067aae54021dff6166985626f00a1dfd0e8"
+  },
+  "independently_built_reference_go": {
+    "path": "/home/runner/work/_temp/resource-qualification/baseline-built-go",
+    "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+    "sha256": "b26afdc8f3005ce06eb0ff8c6ad284314879a9edac379cd5abc1460fa3de4222"
+  },
+  "go_host_profiles": false,
+  "overlay_files": [],
+  "baseline_observer_patch_sha256": "8dd4d5317635ba2ebb79971cea3cc3d118cd66504f587262c07859880e08e871",
+  "matrix_selection": {
+    "sizes": "1000",
+    "cases": "fill_bulk",
+    "layers": "rust",
+    "backends": "memory",
+    "samples": 3
+  },
+  "defaults_changed_by_qualification": false,
+  "instrumented": true,
+  "scope": [
+    "Native Rust allocation requests, Python traced heap and Go heap remain separate observations.",
+    "Per-child process RSS includes runtime, fixture, setup, warmup and complete operation.",
+    "Native phases and Go host JSON/copy/free phases remain separate; native phases nest inside complete Go FFI time.",
+    "Instrumented timing is not uninstrumented performance qualification or a whole-memory bound.",
+    "The ordinary candidate uses the exact frozen engine, bindings, workloads and build configuration; only qualification/workflow files may differ.",
+    "All refusals, nonzero exits, unsupported groups and absent profiles remain adverse outcomes."
+  ]
+}
