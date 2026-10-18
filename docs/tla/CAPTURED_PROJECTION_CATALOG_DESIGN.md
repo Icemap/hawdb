@@ -31,6 +31,15 @@ is retained without duplication. Sealing checks the physical end as well as the
 expected counters/digest, so ignoring an earlier append error cannot select a
 manifest whose boundary excludes trailing data.
 
+Resuming a complete unacknowledged record does not set the torn-tail flag.
+Sealing synchronizes the complete data stream even in that case. Likewise an
+already visible immutable manifest is synchronized, together with its containing
+directory, before idempotent sealing returns. File existence or successful
+decoding cannot stand in for those barriers after an interrupted seal. Receipt/
+GC stabilization completes data and manifest barriers before the selected head's
+barriers. Two additional materialized crash images lose all remaining uncovered
+writes after resumed sealing and selection, then reopen and scrub the generation.
+
 Head and manifest publication reuse the
 [captured control candidate](CAPTURED_CONTROL_PUBLICATION_DESIGN.md). Writes
 are sealed before the native relative selection; post-effect file/identity/
@@ -119,6 +128,24 @@ Native catalog regressions keep a writer and reader across complete root-path
 reuse; build B with colliding logical generations/filenames; then append, seal,
 publish, page, scrub and actually reclaim A's obsolete data while preserving A's
 active/pinned data and every B byte. The same scenario runs with the recorder.
+These post-open ancestor-move scenarios execute on Unix. Native Windows CI
+`39101105952/117597375894` returned `AccessDenied (5)` for the three ancestor-move
+fixtures with the catalog's read-directory descendants held open; the other 95
+cases passed. No data-file write handle or byte-range process lock was needed
+for that refusal. Directory READ_DATA/listing handles are a distinct observed
+case from the earlier regular-file write-handle diagnostic.
+
+Cross-platform constructor-boundary cases retain the chosen root continuously,
+replace its label before child-directory hydration, and invoke the same native
+`from_root`/catalog construction path used by `open`. They then exercise real A
+publication, repair, pinned reads, reclamation and identical-copy token rejection
+while preserving every B byte. Fixture seeding closes before starting this fresh
+capture; it does not close/reacquire a chosen root or a live publication lease to
+force movement. Windows separately must refuse a post-open move while retaining
+all three handles, identities and bytes, then publish normally at its stationary
+root. The original Unix post-open tests remain. No Windows movement capability
+is inferred from Unix success or manufactured by releasing native custody.
+
 Additional cases cover source-relative torn-tail repair, identical copied-token
 rejection, FD refusal/refund, the head-to-pin critical section and real
 lost-selection crash recovery. Windows must

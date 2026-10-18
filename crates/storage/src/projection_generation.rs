@@ -459,14 +459,8 @@ impl ProjectionGenerationStore {
         // every containing name through the admitted project boundary.
         sync_directory_ancestors(&root)?;
         let root = fs::canonicalize(root)?;
-        let captured = Arc::new(CapturedCatalog::capture(&root)?);
-        let shared = shared_catalog(captured.identity())?;
-        Ok(Self {
-            root,
-            captured,
-            read_only: false,
-            shared,
-        })
+        let captured = CapturedCatalog::capture(&root)?;
+        Self::from_capture(root, captured, false)
     }
 
     pub fn open_existing(root: impl AsRef<Path>) -> Result<Self, ProjectionGenerationError> {
@@ -478,13 +472,22 @@ impl ProjectionGenerationStore {
             )));
         }
         let root = fs::canonicalize(root)?;
-        let captured = Arc::new(CapturedCatalog::capture(&root)?);
+        let captured = CapturedCatalog::capture(&root)?;
+        Self::from_capture(root, captured, true)
+    }
+
+    fn from_capture(
+        root: PathBuf,
+        captured: CapturedCatalog,
+        read_only: bool,
+    ) -> Result<Self, ProjectionGenerationError> {
+        let captured = Arc::new(captured);
         let shared = shared_catalog(captured.identity())?;
         Ok(Self {
             root,
-            captured,
-            read_only: true,
             shared,
+            captured,
+            read_only,
         })
     }
 
@@ -1028,10 +1031,12 @@ impl ProjectionGenerationWriter {
                 digest
             )));
         }
-        let seek_fences = build_seek_fences(
-            self.store.open_file(&self.data_path)?,
-            self.state.valid_bytes,
-        )?;
+        // A resumed complete append can be visible without having reached its
+        // file barrier. Sealing must persist the entire validated stream even
+        // when no torn-tail repair or new append was necessary.
+        let data = self.store.open_mutable_file(&self.data_path, false)?;
+        data.sync_all()?;
+        let seek_fences = build_seek_fences(data, self.state.valid_bytes)?;
         let manifest = ProjectionGenerationManifest {
             begin: self.begin.clone(),
             member_count: self.state.member_count,
@@ -1062,6 +1067,8 @@ impl ProjectionGenerationWriter {
                         "sealed generation identity was reused with different metadata".to_string(),
                     ));
                 }
+                self.store
+                    .sync_file_and_parent(&self.store.manifest_path(&self.begin.identity))?;
                 true
             } else {
                 let path = self.store.manifest_path(&self.begin.identity);
@@ -1073,6 +1080,7 @@ impl ProjectionGenerationWriter {
                             "generation manifest appeared with different metadata".to_string(),
                         ));
                     }
+                    self.store.sync_file_and_parent(&path)?;
                 } else {
                     self.store.write_control(&path, &bytes, &mut shared)?;
                 }

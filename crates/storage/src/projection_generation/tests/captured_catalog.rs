@@ -5,6 +5,8 @@ use super::*;
 use crate::file_descriptors::ProjectFileDescriptors;
 use crate::power_loss::{image::ImageLimits, PowerLossModel};
 
+mod constructor_boundary;
+
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
@@ -34,6 +36,7 @@ fn tree(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 }
 
 #[test]
+#[cfg(unix)]
 fn publication_pages_and_gc_use_one_captured_catalog_after_path_reuse() {
     for recorded in [false, true] {
         let fixture = Fixture::new();
@@ -138,6 +141,7 @@ fn publication_pages_and_gc_use_one_captured_catalog_after_path_reuse() {
 }
 
 #[test]
+#[cfg(unix)]
 fn torn_tail_repair_resumes_the_original_candidate_not_the_reused_path() {
     let fixture = Fixture::new();
     let named = fixture.0.join("named");
@@ -187,6 +191,7 @@ fn torn_tail_repair_resumes_the_original_candidate_not_the_reused_path() {
 }
 
 #[test]
+#[cfg(unix)]
 fn identical_catalog_copy_cannot_adopt_an_original_sealed_token() {
     let fixture = Fixture::new();
     let named = fixture.0.join("named");
@@ -479,5 +484,54 @@ fn an_unacknowledged_append_must_recover_before_more_writes_or_sealing() {
                 .members,
             rows
         );
+    }
+}
+
+#[test]
+fn resumed_complete_data_and_visible_manifests_reach_barriers_before_selection() {
+    for interrupted in ["data", "manifest"] {
+        let fixture = Fixture::new();
+        let project = ProjectFileDescriptors::acquire(&fixture.0, 32).unwrap();
+        let model = PowerLossModel::attach(&project, ImageLimits::default()).unwrap();
+        let store = ProjectionGenerationStore::open(fixture.0.join("catalog")).unwrap();
+        let rows = members(&[("a", "first"), ("b", "complete but unsynchronized")]);
+        let mut writer = store
+            .begin_candidate(
+                begin("g1", None, 1),
+                ProjectionGenerationBatchLimits::default(),
+            )
+            .unwrap();
+        if interrupted == "data" {
+            writer.append_batch(&rows[..1]).unwrap();
+            {
+                let mut bytes = Vec::new();
+                append_record(&encode_member(&rows[1]).unwrap(), &mut bytes).unwrap();
+                let mut file = store.open_mutable_file(&writer.data_path, false).unwrap();
+                file.seek(SeekFrom::End(0)).unwrap();
+                file.write_all(&bytes).unwrap();
+                // Deliberately no file sync: recovery sees a complete record,
+                // so a torn-tail-only flush would leave this data uncovered.
+            }
+            drop(writer);
+        } else {
+            writer.append_batch(&rows).unwrap();
+            FAIL_SELECTION_BARRIER.with(|failure| failure.set(true));
+            assert!(matches!(
+                writer.seal(seal_for(&rows)),
+                Err(ProjectionGenerationError::Io(_))
+            ));
+        }
+        let resumed = store
+            .begin_candidate(
+                begin("g1", None, 1),
+                ProjectionGenerationBatchLimits::default(),
+            )
+            .unwrap();
+        assert!(!resumed.recovered_torn_tail());
+        let sealed = resumed.seal(seal_for(&rows)).unwrap();
+        assert_eq!(sealed.idempotent(), interrupted == "manifest");
+        store.publish(&sealed).unwrap();
+        let image = model.capture().unwrap().crash(&Default::default()).unwrap();
+        recover_catalog_image(&image, "g1", &rows);
     }
 }

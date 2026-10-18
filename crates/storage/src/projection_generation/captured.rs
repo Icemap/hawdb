@@ -22,6 +22,10 @@ pub(super) struct CapturedCatalog {
 impl CapturedCatalog {
     pub(super) fn capture(root: &Path) -> io::Result<Self> {
         let root = SourceDirectory::capture_for_path(root)?;
+        Self::from_root(root)
+    }
+
+    pub(super) fn from_root(root: SourceDirectory) -> io::Result<Self> {
         let context = root.operation_context();
         let generations = root.open_directory(&context, "generations")?;
         let heads = root.open_directory(&context, "heads")?;
@@ -237,6 +241,14 @@ impl ProjectionGenerationStore {
         directory.sync(&directory.operation_context())
     }
 
+    pub(super) fn sync_file_and_parent(&self, path: &Path) -> io::Result<()> {
+        {
+            let file = self.open_mutable_file(path, false)?;
+            file.sync_all()?;
+        }
+        self.sync_parent(path)
+    }
+
     pub(super) fn stabilize_selected_head(
         &self,
         path: &Path,
@@ -250,22 +262,20 @@ impl ProjectionGenerationStore {
             ));
         }
         {
-            let mut file = self.open_file(&self.data_path(&manifest.begin.identity))?;
+            let mut file =
+                self.open_mutable_file(&self.data_path(&manifest.begin.identity), false)?;
             let (begin, _) = read_data_header(&mut file)?;
             if begin != manifest.begin || file.metadata()?.len() != manifest.data_bytes {
                 return Err(ProjectionGenerationError::Corruption(
                     "selected generation data does not match its sealed boundary".into(),
                 ));
             }
-        }
-        {
-            // FlushFileBuffers needs write authority on Windows. This existing
-            // open neither creates nor truncates; the catalog mutex and actual
-            // host exclusion keep the selected name/content immutable here.
-            let file = self.open_mutable_file(path, false)?;
             file.sync_all()?;
         }
-        self.sync_parent(path)?;
+        // A previously visible manifest can also have lost its namespace
+        // barrier. Complete all recovery dependencies before the head barrier.
+        self.sync_file_and_parent(&self.manifest_path(&manifest.begin.identity))?;
+        self.sync_file_and_parent(path)?;
         Ok(())
     }
 
