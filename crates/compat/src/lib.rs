@@ -431,6 +431,7 @@ impl ExpectedErrorClass {
             HawDBError::Execution(_)
             | HawDBError::BranchEvidenceBudgetExceeded { .. }
             | HawDBError::ReadBudgetExceeded(_)
+            | HawDBError::ResourceBudgetExceeded(_)
             | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
             | HawDBError::GraphExpansionPayloadLimitExceeded { .. }
             | HawDBError::TransactionConflict { .. }

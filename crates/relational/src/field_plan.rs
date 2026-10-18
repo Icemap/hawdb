@@ -252,7 +252,7 @@ fn expression_contains_aggregate(expression: &SqlExpression) -> bool {
     let mut aggregate = false;
     expression.visit(&mut |expression| {
         if let ExprKind::Function { name, .. } = &expression.kind {
-            aggregate |= matches!(name.as_str(), "count" | "sum" | "max");
+            aggregate |= matches!(name.as_str(), "count" | "sum" | "min" | "max");
         }
     });
     aggregate

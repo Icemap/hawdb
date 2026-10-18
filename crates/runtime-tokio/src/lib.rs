@@ -357,10 +357,7 @@ impl TokioRuntimeAdapter {
             let _permit = permit;
             task_context.checkpoint().map_err(TokioTaskError::Stopped)?;
             let result = operation(&task_context);
-            if observe_post_operation_cancellation {
-                task_context.checkpoint().map_err(TokioTaskError::Stopped)?;
-            }
-            result.map_err(TokioTaskError::Operation)
+            finish_operation(&task_context, result, observe_post_operation_cancellation)
         });
         self.await_join(join).await
     }
@@ -385,10 +382,7 @@ impl TokioRuntimeAdapter {
             task_context.checkpoint().map_err(TokioTaskError::Stopped)?;
             let checkpoint = task_context.clone();
             let result = operation(task_context).await;
-            if observe_post_operation_cancellation {
-                checkpoint.checkpoint().map_err(TokioTaskError::Stopped)?;
-            }
-            result.map_err(TokioTaskError::Operation)
+            finish_operation(&checkpoint, result, observe_post_operation_cancellation)
         });
         self.await_join(join).await
     }
@@ -479,7 +473,7 @@ impl TokioRuntimeAdapter {
             });
             let admission_notified = poll_fn(|task| {
                 if cancellation.as_mut().poll(task).is_ready() {
-                    return Poll::Ready(Err(RuntimeCancellationReason::Cancelled));
+                    return Poll::Ready(context.checkpoint().map(|()| false));
                 }
                 if deadline
                     .as_mut()
@@ -559,6 +553,22 @@ impl TokioRuntimeAdapter {
             false
         }
     }
+}
+
+fn finish_operation<T, E>(
+    context: &RuntimeTaskContext,
+    result: Result<T, E>,
+    observe_cancellation: bool,
+) -> Result<T, TokioTaskError<E>> {
+    if observe_cancellation
+        && let Err(reason) = context.checkpoint()
+        // A resource stop coordinates siblings; its originating operation error
+        // carries the budget metadata that the caller needs to diagnose it.
+        && (reason != RuntimeCancellationReason::ResourceExhausted || result.is_ok())
+    {
+        return Err(TokioTaskError::Stopped(reason));
+    }
+    result.map_err(TokioTaskError::Operation)
 }
 
 #[cfg(test)]
@@ -989,49 +999,58 @@ mod tests {
 
     #[test]
     fn cancellation_wakes_a_task_waiting_for_admission() {
-        let governor = governor(1);
-        let held = governor
-            .try_admit(RuntimeWorkRequest::blocking_cpu(
-                RuntimeWorkPriority::Foreground,
-                0,
-            ))
-            .unwrap();
-        let host = Builder::new_multi_thread().enable_time().build().unwrap();
-        let adapter = TokioRuntimeAdapter::borrowed(
-            host.handle().clone(),
-            governor,
-            TokioRuntimeConfig {
-                resource_refresh_interval: Duration::from_secs(3600),
-                ..TokioRuntimeConfig::default()
-            },
-        );
-        let token = RuntimeCancellationToken::new();
-        let context = RuntimeTaskContext::without_deadline(token.clone());
-        host.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            token.cancel();
-        });
+        for reason in [
+            RuntimeCancellationReason::Cancelled,
+            RuntimeCancellationReason::ResourceExhausted,
+        ] {
+            let governor = governor(1);
+            let held = governor
+                .try_admit(RuntimeWorkRequest::blocking_cpu(
+                    RuntimeWorkPriority::Foreground,
+                    0,
+                ))
+                .unwrap();
+            let host = Builder::new_multi_thread().enable_time().build().unwrap();
+            let adapter = TokioRuntimeAdapter::borrowed(
+                host.handle().clone(),
+                governor,
+                TokioRuntimeConfig {
+                    resource_refresh_interval: Duration::from_secs(3600),
+                    ..TokioRuntimeConfig::default()
+                },
+            );
+            let token = RuntimeCancellationToken::new();
+            let context = RuntimeTaskContext::without_deadline(token.clone());
+            host.spawn(async move {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                if reason == RuntimeCancellationReason::ResourceExhausted {
+                    token.cancel_for_resource_exhaustion();
+                } else {
+                    token.cancel();
+                }
+            });
 
-        let result = host
-            .block_on(async {
-                tokio::time::timeout(
-                    Duration::from_secs(1),
-                    adapter.execute_blocking(
-                        RuntimeWorkRequest::blocking_cpu(RuntimeWorkPriority::Foreground, 0),
-                        context,
-                        |_| Ok::<_, Infallible>(()),
-                    ),
-                )
-                .await
-            })
-            .expect("cancellation must wake admission without waiting for resource refresh");
-        assert!(matches!(
-            result,
-            Err(TokioTaskError::Stopped(
-                RuntimeCancellationReason::Cancelled
-            ))
-        ));
-        drop(held);
+            let result = host
+                .block_on(async {
+                    tokio::time::timeout(
+                        Duration::from_secs(1),
+                        adapter.execute_blocking(
+                            RuntimeWorkRequest::blocking_cpu(RuntimeWorkPriority::Foreground, 0),
+                            context,
+                            |_| Ok::<_, Infallible>(()),
+                        ),
+                    )
+                    .await
+                })
+                .expect("cancellation must wake admission without waiting for resource refresh");
+            assert!(matches!(
+                result,
+                Err(TokioTaskError::Stopped(
+                    observed
+                )) if observed == reason
+            ));
+            drop(held);
+        }
     }
 
     #[test]
@@ -1060,6 +1079,58 @@ mod tests {
             .unwrap();
         canceller.join().unwrap();
         assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn resource_cancellation_preserves_operation_errors_but_refuses_success() {
+        let adapter =
+            TokioRuntimeAdapter::owned(governor(1), TokioRuntimeConfig::default()).unwrap();
+        let request = RuntimeWorkRequest::blocking_cpu(RuntimeWorkPriority::Foreground, 0);
+        for fail in [true, false] {
+            let blocking = adapter
+                .block_on(adapter.execute_blocking(
+                    request,
+                    RuntimeTaskContext::default(),
+                    move |context| {
+                        context.cancellation().cancel_for_resource_exhaustion();
+                        if fail {
+                            Err("original resource error")
+                        } else {
+                            Ok(42)
+                        }
+                    },
+                ))
+                .unwrap();
+            let asynchronous = adapter
+                .block_on(adapter.execute_async(
+                    request,
+                    RuntimeTaskContext::default(),
+                    move |context| async move {
+                        context.cancellation().cancel_for_resource_exhaustion();
+                        if fail {
+                            Err("original resource error")
+                        } else {
+                            Ok(42)
+                        }
+                    },
+                ))
+                .unwrap();
+            for result in [blocking, asynchronous] {
+                if fail {
+                    assert!(matches!(
+                        result,
+                        Err(TokioTaskError::Operation("original resource error"))
+                    ));
+                } else {
+                    assert!(matches!(
+                        result,
+                        Err(TokioTaskError::Stopped(
+                            RuntimeCancellationReason::ResourceExhausted
+                        ))
+                    ));
+                }
+            }
+        }
     }
 
     /// A saturated cgroup rejects retryably, so an async admission waits

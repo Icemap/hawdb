@@ -186,6 +186,10 @@ path = "examples/wasm_playground.rs"
 crate-type = ["cdylib"]
 test = true
 
+[[example]]
+name = "rabitq_query_profile"
+required-features = ["vector-search"]
+
 [[bench]]
 name = "relational_join_planning"
 harness = false

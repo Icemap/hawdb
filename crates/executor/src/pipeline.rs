@@ -69,11 +69,7 @@ pub struct BatchExecutionContext<'a> {
 
 impl BatchExecutionContext<'_> {
     pub(crate) fn source_account(&self, operator: &'static str) -> QueryMemoryAccount {
-        self.memory_ledger.source_account(
-            operator,
-            self.memory.query_memory_bytes,
-            self.memory.blocking_operator_bytes,
-        )
+        self.source_account_retaining(operator, self.operator_account(operator))
     }
 
     pub(crate) fn source_account_retaining(
@@ -81,18 +77,22 @@ impl BatchExecutionContext<'_> {
         operator: &'static str,
         retained: QueryMemoryAccount,
     ) -> QueryMemoryAccount {
-        self.memory_ledger.source_account_retaining(
-            operator,
-            self.memory.query_memory_bytes,
-            retained,
-        )
+        self.memory_ledger
+            .account_with_budget_option(
+                QueryMemoryClass::ExternalRead,
+                operator,
+                self.memory.query_memory_bytes,
+                "ExecutionMemoryConfig.query_memory_bytes",
+            )
+            .with_retained_state(retained)
     }
 
     pub fn operator_account(&self, operator: &'static str) -> QueryMemoryAccount {
-        self.memory_ledger.account(
+        self.memory_ledger.account_with_budget_option(
             QueryMemoryClass::BlockingState,
             operator,
             self.memory.blocking_operator_bytes,
+            "ExecutionMemoryConfig.blocking_operator_bytes",
         )
     }
 

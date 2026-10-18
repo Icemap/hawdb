@@ -643,15 +643,24 @@ impl SearchOutOfCoreReader {
                     continue;
                 }
                 raw_segment_scan_count = raw_segment_scan_count.saturating_add(1);
-                for document in self.read_vector_segment(artifact, segment, metrics)? {
-                    if selected_layer[start_index..end_index]
-                        .binary_search_by_key(&document.vector_ordinal, |candidate| {
-                            candidate.ordinal
-                        })
-                        .is_err()
-                    {
-                        continue;
-                    }
+                let selected_segment = &selected_layer[start_index..end_index];
+                let documents = if selected_segment.len() == layout.vectors.entry_count {
+                    // Unique ordinals within this range cover the whole segment.
+                    self.read_vector_segment(artifact, segment, metrics)?
+                } else {
+                    self.read_vector_segment_selected(
+                        artifact,
+                        segment,
+                        metrics,
+                        selected_segment.len(),
+                        |ordinal| {
+                            selected_segment
+                                .binary_search_by_key(&ordinal, |candidate| candidate.ordinal)
+                                .is_ok()
+                        },
+                    )?
+                };
+                for document in documents {
                     metrics.vector_bytes_read = metrics.vector_bytes_read.saturating_add(
                         (document.embedding.len() as u64)
                             .saturating_mul(std::mem::size_of::<f32>() as u64),

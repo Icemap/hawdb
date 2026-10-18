@@ -20,10 +20,12 @@ use hawdb::{
 };
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PySequenceMethods};
 
 use crate::errors::{format_embedded_error, format_hawdb_error, Error};
-use crate::value::{py_dict_to_params, py_list_to_params, value_to_py};
+use crate::value::{
+    parameter_sequence, py_dict_to_params, py_list_to_params, py_sequence_to_params, value_to_py,
+};
 
 /// An open HawDB database.
 ///
@@ -41,7 +43,21 @@ pub struct Database {
 }
 
 impl Database {
-    fn open_impl(path: Option<PathBuf>, read_only: bool) -> PyResult<Self> {
+    fn open_impl(
+        path: Option<PathBuf>,
+        read_only: bool,
+        max_read_result_rows: Option<usize>,
+        max_read_result_payload_bytes: Option<usize>,
+    ) -> PyResult<Self> {
+        let with_read_limits = |mut config: DatabaseConfig| {
+            if let Some(rows) = max_read_result_rows {
+                config.max_read_result_rows = Some(rows);
+            }
+            if let Some(bytes) = max_read_result_payload_bytes {
+                config.max_read_result_payload_bytes = Some(bytes);
+            }
+            config
+        };
         let Some(path) = path else {
             if read_only {
                 return Err(pyo3::exceptions::PyValueError::new_err(
@@ -49,15 +65,17 @@ impl Database {
                 ));
             }
             return Ok(Self {
-                inner: Some(HawDBEmbedded::open_in_memory()),
+                inner: Some(HawDBEmbedded::open_in_memory_with_config(with_read_limits(
+                    DatabaseConfig::default(),
+                ))),
                 path: None,
             });
         };
         let inner = if read_only {
-            let config = DatabaseConfig {
+            let config = with_read_limits(DatabaseConfig {
                 read_only: true,
                 ..Default::default()
-            };
+            });
             HawDBEmbedded::open_with_options(HawDBEmbeddedOpenOptions {
                 path: path.clone(),
                 config,
@@ -69,7 +87,9 @@ impl Database {
                 runtime_governor_config: None,
             })
         } else {
-            HawDBEmbedded::open(&path)
+            let options = HawDBEmbeddedOpenOptions::new(path.clone());
+            let config = with_read_limits(options.config);
+            HawDBEmbedded::open_with_options(HawDBEmbeddedOpenOptions { config, ..options })
         };
         match inner {
             Ok(inner) => Ok(Self {
@@ -85,14 +105,40 @@ impl Database {
             .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("database is closed"))
     }
+
+    fn execute_batch(
+        slf: Py<Self>,
+        py: Python<'_>,
+        rows: &Bound<'_, PyAny>,
+        execute: impl FnOnce(&mut Transaction) -> PyResult<()>,
+    ) -> PyResult<()> {
+        slf.borrow_mut(py).required()?;
+        if parameter_sequence(rows)?.is_empty()? {
+            return Ok(());
+        }
+        let mut transaction = Self::transaction(slf, py)?;
+        execute(&mut transaction)?;
+        transaction.commit(py)?;
+        Ok(())
+    }
 }
 
 #[pymethods]
 impl Database {
     #[new]
-    #[pyo3(signature = (path = None, read_only = false))]
-    fn new(path: Option<PathBuf>, read_only: bool) -> PyResult<Self> {
-        Self::open_impl(path, read_only)
+    #[pyo3(signature = (path = None, read_only = false, *, max_read_result_rows = None, max_read_result_payload_bytes = None))]
+    fn new(
+        path: Option<PathBuf>,
+        read_only: bool,
+        max_read_result_rows: Option<usize>,
+        max_read_result_payload_bytes: Option<usize>,
+    ) -> PyResult<Self> {
+        Self::open_impl(
+            path,
+            read_only,
+            max_read_result_rows,
+            max_read_result_payload_bytes,
+        )
     }
 
     /// Project path this database is bound to, or None for an in-memory
@@ -138,6 +184,33 @@ impl Database {
         #[cfg(feature = "boundary-profiling")]
         drop(engine);
         QueryResult::from_output(py, output)
+    }
+
+    /// Returns the physical Cypher plan without executing the statement.
+    #[pyo3(signature = (cypher, params = None))]
+    fn explain(
+        &mut self,
+        py: Python<'_>,
+        cypher: &str,
+        params: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<String> {
+        let params = params
+            .map(py_dict_to_params)
+            .transpose()?
+            .unwrap_or_default();
+        let database = self.required()?;
+        if database.transaction_active() {
+            return Err(PyRuntimeError::new_err(
+                "a transaction is open on this database",
+            ));
+        }
+        py.detach(move || {
+            database
+                .database()
+                .explain_query_with_params(cypher, &params)
+                .map(|output| output.physical_plan.explain(0))
+        })
+        .map_err(|error| format_hawdb_error(&error))
     }
 
     /// Experimental retained numeric query; unsupported shapes refuse without
@@ -250,6 +323,32 @@ impl Database {
         #[cfg(feature = "boundary-profiling")]
         drop(engine);
         QueryResult::from_output(py, output)
+    }
+
+    /// Runs one Cypher statement for each parameter dict in one transaction.
+    /// Returns None; an empty sequence opens no transaction.
+    fn executemany(
+        slf: Py<Self>,
+        py: Python<'_>,
+        cypher: &str,
+        rows: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        Self::execute_batch(slf, py, rows, |transaction| {
+            transaction.executemany(py, cypher, rows)
+        })
+    }
+
+    /// Runs one SQL statement for each positional parameter sequence in one transaction.
+    /// Returns None; an empty sequence opens no transaction.
+    fn executemany_sql(
+        slf: Py<Self>,
+        py: Python<'_>,
+        sql: &str,
+        rows: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        Self::execute_batch(slf, py, rows, |transaction| {
+            transaction.executemany_sql(py, sql, rows)
+        })
     }
 
     /// Begins an explicit multi-statement transaction.
@@ -484,6 +583,31 @@ impl Transaction {
             .rollback_transaction()
             .map_err(|error| format_hawdb_error(&error))
     }
+
+    fn execute_batch(
+        &mut self,
+        py: Python<'_>,
+        rows: &Bound<'_, PyAny>,
+        mut execute: impl FnMut(&mut Self, &Bound<'_, PyAny>) -> PyResult<()>,
+    ) -> PyResult<()> {
+        self.required()?;
+        let result = (|| {
+            for row in parameter_sequence(rows)?.try_iter()? {
+                execute(self, &row?)?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            // There are no savepoints: a caught batch error must not leave a
+            // committable prefix in the caller's transaction.
+            if let Err(rollback_error) = self.abandon(py) {
+                rollback_error.set_cause(py, Some(error));
+                return Err(rollback_error);
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
 }
 
 #[pymethods]
@@ -530,6 +654,42 @@ impl Transaction {
             .detach(|| embedded.transaction_query_sql_with_params(sql, &values))
             .map_err(|error| format_hawdb_error(&error))?;
         QueryResult::from_output(py, output)
+    }
+
+    /// Runs a batch of Cypher bindings without committing the outer transaction.
+    /// Returns None; any batch failure rolls back and closes the transaction.
+    fn executemany(
+        &mut self,
+        py: Python<'_>,
+        cypher: &str,
+        rows: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        self.execute_batch(py, rows, |transaction, row| {
+            let params = py_dict_to_params(row.cast::<PyDict>()?)?;
+            let mut db = transaction.db.borrow_mut(py);
+            let embedded = db.required()?;
+            py.detach(|| embedded.transaction_query_with_params(cypher, &params))
+                .map(|_| ())
+                .map_err(|error| format_hawdb_error(&error))
+        })
+    }
+
+    /// Runs a batch of SQL bindings without committing the outer transaction.
+    /// Returns None; any batch failure rolls back and closes the transaction.
+    fn executemany_sql(
+        &mut self,
+        py: Python<'_>,
+        sql: &str,
+        rows: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        self.execute_batch(py, rows, |transaction, row| {
+            let params = py_sequence_to_params(parameter_sequence(row)?)?;
+            let mut db = transaction.db.borrow_mut(py);
+            let embedded = db.required()?;
+            py.detach(|| embedded.transaction_query_sql_with_params(sql, &params))
+                .map(|_| ())
+                .map_err(|error| format_hawdb_error(&error))
+        })
     }
 
     /// Publishes every staged statement as one durable commit and closes
@@ -694,9 +854,15 @@ impl ReadTransaction {
 /// Called without `path` it returns an empty in-memory database: no project
 /// directory is created and closing the handle discards all data.
 /// `read_only=True` requires a path and opens an existing database read-only.
+/// Optional read budgets pass through to the engine; None keeps its defaults.
 #[pyfunction]
-#[pyo3(signature = (path = None, read_only = false))]
-pub fn open(path: Option<PathBuf>, read_only: bool) -> PyResult<Database> {
+#[pyo3(signature = (path = None, read_only = false, *, max_read_result_rows = None, max_read_result_payload_bytes = None))]
+pub fn open(
+    path: Option<PathBuf>,
+    read_only: bool,
+    max_read_result_rows: Option<usize>,
+    max_read_result_payload_bytes: Option<usize>,
+) -> PyResult<Database> {
     if let Some(path) = &path
         && !read_only
         && !path.exists()
@@ -713,5 +879,10 @@ pub fn open(path: Option<PathBuf>, read_only: bool) -> PyResult<Database> {
             )));
         }
     }
-    Database::open_impl(path, read_only)
+    Database::open_impl(
+        path,
+        read_only,
+        max_read_result_rows,
+        max_read_result_payload_bytes,
+    )
 }

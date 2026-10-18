@@ -1,0 +1,6 @@
+machdep.cpu.brand_string: Apple M1 (Virtual)
+hw.logicalcpu: 3
+hw.physicalcpu: 3
+hw.memsize: 7516192768
+hw.l1dcachesize: 131072
+hw.l2cachesize: 12582912

@@ -1,0 +1,3 @@
+Darwin sjc22-bm212-2729cced-0638-43c9-9885-cde0e2f5ef0d-2A43EB0F9BCD.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:16:43 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_VMAPPLE arm64
+Filesystem      Size    Used   Avail Capacity iused ifree %iused  Mounted on
+/dev/disk2s5   320Gi   205Gi    95Gi    69%    1.9M  998M    0%   /System/Volumes/Data

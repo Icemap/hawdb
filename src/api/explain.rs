@@ -19,7 +19,7 @@ use crate::executor::{self, Row};
 use crate::qos::WorkRequest;
 use hawdb_core::Result;
 use hawdb_executor::binding::Binding;
-use hawdb_executor::memory::{enforced_query_memory_budget, enforced_result_memory_budget};
+use hawdb_executor::memory::enforced_result_memory_budget_with_option;
 use hawdb_executor::result_delivery::{ConsumerMemoryMode, OutputLimits, QueryOutputAccumulator};
 use hawdb_executor::QueryMemoryLedger;
 use hawdb_explain::json::{
@@ -81,16 +81,15 @@ pub(super) fn admit_explain_output(
     options: QueryExecutionOptions<'_>,
 ) -> Result<QueryOutput> {
     query_runtime_checkpoint(options.task_context)?;
-    let ledger = QueryMemoryLedger::new(enforced_query_memory_budget(
-        &config.execution_memory,
-        options.task_context,
-    )?);
+    let ledger = QueryMemoryLedger::for_query(&config.execution_memory, options.task_context)?;
     let mut rows = Vec::new();
     let mut consumer = |row| {
         rows.push(row);
         Ok(())
     };
-    let mut accumulator = QueryOutputAccumulator::new(
+    let (result_budget, budget_option) =
+        enforced_result_memory_budget_with_option(&config.execution_memory, options.task_context)?;
+    let mut accumulator = QueryOutputAccumulator::new_with_budget_option(
         OutputLimits {
             max_rows: restrictive_query_limit(
                 config.read_result_row_limit(),
@@ -101,8 +100,9 @@ pub(super) fn admit_explain_output(
                 options.output_limits.max_payload_bytes,
             ),
         },
-        enforced_result_memory_budget(&config.execution_memory, options.task_context)?,
+        result_budget,
         &ledger,
+        budget_option,
         ConsumerMemoryMode::Retained,
         &mut consumer,
     )?;

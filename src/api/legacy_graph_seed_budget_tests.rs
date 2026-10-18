@@ -4,6 +4,22 @@
 use super::*;
 use hawdb_search::SearchMode;
 
+fn assert_graph_read_budget_error(error: HawDBError, budget: u64) {
+    let HawDBError::ResourceBudgetExceeded(cause) = error else {
+        panic!("expected a typed graph-read memory refusal, got {error:?}");
+    };
+    assert_eq!(cause.resource, crate::ResourceBudgetKind::MemoryBytes);
+    assert_eq!(cause.scope, crate::ResourceBudgetScope::Account);
+    assert_eq!(cause.owner, "knowledge_retrieval_graph_read");
+    assert_eq!(cause.memory_class, Some("blocking_state"));
+    assert_eq!(cause.budget, budget);
+    assert_eq!(
+        cause.budget_option,
+        "ExecutionMemoryConfig.query_memory_bytes"
+    );
+    assert!(cause.requested > cause.budget.saturating_sub(cause.used));
+}
+
 fn oversized_nonmatching_source() -> (Database, SearchIndex, KnowledgeRetrievalRequest) {
     let mut database = Database::new();
     let params = BTreeMap::from([("body".into(), Value::String("x".repeat(64 * 1024)))]);
@@ -36,7 +52,12 @@ fn oversized_nonmatching_source() -> (Database, SearchIndex, KnowledgeRetrievalR
 fn legacy_graph_seed_live_retrieval_refuses_oversized_nonmatching_owned_source() {
     let (database, index, request) = oversized_nonmatching_source();
     let result = database.retrieve_knowledge(&index, &request);
-    assert!(matches!(result, Err(HawDBError::Execution(_))), "every canonical source needs query admission even when no candidate matches; actual {result:?}");
+    assert_graph_read_budget_error(
+        result.expect_err(
+            "every canonical source needs query admission even when no candidate matches",
+        ),
+        8 * 1024,
+    );
 }
 
 #[test]
@@ -46,7 +67,11 @@ fn legacy_graph_seed_snapshot_retrieval_refuses_oversized_nonmatching_owned_sour
         .begin_read_transaction()
         .unwrap()
         .retrieve_knowledge(&index, &request);
-    assert!(matches!(result, Err(HawDBError::Execution(_))), "snapshot canonical source needs admission even when no candidate matches; actual {result:?}");
+    assert_graph_read_budget_error(
+        result
+            .expect_err("snapshot canonical source needs admission even when no candidate matches"),
+        8 * 1024,
+    );
 }
 
 fn overlapping_filter_sources() -> (Database, SearchIndex, KnowledgeRetrievalRequest) {
@@ -82,9 +107,9 @@ fn overlapping_filter_sources() -> (Database, SearchIndex, KnowledgeRetrievalReq
 fn legacy_graph_seed_live_filter_refuses_overlapping_source_and_label_reads() {
     let (database, index, request) = overlapping_filter_sources();
     let result = database.retrieve_knowledge(&index, &request);
-    assert!(
-        matches!(result, Err(HawDBError::Execution(_))),
-        "source and business-label ownership must share one root budget; actual {result:?}"
+    assert_graph_read_budget_error(
+        result.expect_err("source and business-label ownership must share one root budget"),
+        20 * 1024,
     );
 }
 
@@ -95,7 +120,11 @@ fn legacy_graph_seed_snapshot_filter_refuses_overlapping_source_and_label_reads(
         .begin_read_transaction()
         .unwrap()
         .retrieve_knowledge(&index, &request);
-    assert!(matches!(result, Err(HawDBError::Execution(_))), "snapshot source and business-label ownership must share one root budget; actual {result:?}");
+    assert_graph_read_budget_error(
+        result
+            .expect_err("snapshot source and business-label ownership must share one root budget"),
+        20 * 1024,
+    );
 }
 
 #[test]
@@ -167,7 +196,12 @@ fn oversized_lookup_without_seed_scan() -> (Database, SearchIndex, KnowledgeRetr
 fn legacy_graph_seed_disabled_live_lookup_admits_owned_input_before_empty_top_k() {
     let (database, index, request) = oversized_lookup_without_seed_scan();
     let result = database.retrieve_knowledge(&index, &request);
-    assert!(matches!(result, Err(HawDBError::Execution(_))), "canonical lookup ownership must fit the root even when the seed scan is disabled and final candidates are empty; actual {result:?}");
+    assert_graph_read_budget_error(
+        result.expect_err(
+            "canonical lookup ownership must fit before an empty final candidate window",
+        ),
+        16 * 1024,
+    );
 }
 
 #[test]
@@ -177,7 +211,12 @@ fn legacy_graph_seed_disabled_snapshot_lookup_admits_owned_input_before_empty_to
         .begin_read_transaction()
         .unwrap()
         .retrieve_knowledge(&index, &request);
-    assert!(matches!(result, Err(HawDBError::Execution(_))), "pinned canonical lookup ownership must fit the root before an empty final candidate window; actual {result:?}");
+    assert_graph_read_budget_error(
+        result.expect_err(
+            "pinned canonical lookup ownership must fit before an empty final candidate window",
+        ),
+        16 * 1024,
+    );
 }
 
 #[test]
@@ -299,7 +338,10 @@ fn oversized_discarded_expansion_relationship() -> (Database, SearchIndex, Knowl
 fn legacy_graph_seed_disabled_live_expansion_admits_discarded_relationship() {
     let (database, index, request) = oversized_discarded_expansion_relationship();
     let result = database.retrieve_knowledge(&index, &request);
-    assert!(matches!(result, Err(HawDBError::Execution(_))), "owned expansion input must fit the root even when its large properties fall outside the final path window; actual {result:?}");
+    assert_graph_read_budget_error(
+        result.expect_err("owned expansion input must fit even when its properties fall outside the final path window"),
+        24 * 1024,
+    );
 }
 
 #[test]
@@ -309,5 +351,10 @@ fn legacy_graph_seed_disabled_snapshot_expansion_admits_discarded_relationship()
         .begin_read_transaction()
         .unwrap()
         .retrieve_knowledge(&index, &request);
-    assert!(matches!(result, Err(HawDBError::Execution(_))), "pinned expansion input must be admitted before copying properties discarded by final path selection; actual {result:?}");
+    assert_graph_read_budget_error(
+        result.expect_err(
+            "pinned expansion input must be admitted before copying discarded properties",
+        ),
+        24 * 1024,
+    );
 }

@@ -27,8 +27,11 @@ its per-direction input prefix preceded scope filtering and deduplication. The
 candidate replaces that prefix with admitted streaming; see the regression
 case below. This is not an exhaustive proof of runtime completeness or allocator
 accounting.
-In particular, class C does not establish that every error is structured, that
-all allocations are admitted, or that a sibling worker stops promptly.
+In particular, class C does not establish that every error is structured or that
+all allocations are admitted. The memory/spill and contextual morsel rows below
+include the structured-error and cooperative-cancellation follow-up described in
+the [execution contract](EXECUTION_REQUEST_CONTRACT.md#resource-refusal-metadata).
+Callbacks without checkpoints still cannot be interrupted while executing.
 
 ## Execution and admission
 
@@ -36,7 +39,7 @@ all allocations are admitted, or that a sibling worker stops promptly.
 | --- | --- | --- | --- |
 | [ExecutionLimit](../crates/executor/src/limit.rs), `from_user_max_rows` / `child_for_limit` | A + C | Semantic LIMIT includes its offset. A resource row ceiling retains one additional detection row; it is not a successful prefix. | Preserve detection when adding pushdown or another result producer. |
 | [QueryOutputAccumulator](../crates/executor/src/result_delivery.rs), `emit` | C | Excess rows or payload return `ReadBudgetExceeded` with resource identity. Owned result capacity is separately charged. | Streaming consumers can observe earlier callbacks before an error; they must treat the operation as failed. |
-| [QueryMemoryLedger](../crates/executor/src/memory_ledger.rs), `reserve` | C | Per-account and query reservations fail before counters change. | Errors are still `Execution(String)`; structured kind/scope/owner/request/usage/budget/configuration is unfinished. |
+| [QueryMemoryLedger](../crates/executor/src/memory_ledger.rs), `reserve` | C | Per-account and query reservations fail before counters change, with structured `ResourceBudgetExceeded` metadata. Governed spill quota refusals preserve the same resource/scope/owner/request/usage/budget/origin contract. | Other operator-local checks may still return `Execution(String)`; do not infer that every resource failure has been converted. |
 | [GraphExpansionExecutionState](../crates/executor/src/graph.rs), `try_admit_payload` | C | Candidate and payload excess return `GraphExpansionCandidateLimitExceeded` or `GraphExpansionPayloadLimitExceeded`. `Ok(false)` in `try_push` is not the excess branch. Expanded-node state also reserves memory. | Fixed planner caps remain; scaling with the admitted ledger and spill policy is unfinished. |
 | [Graph lowering](../crates/optimizer-graph/src/graph/lowering.rs), `graph_expansion_budget` | C | Seed/hop-derived candidate cap and fixed payload cap feed the fail-closed expansion above. | The original 4,096 / 4 MiB policy is not evidence of budget-derived capacity. |
 | [Sort / TopN](../crates/executor/src/blocking/sort.rs), `push`, `spill_heap`, merge output | A + C | TopN selects the requested order/window. Working-state pressure produces governed runs; spill failure propagates. | Preserve full-input ranking and spill cleanup when changing either path. |
@@ -45,7 +48,7 @@ all allocations are admitted, or that a sibling worker stops promptly.
 | [Distinct](../crates/executor/src/blocking/distinct.rs) | A + C | Deduplication spills as needed; final `execution_limit` is a semantic/detection boundary. | An output limit must not become a cap on input examined for distinctness. |
 | [Host scoring](../crates/executor/src/transform/host_scoring.rs) | A + C | The finite input cohort is retained under admission before scoring. Final K is applied afterward; a memory failure is not a smaller cohort. | Keep complete-cohort normalization and late-winner regressions. |
 | [Numeric production](../crates/executor/src/numeric.rs), [retained selection](../crates/executor/src/numeric/retained.rs) | A + C + D | Selection honors query limits; production waves resume the iterator. Retained delivery reserves its owner and buffers. | Lifetime/task-reservation qualification is independent of this report inventory. |
-| [Pipeline batches](../crates/executor/src/pipeline.rs), [morsels](../crates/executor/src/morsel.rs), [concurrent work](../crates/executor/src/concurrent.rs) | D + C | Batch/worker counts partition work and do not define successful result cardinality; execution errors propagate. | Cross-worker cancellation on resource exhaustion remains a separate #996 gate. |
+| [Pipeline batches](../crates/executor/src/pipeline.rs), [morsels](../crates/executor/src/morsel.rs), [concurrent work](../crates/executor/src/concurrent.rs) | D + C | Contextual morsel schedulers signal resource exhaustion before joining in-flight workers and preserve the originating typed refusal. The numeric parallel pipeline uses a child context to isolate a reusable parent. | Cancellation is cooperative. Handled reservation refusals do not cancel; generic result-agnostic maps and ordinary callback errors retain their existing behavior. |
 | [Relational runtime](../crates/relational/src/query.rs) and [execution](../crates/relational/src/row_runtime.rs) | A + C | SQL semantic limits are separate from result/working allowances and shared blocking operators. | Preserve structured result-limit causes and spill semantics at the SQL facade. |
 
 ## Search and retrieval
@@ -149,9 +152,12 @@ Update report inventory records only after that producer review.
 
 - Derive graph expansion capacity from admitted memory/spill policy instead of
   treating fixed planner constants as host budget scaling.
-- Introduce structured generic memory/spill exhaustion information while
-  preserving useful diagnostics; current `Execution(String)` is not that API.
-- Establish sibling cancellation behavior on exhausted reservations.
+- Convert remaining operator-local string-only refusals as those stages are
+  touched; ledger and governed spill refusals already expose structured metadata.
+- Preserve contextual sibling cancellation and original-cause propagation when
+  adding parallel stages; the existing worker/consumer, handled-refusal and
+  parent-reuse regressions cover the current morsel and numeric paths, not every
+  possible host callback or executor stage.
 - Qualify every converted stage above its old row/byte cap, with complete spill
   output or typed failure, including cleanup and cancellation.
 - Record the Mem consumer contract decision before treating informational

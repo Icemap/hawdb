@@ -2383,15 +2383,11 @@ impl CanonicalSegmentReader {
             }
             let read = self.read_segment_with_report(descriptor)?;
             update_report_for_segment(&mut report, &read);
-            let mut control = CanonicalScanControl::Continue;
-            decode_segment_records(
+            decode_segment_records_control(
                 &read.payload,
                 self.manifest.generation,
                 descriptor,
                 |id, payload| {
-                    if control == CanonicalScanControl::Stop {
-                        return Ok(());
-                    }
                     let node = decode_node_with_property_spills(
                         id,
                         payload,
@@ -2402,12 +2398,11 @@ impl CanonicalSegmentReader {
                     if node.labels.contains(&label_id)
                         && node.properties.get(property) == Some(value)
                     {
-                        control = consumer(node)?;
+                        return consumer(node);
                     }
-                    Ok(())
+                    Ok(CanonicalScanControl::Continue)
                 },
-            )?;
-            Ok(control)
+            )
         });
         let result = result.map(|(descriptor_report, control)| {
             report.record_descriptor_read(descriptor_report);
