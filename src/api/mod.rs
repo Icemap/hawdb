@@ -5618,67 +5618,68 @@ impl<S: crate::executor::ExecutionStore> KnowledgeRetrievalPipelineContext<'_, S
                 &mut reported_dense_groups,
                 &mut fanout_reasons,
             );
-            let edges = knowledge_graph_read::expansion_edges(
+            let control = knowledge_graph_read::visit_expansion_edges(
                 self.store,
                 current_node,
-                graph_context_limit
-                    .saturating_sub(paths.len())
-                    .saturating_add(1),
                 self.query_memory_budget.get(),
                 self.account,
-            )?;
-            for edge in &edges.edges {
-                if !self.graph_expansion_node_is_authorized(edge.next_node, metadata_filters)? {
-                    continue;
-                }
-                let _lookup = self.account.reserve(seed_hit_id.len())?;
-                let relationship_key = (seed_hit_id.clone(), edge.relationship.id.0);
-                if seen_relationships.contains(&relationship_key) {
-                    continue;
-                }
-                temporary.reserve(
-                    seed_hit_id
-                        .len()
-                        .saturating_add(128 + 11 * std::mem::size_of::<(String, u64)>()),
-                )?;
-                seen_relationships.insert(relationship_key);
-                if paths.len() >= graph_context_limit {
-                    let detail = KnowledgeFanoutReasonDetail::graph_context_limit(
-                        graph_context_limit,
-                        &seed_hit_id,
-                    );
-                    truncation_reasons.push(detail.message.clone());
-                    fanout_reasons.push(detail);
-                    let expanded_relationship_count = paths.len();
-                    return Ok(KnowledgeGraphContextSearchOutput {
-                        paths,
-                        input_seed_count,
-                        expanded_relationship_count,
-                        fanout_reason_details: fanout_reasons,
-                        truncation_reasons,
+                |edge| {
+                    if !self.graph_expansion_node_is_authorized(edge.next_node, metadata_filters)? {
+                        return Ok(hawdb_executor::store::ScanControl::Continue);
+                    }
+                    let _lookup = self.account.reserve(seed_hit_id.len())?;
+                    let relationship_key = (seed_hit_id.clone(), edge.relationship.id.0);
+                    if seen_relationships.contains(&relationship_key) {
+                        return Ok(hawdb_executor::store::ScanControl::Continue);
+                    }
+                    temporary.reserve(
+                        seed_hit_id
+                            .len()
+                            .saturating_add(128 + 11 * std::mem::size_of::<(String, u64)>()),
+                    )?;
+                    seen_relationships.insert(relationship_key);
+                    if paths.len() >= graph_context_limit {
+                        let detail = KnowledgeFanoutReasonDetail::graph_context_limit(
+                            graph_context_limit,
+                            &seed_hit_id,
+                        );
+                        truncation_reasons.push(detail.message.clone());
+                        fanout_reasons.push(detail);
+                        return Ok(hawdb_executor::store::ScanControl::Stop);
+                    }
+                    self.owned.reserve_vec(&mut paths)?;
+                    self.owned.reserve(seed_hit_id.len())?;
+                    paths.push(KnowledgeGraphContextCandidate {
+                        seed_hit_id: seed_hit_id.clone(),
+                        hop: depth + 1,
+                        direction: edge.direction,
+                        relationship_id: edge.relationship.id,
+                        source_node_id: edge.relationship.source,
+                        target_node_id: edge.relationship.target,
                     });
-                }
-                self.owned.reserve_vec(&mut paths)?;
-                self.owned.reserve(seed_hit_id.len())?;
-                paths.push(KnowledgeGraphContextCandidate {
-                    seed_hit_id: seed_hit_id.clone(),
-                    hop: depth + 1,
-                    direction: edge.direction,
-                    relationship_id: edge.relationship.id,
-                    source_node_id: edge.relationship.source,
-                    target_node_id: edge.relationship.target,
+                    let _lookup = self.account.reserve(seed_hit_id.len())?;
+                    let frontier_key = (seed_hit_id.clone(), edge.next_node.0);
+                    if !seen_frontier_nodes.contains(&frontier_key) {
+                        temporary.reserve(seed_hit_id.len().saturating_mul(2).saturating_add(
+                            128 + 11 * std::mem::size_of::<(String, u64)>()
+                                + 2 * std::mem::size_of::<(String, NodeId, usize)>(),
+                        ))?;
+                        seen_frontier_nodes.insert(frontier_key);
+                        frontier.reserve_exact(1);
+                        frontier.push_back((seed_hit_id.clone(), edge.next_node, depth + 1));
+                    }
+                    Ok(hawdb_executor::store::ScanControl::Continue)
+                },
+            )?;
+            if control == hawdb_executor::store::ScanControl::Stop {
+                let expanded_relationship_count = paths.len();
+                return Ok(KnowledgeGraphContextSearchOutput {
+                    paths,
+                    input_seed_count,
+                    expanded_relationship_count,
+                    fanout_reason_details: fanout_reasons,
+                    truncation_reasons,
                 });
-                let _lookup = self.account.reserve(seed_hit_id.len())?;
-                let frontier_key = (seed_hit_id.clone(), edge.next_node.0);
-                if !seen_frontier_nodes.contains(&frontier_key) {
-                    temporary.reserve(seed_hit_id.len().saturating_mul(2).saturating_add(
-                        128 + 11 * std::mem::size_of::<(String, u64)>()
-                            + 2 * std::mem::size_of::<(String, NodeId, usize)>(),
-                    ))?;
-                    seen_frontier_nodes.insert(frontier_key);
-                    frontier.reserve_exact(1);
-                    frontier.push_back((seed_hit_id.clone(), edge.next_node, depth + 1));
-                }
             }
         }
 
