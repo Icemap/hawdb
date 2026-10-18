@@ -18,3 +18,11 @@ Update: current-source full Python, Pydantic and public PyArrow26 consumer8 pass
 The immutable d725 source also passes search836/21ignored, text-vector819/21ignored, concurrent115/1ignored, minimal branch47, full branch47, and execution-request contracts30. Original internal concurrency and deadlines remain unchanged. All11 eligible platform/Prow checks pass, including Windows abandonment GC power-loss cuts and Prow root58. Included current-source receipts and raw selected logs substantiate these results.
 
 The earlier local complete general result remains1747passed/8failed/1ignored. The first main comparison is ENOSPC-contaminated and does not establish cause. A clean serial main/candidate comparison is queued; no result is claimed for it here. Full original final-source PR986 performance/resource acceptance and genuine review/approval remain open. This packet remains partial and does not authorize Ready or approval.
+
+
+## Controlled full-general replay (v3)
+
+- `da58476dcb2d1a34789457bfee06c36d004138ca`: test result: ok. 1723 passed; 0 failed; 1 ignored; 0 measured; 322 filtered out; finished in 472.81s
+- `d725c2d84698171f43bb69dd6635d13115e48ad5`: test result: ok. 1755 passed; 0 failed; 1 ignored; 0 measured; 322 filtered out; finished in 429.93s
+
+The two runs preserve all original cases, internal concurrency and deadlines, and have no observed ENOSPC error. The initial candidate1747/8 failure and invalid ENOSPC main comparison remain included. Passing replay evidence does not establish their cause. Full original986 performance/resource and genuine review/approval gates remain open.

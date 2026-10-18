@@ -1,0 +1,34 @@
+{
+  "time": 1792315245.8032582,
+  "head": "da58476dcb2d1a34789457bfee06c36d004138ca",
+  "tree": "38b0b4a098d5404ef2e537e0943d964e07f9559b",
+  "general_result": "test result: ok. 1723 passed; 0 failed; 1 ignored; 0 measured; 322 filtered out; finished in 472.81s",
+  "step": {
+    "name": "main",
+    "head": "da58476dcb2d1a34789457bfee06c36d004138ca",
+    "tree": "38b0b4a098d5404ef2e537e0943d964e07f9559b",
+    "command": [
+      "bazel",
+      "test",
+      "//:hawdb_unit_general_tests",
+      "--nocache_test_results",
+      "--repo_env=CARGO_BAZEL_ISOLATED=false",
+      "--repo_env=CARGO_NET_OFFLINE=true",
+      "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/clean-general-pair-v3-main.bep.json"
+    ],
+    "started": 1792314701.924381,
+    "free_disk_before": 37079154688,
+    "log": "/private/tmp/hawdb-wip-ready-20261015/clean-general-pair-v3-main.log",
+    "exit": 0,
+    "ended": 1792315178.899327,
+    "free_disk_after": 39572283392,
+    "targets": [
+      {
+        "label": "//:hawdb_unit_general_tests",
+        "status": "PASSED"
+      }
+    ],
+    "test_log": "/private/tmp/hawdb-wip-ready-20261015/clean-general-pair-v3-main-test.log"
+  },
+  "scope": "Untouched mainDa584 full general passes with original cases/concurrency/deadlines and sufficient disk. Paired Arrow source is still running. Previous candidate failures remain preserved; cause not established."
+}

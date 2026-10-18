@@ -1,0 +1,42 @@
+{
+  "results": [
+    {
+      "name": "main",
+      "head": "da58476dcb2d1a34789457bfee06c36d004138ca",
+      "tree": "38b0b4a098d5404ef2e537e0943d964e07f9559b",
+      "exit": 0,
+      "result": "test result: ok. 1723 passed; 0 failed; 1 ignored; 0 measured; 322 filtered out; finished in 472.81s",
+      "disk_error_observed": false,
+      "original_command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--nocache_test_results",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/clean-general-pair-v3-main.bep.json"
+      ]
+    },
+    {
+      "name": "arrow",
+      "head": "d725c2d84698171f43bb69dd6635d13115e48ad5",
+      "tree": "8ea714c9d10b38322de7089bca7bd0126f5ea5d4",
+      "exit": 0,
+      "result": "test result: ok. 1755 passed; 0 failed; 1 ignored; 0 measured; 322 filtered out; finished in 429.93s",
+      "disk_error_observed": false,
+      "original_command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--nocache_test_results",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/clean-general-pair-v3-arrow.bep.json"
+      ]
+    }
+  ],
+  "both_pass": true,
+  "initial_candidate_failure": "1747passed/8failed/1ignored remains preserved in this packet",
+  "earlier_main_control": "ENOSPC-contaminated and invalid as a clean comparator",
+  "scope": "Unchanged-source full-general replay with original cases, internal concurrency and deadlines, after disk recovery. Source and outcome are reported separately; neither a passing replay nor matching files establish the initial failure cause. Full986 performance/resources and genuine review/approval remain separate."
+}
