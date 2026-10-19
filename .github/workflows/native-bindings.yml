@@ -235,6 +235,7 @@ jobs:
             -- --nocapture --test-threads="$POWER_LOSS_TEST_THREADS" \
             2>&1 | tee windows-native-results/abandonment.txt
           # Keep all two-policy/four-cut groups in the required selection.
+          # Adding another test to this module must also update this exact count.
           grep -Eq '^test result: ok\. 8 passed; 0 failed; 0 ignored;' \
             windows-native-results/abandonment.txt
 
