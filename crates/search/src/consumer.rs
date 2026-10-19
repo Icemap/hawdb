@@ -1027,7 +1027,37 @@ mod tests {
         drop(recovered);
         fs::remove_dir_all(parent).unwrap();
     }
-    #[cfg(not(windows))]
+    fn assert_windows_relocation_refusal(
+        mut owner: ConsumerProjection,
+        parent: &Path,
+        source: &Path,
+        destination: &Path,
+        receipt: &CheckpointReceipt,
+    ) {
+        let snapshot = fs::read(source.join(SEARCH_SNAPSHOT_FILE)).unwrap();
+        let error = owner.publish_directory(destination).unwrap_err();
+        assert!(error.to_string().contains("os error 5"), "{error}");
+        assert!(source.is_dir());
+        assert!(!destination.exists());
+        assert_eq!(
+            fs::read(source.join(SEARCH_SNAPSHOT_FILE)).unwrap(),
+            snapshot
+        );
+        assert_eq!(owner.index().path.as_deref(), Some(source));
+        assert_eq!(&owner.receipt(), receipt);
+        assert!(!owner.binding_is_valid());
+        assert!(owner.checkpoint().is_err());
+        assert!(owner.reserve_preparation().is_err());
+        assert!(owner
+            .apply(|index| index.mark_full_reindex_needed("refused move"))
+            .is_err());
+        assert!(ConsumerProjection::open(source).is_err());
+        drop(owner);
+        let reopened = ConsumerProjection::open(source).unwrap();
+        assert_eq!(&reopened.receipt(), receipt);
+        drop(reopened);
+        fs::remove_dir_all(parent).unwrap();
+    }
     #[test]
     fn directory_sync_failure_cannot_reuse_the_vacated_path_as_native_authority() {
         let parent = directory();
@@ -1035,6 +1065,11 @@ mod tests {
         let destination = parent.join("destination");
         fs::create_dir(&source).unwrap();
         let mut owner = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
+        if cfg!(windows) {
+            let receipt = owner.receipt();
+            assert_windows_relocation_refusal(owner, &parent, &source, &destination, &receipt);
+            return;
+        }
         FAIL_PUBLISHED_PARENT_SYNC.with(|failure| failure.set(true));
         assert!(owner.publish_directory(&destination).is_err());
         assert!(destination.is_dir());
@@ -1078,7 +1113,6 @@ mod tests {
         drop(recovered);
         fs::remove_dir_all(parent).unwrap();
     }
-    #[cfg(not(windows))]
     #[test]
     fn lost_directory_move_response_keeps_native_custody_and_original_receipt() {
         let parent = directory();
@@ -1087,6 +1121,10 @@ mod tests {
         fs::create_dir(&source).unwrap();
         let mut owner = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
         let receipt = owner.receipt();
+        if cfg!(windows) {
+            assert_windows_relocation_refusal(owner, &parent, &source, &destination, &receipt);
+            return;
+        }
         FAIL_DIRECTORY_MOVE_RESPONSE.with(|failure| failure.set(true));
         assert!(owner
             .publish_directory(&destination)
@@ -1114,7 +1152,6 @@ mod tests {
         fs::remove_dir_all(parent).unwrap();
     }
 
-    #[cfg(not(windows))]
     #[test]
     fn lost_move_outcome_with_no_known_locator_retains_custody_and_evidence() {
         let parent = directory();
@@ -1124,6 +1161,10 @@ mod tests {
         fs::create_dir(&source).unwrap();
         let mut owner = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
         let receipt = owner.receipt();
+        if cfg!(windows) {
+            assert_windows_relocation_refusal(owner, &parent, &source, &destination, &receipt);
+            return;
+        }
         let moved = destination.clone();
         let actual = third.clone();
         AFTER_DIRECTORY_MOVE.with(|hook| {
@@ -1147,7 +1188,6 @@ mod tests {
         fs::remove_dir_all(parent).unwrap();
     }
 
-    #[cfg(not(windows))]
     #[test]
     fn a_replaced_source_is_not_moved_using_an_old_native_owner() {
         let parent = directory();
@@ -1157,6 +1197,14 @@ mod tests {
         fs::create_dir(&source).unwrap();
         let mut owner = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
         let receipt = owner.receipt();
+        if cfg!(windows) {
+            assert_eq!(
+                fs::rename(&source, &original).unwrap_err().kind(),
+                std::io::ErrorKind::PermissionDenied
+            );
+            assert_windows_relocation_refusal(owner, &parent, &source, &destination, &receipt);
+            return;
+        }
         fs::rename(&source, &original).unwrap();
         fs::create_dir(&source).unwrap();
         let peer = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
@@ -1214,7 +1262,6 @@ mod tests {
         }
     }
 
-    #[cfg(not(windows))]
     #[test]
     fn source_parent_sync_failure_keeps_the_moved_directory_revoked() {
         let parent = directory();
@@ -1227,6 +1274,10 @@ mod tests {
         fs::create_dir(&source).unwrap();
         let mut owner = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
         let receipt = owner.receipt();
+        if cfg!(windows) {
+            assert_windows_relocation_refusal(owner, &parent, &source, &destination, &receipt);
+            return;
+        }
         FAIL_SOURCE_PARENT_SYNC.with(|failure| failure.set(true));
         assert!(owner
             .publish_directory(&destination)
@@ -1245,7 +1296,6 @@ mod tests {
         fs::remove_dir_all(parent).unwrap();
     }
 
-    #[cfg(not(windows))]
     #[test]
     fn successful_directory_move_keeps_mutations_on_the_moved_native_root() {
         let parent = directory();
@@ -1254,6 +1304,10 @@ mod tests {
         fs::create_dir(&source).unwrap();
         let mut owner = ConsumerProjection::initialize(&source, binding(), 0, |_| Ok(())).unwrap();
         let receipt = owner.receipt();
+        if cfg!(windows) {
+            assert_windows_relocation_refusal(owner, &parent, &source, &destination, &receipt);
+            return;
+        }
         owner.publish_directory(&destination).unwrap();
         assert!(owner.binding_is_valid());
         assert!(!owner.has_pending_mutation());
