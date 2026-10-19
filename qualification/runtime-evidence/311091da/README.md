@@ -53,3 +53,40 @@ https://github.com/nowledge-co/hawdb/tree/7589084c0082a99b52acc14fe03e2fc75a955b
 
 Historical fixed-baseline/0c packet (source scopes remain unchanged):
 https://github.com/nowledge-co/hawdb/tree/b9e639e943512376ecd688a25d975388fd07b6f2/qualification/final-control-evidence/0c298984
+
+## Formatting bridge, complete root and retained observations
+
+Current PR headc87fc097 differs from311 only by whitespace in one cfg(test) C ABI
+assertion tuple. Root fmt excluded that independent package; the failed separate
+format check is preserved. Correction passes root/FFI/Python fmt, strict Clippy,
+prek/hooks and6 C ABI Node tests (14 outside this module filtered). The normal
+and profiled opt FFI libraries match byte-for-byte before/after formatting and
+post-commit on the same build path. All other tracked source is identical.
+FFI declared inputs/action keys need not match: its src glob includes test files.
+Raw311 measurements are never relabeled c87; the explicit bridge supports review
+of unchanged runtime code. Normal push waited for311 Windows to finish so that
+its live model observations were preserved. Newc87 automatic CI remains separate.
+
+All59 selected standalone311 root targets pass, including full general1786pass/
+1ignored and contracts33. Full source guard, scope, BEP and raw test logs are
+archived. Crates remains pending; this is not Prow or prior-failure disposition.
+
+The completed311 Windows artifact verifies checkout20db2c93/tree6ea7fb5d and
+main46bf/PR311 parents, Rust1.97.1/MSVC, strict native Clippy, retainedFFI18,
+Node26, Arrow32, Go and922 modeled abandonment GC schedules. These model results
+do not prove physical-storage synchronization or whole-memory bounds.
+
+Retained10/10 observations include6 successful groups,2 default1M independent
+memory refusals with row0, and2 explicit1M+1 row refusals. All250 deliveries and
+210 measured mode samples retain original references, warmups and7 rotating
+rounds. Every retained/Arrow complete-operation pair in the6 positive groups
+exceeds1.1; refused attempts have no qualified latency ratio. Workflow failure
+retains expected negative jobs and is not hidden. A stream may already have
+delivered legal batches before a later cumulative-budget error; final zero
+owners proves cleanup, not atomic whole-result delivery. Native binaries and
+frozen producer hashes remain in referenced original GitHub artifacts.
+
+Full ordinary90/resource110, phase observations, independent disposition of
+earlier local failures, genuine review/approval, required CI and normal Tide
+integration remain open. Actual final main-history exclusion audit is still
+required. This incremental packet is not a Ready, approval or merge claim.

@@ -1,0 +1,27 @@
+{
+  "status": "failed",
+  "pid": 82091,
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "steps": [
+    {
+      "name": "ffi-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "bindings/ffi/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792399686.028895,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-ffi-fmt.log",
+      "exit": 1,
+      "ended": 1792399691.299051,
+      "sha256": "eaaea3a2adb028981ffc3cacb8e002f6a73c2462df887bf552bd61ed38004cff"
+    }
+  ],
+  "error": "",
+  "ended": 1792399691.2994392
+}

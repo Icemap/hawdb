@@ -1,0 +1,79 @@
+{
+  "head": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "checkout": "20db2c93b578f3df426bf7647cbeaa981ebc7e44",
+  "artifact": 12175150124,
+  "job": 117956424126,
+  "run": 39221129414,
+  "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "results": {
+    "retained-ffi.txt": {
+      "passed": 18,
+      "summary": "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.24s"
+    },
+    "retained-node.txt": {
+      "passed": 26,
+      "summary": "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 2083 filtered out; finished in 1.29s"
+    },
+    "retained-arrow.txt": {
+      "passed": 32,
+      "summary": "test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 2133 filtered out; finished in 0.14s"
+    },
+    "abandonment.txt": {
+      "modeled_schedules": 922,
+      "summary": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2164 filtered out; finished in 2256.45s"
+    }
+  },
+  "files": {
+    "job.log": {
+      "bytes": 123230,
+      "sha256": "735022f438dc35bb509c058eb9243e636c7a4aa94bd232ba098a5c4e445db8be"
+    },
+    "artifact-metadata.json": {
+      "bytes": 831,
+      "sha256": "615528c02d59ea31ec89212ab1386342174cbdd9fd982265a9df965e15bade4e"
+    },
+    "artifact.zip": {
+      "bytes": 10129,
+      "sha256": "24a0d84844a89d372356197631cdcbf07ec0d13b2ffa6b595ef21bd32608775d"
+    },
+    "job.json": {
+      "bytes": 4462,
+      "sha256": "2cf184aeaab2014374e6526c653f1186e9bf44101090ca1d31b597c3d5deda20"
+    },
+    "artifact/retained-node.txt": {
+      "bytes": 10609,
+      "sha256": "c9ddee8ecb023c184bde3729d1f50b29163f2ce413f07f686a311b8f3679a7aa"
+    },
+    "artifact/toolchain.txt": {
+      "bytes": 194,
+      "sha256": "7fad09dd8c16d49de37932475436003b5b1763c1015c5ce081ad7692db368ca3"
+    },
+    "artifact/retained-arrow.txt": {
+      "bytes": 6761,
+      "sha256": "d2869f52c786c94a33ad833e8093db302fb9866785cf7712a393f490702c1bca"
+    },
+    "artifact/source.txt": {
+      "bytes": 164,
+      "sha256": "567958b7762f725a46e7172c0fd76fe5530c33b81115d6841eca3019a5e8a023"
+    },
+    "artifact/clippy.txt": {
+      "bytes": 14965,
+      "sha256": "accca81451f92ce770499aeb1bbfc0febfe7f722e74601363a86e652f81105bb"
+    },
+    "artifact/go.txt": {
+      "bytes": 2760,
+      "sha256": "233bd92deccbbaff066829986f4fddb2b29aa2c5b310648739c58eaff1678acf"
+    },
+    "artifact/retained-ffi.txt": {
+      "bytes": 2672,
+      "sha256": "047d7a3761c0c4a127940d8a5d1aecce9e384886bcbdb7e8ead2b56ecbbadf8e"
+    },
+    "artifact/abandonment.txt": {
+      "bytes": 1555,
+      "sha256": "7fc9b7e846687f85333acfe09c107c5e0582d4a0c540241e374677317a185058"
+    }
+  },
+  "observed_at": 1792401040.145709,
+  "scope": "Full source/toolchain/test artifacts qualify successful311 Windows job on exact6ea tree. c87 changes only test whitespace with separate equivalence proof; this remains a311 result. Modeled schedules do not prove physical storage synchronization; no Prow, prior-failure cause, performance acceptance or approval claim."
+}

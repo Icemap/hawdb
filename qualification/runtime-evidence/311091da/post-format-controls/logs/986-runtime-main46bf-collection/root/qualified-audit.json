@@ -1,0 +1,19 @@
+{
+  "role": "root",
+  "job": 117960457287,
+  "head": "ef412c48ba3a89b30abaf809e33512f58ed60e66",
+  "job_conclusion": "success",
+  "source_verified": true,
+  "indexed_files_verified": 67,
+  "zip_sha256": "2b4ef4abfd55fd403d495479f47714b6b732c5f845bcc2f06c4f5cd9dd886aed",
+  "log_sha256": "48a68d0699f4350b089369584485dd200c9a690a891e15586dea42a82ed1411c",
+  "command_exit": 0,
+  "selected_test_count": 59,
+  "observed_test_summaries": 59,
+  "missing_summaries": [],
+  "statuses": {
+    "PASSED": 59
+  },
+  "all_selected_passed": true,
+  "scope": "Standalone current-main runtime evidence, preserving all outcomes. Not Prow/Tide status, local failure disposition, complete performance acceptance or genuine approval."
+}

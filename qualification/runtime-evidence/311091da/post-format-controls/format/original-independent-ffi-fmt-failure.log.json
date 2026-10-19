@@ -1,0 +1,5 @@
+{
+  "original_bytes": 558,
+  "original_sha256": "eaaea3a2adb028981ffc3cacb8e002f6a73c2462df887bf552bd61ed38004cff",
+  "raw_utf8": "Diff in /private/tmp/hawdb-wip-ready-20261015/integrate-main-46bfde00/bindings/ffi/src/retained/node/tests.rs:347:\n         HAWDB_RETAINED_UNSUPPORTED_PLAN\n     );\n     assert_eq!(\n-        (out.abi_version, out.struct_size, out.owner_namespace, out.owner_id, out.column_count),\n+        (\n+            out.abi_version,\n+            out.struct_size,\n+            out.owner_namespace,\n+            out.owner_id,\n+            out.column_count\n+        ),\n         (0, 0, 0, 0, 0)\n     );\n     assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);\n"
+}

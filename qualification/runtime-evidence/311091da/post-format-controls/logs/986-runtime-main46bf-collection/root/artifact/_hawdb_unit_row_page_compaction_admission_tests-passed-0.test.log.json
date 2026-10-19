@@ -1,0 +1,5 @@
+{
+  "original_bytes": 670,
+  "original_sha256": "3e620d56315446059e82d3be0d74d905bc2689fb8a82b71d7d69912219959ca7",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_unit_row_page_compaction_admission_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest store_facade_tests::row_page_compaction::row_page_compaction_failure_limits_leave_the_generation_retryable ... ok\ntest store_facade_tests::row_page_compaction::row_page_compaction_dirty_and_materialized_limits_release_admission ... ok\ntest store_facade_tests::row_page_compaction::row_page_compaction_admits_before_building_and_shares_shadow_capacity ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 21.44s\n\n"
+}

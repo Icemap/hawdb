@@ -1,0 +1,284 @@
+{
+  "old_head": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "validated_new_commit": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+  "new_tree": "b38a95a769af9e468c6bfa49e53c4fbc05de72af",
+  "changed_files": [
+    "bindings/ffi/src/retained/node/tests.rs"
+  ],
+  "whitespace_only": true,
+  "test_module_cfg": "#[cfg(test)] mod tests;",
+  "node_ffi_tests": {
+    "passed": 6,
+    "filtered_outside_module": 14,
+    "log_sha256": "cedbb44f415e14cf1516deb4e85faf38298b4bce0cfdc90d337b01edbb5c8f0d"
+  },
+  "native_library_comparisons": {
+    "libhawdb_ffi.dylib": {
+      "before": "10481316b383627deb64fa818955abef6d468b52639173d7f0f7b7d52c4689e8",
+      "after": "10481316b383627deb64fa818955abef6d468b52639173d7f0f7b7d52c4689e8",
+      "post_commit": "10481316b383627deb64fa818955abef6d468b52639173d7f0f7b7d52c4689e8"
+    },
+    "libhawdb_ffi_boundary_profile.dylib": {
+      "before": "bb91fa2c2085782c3213a15336b38283b2be264f1e23f4adc44fbc95651d080a",
+      "after": "bb91fa2c2085782c3213a15336b38283b2be264f1e23f4adc44fbc95651d080a",
+      "post_commit": "bb91fa2c2085782c3213a15336b38283b2be264f1e23f4adc44fbc95651d080a"
+    }
+  },
+  "checks": [
+    {
+      "name": "native-before",
+      "command": [
+        "bazel",
+        "build",
+        "-c",
+        "opt",
+        "//bindings/ffi:hawdb_ffi",
+        "//bindings/ffi:hawdb_ffi_boundary_profile",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-native-before.log",
+      "started": 1792400058.478824,
+      "exit": 0,
+      "ended": 1792400155.6508858,
+      "sha256": "371c9d730a1bc24dfb7cfb979457c63afb404b042ca0e5fe6e7a6da0d321129a"
+    },
+    {
+      "name": "apply-ffi-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "bindings/ffi/Cargo.toml",
+        "--all"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-apply-ffi-fmt.log",
+      "started": 1792400155.704128,
+      "exit": 0,
+      "ended": 1792400161.7176802,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "native-after",
+      "command": [
+        "bazel",
+        "build",
+        "-c",
+        "opt",
+        "//bindings/ffi:hawdb_ffi",
+        "//bindings/ffi:hawdb_ffi_boundary_profile",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-native-after.log",
+      "started": 1792400162.1567109,
+      "exit": 0,
+      "ended": 1792400164.6823502,
+      "sha256": "17724e85c66507dc144015289634e9c955abd3d613237a8ef4a11d6a5aa3c50a"
+    },
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-install.log",
+      "started": 1792400164.7443762,
+      "exit": 0,
+      "ended": 1792400164.830747,
+      "sha256": "6dd3a3ee6c0892e5369e843cabf8ddc982f55665d60d1d1359fc0d198ee6f427"
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-fmt.log",
+      "started": 1792400164.880644,
+      "exit": 0,
+      "ended": 1792400169.927814,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-clippy.log",
+      "started": 1792400169.98275,
+      "exit": 0,
+      "ended": 1792400214.878459,
+      "sha256": "6f7c455d18bb4efc0aad34498cd0af7fbb619bb8b405be7b20ba9ab9f6701329"
+    },
+    {
+      "name": "ffi-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "bindings/ffi/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-ffi-fmt.log",
+      "started": 1792400214.9220932,
+      "exit": 0,
+      "ended": 1792400219.88499,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ffi-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/ffi/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-ffi-clippy.log",
+      "started": 1792400219.9311092,
+      "exit": 0,
+      "ended": 1792400235.424361,
+      "sha256": "4608bc2866b5eeaa48d90f72a5977b963c92e0b694ef110f2b952183d924828d"
+    },
+    {
+      "name": "python-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-python-fmt.log",
+      "started": 1792400235.467274,
+      "exit": 0,
+      "ended": 1792400240.373075,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "python-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-python-clippy.log",
+      "started": 1792400240.416542,
+      "exit": 0,
+      "ended": 1792400256.586045,
+      "sha256": "76a92b61a086a8c13c44b8046f214bb95c5b7601fa063418701047f3652e1b10"
+    },
+    {
+      "name": "ffi-node-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "bindings/ffi/Cargo.toml",
+        "--lib",
+        "retained::node::tests"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-ffi-node-tests.log",
+      "started": 1792400256.6295779,
+      "exit": 0,
+      "ended": 1792400292.2246249,
+      "sha256": "cedbb44f415e14cf1516deb4e85faf38298b4bce0cfdc90d337b01edbb5c8f0d"
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-prek.log",
+      "started": 1792400292.271225,
+      "exit": 0,
+      "ended": 1792400297.972008,
+      "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
+    },
+    {
+      "name": "commit",
+      "command": [
+        "git",
+        "commit",
+        "-m",
+        "style(ffi): format retained refusal assertions",
+        "-m",
+        "Format the five-field sentinel tuple in the independent C ABI test package, which root cargo fmt does not cover. Preserve all assertions and runtime code. Normal/profiled opt FFI libraries are byte-identical before/after formatting. Ref #976, ref #987, ref #1081."
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-commit.log",
+      "started": 1792400297.994303,
+      "exit": 0,
+      "ended": 1792400303.329628,
+      "sha256": "b6b7af2bcd13222081cb34b98874ec6e166aae9cced354d1331205ef55bdb4c1"
+    },
+    {
+      "name": "native-post-commit",
+      "command": [
+        "bazel",
+        "build",
+        "-c",
+        "opt",
+        "//bindings/ffi:hawdb_ffi",
+        "//bindings/ffi:hawdb_ffi_boundary_profile",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-native-post-commit.log",
+      "started": 1792400303.39421,
+      "exit": 0,
+      "ended": 1792400303.553136,
+      "sha256": "fa6069b3a9f5cf65830698cfa19f868fbbbe07975b5b124c67e539afaff754dc"
+    },
+    {
+      "name": "push",
+      "command": [
+        "git",
+        "push",
+        "origin",
+        "HEAD:refs/heads/feat/978-boundary-baseline"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-ffi-format-push.log",
+      "started": 1792400580.872719,
+      "exit": 0,
+      "ended": 1792400583.919738,
+      "sha256": "ca87e0b45d156c79032063184008950100e1bb042057187d8f15c57c8fccf4d0"
+    }
+  ],
+  "currently_unpushed": false,
+  "observed_at": 1792400436.036944,
+  "scope": "Committed single test-only whitespace correction. Exact normal/profiled opt FFI dylib bytes match before/after and post-commit on the same build path. All production/Python/Rust benchmark source files are byte-identical; FFI declared inputs and action keys need not match because its src glob includes cfg(test) files. Existing311 measurements retain source311 and may be evaluated with this scoped equivalence, never relabeled. Final required CI/review/approval remain open. Published only after existing311 Windows job completed successfully; its observations are preserved.",
+  "published_verified": true,
+  "publication_state": "986-ffi-format-fix-state.json",
+  "publication_observed_at": 1792400885.794282
+}

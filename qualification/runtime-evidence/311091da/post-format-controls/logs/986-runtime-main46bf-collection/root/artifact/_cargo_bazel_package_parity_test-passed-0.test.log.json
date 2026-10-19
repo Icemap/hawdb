@@ -1,0 +1,5 @@
+{
+  "original_bytes": 178,
+  "original_sha256": "79b4149916a7dceee413d56ec5fe9e09abcd3e2ad841414fa060feb893c3aeff",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:cargo_bazel_package_parity_test\n-----------------------------------------------------------------------------\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 550,
+  "original_sha256": "ff3f26ac3445dec263baac6d3555c61993bbde67168e0456ed09d5550b1e2274",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_host_allocator_tests\n-----------------------------------------------------------------------------\n\nrunning 4 tests\ntest native_zstd_compression_workspace_uses_the_host_allocator ... ok\ntest native_zstd_context_uses_the_host_for_allocation_and_release ... ok\ntest database_and_result_teardown_use_the_host_allocator ... ok\ntest graph_and_sql_queries_use_the_host_allocator ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n"
+}

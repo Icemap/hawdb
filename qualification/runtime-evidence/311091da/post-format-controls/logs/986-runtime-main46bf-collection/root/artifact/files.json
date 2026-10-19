@@ -1,0 +1,270 @@
+{
+  "source-check.json": {
+    "bytes": 590,
+    "sha256": "ee132d524f720061d9e237622fd8d2798a76ebca19f6f037fbdca6db985b5107"
+  },
+  "_hawdb_in_memory_portable_tests-passed-0.test.log": {
+    "bytes": 1294,
+    "sha256": "b529c5fe684444d29ef42e0d39a959dc2639bca499c733b9e2205f95efb8040e"
+  },
+  "toolchain.txt": {
+    "bytes": 196,
+    "sha256": "b2bdf493bcf6d1dc55181a0efc2774b6d9cf7bf5c8dcc5bed592c994b2ad38c4"
+  },
+  "_hawdb_search_projection_consumer_minimal_tests-passed-0.test.log": {
+    "bytes": 524,
+    "sha256": "032267a94e2939f6f3d4585a26f1489b147aba8f1668b19cbf1ce39219716c98"
+  },
+  "_hawdb_host_allocator_minimal_tests-passed-0.test.log": {
+    "bytes": 558,
+    "sha256": "56dec7585a99771f5cbeda81f016a58e63547da34de3c9197ea7b625e565f4ce"
+  },
+  "_hawdb_default_consumer_tests-passed-0.test.log": {
+    "bytes": 325,
+    "sha256": "0a1d6b85f0abc08d847038bcd21953dd591d51e5fff7e553ea5194167bba0fee"
+  },
+  "_hawdb_linux_ci_wal_group_commit_smoke_test-passed-0.test.log": {
+    "bytes": 249610,
+    "sha256": "01109390154a131b8562d8561634654b83131e39904332a797bd5fcdd54602e7"
+  },
+  "_hawdb_host_allocator_tests-passed-0.test.log": {
+    "bytes": 550,
+    "sha256": "ff3f26ac3445dec263baac6d3555c61993bbde67168e0456ed09d5550b1e2274"
+  },
+  "_hawdb_unit_analytics_core_general_tests-passed-0.test.log": {
+    "bytes": 7363,
+    "sha256": "3669970172b6a85f0107ad34838a11cc8c11f8bac4d7d922c66108d865300a74"
+  },
+  "_hawdb_unit_analytics_rss_tests-passed-0.test.log": {
+    "bytes": 586,
+    "sha256": "9b33683cef9340c3947ffbb38bc9616855e50fd5c667a905a9849fe4c140799b"
+  },
+  "_hawdb_linux_ci_optimizer_group_1_smoke_test-passed-0.test.log": {
+    "bytes": 879,
+    "sha256": "cd24181c880b6d0daac03675cee8d7a8dc1d79812f3b62bb1b453d5c63e0272d"
+  },
+  "command-result.json": {
+    "bytes": 28,
+    "sha256": "545e1d9abc26062a9fbec9b092f9cf2af5bc73330d50a8f8029d2d78f02dadc1"
+  },
+  "_hawdb_unit_row_page_compaction_admission_tests-passed-0.test.log": {
+    "bytes": 670,
+    "sha256": "3e620d56315446059e82d3be0d74d905bc2689fb8a82b71d7d69912219959ca7"
+  },
+  "command.log": {
+    "bytes": 56978,
+    "sha256": "5711108c7baee0b45a0ce920f638bf71ce0ccd52a6360bf7c56bb4205df7f396"
+  },
+  "_cargo_bazel_package_parity_script_test-passed-0.test.log": {
+    "bytes": 185,
+    "sha256": "312b80f7216d623742e39401694892342b1f9376cfcd1a8a1cbd0ae9912e5f06"
+  },
+  "_hawdb_search_generation_context_minimal_tests-passed-0.test.log": {
+    "bytes": 1060,
+    "sha256": "3bed9b1c169b4d8022de466aec054c6cf2e0906f95eccf09af95304af2f67861"
+  },
+  "_hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test-passed-0.test.log": {
+    "bytes": 335,
+    "sha256": "c4310d84a83b784f3952450ab4d621a1644fcdbd59b1be3d1fb1c23784ed286c"
+  },
+  "_hawdb_linux_ci_fixture_contract_smoke_test-passed-0.test.log": {
+    "bytes": 189,
+    "sha256": "108b6566dafe48dbfb86fdd8794cb2eb5f4f95e5a227a8a59aa3965cefcb7960"
+  },
+  "_hawdb_linux_ci_migration_gate_blocked_smoke_test-passed-0.test.log": {
+    "bytes": 195,
+    "sha256": "7efac42b0b571a5e791cdff7c3ecd15d88266fe844453f57c7c2a10eba0bf437"
+  },
+  "_hawdb_process_memory_policy_contract_tests-passed-0.test.log": {
+    "bytes": 989,
+    "sha256": "5f3f94228823d228672ae29ab26ca319ba380227418ada57ee666d0ecd55f7b0"
+  },
+  "crates_system-sql_hawdb_system_sql_loom_tests-passed-0.test.log": {
+    "bytes": 392,
+    "sha256": "02c5607d075a9d212a9e5258af32e7991a468bd60d6c3aa204ac278b81de0e6a"
+  },
+  "_hawdb_branch_project_open_minimal_tests-passed-0.test.log": {
+    "bytes": 4709,
+    "sha256": "09cc0d9dd3dc4f3a13fcd2e1551d33aa9567a5c6db30ba02d570e8d2410390da"
+  },
+  "selection.json": {
+    "bytes": 9102,
+    "sha256": "0588e8661a2fcc5ea4a5016799d1eff144f4e83741bc76e36202d7e6d37b8e78"
+  },
+  "_hawdb_branch_project_open_tests-passed-0.test.log": {
+    "bytes": 4701,
+    "sha256": "ea076f30267ce2f7abbc613a048ffd89e0e12dd932ec3e460a7e34cd8304513e"
+  },
+  "_hawdb_acl_capability_tests-passed-0.test.log": {
+    "bytes": 2236,
+    "sha256": "99455b1328b9353537ef7e98c015121f0807d094e33886b87b9c8aa902ff3498"
+  },
+  "_hawdb_linux_ci_benchmark_relational_index_access_smoke_test-passed-0.test.log": {
+    "bytes": 324,
+    "sha256": "a5cc2509312676859fe8168f0811d320701619d908921a7fc9746a9fe8668b85"
+  },
+  "_hawdb_linux_ci_previous_wrapper_adapter_smoke_test-passed-0.test.log": {
+    "bytes": 197,
+    "sha256": "7c3f9f87edf5ea5eb737165e6a2b6db1072e8ddd280653d46d3410472322d91c"
+  },
+  "_hawdb_search_generation_context_tests-passed-0.test.log": {
+    "bytes": 1126,
+    "sha256": "e93151ef6b5c5e87ac63a66f3dcf7c6f2d2be1b8bad631b34e58272615ad7f22"
+  },
+  "_hawdb_execution_request_contract_tests-passed-0.test.log": {
+    "bytes": 2933,
+    "sha256": "c6491811951711352e967d87e6fecbd123fa9c72d2a5a9f63ef07bf1a5b6f0ee"
+  },
+  "_hawdb_unit_storage_crash_matrix_tests-passed-0.test.log": {
+    "bytes": 573,
+    "sha256": "239decadbd11be24ddde3f3681c2c76fdc838c9bef49946860ec492e4c43345d"
+  },
+  "_hawdb_linux_ci_benchmark_integrity_checksum_smoke_test-passed-0.test.log": {
+    "bytes": 309,
+    "sha256": "36a1501be226707b66ee37e45cda1ceb0250f94a8154322466b168b3f521e2a2"
+  },
+  "_query_limit_inventory_script_test-passed-0.test.log": {
+    "bytes": 284,
+    "sha256": "99abbe812de62ce89f617931f67f5d9fd7bcce91a36e68f3f1a98b3e90b1c1d1"
+  },
+  "_hawdb_unit_row_page_compaction_materialized_tests-passed-0.test.log": {
+    "bytes": 612,
+    "sha256": "e03a17ec9c786fe990918fd6160d37e226a7b67cb173e2efa01bc6dac1a88a84"
+  },
+  "_hawdb_wasm_playground_bridge_tests-passed-0.test.log": {
+    "bytes": 699,
+    "sha256": "b722d30d6bd5b51b1695a8b835d9ef2ee7dadb2f44296f6adcb473592b22146b"
+  },
+  "_hawdb_linux_ci_benchmark_dispatch_tests-passed-0.test.log": {
+    "bytes": 280,
+    "sha256": "92a5f065c9573d8906fe7265037c9463f81aea03be5435c0369dc886d9f3e402"
+  },
+  "_hawdb_unit_row_page_compaction_out_of_core_tests-passed-0.test.log": {
+    "bytes": 609,
+    "sha256": "004dfe8fd4d3058d4693a34cdf4df50d7f9e364785ce076a8028602420288800"
+  },
+  "tests.bep.json": {
+    "bytes": 421151,
+    "sha256": "e1c9ec184f5c0e2b3f6c03c73466922faff78d356c00f569b552879cc9fcffcf"
+  },
+  "_hawdb_minimal_consumer_tests-passed-0.test.log": {
+    "bytes": 325,
+    "sha256": "ce6059add72dcecf8cfc191405fb263a0046e4b19c3f1eba3266d42ef5123045"
+  },
+  "_hawdb_pgq_create_binder_tests-passed-0.test.log": {
+    "bytes": 383,
+    "sha256": "f10751b552c540477f377f6af37dce59465f8f750f1729dace73a8aff2b0e0f5"
+  },
+  "_hawdb_linux_ci_migration_gate_smoke_test-passed-0.test.log": {
+    "bytes": 187,
+    "sha256": "df20339a43817fc8ece586ff54d360c3ab0fe1d45a1a4b18d230e429bf39248b"
+  },
+  "_hawdb_fallible_search_contract_minimal_tests-passed-0.test.log": {
+    "bytes": 536,
+    "sha256": "d65243bbc149052fe7b70d572e3655e59ffb4b4af06e1d3f064c58afa9b74435"
+  },
+  "_hawdb_linux_ci_background_maintenance_smoke_test-passed-0.test.log": {
+    "bytes": 195,
+    "sha256": "788425b4c329a8660894485cbaa84f36cf361a3b824cbaf71522df595a8c4acd"
+  },
+  "_hawdb_linux_ci_benchmark_relational_index_page_cache_smoke_test-passed-0.test.log": {
+    "bytes": 335,
+    "sha256": "6b1159613db459a0a2df50c86ede0b1c57a1e1eb6689d93ca8d5866bbb661b13"
+  },
+  "_hawdb_process_memory_policy_contract_minimal_tests-passed-0.test.log": {
+    "bytes": 816,
+    "sha256": "d8e188acbda9561e9551d6d1475822b68b3007b85272bd34fbd2d3bac73702d5"
+  },
+  "_hawdb_search_projection_consumer_tests-passed-0.test.log": {
+    "bytes": 516,
+    "sha256": "eb37eeb2a192fc4a186eb5c1d58f207b319c73f71e5748e77b42663a1aa42bb4"
+  },
+  "_root_unit_partition_script_test-passed-0.test.log": {
+    "bytes": 257,
+    "sha256": "1d6144f7cd53fd8edd4ccd349cff809134a6794425558b6e6ecb608ab7e5c70e"
+  },
+  "_hawdb_linux_ci_optimizer_group_3_smoke_test-passed-0.test.log": {
+    "bytes": 1085,
+    "sha256": "d8772d98dea9d4359ab67cf3122a733c89783e841a7c1ea55ddc84d088903dd3"
+  },
+  "_hawdb_unit_recovery_tests-passed-0.test.log": {
+    "bytes": 15713,
+    "sha256": "c940ba3e6a26b9d1650bd0804c01ea528f92ba682d3354c3b74b96bc54e63f9f"
+  },
+  "_hawdb_search_lexical_corpus_qualification_tests-passed-0.test.log": {
+    "bytes": 603,
+    "sha256": "d2e12602e61c7c426dfeb3894ac00e3fe01a5b40d2d7451f873a187d3bc35cc4"
+  },
+  "_hawdb_unit_general_tests-passed-0.test.log": {
+    "bytes": 187456,
+    "sha256": "95d4f0312245e1a381c42ba043fa2dc45c44b8805b1a152f19ad77002bc8fdb2"
+  },
+  "_hawdb_graph_text_dependency_boundary_test-passed-0.test.log": {
+    "bytes": 188,
+    "sha256": "45a2ab753c5b841db75b20f6c2d3740276cf1ef9ccbc63df905dce9a55a2eead"
+  },
+  "_hawdb_linux_ci_storage_recovery_smoke_test-passed-0.test.log": {
+    "bytes": 189,
+    "sha256": "a0782cf92419ea427e9a6b30ab72856f1e569394cf989a778cfbd124ad68e599"
+  },
+  "_cargo_bazel_package_parity_test-passed-0.test.log": {
+    "bytes": 178,
+    "sha256": "79b4149916a7dceee413d56ec5fe9e09abcd3e2ad841414fa060feb893c3aeff"
+  },
+  "test-summaries.json": {
+    "bytes": 38651,
+    "sha256": "124d39ef5940b0ef990c7d691e26cd88bd81c2547228536e94b64902e110acf2"
+  },
+  "_query_limit_inventory_test-passed-0.test.log": {
+    "bytes": 230,
+    "sha256": "d464e4d23c830fc1c675817a59dfa7944b388102f11780037f50599083a25521"
+  },
+  "_hawdb_linux_ci_optimizer_summary_smoke_test-passed-0.test.log": {
+    "bytes": 190,
+    "sha256": "237d7dce78422bfa220b5e3c41258599a96ced336efca4de975c5cf77d8048ae"
+  },
+  "_hawdb_minimal_native_vector_boundary_test-passed-0.test.log": {
+    "bytes": 188,
+    "sha256": "4ffaa0ac61a7589bc4399cae56e323937bca0681c890a53f9d10e8abc0edf71f"
+  },
+  "_hawdb_linux_ci_benchmark_relational_oltp_mix_smoke_test-passed-0.test.log": {
+    "bytes": 311,
+    "sha256": "b3c66186f701086d9c939324b5e04c10daee3405677f07f60ec9324ce2722f50"
+  },
+  "_hawdb_graph_text_consumer_tests-passed-0.test.log": {
+    "bytes": 328,
+    "sha256": "e9afc83515406e03d8a0bac365d036bc2b75b01f1571c64052af58c19fc986bf"
+  },
+  "_hawdb_cli_tests-passed-0.test.log": {
+    "bytes": 7903,
+    "sha256": "2c14aa46be6f9a1174d14e3a60828eb08d7a4b6e36d619b8c2ed8a35988ed02b"
+  },
+  "_hawdb_unit_concurrent_tests-passed-0.test.log": {
+    "bytes": 14471,
+    "sha256": "cfd0cbc0c0a9631c1f762de0d468923d7f33cabaa479aaac71d71f2e030799f6"
+  },
+  "_hawdb_wal_group_commit_recovery_tests-passed-0.test.log": {
+    "bytes": 704,
+    "sha256": "ba9a183df2576f679d37f5e5cbe9e53e6270c232dd20cf9aa21bd44863c876aa"
+  },
+  "source.txt": {
+    "bytes": 123,
+    "sha256": "6e3e24337321dec389198a2f26ac93eb8feed3861a6fee0512fc91ec7edfd4a1"
+  },
+  "_hawdb_linux_ci_benchmark_index_restart_cost_smoke_test-passed-0.test.log": {
+    "bytes": 309,
+    "sha256": "940d486c776a146a433d7ab45d182f702f3c3e0672fc5f36e4f1be645d889b11"
+  },
+  "_hawdb_linux_ci_relational_row_page_lending_smoke_test-passed-0.test.log": {
+    "bytes": 321,
+    "sha256": "eb2e0571abfd96e90c63f1db28655ce0313108afb49bf795d1e8aec0b35f8add"
+  },
+  "_hawdb_shadow_self_tests-passed-0.test.log": {
+    "bytes": 489,
+    "sha256": "fa06c20f67dc1a7a510232a227cbf028b6b7d546dfc4a04dd1c70e998f115af6"
+  },
+  "_hawdb_fallible_search_contract_tests-passed-0.test.log": {
+    "bytes": 674,
+    "sha256": "8417de52b0e103e0d41ed72bb3b55d4cf26194c8fc02b9bee0a75d65d587e86f"
+  }
+}

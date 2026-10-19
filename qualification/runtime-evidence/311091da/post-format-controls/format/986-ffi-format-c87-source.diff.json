@@ -1,0 +1,5 @@
+{
+  "original_bytes": 750,
+  "original_sha256": "3fa41d5f2a71b12f172b33a16cc4829a85203487b94d0f09a1e075309cdfde08",
+  "raw_utf8": "diff --git a/bindings/ffi/src/retained/node/tests.rs b/bindings/ffi/src/retained/node/tests.rs\nindex 7dd653af..5be4d2d2 100644\n--- a/bindings/ffi/src/retained/node/tests.rs\n+++ b/bindings/ffi/src/retained/node/tests.rs\n@@ -347,7 +347,13 @@ fn non_unique_index_refuses_without_publishing_a_foreign_owner() {\n         HAWDB_RETAINED_UNSUPPORTED_PLAN\n     );\n     assert_eq!(\n-        (out.abi_version, out.struct_size, out.owner_namespace, out.owner_id, out.column_count),\n+        (\n+            out.abi_version,\n+            out.struct_size,\n+            out.owner_namespace,\n+            out.owner_id,\n+            out.column_count\n+        ),\n         (0, 0, 0, 0, 0)\n     );\n     assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);\n"
+}

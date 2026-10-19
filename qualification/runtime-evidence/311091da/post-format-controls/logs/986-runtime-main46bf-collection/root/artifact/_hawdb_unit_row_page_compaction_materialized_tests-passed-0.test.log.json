@@ -1,0 +1,5 @@
+{
+  "original_bytes": 612,
+  "original_sha256": "e03a17ec9c786fe990918fd6160d37e226a7b67cb173e2efa01bc6dac1a88a84",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_unit_row_page_compaction_materialized_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest store_facade_tests::row_page_compaction::row_page_compaction_converges_disk_bytes_and_preserves_pinned_readers_materialized has been running for over 60 seconds\ntest store_facade_tests::row_page_compaction::row_page_compaction_converges_disk_bytes_and_preserves_pinned_readers_materialized ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 298.59s\n\n"
+}

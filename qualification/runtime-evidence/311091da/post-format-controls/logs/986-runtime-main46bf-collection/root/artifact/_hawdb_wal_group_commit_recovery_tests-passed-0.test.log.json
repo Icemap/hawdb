@@ -1,0 +1,5 @@
+{
+  "original_bytes": 704,
+  "original_sha256": "ba9a183df2576f679d37f5e5cbe9e53e6270c232dd20cf9aa21bd44863c876aa",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_wal_group_commit_recovery_tests\n-----------------------------------------------------------------------------\n\nrunning 6 tests\ntest tests::one_reopen_proves_order_and_every_row_including_warmup ... ok\ntest tests::torn_wal_rejects_recovery_before_any_row_proof ... ok\ntest tests::clean_recovery_keeps_the_original_separate_proofs ... ok\ntest tests::checkpointed_rows_do_not_substitute_for_full_wal_replay ... ok\ntest tests::wrong_epoch_rejects_both_proofs ... ok\ntest tests::valid_wal_cannot_hide_missing_extra_or_replaced_rows ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.61s\n\n"
+}

@@ -1,0 +1,491 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "source": "ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+  "tree": "2de750bb8fa6c627a2e2b3517417090b4c005fe9",
+  "observed_groups": 10,
+  "full_requested_matrix_observed": true,
+  "missing_groups": [],
+  "audit_errors": [],
+  "groups": [
+    {
+      "group": [
+        "default",
+        1000,
+        "file"
+      ],
+      "artifact": "session-retained-default-1000-file-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "records": {
+        "('owned', 'ok')": 7,
+        "('retained', 'ok')": 7,
+        "('arrow', 'ok')": 7
+      },
+      "success": true,
+      "actual_limits": [
+        [
+          0,
+          67108864,
+          268435456,
+          16777216,
+          3701640192,
+          16777216,
+          67108864
+        ]
+      ],
+      "verified_frozen_files": 11,
+      "ownership_released": true,
+      "ratios": {
+        "retained": {
+          "median": 2.4631717630394934,
+          "minimum": 2.3981338128252996,
+          "pairs": [
+            2.547390283998986,
+            2.503557577858119,
+            2.4909280532010927,
+            2.4150357327809426,
+            2.4631717630394934,
+            2.3981338128252996,
+            2.4400063822428013
+          ],
+          "every_pair_at_least_10_percent": true
+        },
+        "arrow": {
+          "median": 2.3827667848795033,
+          "minimum": 2.207423898069624,
+          "pairs": [
+            2.3921381318484842,
+            2.418276510594819,
+            2.262764869323949,
+            2.278273265732448,
+            2.3827667848795033,
+            2.386881093981382,
+            2.207423898069624
+          ],
+          "every_pair_at_least_10_percent": true
+        }
+      },
+      "process_rss": 81285120,
+      "scope": "Python numeric complete-operation delivery only; no Go, foreign-heap or whole-operation memory qualification."
+    },
+    {
+      "group": [
+        "default",
+        1000,
+        "memory"
+      ],
+      "artifact": "session-retained-default-1000-memory-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "records": {
+        "('owned', 'ok')": 7,
+        "('retained', 'ok')": 7,
+        "('arrow', 'ok')": 7
+      },
+      "success": true,
+      "actual_limits": [
+        [
+          0,
+          67108864,
+          268435456,
+          16777216,
+          3635950592,
+          16777216,
+          67108864
+        ]
+      ],
+      "verified_frozen_files": 11,
+      "ownership_released": true,
+      "ratios": {
+        "retained": {
+          "median": 2.594994113841487,
+          "minimum": 2.4782640076569438,
+          "pairs": [
+            2.577972683198732,
+            2.7104610890055123,
+            2.6640607978251185,
+            2.4782640076569438,
+            2.5007588499545297,
+            3.297008740830234,
+            2.594994113841487
+          ],
+          "every_pair_at_least_10_percent": true
+        },
+        "arrow": {
+          "median": 2.400968326198538,
+          "minimum": 2.2241928503500286,
+          "pairs": [
+            2.4202000794694487,
+            2.5253115252807343,
+            2.400968326198538,
+            2.2241928503500286,
+            2.37635428969998,
+            3.4082528814059785,
+            2.3942216803430276
+          ],
+          "every_pair_at_least_10_percent": true
+        }
+      },
+      "process_rss": 72556544,
+      "scope": "Python numeric complete-operation delivery only; no Go, foreign-heap or whole-operation memory qualification."
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "file"
+      ],
+      "artifact": "session-retained-default-100000-file-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "records": {
+        "('owned', 'ok')": 7,
+        "('retained', 'ok')": 7,
+        "('arrow', 'ok')": 7
+      },
+      "success": true,
+      "actual_limits": [
+        [
+          0,
+          67108864,
+          268435456,
+          16777216,
+          3637451776,
+          16777216,
+          67108864
+        ]
+      ],
+      "verified_frozen_files": 11,
+      "ownership_released": true,
+      "ratios": {
+        "retained": {
+          "median": 2.8225716633594273,
+          "minimum": 2.76092385920217,
+          "pairs": [
+            2.8225716633594273,
+            3.0014506039389577,
+            2.805577224074827,
+            3.8261746516978907,
+            2.8005964434271444,
+            2.886591018592546,
+            2.76092385920217
+          ],
+          "every_pair_at_least_10_percent": true
+        },
+        "arrow": {
+          "median": 2.9448392772867487,
+          "minimum": 2.7677480919760855,
+          "pairs": [
+            2.8199017173181624,
+            3.016838289255008,
+            2.9448392772867487,
+            3.9397164579937645,
+            2.9999529342129034,
+            2.8544607139321148,
+            2.7677480919760855
+          ],
+          "every_pair_at_least_10_percent": true
+        }
+      },
+      "process_rss": 239407104,
+      "scope": "Python numeric complete-operation delivery only; no Go, foreign-heap or whole-operation memory qualification."
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "memory"
+      ],
+      "artifact": "session-retained-default-100000-memory-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "records": {
+        "('owned', 'ok')": 7,
+        "('retained', 'ok')": 7,
+        "('arrow', 'ok')": 7
+      },
+      "success": true,
+      "actual_limits": [
+        [
+          0,
+          67108864,
+          268435456,
+          16777216,
+          3641709568,
+          16777216,
+          67108864
+        ]
+      ],
+      "verified_frozen_files": 11,
+      "ownership_released": true,
+      "ratios": {
+        "retained": {
+          "median": 2.884727844919476,
+          "minimum": 2.7687289704228464,
+          "pairs": [
+            2.9282316231485335,
+            2.923102805793071,
+            2.884727844919476,
+            2.8587281540637557,
+            2.7687289704228464,
+            2.795973983812784,
+            2.915419983051824
+          ],
+          "every_pair_at_least_10_percent": true
+        },
+        "arrow": {
+          "median": 2.877642243695914,
+          "minimum": 2.749357237775914,
+          "pairs": [
+            2.983860915438761,
+            2.9596659896350794,
+            2.88870997497873,
+            2.7727886554818015,
+            2.749357237775914,
+            2.877642243695914,
+            2.822653462232041
+          ],
+          "every_pair_at_least_10_percent": true
+        }
+      },
+      "process_rss": 214953984,
+      "scope": "Python numeric complete-operation delivery only; no Go, foreign-heap or whole-operation memory qualification."
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "file"
+      ],
+      "artifact": "session-retained-default-1000000-file-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "records": {
+        "('owned', 'error')": 7,
+        "('retained', 'error')": 7,
+        "('arrow', 'error')": 7
+      },
+      "success": false,
+      "actual_limits": [
+        [
+          0,
+          67108864,
+          268435456,
+          16777216,
+          3718149120,
+          16777216,
+          67108864
+        ]
+      ],
+      "verified_frozen_files": 11,
+      "ownership_released": true,
+      "ratios": {},
+      "process_rss": 1110544384,
+      "scope": "Python numeric complete-operation delivery only; no Go, foreign-heap or whole-operation memory qualification."
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "memory"
+      ],
+      "artifact": "session-retained-default-1000000-memory-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "records": {
+        "('owned', 'error')": 7,
+        "('retained', 'error')": 7,
+        "('arrow', 'error')": 7
+      },
+      "success": false,
+      "actual_limits": [
+        [
+          0,
+          67108864,
+          268435456,
+          16777216,
+          3624392704,
+          16777216,
+          67108864
+        ]
+      ],
+      "verified_frozen_files": 11,
+      "ownership_released": true,
+      "ratios": {},
+      "process_rss": 1043427328,
+      "scope": "Python numeric complete-operation delivery only; no Go, foreign-heap or whole-operation memory qualification."
+    },
+    {
+      "group": [
+        "large",
+        1000000,
+        "file"
+      ],
+      "artifact": "session-retained-large-1000000-file-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "records": {
+        "('owned', 'ok')": 7,
+        "('retained', 'ok')": 7,
+        "('arrow', 'ok')": 7
+      },
+      "success": true,
+      "actual_limits": [
+        [
+          1000000,
+          1073741824,
+          1073741824,
+          1073741824,
+          2147483648,
+          268435456,
+          67108864
+        ]
+      ],
+      "verified_frozen_files": 11,
+      "ownership_released": true,
+      "ratios": {
+        "retained": {
+          "median": 3.040690317615825,
+          "minimum": 2.772648390307255,
+          "pairs": [
+            2.772648390307255,
+            3.1584182913013485,
+            3.1146837004620376,
+            3.0905820156741752,
+            2.9224634170229216,
+            3.018294178764198,
+            3.040690317615825
+          ],
+          "every_pair_at_least_10_percent": true
+        },
+        "arrow": {
+          "median": 2.9261150399970326,
+          "minimum": 2.7360420394756035,
+          "pairs": [
+            2.7360420394756035,
+            3.0551950463880564,
+            2.9184586388763982,
+            2.9407723370937022,
+            2.8705606024070254,
+            2.9261150399970326,
+            2.9567493264083144
+          ],
+          "every_pair_at_least_10_percent": true
+        }
+      },
+      "process_rss": 1692434432,
+      "scope": "Python numeric complete-operation delivery only; no Go, foreign-heap or whole-operation memory qualification."
+    },
+    {
+      "group": [
+        "large",
+        1000000,
+        "memory"
+      ],
+      "artifact": "session-retained-large-1000000-memory-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "records": {
+        "('owned', 'ok')": 7,
+        "('retained', 'ok')": 7,
+        "('arrow', 'ok')": 7
+      },
+      "success": true,
+      "actual_limits": [
+        [
+          1000000,
+          1073741824,
+          1073741824,
+          1073741824,
+          2147483648,
+          268435456,
+          67108864
+        ]
+      ],
+      "verified_frozen_files": 11,
+      "ownership_released": true,
+      "ratios": {
+        "retained": {
+          "median": 2.886891727236957,
+          "minimum": 2.8662399121412534,
+          "pairs": [
+            2.879145160704979,
+            2.8662399121412534,
+            2.8980438811796763,
+            2.9182733555776,
+            2.8708158474692853,
+            2.907630553091073,
+            2.886891727236957
+          ],
+          "every_pair_at_least_10_percent": true
+        },
+        "arrow": {
+          "median": 2.7881869660305623,
+          "minimum": 2.698859544714945,
+          "pairs": [
+            2.8042607244563516,
+            2.791153022388413,
+            2.698859544714945,
+            2.84013338377129,
+            2.78074265101178,
+            2.7881869660305623,
+            2.757745939263199
+          ],
+          "every_pair_at_least_10_percent": true
+        }
+      },
+      "process_rss": 1504931840,
+      "scope": "Python numeric complete-operation delivery only; no Go, foreign-heap or whole-operation memory qualification."
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "file"
+      ],
+      "artifact": "session-retained-large-1000001-file-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "records": {
+        "('owned', 'error')": 7,
+        "('retained', 'error')": 7,
+        "('arrow', 'error')": 7
+      },
+      "success": false,
+      "actual_limits": [
+        [
+          1000000,
+          1073741824,
+          1073741824,
+          1073741824,
+          2147483648,
+          268435456,
+          67108864
+        ]
+      ],
+      "verified_frozen_files": 11,
+      "ownership_released": true,
+      "ratios": {},
+      "process_rss": 1170604032,
+      "scope": "Python numeric complete-operation delivery only; no Go, foreign-heap or whole-operation memory qualification."
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "memory"
+      ],
+      "artifact": "session-retained-large-1000001-memory-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "records": {
+        "('owned', 'error')": 7,
+        "('retained', 'error')": 7,
+        "('arrow', 'error')": 7
+      },
+      "success": false,
+      "actual_limits": [
+        [
+          1000000,
+          1073741824,
+          1073741824,
+          1073741824,
+          2147483648,
+          268435456,
+          67108864
+        ]
+      ],
+      "verified_frozen_files": 11,
+      "ownership_released": true,
+      "ratios": {},
+      "process_rss": 1046065152,
+      "scope": "Python numeric complete-operation delivery only; no Go, foreign-heap or whole-operation memory qualification."
+    }
+  ],
+  "incomplete_groups": [],
+  "scope": "Proposed source; final PR source/build-input equivalence remains required. Integrity and result/refusal/paired-ratio audit only; no automatic PR approval or readiness claim.",
+  "run": 39222009845,
+  "status": "completed",
+  "conclusion": "failure",
+  "collection_errors": []
+}

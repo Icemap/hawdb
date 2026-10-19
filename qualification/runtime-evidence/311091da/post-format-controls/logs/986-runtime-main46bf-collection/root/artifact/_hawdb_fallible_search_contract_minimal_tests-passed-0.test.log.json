@@ -1,0 +1,5 @@
+{
+  "original_bytes": 536,
+  "original_sha256": "d65243bbc149052fe7b70d572e3655e59ffb4b4af06e1d3f064c58afa9b74435",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_fallible_search_contract_minimal_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest projection_candidate_readiness_and_shadow_methods_fail_closed ... ok\ntest retrieval_facades_return_capability_errors_before_pipeline_admission ... ok\ntest embedded_store_and_handle_propagate_errors_and_release_admission ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

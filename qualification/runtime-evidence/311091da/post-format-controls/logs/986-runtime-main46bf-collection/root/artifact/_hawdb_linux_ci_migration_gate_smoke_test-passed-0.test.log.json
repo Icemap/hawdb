@@ -1,0 +1,5 @@
+{
+  "original_bytes": 187,
+  "original_sha256": "df20339a43817fc8ece586ff54d360c3ab0fe1d45a1a4b18d230e429bf39248b",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_linux_ci_migration_gate_smoke_test\n-----------------------------------------------------------------------------\n"
+}

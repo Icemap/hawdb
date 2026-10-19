@@ -1,0 +1,5 @@
+{
+  "original_bytes": 489,
+  "original_sha256": "fa06c20f67dc1a7a510232a227cbf028b6b7d546dfc4a04dd1c70e998f115af6",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_shadow_self_tests\n-----------------------------------------------------------------------------\n\nrunning 4 tests\ntest tests::rejects_missing_protocol_version ... ok\ntest tests::rejects_unsupported_protocol_version ... ok\ntest tests::accepts_current_protocol_version ... ok\ntest tests::reports_ready_capabilities ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

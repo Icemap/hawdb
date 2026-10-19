@@ -1,0 +1,5 @@
+{
+  "original_bytes": 188,
+  "original_sha256": "4ffaa0ac61a7589bc4399cae56e323937bca0681c890a53f9d10e8abc0edf71f",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_minimal_native_vector_boundary_test\n-----------------------------------------------------------------------------\n"
+}

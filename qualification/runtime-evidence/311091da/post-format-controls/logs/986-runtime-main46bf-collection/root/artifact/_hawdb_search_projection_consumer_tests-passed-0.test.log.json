@@ -1,0 +1,5 @@
+{
+  "original_bytes": 516,
+  "original_sha256": "eb37eeb2a192fc4a186eb5c1d58f207b319c73f71e5748e77b42663a1aa42bb4",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_search_projection_consumer_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest public_types_validate_ids_and_require_a_durable_source ... ok\ntest public_zero_retention_and_expiry_report_typed_rebuild_reasons ... ok\ntest public_consumer_initializes_mixed_content_catches_up_and_reopens ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.27s\n\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 699,
+  "original_sha256": "b722d30d6bd5b51b1695a8b835d9ef2ee7dadb2f44296f6adcb473592b22146b",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_wasm_playground_bridge_tests\n-----------------------------------------------------------------------------\n\nrunning 5 tests\ntest tests::nested_values_keep_types_and_non_finite_floats ... ok\ntest tests::writes_traversal_values_and_error_recovery_share_one_instance ... ok\ntest tests::payload_admission_returns_an_error_then_allows_a_smaller_read ... ok\ntest tests::admission_errors_return_no_partial_rows_and_preserve_the_database ... ok\ntest tests::nested_tagged_results_have_an_explicit_display_budget_and_allow_recovery ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.71s\n\n"
+}

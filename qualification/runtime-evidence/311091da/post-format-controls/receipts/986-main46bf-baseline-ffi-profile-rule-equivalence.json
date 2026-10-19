@@ -1,0 +1,23 @@
+{
+  "at": 1792399539.2627861,
+  "baseline_head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+  "source_snapshots": [
+    {
+      "tree": "8c30cf48bc6ced6fef624c8333759892ff6b21a4",
+      "build_sha256": "69f4792c33cd42ffdc6730f3248e4a0919978f492838aba67e929e1b46a83d81",
+      "selected_rules": {
+        "hawdb_ffi_boundary_profile": "Call(func=Name(id='rust_shared_library', ctx=Load()), args=[], keywords=[keyword(arg='name', value=Constant(value='hawdb_ffi_boundary_profile')), keyword(arg='srcs', value=BinOp(left=Call(func=Name(id='glob', ctx=Load()), args=[List(elts=[Constant(value='src/**/*.rs')], ctx=Load())], keywords=[]), op=Add(), right=List(elts=[Constant(value='//bindings/benchmarks:native_alloc.rs'), Constant(value='//bindings/benchmarks:native_profile.rs')], ctx=Load()))), keyword(arg='crate_name', value=Constant(value='hawdb_ffi_boundary_profile')), keyword(arg='crate_root', value=Constant(value='src/lib.rs')), keyword(arg='crate_features', value=List(elts=[Constant(value='boundary-profiling')], ctx=Load())), keyword(arg='edition', value=Constant(value='2024')), keyword(arg='rustc_flags', value=Call(func=Name(id='select', ctx=Load()), args=[Dict(keys=[Constant(value='@platforms//os:macos'), Constant(value='//conditions:default')], values=[List(elts=[Constant(value='-Cstrip=none')], ctx=Load()), List(elts=[], ctx=Load())])], keywords=[])), keyword(arg='version', value=Constant(value='0.9.0')), keyword(arg='deps', value=Name(id='_FFI_DEPS', ctx=Load())), keyword(arg='tags', value=List(elts=[Constant(value='manual')], ctx=Load()))])"
+      }
+    },
+    {
+      "tree": "4a235b06362ae6306a300e45d5974495c1229c2b",
+      "build_sha256": "759ecc6d57096a17d4140a67f1d09ebccf9742f733f4d438699a19bc607e19ef",
+      "selected_rules": {
+        "hawdb_ffi_boundary_profile": "Call(func=Name(id='rust_shared_library', ctx=Load()), args=[], keywords=[keyword(arg='name', value=Constant(value='hawdb_ffi_boundary_profile')), keyword(arg='srcs', value=BinOp(left=Call(func=Name(id='glob', ctx=Load()), args=[List(elts=[Constant(value='src/**/*.rs')], ctx=Load())], keywords=[]), op=Add(), right=List(elts=[Constant(value='//bindings/benchmarks:native_alloc.rs'), Constant(value='//bindings/benchmarks:native_profile.rs')], ctx=Load()))), keyword(arg='crate_name', value=Constant(value='hawdb_ffi_boundary_profile')), keyword(arg='crate_root', value=Constant(value='src/lib.rs')), keyword(arg='crate_features', value=List(elts=[Constant(value='boundary-profiling')], ctx=Load())), keyword(arg='edition', value=Constant(value='2024')), keyword(arg='rustc_flags', value=Call(func=Name(id='select', ctx=Load()), args=[Dict(keys=[Constant(value='@platforms//os:macos'), Constant(value='//conditions:default')], values=[List(elts=[Constant(value='-Cstrip=none')], ctx=Load()), List(elts=[], ctx=Load())])], keywords=[])), keyword(arg='version', value=Constant(value='0.9.0')), keyword(arg='deps', value=Name(id='_FFI_DEPS', ctx=Load())), keyword(arg='tags', value=List(elts=[Constant(value='manual')], ctx=Load()))])"
+      }
+    }
+  ],
+  "selected_profile_rules_equal": true,
+  "full_build_diff": "diff --git a/bindings/ffi/BUILD.bazel b/bindings/ffi/BUILD.bazel\nindex 62a16398..ef316780 100644\n--- a/bindings/ffi/BUILD.bazel\n+++ b/bindings/ffi/BUILD.bazel\n@@ -16,6 +16,11 @@ rust_shared_library(\n     crate_name = \"hawdb_ffi\",\n     crate_root = \"src/lib.rs\",\n     edition = \"2024\",\n+    # Match main's macOS 27 workaround for malformed stripped LINKEDIT data.\n+    rustc_flags = select({\n+        \"@platforms//os:macos\": [\"-Cstrip=none\"],\n+        \"//conditions:default\": [],\n+    }),\n     version = \"0.6.0\",\n     deps = _FFI_DEPS,\n )\n",
+  "scope": "Strengthens baseline-only source equivalence: selected FFI boundary-profile Starlark rules match exactly across compiled8c30 and observer4a trees. The macOS strip workaround affects the ordinary target only. Not action-key equality, new measurements, Linux heap equivalence or final311 performance acceptance."
+}

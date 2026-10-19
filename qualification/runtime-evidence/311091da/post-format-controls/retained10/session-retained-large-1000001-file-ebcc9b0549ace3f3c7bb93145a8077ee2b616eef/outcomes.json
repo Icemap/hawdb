@@ -1,0 +1,19 @@
+[
+  {
+    "command": [
+      "/opt/hostedtoolcache/Python/3.14.8/x64/bin/python",
+      "-B",
+      "/home/runner/work/_temp/retained-evidence/frozen/configured.py",
+      "/home/runner/work/_temp/retained-evidence/frozen/retained_boundary.py",
+      "--rows",
+      "1000001",
+      "--backend",
+      "file",
+      "--mode",
+      "all",
+      "--samples",
+      "7"
+    ],
+    "exit_code": 1
+  }
+]

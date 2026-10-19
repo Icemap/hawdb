@@ -1,0 +1,5 @@
+{
+  "original_bytes": 879,
+  "original_sha256": "cd24181c880b6d0daac03675cee8d7a8dc1d79812f3b62bb1b453d5c63e0272d",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_linux_ci_optimizer_group_1_smoke_test\n-----------------------------------------------------------------------------\nbenchmark started: hawdb_bench_relational_join_execution\nbenchmark completed: hawdb_bench_relational_join_execution (6s)\nbenchmark started: hawdb_bench_relational_join_planning\nbenchmark completed: hawdb_bench_relational_join_planning (0s)\nbenchmark started: hawdb_bench_aggregate_partial_spill\nbenchmark completed: hawdb_bench_aggregate_partial_spill (3s)\nbenchmark started: hawdb_bench_aggregate_hash\nbenchmark completed: hawdb_bench_aggregate_hash (25s)\nbenchmark started: hawdb_bench_canonical_point_lookup\nbenchmark completed: hawdb_bench_canonical_point_lookup (2s)\nbenchmark started: hawdb_bench_executor_vectorization\nbenchmark completed: hawdb_bench_executor_vectorization (106s)\n"
+}

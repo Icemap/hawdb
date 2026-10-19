@@ -1,0 +1,5 @@
+{
+  "original_bytes": 586,
+  "original_sha256": "9b33683cef9340c3947ffbb38bc9616855e50fd5c667a905a9849fe4c140799b",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_unit_analytics_rss_tests\n-----------------------------------------------------------------------------\n\nrunning 2 tests\ntest api::tests::graph_analytics::rss_child ... ok\ntest api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process has been running for over 60 seconds\ntest api::tests::graph_analytics::persistent_edges_stream_with_bounded_rss_in_an_isolated_process ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2107 filtered out; finished in 344.02s\n\n"
+}

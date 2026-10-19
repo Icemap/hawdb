@@ -1,0 +1,5 @@
+{
+  "original_bytes": 293,
+  "original_sha256": "b6b7af2bcd13222081cb34b98874ec6e166aae9cced354d1331205ef55bdb4c1",
+  "raw_utf8": "Cargo format check (workspace)...........................................Passed\nCargo Clippy (workspace, all targets and features).......................Passed\n[fix/986-ffi-refusal-format c87fc097] style(ffi): format retained refusal assertions\n 1 file changed, 7 insertions(+), 1 deletion(-)\n"
+}

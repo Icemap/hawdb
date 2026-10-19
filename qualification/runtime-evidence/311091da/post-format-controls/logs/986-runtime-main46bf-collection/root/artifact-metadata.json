@@ -1,0 +1,20 @@
+{
+  "id": 12172994456,
+  "node_id": "MDg6QXJ0aWZhY3QxMjE3Mjk5NDQ1Ng==",
+  "name": "runtime-qualification-root-ef412c48ba3a89b30abaf809e33512f58ed60e66",
+  "size_in_bytes": 138498,
+  "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/artifacts/12172994456",
+  "archive_download_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/artifacts/12172994456/zip",
+  "expired": false,
+  "digest": "sha256:2b4ef4abfd55fd403d495479f47714b6b732c5f845bcc2f06c4f5cd9dd886aed",
+  "created_at": "2026-10-19T08:55:35Z",
+  "updated_at": "2026-10-19T08:55:35Z",
+  "expires_at": "2027-01-17T08:23:03Z",
+  "workflow_run": {
+    "id": 39222367162,
+    "repository_id": 1300138241,
+    "head_repository_id": 1300138241,
+    "head_branch": "qualify/986-runtime-main46bfde00",
+    "head_sha": "ef412c48ba3a89b30abaf809e33512f58ed60e66"
+  }
+}

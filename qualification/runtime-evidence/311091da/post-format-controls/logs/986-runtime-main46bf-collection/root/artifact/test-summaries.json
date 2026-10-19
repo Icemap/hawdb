@@ -1,0 +1,1182 @@
+[
+  {
+    "label": "//:cargo_bazel_package_parity_script_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/cargo_bazel_package_parity_script_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398277418",
+      "lastStopTimeMillis": "1792398277904",
+      "totalRunDurationMillis": "486",
+      "runCount": 1,
+      "totalRunDuration": "0.486s",
+      "firstStartTime": "2026-10-19T08:24:37.418Z",
+      "lastStopTime": "2026-10-19T08:24:37.904Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:cargo_bazel_package_parity_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/cargo_bazel_package_parity_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398277479",
+      "lastStopTimeMillis": "1792398278222",
+      "totalRunDurationMillis": "743",
+      "runCount": 1,
+      "totalRunDuration": "0.743s",
+      "firstStartTime": "2026-10-19T08:24:37.479Z",
+      "lastStopTime": "2026-10-19T08:24:38.222Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:query_limit_inventory_script_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/query_limit_inventory_script_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398277587",
+      "lastStopTimeMillis": "1792398278017",
+      "totalRunDurationMillis": "430",
+      "runCount": 1,
+      "totalRunDuration": "0.430s",
+      "firstStartTime": "2026-10-19T08:24:37.587Z",
+      "lastStopTime": "2026-10-19T08:24:38.017Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_benchmark_dispatch_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_benchmark_dispatch_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398277415",
+      "lastStopTimeMillis": "1792398279279",
+      "totalRunDurationMillis": "1864",
+      "runCount": 1,
+      "totalRunDuration": "1.864s",
+      "firstStartTime": "2026-10-19T08:24:37.415Z",
+      "lastStopTime": "2026-10-19T08:24:39.279Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:root_unit_partition_script_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/root_unit_partition_script_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398278076",
+      "lastStopTimeMillis": "1792398279304",
+      "totalRunDurationMillis": "1228",
+      "runCount": 1,
+      "totalRunDuration": "1.228s",
+      "firstStartTime": "2026-10-19T08:24:38.076Z",
+      "lastStopTime": "2026-10-19T08:24:39.304Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_graph_text_dependency_boundary_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_graph_text_dependency_boundary_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398280464",
+      "lastStopTimeMillis": "1792398280539",
+      "totalRunDurationMillis": "75",
+      "runCount": 1,
+      "totalRunDuration": "0.075s",
+      "firstStartTime": "2026-10-19T08:24:40.464Z",
+      "lastStopTime": "2026-10-19T08:24:40.539Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_minimal_native_vector_boundary_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_minimal_native_vector_boundary_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398280587",
+      "lastStopTimeMillis": "1792398280652",
+      "totalRunDurationMillis": "65",
+      "runCount": 1,
+      "totalRunDuration": "0.065s",
+      "firstStartTime": "2026-10-19T08:24:40.587Z",
+      "lastStopTime": "2026-10-19T08:24:40.652Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:query_limit_inventory_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/query_limit_inventory_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398278843",
+      "lastStopTimeMillis": "1792398280292",
+      "totalRunDurationMillis": "1449",
+      "runCount": 1,
+      "totalRunDuration": "1.449s",
+      "firstStartTime": "2026-10-19T08:24:38.843Z",
+      "lastStopTime": "2026-10-19T08:24:40.292Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/system-sql:hawdb_system_sql_loom_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/system-sql/hawdb_system_sql_loom_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398432633",
+      "lastStopTimeMillis": "1792398435794",
+      "totalRunDurationMillis": "3161",
+      "runCount": 1,
+      "totalRunDuration": "3.161s",
+      "firstStartTime": "2026-10-19T08:27:12.633Z",
+      "lastStopTime": "2026-10-19T08:27:15.794Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_fallible_search_contract_minimal_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_fallible_search_contract_minimal_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398498547",
+      "lastStopTimeMillis": "1792398498594",
+      "totalRunDurationMillis": "47",
+      "runCount": 1,
+      "totalRunDuration": "0.047s",
+      "firstStartTime": "2026-10-19T08:28:18.547Z",
+      "lastStopTime": "2026-10-19T08:28:18.594Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_graph_text_consumer_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_graph_text_consumer_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398498625",
+      "lastStopTimeMillis": "1792398498680",
+      "totalRunDurationMillis": "55",
+      "runCount": 1,
+      "totalRunDuration": "0.055s",
+      "firstStartTime": "2026-10-19T08:28:18.625Z",
+      "lastStopTime": "2026-10-19T08:28:18.680Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_process_memory_policy_contract_minimal_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_process_memory_policy_contract_minimal_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398498711",
+      "lastStopTimeMillis": "1792398501001",
+      "totalRunDurationMillis": "2290",
+      "runCount": 1,
+      "totalRunDuration": "2.290s",
+      "firstStartTime": "2026-10-19T08:28:18.711Z",
+      "lastStopTime": "2026-10-19T08:28:21.001Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_minimal_consumer_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_minimal_consumer_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398503776",
+      "lastStopTimeMillis": "1792398503874",
+      "totalRunDurationMillis": "98",
+      "runCount": 1,
+      "totalRunDuration": "0.098s",
+      "firstStartTime": "2026-10-19T08:28:23.776Z",
+      "lastStopTime": "2026-10-19T08:28:23.874Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_wasm_playground_bridge_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_wasm_playground_bridge_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398503932",
+      "lastStopTimeMillis": "1792398505698",
+      "totalRunDurationMillis": "1766",
+      "runCount": 1,
+      "totalRunDuration": "1.766s",
+      "firstStartTime": "2026-10-19T08:28:23.932Z",
+      "lastStopTime": "2026-10-19T08:28:25.698Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_search_projection_consumer_minimal_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_search_projection_consumer_minimal_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398505766",
+      "lastStopTimeMillis": "1792398509448",
+      "totalRunDurationMillis": "3682",
+      "runCount": 1,
+      "totalRunDuration": "3.682s",
+      "firstStartTime": "2026-10-19T08:28:25.766Z",
+      "lastStopTime": "2026-10-19T08:28:29.448Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_search_generation_context_minimal_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_search_generation_context_minimal_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398509498",
+      "lastStopTimeMillis": "1792398512792",
+      "totalRunDurationMillis": "3294",
+      "runCount": 1,
+      "totalRunDuration": "3.294s",
+      "firstStartTime": "2026-10-19T08:28:29.498Z",
+      "lastStopTime": "2026-10-19T08:28:32.792Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_host_allocator_minimal_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_host_allocator_minimal_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398512851",
+      "lastStopTimeMillis": "1792398512948",
+      "totalRunDurationMillis": "97",
+      "runCount": 1,
+      "totalRunDuration": "0.097s",
+      "firstStartTime": "2026-10-19T08:28:32.851Z",
+      "lastStopTime": "2026-10-19T08:28:32.948Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_in_memory_portable_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_in_memory_portable_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398513041",
+      "lastStopTimeMillis": "1792398513366",
+      "totalRunDurationMillis": "325",
+      "runCount": 1,
+      "totalRunDuration": "0.325s",
+      "firstStartTime": "2026-10-19T08:28:33.041Z",
+      "lastStopTime": "2026-10-19T08:28:33.366Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_branch_project_open_minimal_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_branch_project_open_minimal_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398501054",
+      "lastStopTimeMillis": "1792398586594",
+      "totalRunDurationMillis": "85540",
+      "runCount": 1,
+      "totalRunDuration": "85.540s",
+      "firstStartTime": "2026-10-19T08:28:21.054Z",
+      "lastStopTime": "2026-10-19T08:29:46.594Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_process_memory_policy_contract_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_process_memory_policy_contract_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398585006",
+      "lastStopTimeMillis": "1792398588380",
+      "totalRunDurationMillis": "3374",
+      "runCount": 1,
+      "totalRunDuration": "3.374s",
+      "firstStartTime": "2026-10-19T08:29:45.006Z",
+      "lastStopTime": "2026-10-19T08:29:48.380Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_pgq_create_binder_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_pgq_create_binder_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398588403",
+      "lastStopTimeMillis": "1792398588432",
+      "totalRunDurationMillis": "29",
+      "runCount": 1,
+      "totalRunDuration": "0.029s",
+      "firstStartTime": "2026-10-19T08:29:48.403Z",
+      "lastStopTime": "2026-10-19T08:29:48.432Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_unit_concurrent_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_unit_concurrent_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398588461",
+      "lastStopTimeMillis": "1792398797976",
+      "totalRunDurationMillis": "209515",
+      "runCount": 1,
+      "totalRunDuration": "209.515s",
+      "firstStartTime": "2026-10-19T08:29:48.461Z",
+      "lastStopTime": "2026-10-19T08:33:17.976Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_unit_analytics_core_general_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_unit_analytics_core_general_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398635502",
+      "lastStopTimeMillis": "1792398682913",
+      "totalRunDurationMillis": "47411",
+      "runCount": 1,
+      "totalRunDuration": "47.411s",
+      "firstStartTime": "2026-10-19T08:30:35.502Z",
+      "lastStopTime": "2026-10-19T08:31:22.913Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_previous_wrapper_adapter_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_previous_wrapper_adapter_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398636920",
+      "lastStopTimeMillis": "1792398636992",
+      "totalRunDurationMillis": "72",
+      "runCount": 1,
+      "totalRunDuration": "0.072s",
+      "firstStartTime": "2026-10-19T08:30:36.920Z",
+      "lastStopTime": "2026-10-19T08:30:36.992Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_unit_row_page_compaction_materialized_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_unit_row_page_compaction_materialized_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398586629",
+      "lastStopTimeMillis": "1792398885283",
+      "totalRunDurationMillis": "298654",
+      "runCount": 1,
+      "totalRunDuration": "298.654s",
+      "firstStartTime": "2026-10-19T08:29:46.629Z",
+      "lastStopTime": "2026-10-19T08:34:45.283Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_default_consumer_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_default_consumer_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398845419",
+      "lastStopTimeMillis": "1792398845498",
+      "totalRunDurationMillis": "79",
+      "runCount": 1,
+      "totalRunDuration": "0.079s",
+      "firstStartTime": "2026-10-19T08:34:05.419Z",
+      "lastStopTime": "2026-10-19T08:34:05.498Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_background_maintenance_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_background_maintenance_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398845487",
+      "lastStopTimeMillis": "1792398846675",
+      "totalRunDurationMillis": "1188",
+      "runCount": 1,
+      "totalRunDuration": "1.188s",
+      "firstStartTime": "2026-10-19T08:34:05.487Z",
+      "lastStopTime": "2026-10-19T08:34:06.675Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_unit_recovery_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_unit_recovery_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398798009",
+      "lastStopTimeMillis": "1792398864310",
+      "totalRunDurationMillis": "66301",
+      "runCount": 1,
+      "totalRunDuration": "66.301s",
+      "firstStartTime": "2026-10-19T08:33:18.009Z",
+      "lastStopTime": "2026-10-19T08:34:24.310Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_search_projection_consumer_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_search_projection_consumer_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398885404",
+      "lastStopTimeMillis": "1792398887731",
+      "totalRunDurationMillis": "2327",
+      "runCount": 1,
+      "totalRunDuration": "2.327s",
+      "firstStartTime": "2026-10-19T08:34:45.404Z",
+      "lastStopTime": "2026-10-19T08:34:47.731Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_migration_gate_blocked_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_migration_gate_blocked_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398886619",
+      "lastStopTimeMillis": "1792398895635",
+      "totalRunDurationMillis": "9016",
+      "runCount": 1,
+      "totalRunDuration": "9.016s",
+      "firstStartTime": "2026-10-19T08:34:46.619Z",
+      "lastStopTime": "2026-10-19T08:34:55.635Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_branch_project_open_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_branch_project_open_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398911844",
+      "lastStopTimeMillis": "1792398973003",
+      "totalRunDurationMillis": "61159",
+      "runCount": 1,
+      "totalRunDuration": "61.159s",
+      "firstStartTime": "2026-10-19T08:35:11.844Z",
+      "lastStopTime": "2026-10-19T08:36:13.003Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_unit_row_page_compaction_admission_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_unit_row_page_compaction_admission_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398914139",
+      "lastStopTimeMillis": "1792398935613",
+      "totalRunDurationMillis": "21474",
+      "runCount": 1,
+      "totalRunDuration": "21.474s",
+      "firstStartTime": "2026-10-19T08:35:14.139Z",
+      "lastStopTime": "2026-10-19T08:35:35.613Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_acl_capability_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_acl_capability_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398923155",
+      "lastStopTimeMillis": "1792398923229",
+      "totalRunDurationMillis": "74",
+      "runCount": 1,
+      "totalRunDuration": "0.074s",
+      "firstStartTime": "2026-10-19T08:35:23.155Z",
+      "lastStopTime": "2026-10-19T08:35:23.229Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_execution_request_contract_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_execution_request_contract_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398885338",
+      "lastStopTimeMillis": "1792399084671",
+      "totalRunDurationMillis": "199333",
+      "runCount": 1,
+      "totalRunDuration": "199.333s",
+      "firstStartTime": "2026-10-19T08:34:45.338Z",
+      "lastStopTime": "2026-10-19T08:38:04.671Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_shadow_self_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_shadow_self_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399005806",
+      "lastStopTimeMillis": "1792399005832",
+      "totalRunDurationMillis": "26",
+      "runCount": 1,
+      "totalRunDuration": "0.026s",
+      "firstStartTime": "2026-10-19T08:36:45.806Z",
+      "lastStopTime": "2026-10-19T08:36:45.832Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_search_lexical_corpus_qualification_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_search_lexical_corpus_qualification_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399005874",
+      "lastStopTimeMillis": "1792399005897",
+      "totalRunDurationMillis": "23",
+      "runCount": 1,
+      "totalRunDuration": "0.023s",
+      "firstStartTime": "2026-10-19T08:36:45.874Z",
+      "lastStopTime": "2026-10-19T08:36:45.897Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_unit_storage_crash_matrix_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_unit_storage_crash_matrix_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399085933",
+      "lastStopTimeMillis": "1792399092261",
+      "totalRunDurationMillis": "6328",
+      "runCount": 1,
+      "totalRunDuration": "6.328s",
+      "firstStartTime": "2026-10-19T08:38:05.933Z",
+      "lastStopTime": "2026-10-19T08:38:12.261Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_fixture_contract_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_fixture_contract_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399085953",
+      "lastStopTimeMillis": "1792399086063",
+      "totalRunDurationMillis": "110",
+      "runCount": 1,
+      "totalRunDuration": "0.110s",
+      "firstStartTime": "2026-10-19T08:38:05.953Z",
+      "lastStopTime": "2026-10-19T08:38:06.063Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_unit_general_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_unit_general_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399085983",
+      "lastStopTimeMillis": "1792399251582",
+      "totalRunDurationMillis": "165599",
+      "runCount": 1,
+      "totalRunDuration": "165.599s",
+      "firstStartTime": "2026-10-19T08:38:05.983Z",
+      "lastStopTime": "2026-10-19T08:40:51.582Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399092315",
+      "lastStopTimeMillis": "1792399092931",
+      "totalRunDurationMillis": "616",
+      "runCount": 1,
+      "totalRunDuration": "0.616s",
+      "firstStartTime": "2026-10-19T08:38:12.315Z",
+      "lastStopTime": "2026-10-19T08:38:12.931Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_wal_group_commit_recovery_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_wal_group_commit_recovery_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399092433",
+      "lastStopTimeMillis": "1792399098071",
+      "totalRunDurationMillis": "5638",
+      "runCount": 1,
+      "totalRunDuration": "5.638s",
+      "firstStartTime": "2026-10-19T08:38:12.433Z",
+      "lastStopTime": "2026-10-19T08:38:18.071Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_search_generation_context_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_search_generation_context_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399258161",
+      "lastStopTimeMillis": "1792399259387",
+      "totalRunDurationMillis": "1226",
+      "runCount": 1,
+      "totalRunDuration": "1.226s",
+      "firstStartTime": "2026-10-19T08:40:58.161Z",
+      "lastStopTime": "2026-10-19T08:40:59.387Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_host_allocator_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_host_allocator_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399258651",
+      "lastStopTimeMillis": "1792399258686",
+      "totalRunDurationMillis": "35",
+      "runCount": 1,
+      "totalRunDuration": "0.035s",
+      "firstStartTime": "2026-10-19T08:40:58.651Z",
+      "lastStopTime": "2026-10-19T08:40:58.686Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_fallible_search_contract_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_fallible_search_contract_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399264292",
+      "lastStopTimeMillis": "1792399264333",
+      "totalRunDurationMillis": "41",
+      "runCount": 1,
+      "totalRunDuration": "0.041s",
+      "firstStartTime": "2026-10-19T08:41:04.292Z",
+      "lastStopTime": "2026-10-19T08:41:04.333Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_migration_gate_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_migration_gate_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399265522",
+      "lastStopTimeMillis": "1792399273331",
+      "totalRunDurationMillis": "7809",
+      "runCount": 1,
+      "totalRunDuration": "7.809s",
+      "firstStartTime": "2026-10-19T08:41:05.522Z",
+      "lastStopTime": "2026-10-19T08:41:13.331Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_storage_recovery_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_storage_recovery_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399265558",
+      "lastStopTimeMillis": "1792399266226",
+      "totalRunDurationMillis": "668",
+      "runCount": 1,
+      "totalRunDuration": "0.668s",
+      "firstStartTime": "2026-10-19T08:41:05.558Z",
+      "lastStopTime": "2026-10-19T08:41:06.226Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_unit_row_page_compaction_out_of_core_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_unit_row_page_compaction_out_of_core_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398984320",
+      "lastStopTimeMillis": "1792399269783",
+      "totalRunDurationMillis": "285463",
+      "runCount": 1,
+      "totalRunDuration": "285.463s",
+      "firstStartTime": "2026-10-19T08:36:24.320Z",
+      "lastStopTime": "2026-10-19T08:41:09.783Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399291336",
+      "lastStopTimeMillis": "1792399297432",
+      "totalRunDurationMillis": "6096",
+      "runCount": 1,
+      "totalRunDuration": "6.096s",
+      "firstStartTime": "2026-10-19T08:41:31.336Z",
+      "lastStopTime": "2026-10-19T08:41:37.432Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_unit_analytics_rss_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_unit_analytics_rss_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399297449",
+      "lastStopTimeMillis": "1792399641601",
+      "totalRunDurationMillis": "344152",
+      "runCount": 1,
+      "totalRunDuration": "344.152s",
+      "firstStartTime": "2026-10-19T08:41:37.449Z",
+      "lastStopTime": "2026-10-19T08:47:21.601Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_benchmark_index_restart_cost_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_benchmark_index_restart_cost_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399641623",
+      "lastStopTimeMillis": "1792399655043",
+      "totalRunDurationMillis": "13420",
+      "runCount": 1,
+      "totalRunDuration": "13.420s",
+      "firstStartTime": "2026-10-19T08:47:21.623Z",
+      "lastStopTime": "2026-10-19T08:47:35.043Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_optimizer_group_3_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_optimizer_group_3_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399655061",
+      "lastStopTimeMillis": "1792399712425",
+      "totalRunDurationMillis": "57364",
+      "runCount": 1,
+      "totalRunDuration": "57.364s",
+      "firstStartTime": "2026-10-19T08:47:35.061Z",
+      "lastStopTime": "2026-10-19T08:48:32.425Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_benchmark_relational_index_access_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_benchmark_relational_index_access_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399712442",
+      "lastStopTimeMillis": "1792399767348",
+      "totalRunDurationMillis": "54906",
+      "runCount": 1,
+      "totalRunDuration": "54.906s",
+      "firstStartTime": "2026-10-19T08:48:32.442Z",
+      "lastStopTime": "2026-10-19T08:49:27.348Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_relational_row_page_lending_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_relational_row_page_lending_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399767366",
+      "lastStopTimeMillis": "1792399767879",
+      "totalRunDurationMillis": "513",
+      "runCount": 1,
+      "totalRunDuration": "0.513s",
+      "firstStartTime": "2026-10-19T08:49:27.366Z",
+      "lastStopTime": "2026-10-19T08:49:27.879Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_benchmark_relational_index_page_cache_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_benchmark_relational_index_page_cache_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399767896",
+      "lastStopTimeMillis": "1792399768062",
+      "totalRunDurationMillis": "166",
+      "runCount": 1,
+      "totalRunDuration": "0.166s",
+      "firstStartTime": "2026-10-19T08:49:27.896Z",
+      "lastStopTime": "2026-10-19T08:49:28.062Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_benchmark_relational_oltp_mix_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_benchmark_relational_oltp_mix_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399768079",
+      "lastStopTimeMillis": "1792399773395",
+      "totalRunDurationMillis": "5316",
+      "runCount": 1,
+      "totalRunDuration": "5.316s",
+      "firstStartTime": "2026-10-19T08:49:28.079Z",
+      "lastStopTime": "2026-10-19T08:49:33.395Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_benchmark_integrity_checksum_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_benchmark_integrity_checksum_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399773412",
+      "lastStopTimeMillis": "1792399793890",
+      "totalRunDurationMillis": "20478",
+      "runCount": 1,
+      "totalRunDuration": "20.478s",
+      "firstStartTime": "2026-10-19T08:49:33.412Z",
+      "lastStopTime": "2026-10-19T08:49:53.890Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_wal_group_commit_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_wal_group_commit_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399793908",
+      "lastStopTimeMillis": "1792399985694",
+      "totalRunDurationMillis": "191786",
+      "runCount": 1,
+      "totalRunDuration": "191.786s",
+      "firstStartTime": "2026-10-19T08:49:53.908Z",
+      "lastStopTime": "2026-10-19T08:53:05.694Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_optimizer_summary_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_optimizer_summary_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399985801",
+      "lastStopTimeMillis": "1792399991688",
+      "totalRunDurationMillis": "5887",
+      "runCount": 1,
+      "totalRunDuration": "5.887s",
+      "firstStartTime": "2026-10-19T08:53:05.801Z",
+      "lastStopTime": "2026-10-19T08:53:11.688Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//:hawdb_linux_ci_optimizer_group_1_smoke_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/hawdb_linux_ci_optimizer_group_1_smoke_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399991707",
+      "lastStopTimeMillis": "1792400133604",
+      "totalRunDurationMillis": "141897",
+      "runCount": 1,
+      "totalRunDuration": "141.897s",
+      "firstStartTime": "2026-10-19T08:53:11.707Z",
+      "lastStopTime": "2026-10-19T08:55:33.604Z",
+      "attemptCount": 1
+    }
+  }
+]
