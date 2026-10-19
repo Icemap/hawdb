@@ -28,7 +28,11 @@ created directory and marker file, including on errors after native effects.
 Through that directory it writes the full bound marker with a CRC envelope,
 synchronizes the actual marker file, child namespace and original parent entry,
 then records `Recorded` through the original source ledger's sealed-candidate
-and file/parent barrier. Only a completed response exposes the original captured
+and file/parent barrier. Before exposure, `born_directory` checks that the
+installed marker is still the original native file with the expected bounded
+bytes and that the source ledger still records this operation as `Recorded`.
+A mismatch fails closed without granting producer access or clearing durable
+debt. Only a completed response with those checks exposes the original captured
 directory to a producer. The operation cannot be retried by guessing whether a
 failed syscall took effect. Drop performs no deletion or counter refund; pending
 and recorded rows remain retained durable debt, independent of the registry.
@@ -63,8 +67,9 @@ correct source admission and trustworthy completed synchronization. Torn marker
 bytes, actual descriptor admission and platform calls require native tests.
 
 Native coverage exercises collision refusal, original-parent label replacement,
-full bound marker/checksum, retained recorded debt after close/reopen, nonreuse,
-no registry activation and descriptor refusal before mkdir. Qualification must
+full bound marker/checksum, mutated marker refusal, same-byte native marker
+replacement refusal on Unix, retained recorded debt after close/reopen,
+nonreuse, no registry activation and descriptor refusal before mkdir. Qualification must
 record terminal test results separately; this document does not turn a defined
 test or a running crash-image campaign into a passing result.
 
@@ -75,7 +80,9 @@ There is no recovery constructor or adoption from marker/path equality.
 only attempts proven to own no entry; known-born and uncertain attempts remain
 retained debt. A lost response can leave a complete
 recorded birth but no live producer token. That outcome remains debt; it is not
-rollback. Target lease integration, explicit resolution with admitted native
+rollback. The born target can now acquire Search publication exclusion through
+its original native directory handle while retaining a borrow of the birth
+token; this is target custody only. Explicit resolution with admitted native
 custody, complete producer closure, stationary query views, selector/receipt
 publication, C..E validation and eventual known-debt reclamation remain required.
 Metadata/workspace physical accounting and all-platform lost/torn/reordered

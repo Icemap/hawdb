@@ -1376,6 +1376,69 @@ fn consumer_native_birth_target_lease_excludes_a_second_publication_owner() {
 }
 
 #[test]
+fn consumer_native_birth_refuses_mutated_marker_before_exposing_target() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let marker = fixture
+        .0
+        .join(pending.generation_name())
+        .join("consumer-birth.hawdb");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(marker)
+        .unwrap();
+    std::io::Write::write_all(&mut file, b"X").unwrap();
+    file.sync_all().unwrap();
+    let error = pending.born_directory().unwrap_err();
+    assert!(
+        error.to_string().contains("marker bytes changed"),
+        "{error}"
+    );
+    assert!(
+        hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(
+            &mut pending,
+            &hawdb_core::RuntimeTaskContext::default(),
+        )
+        .is_err()
+    );
+    assert_eq!(
+        allocation_evidence(&fixture).1["pending"][0]["native_birth"]["state"],
+        "Recorded"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn consumer_native_birth_refuses_replaced_marker_with_identical_bytes() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let generation = fixture.0.join(pending.generation_name());
+    let marker = generation.join("consumer-birth.hawdb");
+    let bytes = std::fs::read(&marker).unwrap();
+    std::fs::rename(&marker, generation.join("retained-original-marker")).unwrap();
+    std::fs::write(&marker, bytes).unwrap();
+    let error = pending.born_directory().unwrap_err();
+    assert!(
+        error.to_string().contains("marker identity changed"),
+        "{error}"
+    );
+    assert_eq!(
+        allocation_evidence(&fixture).1["pending"][0]["native_birth"]["state"],
+        "Recorded"
+    );
+}
+
+#[test]
 fn consumer_native_birth_collision_never_adopts_matching_marker_or_forgets_debt() {
     let fixture = Fixture::new();
     let mut db = fixture.database();

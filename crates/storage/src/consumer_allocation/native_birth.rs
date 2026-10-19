@@ -299,13 +299,51 @@ impl PendingConsumerGeneration {
         if self.phase != Phase::Recorded {
             return Err(invalid("native birth has no completed durable receipt"));
         }
+        let directory = self
+            .directory
+            .as_ref()
+            .expect("recorded birth retains directory");
+        let marker = self.marker.as_ref().expect("recorded birth retains marker");
+        let context = directory.operation_context();
+        if !directory.matches_child_file(&context, BIRTH_FILE, marker)? {
+            return Err(HawDBError::StorageIntegrity(
+                "consumer birth marker identity changed".into(),
+            ));
+        }
+        let mut observed = directory.open_child(&context, BIRTH_FILE)?;
+        let mut buffer = [0u8; 8192];
+        for expected in self.marker_bytes.chunks(buffer.len()) {
+            observed.read_exact(&mut buffer[..expected.len()])?;
+            if buffer[..expected.len()] != *expected {
+                return Err(HawDBError::StorageIntegrity(
+                    "consumer birth marker bytes changed".into(),
+                ));
+            }
+        }
+        if observed.read(&mut buffer[..1])? != 0 {
+            return Err(HawDBError::StorageIntegrity(
+                "consumer birth marker bytes changed".into(),
+            ));
+        }
+        let expected = NativeBirth::Recorded {
+            generation_name: self.generation_name().to_owned(),
+            parent_locator: self.parent_locator.clone(),
+        };
+        self.allocation
+            .as_ref()
+            .expect("recorded birth retains allocation")
+            .with_row(|row| {
+                if row.native_birth != expected {
+                    return Err(HawDBError::StorageIntegrity(
+                        "consumer birth ledger state changed".into(),
+                    ));
+                }
+                Ok(())
+            })?;
         // Returning even a borrowed directory can let a producer retain native
         // children or duplicate custody. Never later treat it as an unused birth.
         self.producer_exposed.store(true, Ordering::Relaxed);
-        Ok(self
-            .directory
-            .as_ref()
-            .expect("recorded birth retains directory"))
+        Ok(directory)
     }
 
     /// Settle only native evidence that proves this operation owns no entry.
