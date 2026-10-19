@@ -26,8 +26,8 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "683a39e65a982e7b95bbe3b0a015113727131a2d1630d04b46d000d0d528bf25",
-      "bytes": 9809,
+      "sha256": "7496e23afe0853d1810cb21e63a1243e4a8c018e173239636c50718fe3af818b",
+      "bytes": 10601,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-control-evidence-0c298984/qualification/final-control-evidence/0c298984/README.md"
     },
     {
@@ -788,14 +788,14 @@
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-pairs-audit.json",
-      "sha256": "b5f547727ff7057d3e87a58e77fb531a25a261073eba5b6d058dadd9d3548b89",
-      "bytes": 113336,
+      "sha256": "abea65a83c23e447f5cf38df9a771f0ec5ab5d15d3ec744e3f633c8e238b7db5",
+      "bytes": 126479,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-pairs-audit.json"
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-refusals-audit.json",
-      "sha256": "fbff08a04133cdc4c0591430be848487b40e9bb78eb9abec8b86463db5e5c174",
-      "bytes": 49580,
+      "sha256": "27576358990d6eb2ec2efbd1a436ace3d1e292f77d2dddaab347ff3d76c0d4ae",
+      "bytes": 62724,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-refusals-audit.json"
     },
     {
@@ -1549,9 +1549,27 @@
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12162425559.json"
     },
     {
+      "path": "original-matrix-snapshot/resources/artifact-12162883919.json",
+      "sha256": "336301f7c6819d309424db6c71e54a2756d98264e02ff5800fc59bb53ebcd813",
+      "bytes": 33168,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12162883919.json"
+    },
+    {
+      "path": "original-matrix-snapshot/resources/artifact-12163401804.json",
+      "sha256": "155239db1ef7714040d5868212c33b200d356d3ed2f5a2a27d8a414f64b74685",
+      "bytes": 38363,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12163401804.json"
+    },
+    {
+      "path": "original-matrix-snapshot/resources/artifact-12164042586.json",
+      "sha256": "65cc071c81407b2a8bad407f0dd372fdbf0a76c1a673197707a9c4fd5fa976a8",
+      "bytes": 38274,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12164042586.json"
+    },
+    {
       "path": "original-matrix-snapshot/resources-summary.json",
-      "sha256": "f1dd3e5ab10678b6f9d0e52f8675945e7e3d927601274bdedf75d6cb5b0f9061",
-      "bytes": 247646,
+      "sha256": "2e144fa67ea6ffc78dcd59a2ff82cc9f0ca7b8ee4f036e333ace8fe3ac339d71",
+      "bytes": 255828,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/summary.json"
     },
     {
@@ -3279,14 +3297,14 @@
       "summary_sha256": "800111bf7c796a3e5e3b83b285f76964a23681a9ec1d0d72e8b5e13626afeebf"
     },
     "resources": {
-      "audited": 65,
+      "audited": 68,
       "expected": 110,
       "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
       "run": 39154779183,
-      "summary_sha256": "f1dd3e5ab10678b6f9d0e52f8675945e7e3d927601274bdedf75d6cb5b0f9061"
+      "summary_sha256": "2e144fa67ea6ffc78dcd59a2ff82cc9f0ca7b8ee4f036e333ace8fe3ac339d71"
     }
   },
-  "updated_at": 1792383064.1772768,
+  "updated_at": 1792385913.2472188,
   "numeric20_original_controls": {
     "positive": 12,
     "default_memory_refusals": 4,
@@ -3348,8 +3366,8 @@
     "paired_ratio": null
   },
   "original_100k_wide_resource_slice": {
-    "groups": 3,
-    "both_sides_refuse": 3,
+    "groups": 6,
+    "both_sides_refuse": 6,
     "latency_ratio": null,
     "native_and_RSS_scope": "full producer/process includes setup, warmup and cleanup; no memory-bound or leak claim",
     "python_foreign_heap": "original field absent; narrow select supplement not relabeled as wide"
