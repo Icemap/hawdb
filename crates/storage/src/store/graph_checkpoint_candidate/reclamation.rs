@@ -34,6 +34,7 @@ impl GraphStore {
         })?;
         // Cleanup cannot append to the serving WAL or retain its append handle.
         durable.wal_append_file = None;
+        durable.wal_append_owner = None;
         Ok(CheckpointReclamationContext {
             durable,
             _branch_lease: self.branch_lease.clone(),

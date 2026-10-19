@@ -1064,12 +1064,14 @@ impl GraphStore {
         let max_wal_bytes = request.replay_config.max_bytes.unwrap_or(u64::MAX);
         let mut captured_active_wal = if project.is_some() {
             let directory = branch_lease.captured_directory();
-            let file = directory
-                .open_child(
-                    &directory.operation_context(),
-                    &crate::artifact_files::wal_generation_file(head.active_wal.generation),
-                )
-                .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
+            let name = crate::artifact_files::wal_generation_file(head.active_wal.generation);
+            let context = directory.operation_context();
+            let file = if read_only {
+                directory.open_child(&context, &name)
+            } else {
+                directory.open_wal_append_child(&context, &name)
+            }
+            .map_err(|error| BranchAdmissionError::Recovery(error.into()))?;
             Some(
                 branch_head::validate_active_wal_prefix_from_open_file(
                     file,
@@ -1214,11 +1216,19 @@ impl GraphStore {
         // cleanup before another opener can acquire ownership of this UUID.
         match result {
             Ok((mut store, catalog)) => {
-                store.branch_lease = Some(branch_lease);
+                store.branch_lease = Some(Arc::clone(&branch_lease));
                 let durable = store
                     .durable
                     .as_mut()
                     .expect("admission opened a durable store");
+                if !read_only && let Some(file) = captured_active_wal.take() {
+                    durable.wal_append_file = Some(Arc::new(file));
+                    durable.wal_append_owner = Some(branch_lease);
+                    #[cfg(test)]
+                    {
+                        durable.wal_append_open_count = 1;
+                    }
+                }
                 let runtime_owner = durable.retain_admitted_runtime();
                 durable.branch_runtime = Some(BranchRuntimeBinding {
                     catalog_path: request.catalog_path.to_path_buf(),
@@ -1542,6 +1552,7 @@ impl GraphStore {
             ));
         }
         durable.wal_append_file = None;
+        durable.wal_append_owner = None;
         durable.wal_path = prepared.rotation.next_wal_path;
         durable.wal_generation = prepared.rotation.next_generation;
         durable.wal_replay_start_lsn = prepared.rotation.next_start_lsn;
@@ -1808,6 +1819,7 @@ impl GraphStore {
         }
         durable.wal_path = path.to_path_buf();
         durable.wal_append_file = None;
+        durable.wal_append_owner = None;
         durable.wal_generation = generation;
         durable.wal_replay_start_lsn = start_lsn;
         let repair_directory = path.parent().ok_or_else(|| {
@@ -3129,6 +3141,174 @@ mod tests {
         std::fs::rename(&moved, &wal).unwrap();
         let admitted = GraphStore::admit_captured_branch(request()).unwrap();
         assert_eq!(admitted.store().node_count_for_label(None), 3);
+    }
+
+    #[test]
+    fn captured_active_wal_writer_reuses_replayed_handle_across_sync_policies() {
+        use std::io::{Seek, SeekFrom};
+        for durability in [
+            DurabilityPolicy::SyncOnEveryWrite,
+            DurabilityPolicy::SyncOnCheckpoint,
+        ] {
+            let mut fixture = BranchFixture::new();
+            let project = fixture.capture_project(32);
+            let revision = project.metadata().unwrap().main().metadata_revision;
+            let request = || CapturedBranchAdmissionRequest {
+                project: &project,
+                branch_id: fixture.main,
+                expected_metadata_revision: revision,
+                durability,
+                replay_config: WalReplayConfig {
+                    max_open_files: 32,
+                    ..Default::default()
+                },
+                read_only: false,
+            };
+            let (mut store, mut schema) = GraphStore::admit_captured_branch(request())
+                .unwrap()
+                .into_parts();
+            let durable = store.durable.as_ref().unwrap();
+            assert!(durable.wal_append_owner.is_some());
+            let wal = durable.wal_path.clone();
+            let before = std::fs::read(&wal).unwrap();
+            let mut handle = durable.wal_append_file.as_ref().unwrap().as_ref();
+            handle.seek(SeekFrom::Start(0)).unwrap();
+            crate::store::set_wal_append_failpoint(crate::store::WalAppendFailure::PartialWrite);
+            assert!(matches!(
+                store.create_node(&mut schema, "Seed", BTreeMap::new()),
+                Err(HawDBError::Storage(_))
+            ));
+            store.ensure_usable().unwrap();
+            assert_eq!(std::fs::read(&wal).unwrap(), before);
+            let grouped = store.begin_wal_sync_group().unwrap();
+            assert_eq!(grouped, durability == DurabilityPolicy::SyncOnEveryWrite);
+            store
+                .create_node(&mut schema, "Seed", BTreeMap::new())
+                .unwrap();
+            store
+                .create_node(&mut schema, "Seed", BTreeMap::new())
+                .unwrap();
+            store.finish_wal_sync_group().unwrap();
+            let mut source = store.checkpoint_source();
+            let epoch = source
+                .durable
+                .as_mut()
+                .unwrap()
+                .synchronize_source_prefix()
+                .unwrap();
+            assert_eq!(epoch, store.commit_epoch());
+            assert_eq!(store.durable.as_ref().unwrap().wal_append_open_count, 1);
+            drop(source);
+            drop(store);
+            let reopened = GraphStore::admit_captured_branch(request()).unwrap();
+            assert_eq!(reopened.store().node_count_for_label(None), 4);
+        }
+    }
+
+    #[test]
+    fn captured_active_wal_writer_preserves_foreign_name_before_and_after_append_admission() {
+        for after_admission in [false, true] {
+            let mut fixture = BranchFixture::new();
+            let project = fixture.capture_project(32);
+            let revision = project.metadata().unwrap().main().metadata_revision;
+            let request = || CapturedBranchAdmissionRequest {
+                project: &project,
+                branch_id: fixture.main,
+                expected_metadata_revision: revision,
+                durability: DurabilityPolicy::default(),
+                replay_config: WalReplayConfig {
+                    max_open_files: 32,
+                    ..Default::default()
+                },
+                read_only: false,
+            };
+            let (mut store, mut schema) = GraphStore::admit_captured_branch(request())
+                .unwrap()
+                .into_parts();
+            let wal = store.durable.as_ref().unwrap().wal_path.clone();
+            let saved = wal.with_extension("original");
+            let before = std::fs::read(&wal).unwrap();
+            let named = wal.clone();
+            let original = saved.clone();
+            let foreign = before.clone();
+            let replace = move || {
+                std::fs::rename(&named, original).unwrap();
+                std::fs::write(named, foreign).unwrap();
+            };
+            if after_admission {
+                super::super::durable::AFTER_CAPTURED_WAL_APPEND_OPEN
+                    .with(|hook| *hook.borrow_mut() = Some(Box::new(replace)));
+            } else {
+                replace();
+            }
+            let result = store.create_node(&mut schema, "Seed", BTreeMap::new());
+            assert!(
+                matches!(result, Err(HawDBError::StorageIntegrity(message)) if message.contains("captured active WAL writer was replaced"))
+            );
+            assert!(store.ensure_usable().is_err());
+            assert_eq!(std::fs::read(&wal).unwrap(), before);
+            if after_admission {
+                assert!(std::fs::metadata(&saved).unwrap().len() > before.len() as u64);
+                let file = store
+                    .durable
+                    .as_ref()
+                    .unwrap()
+                    .wal_append_file
+                    .as_ref()
+                    .unwrap();
+                assert!(file.matches_native_path(&saved).unwrap());
+            } else {
+                assert_eq!(std::fs::read(&saved).unwrap(), before);
+            }
+            drop(store);
+            std::fs::remove_file(&wal).unwrap();
+            std::fs::rename(saved, &wal).unwrap();
+            let reopened = GraphStore::admit_captured_branch(request()).unwrap();
+            // A complete write may recover despite its uncertain acknowledgment.
+            assert_eq!(
+                reopened.store().node_count_for_label(None),
+                if after_admission { 3 } else { 2 }
+            );
+        }
+    }
+
+    #[test]
+    fn captured_active_wal_writer_retains_original_file_after_uncertain_sync_failure() {
+        let mut fixture = BranchFixture::new();
+        let project = fixture.capture_project(32);
+        let revision = project.metadata().unwrap().main().metadata_revision;
+        let request = || CapturedBranchAdmissionRequest {
+            project: &project,
+            branch_id: fixture.main,
+            expected_metadata_revision: revision,
+            durability: DurabilityPolicy::default(),
+            replay_config: WalReplayConfig {
+                max_open_files: 32,
+                ..Default::default()
+            },
+            read_only: false,
+        };
+        let (mut store, mut schema) = GraphStore::admit_captured_branch(request())
+            .unwrap()
+            .into_parts();
+        let before = store.durable.as_ref().unwrap().wal_bytes;
+        crate::store::set_wal_append_failpoint(crate::store::WalAppendFailure::Sync);
+        assert!(matches!(
+            store.create_node(&mut schema, "Seed", BTreeMap::new()),
+            Err(HawDBError::StorageIntegrity(_))
+        ));
+        assert!(store.ensure_usable().is_err());
+        let durable = store.durable.as_ref().unwrap();
+        let file = durable
+            .wal_append_file
+            .as_ref()
+            .expect("uncertain captured WAL must retain its original native file");
+        assert!(file.matches_native_path(&durable.wal_path).unwrap());
+        assert!(file.metadata().unwrap().len() > before);
+        assert_eq!(durable.wal_bytes, before);
+        drop(store);
+        let reopened = GraphStore::admit_captured_branch(request()).unwrap();
+        assert_eq!(reopened.store().node_count_for_label(None), 3);
     }
 
     #[test]

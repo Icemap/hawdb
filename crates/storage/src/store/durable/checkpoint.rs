@@ -439,6 +439,7 @@ impl DurableStore {
     ) -> Result<()> {
         let generation = manifest.checkpoint_epoch;
         self.wal_append_file = None;
+        self.wal_append_owner = None;
         self.checkpoint_path = manifest.checkpoint_path(&self.root_path);
         self.wal_path = manifest.wal_path(&self.root_path);
         self.checkpoint_encoded_len = manifest.checkpoint_encoded_len;

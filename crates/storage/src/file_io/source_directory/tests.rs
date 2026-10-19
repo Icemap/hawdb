@@ -4,7 +4,7 @@
 use super::*;
 use crate::file_descriptors::ProjectFileDescriptors;
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 struct Fixture {
@@ -958,4 +958,60 @@ fn invalid_directory_names_and_foreign_domain_refuse_before_creation() {
     assert_eq!(fs::read_dir(&foreign.root).unwrap().count(), 0);
     assert_eq!(fixture.project.metrics().open, 1);
     assert_eq!(foreign.project.metrics().open, 0);
+}
+
+#[test]
+fn captured_wal_append_preserves_end_of_file_after_reads_and_name_replacement() {
+    let fixture = Fixture::new(8);
+    let context = fixture.project.io_context();
+    let path = fixture.root.join("wal.1.hawdb");
+    let saved = fixture.root.join("saved.hawdb");
+    fs::write(&path, b"prefix").unwrap();
+    let directory = fixture.capture(&fixture.root);
+    let mut file = directory
+        .open_wal_append_child(&context, "wal.1.hawdb")
+        .unwrap();
+    let mut prefix = [0; 6];
+    file.read_exact(&mut prefix).unwrap();
+    assert_eq!(&prefix, b"prefix");
+    file.seek(SeekFrom::Start(0)).unwrap();
+    file.write_all(b"-one").unwrap();
+    file.sync_all().unwrap();
+    assert_eq!(fs::read(&path).unwrap(), b"prefix-one");
+    fs::rename(&path, &saved).unwrap();
+    fs::write(&path, b"foreign").unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
+    file.write_all(b"-torn").unwrap();
+    file.rollback_wal_append(10, b"unused").unwrap();
+    directory.sync(&context).unwrap();
+    assert_eq!(fs::read(saved).unwrap(), b"prefix-one");
+    assert_eq!(fs::read(&path).unwrap(), b"foreign");
+    assert!(!file.matches_native_path(&path).unwrap());
+    drop((file, directory));
+    assert_eq!(fixture.project.metrics().open, 0);
+}
+
+#[cfg(windows)]
+#[test]
+fn captured_wal_append_resize_refuses_at_the_original_descriptor_cap_and_retries() {
+    let fixture = Fixture::new(3);
+    let context = fixture.project.io_context();
+    let path = fixture.root.join("wal.1.hawdb");
+    fs::write(&path, b"prefix").unwrap();
+    let directory = fixture.capture(&fixture.root);
+    let mut file = directory
+        .open_wal_append_child(&context, "wal.1.hawdb")
+        .unwrap();
+    let blocker = crate::file_io::File::open(&path).unwrap();
+    file.write_all(b"-partial").unwrap();
+    assert_eq!(fixture.project.metrics().open, 3);
+    assert!(file.rollback_wal_append(6, b"unused").is_err());
+    assert_eq!(fs::read(&path).unwrap(), b"prefix-partial");
+    assert_eq!(fixture.project.metrics().open, 3);
+    drop(blocker);
+    file.rollback_wal_append(6, b"unused").unwrap();
+    assert_eq!(fs::read(&path).unwrap(), b"prefix");
+    assert_eq!(fixture.project.metrics().open, 2);
+    drop((file, directory));
+    assert_eq!(fixture.project.metrics().open, 0);
 }

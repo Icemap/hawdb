@@ -158,13 +158,14 @@ jobs:
             --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/captured-branch-admission.txt
 
-      - name: Test captured active WAL replay and guarded repair
+      - name: Test captured active WAL replay, append, rollback and guarded repair
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -euo pipefail
           bash scripts/cargo-test-required.sh --locked -p hawdb-storage --all-features --lib \
-            -- captured_active_wal_ opened_wal_prefix_ held_wal_rollback_ \
+            -- captured_active_wal_ opened_wal_prefix_ \
+            held_wal_rollback_ captured_wal_append_ captured_wal_namespace_barrier_ \
             --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/captured-active-wal.txt
 

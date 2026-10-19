@@ -27,6 +27,10 @@ pub(crate) struct NativeTrace {
 }
 
 impl NativeTrace {
+    pub(crate) fn mark_append(&mut self) {
+        self.append = true;
+    }
+
     pub(super) fn from_directory(
         core: Arc<ModelCore>,
         inode: InodeId,

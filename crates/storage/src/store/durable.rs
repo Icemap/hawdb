@@ -92,6 +92,9 @@ pub(super) struct DurableStore {
     stable_id_mapping_path: PathBuf,
     pub(super) wal_path: PathBuf,
     pub(super) wal_append_file: Option<Arc<File>>,
+    // Current captured generation only. Explicit checkpoint/rotation transitions
+    // still use their legacy paths and clear this custody until native adoption.
+    pub(super) wal_append_owner: Option<Arc<DatabaseDirectoryLease>>,
     #[cfg(test)]
     pub(super) wal_append_open_count: usize,
     pub(super) checkpoint_encoded_len: Option<u64>,
@@ -556,6 +559,7 @@ impl DurableStore {
             stable_id_mapping_path: artifact_path.join(STABLE_ID_MAPPING_FILE),
             wal_path,
             wal_append_file: None,
+            wal_append_owner: None,
             #[cfg(test)]
             wal_append_open_count: 0,
             checkpoint_encoded_len: manifest.checkpoint_encoded_len,
@@ -783,4 +787,11 @@ impl DurableStore {
         }
         Ok(())
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(in crate::store) static AFTER_CAPTURED_WAL_APPEND_OPEN: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const {
+        std::cell::RefCell::new(None)
+    };
 }

@@ -184,6 +184,16 @@ pub(super) fn open_root(path: &Path) -> io::Result<std::fs::File> {
         .open(path)
 }
 
+pub(super) fn open_wal_append_child(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+) -> io::Result<std::fs::File> {
+    // FILE_GENERIC_WRITE without FILE_WRITE_DATA preserves kernel append-only
+    // semantics after reads/seeks. Add FILE_READ_DATA for prefix/cursor replay.
+    // Resizing requires a separately charged original-object ReOpenFile handle.
+    relative_open(root, name, READ_DATA | 0x0012_0114, false)
+}
+
 pub(super) fn open_mutable_child(
     root: &std::fs::File,
     name: ChildName<'_>,

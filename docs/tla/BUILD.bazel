@@ -1043,3 +1043,27 @@ tla_check(
     )
     for control in ["PathRollback", "UnlinkName", "DropBeforeRollback", "SkipNameFence", "SkipEmptyHeader"]
 ]
+
+# Current captured WAL replay hands its native append file into the writer.
+[
+    genrule(
+        name = "HawDBCapturedWalWriter" + control + "_config",
+        srcs = ["HawDBCapturedWalWriter.cfg"],
+        outs = ["generated/HawDBCapturedWalWriter" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBCapturedWalWriter.cfg) > $@",
+        tags = ["manual"],
+    )
+    for control in ["PathAppend", "PathBarrier", "DropCapture", "SkipFence", "NoAppendSemantics", "DropUncertainFile"]
+]
+[
+    tla_check(
+        name = "HawDBCapturedWalWriter" + control + "_check",
+        module = "HawDBCapturedWalWriter.tla",
+        config = ":HawDBCapturedWalWriter" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["PathAppend", "PathBarrier", "DropCapture", "SkipFence", "NoAppendSemantics", "DropUncertainFile"]
+]

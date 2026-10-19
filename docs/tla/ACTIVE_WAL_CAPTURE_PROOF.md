@@ -79,7 +79,7 @@ fails on the foreign suffix; that is not a successful custody refusal.
 
 These changes qualify active-WAL reads, not every WAL lifecycle operation.
 [Held append rollback](HELD_WAL_ROLLBACK_PROOF.md) separately restores the actual
-partial-write object without pathname truncation or unlink. Append-handle
+partial-write object without pathname truncation or unlink. Legacy append-handle
 opening, rotation, checkpoints, sealed-object staging,
 doctor sidecars, quarantine, runtime/data/root-registry paths and later writes
 are not all migrated. Source-root and file-name fences are observations, not
@@ -101,3 +101,7 @@ behavior without an added seek; captured cursors alone rewind the validated file
 Actual control executables, source and log hashes are archived. These are local
 functional checks; native Windows guarded-repair behavior and full power-loss
 qualification are not inferred from them.
+
+[Current-generation writer handoff](CAPTURED_WAL_WRITER_PROOF.md) now retains
+the writable replay handle for native append and original-directory barriers.
+Explicit generation transitions remain outside that capture window.

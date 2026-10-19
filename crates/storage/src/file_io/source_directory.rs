@@ -33,6 +33,12 @@ mod platform {
     ) -> io::Result<std::fs::File> {
         Err(unsupported())
     }
+    pub(super) fn open_wal_append_child(
+        _root: &std::fs::File,
+        _name: ChildName<'_>,
+    ) -> io::Result<std::fs::File> {
+        Err(unsupported())
+    }
     pub(super) fn open_mutable_child(
         _root: &std::fs::File,
         _name: ChildName<'_>,
@@ -381,6 +387,26 @@ impl SourceDirectory {
         name: &str,
         kind: DescriptorKind,
     ) -> io::Result<File> {
+        self.open_existing_child(context, name, kind, false)
+    }
+
+    /// Existing current-generation WAL only: no create, truncate or publication.
+    /// Reading and appending share one native object and its original account.
+    pub(crate) fn open_wal_append_child(
+        &self,
+        context: &FileOpenContext,
+        name: &str,
+    ) -> io::Result<File> {
+        self.open_existing_child(context, name, DescriptorKind::MutableWal, true)
+    }
+
+    fn open_existing_child(
+        &self,
+        context: &FileOpenContext,
+        name: &str,
+        kind: DescriptorKind,
+        append: bool,
+    ) -> io::Result<File> {
         self.require_context(context)?;
         let name = ChildName::new(name)?;
         let _native = native_scope(context)?;
@@ -388,13 +414,22 @@ impl SourceDirectory {
         let permit = context.acquire(kind)?;
         let open = || {
             self.root
-                .with_native(|root| platform::open_child(root, name))
+                .with_native(|root| {
+                    if append {
+                        platform::open_wal_append_child(root, name)
+                    } else {
+                        platform::open_child(root, name)
+                    }
+                })
                 .map_err(|error| context.map_open_error(error))
         };
         #[cfg(any(test, feature = "test-support"))]
         let (inner, trace) = match self.trace.as_deref() {
             Some(trace) => {
-                let (inner, trace) = trace.open_child(Path::new(name.0), open)?;
+                let (inner, mut trace) = trace.open_child(Path::new(name.0), open)?;
+                if append {
+                    trace.mark_append();
+                }
                 (inner, Some(Box::new(trace)))
             }
             None => (open()?, None),

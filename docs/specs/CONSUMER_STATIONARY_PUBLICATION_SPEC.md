@@ -55,8 +55,13 @@ not migrate object/WAL/runtime/root-registry I/O or grant ledger authority; see
 [the kernel metadata boundary](../tla/BRANCH_ADMISSION_CAPTURE_PROOF.md).
 Active WAL prefix verification and replay now consume one file opened through
 that UUID owner, retaining it through name checks before installation. Remaining
-WAL writes/doctor/runtime operations are not thereby qualified; see
+WAL generation/doctor/runtime operations are not thereby qualified; see
 [the WAL custody refinement](../tla/ACTIVE_WAL_CAPTURE_PROOF.md).
+Writable captured admission also hands the same native append-capable file and
+original directory into its current-generation writer and prefix/group barriers.
+Generation transitions still clear that capture and use legacy paths; this does
+not mint Consumer ledger/birth authority. See the
+[current-generation writer argument](../tla/CAPTURED_WAL_WRITER_PROOF.md).
 Pending-child completion with that capture needs five charged slots on Unix
 and six on Windows, whose policy retains a write-capable candidate through the
 separately admitted rename. Native Windows confirmed typed refusal at five in

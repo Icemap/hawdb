@@ -805,3 +805,65 @@ fn last_relative_file_keeps_the_model_anchor_after_directory_and_model_handles_c
     drop((file, source));
     assert_eq!(fixture.project.metrics().open, 0);
 }
+
+#[test]
+fn captured_wal_append_records_real_append_offsets_and_required_prefix_barriers() {
+    let fixture = Fixture::new(8, ImageLimits::default());
+    fixture.write("wal.1.hawdb", b"header");
+    let baseline_descriptors = fixture.project.metrics().open;
+    let directory = fixture.source("");
+    let context = fixture.project.io_context();
+    let mut file = directory
+        .open_wal_append_child(&context, "wal.1.hawdb")
+        .unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
+    file.write_all(b"-commit").unwrap();
+    let unsynced = fixture.model().capture().unwrap();
+    assert_eq!(
+        unsynced
+            .crash(&CrashPlan::default())
+            .unwrap()
+            .bytes(Path::new("wal.1.hawdb"))
+            .unwrap(),
+        b"header"
+    );
+    let expected = b"header-commit";
+    assert_eq!(
+        unsynced
+            .crash(&unsynced.persist_all_plan())
+            .unwrap()
+            .bytes(Path::new("wal.1.hawdb"))
+            .unwrap(),
+        expected
+    );
+    file.sync_data().unwrap();
+    let synced = fixture.model().capture().unwrap();
+    assert_eq!(
+        synced
+            .crash(&CrashPlan::default())
+            .unwrap()
+            .bytes(Path::new("wal.1.hawdb"))
+            .unwrap(),
+        expected
+    );
+    file.seek(SeekFrom::Start(0)).unwrap();
+    file.write_all(b"-torn").unwrap();
+    file.rollback_wal_append(expected.len() as u64, b"unused")
+        .unwrap();
+    directory.sync(&context).unwrap();
+    let repaired = fixture.model().capture().unwrap();
+    assert_eq!(
+        repaired
+            .crash(&CrashPlan::default())
+            .unwrap()
+            .bytes(Path::new("wal.1.hawdb"))
+            .unwrap(),
+        expected
+    );
+    assert_eq!(
+        std::fs::read(fixture.root.join("wal.1.hawdb")).unwrap(),
+        expected
+    );
+    drop((file, directory));
+    assert_eq!(fixture.project.metrics().open, baseline_descriptors);
+}
