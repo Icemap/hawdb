@@ -73,6 +73,7 @@ establish that every remaining resource failure in this inventory is structured.
 | --- | --- | --- | --- |
 | [Resident Search](../crates/search/src/lib.rs), ranked page construction | A | `limit` / `offset` choose the requested page. `SearchTruncationReasonCode::LimitExceeded` means more matching hits exist beyond that page. | Do not reuse this reason for a resource-induced loss of candidates. |
 | [Out-of-core Search](../crates/search/src/out_of_core.rs), page construction | A + C | Same page semantics; score-window requests exceeding `max_score_entries` fail before work. | Keep resident/out-of-core page parity. |
+| [Selected document hydration](../crates/search/src/out_of_core/hydration.rs), serving and mutation-target resolution | C | `max_hydrated_bytes` refuses the complete operation with operator-scoped `ResourceBudgetExceeded`. Metadata names the configured cap, the rejected document's payload bytes, and cumulative selected payload across segments. Range/checksum validation retains its error precedence. | This post-decode payload check is not allocation admission or an RSS bound. Document-count limits and defensive aggregate consistency checks remain separate diagnostic strings. |
 | [Lexical query admission](../crates/search/src/lexical_projection.rs), `tokenize_accounted`, score entry points | C | Too many query terms, oversized terms, score-state or working admission failures return errors. The query is not reduced to its first terms. | Several errors remain storage/execution diagnostic strings. |
 | [Lexical ScoreCollector](../crates/search/src/lexical_projection.rs) | A + C | An explicit retained top-K window selects the best scores while visiting eligible input. Full collection exceeding its entry allowance fails. | Filtering must precede top-K; pruning must preserve the requested ranking. |
 | [Metadata candidate spill](../crates/search/src/out_of_core.rs), `build_candidate_set` | C | Candidate blocks spill under byte limits. An oversized block or exhausted total spill allowance returns an error. | This is complete candidate enumeration, not a top-K producer. |
@@ -166,8 +167,9 @@ Update report inventory records only after that producer review.
 
 ## Remaining #996 requirements
 
-- Derive graph expansion capacity from admitted memory/spill policy instead of
-  treating fixed planner constants as host budget scaling.
+- Keep graph expansion capacity tied to admitted memory/spill policy. The
+  merged #1078 regression covers 8,193 candidates and more than 8 MiB of payload,
+  with low-budget refusal and complete output at a larger admitted budget.
 - Convert remaining operator-local string-only refusals as those stages are
   touched; ledger and governed spill refusals already expose structured metadata.
 - Preserve contextual sibling cancellation and original-cause propagation when
