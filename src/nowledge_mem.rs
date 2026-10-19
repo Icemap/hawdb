@@ -10630,11 +10630,13 @@ mod tests {
     }
 
     #[test]
-    fn embedded_store_scheduled_catch_up_reports_batch_budget_exhaustion() {
+    fn embedded_store_scheduled_catch_up_rejects_partial_source_interval_and_retries() {
         let root = unique_nowledge_mem_test_dir("embedded_scheduled_catch_up_budget");
         let search_path = root.join("search");
+        let database = Database::new();
+        let scheduler = database.local_qos_scheduler();
         let mut graph =
-            NowledgeMemGraph::from_database(Database::new(), NowledgeMemGraphMode::WritableCutover);
+            NowledgeMemGraph::from_database(database, NowledgeMemGraphMode::WritableCutover);
         graph
             .query("CREATE (:Memory {id: 'first', title: 'First'})")
             .unwrap();
@@ -10644,19 +10646,46 @@ mod tests {
         let projection =
             NowledgeMemSearchProjection::from_index(SearchIndex::open(&search_path).unwrap());
         let mut store = NowledgeMemEmbeddedStore::new(graph, Some(projection));
-        let report = store.catch_up_search_projection_scheduled(1, 1).unwrap();
+        let error = store
+            .catch_up_search_projection_scheduled(1, 1)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("complete-through epoch 1 differs from source snapshot epoch 2"),
+            "{error}"
+        );
+        let projection = store.search_projection().unwrap();
+        assert!(projection.index().document("memory:first").is_none());
+        assert!(projection.index().document("memory:second").is_none());
+        let freshness = projection.index().projection_freshness();
+        assert_eq!(freshness.source_graph_commit_epoch, None);
+        assert_eq!(freshness.durable_source_graph_commit_epoch, None);
+        assert!(!freshness.has_uncheckpointed_changes);
+        assert_eq!(scheduler.state().running_background_operations, 0);
 
+        let report = store.catch_up_search_projection_scheduled(2, 1).unwrap();
         assert_eq!(
             report.stop_reason,
-            crate::SearchProjectionCatchUpStopReason::BatchBudgetExhausted
+            crate::SearchProjectionCatchUpStopReason::CaughtUp
         );
-        assert!(!report.catch_up.complete);
+        assert!(report.catch_up.complete);
         assert_eq!(report.catch_up.applied_batch_count, 1);
-        assert_eq!(report.catch_up.applied_operation_count, 1);
-        assert_eq!(report.catch_up.end_durable_epoch, Some(1));
-        let projection = store.search_projection().unwrap();
-        assert!(projection.index().document("memory:first").is_some());
-        assert!(projection.index().document("memory:second").is_none());
+        assert_eq!(report.catch_up.applied_operation_count, 2);
+        assert_eq!(report.catch_up.end_durable_epoch, Some(2));
+        assert_eq!(scheduler.state().running_background_operations, 0);
+        drop(store);
+
+        let reopened = SearchIndex::open(&search_path).unwrap();
+        assert!(reopened.document("memory:first").is_some());
+        assert!(reopened.document("memory:second").is_some());
+        assert_eq!(
+            reopened
+                .projection_freshness()
+                .durable_source_graph_commit_epoch,
+            Some(2)
+        );
+        drop(reopened);
         std::fs::remove_dir_all(root).unwrap();
     }
 
