@@ -30,6 +30,13 @@ owned-document scanning also reads through a positioned range when custody is
 present. Byte-identical labels or self-consistent replacement frames cannot
 replace the original producer file.
 
+The threat boundary is namespace replacement, including rename or
+unlink-and-recreate. An independent writer that overwrites the same underlying
+file in place is outside the private-stage ownership contract. Length checks and
+frame CRCs detect ordinary corruption; they cannot authenticate input against a
+writer that preserves the length and recomputes those CRCs. The retained handle
+does not make the original file immutable or establish cryptographic provenance.
+
 After all artifact builders/partition cursors finish, the writer releases input
 custody before publishing the built artifacts. Shared record/body references
 retain the actual file until their own final close. SourceFile declares the file
@@ -77,7 +84,7 @@ separately; defined or running tests do not constitute passing evidence.
 ## Remaining integration
 
 Compaction auxiliary SpoolSource constructors remain explicitly legacy path
-sources. Generation artifact builders/installers also retain legacy
+sources under the remaining producer-custody work in #231/#232. Generation artifact builders/installers also retain legacy
 path operations. These must be migrated through original native namespace and
 producer ownership before switching the Consumer facade to stationary operation.
 The input-file fix is not target-root birth, a prebuilt serving view, a selector
