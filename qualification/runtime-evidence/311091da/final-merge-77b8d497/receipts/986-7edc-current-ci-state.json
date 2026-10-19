@@ -1,0 +1,105 @@
+{
+  "head": "7edc242728bc7febd55f964027f947fbbc8866b9",
+  "observed_at": 1792427357.668426,
+  "checks": [
+    {
+      "id": 118161175701,
+      "name": "ci/skein-supply-chain",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-supply-chain/2112213725858500608",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118161169645,
+      "name": "ci/skein-storage-crash-recovery",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-storage-crash-recovery/2112213726156296192",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118161163628,
+      "name": "ci/skein-bazel-test-root",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-root/2112213726005301248",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118161158460,
+      "name": "ci/skein-bazel-test-crates",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-crates/2112213726269542400",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118161154628,
+      "name": "ci/skein-bazel-test-analytics-dense",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-analytics-dense/2112213726072410112",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118161148949,
+      "name": "ci/skein-bazel-build",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-build/2112213725892055040",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118116445865,
+      "name": "Bazel native bindings (ubuntu-24.04)",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39269116642/job/118116445865",
+      "publisher_app_id": 15368
+    },
+    {
+      "id": 118116445577,
+      "name": "Bazel native bindings (macos-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39269116642/job/118116445577",
+      "publisher_app_id": 15368
+    },
+    {
+      "id": 118116445137,
+      "name": "Windows native contracts",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39269116642/job/118116445137",
+      "publisher_app_id": 15368
+    },
+    {
+      "id": 118116440733,
+      "name": "Bazel build and test (macos-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39269116547/job/118116440733",
+      "publisher_app_id": 15368
+    },
+    {
+      "id": 118116440694,
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39269116547/job/118116440694",
+      "publisher_app_id": 15368
+    },
+    {
+      "id": 118116440223,
+      "name": "Build and test",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/nowledge-co/hawdb/actions/runs/39269116547/job/118116440223",
+      "publisher_app_id": 15368
+    }
+  ],
+  "all_twelve_passed": true,
+  "prior_all12_receipt": "986-7edc-initial-wave-all12-success.json",
+  "scope": "Current Tide retest wave. Original platform success and prior Prow wave remain preserved; raw new Prow clone source/test counts not independently verified."
+}

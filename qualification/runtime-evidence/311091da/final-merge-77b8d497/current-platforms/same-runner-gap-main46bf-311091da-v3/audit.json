@@ -1,0 +1,10 @@
+{
+  "complete": false,
+  "missing_reports": [
+    "candidate/report.json",
+    "comparison.json"
+  ],
+  "gaps": [],
+  "scope": "Partial failed operation preserved; no lower-bound fraction qualifies.",
+  "workflow_conclusion": "cancelled"
+}

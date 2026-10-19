@@ -1,0 +1,13 @@
+{
+  "status": "complete_observations",
+  "pid": 54235,
+  "run": 39232726821,
+  "source": "671094db1557d3176465945cee9b5c31f01a1df2",
+  "errors": [],
+  "run_status": "completed",
+  "run_conclusion": "cancelled",
+  "updated": 1792426448.336389,
+  "audit_complete": false,
+  "all_groups_qualified": false,
+  "ended": 1792426621.476694
+}

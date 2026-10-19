@@ -1,0 +1,28 @@
+{
+  "observed_at": 1792427422.0467808,
+  "feature_head": "7edc242728bc7febd55f964027f947fbbc8866b9",
+  "merged_commit": "77b8d497569ebcb4c84ffc8eccff6f9419ff245b",
+  "merged_at": "2026-10-19T16:29:11Z",
+  "merged_by": "nowledge-ci[bot]",
+  "observed_main": "77b8d497569ebcb4c84ffc8eccff6f9419ff245b",
+  "squash_parent": "40d91403404d1de67e8eeafd22c1066f47f91029",
+  "merged_tree": "70697cf269a73a895f1953bee9bac097900eb944",
+  "expected_merge_tree": "70697cf269a73a895f1953bee9bac097900eb944",
+  "normal_tide_success": true,
+  "main_history_excluded_blobs": [],
+  "main_tree_excluded_blobs": [],
+  "feature_history_excluded_blob_count": 30,
+  "manifest_sha256": "41c2e9bbe00dec9e5a5cabe9c90a716112a6d7fe5612ac8c2940486ca5df84c2",
+  "required_current_checks_passed": 12,
+  "latest_prow_retests_passed": 6,
+  "review_cleanup_verified": {
+    "per_pr_document_removed": true,
+    "bazel_pins_aligned": true,
+    "seven_historical_source_and_regeneration_headers": true
+  },
+  "session_policy_zero_unlimited_verified": true,
+  "table_mvcc_documentation_only_verified": true,
+  "background_full_matrix_completion_claim": false,
+  "review_scope": "External PR review comments closed all findings, author states approval at maintainer request, repository accepted /approve, Tide bot performed merge. Distinct maintainer identity/formal submitted review not independently verified; no such identity or failure-cause proof is claimed.",
+  "validation_scope": "Platform artifact source73711c6f/tree9210f4f8 is independently verified; trusted exact-head Prow retest success is preserved without independently verified raw clone/test counts. No final-main runtime test newly executed by this audit."
+}

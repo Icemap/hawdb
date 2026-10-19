@@ -1,0 +1,28 @@
+{
+  "observed_at": 1792426452.459829,
+  "head": "7edc242728bc7febd55f964027f947fbbc8866b9",
+  "files": {
+    "src/api/mod.rs": "1864f168ae86579ffdd06b587bdc28c9836a467013892e3c63d4a19e94bf9aa7",
+    "tests/execution_request_contract.rs": "24af96013fbf5c6b656268939044193228166f326e2d71ef02808ea4f835068d",
+    "docs/MVCC_COMMIT_VALIDATION_PROTOCOL.md": "9bc9c5cc290c40c28d367f2ed0e69731fd681cc738c596d9e38c2d844424b19a"
+  },
+  "default_session_policy": {
+    "uint64": true,
+    "default_zero_unlimited": true,
+    "host_ceilings_independent": true,
+    "source_contracts": [
+      "default_unlimited_and_explicit_read_row_limits_preserve_complete_delivery",
+      "session_result_row_settings_are_isolated_and_inherited_by_transactions"
+    ]
+  },
+  "table_mvcc": {
+    "documented_only": true,
+    "documentation_commit": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+    "changed_paths": [
+      "docs/MVCC_COMMIT_VALIDATION_PROTOCOL.md"
+    ]
+  },
+  "runtime_validation": "Initial7edc platform source-qualified success and all12 original wave receipts; current Tide retests remain a separate live gate. No tests newly executed by this static audit.",
+  "background_matrices": "Owner approved background supplemental verification; full completion not claimed.",
+  "scope": "Premerge source inspection only; actual final-main publication and normal Tide merge remain unverified."
+}

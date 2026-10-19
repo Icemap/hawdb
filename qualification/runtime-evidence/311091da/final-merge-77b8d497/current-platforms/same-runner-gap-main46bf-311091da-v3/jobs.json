@@ -1,0 +1,217 @@
+{
+  "total_count": 5,
+  "jobs": [
+    {
+      "id": 117994337629,
+      "run_id": 39232726821,
+      "workflow_name": "Native Bindings",
+      "head_branch": "qualify/986-ordinary-final-main46bf-311091da",
+      "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39232726821",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTX6JAc8AAAAbeQK1XQ",
+      "head_sha": "671094db1557d3176465945cee9b5c31f01a1df2",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/117994337629",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39232726821/job/117994337629",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "created_at": "2026-10-19T09:47:44Z",
+      "started_at": "2026-10-19T09:47:46Z",
+      "completed_at": "2026-10-19T15:48:46Z",
+      "name": "Manual ordinary-boundary comparison (Linux)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-19T09:47:46Z",
+          "completed_at": "2026-10-19T09:47:47Z"
+        },
+        {
+          "name": "Checkout the candidate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-19T09:47:47Z",
+          "completed_at": "2026-10-19T09:47:54Z"
+        },
+        {
+          "name": "Install Bazel",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-19T09:47:54Z",
+          "completed_at": "2026-10-19T09:48:21Z"
+        },
+        {
+          "name": "Install Go for provenance",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-19T09:48:21Z",
+          "completed_at": "2026-10-19T09:48:31Z"
+        },
+        {
+          "name": "Compare frozen ordinary producers with unchanged defaults",
+          "status": "completed",
+          "conclusion": "cancelled",
+          "number": 5,
+          "started_at": "2026-10-19T09:48:31Z",
+          "completed_at": "2026-10-19T15:48:11Z"
+        },
+        {
+          "name": "Preserve complete or partial evidence, including failed outcomes",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-19T15:48:11Z",
+          "completed_at": "2026-10-19T15:48:43Z"
+        },
+        {
+          "name": "Post Install Go for provenance",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 10,
+          "started_at": "2026-10-19T15:48:43Z",
+          "completed_at": "2026-10-19T15:48:43Z"
+        },
+        {
+          "name": "Post Install Bazel",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 11,
+          "started_at": "2026-10-19T15:48:43Z",
+          "completed_at": "2026-10-19T15:48:43Z"
+        },
+        {
+          "name": "Post Checkout the candidate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-10-19T15:48:43Z",
+          "completed_at": "2026-10-19T15:48:43Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-10-19T15:48:43Z",
+          "completed_at": "2026-10-19T15:48:43Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117994337629",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "runner_id": 1000085397,
+      "runner_name": "GitHub Actions 1000085397",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 117994339121,
+      "run_id": 39232726821,
+      "workflow_name": "Native Bindings",
+      "head_branch": "qualify/986-ordinary-final-main46bf-311091da",
+      "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39232726821",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTX6JAc8AAAAbeQK7MQ",
+      "head_sha": "671094db1557d3176465945cee9b5c31f01a1df2",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/117994339121",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39232726821/job/117994339121",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-10-19T09:47:44Z",
+      "started_at": "2026-10-19T09:47:44Z",
+      "completed_at": "2026-10-19T09:47:44Z",
+      "name": "Bazel native bindings (${{ matrix.os }})",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117994339121",
+      "labels": [],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    },
+    {
+      "id": 117994339207,
+      "run_id": 39232726821,
+      "workflow_name": "Native Bindings",
+      "head_branch": "qualify/986-ordinary-final-main46bf-311091da",
+      "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39232726821",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTX6JAc8AAAAbeQK7hw",
+      "head_sha": "671094db1557d3176465945cee9b5c31f01a1df2",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/117994339207",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39232726821/job/117994339207",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-10-19T09:47:44Z",
+      "started_at": "2026-10-19T09:47:44Z",
+      "completed_at": "2026-10-19T09:47:44Z",
+      "name": "ordinary-matrix",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117994339207",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    },
+    {
+      "id": 117994339433,
+      "run_id": 39232726821,
+      "workflow_name": "Native Bindings",
+      "head_branch": "qualify/986-ordinary-final-main46bf-311091da",
+      "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39232726821",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTX6JAc8AAAAbeQK8aQ",
+      "head_sha": "671094db1557d3176465945cee9b5c31f01a1df2",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/117994339433",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39232726821/job/117994339433",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-10-19T09:47:44Z",
+      "started_at": "2026-10-19T09:47:44Z",
+      "completed_at": "2026-10-19T09:47:44Z",
+      "name": "Windows native contracts",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117994339433",
+      "labels": [
+        "windows-2025"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    },
+    {
+      "id": 117994339566,
+      "run_id": 39232726821,
+      "workflow_name": "Native Bindings",
+      "head_branch": "qualify/986-ordinary-final-main46bf-311091da",
+      "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39232726821",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTX6JAc8AAAAbeQK87g",
+      "head_sha": "671094db1557d3176465945cee9b5c31f01a1df2",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/117994339566",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39232726821/job/117994339566",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-10-19T09:47:44Z",
+      "started_at": "2026-10-19T09:47:44Z",
+      "completed_at": "2026-10-19T09:47:44Z",
+      "name": "Manual RaBitQ baseline (${{ matrix.os }})",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117994339566",
+      "labels": [],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    }
+  ]
+}

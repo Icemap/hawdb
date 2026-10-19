@@ -1,0 +1,58 @@
+{
+  "observed_at": 1792426996.118422,
+  "run": 39232726821,
+  "source": "671094db1557d3176465945cee9b5c31f01a1df2",
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "workflow_conclusion": "cancelled",
+  "collector_status": "complete_observations",
+  "audit_complete": false,
+  "all_groups_qualified": false,
+  "missing_reports": [
+    "candidate/report.json",
+    "comparison.json"
+  ],
+  "baseline_records_present": 25,
+  "baseline_terminal": false,
+  "members": {
+    "117994337629.log": {
+      "bytes": 68695,
+      "sha256": "2fc9a74fc39bb60bd944e5ac3daa6b4e53dc58e978884f56cdcae704141b0b48"
+    },
+    "artifact-metadata.json": {
+      "bytes": 857,
+      "sha256": "f2155f9c52bb3926539006bf38628c99f9c519b57c45ae05877fa55563147eee"
+    },
+    "artifact.json": {
+      "bytes": 51317,
+      "sha256": "f472a9548f12739fa3ba8d271119396ffd4023ad0c1ecbb7100dec03012eb45d"
+    },
+    "audit.json": {
+      "bytes": 240,
+      "sha256": "2de6e82a0002d241d70a448b68c210ce0585a647fdcccfb1d59fd1a485a93948"
+    },
+    "jobs.json": {
+      "bytes": 8207,
+      "sha256": "381162f97a4fe94ffb3c2ec069256f5fa26b70195a66c72c3411a34167887bad"
+    },
+    "run.json": {
+      "bytes": 13576,
+      "sha256": "8ec4690cdc1b1c8776c815f7adca09c824b293def5b8590845108ee7797b3fae"
+    }
+  },
+  "scope": "Original background same-runner gap run terminated cancelled. Its logs report operation cancelled; cancellation cause not independently established. Missing candidate/comparison reports prevent any gap fraction. No restart, sample/deadline/concurrency reduction or hidden failure removal. Original90/110 campaigns remain separate.",
+  "baseline_status_counts": {
+    "error": 25
+  },
+  "baseline_materialization_refusal_count": 25,
+  "baseline_last_completed_identity": {
+    "case": "fill",
+    "layer": "rust",
+    "backend": "memory",
+    "size": 100000,
+    "iteration": 0,
+    "discarded": true,
+    "status": "error"
+  },
+  "cancellation_cause": "not independently established; completed records are refusals, not evidence of what caused later cancellation",
+  "updated": 1792427175.808645
+}
