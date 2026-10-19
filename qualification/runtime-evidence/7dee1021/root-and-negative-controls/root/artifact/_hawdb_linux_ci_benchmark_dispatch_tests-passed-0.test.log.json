@@ -1,0 +1,5 @@
+{
+  "original_bytes": 280,
+  "original_sha256": "92a5f065c9573d8906fe7265037c9463f81aea03be5435c0369dc886d9f3e402",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_linux_ci_benchmark_dispatch_tests\n-----------------------------------------------------------------------------\nBenchmark dispatch: all six workloads preserved; selection, diagnostics and failures verified\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 311,
+  "original_sha256": "2df3f3cbcb8ed96e8f27542659907033890635b4f394f876047641b29640bfd8",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_linux_ci_benchmark_relational_oltp_mix_smoke_test\n-----------------------------------------------------------------------------\nbenchmark started: hawdb_bench_relational_oltp_mix\nbenchmark completed: hawdb_bench_relational_oltp_mix (6s)\n"
+}

@@ -1,0 +1,830 @@
+{
+  "artifact": 12170552689,
+  "reports": {
+    "source-qualification.json": {
+      "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "engine_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+      "checkout": "1200a20af7b70af712da3d6ab716d93861100d61",
+      "checkout_tree": "dfef3baad8797ca528ab487b6f9e54ccb439374a",
+      "overlay": [
+        ".github/workflows/native-bindings.yml"
+      ],
+      "case": "fill",
+      "layer": "rust",
+      "backend": "memory",
+      "sizes": [
+        1000
+      ],
+      "matrix_sizes": [
+        1000,
+        100000,
+        1000000
+      ],
+      "measured_samples": 3,
+      "discarded_samples": 1,
+      "defaults_changed": false,
+      "timed_consumers_changed": false,
+      "engine_default_result_rows": 0,
+      "engine_session_default_result_rows": 0,
+      "matrix_groups": 90,
+      "shards": 90,
+      "max_parallel_jobs": 4,
+      "per_job_deadline_minutes": 360,
+      "candidate_requires_final_head_equivalence": true,
+      "scope": "A shard alone does not establish full-matrix acceptance; preserve refusals and failures."
+    },
+    "manifest.json": {
+      "sources": {
+        "baseline": {
+          "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+          "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478",
+          "adapter_patch_sha256": "b8f34cfaff27cafc06b3da87d0ae55e5f146038f01d5cfdf3b1ada0ef568094e",
+          "adapter_spec_sha256": "f0eff1a343765f25acbbdbe18019b3641f96de07d4d5a177ea2c641c02a4905d",
+          "adaptations": [
+            "Identical ordinary harness and manual targets.",
+            "Identical untimed in-memory opening adapter."
+          ]
+        },
+        "candidate": {
+          "head": "1200a20af7b70af712da3d6ab716d93861100d61",
+          "tree": "dfef3baad8797ca528ab487b6f9e54ccb439374a"
+        }
+      },
+      "producers": {
+        "baseline": {
+          "rust": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/hawdb_bench_host_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary",
+            "sha256": "8e545c24d2105938f8e8ae01225a574d44d772215294e46caa8ca100a384c95b"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary.runfiles",
+              "sha256": "765764640f2e6f2553b6a07b8c20b6e81cb1a564688017316ae468ebcc1eb43e",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "93e295e0b37cede63621aa53e7f859e00d1f4994b6e088200a377e8615a6b437"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/libhawdb_ffi.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi.so",
+            "sha256": "b58de72507b687a8bc416324268682a5038d18f5ca58131da9da17327cbbbdde"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/_hawdb.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/python/hawdb/_hawdb.so",
+            "sha256": "3f23c60bd39d480e0ccfddd44068ecf2ff7598bc21be19ae1acf5ab7d1263d11"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-2c5af747e1f8/bin/bindings/go/cmd/boundary/boundary_/boundary",
+            "sha256": "3b186ee647e626999bfb39b98375d44dd5401fa9d4e55cc4ac3b8d30345fcbd2"
+          }
+        },
+        "candidate": {
+          "rust": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/hawdb_bench_host_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary",
+            "sha256": "38013bb7f00faaa8cfa2a9ca54c30915a8c5da6e43f8cb9c54a971e319c5685b"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary.runfiles",
+              "sha256": "bc57027a053a187294d78c181fd45a1f4acfbfab4eae30f0537797b099222889",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "78422c6faaae8f0d062728e2eeb17d98dbd414f054ffc901127c43a7843d2bfc"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/libhawdb_ffi.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi.so",
+            "sha256": "ca73d7071e23e6131c616ad0b6df20dc500cb99a84fead7b7f42801928b98cdd"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/_hawdb.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/python/hawdb/_hawdb.so",
+            "sha256": "b5d8e3464202f94ba4069eccbb12229e0be348b0840c7f5d28e10b27ca9fc5ec"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-2c5af747e1f8/bin/bindings/go/cmd/boundary/boundary_/boundary",
+            "sha256": "abdd8c6bd496c93dad87f286d5f804cc5e984a593d98e2a6db1fabf30a30f17d"
+          }
+        }
+      },
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "matrix_selection": {
+        "sizes": "1000",
+        "cases": "fill",
+        "layers": [
+          "rust"
+        ],
+        "backends": "memory",
+        "samples": 3
+      },
+      "build": "default Bazel configuration, -c opt",
+      "defaults_changed": false,
+      "ordering": "baseline then candidate; ratios of medians, not alternated pairs",
+      "measurement_limits": [
+        "Process RSS includes fixture/setup/host runtime.",
+        "A shard does not establish complete matrix coverage.",
+        "Ordinary APIs do not use Arrow or retained cursors.",
+        "Python launcher, package and runtime are copied independently; runfiles hashes are checked before and after each producer matrix.",
+        "Any refusal/failure prevents a group speedup claim."
+      ]
+    },
+    "comparison.json": {
+      "sources": {
+        "baseline": {
+          "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+          "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478",
+          "adapter_patch_sha256": "b8f34cfaff27cafc06b3da87d0ae55e5f146038f01d5cfdf3b1ada0ef568094e",
+          "adapter_spec_sha256": "f0eff1a343765f25acbbdbe18019b3641f96de07d4d5a177ea2c641c02a4905d",
+          "adaptations": [
+            "Identical ordinary harness and manual targets.",
+            "Identical untimed in-memory opening adapter."
+          ]
+        },
+        "candidate": {
+          "head": "1200a20af7b70af712da3d6ab716d93861100d61",
+          "tree": "dfef3baad8797ca528ab487b6f9e54ccb439374a"
+        }
+      },
+      "producers": {
+        "baseline": {
+          "rust": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/hawdb_bench_host_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary",
+            "sha256": "8e545c24d2105938f8e8ae01225a574d44d772215294e46caa8ca100a384c95b"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/python_boundary.runfiles",
+              "sha256": "765764640f2e6f2553b6a07b8c20b6e81cb1a564688017316ae468ebcc1eb43e",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "93e295e0b37cede63621aa53e7f859e00d1f4994b6e088200a377e8615a6b437"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/libhawdb_ffi.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi.so",
+            "sha256": "b58de72507b687a8bc416324268682a5038d18f5ca58131da9da17327cbbbdde"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/_hawdb.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/python/hawdb/_hawdb.so",
+            "sha256": "3f23c60bd39d480e0ccfddd44068ecf2ff7598bc21be19ae1acf5ab7d1263d11"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-2c5af747e1f8/bin/bindings/go/cmd/boundary/boundary_/boundary",
+            "sha256": "3b186ee647e626999bfb39b98375d44dd5401fa9d4e55cc4ac3b8d30345fcbd2"
+          }
+        },
+        "candidate": {
+          "rust": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/hawdb_bench_host_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary",
+            "sha256": "38013bb7f00faaa8cfa2a9ca54c30915a8c5da6e43f8cb9c54a971e319c5685b"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/python_boundary.runfiles",
+              "sha256": "bc57027a053a187294d78c181fd45a1f4acfbfab4eae30f0537797b099222889",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "78422c6faaae8f0d062728e2eeb17d98dbd414f054ffc901127c43a7843d2bfc"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/libhawdb_ffi.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi.so",
+            "sha256": "ca73d7071e23e6131c616ad0b6df20dc500cb99a84fead7b7f42801928b98cdd"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/_hawdb.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/python/hawdb/_hawdb.so",
+            "sha256": "b5d8e3464202f94ba4069eccbb12229e0be348b0840c7f5d28e10b27ca9fc5ec"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-2c5af747e1f8/bin/bindings/go/cmd/boundary/boundary_/boundary",
+            "sha256": "abdd8c6bd496c93dad87f286d5f804cc5e984a593d98e2a6db1fabf30a30f17d"
+          }
+        }
+      },
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "matrix_selection": {
+        "sizes": "1000",
+        "cases": "fill",
+        "layers": [
+          "rust"
+        ],
+        "backends": "memory",
+        "samples": 3
+      },
+      "build": "default Bazel configuration, -c opt",
+      "defaults_changed": false,
+      "ordering": "baseline then candidate; ratios of medians, not alternated pairs",
+      "measurement_limits": [
+        "Process RSS includes fixture/setup/host runtime.",
+        "A shard does not establish complete matrix coverage.",
+        "Ordinary APIs do not use Arrow or retained cursors.",
+        "Python launcher, package and runtime are copied independently; runfiles hashes are checked before and after each producer matrix.",
+        "Any refusal/failure prevents a group speedup claim."
+      ],
+      "driver_exits": {
+        "baseline": 0,
+        "candidate": 0
+      },
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 13.374774910155462,
+          "query_boundary_ns_median_speedup": 13.409547151316417,
+          "write_boundary_ns_median_speedup": 14.030089888665941,
+          "read_boundary_ns_median_speedup": 1.344007892739043
+        }
+      ],
+      "all_paths_succeeded": true
+    },
+    "baseline/report.json": {
+      "source": {
+        "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+        "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478"
+      },
+      "spec": "ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md",
+      "seed": 24301,
+      "sizes": [
+        1000
+      ],
+      "cases": [
+        "fill"
+      ],
+      "backends": [
+        "memory"
+      ],
+      "layers": [
+        "rust"
+      ],
+      "samples": 3,
+      "discarded_iterations": 1,
+      "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu": "x86_64",
+      "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "go": "go version go1.27.2 linux/amd64",
+      "build": "Bazel opt, all three engine dependencies compiled together",
+      "defaults_changed": false,
+      "strict_zero_copy": false,
+      "terminal": true,
+      "instrumented": false,
+      "go_host_profiles": false,
+      "native_profiles": false,
+      "go_cpu_profiles": false,
+      "binaries": {
+        "rust": {
+          "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/hawdb_bench_host_boundary",
+          "sha256": "8e545c24d2105938f8e8ae01225a574d44d772215294e46caa8ca100a384c95b"
+        }
+      },
+      "library_sha256": "b58de72507b687a8bc416324268682a5038d18f5ca58131da9da17327cbbbdde",
+      "python_extension_path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/_hawdb.so",
+      "python_extension_sha256": "3f23c60bd39d480e0ccfddd44068ecf2ff7598bc21be19ae1acf5ab7d1263d11",
+      "records": [
+        {
+          "backend": "memory",
+          "case": "fill",
+          "checksum": "ee38a8b2642c45d5",
+          "consumer_ns": 65549,
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 767905660,
+          "engine_payload_bytes": 40012,
+          "input_rows": 1000,
+          "layer": "rust",
+          "native_profile": null,
+          "output_rows": 1000,
+          "prefetch": 0,
+          "query_boundary_ns": 767739710,
+          "read_boundary_ns": 3732825,
+          "setup_ns": 310208,
+          "status": "ok",
+          "values": 3000,
+          "write_boundary_ns": 764006885,
+          "process_exit": 0,
+          "process_seconds": 0.7889921910000339,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/hawdb_bench_host_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-0.job.json"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-0.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-0.stderr",
+          "process_peak_rss_bytes": 18681856,
+          "size": 1000,
+          "iteration": 0,
+          "discarded": true,
+          "fixture_sha256": "0ee95d11e3461c08dbcf7ab4556c2dde187adee3ec11d6ace84ce23957fd3742",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "backend": "memory",
+          "case": "fill",
+          "checksum": "ee38a8b2642c45d5",
+          "consumer_ns": 65869,
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 774853282,
+          "engine_payload_bytes": 40012,
+          "input_rows": 1000,
+          "layer": "rust",
+          "native_profile": null,
+          "output_rows": 1000,
+          "prefetch": 0,
+          "query_boundary_ns": 774682618,
+          "read_boundary_ns": 3842730,
+          "setup_ns": 310829,
+          "status": "ok",
+          "values": 3000,
+          "write_boundary_ns": 770839888,
+          "process_exit": 0,
+          "process_seconds": 0.7803441799999291,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/hawdb_bench_host_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-1.job.json"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-1.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-1.stderr",
+          "process_peak_rss_bytes": 18661376,
+          "size": 1000,
+          "iteration": 1,
+          "discarded": false,
+          "fixture_sha256": "a548356d652d1e3515340e697d486cd34dbeb5e1e79161c1ef4b490a542fc309",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "backend": "memory",
+          "case": "fill",
+          "checksum": "ee38a8b2642c45d5",
+          "consumer_ns": 65479,
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 765264358,
+          "engine_payload_bytes": 40012,
+          "input_rows": 1000,
+          "layer": "rust",
+          "native_profile": null,
+          "output_rows": 1000,
+          "prefetch": 0,
+          "query_boundary_ns": 765089753,
+          "read_boundary_ns": 3738063,
+          "setup_ns": 295896,
+          "status": "ok",
+          "values": 3000,
+          "write_boundary_ns": 761351690,
+          "process_exit": 0,
+          "process_seconds": 0.7705239959999517,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/hawdb_bench_host_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-2.job.json"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-2.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-2.stderr",
+          "process_peak_rss_bytes": 18481152,
+          "size": 1000,
+          "iteration": 2,
+          "discarded": false,
+          "fixture_sha256": "0ffaa1ceba5a104ead0b7e6cadeca4f0506de413f7a86a46007c16984f9c2687",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "backend": "memory",
+          "case": "fill",
+          "checksum": "ee38a8b2642c45d5",
+          "consumer_ns": 75344,
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 770413771,
+          "engine_payload_bytes": 40012,
+          "input_rows": 1000,
+          "layer": "rust",
+          "native_profile": null,
+          "output_rows": 1000,
+          "prefetch": 0,
+          "query_boundary_ns": 770238810,
+          "read_boundary_ns": 3776220,
+          "setup_ns": 296457,
+          "status": "ok",
+          "values": 3000,
+          "write_boundary_ns": 766462590,
+          "process_exit": 0,
+          "process_seconds": 0.7758226050000303,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline-producer/hawdb_bench_host_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-3.job.json"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-3.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/baseline/rust-fill-1000-memory-3.stderr",
+          "process_peak_rss_bytes": 18374656,
+          "size": 1000,
+          "iteration": 3,
+          "discarded": false,
+          "fixture_sha256": "5aeb523c95bdc8aa83562311aeb4e89600bb0f38fe34deebdf6bc2969024727a",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        }
+      ],
+      "summaries": [
+        {
+          "layer": "rust",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "successful_samples": 3,
+          "failed_samples": 0,
+          "median_query_boundary_ns": 770238810,
+          "median_write_boundary_ns": 766462590,
+          "median_read_boundary_ns": 3776220,
+          "median_elapsed_ns": 770413771
+        }
+      ],
+      "measurement_limits": [
+        "A selected layer/backend shard qualifies only its recorded groups; full-matrix acceptance requires complete coverage across shards.",
+        "Process peak RSS includes runtime, fixture, setup and query; it is not a query-only allocation ledger.",
+        "Go allocation counts exclude the native engine; run the separately instrumented matrix for native/Python profiles.",
+        "Each iteration opens its own store; seeded read runs measure a warm store, not cold artifact reads.",
+        "Write cases include a final verification query in query_boundary_ns; write_boundary_ns and read_boundary_ns separate the phases without removing calls.",
+        "The query timer excludes the identical checksum algorithm; consumer time is reported separately."
+      ],
+      "parity_failures": 0,
+      "value_parity_records": 4,
+      "successful_records": 4,
+      "refused_or_failed_records": 0,
+      "profile_failures": 0,
+      "failure_profile_failures": 0,
+      "go_host_profile_failures": 0,
+      "failure_go_host_profile_failures": 0,
+      "phase_timing_failures": 0,
+      "all_paths_succeeded": true
+    },
+    "candidate/report.json": {
+      "source": {
+        "head": "1200a20af7b70af712da3d6ab716d93861100d61",
+        "tree": "dfef3baad8797ca528ab487b6f9e54ccb439374a"
+      },
+      "spec": "ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md",
+      "seed": 24301,
+      "sizes": [
+        1000
+      ],
+      "cases": [
+        "fill"
+      ],
+      "backends": [
+        "memory"
+      ],
+      "layers": [
+        "rust"
+      ],
+      "samples": 3,
+      "discarded_iterations": 1,
+      "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu": "x86_64",
+      "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "go": "go version go1.27.2 linux/amd64",
+      "build": "Bazel opt, all three engine dependencies compiled together",
+      "defaults_changed": false,
+      "strict_zero_copy": false,
+      "terminal": true,
+      "instrumented": false,
+      "go_host_profiles": false,
+      "native_profiles": false,
+      "go_cpu_profiles": false,
+      "binaries": {
+        "rust": {
+          "path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/hawdb_bench_host_boundary",
+          "sha256": "38013bb7f00faaa8cfa2a9ca54c30915a8c5da6e43f8cb9c54a971e319c5685b"
+        }
+      },
+      "library_sha256": "ca73d7071e23e6131c616ad0b6df20dc500cb99a84fead7b7f42801928b98cdd",
+      "python_extension_path": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/_hawdb.so",
+      "python_extension_sha256": "b5d8e3464202f94ba4069eccbb12229e0be348b0840c7f5d28e10b27ca9fc5ec",
+      "records": [
+        {
+          "backend": "memory",
+          "case": "fill",
+          "checksum": "ee38a8b2642c45d5",
+          "consumer_ns": 65569,
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 57361342,
+          "engine_payload_bytes": 40012,
+          "input_rows": 1000,
+          "layer": "rust",
+          "native_profile": null,
+          "output_rows": 1000,
+          "prefetch": 0,
+          "query_boundary_ns": 57197330,
+          "read_boundary_ns": 2937864,
+          "setup_ns": 304189,
+          "status": "ok",
+          "values": 3000,
+          "write_boundary_ns": 54259466,
+          "process_exit": 0,
+          "process_seconds": 0.06323084099994958,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/hawdb_bench_host_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-0.job.json"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-0.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-0.stderr",
+          "process_peak_rss_bytes": 19705856,
+          "size": 1000,
+          "iteration": 0,
+          "discarded": true,
+          "fixture_sha256": "e8235c91b781c877ea1b066b529a5ab2cd52f8cc079e19e631ba358eb5f4c092",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "backend": "memory",
+          "case": "fill",
+          "checksum": "ee38a8b2642c45d5",
+          "consumer_ns": 68063,
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 56908342,
+          "engine_payload_bytes": 40012,
+          "input_rows": 1000,
+          "layer": "rust",
+          "native_profile": null,
+          "output_rows": 1000,
+          "prefetch": 0,
+          "query_boundary_ns": 56743946,
+          "read_boundary_ns": 3049233,
+          "setup_ns": 304069,
+          "status": "ok",
+          "values": 3000,
+          "write_boundary_ns": 53694713,
+          "process_exit": 0,
+          "process_seconds": 0.06277679100003297,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/hawdb_bench_host_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-1.job.json"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-1.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-1.stderr",
+          "process_peak_rss_bytes": 19685376,
+          "size": 1000,
+          "iteration": 1,
+          "discarded": false,
+          "fixture_sha256": "eb513d923c76779cb916dc52576b44e7737839b740be193125f8e88c979c9639",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "backend": "memory",
+          "case": "fill",
+          "checksum": "ee38a8b2642c45d5",
+          "consumer_ns": 65640,
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 57601999,
+          "engine_payload_bytes": 40012,
+          "input_rows": 1000,
+          "layer": "rust",
+          "native_profile": null,
+          "output_rows": 1000,
+          "prefetch": 0,
+          "query_boundary_ns": 57439584,
+          "read_boundary_ns": 2809671,
+          "setup_ns": 272582,
+          "status": "ok",
+          "values": 3000,
+          "write_boundary_ns": 54629913,
+          "process_exit": 0,
+          "process_seconds": 0.06320195299997522,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/hawdb_bench_host_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-2.job.json"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-2.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-2.stderr",
+          "process_peak_rss_bytes": 19820544,
+          "size": 1000,
+          "iteration": 2,
+          "discarded": false,
+          "fixture_sha256": "485a8312484fb79ce26d785ef0cea17b79c7af446909770f55a7fd46406dbc56",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "backend": "memory",
+          "case": "fill",
+          "checksum": "ee38a8b2642c45d5",
+          "consumer_ns": 65780,
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 58187944,
+          "engine_payload_bytes": 40012,
+          "input_rows": 1000,
+          "layer": "rust",
+          "native_profile": null,
+          "output_rows": 1000,
+          "prefetch": 0,
+          "query_boundary_ns": 58027004,
+          "read_boundary_ns": 2785655,
+          "setup_ns": 274415,
+          "status": "ok",
+          "values": 3000,
+          "write_boundary_ns": 55241349,
+          "process_exit": 0,
+          "process_seconds": 0.06367933300009554,
+          "command": [
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate-producer/hawdb_bench_host_boundary",
+            "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-3.job.json"
+          ],
+          "stdout": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-3.stdout",
+          "stderr": "/home/runner/work/_temp/hawdb-boundary-comparison/evidence/candidate/rust-fill-1000-memory-3.stderr",
+          "process_peak_rss_bytes": 19533824,
+          "size": 1000,
+          "iteration": 3,
+          "discarded": false,
+          "fixture_sha256": "3d3e0b07ce13edc43951bfed6a404f9730d35d1bf963042ce4ed4311a49e1ddd",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        }
+      ],
+      "summaries": [
+        {
+          "layer": "rust",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "successful_samples": 3,
+          "failed_samples": 0,
+          "median_query_boundary_ns": 57439584,
+          "median_write_boundary_ns": 54629913,
+          "median_read_boundary_ns": 2809671,
+          "median_elapsed_ns": 57601999
+        }
+      ],
+      "measurement_limits": [
+        "A selected layer/backend shard qualifies only its recorded groups; full-matrix acceptance requires complete coverage across shards.",
+        "Process peak RSS includes runtime, fixture, setup and query; it is not a query-only allocation ledger.",
+        "Go allocation counts exclude the native engine; run the separately instrumented matrix for native/Python profiles.",
+        "Each iteration opens its own store; seeded read runs measure a warm store, not cold artifact reads.",
+        "Write cases include a final verification query in query_boundary_ns; write_boundary_ns and read_boundary_ns separate the phases without removing calls.",
+        "The query timer excludes the identical checksum algorithm; consumer time is reported separately."
+      ],
+      "parity_failures": 0,
+      "value_parity_records": 4,
+      "successful_records": 4,
+      "refused_or_failed_records": 0,
+      "profile_failures": 0,
+      "failure_profile_failures": 0,
+      "go_host_profile_failures": 0,
+      "failure_go_host_profile_failures": 0,
+      "phase_timing_failures": 0,
+      "all_paths_succeeded": true
+    }
+  },
+  "verified_uploaded_producers_and_manifests": [
+    {
+      "path": "baseline-producer/hawdb_bench_host_boundary",
+      "sha256": "8e545c24d2105938f8e8ae01225a574d44d772215294e46caa8ca100a384c95b"
+    },
+    {
+      "path": "baseline-producer/python_boundary",
+      "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+    },
+    {
+      "path": "baseline-producer/libhawdb_ffi.so",
+      "sha256": "b58de72507b687a8bc416324268682a5038d18f5ca58131da9da17327cbbbdde"
+    },
+    {
+      "path": "baseline-producer/_hawdb.so",
+      "sha256": "3f23c60bd39d480e0ccfddd44068ecf2ff7598bc21be19ae1acf5ab7d1263d11"
+    },
+    {
+      "path": "baseline-producer/boundary",
+      "sha256": "3b186ee647e626999bfb39b98375d44dd5401fa9d4e55cc4ac3b8d30345fcbd2"
+    },
+    {
+      "path": "baseline-producer/python_boundary.runfiles_manifest",
+      "sha256": "93e295e0b37cede63621aa53e7f859e00d1f4994b6e088200a377e8615a6b437"
+    },
+    {
+      "path": "candidate-producer/hawdb_bench_host_boundary",
+      "sha256": "38013bb7f00faaa8cfa2a9ca54c30915a8c5da6e43f8cb9c54a971e319c5685b"
+    },
+    {
+      "path": "candidate-producer/python_boundary",
+      "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+    },
+    {
+      "path": "candidate-producer/libhawdb_ffi.so",
+      "sha256": "ca73d7071e23e6131c616ad0b6df20dc500cb99a84fead7b7f42801928b98cdd"
+    },
+    {
+      "path": "candidate-producer/_hawdb.so",
+      "sha256": "b5d8e3464202f94ba4069eccbb12229e0be348b0840c7f5d28e10b27ca9fc5ec"
+    },
+    {
+      "path": "candidate-producer/boundary",
+      "sha256": "abdd8c6bd496c93dad87f286d5f804cc5e984a593d98e2a6db1fabf30a30f17d"
+    },
+    {
+      "path": "candidate-producer/python_boundary.runfiles_manifest",
+      "sha256": "78422c6faaae8f0d062728e2eeb17d98dbd414f054ffc901127c43a7843d2bfc"
+    }
+  ],
+  "scope": "Native producer and launcher-manifest bytes verified; archived Python runfiles permission/symlink metadata is not independently requalified.",
+  "campaign_selection": {
+    "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+    "engine_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+    "checkout": "1200a20af7b70af712da3d6ab716d93861100d61",
+    "checkout_tree": "dfef3baad8797ca528ab487b6f9e54ccb439374a",
+    "overlay": [
+      ".github/workflows/native-bindings.yml"
+    ],
+    "case": "fill",
+    "layer": "rust",
+    "backend": "memory",
+    "sizes": [
+      1000
+    ],
+    "matrix_sizes": [
+      1000,
+      100000,
+      1000000
+    ],
+    "measured_samples": 3,
+    "discarded_samples": 1,
+    "defaults_changed": false,
+    "timed_consumers_changed": false,
+    "engine_default_result_rows": 0,
+    "engine_session_default_result_rows": 0,
+    "matrix_groups": 90,
+    "shards": 90,
+    "max_parallel_jobs": 4,
+    "per_job_deadline_minutes": 360,
+    "candidate_requires_final_head_equivalence": true,
+    "scope": "A shard alone does not establish full-matrix acceptance; preserve refusals and failures."
+  },
+  "artifact_name": "ordinary-1000-fill-rust-memory-1200a20af7b70af712da3d6ab716d93861100d61",
+  "workflow_run": 39207199690
+}

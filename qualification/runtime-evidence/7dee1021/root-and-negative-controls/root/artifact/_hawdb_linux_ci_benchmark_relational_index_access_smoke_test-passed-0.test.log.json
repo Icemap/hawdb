@@ -1,0 +1,5 @@
+{
+  "original_bytes": 324,
+  "original_sha256": "1896fde8d9bd5994922742eb5b8f6aa816b57da2d10527bd15ed891c6eb75a2a",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_linux_ci_benchmark_relational_index_access_smoke_test\n-----------------------------------------------------------------------------\nbenchmark started: hawdb_bench_relational_index_access\nbenchmark completed: hawdb_bench_relational_index_access (62s)\n"
+}

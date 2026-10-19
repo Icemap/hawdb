@@ -1,0 +1,5 @@
+{
+  "original_bytes": 257,
+  "original_sha256": "1d6144f7cd53fd8edd4ccd349cff809134a6794425558b6e6ecb608ab7e5c70e",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:root_unit_partition_script_test\n-----------------------------------------------------------------------------\nroot unit partition ownership, caller arguments and failure propagation passed\n"
+}

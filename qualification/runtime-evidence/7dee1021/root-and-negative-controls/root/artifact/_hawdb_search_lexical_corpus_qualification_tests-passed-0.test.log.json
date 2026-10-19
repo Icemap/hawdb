@@ -1,0 +1,5 @@
+{
+  "original_bytes": 603,
+  "original_sha256": "3c014e7277b7e647d7aa8602fa81e0a9ad00cf81593349062d7ccdf57b5ad7d0",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_search_lexical_corpus_qualification_tests\n-----------------------------------------------------------------------------\n\nrunning 4 tests\ntest tests::compact_artifact_metrics_reconcile_manifest_counters ... ok\ntest tests::comparison_rejects_unqualified_layout_and_manifest_policy ... ok\ntest tests::comparison_requires_identical_corpus_and_logical_identity ... ok\ntest tests::comparison_tenfold_gate_is_exact_at_u64_boundaries ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

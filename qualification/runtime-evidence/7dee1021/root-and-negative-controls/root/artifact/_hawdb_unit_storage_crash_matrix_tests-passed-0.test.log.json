@@ -1,0 +1,5 @@
+{
+  "original_bytes": 574,
+  "original_sha256": "41816db016be96632ea5e391081049fe84ff90feb8617c1d1e32593be2ea996c",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_unit_storage_crash_matrix_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\ntest api::tests::storage_recovery::subprocess_crash_matrix_recovers_whole_batches_and_artifact_generations ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2108 filtered out; finished in 17.86s\n\n"
+}

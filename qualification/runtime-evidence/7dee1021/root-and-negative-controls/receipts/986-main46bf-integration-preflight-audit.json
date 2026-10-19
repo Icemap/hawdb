@@ -1,0 +1,32 @@
+{
+  "observed_at": 1792397102.0200808,
+  "published_head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "actual_main": "46bfde00131a6d711d51aad6e5e237279a287061",
+  "prepared_integration_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "report_count": 30,
+  "main_history_overlap": [],
+  "feature_history_overlap_count": 30,
+  "integration_tree_overlap": [],
+  "merge_conflicts": [],
+  "changed_since_main032": [
+    "crates/executor/src/binding.rs",
+    "crates/executor/src/blocking.rs",
+    "crates/executor/src/blocking/aggregate.rs",
+    "crates/executor/src/blocking/aggregate/partial.rs",
+    "crates/executor/src/blocking/hash_key.rs",
+    "crates/executor/src/blocking/sort.rs",
+    "crates/executor/src/blocking/sort/tests.rs",
+    "crates/executor/src/expression.rs",
+    "crates/executor/src/expression/key.rs",
+    "crates/executor/src/expression/predicate.rs",
+    "crates/executor/src/expression/value.rs",
+    "crates/executor/src/expression/value/borrowed.rs",
+    "crates/executor/src/kernel.rs",
+    "crates/executor/src/memory_ledger.rs",
+    "crates/executor/src/spill.rs",
+    "crates/executor/src/spill/compaction.rs",
+    "docs/QUERY_LIMIT_INVENTORY.md",
+    "tests/in_memory_portable.rs"
+  ],
+  "scope": "Prepared uncommitted integration, no conflict. Main1101 changes native executor and portable tests, so older7dee campaigns cannot establish final-source qualification. Existing runs preserved. All30 reports excluded from current main history and prepared tree, but remain feature-history reachable: genuine final squash and actual-main re-audit required."
+}

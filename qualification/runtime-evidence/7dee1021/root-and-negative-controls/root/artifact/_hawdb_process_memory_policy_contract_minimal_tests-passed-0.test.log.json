@@ -1,0 +1,5 @@
+{
+  "original_bytes": 816,
+  "original_sha256": "76557deb354674345cda4b3e4c3ce95b9008428a518ace2063332d9db8a015fd",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_process_memory_policy_contract_minimal_tests\n-----------------------------------------------------------------------------\n\nrunning 6 tests\ntest embedded_queries_reject_rss_pressure_before_mutation_and_recover_with_hysteresis ... ok\ntest embedded_refresh_preserves_pinned_resources_and_host_owned_rss_samples ... ok\ntest public_policy_coordinates_rss_headroom_across_embedded_governors ... ok\ntest embedded_instances_share_reservations_without_charging_observed_growth_twice ... ok\ntest embedded_resource_report_observes_shared_governor_updates_without_facade_refresh ... ok\ntest embedded_missing_unsupported_and_stale_samples_fail_closed ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.31s\n\n"
+}

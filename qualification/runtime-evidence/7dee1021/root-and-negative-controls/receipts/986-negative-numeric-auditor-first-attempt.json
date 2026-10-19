@@ -1,0 +1,6 @@
+{
+  "at": 1792397295.623393,
+  "script_sha256": "5fbc9a1afbe01b6e4e5b33eb169b681bef62ca5a6d766889ddb54b24ca47ac61",
+  "outcome": "Auditor preflight assertion failure: retained error uses typed ResultBudget, not free-text row limit. No runtime retry and no output receipt generated. Corrected parser must verify exact rows1000001 and payload24000024 below configured payload budget.",
+  "not_product_failure": true
+}

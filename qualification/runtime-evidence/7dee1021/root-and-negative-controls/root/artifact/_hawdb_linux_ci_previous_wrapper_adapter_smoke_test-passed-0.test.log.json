@@ -1,0 +1,5 @@
+{
+  "original_bytes": 197,
+  "original_sha256": "7c3f9f87edf5ea5eb737165e6a2b6db1072e8ddd280653d46d3410472322d91c",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_linux_ci_previous_wrapper_adapter_smoke_test\n-----------------------------------------------------------------------------\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 328,
+  "original_sha256": "428e3c2b5ada262a2fa4b1437d3552fafbbaf307674cd1bd4165519b747a0893",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_graph_text_consumer_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest consumer_profile_workload ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s\n\n"
+}

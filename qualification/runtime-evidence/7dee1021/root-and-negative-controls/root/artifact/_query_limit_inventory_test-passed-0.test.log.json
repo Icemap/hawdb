@@ -1,0 +1,5 @@
+{
+  "original_bytes": 230,
+  "original_sha256": "d464e4d23c830fc1c675817a59dfa7944b388102f11780037f50599083a25521",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:query_limit_inventory_test\n-----------------------------------------------------------------------------\nReviewed truncation report inventory: 25 fields, 3 enums\n"
+}

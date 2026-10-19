@@ -1,0 +1,925 @@
+{
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "production_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "observed_at": 1792397062.9646132,
+  "groups": [
+    {
+      "group": [
+        "numeric",
+        1000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12166800152,
+      "source_report_bundle_sha256": "c4eea51d5c812b5272c963716f9b6af48d7f9246c7d14b6886ac27865242f891",
+      "checksum": "b283e64104aa390d",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 1696680,
+            "nearest_rank_p95_ns": 1903634,
+            "maximum_ns": 1970268,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 71634944,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 160027,
+            "nearest_rank_p95_ns": 219867,
+            "maximum_ns": 259412,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 71176192,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 224859,
+            "nearest_rank_p95_ns": 260196,
+            "maximum_ns": 327640,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 72179712,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.9935959746126136,
+        "arrow": 1.0076047801475212
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12166443132,
+      "source_report_bundle_sha256": "c55c26a691424622656e190ac05c7b5dd52338828755fd7521c7b9c6915149b2",
+      "checksum": "b283e64104aa390d",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 4614794,
+            "nearest_rank_p95_ns": 4770310,
+            "maximum_ns": 4809689,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 71516160,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 7779,
+            "allocated_bytes": 11430542,
+            "reallocation_calls": 1043,
+            "parameter_conversion_ns": 2727,
+            "engine_call_ns": 1636533,
+            "result_conversion_ns": 2371952,
+            "live_requested_bytes_before": 1143408,
+            "live_requested_bytes_after": 1143408,
+            "process_peak_requested_bytes": 2862520
+          },
+          "allocation_counter_consistency_valid": true
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 507310,
+            "nearest_rank_p95_ns": 557783,
+            "maximum_ns": 593050,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 71049216,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 417,
+            "allocated_bytes": 72656,
+            "reallocation_calls": 17,
+            "parameter_conversion_ns": 0,
+            "engine_call_ns": 0,
+            "result_conversion_ns": 0,
+            "live_requested_bytes_before": 1109052,
+            "live_requested_bytes_after": 1109052,
+            "process_peak_requested_bytes": 2862520
+          },
+          "allocation_counter_consistency_valid": true
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 914927,
+            "nearest_rank_p95_ns": 1091489,
+            "maximum_ns": 1158359,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 71917568,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 432,
+            "allocated_bytes": 86976,
+            "reallocation_calls": 17,
+            "parameter_conversion_ns": 0,
+            "engine_call_ns": 0,
+            "result_conversion_ns": 0,
+            "live_requested_bytes_before": 1109052,
+            "live_requested_bytes_after": 1109052,
+            "process_peak_requested_bytes": 2862520
+          },
+          "allocation_counter_consistency_valid": true
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.9934707903780069,
+        "arrow": 1.0056128293241695
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12166801393,
+      "source_report_bundle_sha256": "dd5429e91d80d60b1d3f2f7d1fe9b8e29f6f1b04edadc4bf3450dd3266b0f49f",
+      "checksum": "b283e64104aa390d",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 1618813,
+            "nearest_rank_p95_ns": 1632843,
+            "maximum_ns": 1633224,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 81969152,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 155539,
+            "nearest_rank_p95_ns": 176199,
+            "maximum_ns": 186444,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 81412096,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 222643,
+            "nearest_rank_p95_ns": 257005,
+            "maximum_ns": 273143,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 83247104,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.993204077553468,
+        "arrow": 1.0155906456126325
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12167431157,
+      "source_report_bundle_sha256": "bf4c0c8e55c4f9dca5d18cbdf29121282c466afdd6f56a72dd6804204d14ad6b",
+      "checksum": "b283e64104aa390d",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 5617121,
+            "nearest_rank_p95_ns": 6174436,
+            "maximum_ns": 6178180,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 82034688,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 7789,
+            "allocated_bytes": 11431599,
+            "reallocation_calls": 1045,
+            "parameter_conversion_ns": 6632,
+            "engine_call_ns": 2111388,
+            "result_conversion_ns": 2732249,
+            "live_requested_bytes_before": 1272747,
+            "live_requested_bytes_after": 1272747,
+            "process_peak_requested_bytes": 3359646
+          },
+          "allocation_counter_consistency_valid": true
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 585892,
+            "nearest_rank_p95_ns": 639914,
+            "maximum_ns": 642012,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 81563648,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 417,
+            "allocated_bytes": 72656,
+            "reallocation_calls": 17,
+            "parameter_conversion_ns": 0,
+            "engine_call_ns": 0,
+            "result_conversion_ns": 0,
+            "live_requested_bytes_before": 1238583,
+            "live_requested_bytes_after": 1238583,
+            "process_peak_requested_bytes": 3359646
+          },
+          "allocation_counter_consistency_valid": true
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 1112872,
+            "nearest_rank_p95_ns": 1197168,
+            "maximum_ns": 1279352,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 82796544,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 432,
+            "allocated_bytes": 86976,
+            "reallocation_calls": 17,
+            "parameter_conversion_ns": 0,
+            "engine_call_ns": 0,
+            "result_conversion_ns": 0,
+            "live_requested_bytes_before": 1238583,
+            "live_requested_bytes_after": 1238583,
+            "process_peak_requested_bytes": 3359646
+          },
+          "allocation_counter_consistency_valid": true
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.9942580387457559,
+        "arrow": 1.0092869982025165
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12167890765,
+      "source_report_bundle_sha256": "ee10af8306bfd7ecba03f050e8485335c224230a95cbb9fdfc939e549edb6d19",
+      "checksum": "b1ea367ddd268ec5",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 170114386,
+            "nearest_rank_p95_ns": 176891809,
+            "maximum_ns": 177657217,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 214200320,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 11413712,
+            "nearest_rank_p95_ns": 13372454,
+            "maximum_ns": 13467443,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 165871616,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 15249169,
+            "nearest_rank_p95_ns": 15774257,
+            "maximum_ns": 15971781,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 165806080,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.7743761353857921,
+        "arrow": 0.7740701787933837
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12167083399,
+      "source_report_bundle_sha256": "b82dab7ba266e856707379d674680ffb9a56cf4ca271be9768e4334085f4aecb",
+      "checksum": "b1ea367ddd268ec5",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 549141165,
+            "nearest_rank_p95_ns": 563754719,
+            "maximum_ns": 586338839,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 293851136,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 712957,
+            "allocated_bytes": 1156529454,
+            "reallocation_calls": 103180,
+            "parameter_conversion_ns": 4358,
+            "engine_call_ns": 123881804,
+            "result_conversion_ns": 331258844,
+            "live_requested_bytes_before": 82602164,
+            "live_requested_bytes_after": 82602164,
+            "process_peak_requested_bytes": 93273147
+          },
+          "allocation_counter_consistency_valid": true
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 33609062,
+            "nearest_rank_p95_ns": 34270280,
+            "maximum_ns": 35039502,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 165838848,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 7383,
+            "allocated_bytes": 2574244,
+            "reallocation_calls": 17,
+            "parameter_conversion_ns": 0,
+            "engine_call_ns": 0,
+            "result_conversion_ns": 0,
+            "live_requested_bytes_before": 82567760,
+            "live_requested_bytes_after": 82567760,
+            "process_peak_requested_bytes": 92094947
+          },
+          "allocation_counter_consistency_valid": true
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 84122692,
+            "nearest_rank_p95_ns": 87138103,
+            "maximum_ns": 87689339,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 165875712,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 7398,
+            "allocated_bytes": 2956988,
+            "reallocation_calls": 17,
+            "parameter_conversion_ns": 0,
+            "engine_call_ns": 0,
+            "result_conversion_ns": 0,
+            "live_requested_bytes_before": 82567760,
+            "live_requested_bytes_after": 82567760,
+            "process_peak_requested_bytes": 92094947
+          },
+          "allocation_counter_consistency_valid": true
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.5643634741640067,
+        "arrow": 0.5644889254401249
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12168031402,
+      "source_report_bundle_sha256": "e07fff27015a31f4c3a2803919231f8b13232119b93af9d723532729ea0e9ae8",
+      "checksum": "b1ea367ddd268ec5",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 172255399,
+            "nearest_rank_p95_ns": 179733757,
+            "maximum_ns": 190259545,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 238284800,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 12189354,
+            "nearest_rank_p95_ns": 13259950,
+            "maximum_ns": 13526913,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 190672896,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 15480587,
+            "nearest_rank_p95_ns": 15880885,
+            "maximum_ns": 16222981,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 190697472,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.8001890846583584,
+        "arrow": 0.8002922217447357
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12168565550,
+      "source_report_bundle_sha256": "0156081774a6df2ff2041490d4aab732b735bb4d10564416d7f2a2c9e4904936",
+      "checksum": "b1ea367ddd268ec5",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 565314167,
+            "nearest_rank_p95_ns": 601561940,
+            "maximum_ns": 607767280,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 318009344,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 712967,
+            "allocated_bytes": 1156530511,
+            "reallocation_calls": 103182,
+            "parameter_conversion_ns": 4218,
+            "engine_call_ns": 123454624,
+            "result_conversion_ns": 339991460,
+            "live_requested_bytes_before": 98984799,
+            "live_requested_bytes_after": 98984799,
+            "process_peak_requested_bytes": 109655782
+          },
+          "allocation_counter_consistency_valid": true
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 34896931,
+            "nearest_rank_p95_ns": 35610170,
+            "maximum_ns": 36222610,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 190898176,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 7383,
+            "allocated_bytes": 2574244,
+            "reallocation_calls": 17,
+            "parameter_conversion_ns": 0,
+            "engine_call_ns": 0,
+            "result_conversion_ns": 0,
+            "live_requested_bytes_before": 98950587,
+            "live_requested_bytes_after": 98950587,
+            "process_peak_requested_bytes": 108477774
+          },
+          "allocation_counter_consistency_valid": true
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 84906226,
+            "nearest_rank_p95_ns": 86571179,
+            "maximum_ns": 88669769,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 190926848,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 7398,
+            "allocated_bytes": 2956988,
+            "reallocation_calls": 17,
+            "parameter_conversion_ns": 0,
+            "engine_call_ns": 0,
+            "result_conversion_ns": 0,
+            "live_requested_bytes_before": 98950587,
+            "live_requested_bytes_after": 98950587,
+            "process_peak_requested_bytes": 108477774
+          },
+          "allocation_counter_consistency_valid": true
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.6002910908177591,
+        "arrow": 0.6003812516905164
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12169272242,
+      "source_report_bundle_sha256": "4ccfe101ca99145bf73e4514adc600d62ca90e61be19f923061b602c8a4720bb",
+      "checksum": "06d5a702fb1d7e65",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 1829769469,
+            "nearest_rank_p95_ns": 1843300054,
+            "maximum_ns": 1862354201,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 1503580160,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 114554217,
+            "nearest_rank_p95_ns": 120128686,
+            "maximum_ns": 122369189,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 1043853312,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 155196996,
+            "nearest_rank_p95_ns": 160638775,
+            "maximum_ns": 160834449,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 1043886080,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.6942452020649168,
+        "arrow": 0.6942669953825408
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12169908949,
+      "source_report_bundle_sha256": "8428dce8a30d46f119489983ac6b7fa3228141bc6e854fbd2b9d6dac67889c6c",
+      "checksum": "06d5a702fb1d7e65",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 1289355137,
+            "nearest_rank_p95_ns": 1318220806,
+            "maximum_ns": 1344798607,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 1618944000,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 115681823,
+            "nearest_rank_p95_ns": 121976874,
+            "maximum_ns": 126493810,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 1110085632,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 129444726,
+            "nearest_rank_p95_ns": 141985169,
+            "maximum_ns": 157926877,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 1099468800,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero"
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.6856850094876661,
+        "arrow": 0.6791271347248576
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12169754277,
+      "source_report_bundle_sha256": "4660ae5942359e0c4651725719211986b6e7eb150f19a3e3fb058995e532db3b",
+      "checksum": "06d5a702fb1d7e65",
+      "measured_mode_samples": 93,
+      "warmups": 3,
+      "modes": {
+        "owned": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 5873512334,
+            "nearest_rank_p95_ns": 6030390989,
+            "maximum_ns": 6417237153,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 2275495936,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 7122674,
+            "allocated_bytes": 11563925646,
+            "reallocation_calls": 1031309,
+            "parameter_conversion_ns": 4228,
+            "engine_call_ns": 1215136073,
+            "result_conversion_ns": 3564872594,
+            "live_requested_bytes_before": 823373910,
+            "live_requested_bytes_after": 823373910,
+            "process_peak_requested_bytes": 927861725
+          },
+          "allocation_counter_consistency_valid": true
+        },
+        "retained": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 357878952,
+            "nearest_rank_p95_ns": 365634766,
+            "maximum_ns": 368443674,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 1043914752,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 70671,
+            "allocated_bytes": 25301678,
+            "reallocation_calls": 17,
+            "parameter_conversion_ns": 0,
+            "engine_call_ns": 0,
+            "result_conversion_ns": 0,
+            "live_requested_bytes_before": 823339506,
+            "live_requested_bytes_after": 823339506,
+            "process_peak_requested_bytes": 918922939
+          },
+          "allocation_counter_consistency_valid": true
+        },
+        "arrow": {
+          "query_latency": {
+            "samples": 31,
+            "median_ns": 864854294,
+            "nearest_rank_p95_ns": 886099575,
+            "maximum_ns": 909021268,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "whole_child_peak_rss_bytes": 1043939328,
+          "native_nonzero_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "owner_release_and_parity": true,
+          "warmup_allocation_and_pool_counters": "not collected; not zero",
+          "native_medians": {
+            "allocation_calls": 70686,
+            "allocated_bytes": 29031654,
+            "reallocation_calls": 17,
+            "parameter_conversion_ns": 0,
+            "engine_call_ns": 0,
+            "result_conversion_ns": 0,
+            "live_requested_bytes_before": 823339506,
+            "live_requested_bytes_after": 823339506,
+            "process_peak_requested_bytes": 918922939
+          },
+          "allocation_counter_consistency_valid": true
+        }
+      },
+      "same_configuration_child_rss_ratios_vs_owned": {
+        "retained": 0.4587636196068337,
+        "arrow": 0.4587744198898011
+      }
+    }
+  ],
+  "scope": "Currently collected positive numeric groups only; source/frozen producers verified by original collector. Cumulative requested allocation bytes are traffic, not live memory or RSS. Process-global allocation windows are not per-query leak proofs. Whole-child RSS includes fixture/setup, native/foreign heaps and instrumentation. Generic retained/Arrow conversion zeros are not absent-cost evidence; phase controls remain separate. No full110, causal/significance, whole-memory bound, production tails or approval claim."
+}

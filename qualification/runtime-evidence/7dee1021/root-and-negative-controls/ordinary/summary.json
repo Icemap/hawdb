@@ -1,0 +1,1203 @@
+{
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "engine_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "source": "1200a20af7b70af712da3d6ab716d93861100d61",
+  "tree": "dfef3baad8797ca528ab487b6f9e54ccb439374a",
+  "run": 39207199690,
+  "url": "https://github.com/nowledge-co/hawdb/actions/runs/39207199690",
+  "status": "queued",
+  "conclusion": null,
+  "expected_groups": 90,
+  "observed_complete_groups": 28,
+  "full_requested_matrix_observed": false,
+  "missing_groups": [
+    [
+      "fill",
+      "go",
+      "file",
+      1000
+    ],
+    [
+      "fill",
+      "go",
+      "file",
+      100000
+    ],
+    [
+      "fill",
+      "go",
+      "file",
+      1000000
+    ],
+    [
+      "fill",
+      "go",
+      "memory",
+      1000
+    ],
+    [
+      "fill",
+      "go",
+      "memory",
+      100000
+    ],
+    [
+      "fill",
+      "go",
+      "memory",
+      1000000
+    ],
+    [
+      "fill",
+      "python",
+      "file",
+      100000
+    ],
+    [
+      "fill",
+      "python",
+      "file",
+      1000000
+    ],
+    [
+      "fill",
+      "python",
+      "memory",
+      100000
+    ],
+    [
+      "fill",
+      "python",
+      "memory",
+      1000000
+    ],
+    [
+      "fill",
+      "rust",
+      "file",
+      100000
+    ],
+    [
+      "fill",
+      "rust",
+      "file",
+      1000000
+    ],
+    [
+      "fill",
+      "rust",
+      "memory",
+      100000
+    ],
+    [
+      "fill",
+      "rust",
+      "memory",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "go",
+      "file",
+      100000
+    ],
+    [
+      "fill_bulk",
+      "go",
+      "file",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "go",
+      "memory",
+      100000
+    ],
+    [
+      "fill_bulk",
+      "go",
+      "memory",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "python",
+      "file",
+      100000
+    ],
+    [
+      "fill_bulk",
+      "python",
+      "file",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "python",
+      "memory",
+      100000
+    ],
+    [
+      "fill_bulk",
+      "python",
+      "memory",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "rust",
+      "file",
+      100000
+    ],
+    [
+      "fill_bulk",
+      "rust",
+      "file",
+      1000000
+    ],
+    [
+      "fill_bulk",
+      "rust",
+      "memory",
+      100000
+    ],
+    [
+      "fill_bulk",
+      "rust",
+      "memory",
+      1000000
+    ],
+    [
+      "point",
+      "go",
+      "file",
+      100000
+    ],
+    [
+      "point",
+      "go",
+      "file",
+      1000000
+    ],
+    [
+      "point",
+      "go",
+      "memory",
+      100000
+    ],
+    [
+      "point",
+      "go",
+      "memory",
+      1000000
+    ],
+    [
+      "point",
+      "python",
+      "file",
+      100000
+    ],
+    [
+      "point",
+      "python",
+      "file",
+      1000000
+    ],
+    [
+      "point",
+      "python",
+      "memory",
+      100000
+    ],
+    [
+      "point",
+      "python",
+      "memory",
+      1000000
+    ],
+    [
+      "point",
+      "rust",
+      "file",
+      100000
+    ],
+    [
+      "point",
+      "rust",
+      "file",
+      1000000
+    ],
+    [
+      "point",
+      "rust",
+      "memory",
+      100000
+    ],
+    [
+      "point",
+      "rust",
+      "memory",
+      1000000
+    ],
+    [
+      "select",
+      "go",
+      "file",
+      100000
+    ],
+    [
+      "select",
+      "go",
+      "file",
+      1000000
+    ],
+    [
+      "select",
+      "go",
+      "memory",
+      100000
+    ],
+    [
+      "select",
+      "go",
+      "memory",
+      1000000
+    ],
+    [
+      "select",
+      "python",
+      "file",
+      100000
+    ],
+    [
+      "select",
+      "python",
+      "file",
+      1000000
+    ],
+    [
+      "select",
+      "python",
+      "memory",
+      100000
+    ],
+    [
+      "select",
+      "python",
+      "memory",
+      1000000
+    ],
+    [
+      "select",
+      "rust",
+      "file",
+      100000
+    ],
+    [
+      "select",
+      "rust",
+      "file",
+      1000000
+    ],
+    [
+      "select",
+      "rust",
+      "memory",
+      100000
+    ],
+    [
+      "select",
+      "rust",
+      "memory",
+      1000000
+    ],
+    [
+      "wide",
+      "go",
+      "file",
+      100000
+    ],
+    [
+      "wide",
+      "go",
+      "file",
+      1000000
+    ],
+    [
+      "wide",
+      "go",
+      "memory",
+      100000
+    ],
+    [
+      "wide",
+      "go",
+      "memory",
+      1000000
+    ],
+    [
+      "wide",
+      "python",
+      "file",
+      100000
+    ],
+    [
+      "wide",
+      "python",
+      "file",
+      1000000
+    ],
+    [
+      "wide",
+      "python",
+      "memory",
+      100000
+    ],
+    [
+      "wide",
+      "python",
+      "memory",
+      1000000
+    ],
+    [
+      "wide",
+      "rust",
+      "file",
+      100000
+    ],
+    [
+      "wide",
+      "rust",
+      "file",
+      1000000
+    ],
+    [
+      "wide",
+      "rust",
+      "memory",
+      100000
+    ],
+    [
+      "wide",
+      "rust",
+      "memory",
+      1000000
+    ]
+  ],
+  "reports": [
+    {
+      "shard": [
+        "fill_bulk",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.1392153596346835,
+          "query_boundary_ns_median_speedup": 1.142581511620065,
+          "write_boundary_ns_median_speedup": 1.077775691378831,
+          "read_boundary_ns_median_speedup": 1.687201904488009,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12166870794
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.086921747037995,
+          "query_boundary_ns_median_speedup": 1.0913514801974535,
+          "write_boundary_ns_median_speedup": 1.0374631217639902,
+          "read_boundary_ns_median_speedup": 1.573871487671052,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12166568721
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.053795382029298,
+          "query_boundary_ns_median_speedup": 1.0685300948818242,
+          "write_boundary_ns_median_speedup": 1.0151839531654154,
+          "read_boundary_ns_median_speedup": 1.4629014247096188,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12166013863
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0753988642801688,
+          "query_boundary_ns_median_speedup": 1.102385015782964,
+          "write_boundary_ns_median_speedup": 1.042066470721945,
+          "read_boundary_ns_median_speedup": 1.5468365913272561,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12166885602
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0753702878917313,
+          "query_boundary_ns_median_speedup": 1.0763678622165493,
+          "write_boundary_ns_median_speedup": 1.0327700361983556,
+          "read_boundary_ns_median_speedup": 1.2881700348268348,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12166704838
+    },
+    {
+      "shard": [
+        "fill_bulk",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "fill_bulk",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0585215799837158,
+          "query_boundary_ns_median_speedup": 1.0587429846687852,
+          "write_boundary_ns_median_speedup": 1.0194803700477368,
+          "read_boundary_ns_median_speedup": 1.2663263511294525,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12167142066
+    },
+    {
+      "shard": [
+        "select",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "select",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.6137974498446486,
+          "query_boundary_ns_median_speedup": 1.6207043821883445,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.6207043821883445,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12167421537
+    },
+    {
+      "shard": [
+        "select",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "select",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.5792960187084732,
+          "query_boundary_ns_median_speedup": 1.592426993408048,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.592426993408048,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12167547070
+    },
+    {
+      "shard": [
+        "select",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "select",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0856076215300785,
+          "query_boundary_ns_median_speedup": 1.5577358390502032,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.5577358390502032,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12168206074
+    },
+    {
+      "shard": [
+        "select",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "select",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.1056141926387046,
+          "query_boundary_ns_median_speedup": 1.5436870510057925,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.5436870510057925,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12168066498
+    },
+    {
+      "shard": [
+        "select",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "select",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.3080818121597835,
+          "query_boundary_ns_median_speedup": 1.329432727256201,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.329432727256201,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12168440940
+    },
+    {
+      "shard": [
+        "select",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "select",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.3069442360241976,
+          "query_boundary_ns_median_speedup": 1.319506135539396,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.319506135539396,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12168082532
+    },
+    {
+      "shard": [
+        "wide",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "wide",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.6958492951271835,
+          "query_boundary_ns_median_speedup": 1.826321555369904,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.826321555369904,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12168845538
+    },
+    {
+      "shard": [
+        "wide",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "wide",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.081054335360963,
+          "query_boundary_ns_median_speedup": 1.5209192270955398,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.5209192270955398,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12169285047
+    },
+    {
+      "shard": [
+        "wide",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "wide",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.689263659011507,
+          "query_boundary_ns_median_speedup": 1.789229764895179,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.789229764895179,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12168448986
+    },
+    {
+      "shard": [
+        "wide",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "wide",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0980381970655801,
+          "query_boundary_ns_median_speedup": 1.4291528127085806,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.4291528127085806,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12168827705
+    },
+    {
+      "shard": [
+        "wide",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "wide",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.0452243915726103,
+          "query_boundary_ns_median_speedup": 1.047197293153574,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.047197293153574,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12169870496
+    },
+    {
+      "shard": [
+        "wide",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "wide",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.164125395119903,
+          "query_boundary_ns_median_speedup": 1.1717763550111835,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.1717763550111835,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12169756143
+    },
+    {
+      "shard": [
+        "point",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "point",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.6678622777280636,
+          "query_boundary_ns_median_speedup": 1.675736724546414,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.675736724546414,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12169806194
+    },
+    {
+      "shard": [
+        "point",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "point",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.8015046200917824,
+          "query_boundary_ns_median_speedup": 1.8082475937617968,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.8082475937617968,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12169841141
+    },
+    {
+      "shard": [
+        "point",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "point",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.552152100933613,
+          "query_boundary_ns_median_speedup": 1.6054854689789895,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.6054854689789895,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12169589303
+    },
+    {
+      "shard": [
+        "point",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "point",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.5847608394947692,
+          "query_boundary_ns_median_speedup": 1.6253374289181393,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.6253374289181393,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12169704267
+    },
+    {
+      "shard": [
+        "point",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "point",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.7823353175352104,
+          "query_boundary_ns_median_speedup": 1.78447393992694,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.78447393992694,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12170641612
+    },
+    {
+      "shard": [
+        "point",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "point",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 1.547273925031387,
+          "query_boundary_ns_median_speedup": 1.5502530507065257,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 1.5502530507065257,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12170780292
+    },
+    {
+      "shard": [
+        "fill",
+        "rust",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 13.374774910155462,
+          "query_boundary_ns_median_speedup": 13.409547151316417,
+          "write_boundary_ns_median_speedup": 14.030089888665941,
+          "read_boundary_ns_median_speedup": 1.344007892739043,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12170552689
+    },
+    {
+      "shard": [
+        "fill",
+        "rust",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "rust",
+          "case": "fill",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 2.6469185640009023,
+          "query_boundary_ns_median_speedup": 2.647492772239027,
+          "write_boundary_ns_median_speedup": 2.653558736351049,
+          "read_boundary_ns_median_speedup": 1.4642014477675465,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12171027028
+    },
+    {
+      "shard": [
+        "fill",
+        "python",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 9.570053791995344,
+          "query_boundary_ns_median_speedup": 10.323893841131946,
+          "write_boundary_ns_median_speedup": 10.646477995392797,
+          "read_boundary_ns_median_speedup": 1.7672956987697936,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12170518253
+    },
+    {
+      "shard": [
+        "fill",
+        "python",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "python",
+          "case": "fill",
+          "size": 1000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 2.5641271778704873,
+          "query_boundary_ns_median_speedup": 2.587479478667701,
+          "write_boundary_ns_median_speedup": 2.5959044040821713,
+          "read_boundary_ns_median_speedup": 1.6501426927203986,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12171280830
+    }
+  ],
+  "collection_or_integrity_errors": [],
+  "scope": "Source/selection and complete archived producer/report verification. Persistent range cache and incremental summaries only; benchmark source, workloads, budgets, samples and deadlines unchanged. All adverse/partial/setup failures remain explicit. No final acceptance, approval or whole-memory/source-reuse proof."
+}

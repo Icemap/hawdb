@@ -1,0 +1,5 @@
+{
+  "original_bytes": 309,
+  "original_sha256": "36a1501be226707b66ee37e45cda1ceb0250f94a8154322466b168b3f521e2a2",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_linux_ci_benchmark_integrity_checksum_smoke_test\n-----------------------------------------------------------------------------\nbenchmark started: hawdb_bench_integrity_checksum\nbenchmark completed: hawdb_bench_integrity_checksum (20s)\n"
+}

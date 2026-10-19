@@ -1,0 +1,442 @@
+{
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "production_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "observed_at": 1792397295.830822,
+  "groups": [
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12167947377,
+      "bundle_sha256": "79c4036f700d343fac9fce6c1a76cb9ac275501816707f8d1ab3c624d0b02e17",
+      "classification": "independent_memory_refusal",
+      "modes": {
+        "owned": {
+          "error_types": [
+            "ResourceBudgetError"
+          ],
+          "errors": [
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 130124173,
+            "nearest_rank_p95": 137841351,
+            "maximum": 157386657
+          },
+          "process_peak_rss_bytes": 1043918848,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": false,
+          "warmup_allocation_pool_counters": "not collected; not zero"
+        },
+        "retained": {
+          "error_types": [
+            "RetainedError"
+          ],
+          "errors": [
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 72009,
+            "nearest_rank_p95": 160702,
+            "maximum": 237157
+          },
+          "process_peak_rss_bytes": 1043849216,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": true,
+          "warmup_allocation_pool_counters": "not collected; not zero"
+        },
+        "arrow": {
+          "error_types": [
+            "RetainedError"
+          ],
+          "errors": [
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 47762,
+            "nearest_rank_p95": 119159,
+            "maximum": 199730
+          },
+          "process_peak_rss_bytes": 1043894272,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": true,
+          "warmup_allocation_pool_counters": "not collected; not zero"
+        }
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12168617249,
+      "bundle_sha256": "a8182547d3bf2cc191b005258df763f90201a9c2a8c2996fef297646821d60a8",
+      "classification": "independent_memory_refusal",
+      "modes": {
+        "owned": {
+          "error_types": [
+            "ResourceBudgetError"
+          ],
+          "errors": [
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 215403382,
+            "nearest_rank_p95": 222132544,
+            "maximum": 222324282
+          },
+          "process_peak_rss_bytes": 1044017152,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": false,
+          "warmup_allocation_pool_counters": "not collected; not zero",
+          "native_allocation_medians": {
+            "allocation_calls": 1244498,
+            "allocated_bytes": 2016481411,
+            "deallocation_calls": 1244498,
+            "deallocated_bytes": 2016481411,
+            "process_peak_requested_bytes": 918923200
+          },
+          "python_traced_peak_bytes_median": 3268,
+          "python_traced_live_bytes_median": 2791
+        },
+        "retained": {
+          "error_types": [
+            "RetainedError"
+          ],
+          "errors": [
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 146321,
+            "nearest_rank_p95": 166371,
+            "maximum": 271058
+          },
+          "process_peak_rss_bytes": 1043759104,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": true,
+          "warmup_allocation_pool_counters": "not collected; not zero",
+          "native_allocation_medians": {
+            "allocation_calls": 349,
+            "allocated_bytes": 46997,
+            "deallocation_calls": 349,
+            "deallocated_bytes": 46997,
+            "process_peak_requested_bytes": 918922939
+          },
+          "python_traced_peak_bytes_median": 3867,
+          "python_traced_live_bytes_median": 3832
+        },
+        "arrow": {
+          "error_types": [
+            "RetainedError"
+          ],
+          "errors": [
+            "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 138268,
+            "nearest_rank_p95": 162755,
+            "maximum": 259911
+          },
+          "process_peak_rss_bytes": 1044201472,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": true,
+          "warmup_allocation_pool_counters": "not collected; not zero",
+          "native_allocation_medians": {
+            "allocation_calls": 349,
+            "allocated_bytes": 46997,
+            "deallocation_calls": 349,
+            "deallocated_bytes": 46997,
+            "process_peak_requested_bytes": 918922939
+          },
+          "python_traced_peak_bytes_median": 3867,
+          "python_traced_live_bytes_median": 3832
+        }
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12168638635,
+      "bundle_sha256": "23cd81079af744435d91edb04f55542741e86e8c22369395b842655aaf5d1998",
+      "classification": "independent_memory_refusal",
+      "modes": {
+        "owned": {
+          "error_types": [
+            "ResourceBudgetError"
+          ],
+          "errors": [
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 357963913,
+            "nearest_rank_p95": 362632338,
+            "maximum": 363553160
+          },
+          "process_peak_rss_bytes": 1128394752,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": false,
+          "warmup_allocation_pool_counters": "not collected; not zero"
+        },
+        "retained": {
+          "error_types": [
+            "RetainedError"
+          ],
+          "errors": [
+            "execution error: query memory account retained_source (external_read) would use 1071030928 bytes, exceeding its 268435456-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 168330,
+            "nearest_rank_p95": 216020,
+            "maximum": 306130
+          },
+          "process_peak_rss_bytes": 1092456448,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": true,
+          "warmup_allocation_pool_counters": "not collected; not zero"
+        },
+        "arrow": {
+          "error_types": [
+            "RetainedError"
+          ],
+          "errors": [
+            "execution error: query memory account retained_source (external_read) would use 1071030896 bytes, exceeding its 268435456-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 170040,
+            "nearest_rank_p95": 209514,
+            "maximum": 308725
+          },
+          "process_peak_rss_bytes": 1129676800,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": true,
+          "warmup_allocation_pool_counters": "not collected; not zero"
+        }
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12169082992,
+      "bundle_sha256": "38096f009b2d62f93c755f3a10d59196bcf8e29b6e3310bbfa445fa2023c6199",
+      "classification": "independent_memory_refusal",
+      "modes": {
+        "owned": {
+          "error_types": [
+            "ResourceBudgetError"
+          ],
+          "errors": [
+            "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 214754147,
+            "nearest_rank_p95": 217800294,
+            "maximum": 218487046
+          },
+          "process_peak_rss_bytes": 1138999296,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": false,
+          "warmup_allocation_pool_counters": "not collected; not zero",
+          "native_allocation_medians": {
+            "allocation_calls": 1244536,
+            "allocated_bytes": 2016484792,
+            "deallocation_calls": 1244536,
+            "deallocated_bytes": 2016484792,
+            "process_peak_requested_bytes": 974553979
+          },
+          "python_traced_peak_bytes_median": 3268,
+          "python_traced_live_bytes_median": 2791
+        },
+        "retained": {
+          "error_types": [
+            "RetainedError"
+          ],
+          "errors": [
+            "execution error: query memory account retained_source (external_read) would use 1071030224 bytes, exceeding its 268435456-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 141082,
+            "nearest_rank_p95": 265769,
+            "maximum": 308053
+          },
+          "process_peak_rss_bytes": 1121873920,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": true,
+          "warmup_allocation_pool_counters": "not collected; not zero",
+          "native_allocation_medians": {
+            "allocation_calls": 349,
+            "allocated_bytes": 46997,
+            "deallocation_calls": 349,
+            "deallocated_bytes": 46997,
+            "process_peak_requested_bytes": 960771440
+          },
+          "python_traced_peak_bytes_median": 3867,
+          "python_traced_live_bytes_median": 3832
+        },
+        "arrow": {
+          "error_types": [
+            "RetainedError"
+          ],
+          "errors": [
+            "execution error: query memory account retained_source (external_read) would use 1071028240 bytes, exceeding its 268435456-byte budget"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 125288,
+            "nearest_rank_p95": 204287,
+            "maximum": 260110
+          },
+          "process_peak_rss_bytes": 1127989248,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": true,
+          "warmup_allocation_pool_counters": "not collected; not zero",
+          "native_allocation_medians": {
+            "allocation_calls": 349,
+            "allocated_bytes": 46997,
+            "deallocation_calls": 349,
+            "deallocated_bytes": 46997,
+            "process_peak_requested_bytes": 935656940
+          },
+          "python_traced_peak_bytes_median": 3867,
+          "python_traced_live_bytes_median": 3832
+        }
+      }
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "memory",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12170414143,
+      "bundle_sha256": "2deeae50ac5a5ec4305ade9a519551984195bad76e90f138ca4f71f861e2c08c",
+      "classification": "explicit_row_refusal",
+      "modes": {
+        "owned": {
+          "error_types": [
+            "ExecutionError"
+          ],
+          "errors": [
+            "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 1036831349,
+            "nearest_rank_p95": 1086888494,
+            "maximum": 1092305325
+          },
+          "process_peak_rss_bytes": 1045258240,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": false,
+          "warmup_allocation_pool_counters": "not collected; not zero"
+        },
+        "retained": {
+          "error_types": [
+            "RetainedError"
+          ],
+          "errors": [
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 718471511,
+            "nearest_rank_p95": 748101180,
+            "maximum": 750347341
+          },
+          "process_peak_rss_bytes": 1043931136,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": true,
+          "warmup_allocation_pool_counters": "not collected; not zero"
+        },
+        "arrow": {
+          "error_types": [
+            "ArrowMemoryError"
+          ],
+          "errors": [
+            "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+          ],
+          "measured_failures": 31,
+          "complete_attempt_ns": {
+            "median": 728955557,
+            "nearest_rank_p95": 741807526,
+            "maximum": 754373226
+          },
+          "process_peak_rss_bytes": 1044037632,
+          "native_nonzero_global_live_windows": [],
+          "native_counter_disagreements": [],
+          "arrow_pool_differences": [],
+          "final_retained_owner_cleanup_verified": true,
+          "warmup_allocation_pool_counters": "not collected; not zero"
+        }
+      }
+    }
+  ],
+  "scope": "Collected source7dee negative numeric groups only. Original collector validates frozen producers. All31 failures and discarded warmup retained. Complete-attempt durations are failed-operation costs, not successful-query latency or speedup. Tracemalloc, native traffic/global windows, Arrow pool and whole-child RSS are distinct. Final owner cleanup does not prove no earlier valid batch delivery. Does not qualify newer main46bf, whole resource110, leak absence or independent approval."
+}

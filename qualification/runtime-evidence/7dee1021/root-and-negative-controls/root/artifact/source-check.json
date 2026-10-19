@@ -1,0 +1,12 @@
+{
+  "published_pr_head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "current_main": "032296335928261a17d7c98088cee7e1c869957c",
+  "qualification_head": "34988952ebae65768950a269d9ddab5a0870bf1e",
+  "qualification_tree": "beb53ddbf624cd2d51e3c6253cb5e1cebf5128d3",
+  "production_integration_tree": "38e8da6f496f7c982be84f15f5ae4cf62f0fbe25",
+  "qualification_overlay": [
+    ".github/workflows/native-bindings.yml"
+  ],
+  "lane": "root",
+  "scope": "Standalone current-main integration tests; not a Prow/Tide status or approval. No fuzz campaign, deadline or internal thread override."
+}

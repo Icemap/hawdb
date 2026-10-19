@@ -1,0 +1,770 @@
+{
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "engine_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "source": "1200a20af7b70af712da3d6ab716d93861100d61",
+  "source_summary_sha256": "e836d565f3d94e791d36797fa1c778c44d561b2b16d374e5945a830cf26db1c4",
+  "observed_at": 1792397062.918247,
+  "observed_complete_groups": 28,
+  "expected_groups": 90,
+  "comparable": [
+    {
+      "artifact": 12166870794,
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.1392153596346835,
+        "query_boundary_ns_median_speedup": 1.142581511620065,
+        "write_boundary_ns_median_speedup": 1.077775691378831,
+        "read_boundary_ns_median_speedup": 1.687201904488009,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12166568721,
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.086921747037995,
+        "query_boundary_ns_median_speedup": 1.0913514801974535,
+        "write_boundary_ns_median_speedup": 1.0374631217639902,
+        "read_boundary_ns_median_speedup": 1.573871487671052,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12166013863,
+      "selection": [
+        "fill_bulk",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.053795382029298,
+        "query_boundary_ns_median_speedup": 1.0685300948818242,
+        "write_boundary_ns_median_speedup": 1.0151839531654154,
+        "read_boundary_ns_median_speedup": 1.4629014247096188,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12166885602,
+      "selection": [
+        "fill_bulk",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0753988642801688,
+        "query_boundary_ns_median_speedup": 1.102385015782964,
+        "write_boundary_ns_median_speedup": 1.042066470721945,
+        "read_boundary_ns_median_speedup": 1.5468365913272561,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12166704838,
+      "selection": [
+        "fill_bulk",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0753702878917313,
+        "query_boundary_ns_median_speedup": 1.0763678622165493,
+        "write_boundary_ns_median_speedup": 1.0327700361983556,
+        "read_boundary_ns_median_speedup": 1.2881700348268348,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12167142066,
+      "selection": [
+        "fill_bulk",
+        "go",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0585215799837158,
+        "query_boundary_ns_median_speedup": 1.0587429846687852,
+        "write_boundary_ns_median_speedup": 1.0194803700477368,
+        "read_boundary_ns_median_speedup": 1.2663263511294525,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12167421537,
+      "selection": [
+        "select",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "select",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.6137974498446486,
+        "query_boundary_ns_median_speedup": 1.6207043821883445,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.6207043821883445,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12167547070,
+      "selection": [
+        "select",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "select",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.5792960187084732,
+        "query_boundary_ns_median_speedup": 1.592426993408048,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.592426993408048,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12168206074,
+      "selection": [
+        "select",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "select",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0856076215300785,
+        "query_boundary_ns_median_speedup": 1.5577358390502032,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.5577358390502032,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12168066498,
+      "selection": [
+        "select",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "select",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.1056141926387046,
+        "query_boundary_ns_median_speedup": 1.5436870510057925,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.5436870510057925,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12168440940,
+      "selection": [
+        "select",
+        "go",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "select",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.3080818121597835,
+        "query_boundary_ns_median_speedup": 1.329432727256201,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.329432727256201,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12168082532,
+      "selection": [
+        "select",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "select",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.3069442360241976,
+        "query_boundary_ns_median_speedup": 1.319506135539396,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.319506135539396,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12168845538,
+      "selection": [
+        "wide",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "wide",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.6958492951271835,
+        "query_boundary_ns_median_speedup": 1.826321555369904,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.826321555369904,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12169285047,
+      "selection": [
+        "wide",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "wide",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.081054335360963,
+        "query_boundary_ns_median_speedup": 1.5209192270955398,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.5209192270955398,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12168448986,
+      "selection": [
+        "wide",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "wide",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.689263659011507,
+        "query_boundary_ns_median_speedup": 1.789229764895179,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.789229764895179,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12168827705,
+      "selection": [
+        "wide",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "wide",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0980381970655801,
+        "query_boundary_ns_median_speedup": 1.4291528127085806,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.4291528127085806,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12169870496,
+      "selection": [
+        "wide",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "wide",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0452243915726103,
+        "query_boundary_ns_median_speedup": 1.047197293153574,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.047197293153574,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12169756143,
+      "selection": [
+        "wide",
+        "go",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "wide",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.164125395119903,
+        "query_boundary_ns_median_speedup": 1.1717763550111835,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.1717763550111835,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12169806194,
+      "selection": [
+        "point",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "point",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.6678622777280636,
+        "query_boundary_ns_median_speedup": 1.675736724546414,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.675736724546414,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12169841141,
+      "selection": [
+        "point",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "point",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.8015046200917824,
+        "query_boundary_ns_median_speedup": 1.8082475937617968,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.8082475937617968,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12169589303,
+      "selection": [
+        "point",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "point",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.552152100933613,
+        "query_boundary_ns_median_speedup": 1.6054854689789895,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.6054854689789895,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12169704267,
+      "selection": [
+        "point",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "point",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.5847608394947692,
+        "query_boundary_ns_median_speedup": 1.6253374289181393,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.6253374289181393,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12170641612,
+      "selection": [
+        "point",
+        "go",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "point",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.7823353175352104,
+        "query_boundary_ns_median_speedup": 1.78447393992694,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.78447393992694,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12170780292,
+      "selection": [
+        "point",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "point",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.547273925031387,
+        "query_boundary_ns_median_speedup": 1.5502530507065257,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 1.5502530507065257,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12170552689,
+      "selection": [
+        "fill",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 13.374774910155462,
+        "query_boundary_ns_median_speedup": 13.409547151316417,
+        "write_boundary_ns_median_speedup": 14.030089888665941,
+        "read_boundary_ns_median_speedup": 1.344007892739043,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12171027028,
+      "selection": [
+        "fill",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 2.6469185640009023,
+        "query_boundary_ns_median_speedup": 2.647492772239027,
+        "write_boundary_ns_median_speedup": 2.653558736351049,
+        "read_boundary_ns_median_speedup": 1.4642014477675465,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12170518253,
+      "selection": [
+        "fill",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 9.570053791995344,
+        "query_boundary_ns_median_speedup": 10.323893841131946,
+        "write_boundary_ns_median_speedup": 10.646477995392797,
+        "read_boundary_ns_median_speedup": 1.7672956987697936,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12171280830,
+      "selection": [
+        "fill",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 2.5641271778704873,
+        "query_boundary_ns_median_speedup": 2.587479478667701,
+        "write_boundary_ns_median_speedup": 2.5959044040821713,
+        "read_boundary_ns_median_speedup": 1.6501426927203986,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    }
+  ],
+  "adverse": [],
+  "non_comparable": [],
+  "scope": "Producer-verified original ordinary observations. Ratios are baseline/candidate medians, three samples per side. None means unavailable, not zero. No significance, causality, universal improvement or acceptance claim."
+}

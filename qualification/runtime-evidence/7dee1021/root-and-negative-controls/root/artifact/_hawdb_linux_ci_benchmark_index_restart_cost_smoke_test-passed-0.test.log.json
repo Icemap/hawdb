@@ -1,0 +1,5 @@
+{
+  "original_bytes": 309,
+  "original_sha256": "940d486c776a146a433d7ab45d182f702f3c3e0672fc5f36e4f1be645d889b11",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_linux_ci_benchmark_index_restart_cost_smoke_test\n-----------------------------------------------------------------------------\nbenchmark started: hawdb_bench_index_restart_cost\nbenchmark completed: hawdb_bench_index_restart_cost (14s)\n"
+}

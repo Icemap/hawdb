@@ -108,3 +108,33 @@ referenced GitHub artifacts rather than this repository packet; the original
 collectors verified their hashes before auditing the reports. Full ordinary90,
 resource110, foreign-heap/error closure, genuine review/approval and actual final
 Tide merge/history exclusion audit remain required.
+
+## Root runtime and negative resource snapshot
+
+The source-guarded main032 standalone root lane passes59/59 selected targets,
+including all58 historical targets and the suite-discovered analytics RSS test.
+Full general passes1786/0failed/1ignored; contracts33 pass. Complete source,
+selection, BEP and raw logs are preserved. Crates was still running at collection.
+This is not a Prow status or a disposition of earlier local checkpoint failures.
+
+The original source7dee matrix snapshot remains partial. Positive numeric and
+negative numeric receipts preserve31 measured samples per mode, whole-child RSS,
+native allocation traffic/global windows, Python traced heap and Arrow pool where
+actually collected. Refusal durations describe complete failed attempts and do
+not establish successful-query speedups. Default row0 failures are independent
+memory refusals; explicit1M+1 failures exceed row1M while their reported payload
+stays below its separate budget. Final zero owners proves cleanup, not atomic
+whole-result delivery. Nonzero global windows and unavailable warmup counters
+remain explicit. The first negative auditor used incorrect free-text matching;
+its preflight failure is retained and corrected to verify typed ResultBudget
+rows/payload plus the actual independent configuration. No runtime was retried.
+
+Actual main has since advanced to46bfde00 (#1101), changing native executor scalar
+error propagation and expression memory admission. The conflict-free6ea7fb5d
+integration tree is only prepared, not committed or qualified by these results.
+Source7dee measurements and main032 runtime results cannot qualify main46bf.
+All original campaigns remain preserved. Final-source full90/110 acceptance,
+failure disposition, independent review/approval, normal Tide integration and
+actual-main reachable-history audit remain required. The30 removed raw report
+blobs are absent from current46bf main history and prepared tree but remain
+feature-history reachable, requiring the actual final squash path.
