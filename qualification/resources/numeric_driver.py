@@ -30,8 +30,11 @@ def main():
     parser.add_argument("--samples", type=int, default=31)
     parser.add_argument("--instrumented", action="store_true")
     parser.add_argument("--phase-only", action="store_true")
+    parser.add_argument("--setup-checkpoint-rows", type=int, default=0)
     args = parser.parse_args()
     assert not (args.phase_only and args.instrumented)
+    assert args.setup_checkpoint_rows >= 0
+    assert args.setup_checkpoint_rows == 0 or args.backend == "file"
     assert not git("status", "--porcelain")
     assert git("merge-base", ENGINE, "HEAD") == ENGINE
     assert git("rev-parse", ENGINE + "^{tree}") == CAMPAIGN["engine_tree"]
@@ -64,6 +67,9 @@ def main():
                 "overlay_files": git("diff", "--name-only", ENGINE, "HEAD").splitlines(),
                 "scope": "Per-mode process RSS, native/foreign observations and31-sample observed tails. Plain and instrumented results are separate; no owned reference can pollute retained/Arrow RSS."}
     manifest["phase_instrumented"] = args.phase_only
+    manifest["setup_checkpoint_rows"] = args.setup_checkpoint_rows
+    if args.setup_checkpoint_rows:
+        manifest["fixture_scope"] = "Supplemental explicit-checkpoint setup; original failed campaign retained separately. No original latency or acceptance substitution."
     manifest["driver_sha256"] = digest(Path(__file__))
     if args.phase_only:
         manifest["scope"] = "Phase-only owned-native or retained prepare/pull and boundary residual. Separate from ordinary and allocation-instrumented measurements; no pure-conversion or whole-memory bound."
@@ -80,6 +86,8 @@ def main():
             command += ["--consumer-sha256", digest(frozen / "retained_boundary.py"),
                         "--extension-sha256", digest(frozen / "_hawdb.so"),
                         "--progress-report", str(output / (mode + "-progress.json"))]
+        if args.setup_checkpoint_rows:
+            command += ["--setup-checkpoint-rows", str(args.setup_checkpoint_rows)]
         if args.instrumented:
             command.append("--instrumented")
         env = {key: value for key, value in os.environ.items() if key not in ("PYTHONPATH", "PYTHONHOME")}
