@@ -64,3 +64,42 @@ reply and descriptor refusal/retry. CI runs the real Consumer allocation cases
 on Linux, macOS and Windows and preserves logs even if other stages fail.
 A passing stage does not resolve the known Windows legacy directory-publication
 failures or establish stationary generation serving behavior.
+
+## Native reservation crash-image refinement
+
+The regression
+`consumer_allocation_crash_images_preserve_reservation_barriers_and_nonreuse`
+drives the real facade and allocator under the native I/O recorder. It starts
+with a checkpointed graph row, reaches the initializer only after the kernel
+reservation returns, deliberately fails that initializer, and captures both the
+actual in-flight operation and the confirmed reservation. The latter is **not**
+a successful Consumer publication acknowledgement.
+
+| Actual recorded cut | TLA boundary | Allowed recovered high-water |
+| --- | --- | --- |
+| Candidate write, before seal | Propose, before SyncReserve | 0 |
+| Candidate rename, before parent barrier | In-flight SyncReserve | 0 or 3 |
+| Initializer reached after reservation return | Return, before target activation | 3 |
+
+The snapshots retain completed barriers while independently losing, persisting,
+isolating or reversing uncovered operations. Six prefix/suffix/interior fragment
+ranges of the candidate write additionally exercise torn bytes in both pending
+namespace orders. The test retains all generated physical schedules, including
+uncovered source checkpoint cleanup operations; it does not reduce those to
+logical JSON mutations. Each image is materialized and reopened by the actual
+embedded database, verifies the original graph row, then uses the real kernel
+allocator to require the next high-water to be exactly the recovered value plus
+three. This avoids repeating unrelated facade checkpoint/Search initialization
+for every recovery probe. Both configured graph durability policies are covered;
+allocation barriers remain synchronous in both.
+
+These are bounded generated schedules, not exhaustive device behavior. The
+recorder assumes trustworthy completed file/directory synchronization and atomic
+same-directory replacement. Windows namespace durability remains conditional on
+the platform/storage assumptions in `BRANCH_POWER_LOSS_QUALIFICATION.md`. The
+harness does not cover interrupted virgin bootstrap, native target birth,
+stationary selectors, concurrent view exchange, arbitrary sector corruption or
+GC authorization. Their separate qualification remains required. A compiled
+negative control must also prove this test rejects returning a reservation after
+selection without its parent barrier. Passing results must be recorded from the
+actual terminal run rather than inferred from the harness definition.

@@ -144,6 +144,7 @@ jobs:
           bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
             -- api::search_projection_consumer::tests::consumer_allocation_ \
             api::search_projection_consumer::tests::empty_source_epoch_zero_and_repeated_catch_up_are_valid \
+            consumer_allocation_crash_images_preserve_reservation_barriers_and_nonreuse \
             --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/consumer-allocation.txt
 
