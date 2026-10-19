@@ -1,0 +1,26 @@
+--- original/python_boundary.py
++++ supplement/python_boundary.py
+@@ -107,8 +107,22 @@
+             "durability": "SyncOnEveryWrite", "prefetch": 0,
+         }
+     except Exception as error:
++        failure_heap = {
++            "available": False,
++            "reason": "query tracing window has not started",
++            "scope": "query_tracing_window_before_error_cleanup",
++        }
++        if tracing_started:
++            host_current, host_peak = tracemalloc.get_traced_memory()
++            failure_heap = {
++                "available": True,
++                "python_traced_current_bytes": host_current,
++                "python_traced_peak_bytes": host_peak,
++                "scope": "query_tracing_window_before_error_cleanup",
++            }
+         return {"status": "error", "layer": "python", "phase": phase,
+-                "error_type": type(error).__name__, "error": str(error)}
++                "error_type": type(error).__name__, "error": str(error),
++                "failure_python_traced_heap": failure_heap}
+     finally:
+         if tracing_started:
+             tracemalloc.stop()

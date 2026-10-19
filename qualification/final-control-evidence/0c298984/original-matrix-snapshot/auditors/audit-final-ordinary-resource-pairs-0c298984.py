@@ -11,11 +11,20 @@ raw_summary = (root / 'summary.json').read_bytes()
 s = json.loads(raw_summary)
 assert s['engine'] == '0c2989842321d10e91f136f3c924badb07038add'
 audits = []
+refusal_groups = []
 for group in s['reports']:
     if group['group'][0] != 'ordinary':
         continue
     assert group['verified_files'] == 12
     raw = (root / f"artifact-{group['artifact']}.json").read_bytes()
+    if not all(group['sides'][side]['success'] for side in ['baseline', 'candidate']):
+        refusal_audit = json.loads((B / '986-0c298984-original-ordinary-resource-refusals-audit.json').read_text())
+        assert refusal_audit['engine'] == s['engine'] and refusal_audit['source'] == s['source']
+        audited = next(a for a in refusal_audit['groups'] if a['artifact'] == group['artifact'])
+        assert audited['group'] == group['group']
+        assert audited['bundle_sha256'] == hashlib.sha256(raw).hexdigest()
+        refusal_groups.append(audited)
+        continue
     reports = json.loads(raw)['reports']
     values = {}
     go_host_profiles = {}
@@ -56,6 +65,7 @@ for group in s['reports']:
 out = {'engine': s['engine'], 'source': s['source'], 'run': s['run'],
        'observed_at': time.time(), 'summary_sha256': hashlib.sha256(raw_summary).hexdigest(),
        'audited_pairs': len(audits), 'pairs': audits,
+       'separately_audited_refusal_groups': refusal_groups,
        'scope': 'Original instrumented resource pairs only. Three measured processes plus one discarded '
                 'per side. All reported allocation/conversion/traced-heap/RSS medians recomputed. '
                 'Native requested traffic excludes foreign heaps; whole-process RSS includes setup/runtime/'

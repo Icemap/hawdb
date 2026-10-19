@@ -1,0 +1,59 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "receipt_sha256": "804a86a00ea862ea89621efe6e60fa53420224246677c2be8d42d5351c64ce93",
+  "source_audit_sha256": "0af418a8f5679eda5d6ddad16a8cf8bb155636571d2fd317f1d58196924ffeb9",
+  "terminal": true,
+  "expected_samples_including_discarded": 16,
+  "observed_samples": 16,
+  "groups": [
+    {
+      "side": "baseline",
+      "backend": "memory",
+      "observed_attempts": 4,
+      "measured_samples": 3,
+      "complete": true,
+      "observed_heap_medians": {
+        "python_traced_current_bytes": 2515196,
+        "python_traced_peak_bytes": 29691087
+      },
+      "scope": "query_tracing_window_before_error_cleanup"
+    },
+    {
+      "side": "baseline",
+      "backend": "file",
+      "observed_attempts": 4,
+      "measured_samples": 3,
+      "complete": true,
+      "observed_heap_medians": {
+        "python_traced_current_bytes": 2515224,
+        "python_traced_peak_bytes": 29691115
+      },
+      "scope": "query_tracing_window_before_error_cleanup"
+    },
+    {
+      "side": "candidate",
+      "backend": "memory",
+      "observed_attempts": 4,
+      "measured_samples": 3,
+      "complete": true,
+      "observed_heap_medians": {
+        "python_traced_current_bytes": 56793352,
+        "python_traced_peak_bytes": 56793352
+      },
+      "scope": "successful_query_tracing_window"
+    },
+    {
+      "side": "candidate",
+      "backend": "file",
+      "observed_attempts": 4,
+      "measured_samples": 3,
+      "complete": true,
+      "observed_heap_medians": {
+        "python_traced_current_bytes": 56793380,
+        "python_traced_peak_bytes": 56793380
+      },
+      "scope": "successful_query_tracing_window"
+    }
+  ],
+  "scope": "Supplemental local observer only; original 90/110 counts unchanged. Failure Python tracing begins after setup/warmup and ends before cleanup; native failure window includes full producer. No cross-scope performance ratio or leak claim."
+}

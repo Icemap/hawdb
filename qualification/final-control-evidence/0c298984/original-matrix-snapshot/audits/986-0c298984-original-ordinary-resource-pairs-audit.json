@@ -2,8 +2,8 @@
   "engine": "0c2989842321d10e91f136f3c924badb07038add",
   "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
   "run": 39154779183,
-  "observed_at": 1792372791.3911061,
-  "summary_sha256": "3550f1c550c26d526cc60fca4127cfce5b182505685e8d393b484343e1ff8e24",
+  "observed_at": 1792376260.419019,
+  "summary_sha256": "66341caf746d3148d97b9e38283b3c34cccc5714081db8508545d9742741484f",
   "audited_pairs": 30,
   "pairs": [
     {
@@ -1805,6 +1805,454 @@
           "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns"
         }
       }
+    }
+  ],
+  "separately_audited_refusal_groups": [
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "file",
+        "default",
+        "true",
+        "fill_bulk",
+        "rust"
+      ],
+      "artifact": 12157433116,
+      "bundle_sha256": "acd73c7f0105c476bc2e855b48af090095186db8f5aa935717d629e91f64f16a",
+      "sides": {
+        "baseline": {
+          "success": false,
+          "errors": [
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "reported_error_types": [],
+          "reported_error_phases": [],
+          "failed_child_attempts": 4,
+          "measured_failure_native_medians": {
+            "allocated_bytes": 3571350846,
+            "allocation_calls": 17352345,
+            "deallocated_bytes": 3641296129,
+            "deallocation_calls": 17852351,
+            "live_requested_bytes_after": 1605,
+            "live_requested_bytes_before": 69946888,
+            "process_peak_requested_bytes": 570470236,
+            "reallocation_calls": 1227473
+          },
+          "failure_python_traced_fields_present": false,
+          "failure_process_peak_RSS_median": 649019392,
+          "scope": "producer_run_including_setup_warmup_and_cleanup",
+          "usable_query_latency": false
+        },
+        "candidate": {
+          "success": true,
+          "observed_medians": {
+            "process_peak_rss_bytes": 653488128,
+            "query_boundary_ns": 2709545416,
+            "consumer_ns": 11403426,
+            "native_profile": {
+              "allocated_bytes": 3963043710,
+              "allocation_calls": 15774524,
+              "deallocated_bytes": 3831469232,
+              "deallocation_calls": 14723023,
+              "live_requested_bytes_after": 201755222,
+              "live_requested_bytes_before": 70180744,
+              "process_peak_requested_bytes": 570580798,
+              "reallocation_calls": 1299424
+            }
+          },
+          "scope": "successful query window; whole-process RSS separately includes setup/runtime/consumer"
+        }
+      },
+      "paired_query_or_allocation_ratio": null
+    },
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "memory",
+        "default",
+        "true",
+        "fill_bulk",
+        "rust"
+      ],
+      "artifact": 12158245573,
+      "bundle_sha256": "2844e3fc0cada13e6d336089ac055d4a13c02fc5c590c1e5088823e6bfbe2286",
+      "sides": {
+        "baseline": {
+          "success": false,
+          "errors": [
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "reported_error_types": [],
+          "reported_error_phases": [],
+          "failed_child_attempts": 4,
+          "measured_failure_native_medians": {
+            "allocated_bytes": 3364768161,
+            "allocation_calls": 14946283,
+            "deallocated_bytes": 3434714267,
+            "deallocation_calls": 15446294,
+            "live_requested_bytes_after": 788,
+            "live_requested_bytes_before": 69946894,
+            "process_peak_requested_bytes": 529535261,
+            "reallocation_calls": 125785
+          },
+          "failure_python_traced_fields_present": false,
+          "failure_process_peak_RSS_median": 611086336,
+          "scope": "producer_run_including_setup_warmup_and_cleanup",
+          "usable_query_latency": false
+        },
+        "candidate": {
+          "success": true,
+          "observed_medians": {
+            "process_peak_rss_bytes": 613122048,
+            "query_boundary_ns": 3400582851,
+            "consumer_ns": 11043596,
+            "native_profile": {
+              "allocated_bytes": 3781562471,
+              "allocation_calls": 13374548,
+              "deallocated_bytes": 3649990017,
+              "deallocation_calls": 12323061,
+              "live_requested_bytes_after": 201699477,
+              "live_requested_bytes_before": 70127023,
+              "process_peak_requested_bytes": 529785469,
+              "reallocation_calls": 199467
+            }
+          },
+          "scope": "successful query window; whole-process RSS separately includes setup/runtime/consumer"
+        }
+      },
+      "paired_query_or_allocation_ratio": null
+    },
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "memory",
+        "default",
+        "true",
+        "fill_bulk",
+        "python"
+      ],
+      "artifact": 12158182493,
+      "bundle_sha256": "952e232c937cfa864e11c6f9b8687023b4bdfb39e43b25e68854b16a80b6996d",
+      "sides": {
+        "baseline": {
+          "success": false,
+          "errors": [
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "reported_error_types": [
+            "ExecutionError"
+          ],
+          "reported_error_phases": [
+            "execute"
+          ],
+          "failed_child_attempts": 4,
+          "measured_failure_native_medians": {
+            "allocation_calls": 15146318,
+            "allocated_bytes": 3298453869,
+            "deallocation_calls": 15146318,
+            "deallocated_bytes": 3298453869,
+            "reallocation_calls": 125814,
+            "parameter_conversion_ns": 2560867981,
+            "engine_call_ns": 37276328492,
+            "result_conversion_ns": 620404253,
+            "live_requested_bytes_before": 1232,
+            "live_requested_bytes_after": 1232,
+            "process_peak_requested_bytes": 460583903
+          },
+          "failure_python_traced_fields_present": false,
+          "failure_process_peak_RSS_median": 632360960,
+          "scope": "producer_run_including_setup_warmup_and_cleanup",
+          "usable_query_latency": false
+        },
+        "candidate": {
+          "success": true,
+          "observed_medians": {
+            "process_peak_rss_bytes": 670973952,
+            "query_boundary_ns": 9064736373,
+            "consumer_ns": 7448452584,
+            "native_profile": {
+              "allocation_calls": 13774606,
+              "allocated_bytes": 3797345406,
+              "deallocation_calls": 12723114,
+              "deallocated_bytes": 3664724292,
+              "reallocation_calls": 199512,
+              "parameter_conversion_ns": 2556089169,
+              "engine_call_ns": 3484892838,
+              "result_conversion_ns": 2901794023,
+              "live_requested_bytes_before": 183759,
+              "live_requested_bytes_after": 132804873,
+              "process_peak_requested_bytes": 460836509,
+              "python_traced_current_bytes": 56783576,
+              "python_traced_peak_bytes": 56783576
+            }
+          },
+          "scope": "successful query window; whole-process RSS separately includes setup/runtime/consumer"
+        }
+      },
+      "paired_query_or_allocation_ratio": null
+    },
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "file",
+        "default",
+        "true",
+        "fill_bulk",
+        "python"
+      ],
+      "artifact": 12158488439,
+      "bundle_sha256": "975e7497f11a36e6417ab5f83490653af3db669a4dfa811cae8a61d5fcc32256",
+      "sides": {
+        "baseline": {
+          "success": false,
+          "errors": [
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "reported_error_types": [
+            "ExecutionError"
+          ],
+          "reported_error_phases": [
+            "execute"
+          ],
+          "failed_child_attempts": 4,
+          "measured_failure_native_medians": {
+            "allocation_calls": 17552381,
+            "allocated_bytes": 3505040601,
+            "deallocation_calls": 17552376,
+            "deallocated_bytes": 3505039780,
+            "reallocation_calls": 1227502,
+            "parameter_conversion_ns": 2553730486,
+            "engine_call_ns": 36625248479,
+            "result_conversion_ns": 615474189,
+            "live_requested_bytes_before": 1232,
+            "live_requested_bytes_after": 2053,
+            "process_peak_requested_bytes": 501519165
+          },
+          "failure_python_traced_fields_present": false,
+          "failure_process_peak_RSS_median": 670294016,
+          "scope": "producer_run_including_setup_warmup_and_cleanup",
+          "usable_query_latency": false
+        },
+        "candidate": {
+          "success": true,
+          "observed_medians": {
+            "process_peak_rss_bytes": 707895296,
+            "query_boundary_ns": 9219456857,
+            "consumer_ns": 7333162329,
+            "native_profile": {
+              "allocation_calls": 16174582,
+              "allocated_bytes": 3978826657,
+              "deallocation_calls": 15123076,
+              "deallocated_bytes": 3846203519,
+              "reallocation_calls": 1299469,
+              "parameter_conversion_ns": 2551523902,
+              "engine_call_ns": 3669055059,
+              "result_conversion_ns": 2871988909,
+              "live_requested_bytes_before": 237812,
+              "live_requested_bytes_after": 132860950,
+              "process_peak_requested_bytes": 501632170,
+              "python_traced_current_bytes": 56783604,
+              "python_traced_peak_bytes": 56783604
+            }
+          },
+          "scope": "successful query window; whole-process RSS separately includes setup/runtime/consumer"
+        }
+      },
+      "paired_query_or_allocation_ratio": null
+    },
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "memory",
+        "default",
+        "true",
+        "fill_bulk",
+        "go"
+      ],
+      "artifact": 12158908325,
+      "bundle_sha256": "4c98aa471bd28c10d93df73dc1f37c9d7d26207496276006e4cf22de029e5925",
+      "sides": {
+        "baseline": {
+          "success": false,
+          "errors": [
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "reported_error_types": [],
+          "reported_error_phases": [],
+          "failed_child_attempts": 4,
+          "measured_failure_native_medians": {
+            "allocated_bytes": 3403249105,
+            "allocation_calls": 15546373,
+            "deallocated_bytes": 3403249105,
+            "deallocation_calls": 15546373,
+            "engine_call_ns": 25391115878,
+            "live_requested_bytes_after": 0,
+            "live_requested_bytes_before": 0,
+            "parameter_conversion_ns": 191207148,
+            "process_peak_requested_bytes": 460595919,
+            "reallocation_calls": 125845,
+            "result_conversion_ns": 26772999
+          },
+          "failure_python_traced_fields_present": false,
+          "failure_process_peak_RSS_median": 651304960,
+          "scope": "producer_run_including_setup_warmup_and_cleanup",
+          "usable_query_latency": false,
+          "observed_go_host_phase_medians": {
+            "ffi_call_ns": 25624566366,
+            "ffi_calls": 3,
+            "parameter_conversion_calls": 3,
+            "parameter_conversion_ns": 77530707,
+            "result_conversion_calls": 3,
+            "result_conversion_ns": 17662506
+          },
+          "go_host_phase_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+          "go_heap_allocation_fields_present": false
+        },
+        "candidate": {
+          "success": true,
+          "observed_medians": {
+            "process_peak_rss_bytes": 661172224,
+            "query_boundary_ns": 2874711807,
+            "consumer_ns": 6203999,
+            "go_allocated_bytes": 160679880,
+            "go_allocations": 3099709,
+            "native_profile": {
+              "allocated_bytes": 3952227694,
+              "allocation_calls": 14574641,
+              "deallocated_bytes": 3820655240,
+              "deallocation_calls": 13523154,
+              "engine_call_ns": 2431284916,
+              "live_requested_bytes_after": 131765333,
+              "live_requested_bytes_before": 192879,
+              "parameter_conversion_ns": 141531416,
+              "process_peak_requested_bytes": 460845629,
+              "reallocation_calls": 199537,
+              "result_conversion_ns": 100122179
+            }
+          },
+          "scope": "successful query window; whole-process RSS separately includes setup/runtime/consumer",
+          "observed_go_host_phase_medians": {
+            "ffi_call_ns": 2698517569,
+            "ffi_calls": 2,
+            "parameter_conversion_calls": 2,
+            "parameter_conversion_ns": 74302116,
+            "result_conversion_calls": 2,
+            "result_conversion_ns": 98557045
+          },
+          "go_host_phase_scope": "successful query window",
+          "go_heap_allocation_fields_present": true
+        }
+      },
+      "paired_query_or_allocation_ratio": null
+    },
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "file",
+        "default",
+        "true",
+        "fill_bulk",
+        "go"
+      ],
+      "artifact": 12159087884,
+      "bundle_sha256": "0722aaa7982cd624e4d7b87186bb0d88d8aeff3a7007cd0cdfaab0535459b9b0",
+      "sides": {
+        "baseline": {
+          "success": false,
+          "errors": [
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "reported_error_types": [],
+          "reported_error_phases": [],
+          "failed_child_attempts": 4,
+          "measured_failure_native_medians": {
+            "allocated_bytes": 3609827452,
+            "allocation_calls": 17952435,
+            "deallocated_bytes": 3609826635,
+            "deallocation_calls": 17952430,
+            "engine_call_ns": 38309225782,
+            "live_requested_bytes_after": 817,
+            "live_requested_bytes_before": 0,
+            "parameter_conversion_ns": 214227494,
+            "process_peak_requested_bytes": 501530708,
+            "reallocation_calls": 1227533,
+            "result_conversion_ns": 35564898
+          },
+          "failure_python_traced_fields_present": false,
+          "failure_process_peak_RSS_median": 686944256,
+          "scope": "producer_run_including_setup_warmup_and_cleanup",
+          "usable_query_latency": false,
+          "observed_go_host_phase_medians": {
+            "ffi_call_ns": 38572020440,
+            "ffi_calls": 3,
+            "parameter_conversion_calls": 3,
+            "parameter_conversion_ns": 142018107,
+            "result_conversion_calls": 3,
+            "result_conversion_ns": 38451158
+          },
+          "go_host_phase_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+          "go_heap_allocation_fields_present": false
+        },
+        "candidate": {
+          "success": true,
+          "observed_medians": {
+            "process_peak_rss_bytes": 691273728,
+            "query_boundary_ns": 4443220570,
+            "consumer_ns": 19788564,
+            "go_allocated_bytes": 160685824,
+            "go_allocations": 3099721,
+            "native_profile": {
+              "allocated_bytes": 4133708921,
+              "allocation_calls": 16974617,
+              "deallocated_bytes": 4002134443,
+              "deallocation_calls": 15923116,
+              "engine_call_ns": 3758937198,
+              "live_requested_bytes_after": 131820816,
+              "live_requested_bytes_before": 246338,
+              "parameter_conversion_ns": 216668194,
+              "process_peak_requested_bytes": 501640696,
+              "reallocation_calls": 1299494,
+              "result_conversion_ns": 114204206
+            }
+          },
+          "scope": "successful query window; whole-process RSS separately includes setup/runtime/consumer",
+          "observed_go_host_phase_medians": {
+            "ffi_call_ns": 4090128691,
+            "ffi_calls": 2,
+            "parameter_conversion_calls": 2,
+            "parameter_conversion_ns": 141337731,
+            "result_conversion_calls": 2,
+            "result_conversion_ns": 198023586
+          },
+          "go_host_phase_scope": "successful query window",
+          "go_heap_allocation_fields_present": true
+        }
+      },
+      "paired_query_or_allocation_ratio": null
     }
   ],
   "scope": "Original instrumented resource pairs only. Three measured processes plus one discarded per side. All reported allocation/conversion/traced-heap/RSS medians recomputed. Native requested traffic excludes foreign heaps; whole-process RSS includes setup/runtime/consumer. Query boundary and consumer timings differ from complete operation. No pure conversion attribution, significance, causality, hard memory bound or full90/110 acceptance."

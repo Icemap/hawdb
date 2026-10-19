@@ -26,8 +26,8 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "b7f0b6ffcaf12f50c312b25f85e79d26af779b59cebf8285e0ddd81e470676e6",
-      "bytes": 4646,
+      "sha256": "b80156f606552a09c967c19ac65621749c93080d8433598ed341c00c80698f75",
+      "bytes": 6486,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-control-evidence-0c298984/qualification/final-control-evidence/0c298984/README.md"
     },
     {
@@ -392,9 +392,15 @@
     },
     {
       "path": "original-matrix-snapshot/auditors/audit-final-ordinary-resource-pairs-0c298984.py",
-      "sha256": "5da0c6bde85b55e0d6d4817d295a249e0e3ad19db52eb80d7a894e8f7a70b9c3",
-      "bytes": 3667,
+      "sha256": "92d88e0570ec44e9bb9c09543a27334b6ac044677f92ee463a18f788af759c8b",
+      "bytes": 4325,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-final-ordinary-resource-pairs-0c298984.py"
+    },
+    {
+      "path": "original-matrix-snapshot/auditors/audit-final-ordinary-resource-refusals-0c298984.py",
+      "sha256": "a3dd5f7bc57ec5e3572fbd25e82d2a81d9955d7df48ae805a1bd2d5f4ef0f5c7",
+      "bytes": 6075,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-final-ordinary-resource-refusals-0c298984.py"
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-all-current-ci-passed.json",
@@ -458,9 +464,15 @@
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-pairs-audit.json",
-      "sha256": "d8274c88c6aeec4752507fb84ea7d6909f07cb9192b09ad8661b5bbf19cea785",
-      "bytes": 64286,
+      "sha256": "c27041096210610fdfd646925438b69f59c17599f42dee2b2964e8e0bd74265f",
+      "bytes": 83613,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-pairs-audit.json"
+    },
+    {
+      "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-refusals-audit.json",
+      "sha256": "9eba69a9bc8188b7b3174a9eebdc9f8414e9572bffdc584f43578f8998dc01ac",
+      "bytes": 19856,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-refusals-audit.json"
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-prow-completed-log-observations.json",
@@ -1093,15 +1105,51 @@
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12156974052.json"
     },
     {
+      "path": "original-matrix-snapshot/resources/artifact-12157433116.json",
+      "sha256": "acd73c7f0105c476bc2e855b48af090095186db8f5aa935717d629e91f64f16a",
+      "bytes": 31579,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12157433116.json"
+    },
+    {
       "path": "original-matrix-snapshot/resources/artifact-12157745685.json",
       "sha256": "35fc66fc8e28935552121a336270c3d9be903f13b1376e32276386330e8cc60b",
       "bytes": 39287,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12157745685.json"
     },
     {
+      "path": "original-matrix-snapshot/resources/artifact-12158182493.json",
+      "sha256": "952e232c937cfa864e11c6f9b8687023b4bdfb39e43b25e68854b16a80b6996d",
+      "bytes": 34265,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12158182493.json"
+    },
+    {
+      "path": "original-matrix-snapshot/resources/artifact-12158245573.json",
+      "sha256": "2844e3fc0cada13e6d336089ac055d4a13c02fc5c590c1e5088823e6bfbe2286",
+      "bytes": 31644,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12158245573.json"
+    },
+    {
+      "path": "original-matrix-snapshot/resources/artifact-12158488439.json",
+      "sha256": "975e7497f11a36e6417ab5f83490653af3db669a4dfa811cae8a61d5fcc32256",
+      "bytes": 34195,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12158488439.json"
+    },
+    {
+      "path": "original-matrix-snapshot/resources/artifact-12158908325.json",
+      "sha256": "4c98aa471bd28c10d93df73dc1f37c9d7d26207496276006e4cf22de029e5925",
+      "bytes": 39074,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12158908325.json"
+    },
+    {
+      "path": "original-matrix-snapshot/resources/artifact-12159087884.json",
+      "sha256": "0722aaa7982cd624e4d7b87186bb0d88d8aeff3a7007cd0cdfaab0535459b9b0",
+      "bytes": 39027,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12159087884.json"
+    },
+    {
       "path": "original-matrix-snapshot/resources-summary.json",
-      "sha256": "3550f1c550c26d526cc60fca4127cfce5b182505685e8d393b484343e1ff8e24",
-      "bytes": 211754,
+      "sha256": "66341caf746d3148d97b9e38283b3c34cccc5714081db8508545d9742741484f",
+      "bytes": 225784,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/summary.json"
     },
     {
@@ -1711,6 +1759,354 @@
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-retained-0c298984-artifacts/session-retained-large-1000001-memory-bdb03c069fcba1b5c30dec654fa6052ef8c36d77/source-check.json"
     },
     {
+      "path": "python-failure-heap/baseline/hawdb/__init__.py",
+      "sha256": "d275169828625976f22e5797e6a86c1999b294f7b68c8d8abbd7617f4f0a96fe",
+      "bytes": 1296,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline/hawdb/__init__.py"
+    },
+    {
+      "path": "python-failure-heap/baseline/hawdb/pydantic.py",
+      "sha256": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+      "bytes": 3721,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline/hawdb/pydantic.py"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-file-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-file-0.stderr"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-file-0.stdout",
+      "sha256": "b0ef4f6f94dad75eb37a5ac1f17e9bfe533b9c0662b182e419a9385738037568",
+      "bytes": 1022,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-file-0.stdout"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-file-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-file-1.stderr"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-file-1.stdout",
+      "sha256": "bf9c2f5783f8a5df6352be4c053229e91182854e782c2759cac8013716ef9979",
+      "bytes": 1022,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-file-1.stdout"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-file-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-file-2.stderr"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-file-2.stdout",
+      "sha256": "03b538cb4bd2db927621d369a9daa57e1fa84c28d48eb01980cec6c04fd694ca",
+      "bytes": 1022,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-file-2.stdout"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-file-3.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-file-3.stderr"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-file-3.stdout",
+      "sha256": "edd5c8ac5d9ee70d24159bbce483881f1df0e9e94266f2d39f037eac11469c79",
+      "bytes": 1022,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-file-3.stdout"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-memory-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-memory-0.stderr"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-memory-0.stdout",
+      "sha256": "d7194231b2932b7032bd668526fcd1fd8647fe740487d62fc17d06250d791f88",
+      "bytes": 1022,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-memory-0.stdout"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-memory-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-memory-1.stderr"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-memory-1.stdout",
+      "sha256": "77cc7a056906459a8f89eb31b96a736df40ad3195a14f92d74c32a70a627467d",
+      "bytes": 1022,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-memory-1.stdout"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-memory-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-memory-2.stderr"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-memory-2.stdout",
+      "sha256": "17536235a649d0783f97d75f0f2ae47e9bfaadfc7e0ef02c22c023b6d569ec01",
+      "bytes": 1021,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-memory-2.stdout"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-memory-3.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-memory-3.stderr"
+    },
+    {
+      "path": "python-failure-heap/baseline-100k-bulk-memory-3.stdout",
+      "sha256": "3e00bc831009e6188c41c088224c5277d0e8a289e4baafb151167b9b84e96240",
+      "bytes": 1023,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/baseline-100k-bulk-memory-3.stdout"
+    },
+    {
+      "path": "python-failure-heap/candidate/hawdb/__init__.py",
+      "sha256": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+      "bytes": 1704,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate/hawdb/__init__.py"
+    },
+    {
+      "path": "python-failure-heap/candidate/hawdb/_display.py",
+      "sha256": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+      "bytes": 13595,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate/hawdb/_display.py"
+    },
+    {
+      "path": "python-failure-heap/candidate/hawdb/magic.py",
+      "sha256": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+      "bytes": 8067,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate/hawdb/magic.py"
+    },
+    {
+      "path": "python-failure-heap/candidate/hawdb/pydantic.py",
+      "sha256": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+      "bytes": 3721,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate/hawdb/pydantic.py"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-file-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-file-0.stderr"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-file-0.stdout",
+      "sha256": "d63d938c3795505ad205695c6e7d3d5372127131521ed1dab4474c283b9e754a",
+      "bytes": 995,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-file-0.stdout"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-file-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-file-1.stderr"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-file-1.stdout",
+      "sha256": "1bbfa1e402129c81fb85195da07b992ad30791fb9a05a70d5017b193f249095b",
+      "bytes": 996,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-file-1.stdout"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-file-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-file-2.stderr"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-file-2.stdout",
+      "sha256": "f3ea8632f8d737e6bc0904b9c82a5e424e83424dbde00e24e505635aa38020bc",
+      "bytes": 995,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-file-2.stdout"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-file-3.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-file-3.stderr"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-file-3.stdout",
+      "sha256": "0b3f70805b1e33346d86961cb195eb69c175c608c94a2a325aa58c69427155df",
+      "bytes": 995,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-file-3.stdout"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-memory-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-memory-0.stderr"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-memory-0.stdout",
+      "sha256": "1acb221418c6bf2e39a5eca5d54253ecb88f2aad336d206c8f5f7c31a9c3ab51",
+      "bytes": 998,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-memory-0.stdout"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-memory-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-memory-1.stderr"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-memory-1.stdout",
+      "sha256": "c6eccf7298526dcf929962dd4a580a888efdcde339e1569acc29a1def465b50c",
+      "bytes": 997,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-memory-1.stdout"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-memory-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-memory-2.stderr"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-memory-2.stdout",
+      "sha256": "0e5d3d1fe19567f3bfceedde2c366d6b051a50edc1145185c0887ff2941e48da",
+      "bytes": 997,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-memory-2.stdout"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-memory-3.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-memory-3.stderr"
+    },
+    {
+      "path": "python-failure-heap/candidate-100k-bulk-memory-3.stdout",
+      "sha256": "fc6a6e7d41a75e71688df61e153c6a7898e8f378c05447a1a67795ecc5d4be5f",
+      "bytes": 996,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/candidate-100k-bulk-memory-3.stdout"
+    },
+    {
+      "path": "python-failure-heap/checksum.py",
+      "sha256": "9fac220dad093e1ce18189fc1582481172d3efa8dc5b7919c676cb8fae23b123",
+      "bytes": 1937,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/checksum.py"
+    },
+    {
+      "path": "python-failure-heap/observer.patch",
+      "sha256": "e5e9f529bfee3906234962a7406af5c312ffaf6949eef8ee801849aa7ff8859d",
+      "bytes": 1117,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/observer.patch"
+    },
+    {
+      "path": "python-failure-heap/original-fixture/checksum.py",
+      "sha256": "9fac220dad093e1ce18189fc1582481172d3efa8dc5b7919c676cb8fae23b123",
+      "bytes": 1937,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/qualify-resources-final-0c298984/bindings/benchmarks/checksum.py"
+    },
+    {
+      "path": "python-failure-heap/original-fixture/run.py",
+      "sha256": "5d4f8a55c5b196f44230e4f9db7398809e49b45a1589b2151426ab94fa4253be",
+      "bytes": 21061,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/qualify-resources-final-0c298984/bindings/benchmarks/run.py"
+    },
+    {
+      "path": "python-failure-heap/probe-execute_refusal.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/probe-execute_refusal.stderr"
+    },
+    {
+      "path": "python-failure-heap/probe-execute_refusal.stdout",
+      "sha256": "f7dd8e9b1c23a072e327971fc1b97d61899e6adb42ff182b825761f5fbc9e299",
+      "bytes": 1016,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/probe-execute_refusal.stdout"
+    },
+    {
+      "path": "python-failure-heap/probe-success.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/probe-success.stderr"
+    },
+    {
+      "path": "python-failure-heap/probe-success.stdout",
+      "sha256": "1ce32f0e8d280f2455fd82907b36577062952ae7681d9acdd9efa0c6c419bd7b",
+      "bytes": 938,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/probe-success.stdout"
+    },
+    {
+      "path": "python-failure-heap/probe-warmup_refusal.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/probe-warmup_refusal.stderr"
+    },
+    {
+      "path": "python-failure-heap/probe-warmup_refusal.stdout",
+      "sha256": "ab88cd91db3677e20125ce19188f338691e0e9cb4496ffb076b65223ed3fa33b",
+      "bytes": 990,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/probe-warmup_refusal.stdout"
+    },
+    {
+      "path": "python-failure-heap/python_boundary.py",
+      "sha256": "74e7de72eea7a5f7dc74516e4371fe8eb8812b1a442feaaa2809ee2ffbfa220f",
+      "bytes": 6565,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/python_boundary.py"
+    },
+    {
+      "path": "python-failure-heap/receipt.json",
+      "sha256": "804a86a00ea862ea89621efe6e60fa53420224246677c2be8d42d5351c64ce93",
+      "bytes": 29529,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/receipt.json"
+    },
+    {
+      "path": "python-failure-heap/run.log",
+      "sha256": "d921ee97c88b01a4ed6eb3603a651dc87c2b0cc368994d8c57cf75c980de8838",
+      "bytes": 717,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/run.log"
+    },
+    {
+      "path": "python-failure-heap/sample-qualified-audit.json",
+      "sha256": "9395c8eef470b4246cd07474c2aa2a2b3bca5b5514c9e8851242d399be339375",
+      "bytes": 1952,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/sample-qualified-audit.json"
+    },
+    {
+      "path": "python-failure-heap/scripts/audit-python-failure-heap-samples.py",
+      "sha256": "95d96f51ea95107de4266352b38f217b6b220a2d350f8a4edc79be3c8e25ce9b",
+      "bytes": 3025,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-python-failure-heap-samples.py"
+    },
+    {
+      "path": "python-failure-heap/scripts/audit-python-failure-heap-source.py",
+      "sha256": "2bd048f0135dee3f3dec9206b3764179432cc4c43ada95fb3b7322530a3b189c",
+      "bytes": 3118,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-python-failure-heap-source.py"
+    },
+    {
+      "path": "python-failure-heap/scripts/prepare-python-failure-heap.py",
+      "sha256": "e07139bdef8e4138e315d546f6931b2770e597a78e21eb79f828fe3fa34395d3",
+      "bytes": 3592,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/prepare-python-failure-heap.py"
+    },
+    {
+      "path": "python-failure-heap/scripts/run-python-failure-heap.py",
+      "sha256": "8d76190143536df73565458f1220c5d4402c3c4a2803ee748f0326755879437c",
+      "bytes": 3182,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/run-python-failure-heap.py"
+    },
+    {
+      "path": "python-failure-heap/source-manifest.json",
+      "sha256": "4d4a11f4dfe720b3ed19c3d7d7b4a5e680f6ff6547d37ca0e995cd3e6fd1112c",
+      "bytes": 3190,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/source-manifest.json"
+    },
+    {
+      "path": "python-failure-heap/source-qualified-audit.json",
+      "sha256": "0af418a8f5679eda5d6ddad16a8cf8bb155636571d2fd317f1d58196924ffeb9",
+      "bytes": 1326,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-python-failure-heap-0c298984/source-qualified-audit.json"
+    },
+    {
       "path": "receipts/986-0c298984-initial-ordinary-adverse-observations-v2.json",
       "sha256": "f821d184a4cdbaebe0694e42e540dfb40a76f5293b50ac7b2c29fe4970fe19ce",
       "bytes": 3028,
@@ -2001,14 +2397,14 @@
       "summary_sha256": "305cab792fe59863da9e3f00456f6bbe2b8143d7a27d91828395a6df1871f81f"
     },
     "resources": {
-      "audited": 50,
+      "audited": 56,
       "expected": 110,
       "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
       "run": 39154779183,
-      "summary_sha256": "3550f1c550c26d526cc60fca4127cfce5b182505685e8d393b484343e1ff8e24"
+      "summary_sha256": "66341caf746d3148d97b9e38283b3c34cccc5714081db8508545d9742741484f"
     }
   },
-  "updated_at": 1792373063.466078,
+  "updated_at": 1792378816.300141,
   "numeric20_original_controls": {
     "positive": 12,
     "default_memory_refusals": 4,
@@ -2032,5 +2428,21 @@
     "groups": 4,
     "expected": 6,
     "timing_scope": "workload elapsed excludes full child fixture/setup/warmup lifetime"
+  },
+  "original_100k_bulk_resource_slice": {
+    "groups": 6,
+    "baseline_refusals": 6,
+    "candidate_positives": 6,
+    "failure_python_heap_fields": "absent, supplemental work ongoing",
+    "failure_go_heap_fields": "absent, supplemental work ongoing",
+    "cross_scope_ratios": null
+  },
+  "python_failure_heap_supplement": {
+    "groups": 4,
+    "attempts": 16,
+    "measured": 12,
+    "probes": 3,
+    "terminal": true,
+    "scope": "Supplemental local observer only; original 90/110 counts unchanged. Failure Python tracing begins after setup/warmup and ends before cleanup; native failure window includes full producer. No cross-scope performance ratio or leak claim."
   }
 }
