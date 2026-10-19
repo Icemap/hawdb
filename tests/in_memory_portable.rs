@@ -375,18 +375,18 @@ fn json_expression_positions_share_configured_and_runtime_memory_admission() {
     use std::num::NonZeroUsize;
 
     let cases = [
-        ("MATCH (m:Memory) RETURN json_value(m.metadata, $path) AS value", "$.source", vec![vec![Value::String("ok".into())]; 2]),
-        ("MATCH (m:Memory) WHERE json_value(m.metadata, $path) = 'ok' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]]),
-        ("MATCH (m:Memory) WHERE json_value(m.metadata, $path) <> '' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]]),
-        ("MATCH (m:Memory) WHERE json_value(m.metadata, $path) > 'a' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]]),
-        ("MATCH (m:Memory) WHERE json_value(m.metadata, $path) IN ['ok'] RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]]),
-        ("MATCH (m:Memory) WHERE json_value(m.metadata, $path) CONTAINS 'o' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]]),
-        ("MATCH (m:Memory) WHERE coalesce(json_value(m.metadata, $path), '') = 'ok' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]]),
-        ("MATCH (m:Memory) WHERE CASE WHEN m.id > 0 THEN json_value(m.metadata, $path) ELSE '' END = 'ok' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]]),
-        ("MATCH (m:Memory) WITH json_value(m.metadata, $path) AS origin, COUNT(*) AS total RETURN origin, total", "$.source", vec![vec![Value::String("ok".into()), Value::Int(2)]]),
-        ("MATCH (m:Memory) WITH json_value(m.metadata, $path) AS origin, COUNT(DISTINCT m.id) AS total RETURN origin, total", "$.source", vec![vec![Value::String("ok".into()), Value::Int(2)]]),
-        ("MATCH (m:Memory) RETURN m.id AS id ORDER BY json_value(m.metadata, $path)", "$.rank", vec![vec![Value::Int(2)], vec![Value::Int(1)]]),
-        ("MATCH (m:Memory) RETURN m.id AS id ORDER BY json_value(m.metadata, $path) LIMIT 1", "$.rank", vec![vec![Value::Int(2)]]),
+        ("MATCH (m:Memory) RETURN json_value(m.metadata, $path) AS value", "$.source", vec![vec![Value::String("ok".into())]; 2], "external_read"),
+        ("MATCH (m:Memory) WHERE json_value(m.metadata, $path) = 'ok' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]], "external_read"),
+        ("MATCH (m:Memory) WHERE json_value(m.metadata, $path) <> '' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]], "external_read"),
+        ("MATCH (m:Memory) WHERE json_value(m.metadata, $path) > 'a' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]], "external_read"),
+        ("MATCH (m:Memory) WHERE json_value(m.metadata, $path) IN ['ok'] RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]], "external_read"),
+        ("MATCH (m:Memory) WHERE json_value(m.metadata, $path) CONTAINS 'o' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]], "external_read"),
+        ("MATCH (m:Memory) WHERE coalesce(json_value(m.metadata, $path), '') = 'ok' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]], "external_read"),
+        ("MATCH (m:Memory) WHERE CASE WHEN m.id > 0 THEN json_value(m.metadata, $path) ELSE '' END = 'ok' RETURN COUNT(*) AS total", "$.source", vec![vec![Value::Int(2)]], "external_read"),
+        ("MATCH (m:Memory) WITH json_value(m.metadata, $path) AS origin, COUNT(*) AS total RETURN origin, total", "$.source", vec![vec![Value::String("ok".into()), Value::Int(2)]], "blocking_state"),
+        ("MATCH (m:Memory) WITH json_value(m.metadata, $path) AS origin, COUNT(DISTINCT m.id) AS total RETURN origin, total", "$.source", vec![vec![Value::String("ok".into()), Value::Int(2)]], "blocking_state"),
+        ("MATCH (m:Memory) RETURN m.id AS id ORDER BY json_value(m.metadata, $path)", "$.rank", vec![vec![Value::Int(2)], vec![Value::Int(1)]], "blocking_state"),
+        ("MATCH (m:Memory) RETURN m.id AS id ORDER BY json_value(m.metadata, $path) LIMIT 1", "$.rank", vec![vec![Value::Int(2)]], "blocking_state"),
     ];
     for (configured, runtime) in [
         (8192, None),
@@ -430,7 +430,7 @@ fn json_expression_positions_share_configured_and_runtime_memory_admission() {
                 .len(),
             2
         );
-        for (query, path, expected) in &cases {
+        for (query, path, expected, memory_class) in &cases {
             let parameters = BTreeMap::from([("path".into(), Value::String((*path).into()))]);
             let result = db.query_with_params_context(query, &parameters, &context);
             if configured == 8192 || runtime == Some(8192) {
@@ -440,7 +440,7 @@ fn json_expression_positions_share_configured_and_runtime_memory_admission() {
                 };
                 assert_eq!(cause.budget, 8192, "{query}");
                 assert!(cause.requested > 8192, "{query}: {cause:?}");
-                assert_eq!(cause.memory_class, Some("external_read"), "{query}");
+                assert_eq!(cause.memory_class, Some(*memory_class), "{query}");
                 let (scope, origin) = if configured == 8192 {
                     (
                         ResourceBudgetScope::Account,

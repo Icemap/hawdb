@@ -795,7 +795,7 @@ fn spilled_json_sort_keys_use_query_working_memory_during_merge_and_compaction()
                     cause.budget_option,
                     "ExecutionMemoryConfig.query_memory_bytes"
                 );
-                assert_eq!(cause.memory_class, Some("external_read"));
+                assert_eq!(cause.memory_class, Some("blocking_state"));
                 assert!(output.is_empty());
             } else {
                 result.unwrap();

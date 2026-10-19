@@ -31,13 +31,13 @@ impl KeyMemory {
     ) -> Self {
         Self {
             evaluation: parent.sibling_with_budget_option(
-                QueryMemoryClass::ExternalRead,
+                QueryMemoryClass::BlockingState,
                 evaluation_owner,
                 budget,
                 budget_option,
             ),
             preparation: parent.sibling_with_budget_option(
-                QueryMemoryClass::ExternalRead,
+                QueryMemoryClass::BlockingState,
                 preparation_owner,
                 budget,
                 budget_option,
@@ -230,6 +230,27 @@ mod tests {
             prepared.values,
             vec![(Value::String(payload), SortDirection::Asc)]
         );
+        let error = memory
+            .sort(
+                &[SortItem {
+                    key: SortKey::Column("value".into()),
+                    direction: SortDirection::Asc,
+                }],
+                &Catalog::default(),
+                &binding,
+                None,
+            )
+            .err()
+            .expect("the retained key already uses the complete allowance");
+        let hawdb_core::HawDBError::ResourceBudgetExceeded(cause) = error else {
+            panic!("expected a typed key-preparation refusal, got {error}");
+        };
+        assert_eq!(cause.scope, hawdb_core::ResourceBudgetScope::Account);
+        assert_eq!(cause.memory_class, Some("blocking_state"));
+        assert_eq!(cause.owner, "keys");
+        assert_eq!(cause.used, key_bytes as u64);
+        assert_eq!(cause.budget, key_bytes as u64);
+        assert_eq!(prepared.allocation.bytes(), key_bytes);
         drop((memory, child, parent));
         assert_eq!(ledger.snapshot().used_bytes, key_bytes);
         drop(prepared);

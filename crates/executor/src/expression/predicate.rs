@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::value::{binding_id, project_expression_value};
+use super::value::binding_id;
 use super::*;
 
 pub fn evaluate_predicate(
@@ -470,39 +470,6 @@ fn bound_relationship_exists(
         context.adjacency_memory,
         context.task_context,
     )
-}
-
-pub fn compare_bindings(
-    catalog: &Catalog,
-    left: &Binding,
-    right: &Binding,
-    items: &[SortItem],
-) -> std::cmp::Ordering {
-    for item in items {
-        let ordering =
-            sort_value(catalog, left, &item.key).cmp(&sort_value(catalog, right, &item.key));
-        let ordering = match item.direction {
-            SortDirection::Asc => ordering,
-            SortDirection::Desc => ordering.reverse(),
-        };
-        if ordering != std::cmp::Ordering::Equal {
-            return ordering;
-        }
-    }
-    std::cmp::Ordering::Equal
-}
-
-pub fn sort_value(catalog: &Catalog, binding: &Binding, key: &SortKey) -> Value {
-    match key {
-        SortKey::Property { variable, property } => binding_property(binding, variable, property)
-            .cloned()
-            .unwrap_or(Value::Null),
-        SortKey::Id { variable } => binding_id(binding, variable).unwrap_or(Value::Null),
-        SortKey::Expression(expression) => {
-            project_expression_value(expression, catalog, binding).unwrap_or(Value::Null)
-        }
-        SortKey::Column(name) => binding.values.get(name).cloned().unwrap_or(Value::Null),
-    }
 }
 
 pub fn property_filter_from_predicate(predicate: &Predicate) -> Result<PropertyFilter> {
