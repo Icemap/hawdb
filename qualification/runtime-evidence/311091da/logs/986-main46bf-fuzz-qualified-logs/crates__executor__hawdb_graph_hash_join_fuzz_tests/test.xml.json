@@ -1,0 +1,5 @@
+{
+  "original_bytes": 827,
+  "original_sha256": "4c177be143d5064068962fec90eaee6ac70b366ea5c45e76c5d942a3b36d565f",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/executor/hawdb_graph_hash_join_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/executor/hawdb_graph_hash_join_fuzz_tests\" classname=\"\" status=\"run\" duration=\"45\" time=\"45\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_graph_hash_join_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest blocking::join::tests::graph_hash_join_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 474 filtered out; finished in 44.75s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

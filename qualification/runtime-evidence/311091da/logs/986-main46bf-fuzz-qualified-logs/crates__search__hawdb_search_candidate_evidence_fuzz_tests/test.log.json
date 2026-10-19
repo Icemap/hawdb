@@ -1,0 +1,5 @@
+{
+  "original_bytes": 403,
+  "original_sha256": "fcc1982d0093dabcc57ddd068ab0b5774babb99371f344edd00383601dfc3840",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_candidate_evidence_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest candidate_evidence::differential::candidate_evidence_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 856 filtered out; finished in 0.14s\n\n"
+}

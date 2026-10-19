@@ -1,0 +1,40 @@
+{
+  "sha": "20db2c93b578f3df426bf7647cbeaa981ebc7e44",
+  "node_id": "C_kwDOTX6JAdoAKDIwZGIyYzkzYjU3OGYzZGY0MjZiZjc2NDdjYmVhYTk4MWViYzdlNDQ",
+  "url": "https://api.github.com/repos/nowledge-co/hawdb/git/commits/20db2c93b578f3df426bf7647cbeaa981ebc7e44",
+  "html_url": "https://github.com/nowledge-co/hawdb/commit/20db2c93b578f3df426bf7647cbeaa981ebc7e44",
+  "author": {
+    "name": "Weizhen Wang",
+    "email": "hawking.rei@gmail.com",
+    "date": "2026-10-19T08:12:28Z"
+  },
+  "committer": {
+    "name": "GitHub",
+    "email": "noreply@github.com",
+    "date": "2026-10-19T08:12:28Z"
+  },
+  "tree": {
+    "sha": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+    "url": "https://api.github.com/repos/nowledge-co/hawdb/git/trees/6ea7fb5da52df432df022ac29eab4a74baa6c27b"
+  },
+  "message": "Merge 311091da6b23a292b7385b46362d3a12f6ec0064 into 46bfde00131a6d711d51aad6e5e237279a287061",
+  "parents": [
+    {
+      "sha": "46bfde00131a6d711d51aad6e5e237279a287061",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/git/commits/46bfde00131a6d711d51aad6e5e237279a287061",
+      "html_url": "https://github.com/nowledge-co/hawdb/commit/46bfde00131a6d711d51aad6e5e237279a287061"
+    },
+    {
+      "sha": "311091da6b23a292b7385b46362d3a12f6ec0064",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/git/commits/311091da6b23a292b7385b46362d3a12f6ec0064",
+      "html_url": "https://github.com/nowledge-co/hawdb/commit/311091da6b23a292b7385b46362d3a12f6ec0064"
+    }
+  ],
+  "verification": {
+    "verified": true,
+    "reason": "valid",
+    "signature": "-----BEGIN PGP SIGNATURE-----\n\nwsFcBAABCAAQBQJq1dDsCRC1aQ7uu5UhlAAA0o4QAI7C6QTkj/OBYACPSc//KrKh\nKF3PrYWdn5C3fNoT8/lom+wx9EtCDLgNCewH/rdXe0nelxLkszWkjR/TQaqXftGP\nLv8id/r7t0nqD5We39omGtgkyBvFpCoOoHh+ZaPBkct7ul0S7BmDX8/DXQn6hmT8\nCg3YbxMxzKfN3AudzVuIRvFpR2hX/MTzBgZgqEXqVu+wZwF3R07D89uIOH5Jg0ag\nCZZwBYJvBtGvPoLlbykrd9Y9wzu7rvit59D0z5w8HqzfM8Z7GNHfI2z/eHT7VGSl\nJH/4xpFQz65MJeYoN3AWVRfMqh5R1DUu218wh0Kuh7rTlXjU+yo76ePXdmEZFfJa\njq5+MHxYfx5vKj6aSWD+DnuThB8deIgaxZHI+K88kJMndEHpU9xgPMYheJ6pZN1W\nyJrbTuh81RChokcEDoC29uZDZZnAoZDjwtEeomCanjgHnhpRiFXhOhHeKp9aAzP1\nSNDzKUPLvWYhKUTHiLQxQS9kFHWvuqbenMjjfApfb8CRKI1cF8ZCxzv1UhQV8Y+9\nmuV+Ri/F5v1H4JM3NH7hdZUTnomm7P+XgQIaY2q2IFr7YgwP17YcPu1L+Fj2GyTb\n51qQrR/vpOgUDDAvSOGy4rsqrUCmjf2hhtc4uacqe8hHrSvp392IbDDhCIy+borC\nGEFgSN2vCMA37xxghrRs\n=mzZQ\n-----END PGP SIGNATURE-----\n",
+    "payload": "tree 6ea7fb5da52df432df022ac29eab4a74baa6c27b\nparent 46bfde00131a6d711d51aad6e5e237279a287061\nparent 311091da6b23a292b7385b46362d3a12f6ec0064\nauthor Weizhen Wang <hawking.rei@gmail.com> 1792397548 +0000\ncommitter GitHub <noreply@github.com> 1792397548 +0000\n\nMerge 311091da6b23a292b7385b46362d3a12f6ec0064 into 46bfde00131a6d711d51aad6e5e237279a287061\n",
+    "verified_at": "2026-10-19T08:12:29Z"
+  }
+}

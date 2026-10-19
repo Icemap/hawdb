@@ -1,0 +1,5 @@
+{
+  "original_bytes": 407,
+  "original_sha256": "0dac93222b6d4e0048db73e706d5bd20c608d28d182bb6922496ac557bacb7e6",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/fuzz:hawdb_fuzz_relational_join_rewrite_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest sql_oracle::tests::relational_join_rewrite_differential_campaign_covers_every_shape ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 3.87s\n\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 828,
+  "original_sha256": "2718ae4aa3e6aa5e263216426ba07ccbfef43412dc262299c33f5e577ef1e47e",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/fuzz/hawdb_fuzz_append_seed_7_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/fuzz/hawdb_fuzz_append_seed_7_tests\" classname=\"\" status=\"run\" duration=\"40\" time=\"40\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/fuzz:hawdb_fuzz_append_seed_7_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest append_oracle::tests::append_state_machine_matches_reference_model_across_reopen ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 39.85s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

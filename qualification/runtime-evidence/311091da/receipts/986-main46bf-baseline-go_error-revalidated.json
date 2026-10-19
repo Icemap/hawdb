@@ -1,0 +1,35 @@
+{
+  "baseline_head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+  "go_source_tree": "4a235b06362ae6306a300e45d5974495c1229c2b",
+  "receipt_sha256": "06bab689b5575e91372da3bf80a2201b57e553ded55b8a2517eb3360ff8a150d",
+  "manifest_sha256": "d414540b9b979fb4e1d4a5998489734af480b6550d6551b99769ecd603656455",
+  "terminal": true,
+  "observed_attempts": 8,
+  "expected_attempts": 8,
+  "probes": 3,
+  "groups": [
+    {
+      "backend": "memory",
+      "attempts": 4,
+      "measured": 3,
+      "complete": true,
+      "observed_error_heap_medians": {
+        "go_allocated_bytes": 89964224,
+        "go_allocations": 1399945
+      }
+    },
+    {
+      "backend": "file",
+      "attempts": 4,
+      "measured": 3,
+      "complete": true,
+      "observed_error_heap_medians": {
+        "go_allocated_bytes": 89963544,
+        "go_allocations": 1399944
+      }
+    }
+  ],
+  "build_metadata": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/boundary-failure-heap: go1.27.2\n\tpath\tgithub.com/nowledge-co/hawdb/bindings/go/cmd/boundary\n\tmod\tgithub.com/nowledge-co/hawdb/bindings/go\t(devel)\t\n\tdep\tgithub.com/ebitengine/purego\tv0.11.1\th1:2zpWRSQNVKN4eKsKO9eM1ILDgWfYMY9GwqRmK6XeQ/0=\n\tbuild\t-buildmode=exe\n\tbuild\t-compiler=gc\n\tbuild\t-tags=hawdb_boundary_profile\n\tbuild\tCGO_ENABLED=0\n\tbuild\tGOARCH=arm64\n\tbuild\tGOOS=darwin\n\tbuild\tGOARM64=v8.0\n",
+  "scope": "Supplemental Go profiling observer; error heap delta includes query execution, error return, deferred db.Close and failure-host snapshot, unlike original successful query-only heap fields. No cross-scope ratio.",
+  "original_matrix_counts_unchanged": true
+}

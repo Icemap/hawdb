@@ -1,0 +1,48 @@
+{
+  "status": "complete_controls_only",
+  "pid": 75251,
+  "started": 1792398434.995291,
+  "steps": [
+    {
+      "role": "held_audit",
+      "script": "audit-final-held-write-controls-main46bf-311091da.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-held_audit.log",
+      "started": 1792398720.3693051,
+      "exit": 0,
+      "ended": 1792398720.493624
+    },
+    {
+      "role": "heap_prepare",
+      "script": "prepare-python-failure-heap-main46bf-311091da.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-heap_prepare.log",
+      "started": 1792398720.49424,
+      "exit": 0,
+      "ended": 1792398720.617173
+    },
+    {
+      "role": "heap_controls",
+      "script": "run-python-failure-heap-main46bf-311091da.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-heap_controls.log",
+      "started": 1792398720.617431,
+      "exit": 0,
+      "ended": 1792399304.0578089
+    },
+    {
+      "role": "heap_source_audit",
+      "script": "audit-python-failure-heap-source-main46bf-311091da.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-heap_source_audit.log",
+      "started": 1792399304.058191,
+      "exit": 0,
+      "ended": 1792399304.2037811
+    },
+    {
+      "role": "heap_sample_audit",
+      "script": "audit-python-failure-heap-samples-main46bf-311091da.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-heap_sample_audit.log",
+      "started": 1792399304.204094,
+      "exit": 0,
+      "ended": 1792399305.160258
+    }
+  ],
+  "ended": 1792399305.1607869
+}

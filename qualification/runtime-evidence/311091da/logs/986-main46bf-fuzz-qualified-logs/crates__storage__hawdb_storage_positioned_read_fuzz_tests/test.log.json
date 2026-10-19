@@ -1,0 +1,5 @@
+{
+  "original_bytes": 438,
+  "original_sha256": "3e2c030895e2fae3052db5018bff13fc57ce5c5d443a9d9db2be1ce5180f244b",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_positioned_read_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ncases=5940; success=2088; eof=792; denied=792; overflow=2268\ntest io::tests::positioned_read_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 0.02s\n\n"
+}

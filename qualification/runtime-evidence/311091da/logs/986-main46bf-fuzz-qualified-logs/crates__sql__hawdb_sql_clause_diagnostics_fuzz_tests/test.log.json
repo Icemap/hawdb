@@ -1,0 +1,5 @@
+{
+  "original_bytes": 460,
+  "original_sha256": "569a0192dc8fc89f444a26a5b0ca0d0983bb252c21ab0349c461814f7e7d9f27",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nclause diagnostics: 1816 AST condition pairs; 9216 SQL sources through parse and prepare\ntest parser::clause_tests::clause_diagnostics_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 93 filtered out; finished in 0.61s\n\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 407,
+  "original_sha256": "ba7554b9221d9a81c0d1a8c38cc39123ad49fa9c8b950567f565ed2a868f7bef",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest lexical_projection::tests::robustness::mini_delta_snapshot_lifecycle_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 856 filtered out; finished in 1.05s\n\n"
+}

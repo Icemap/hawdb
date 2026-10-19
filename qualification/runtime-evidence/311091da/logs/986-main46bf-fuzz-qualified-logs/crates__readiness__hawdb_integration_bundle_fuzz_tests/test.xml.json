@@ -1,0 +1,5 @@
+{
+  "original_bytes": 957,
+  "original_sha256": "c7a7da222705f1ba2e5ffcd58d662a9fb6c81f0d81366dc8de6d9ddd551b1ee6",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/readiness/hawdb_integration_bundle_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/readiness/hawdb_integration_bundle_fuzz_tests\" classname=\"\" status=\"run\" duration=\"25\" time=\"25\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/readiness:hawdb_integration_bundle_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nintegration-bundle-differential-v1 seeds=32 combined_cases=4096 corpus_cases=1266 combined_corpus_entries=1266\ntest integration_bundle::tests::integration_bundle_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 359 filtered out; finished in 24.81s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

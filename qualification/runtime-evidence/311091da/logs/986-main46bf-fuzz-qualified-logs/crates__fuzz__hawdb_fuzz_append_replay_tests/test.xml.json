@@ -1,0 +1,5 @@
+{
+  "original_bytes": 937,
+  "original_sha256": "2d2d5af836ec8c913a9edcf07d066311bf9a34bf35aa75e4c034f1d32baad9ef",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/fuzz/hawdb_fuzz_append_replay_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/fuzz/hawdb_fuzz_append_replay_tests\" classname=\"\" status=\"run\" duration=\"73\" time=\"73\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/fuzz:hawdb_fuzz_append_replay_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest append_oracle::tests::append_state_machine_is_replayable_for_another_seed has been running for over 60 seconds\ntest append_oracle::tests::append_state_machine_is_replayable_for_another_seed ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 72.32s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

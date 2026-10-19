@@ -1,0 +1,5 @@
+{
+  "original_bytes": 999,
+  "original_sha256": "ec73297482b23b910426ad73cb5d4034bf23423f8208173069c9b047b7a5a3e2",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/storage/hawdb_storage_relational_index_view_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/storage/hawdb_storage_relational_index_view_fuzz_tests\" classname=\"\" status=\"run\" duration=\"178\" time=\"178\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_relational_index_view_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest relational_index_view::tests::relational_index_view_differential_campaign has been running for over 60 seconds\ntest relational_index_view::tests::relational_index_view_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 176.20s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 825,
+  "original_sha256": "f29e45e7c870a05654a74c90781bcb19fc1e655bea34baa827f5faf7072207d8",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/search/hawdb_search_bounded_file_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/search/hawdb_search_bounded_file_fuzz_tests\" classname=\"\" status=\"run\" duration=\"1\" time=\"1\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_bounded_file_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest bounded_file::tests::bounded_file_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 856 filtered out; finished in 0.11s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 969,
+  "original_sha256": "0a5834817d0b2fa45635a686caaca5f6e25248046257c660993e2eb44e090667",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/relational/hawdb_relational_field_plan_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/relational/hawdb_relational_field_plan_fuzz_tests\" classname=\"\" status=\"run\" duration=\"2\" time=\"2\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/relational:hawdb_relational_field_plan_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nfield planning: 128 seeds, 8192 cases, 32768 exact map comparisons; shapes=[809, 855, 839, 803, 816, 784, 848, 813, 779, 846]\ntest field_plan::tests::field_planning_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 225 filtered out; finished in 1.12s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 452,
+  "original_sha256": "213a05c8bbabf9b6bd8d07fa216578542ecb64aa3d7526573608867a55511120",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nalias boundary campaign: 2688 exact rejections, 5376 valid aliases\ntest alias_boundaries::table_alias_boundary_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.15s\n\n"
+}

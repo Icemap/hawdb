@@ -1,0 +1,5 @@
+{
+  "original_bytes": 919,
+  "original_sha256": "e7a8da00bb1c455ed71dd789b2a13b4fc367bdbc80be1046a20cf1a4d3e903a9",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/storage/hawdb_storage_artifact_binding_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/storage/hawdb_storage_artifact_binding_fuzz_tests\" classname=\"\" status=\"run\" duration=\"1\" time=\"1\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_artifact_binding_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nartifact-binding-state-machine-v1 seeds=128 steps=128 cases=17024\ntest artifact_binding::tests::artifact_binding_state_machine_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 0.62s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

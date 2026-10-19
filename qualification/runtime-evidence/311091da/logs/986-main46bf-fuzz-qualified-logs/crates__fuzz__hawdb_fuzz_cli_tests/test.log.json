@@ -1,0 +1,5 @@
+{
+  "original_bytes": 484,
+  "original_sha256": "e31f73190ae627ee0306ef795c9c2460715b173ecd33ef9e095968f44e036b2a",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/fuzz:hawdb_fuzz_cli_tests\n-----------------------------------------------------------------------------\n\nrunning 4 tests\ntest tests::parses_output_options ... ok\ntest tests::parses_exact_case_index ... ok\ntest tests::parses_sharding_progress_and_resume_options ... ok\ntest tests::parses_seed_and_case_count ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s\n\n"
+}

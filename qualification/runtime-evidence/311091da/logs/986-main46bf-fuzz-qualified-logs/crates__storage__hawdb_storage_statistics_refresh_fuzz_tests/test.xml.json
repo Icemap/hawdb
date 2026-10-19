@@ -1,0 +1,5 @@
+{
+  "original_bytes": 928,
+  "original_sha256": "d4ada6039de05cf8f95d3c8c2fb0333857062e13aabee7a0c76071fc018096b1",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/storage/hawdb_storage_statistics_refresh_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/storage/hawdb_storage_statistics_refresh_fuzz_tests\" classname=\"\" status=\"run\" duration=\"4\" time=\"4\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_statistics_refresh_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nstatistics refresh: 64 seeds, 128 run layouts, 433664 input facts\ntest statistics_refresh::tests::statistics_refresh_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 3.07s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

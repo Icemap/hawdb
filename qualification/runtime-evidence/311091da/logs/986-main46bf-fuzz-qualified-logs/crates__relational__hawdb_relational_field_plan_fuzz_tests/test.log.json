@@ -1,0 +1,5 @@
+{
+  "original_bytes": 510,
+  "original_sha256": "15b603af6f5f327c3d1aea87b233e7d8fc309f20767bdd8641313bd8a292ac2f",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/relational:hawdb_relational_field_plan_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nfield planning: 128 seeds, 8192 cases, 32768 exact map comparisons; shapes=[809, 855, 839, 803, 816, 784, 848, 813, 779, 846]\ntest field_plan::tests::field_planning_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 225 filtered out; finished in 1.12s\n\n"
+}

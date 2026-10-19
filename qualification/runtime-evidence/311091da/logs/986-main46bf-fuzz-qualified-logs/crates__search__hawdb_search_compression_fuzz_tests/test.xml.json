@@ -1,0 +1,5 @@
+{
+  "original_bytes": 827,
+  "original_sha256": "7920cd4dc2bc15d917fe6ce4c508e124c6840868418e8a71145cdd5a4daafe14",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/search/hawdb_search_compression_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/search/hawdb_search_compression_fuzz_tests\" classname=\"\" status=\"run\" duration=\"0\" time=\"0\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_compression_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest compression_tests::compressed_envelope_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 856 filtered out; finished in 0.31s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 821,
+  "original_sha256": "d5a560c2809eae63a8ba0798b7e639a3bb7284297b9db8b181d05bb9b975f3db",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/sql/hawdb_sql_frontend_corpus_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/sql/hawdb_sql_frontend_corpus_fuzz_tests\" classname=\"\" status=\"run\" duration=\"1\" time=\"1\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/sql:hawdb_sql_frontend_corpus_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest tests::frontend_corpus::frontend_corpus_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 93 filtered out; finished in 1.10s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

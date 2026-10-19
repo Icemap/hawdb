@@ -1,0 +1,5 @@
+{
+  "original_bytes": 464,
+  "original_sha256": "570622ef8c3df2ff3e5d56b5e1dfe28f01d8fe77b47f87042c4134488232dbde",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nDDL command campaign: 1944 complete plans and fingerprints, 3888 parse rejections\ntest graph::tests::ddl::ddl_command_pipeline_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 126 filtered out; finished in 0.06s\n\n"
+}

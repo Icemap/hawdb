@@ -1,0 +1,356 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "engine_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "status": "prepared_remote_verified",
+  "pid": 61352,
+  "started": 1792397612.6198258,
+  "steps": [
+    {
+      "role": "ordinary",
+      "name": "worktree",
+      "command": [
+        "git",
+        "worktree",
+        "add",
+        "--quiet",
+        "-b",
+        "qualify/986-ordinary-final-main46bf-311091da",
+        "/private/tmp/hawdb-wip-ready-20261015/qualify-ordinary-final-main46bf-311091da",
+        "311091da6b23a292b7385b46362d3a12f6ec0064"
+      ],
+      "started": 1792397612.621383,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-ordinary-worktree.log",
+      "exit": 0,
+      "ended": 1792397614.868839
+    },
+    {
+      "role": "ordinary",
+      "name": "stage",
+      "command": [
+        "git",
+        "add",
+        "--all"
+      ],
+      "started": 1792397614.901778,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-ordinary-stage.log",
+      "exit": 0,
+      "ended": 1792397615.0439832
+    },
+    {
+      "role": "ordinary",
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792397615.1156821,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-ordinary-install.log",
+      "exit": 0,
+      "ended": 1792397615.1497128
+    },
+    {
+      "role": "ordinary",
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792397615.2050838,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-ordinary-fmt.log",
+      "exit": 0,
+      "ended": 1792397620.20426
+    },
+    {
+      "role": "ordinary",
+      "name": "native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792397620.264062,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-ordinary-native.log",
+      "exit": 0,
+      "ended": 1792397671.216168
+    },
+    {
+      "role": "ordinary",
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792397671.270221,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-ordinary-prek.log",
+      "exit": 0,
+      "ended": 1792397677.7226481
+    },
+    {
+      "role": "ordinary",
+      "name": "commit",
+      "command": [
+        "git",
+        "commit",
+        "-m",
+        "ci(qualification): bind full ordinary matrix to main integration source",
+        "-m",
+        "Engine 311091da6b23a292b7385b46362d3a12f6ec0064; preserve all original workloads, samples, defaults, deadlines and concurrency. Ref #976, ref #987, ref #1081."
+      ],
+      "started": 1792397677.764853,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-ordinary-commit.log",
+      "exit": 0,
+      "ended": 1792397685.6703749
+    },
+    {
+      "role": "ordinary",
+      "name": "push",
+      "command": [
+        "git",
+        "push",
+        "-u",
+        "origin",
+        "HEAD"
+      ],
+      "started": 1792397685.786344,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-ordinary-push.log",
+      "exit": 0,
+      "ended": 1792397688.1656032
+    },
+    {
+      "role": "resources",
+      "name": "worktree",
+      "command": [
+        "git",
+        "worktree",
+        "add",
+        "--quiet",
+        "-b",
+        "qualify/986-resources-final-main46bf-311091da",
+        "/private/tmp/hawdb-wip-ready-20261015/qualify-resources-final-main46bf-311091da",
+        "311091da6b23a292b7385b46362d3a12f6ec0064"
+      ],
+      "started": 1792397689.474598,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-worktree.log",
+      "exit": 0,
+      "ended": 1792397693.090535
+    },
+    {
+      "role": "resources",
+      "name": "stage",
+      "command": [
+        "git",
+        "add",
+        "--all"
+      ],
+      "started": 1792397693.18853,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-stage.log",
+      "exit": 0,
+      "ended": 1792397693.284247
+    },
+    {
+      "role": "resources",
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792397693.4118578,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-install.log",
+      "exit": 0,
+      "ended": 1792397693.46322
+    },
+    {
+      "role": "resources",
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792397693.571671,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-fmt.log",
+      "exit": 0,
+      "ended": 1792397702.2207308
+    },
+    {
+      "role": "resources",
+      "name": "native",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792397702.3565629,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-native.log",
+      "exit": 0,
+      "ended": 1792397820.85835
+    },
+    {
+      "role": "resources",
+      "name": "python-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792397820.975414,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-python-fmt.log",
+      "exit": 0,
+      "ended": 1792397841.090726
+    },
+    {
+      "role": "resources",
+      "name": "python",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792397841.195625,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-python.log",
+      "exit": 0,
+      "ended": 1792397891.669624
+    },
+    {
+      "role": "resources",
+      "name": "wasm",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "hawdb",
+        "--no-default-features",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--lib",
+        "--test",
+        "in_memory_portable",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792397891.79002,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-wasm.log",
+      "exit": 0,
+      "ended": 1792397943.106072
+    },
+    {
+      "role": "resources",
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792397943.243493,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-prek.log",
+      "exit": 0,
+      "ended": 1792397952.0960178
+    },
+    {
+      "role": "resources",
+      "name": "commit",
+      "command": [
+        "git",
+        "commit",
+        "-m",
+        "ci(qualification): bind full resources matrix to main integration source",
+        "-m",
+        "Engine 311091da6b23a292b7385b46362d3a12f6ec0064; preserve all original workloads, samples, defaults, deadlines and concurrency. Ref #976, ref #987, ref #1081."
+      ],
+      "started": 1792397952.207755,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-commit.log",
+      "exit": 0,
+      "ended": 1792397960.280843
+    },
+    {
+      "role": "resources",
+      "name": "push",
+      "command": [
+        "git",
+        "push",
+        "-u",
+        "origin",
+        "HEAD"
+      ],
+      "started": 1792397960.432224,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-main46bf-311091da-resources-push.log",
+      "exit": 0,
+      "ended": 1792397962.982111
+    }
+  ],
+  "qualifications": {
+    "ordinary": {
+      "worktree": "/private/tmp/hawdb-wip-ready-20261015/qualify-ordinary-final-main46bf-311091da",
+      "branch": "qualify/986-ordinary-final-main46bf-311091da",
+      "source": "671094db1557d3176465945cee9b5c31f01a1df2",
+      "tree": "d19549229d231d649b71fc0cc0a144f9a22977c9",
+      "overlay_files": [
+        ".github/workflows/native-bindings.yml"
+      ],
+      "template": "1065905540081d36f8fdb4eca262ba7cdc8df0b9",
+      "original_overlay_sha256": "c15510a9d57c7741c03d351d70452dd32d5c54fd10b92f9c2cb9f737ae8881d6"
+    },
+    "resources": {
+      "worktree": "/private/tmp/hawdb-wip-ready-20261015/qualify-resources-final-main46bf-311091da",
+      "branch": "qualify/986-resources-final-main46bf-311091da",
+      "source": "ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+      "tree": "2de750bb8fa6c627a2e2b3517417090b4c005fe9",
+      "overlay_files": [
+        ".github/workflows/native-bindings.yml",
+        "BUILD.bazel",
+        "Cargo.toml",
+        "bindings/python/BUILD.bazel",
+        "bindings/python/Cargo.toml",
+        "bindings/python/src/database.rs",
+        "bindings/python/src/lib.rs",
+        "qualification/phases/consume.py",
+        "qualification/resources/baseline-source.json",
+        "qualification/resources/campaign.json",
+        "qualification/resources/numeric.py",
+        "qualification/resources/numeric_driver.py",
+        "qualification/resources/run.py",
+        "qualification/retained/configured.py",
+        "qualification/retained/run.py",
+        "src/api/retained_query.rs",
+        "src/embedded.rs",
+        "src/lib.rs",
+        "src/retained_phase_profile.rs"
+      ],
+      "template": "061fc42bcaa6201b8fc59cfdc2242689f9053590",
+      "original_overlay_sha256": "fc0e877ed8af08b89eb825bf4c2032c5aea7061ca54c1ca4124183c605025500"
+    }
+  },
+  "scope": "Full original matrices on published main46bf integration source. Prior general failures remain unresolved; matrices do not prove correctness. No cancellation/relabeling of predecessor runs. Original workloads, limits, samples, deadlines and concurrency preserved.",
+  "ended": 1792397964.017812
+}

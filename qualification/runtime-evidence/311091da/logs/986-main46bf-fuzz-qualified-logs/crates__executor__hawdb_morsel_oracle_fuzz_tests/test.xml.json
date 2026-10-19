@@ -1,0 +1,5 @@
+{
+  "original_bytes": 900,
+  "original_sha256": "13d3de40a18c1122b2969983f829e89d23837bbec1f38259ab89f4aa4459c2a3",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/executor/hawdb_morsel_oracle_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/executor/hawdb_morsel_oracle_fuzz_tests\" classname=\"\" status=\"run\" duration=\"2\" time=\"2\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_morsel_oracle_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nPublic scheduler differential: 576 fixtures, 3456 materializing comparisons and 576 accounted-stream lifecycles\ntest scheduler_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 2.50s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 815,
+  "original_sha256": "f2f9e4f083c056b83c3f04ef04173bb6fca93bbb6a7495998b03d5e70bf615bb",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/compat/hawdb_compat_contract_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/compat/hawdb_compat_contract_fuzz_tests\" classname=\"\" status=\"run\" duration=\"0\" time=\"0\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/compat:hawdb_compat_contract_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest differential::compatibility_contract_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.07s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 905,
+  "original_sha256": "084c64ee4ee58adba2f87254db05cbac75306afd818265eac4e923348526dca5",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/sql-syntax/hawdb_sql_alias_boundary_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/sql-syntax/hawdb_sql_alias_boundary_fuzz_tests\" classname=\"\" status=\"run\" duration=\"0\" time=\"0\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nalias boundary campaign: 2688 exact rejections, 5376 valid aliases\ntest alias_boundaries::table_alias_boundary_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.15s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

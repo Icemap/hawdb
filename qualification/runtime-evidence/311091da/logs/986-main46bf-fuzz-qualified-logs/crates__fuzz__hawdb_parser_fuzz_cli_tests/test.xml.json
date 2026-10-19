@@ -1,0 +1,5 @@
+{
+  "original_bytes": 839,
+  "original_sha256": "ab9dca6f73721816faaecd6e299cbb9e36d2b764caec5431cdb69fe29e6b4c95",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/fuzz/hawdb_parser_fuzz_cli_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/fuzz/hawdb_parser_fuzz_cli_tests\" classname=\"\" status=\"run\" duration=\"0\" time=\"0\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/fuzz:hawdb_parser_fuzz_cli_tests\n-----------------------------------------------------------------------------\n\nrunning 2 tests\ntest tests::rejects_empty_or_excessive_campaigns ... ok\ntest tests::parses_campaign_and_exact_replay_options ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

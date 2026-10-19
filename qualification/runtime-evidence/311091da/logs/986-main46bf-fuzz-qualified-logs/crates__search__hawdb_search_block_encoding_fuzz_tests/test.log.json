@@ -1,0 +1,5 @@
+{
+  "original_bytes": 404,
+  "original_sha256": "bcdd53114d88c13292114ea15a16505a6051d41db9949764dd78a7faee21a970",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_block_encoding_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest lexical_projection::block_encoding::tests::block_encoding_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 856 filtered out; finished in 5.16s\n\n"
+}

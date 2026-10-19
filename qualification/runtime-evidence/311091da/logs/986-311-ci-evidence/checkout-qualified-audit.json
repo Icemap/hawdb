@@ -1,0 +1,75 @@
+{
+  "head": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "synthetic_checkout": "20db2c93b578f3df426bf7647cbeaa981ebc7e44",
+  "synthetic_parents": [
+    "46bfde00131a6d711d51aad6e5e237279a287061",
+    "311091da6b23a292b7385b46362d3a12f6ec0064"
+  ],
+  "synthetic_tree_matches_published": true,
+  "jobs": [
+    {
+      "job": 117956423483,
+      "name": "Build and test",
+      "conclusion": "success",
+      "checkout": "20db2c93b578f3df426bf7647cbeaa981ebc7e44",
+      "head_metadata": "311091da6b23a292b7385b46362d3a12f6ec0064",
+      "log_sha256": "6ae056a5ee19e752ea0f3dbf2146f02b42d899055305c764cfa34fd6d56c0704",
+      "summary_lines": [
+        "2026-10-19T08:19:42.8236280Z ======================== 357 passed, 7 skipped in 9.99s ========================",
+        "2026-10-19T08:19:46.1458541Z ======================== 43 passed, 1 skipped in 1.37s ========================="
+      ],
+      "scope": "Workflow complete log with actual checkout verified. Build-and-test workflow labels cover binding tests, not full root/crate Prow."
+    },
+    {
+      "job": 117956423767,
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "conclusion": "success",
+      "checkout": "20db2c93b578f3df426bf7647cbeaa981ebc7e44",
+      "head_metadata": "311091da6b23a292b7385b46362d3a12f6ec0064",
+      "log_sha256": "4e6fe488b34035142be9ef60876ae2ac946f21e845f8638979f7927c4d5e8330",
+      "summary_lines": [
+        "2026-10-19T08:17:59.0371795Z Executed 3 out of 3 tests: 3 tests pass."
+      ],
+      "scope": "Workflow complete log with actual checkout verified. Build-and-test workflow labels cover binding tests, not full root/crate Prow."
+    },
+    {
+      "job": 117956423870,
+      "name": "Bazel build and test (macos-latest)",
+      "conclusion": "success",
+      "checkout": "20db2c93b578f3df426bf7647cbeaa981ebc7e44",
+      "head_metadata": "311091da6b23a292b7385b46362d3a12f6ec0064",
+      "log_sha256": "d427e4b7ddfa41811237a13af034343958328e7e77fcee007bcf9f22f18153d3",
+      "summary_lines": [
+        "2026-10-19T08:17:25.6348160Z Executed 3 out of 3 tests: 3 tests pass."
+      ],
+      "scope": "Workflow complete log with actual checkout verified. Build-and-test workflow labels cover binding tests, not full root/crate Prow."
+    },
+    {
+      "job": 117956424407,
+      "name": "Bazel native bindings (macos-latest)",
+      "conclusion": "success",
+      "checkout": "20db2c93b578f3df426bf7647cbeaa981ebc7e44",
+      "head_metadata": "311091da6b23a292b7385b46362d3a12f6ec0064",
+      "log_sha256": "9a23b5836b0924a706ddf4ed713e7d0eb47053d3d8c5763e7928ee06ac35ec38",
+      "summary_lines": [
+        "2026-10-19T08:20:56.4345780Z ok  \tgithub.com/nowledge-co/hawdb/bindings/go\t1.880s"
+      ],
+      "scope": "Workflow complete log with actual checkout verified. Build-and-test workflow labels cover binding tests, not full root/crate Prow."
+    },
+    {
+      "job": 117956424412,
+      "name": "Bazel native bindings (ubuntu-24.04)",
+      "conclusion": "success",
+      "checkout": "20db2c93b578f3df426bf7647cbeaa981ebc7e44",
+      "head_metadata": "311091da6b23a292b7385b46362d3a12f6ec0064",
+      "log_sha256": "5ea38d084ca5168a588d60311e98da7a0bbc2b76ceeb619f83cf34f89aaa7566",
+      "summary_lines": [
+        "2026-10-19T08:17:52.8660966Z ok  \tgithub.com/nowledge-co/hawdb/bindings/go\t1.547s"
+      ],
+      "scope": "Workflow complete log with actual checkout verified. Build-and-test workflow labels cover binding tests, not full root/crate Prow."
+    }
+  ],
+  "captured_at": 1792398750.891247,
+  "scope": "Five completed current311 automatic platform jobs on exact6ea tree; Windows remains running. Complete logs/checkout identity do not constitute full root/crates Prow, prior-failure disposition, performance acceptance or genuine approval."
+}

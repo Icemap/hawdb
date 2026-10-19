@@ -1,0 +1,59 @@
+{
+  "baseline_head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+  "receipt_sha256": "fecf749eb2b88990b3f17a56a39dd2259e0aa90ca85418b3f14b2b4109757b0a",
+  "source_manifest_sha256": "55d222650bda2401b108afc9dcdee08d13e7783d8269664a25fa7534e0793066",
+  "terminal": true,
+  "probes": 6,
+  "observed_attempts": 16,
+  "expected_attempts": 16,
+  "groups": [
+    {
+      "layer": "go",
+      "backend": "memory",
+      "attempts": 4,
+      "measured": 3,
+      "complete": true,
+      "observed_medians": {
+        "go_allocations": 1408899,
+        "go_allocated_bytes": 45654392
+      }
+    },
+    {
+      "layer": "go",
+      "backend": "file",
+      "attempts": 4,
+      "measured": 3,
+      "complete": true,
+      "observed_medians": {
+        "go_allocations": 1408867,
+        "go_allocated_bytes": 45490648
+      }
+    },
+    {
+      "layer": "python",
+      "backend": "memory",
+      "attempts": 4,
+      "measured": 3,
+      "complete": true,
+      "observed_medians": {
+        "python_traced_current_bytes": 2514272,
+        "python_traced_peak_bytes": 2652455
+      }
+    },
+    {
+      "layer": "python",
+      "backend": "file",
+      "attempts": 4,
+      "measured": 3,
+      "complete": true,
+      "observed_medians": {
+        "python_traced_current_bytes": 2514272,
+        "python_traced_peak_bytes": 2652455
+      }
+    }
+  ],
+  "scope": "run_including_store_open_setup_warmup_query_and_cleanup_excluding_job_decode_and_library_load",
+  "limitations": "Unchanged default constructors, budgets,512-row read-fixture mutations, queries and checksum consumer. Tracing changes observation overhead; no ordinary-latency or cross-scope ratio claim. Whole-run Go totals count allocated traffic; tracemalloc reports traced Python current/peak, not native memory.",
+  "original_matrix_counts_unchanged": true,
+  "paired_ratio": null
+}

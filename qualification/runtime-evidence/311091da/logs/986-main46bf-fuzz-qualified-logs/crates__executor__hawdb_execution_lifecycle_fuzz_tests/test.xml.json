@@ -1,0 +1,5 @@
+{
+  "original_bytes": 925,
+  "original_sha256": "ca781e5f2416c48ea6cab8a2761f00070c198a169178ffc0596a80b7d445bb12",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/executor/hawdb_execution_lifecycle_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/executor/hawdb_execution_lifecycle_fuzz_tests\" classname=\"\" status=\"run\" duration=\"0\" time=\"0\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_execution_lifecycle_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nexecution lifecycle: 128 seeds, 8192 admission pairs and full-profile comparisons\ntest observer::profile::tests::execution_lifecycle_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 474 filtered out; finished in 0.10s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

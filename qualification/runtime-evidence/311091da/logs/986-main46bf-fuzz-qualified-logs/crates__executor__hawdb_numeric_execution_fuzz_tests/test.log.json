@@ -1,0 +1,5 @@
+{
+  "original_bytes": 451,
+  "original_sha256": "67ec81c47ac21f45495f254be4ae3c737e4caccf4e347f0f427c909148dd2a0d",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_numeric_execution_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nnumeric execution campaign: 256 seeds, 9216 path/batch/exit cases\ntest numeric::differential::numeric_execution_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 474 filtered out; finished in 1.36s\n\n"
+}

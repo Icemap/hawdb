@@ -1,0 +1,5 @@
+{
+  "original_bytes": 897,
+  "original_sha256": "3b0e1cb0d5011ff528cf2aadd2d9cc53688d1bb510629b3540a38c13bb5ff770",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/executor/hawdb_mutation_preflight_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/executor/hawdb_mutation_preflight_fuzz_tests\" classname=\"\" status=\"run\" duration=\"2\" time=\"2\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_mutation_preflight_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nmutation preflight: 256 seeds, 35840 budget/error cases\ntest mutation::preflight::tests::mutation_preflight_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 474 filtered out; finished in 1.51s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

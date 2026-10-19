@@ -1,0 +1,1040 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "build_command": [
+    "bazel",
+    "build",
+    "-c",
+    "opt",
+    "//bindings/python:_hawdb",
+    "//bindings/python:_hawdb_boundary_profile",
+    "--repo_env=CARGO_BAZEL_ISOLATED=false",
+    "--repo_env=CARGO_NET_OFFLINE=true"
+  ],
+  "packages": {
+    "ordinary": {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-ordinary-main46bf-311091da-frozen",
+      "files_sha256": {
+        "retained_node_write_control.py": "8d14c99780381acb1a5d8e8f50f64d3af4fb7cd98058f4facc3f0afb6e68e983",
+        "retained_write_control.py": "4b83e1e954e79f6b7a5d987c0961bddc08fa2ed49cfd56107eaca878f7633de8",
+        "hawdb/magic.py": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+        "hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6",
+        "hawdb/__init__.py": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+        "hawdb/_display.py": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+        "hawdb/_hawdb.so": "7f83b11d1aad5ed123ac1f2b512063cfa0035c74784e8183e65ccaff48f25981",
+        "hawdb/pydantic.py": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+        "hawdb/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hawdb/_hawdb.pyi": "6c84c802cae732f8446298f18d9901e111d20d9d573add30d10f04c2656cbaf2"
+      },
+      "native_build_output": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a0fb379840abc41ef2d4c45c652990c4/execroot/_main/bazel-out/darwin_arm64-opt/bin/bindings/python/lib_hawdb.dylib"
+    },
+    "instrumented": {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/final-held-write-instrumented-main46bf-311091da-frozen",
+      "files_sha256": {
+        "retained_node_write_control.py": "8d14c99780381acb1a5d8e8f50f64d3af4fb7cd98058f4facc3f0afb6e68e983",
+        "retained_write_control.py": "4b83e1e954e79f6b7a5d987c0961bddc08fa2ed49cfd56107eaca878f7633de8",
+        "hawdb/magic.py": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+        "hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6",
+        "hawdb/__init__.py": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+        "hawdb/_display.py": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+        "hawdb/_hawdb.so": "4ae682d0e4cb0f7ee018b166390518fe4900703fc27a660f591bff05f4215ec3",
+        "hawdb/pydantic.py": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+        "hawdb/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hawdb/_hawdb.pyi": "6c84c802cae732f8446298f18d9901e111d20d9d573add30d10f04c2656cbaf2"
+      },
+      "native_build_output": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a0fb379840abc41ef2d4c45c652990c4/execroot/_main/bazel-out/darwin_arm64-opt/bin/bindings/python/lib_hawdb_boundary_profile.dylib"
+    }
+  },
+  "groups": [
+    {
+      "kind": "node",
+      "rows": 1000,
+      "pad_bytes": 4096,
+      "backend": "memory",
+      "producer": "ordinary",
+      "report_sha256": "029cc1279aed2471eac65444ca4f8e9cc77460f24aec31332706af7122c8c329",
+      "measured_rounds": 32,
+      "measured_point_writes": 1024,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_round_write_ns": 29812269.5,
+          "point_samples": 256,
+          "point_p50_ns": 922917,
+          "point_p95_ns": 962791,
+          "point_p99_ns": 1142833,
+          "maximum_retained_bytes": 0
+        },
+        "closed_source": {
+          "median_round_write_ns": 29754539.0,
+          "point_samples": 256,
+          "point_p50_ns": 922917,
+          "point_p95_ns": 978334,
+          "point_p99_ns": 1153542,
+          "maximum_retained_bytes": 0
+        },
+        "owned_result": {
+          "median_round_write_ns": 29697248.5,
+          "point_samples": 256,
+          "point_p50_ns": 920416,
+          "point_p95_ns": 968625,
+          "point_p99_ns": 1088209,
+          "maximum_retained_bytes": 0
+        },
+        "retained_buffers": {
+          "median_round_write_ns": 29975462.0,
+          "point_samples": 256,
+          "point_p50_ns": 927292,
+          "point_p95_ns": 984667,
+          "point_p99_ns": 1151000,
+          "maximum_retained_bytes": 384608
+        }
+      },
+      "paired_ratios": {
+        "closed_source": {
+          "candidate_over_no_reader_ratios": [
+            0.9984962412084533,
+            0.9912305656136846,
+            0.9989250843480108,
+            1.0008728546743448,
+            1.0211036661416137,
+            1.0042603258434746,
+            0.9955492144375039,
+            1.0040809072989978
+          ],
+          "median": 0.9998989695111777,
+          "maximum": 1.0211036661416137
+        },
+        "owned_result": {
+          "candidate_over_no_reader_ratios": [
+            1.0041554168413451,
+            0.9907547342572939,
+            0.9948999533366825,
+            0.9983032653636855,
+            0.9940683581255073,
+            0.9894399636539217,
+            1.0042680619448807,
+            0.9933991454524237
+          ],
+          "median": 0.9944841557310948,
+          "maximum": 1.0042680619448807
+        },
+        "retained_buffers": {
+          "candidate_over_no_reader_ratios": [
+            1.0088418312679577,
+            0.9937915178757232,
+            1.0065543620931017,
+            1.0068460517641153,
+            1.006809705504454,
+            1.0026651361083796,
+            1.004396655156251,
+            1.009070060154531
+          ],
+          "median": 1.0066820337987779,
+          "maximum": 1.009070060154531
+        }
+      },
+      "process_peak_rss_bytes": 83345408
+    },
+    {
+      "kind": "node",
+      "rows": 1000,
+      "pad_bytes": 4096,
+      "backend": "memory",
+      "producer": "instrumented",
+      "report_sha256": "16cd38cac5aa33816f0f7df2917ca65d59b4dc266d04c05ede8c1be997e05530",
+      "measured_rounds": 32,
+      "measured_point_writes": 1024,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_round_write_ns": 30546896.5,
+          "point_samples": 256,
+          "point_p50_ns": 943875,
+          "point_p95_ns": 998291,
+          "point_p99_ns": 1194833,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 316202528.0,
+          "median_reader_native_allocated_bytes": 0.0,
+          "computed_median_native_allocation_calls": 758593.0
+        },
+        "closed_source": {
+          "median_round_write_ns": 30401399.0,
+          "point_samples": 256,
+          "point_p50_ns": 939125,
+          "point_p95_ns": 996833,
+          "point_p99_ns": 1188958,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 316202528.0,
+          "median_reader_native_allocated_bytes": 1897632.0,
+          "computed_median_native_allocation_calls": 758593.0
+        },
+        "owned_result": {
+          "median_round_write_ns": 30416729.0,
+          "point_samples": 256,
+          "point_p50_ns": 942041,
+          "point_p95_ns": 1001333,
+          "point_p99_ns": 1105208,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 316202528.0,
+          "median_reader_native_allocated_bytes": 4213792.0,
+          "computed_median_native_allocation_calls": 758593.0
+        },
+        "retained_buffers": {
+          "median_round_write_ns": 30815998.5,
+          "point_samples": 256,
+          "point_p50_ns": 952041,
+          "point_p95_ns": 1027708,
+          "point_p99_ns": 1225167,
+          "maximum_retained_bytes": 384608,
+          "median_write_native_allocated_bytes": 316382656.0,
+          "median_reader_native_allocated_bytes": 1897632.0,
+          "computed_median_native_allocation_calls": 758945.0
+        }
+      },
+      "paired_ratios": {
+        "closed_source": {
+          "candidate_over_no_reader_ratios": [
+            0.9950045493597403,
+            1.0031142135427782,
+            0.995563411420491,
+            0.9936803667740121,
+            0.9990835384773459,
+            0.9916533328249518,
+            0.996509315607609,
+            0.9794136354374668
+          ],
+          "median": 0.9952839803901157,
+          "maximum": 1.0031142135427782
+        },
+        "owned_result": {
+          "candidate_over_no_reader_ratios": [
+            0.9904762617075286,
+            1.001909944574795,
+            0.9998019538110274,
+            0.987388786999634,
+            0.9964247853831923,
+            0.9885793687778789,
+            1.01390960700931,
+            0.9845416357634785
+          ],
+          "median": 0.9934505235453605,
+          "maximum": 1.01390960700931
+        },
+        "retained_buffers": {
+          "candidate_over_no_reader_ratios": [
+            1.0101811028896726,
+            1.0169982144492637,
+            1.0104079613846966,
+            1.0163726835057374,
+            1.0079563597632115,
+            1.0011144607536733,
+            1.0077633163239827,
+            1.0041593870980887
+          ],
+          "median": 1.0090687313264421,
+          "maximum": 1.0169982144492637
+        }
+      },
+      "process_peak_rss_bytes": 81313792
+    },
+    {
+      "kind": "node",
+      "rows": 1000,
+      "pad_bytes": 4096,
+      "backend": "file",
+      "producer": "ordinary",
+      "report_sha256": "e32f4b4790b48693802b92a6ee9eaed52e4b618f5c9eff27f9607ebf78a8a04e",
+      "measured_rounds": 32,
+      "measured_point_writes": 1024,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_round_write_ns": 185290499.5,
+          "point_samples": 256,
+          "point_p50_ns": 5591083,
+          "point_p95_ns": 6525458,
+          "point_p99_ns": 7544500,
+          "maximum_retained_bytes": 0
+        },
+        "closed_source": {
+          "median_round_write_ns": 187326812.5,
+          "point_samples": 256,
+          "point_p50_ns": 5596459,
+          "point_p95_ns": 6682916,
+          "point_p99_ns": 8545375,
+          "maximum_retained_bytes": 0
+        },
+        "owned_result": {
+          "median_round_write_ns": 185502521.5,
+          "point_samples": 256,
+          "point_p50_ns": 5578791,
+          "point_p95_ns": 6513833,
+          "point_p99_ns": 6543042,
+          "maximum_retained_bytes": 0
+        },
+        "retained_buffers": {
+          "median_round_write_ns": 186148187.0,
+          "point_samples": 256,
+          "point_p50_ns": 5573583,
+          "point_p95_ns": 6521583,
+          "point_p99_ns": 11969417,
+          "maximum_retained_bytes": 384608
+        }
+      },
+      "paired_ratios": {
+        "closed_source": {
+          "candidate_over_no_reader_ratios": [
+            0.9904266560992084,
+            1.023272535375967,
+            0.9202506268984258,
+            1.0030210179283523,
+            1.015978432607908,
+            1.0687838245235917,
+            1.041147778982831,
+            1.0051668024489375
+          ],
+          "median": 1.0105726175284229,
+          "maximum": 1.0687838245235917
+        },
+        "owned_result": {
+          "candidate_over_no_reader_ratios": [
+            0.9970042135112294,
+            0.9996856995410087,
+            0.9315495029490627,
+            1.0261660023479677,
+            0.9904101117899573,
+            1.011756012407023,
+            0.9499378940123199,
+            0.9942917280411396
+          ],
+          "median": 0.9956479707761845,
+          "maximum": 1.0261660023479677
+        },
+        "retained_buffers": {
+          "candidate_over_no_reader_ratios": [
+            1.0072241150340544,
+            1.0021602662787175,
+            1.0028708567372289,
+            1.014807619107234,
+            0.9924595498338604,
+            1.0079104692154512,
+            1.1521169090222043,
+            1.002025138672739
+          ],
+          "median": 1.0050474858856417,
+          "maximum": 1.1521169090222043
+        }
+      },
+      "process_peak_rss_bytes": 108806144
+    },
+    {
+      "kind": "node",
+      "rows": 1000,
+      "pad_bytes": 4096,
+      "backend": "file",
+      "producer": "instrumented",
+      "report_sha256": "8467828e431f1423cd1b65989c2743195fdc69d7d4734108919b09bd8685dbd6",
+      "measured_rounds": 32,
+      "measured_point_writes": 1024,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_round_write_ns": 201743209.5,
+          "point_samples": 256,
+          "point_p50_ns": 6412584,
+          "point_p95_ns": 7418917,
+          "point_p99_ns": 10468917,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 317524448.0,
+          "median_reader_native_allocated_bytes": 0.0,
+          "computed_median_native_allocation_calls": 760193.0
+        },
+        "closed_source": {
+          "median_round_write_ns": 200721290.5,
+          "point_samples": 256,
+          "point_p50_ns": 6396875,
+          "point_p95_ns": 6969500,
+          "point_p99_ns": 7484667,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 317524448.0,
+          "median_reader_native_allocated_bytes": 1897632.0,
+          "computed_median_native_allocation_calls": 760193.0
+        },
+        "owned_result": {
+          "median_round_write_ns": 199620458.5,
+          "point_samples": 256,
+          "point_p50_ns": 6388750,
+          "point_p95_ns": 7463125,
+          "point_p99_ns": 129037334,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 317524448.0,
+          "median_reader_native_allocated_bytes": 4258176.0,
+          "computed_median_native_allocation_calls": 760193.0
+        },
+        "retained_buffers": {
+          "median_round_write_ns": 202726103.0,
+          "point_samples": 256,
+          "point_p50_ns": 6422375,
+          "point_p95_ns": 7236166,
+          "point_p99_ns": 7564917,
+          "maximum_retained_bytes": 384608,
+          "median_write_native_allocated_bytes": 317704576.0,
+          "median_reader_native_allocated_bytes": 1897632.0,
+          "computed_median_native_allocation_calls": 760545.0
+        }
+      },
+      "paired_ratios": {
+        "closed_source": {
+          "candidate_over_no_reader_ratios": [
+            0.9427204386275816,
+            1.0041843449128471,
+            1.0096415250169688,
+            1.0156923293414453,
+            1.0009992633388842,
+            0.9949468510529393,
+            0.8771176993508988,
+            0.9940217373033278
+          ],
+          "median": 0.9979730571959118,
+          "maximum": 1.0156923293414453
+        },
+        "owned_result": {
+          "candidate_over_no_reader_ratios": [
+            0.9583079436301207,
+            0.9753096427086584,
+            5.00808340269598,
+            1.0013996842079373,
+            1.0247077703626464,
+            0.9976901368740252,
+            0.873865057012879,
+            0.9830563031337242
+          ],
+          "median": 0.9903732200038746,
+          "maximum": 5.00808340269598
+        },
+        "retained_buffers": {
+          "candidate_over_no_reader_ratios": [
+            1.008601573967374,
+            0.9872805879389246,
+            1.0316839443632908,
+            0.9906426239449574,
+            1.0214373020031695,
+            1.0157345218763567,
+            0.9448038827597027,
+            0.9828632868992202
+          ],
+          "median": 0.9996220989561657,
+          "maximum": 1.0316839443632908
+        }
+      },
+      "process_peak_rss_bytes": 105529344
+    },
+    {
+      "kind": "node",
+      "rows": 10000,
+      "pad_bytes": 64,
+      "backend": "memory",
+      "producer": "ordinary",
+      "report_sha256": "6e0f47e51f8a5bdeb34068b58533ff5a168113aeba05e0b8041dc5e0aa4023c3",
+      "measured_rounds": 32,
+      "measured_point_writes": 1024,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_round_write_ns": 222689249.0,
+          "point_samples": 256,
+          "point_p50_ns": 6864459,
+          "point_p95_ns": 8106500,
+          "point_p99_ns": 8810209,
+          "maximum_retained_bytes": 0
+        },
+        "closed_source": {
+          "median_round_write_ns": 221314689.5,
+          "point_samples": 256,
+          "point_p50_ns": 6827958,
+          "point_p95_ns": 8218750,
+          "point_p99_ns": 9170500,
+          "maximum_retained_bytes": 0
+        },
+        "owned_result": {
+          "median_round_write_ns": 223055501.0,
+          "point_samples": 256,
+          "point_p50_ns": 6888334,
+          "point_p95_ns": 7736792,
+          "point_p99_ns": 8809750,
+          "maximum_retained_bytes": 0
+        },
+        "retained_buffers": {
+          "median_round_write_ns": 224958647.0,
+          "point_samples": 256,
+          "point_p50_ns": 6957250,
+          "point_p95_ns": 8609458,
+          "point_p99_ns": 9195791,
+          "maximum_retained_bytes": 255584
+        }
+      },
+      "paired_ratios": {
+        "closed_source": {
+          "candidate_over_no_reader_ratios": [
+            1.0207298026709815,
+            0.930265504131915,
+            1.0090802536657264,
+            0.9899220442373524,
+            0.9974043197162116,
+            1.0096548536881127,
+            1.0953777422027258,
+            0.9794326431195141
+          ],
+          "median": 1.003242286690969,
+          "maximum": 1.0953777422027258
+        },
+        "owned_result": {
+          "candidate_over_no_reader_ratios": [
+            0.9653051921334104,
+            0.9297418291468538,
+            1.0041411810256233,
+            1.0354518108384976,
+            1.0022913811656264,
+            1.052770714502118,
+            1.0224301466778736,
+            0.9959242940292788
+          ],
+          "median": 1.0032162810956249,
+          "maximum": 1.052770714502118
+        },
+        "retained_buffers": {
+          "candidate_over_no_reader_ratios": [
+            0.9902762319024967,
+            0.9584168016023827,
+            1.0052567680509572,
+            1.0209931458862773,
+            1.0179091986694906,
+            1.1435288275276587,
+            1.001573099592961,
+            1.0067575382573963
+          ],
+          "median": 1.0060071531541768,
+          "maximum": 1.1435288275276587
+        }
+      },
+      "process_peak_rss_bytes": 128172032
+    },
+    {
+      "kind": "node",
+      "rows": 10000,
+      "pad_bytes": 64,
+      "backend": "memory",
+      "producer": "instrumented",
+      "report_sha256": "5082e2e5e6d86f65d6334d342bf555781891c140cee1d53694fc1519f41fc690",
+      "measured_rounds": 32,
+      "measured_point_writes": 1024,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_round_write_ns": 240097935.5,
+          "point_samples": 256,
+          "point_p50_ns": 7349416,
+          "point_p95_ns": 9588375,
+          "point_p99_ns": 11806291,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 555448096.0,
+          "median_reader_native_allocated_bytes": 0.0,
+          "computed_median_native_allocation_calls": 7431649.0
+        },
+        "closed_source": {
+          "median_round_write_ns": 246440378.0,
+          "point_samples": 256,
+          "point_p50_ns": 7532917,
+          "point_p95_ns": 9571042,
+          "point_p99_ns": 11165333,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 555448096.0,
+          "median_reader_native_allocated_bytes": 1897824.0,
+          "computed_median_native_allocation_calls": 7431649.0
+        },
+        "owned_result": {
+          "median_round_write_ns": 237410167.0,
+          "point_samples": 256,
+          "point_p50_ns": 7382542,
+          "point_p95_ns": 8748792,
+          "point_p99_ns": 10112250,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 555448096.0,
+          "median_reader_native_allocated_bytes": 3956128.0,
+          "computed_median_native_allocation_calls": 7431649.0
+        },
+        "retained_buffers": {
+          "median_round_write_ns": 241157770.5,
+          "point_samples": 256,
+          "point_p50_ns": 7457875,
+          "point_p95_ns": 10750875,
+          "point_p99_ns": 17271917,
+          "maximum_retained_bytes": 255584,
+          "median_write_native_allocated_bytes": 555499200.0,
+          "median_reader_native_allocated_bytes": 1897824.0,
+          "computed_median_native_allocation_calls": 7432001.0
+        }
+      },
+      "paired_ratios": {
+        "closed_source": {
+          "candidate_over_no_reader_ratios": [
+            0.9961166173991379,
+            1.0548984072270524,
+            0.9225913069338688,
+            1.0107096873478914,
+            1.108788789683149,
+            1.0387543930687209,
+            1.0410447813716475,
+            0.9122410962334802
+          ],
+          "median": 1.0247320402083062,
+          "maximum": 1.108788789683149
+        },
+        "owned_result": {
+          "candidate_over_no_reader_ratios": [
+            1.0320802256896182,
+            0.9911330255989853,
+            0.9628689786141861,
+            0.9139410207593626,
+            1.0079024283109548,
+            1.0625519805155215,
+            0.9845257210889252,
+            0.8883826165391562
+          ],
+          "median": 0.9878293733439553,
+          "maximum": 1.0625519805155215
+        },
+        "retained_buffers": {
+          "candidate_over_no_reader_ratios": [
+            1.1301938567260257,
+            1.0237839851318509,
+            1.3206274893046885,
+            0.8538085628570474,
+            1.077189169326395,
+            1.0597390973731058,
+            1.0307858812261006,
+            0.8688418278749268
+          ],
+          "median": 1.0452624892996032,
+          "maximum": 1.3206274893046885
+        }
+      },
+      "process_peak_rss_bytes": 125222912
+    },
+    {
+      "kind": "node",
+      "rows": 10000,
+      "pad_bytes": 64,
+      "backend": "file",
+      "producer": "ordinary",
+      "report_sha256": "894121076d838b53e10f62253bfff60061a0ee04b32ef1ec17e4cf21a1beb81d",
+      "measured_rounds": 32,
+      "measured_point_writes": 1024,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_round_write_ns": 413756354.0,
+          "point_samples": 256,
+          "point_p50_ns": 12500458,
+          "point_p95_ns": 14738208,
+          "point_p99_ns": 16170750,
+          "maximum_retained_bytes": 0
+        },
+        "closed_source": {
+          "median_round_write_ns": 410621414.5,
+          "point_samples": 256,
+          "point_p50_ns": 12519167,
+          "point_p95_ns": 14820916,
+          "point_p99_ns": 15741083,
+          "maximum_retained_bytes": 0
+        },
+        "owned_result": {
+          "median_round_write_ns": 411315355.5,
+          "point_samples": 256,
+          "point_p50_ns": 12746000,
+          "point_p95_ns": 15438166,
+          "point_p99_ns": 17217667,
+          "maximum_retained_bytes": 0
+        },
+        "retained_buffers": {
+          "median_round_write_ns": 420152498.5,
+          "point_samples": 256,
+          "point_p50_ns": 12520958,
+          "point_p95_ns": 15777084,
+          "point_p99_ns": 16640833,
+          "maximum_retained_bytes": 255584
+        }
+      },
+      "paired_ratios": {
+        "closed_source": {
+          "candidate_over_no_reader_ratios": [
+            1.0296902446506464,
+            1.03610461288037,
+            1.0138939690722337,
+            0.9793305901848223,
+            0.9439839584055922,
+            0.9908617576494141,
+            1.0303131227589917,
+            0.9625404722993072
+          ],
+          "median": 1.0023778633608238,
+          "maximum": 1.03610461288037
+        },
+        "owned_result": {
+          "candidate_over_no_reader_ratios": [
+            1.002573734207505,
+            0.992026940451936,
+            1.016294979244895,
+            1.0399591043995298,
+            0.9482854614713423,
+            1.122867305528148,
+            1.0257392898478626,
+            0.9503229968870741
+          ],
+          "median": 1.0094343567261999,
+          "maximum": 1.122867305528148
+        },
+        "retained_buffers": {
+          "candidate_over_no_reader_ratios": [
+            1.0186712163824354,
+            0.9971177045395763,
+            1.0443448063896206,
+            0.9814027425748465,
+            1.0239678243296717,
+            1.0583047974200042,
+            1.0258467292125053,
+            0.9652699400418839
+          ],
+          "median": 1.0213195203560534,
+          "maximum": 1.0583047974200042
+        }
+      },
+      "process_peak_rss_bytes": 147439616
+    },
+    {
+      "kind": "node",
+      "rows": 10000,
+      "pad_bytes": 64,
+      "backend": "file",
+      "producer": "instrumented",
+      "report_sha256": "90e72aa3489abfc558bd177936bd17dc7c55e6e9fb2c8bcb51158be1ad61150d",
+      "measured_rounds": 32,
+      "measured_point_writes": 1024,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_round_write_ns": 433621229.5,
+          "point_samples": 256,
+          "point_p50_ns": 13478791,
+          "point_p95_ns": 15867708,
+          "point_p99_ns": 17629500,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 556779232.0,
+          "median_reader_native_allocated_bytes": 0.0,
+          "computed_median_native_allocation_calls": 7433249.0
+        },
+        "closed_source": {
+          "median_round_write_ns": 433537125.5,
+          "point_samples": 256,
+          "point_p50_ns": 13464250,
+          "point_p95_ns": 15717541,
+          "point_p99_ns": 18181708,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 556779232.0,
+          "median_reader_native_allocated_bytes": 1897824.0,
+          "computed_median_native_allocation_calls": 7433249.0
+        },
+        "owned_result": {
+          "median_round_write_ns": 431643063.0,
+          "point_samples": 256,
+          "point_p50_ns": 13450958,
+          "point_p95_ns": 14541083,
+          "point_p99_ns": 16421417,
+          "maximum_retained_bytes": 0,
+          "median_write_native_allocated_bytes": 556779232.0,
+          "median_reader_native_allocated_bytes": 4000512.0,
+          "computed_median_native_allocation_calls": 7433249.0
+        },
+        "retained_buffers": {
+          "median_round_write_ns": 433163022.5,
+          "point_samples": 256,
+          "point_p50_ns": 13476208,
+          "point_p95_ns": 15352291,
+          "point_p99_ns": 16264709,
+          "maximum_retained_bytes": 255584,
+          "median_write_native_allocated_bytes": 556830336.0,
+          "median_reader_native_allocated_bytes": 1897824.0,
+          "computed_median_native_allocation_calls": 7433601.0
+        }
+      },
+      "paired_ratios": {
+        "closed_source": {
+          "candidate_over_no_reader_ratios": [
+            0.9305415094055126,
+            1.01861900558026,
+            0.9635757430875945,
+            1.009763730889424,
+            1.0441314868373346,
+            1.0311411773124075,
+            0.9548339392622398,
+            1.007534470996801
+          ],
+          "median": 1.0086491009431127,
+          "maximum": 1.0441314868373346
+        },
+        "owned_result": {
+          "candidate_over_no_reader_ratios": [
+            0.9413250679518524,
+            0.9922321484313777,
+            0.9284563732905662,
+            1.0066155239386747,
+            1.0147041799253385,
+            0.9675371462690047,
+            0.9494630193438041,
+            1.0406259112306318
+          ],
+          "median": 0.9798846473501912,
+          "maximum": 1.0406259112306318
+        },
+        "retained_buffers": {
+          "candidate_over_no_reader_ratios": [
+            0.9540944645502394,
+            1.025388942843739,
+            0.945908885276487,
+            1.003350726286639,
+            1.006818216381749,
+            0.9832618924861547,
+            0.9936243139293808,
+            1.0255559865568693
+          ],
+          "median": 0.9984875201080099,
+          "maximum": 1.0255559865568693
+        }
+      },
+      "process_peak_rss_bytes": 145145856
+    },
+    {
+      "kind": "numeric",
+      "rows": 1000,
+      "pad_bytes": 4096,
+      "backend": "memory",
+      "producer": "ordinary",
+      "report_sha256": "cfa13db2c23560a21fdf1b92eee9a6e84f229b19ec8a2a739bfa459acb799cc1",
+      "measured_rounds": 21,
+      "measured_point_writes": null,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_write_boundary_ns": 2536791,
+          "minimum_write_boundary_ns": 2441792
+        },
+        "closed_cursor": {
+          "median_write_boundary_ns": 2537583,
+          "minimum_write_boundary_ns": 2430833
+        },
+        "open_cursor": {
+          "median_write_boundary_ns": 2785125,
+          "minimum_write_boundary_ns": 2655666
+        }
+      },
+      "paired_ratios": {
+        "closed_cursor": {
+          "candidate_over_no_reader_ratios": [
+            1.0003122054595748,
+            0.9923004824801461,
+            0.9874911897628599,
+            0.9928280455740578,
+            0.9827407557082238,
+            0.9944773310521814,
+            1.0096920622231542
+          ],
+          "median": 0.9928280455740578,
+          "maximum": 1.0096920622231542
+        },
+        "open_cursor": {
+          "candidate_over_no_reader_ratios": [
+            1.0882512591695572,
+            1.0723829123195794,
+            1.1314172548621337,
+            1.0663744084136721,
+            1.1074964639321074,
+            1.096873801269641,
+            1.087588951065447
+          ],
+          "median": 1.0882512591695572,
+          "maximum": 1.1314172548621337
+        }
+      },
+      "process_peak_rss_bytes": 64651264
+    },
+    {
+      "kind": "numeric",
+      "rows": 1000,
+      "pad_bytes": 4096,
+      "backend": "file",
+      "producer": "ordinary",
+      "report_sha256": "fd07220017497463118c78c49818e8f0004e0be38e684cc73033ceab9964d0a0",
+      "measured_rounds": 21,
+      "measured_point_writes": null,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_write_boundary_ns": 8410166,
+          "minimum_write_boundary_ns": 7135625
+        },
+        "closed_cursor": {
+          "median_write_boundary_ns": 8184459,
+          "minimum_write_boundary_ns": 7441667
+        },
+        "open_cursor": {
+          "median_write_boundary_ns": 8343500,
+          "minimum_write_boundary_ns": 8157792
+        }
+      },
+      "paired_ratios": {
+        "closed_cursor": {
+          "candidate_over_no_reader_ratios": [
+            0.959451618820157,
+            0.9421773390508533,
+            1.0480109905878014,
+            0.9107039329580193,
+            1.153951756153105,
+            0.9300847331669791,
+            0.9601841230928034
+          ],
+          "median": 0.959451618820157,
+          "maximum": 1.153951756153105
+        },
+        "open_cursor": {
+          "candidate_over_no_reader_ratios": [
+            0.9600463284107946,
+            1.0717232566840302,
+            1.0793582383984939,
+            0.9893645186773904,
+            1.143248419024262,
+            0.9920731647865214,
+            1.1155714976936228
+          ],
+          "median": 1.0717232566840302,
+          "maximum": 1.143248419024262
+        }
+      },
+      "process_peak_rss_bytes": 82935808
+    },
+    {
+      "kind": "numeric",
+      "rows": 10000,
+      "pad_bytes": 64,
+      "backend": "memory",
+      "producer": "ordinary",
+      "report_sha256": "9a90bcfbffdd539675f30d166f97f589fb946f7ba921968064c27fab661b65ac",
+      "measured_rounds": 21,
+      "measured_point_writes": null,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_write_boundary_ns": 46883291,
+          "minimum_write_boundary_ns": 46612083
+        },
+        "closed_cursor": {
+          "median_write_boundary_ns": 47253916,
+          "minimum_write_boundary_ns": 46556541
+        },
+        "open_cursor": {
+          "median_write_boundary_ns": 48354959,
+          "minimum_write_boundary_ns": 47959750
+        }
+      },
+      "paired_ratios": {
+        "closed_cursor": {
+          "candidate_over_no_reader_ratios": [
+            1.0098645006650984,
+            0.9335402323921732,
+            0.9930750168540856,
+            1.0018270056077925,
+            1.007310948842816,
+            0.9959342010716705,
+            0.9988084205548162
+          ],
+          "median": 0.9988084205548162,
+          "maximum": 1.0098645006650984
+        },
+        "open_cursor": {
+          "candidate_over_no_reader_ratios": [
+            1.0333949153593176,
+            0.9645833591305017,
+            1.0229603975540027,
+            1.024120953799322,
+            1.0270969538246542,
+            1.0263674885544767,
+            1.034603881572939
+          ],
+          "median": 1.0263674885544767,
+          "maximum": 1.034603881572939
+        }
+      },
+      "process_peak_rss_bytes": 96911360
+    },
+    {
+      "kind": "numeric",
+      "rows": 10000,
+      "pad_bytes": 64,
+      "backend": "file",
+      "producer": "ordinary",
+      "report_sha256": "6222004b007bcec3c79bb01ca778004f107b7801748b65023cc1facd09d0f0c2",
+      "measured_rounds": 21,
+      "measured_point_writes": null,
+      "all_retained_quotas_released": true,
+      "stats": {
+        "ordinary": {
+          "median_write_boundary_ns": 58023333,
+          "minimum_write_boundary_ns": 55735500
+        },
+        "closed_cursor": {
+          "median_write_boundary_ns": 58570666,
+          "minimum_write_boundary_ns": 55497542
+        },
+        "open_cursor": {
+          "median_write_boundary_ns": 58273334,
+          "minimum_write_boundary_ns": 56834500
+        }
+      },
+      "paired_ratios": {
+        "closed_cursor": {
+          "candidate_over_no_reader_ratios": [
+            0.9957305846363628,
+            1.0075027811808883,
+            0.9941474529518747,
+            0.979317016328358,
+            1.030869047112478,
+            1.0081316796449704,
+            1.0179062934981484
+          ],
+          "median": 1.0075027811808883,
+          "maximum": 1.030869047112478
+        },
+        "open_cursor": {
+          "candidate_over_no_reader_ratios": [
+            1.022131316665321,
+            0.98306911651205,
+            1.0147714370739351,
+            0.9845469812423882,
+            0.9795111218447241,
+            1.0031466865894312,
+            1.0127528911222194
+          ],
+          "median": 1.0031466865894312,
+          "maximum": 1.022131316665321
+        }
+      },
+      "process_peak_rss_bytes": 110379008
+    }
+  ],
+  "pending": [],
+  "missing": [],
+  "errors": [],
+  "complete": true,
+  "observed_at": 1792398720.4881558,
+  "scope": "Existing exact-consumer final-source Node8 and numeric4 held-write controls. Same-source mode comparisons, rotated rounds and safe durability. Instrumented observations separate from ordinary timings; RSS includes all fixtures/setup, no per-mode attribution, production tails, universal COW cost, causality, leak absence, full90/110 or approval claim."
+}

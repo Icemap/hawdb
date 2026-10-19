@@ -1,0 +1,116 @@
+{
+  "id": 117960456935,
+  "run_id": 39222367162,
+  "workflow_name": "Native Bindings",
+  "head_branch": "qualify/986-runtime-main46bfde00",
+  "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39222367162",
+  "run_attempt": 1,
+  "node_id": "CR_kwDOTX6JAc8AAAAbdv265w",
+  "head_sha": "ef412c48ba3a89b30abaf809e33512f58ed60e66",
+  "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/117960456935",
+  "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39222367162/job/117960456935",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-10-19T08:23:04Z",
+  "started_at": "2026-10-19T08:23:06Z",
+  "completed_at": "2026-10-19T08:27:49Z",
+  "name": "Full runtime qualification (python)",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-10-19T08:23:06Z",
+      "completed_at": "2026-10-19T08:23:09Z"
+    },
+    {
+      "name": "Checkout qualification source",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-10-19T08:23:09Z",
+      "completed_at": "2026-10-19T08:23:15Z"
+    },
+    {
+      "name": "Install pinned Rust",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-10-19T08:23:15Z",
+      "completed_at": "2026-10-19T08:23:22Z"
+    },
+    {
+      "name": "Install Bazel",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-10-19T08:23:22Z",
+      "completed_at": "2026-10-19T08:24:11Z"
+    },
+    {
+      "name": "Verify production source and qualification overlay",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-10-19T08:24:11Z",
+      "completed_at": "2026-10-19T08:24:14Z"
+    },
+    {
+      "name": "Run complete declared runtime scope",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-10-19T08:24:14Z",
+      "completed_at": "2026-10-19T08:27:45Z"
+    },
+    {
+      "name": "Preserve complete test logs and source evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-10-19T08:27:45Z",
+      "completed_at": "2026-10-19T08:27:45Z"
+    },
+    {
+      "name": "Upload runtime qualification evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-10-19T08:27:45Z",
+      "completed_at": "2026-10-19T08:27:46Z"
+    },
+    {
+      "name": "Post Install Bazel",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-10-19T08:27:46Z",
+      "completed_at": "2026-10-19T08:27:46Z"
+    },
+    {
+      "name": "Post Checkout qualification source",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-10-19T08:27:46Z",
+      "completed_at": "2026-10-19T08:27:46Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-10-19T08:27:46Z",
+      "completed_at": "2026-10-19T08:27:47Z"
+    }
+  ],
+  "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117960456935",
+  "labels": [
+    "ubuntu-24.04"
+  ],
+  "runner_id": 1000085119,
+  "runner_name": "GitHub Actions 1000085119",
+  "runner_group_id": 0,
+  "runner_group_name": "GitHub Actions"
+}

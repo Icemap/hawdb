@@ -1,0 +1,5 @@
+{
+  "original_bytes": 941,
+  "original_sha256": "ee79f8df3ca298ee0fd8a30c7c37794f7933f9412aebbb5c658fcce13b9abd5a",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/route-ownership/hawdb_graph_route_ownership_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/route-ownership/hawdb_graph_route_ownership_fuzz_tests\" classname=\"\" status=\"run\" duration=\"12\" time=\"12\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ngraph route ownership: 128 seeds, 28160 inventory/evidence/policy cases\ntest graph::differential::graph_route_ownership_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 11.95s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

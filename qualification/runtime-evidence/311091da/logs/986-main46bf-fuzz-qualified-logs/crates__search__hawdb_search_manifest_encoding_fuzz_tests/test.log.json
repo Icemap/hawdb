@@ -1,0 +1,5 @@
+{
+  "original_bytes": 413,
+  "original_sha256": "7d1727b74b2c93c4e778c9e31867bc72301f368902b08a4852730ab50fa6d3a7",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_manifest_encoding_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest lexical_projection::manifest_encoding::tests::manifest_encoding_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 856 filtered out; finished in 0.47s\n\n"
+}

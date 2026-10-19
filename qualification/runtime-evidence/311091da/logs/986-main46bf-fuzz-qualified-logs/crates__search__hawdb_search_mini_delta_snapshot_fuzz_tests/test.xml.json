@@ -1,0 +1,5 @@
+{
+  "original_bytes": 868,
+  "original_sha256": "92ab12d0c41ec525fc1ddbe947c50ccddf4cb7b676d162032017cadc0fc6c380",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/search/hawdb_search_mini_delta_snapshot_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/search/hawdb_search_mini_delta_snapshot_fuzz_tests\" classname=\"\" status=\"run\" duration=\"1\" time=\"1\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest lexical_projection::tests::robustness::mini_delta_snapshot_lifecycle_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 856 filtered out; finished in 1.05s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

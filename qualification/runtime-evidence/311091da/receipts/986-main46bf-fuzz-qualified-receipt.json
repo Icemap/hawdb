@@ -1,0 +1,1999 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "command": [
+    "bazel",
+    "test",
+    "//crates/fuzz:hawdb_fuzz_tests",
+    "//crates/fuzz:hawdb_fuzz_cli_tests",
+    "//:hawdb_linux_ci_fuzz_smoke_test"
+  ],
+  "command_exit": 0,
+  "total_passed": 98,
+  "freshly_executed": 76,
+  "cached": 22,
+  "original_stdout_sha256": "f7222095d8f8b2b6bb52c38acdd37cff44f21d9c762596764c64cbf116bfd9c3",
+  "original_testlog_root": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a0fb379840abc41ef2d4c45c652990c4/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs",
+  "targets": [
+    {
+      "label": "//crates/cypher:hawdb_cypher_backtracking_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 2.0,
+      "files": {
+        "test.log": {
+          "bytes": 462,
+          "sha256": "eede06dbc30dd933367ca6eba7ade7b24ff6aeb1354401606bc3c3c03124bfad"
+        },
+        "test.xml": {
+          "bytes": 909,
+          "sha256": "1188d45f357e2f01f25240b0c6fb01a62059f99fe4f8d0c72d65beaad91bf5c7"
+        },
+        "test.cache_status": {
+          "bytes": 240,
+          "sha256": "0305faf661b41236528d476363b056aa8687f61789f027ad1e75da39c816ca18"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__cypher__hawdb_cypher_backtracking_fuzz_tests"
+    },
+    {
+      "label": "//crates/evidence:hawdb_source_inventory_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 1.7,
+      "files": {
+        "test.log": {
+          "bytes": 399,
+          "sha256": "97720ed1281edc3ff973be9b96a1e2bdabe09696caea1072c3dd2b6102ba3dfa"
+        },
+        "test.xml": {
+          "bytes": 844,
+          "sha256": "e57b0ea8337c382a0470a0911a1ee42c4df1b5563ccaffe2b86543805d96c76c"
+        },
+        "test.cache_status": {
+          "bytes": 239,
+          "sha256": "100195d8b937c9f85ee130c5d54e320c585f449b0bce76fa0179e88d299f7753"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__evidence__hawdb_source_inventory_fuzz_tests"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 1.1,
+      "files": {
+        "test.log": {
+          "bytes": 486,
+          "sha256": "fe3cdeb4b0c0d6c2c7ef91deacbeae66e59f480163182f71f42bc021f2d18321"
+        },
+        "test.xml": {
+          "bytes": 975,
+          "sha256": "f95a6e04459beb65a185db0686fb9d01a98bb00b470f88767d5aae719b63e93a"
+        },
+        "test.cache_status": {
+          "bytes": 261,
+          "sha256": "dd4a52376cf822061a7e2a595afe785744c343c00259bf735b7199130ae19786"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__optimizer-graph__hawdb_optimizer_candidate_fingerprint_fuzz_tests"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_cardinality_defaults_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 1.1,
+      "files": {
+        "test.log": {
+          "bytes": 527,
+          "sha256": "c9ce34d1c4fdc1819d8726cc944a59521df76305d34c3d8109f0cecfeaf33124"
+        },
+        "test.xml": {
+          "bytes": 1014,
+          "sha256": "4485b52ce877356f9d433e7a5876d7de981760c5bbf0b36cf735495a282fc72d"
+        },
+        "test.cache_status": {
+          "bytes": 260,
+          "sha256": "55eaa3b8f8ed39ad1e1306a0557a446822554da055dda08bff458696826e470c"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__optimizer-graph__hawdb_optimizer_cardinality_defaults_fuzz_tests"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 2.4,
+      "files": {
+        "test.log": {
+          "bytes": 524,
+          "sha256": "239092ec7209de28e31daa32f3abf7f9c798f63a0f95d792995879a242342667"
+        },
+        "test.xml": {
+          "bytes": 1011,
+          "sha256": "1bcefdc68fa863c9dfcfa151390e75215ffa2121ca888b0d43f76f6a56f9c281"
+        },
+        "test.cache_status": {
+          "bytes": 260,
+          "sha256": "f49ffba504d2bfedd56a754100e2c8f2fd43ff2b405f37f9de778f3669c63467"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__optimizer-graph__hawdb_optimizer_cardinality_metadata_fuzz_tests"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_full_text_cost_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 0.8,
+      "files": {
+        "test.log": {
+          "bytes": 466,
+          "sha256": "ce63a841c79aceed9a217cc527434d3c1323056a7840d987f2268414efb5e7ec"
+        },
+        "test.xml": {
+          "bytes": 941,
+          "sha256": "87998ea342ec0d61e7d83cb29cf6ab842e5b6dfa1d03fb54c6fc2dac88e4ac1f"
+        },
+        "test.cache_status": {
+          "bytes": 254,
+          "sha256": "043610f5158e3f3a43f36be352d1aa80cd9eab070c0986145fdfbd0e09ef2a14"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__optimizer-graph__hawdb_optimizer_full_text_cost_fuzz_tests"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_trace_cost_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 0.9,
+      "files": {
+        "test.log": {
+          "bytes": 564,
+          "sha256": "c4b4ff3efdaea09d4daf0d90f9f23a5ca47ebaf967906e25867a08c496c0d7c8"
+        },
+        "test.xml": {
+          "bytes": 1031,
+          "sha256": "dab2ff578fe7116416cec13077f3bc737606783127985c56b98914655c420744"
+        },
+        "test.cache_status": {
+          "bytes": 250,
+          "sha256": "c52c012a87560e75529e66eceb91fedaed7a53053aec231c71423bdca1e334db"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__optimizer-graph__hawdb_optimizer_trace_cost_fuzz_tests"
+    },
+    {
+      "label": "//crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 7.4,
+      "files": {
+        "test.log": {
+          "bytes": 395,
+          "sha256": "8691016d5aed3341bd12c5049bc07cf06b43e6d6f2dffd02a5b1914644386c98"
+        },
+        "test.xml": {
+          "bytes": 874,
+          "sha256": "89b416d8f3dd6a0902e9000b6f988eb8335ef0cbe0da91eae15cd51621a6082e"
+        },
+        "test.cache_status": {
+          "bytes": 256,
+          "sha256": "3097a5e4bb90c8e38ec9a863ad34be9431e89af9ebe360db86cb6afb3a0eadc6"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__optimizer-relational__hawdb_optimizer_access_cost_fuzz_tests"
+    },
+    {
+      "label": "//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 0.8,
+      "files": {
+        "test.log": {
+          "bytes": 446,
+          "sha256": "e8ac7d1198484eb8fffca298ea9039c7fd909e8ac019f926ad4023526023662e"
+        },
+        "test.xml": {
+          "bytes": 903,
+          "sha256": "c9d135a83222e151f159fc66e8e3d9bb4adb1f8fa3664a51f780def5b05f2637"
+        },
+        "test.cache_status": {
+          "bytes": 245,
+          "sha256": "8930253d6afa8bd63cb95d837d6cfe8a0f70b04a780ef892e46efa3d7196e4f4"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__plan-cypher__hawdb_plan_cypher_explain_fuzz_tests"
+    },
+    {
+      "label": "//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 12.2,
+      "files": {
+        "test.log": {
+          "bytes": 470,
+          "sha256": "fa161c7ab52e465352853d92bbc606de10ea67306a11a3283cc2ba273d881d9c"
+        },
+        "test.xml": {
+          "bytes": 941,
+          "sha256": "ee79f8df3ca298ee0fd8a30c7c37794f7933f9412aebbb5c658fcce13b9abd5a"
+        },
+        "test.cache_status": {
+          "bytes": 251,
+          "sha256": "7756e446b0192fdaf81884c5755e3ae7c3089cf9cb75d46155e8c73681d8e0c2"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__route-ownership__hawdb_graph_route_ownership_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_append_reader_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 12.9,
+      "files": {
+        "test.log": {
+          "bytes": 15241,
+          "sha256": "6c395df7c037d367a0d0bd3817a2050892ffe168351de9e458890a8b4ce8cfea"
+        },
+        "test.xml": {
+          "bytes": 15696,
+          "sha256": "62a4947336f21dc3760ee9e664da147e835499856dbd2514e6e81b00250b906c"
+        },
+        "test.cache_status": {
+          "bytes": 243,
+          "sha256": "a8258b15038b104cf7a8069e95aff7933063be5bfd95c365078a36060d8854a7"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_append_reader_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_backup_hex_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 1.7,
+      "files": {
+        "test.log": {
+          "bytes": 378,
+          "sha256": "bdf4212d0e0a6050f113ed8b18461ae96ba813a37fea656089e52c37a732b76b"
+        },
+        "test.xml": {
+          "bytes": 825,
+          "sha256": "ec7143b808733b119bbdd730e96c493fba6b50af542ea96aa3befad8c1f2db66"
+        },
+        "test.cache_status": {
+          "bytes": 240,
+          "sha256": "0a892321b8b4aef479679e166d1b1601ed67077fdf4690029a00a5c9a50fc31e"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_backup_hex_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_file_lock_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 1.9,
+      "files": {
+        "test.log": {
+          "bytes": 1109,
+          "sha256": "0dc9462114e21805ccc1e05c01a3d08416f397e377ae4a56ffacea1298ee7d7b"
+        },
+        "test.xml": {
+          "bytes": 1554,
+          "sha256": "0bf3c200848b7443ab37a8c21e845b09b27b82b3e285c4ed141223cacec6fa00"
+        },
+        "test.cache_status": {
+          "bytes": 239,
+          "sha256": "55450e23819577cb9e60e008e687dbaaf8ff9dc5ab73baef9b3f3a3bed12a9f8"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_file_lock_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_graph_constraints_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 1.5,
+      "files": {
+        "test.log": {
+          "bytes": 466,
+          "sha256": "04241dca82114194fe3df53094a6129f46bc085859f16e8997cb6afaebab5ad7"
+        },
+        "test.xml": {
+          "bytes": 927,
+          "sha256": "b45401823fa1441a4f40d168dfd48e6c388baeca24af7e2e39cd42475776320e"
+        },
+        "test.cache_status": {
+          "bytes": 247,
+          "sha256": "64e158100f7f8d592655693301ed404c4168265ac9db66ba469eef1c51d2c501"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_graph_constraints_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_graph_overlay_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 15.0,
+      "files": {
+        "test.log": {
+          "bytes": 444,
+          "sha256": "0b8439b6a4b04c935c20d71f7298ca7c7db1a60b2505c511cdd68dbd41db1d3a"
+        },
+        "test.xml": {
+          "bytes": 899,
+          "sha256": "321f1a3e587fcb7c8dbf6b263154e80e5edea61427aafd84d98164147a7a1513"
+        },
+        "test.cache_status": {
+          "bytes": 243,
+          "sha256": "d64a2f66fcd7926e886699f3c0ebf61dced99b9b3ad9e86cecd91a3f076e7ed7"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_graph_overlay_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_projected_artifact_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 27.2,
+      "files": {
+        "test.log": {
+          "bytes": 466,
+          "sha256": "6a2f621d80bc3492b17e03c065eba56456fcf7ecfd0fe2948207e5c6f07c0e9d"
+        },
+        "test.xml": {
+          "bytes": 931,
+          "sha256": "76ad4c9908d0036c5cfd27fdcc6a9c624ef7c63c9fd6f1b470f11d71c6d3d448"
+        },
+        "test.cache_status": {
+          "bytes": 251,
+          "sha256": "be26129bf67f7ef46ed876bfa92c43f2ffbcd0cc29c667e57024c0421dd7e776"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_projected_artifact_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 1.4,
+      "files": {
+        "test.log": {
+          "bytes": 404,
+          "sha256": "f69b6bc6dcaa4d24ee458ca9e0fbe480011eb5aee86acb329b54f8e01f05f457"
+        },
+        "test.xml": {
+          "bytes": 877,
+          "sha256": "7edb529b8315a4ef398b6a7f4ef457ff92039ccd4808892fcb8cd1d06dc098f8"
+        },
+        "test.cache_status": {
+          "bytes": 253,
+          "sha256": "ba1bcb9610624bcb661311cf7169ef27508d092e316e2a8b51ce27aa2b258e12"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_property_projection_hex_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_relational_index_view_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 178.5,
+      "files": {
+        "test.log": {
+          "bytes": 526,
+          "sha256": "0c456875dccd91e4d3cfc569696d2e1a8c6239bd64276ba56abf0537c5ce91d0"
+        },
+        "test.xml": {
+          "bytes": 999,
+          "sha256": "ec73297482b23b910426ad73cb5d4034bf23423f8208173069c9b047b7a5a3e2"
+        },
+        "test.cache_status": {
+          "bytes": 254,
+          "sha256": "60c54e272648ba1b182b6c772a9e239b1da07893cf415a40096f34456034b7ef"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_relational_index_view_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 58.5,
+      "files": {
+        "test.log": {
+          "bytes": 600,
+          "sha256": "378d4e2f22b9c5e4aba8c710d089b635d49c01f3c5e692ba711831ef357cbf14"
+        },
+        "test.xml": {
+          "bytes": 1077,
+          "sha256": "04a0ae20c1ae81dbe6c73d605315d00f24286d8a3c8b1f9092d16f1b887ad203"
+        },
+        "test.cache_status": {
+          "bytes": 257,
+          "sha256": "5bcdafadc6f3fb752ad5036978f52bbe8cf6943620a04846a201b39cbf122467"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_relational_row_workspace_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_source_scan_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 44.8,
+      "files": {
+        "test.log": {
+          "bytes": 470,
+          "sha256": "fffdf7e4b89445cfa5a4e5803fd0b931d81d4290c0bee29aa787b2200d3ad872"
+        },
+        "test.xml": {
+          "bytes": 921,
+          "sha256": "479d1a4307bfa2d8d377d1bd0af6edf89fc343858facd5248f2ecb8128e9d938"
+        },
+        "test.cache_status": {
+          "bytes": 244,
+          "sha256": "47a0b27ebb8f4617bfa868f26219adb46500dc307c03e5e0059f77d9890c42ce"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_source_scan_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_text_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 1.8,
+      "files": {
+        "test.log": {
+          "bytes": 366,
+          "sha256": "062757883baa1f23a0417436bbfe36204fd6110ba9cb5ee958430a1aef9f28c5"
+        },
+        "test.xml": {
+          "bytes": 801,
+          "sha256": "c6093fa86012e63d1530662f24b6eb88ca3dc9764c8f62f4fc5a876c17d93c22"
+        },
+        "test.cache_status": {
+          "bytes": 234,
+          "sha256": "c2936385780c3994663cf4ab7429d9b758349da0bfad11abb6b6f20f144edb67"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_text_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_transaction_locks_fuzz_tests",
+      "cached": true,
+      "reported_duration_seconds": 2.6,
+      "files": {
+        "test.log": {
+          "bytes": 497,
+          "sha256": "4058811259a324deefa2a7e4bc1449f384eb82e26a18d0357ccd8094fc590cd8"
+        },
+        "test.xml": {
+          "bytes": 958,
+          "sha256": "b9d68b48ab88bbe8c9ff86411f5179921b96169ca90b029c40b4a59c0fa3652a"
+        },
+        "test.cache_status": {
+          "bytes": 247,
+          "sha256": "d7f2d8843f67131b8ae748d117ca537aee17816553308e5b4128a06aec3abb0c"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_transaction_locks_fuzz_tests"
+    },
+    {
+      "label": "//:hawdb_concurrent_key_range_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 2.0,
+      "files": {
+        "test.log": {
+          "bytes": 377,
+          "sha256": "cc4ecd42a15c5540f01be3511fd38c5c951ce805001010fb067512516458b12a"
+        },
+        "test.xml": {
+          "bytes": 798,
+          "sha256": "40a3e25d2476c17b7be18aaf1b71586f9d2ae212e8143df3071d65c26592c8df"
+        },
+        "test.cache_status": {
+          "bytes": 225,
+          "sha256": "b18b8dc54f47500cb92786c4508365571006dc749ec279120b84789cb0898eb2"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/__hawdb_concurrent_key_range_fuzz_tests"
+    },
+    {
+      "label": "//:hawdb_graph_projection_residency_fuzz_first_half_tests",
+      "cached": false,
+      "reported_duration_seconds": 169.7,
+      "files": {
+        "test.log": {
+          "bytes": 665,
+          "sha256": "c923c9da36c28641c3be8b04275822b47f952cad326ac06342d5e3c73a26b434"
+        },
+        "test.xml": {
+          "bytes": 1124,
+          "sha256": "5c8b28238204f8aba0fe8648f987a62762400adb045ff7e2d9b98543ddd34393"
+        },
+        "test.cache_status": {
+          "bytes": 245,
+          "sha256": "dbabbdbaa955900dd13aac57bd4ddc40a61fb823f251e67a87786d6635fd281b"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/__hawdb_graph_projection_residency_fuzz_first_half_tests"
+    },
+    {
+      "label": "//:hawdb_graph_projection_residency_fuzz_second_half_tests",
+      "cached": false,
+      "reported_duration_seconds": 193.2,
+      "files": {
+        "test.log": {
+          "bytes": 669,
+          "sha256": "941e378a0d79fa1a1a04878ae39dc324924a78a51883dadb214cb04e00b5cc93"
+        },
+        "test.xml": {
+          "bytes": 1130,
+          "sha256": "2d367402eab99c4692e097f813ba4dffefc4d3357bfb63b4f18b2d69183e456e"
+        },
+        "test.cache_status": {
+          "bytes": 246,
+          "sha256": "40c73002087cfe22c74538bf4337c43db7d90936417fc4d5db46b0bfcb70e229"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/__hawdb_graph_projection_residency_fuzz_second_half_tests"
+    },
+    {
+      "label": "//:hawdb_linux_ci_fuzz_smoke_test",
+      "cached": false,
+      "reported_duration_seconds": 201.4,
+      "files": {
+        "test.log": {
+          "bytes": 177,
+          "sha256": "39a8074ffb316bc145747528fc427d5aa07a63870080cab075ae99cdfeeb8059"
+        },
+        "test.xml": {
+          "bytes": 589,
+          "sha256": "1e2a781cedb8332f0094c39348ec07bfec4d19d3116b75584fe4798739a3a1e9"
+        },
+        "test.cache_status": {
+          "bytes": 221,
+          "sha256": "cde8e1bb78589b0fd535c30ef226ca168958907a742a551f4f3e3832b9089aaa"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/__hawdb_linux_ci_fuzz_smoke_test"
+    },
+    {
+      "label": "//:hawdb_scan_callback_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 26.5,
+      "files": {
+        "test.log": {
+          "bytes": 426,
+          "sha256": "6d00b1ff896e9ef57aa34b41d5d25356f4761599b00dfa9f164773d7ab927834"
+        },
+        "test.xml": {
+          "bytes": 835,
+          "sha256": "43d2fd1af3751b256f4650266da0694d793f9899dc9b812791f9c56a51b6d1c5"
+        },
+        "test.cache_status": {
+          "bytes": 221,
+          "sha256": "ef7a813ba221c033746ad94485065f92c2d8240c0882115ab77a0fce15d4b1d0"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/__hawdb_scan_callback_fuzz_tests"
+    },
+    {
+      "label": "//crates/compat:hawdb_compat_contract_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.3,
+      "files": {
+        "test.log": {
+          "bytes": 376,
+          "sha256": "99563fac246cae731a66f720f381211587f249659a754ac7b9269f052ca86581"
+        },
+        "test.xml": {
+          "bytes": 815,
+          "sha256": "f2f9e4f083c056b83c3f04ef04173bb6fca93bbb6a7495998b03d5e70bf615bb"
+        },
+        "test.cache_status": {
+          "bytes": 234,
+          "sha256": "8544afac3a63ffb87461b35261b91abd00d771b7ce207081ab0492166e584e8d"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__compat__hawdb_compat_contract_fuzz_tests"
+    },
+    {
+      "label": "//crates/evidence:hawdb_inventory_health_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 2.9,
+      "files": {
+        "test.log": {
+          "bytes": 489,
+          "sha256": "3fd379891fc61d8be5eb8a23e392768b5ac0a32cd9243ed02979800fef370772"
+        },
+        "test.xml": {
+          "bytes": 934,
+          "sha256": "ac7cef13ee50b2d29dfb1c8877d6099abb3d7d2f4bf2f5e7e5169eacccc4065f"
+        },
+        "test.cache_status": {
+          "bytes": 237,
+          "sha256": "226a0082ab4f0903e39aab71ee43f7e5f61118cf6c993dd708e8cd5d381c9d5c"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__evidence__hawdb_inventory_health_fuzz_tests"
+    },
+    {
+      "label": "//crates/evidence:hawdb_resource_profile_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.7,
+      "files": {
+        "test.log": {
+          "bytes": 457,
+          "sha256": "21fa07d9a3ff7d4a18b0aad17c79122ffeddb5fa71f0be8547f44870053a10be"
+        },
+        "test.xml": {
+          "bytes": 902,
+          "sha256": "6b99f7bb41e114ccbf1224f08cae28b77e10a21f008bd311dc54a84c1a3ba6de"
+        },
+        "test.cache_status": {
+          "bytes": 237,
+          "sha256": "5a6bc4c7cfad41a4ed9b6c18be71656248fe762d2ca24dd88b4507578db71cce"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__evidence__hawdb_resource_profile_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_batch_dispatch_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.8,
+      "files": {
+        "test.log": {
+          "bytes": 367,
+          "sha256": "2ced163a45e334a4b179af366e4d8508deba3548d940d4f75bbfa97d3ad72ea5"
+        },
+        "test.xml": {
+          "bytes": 808,
+          "sha256": "6f11d24d5f85bf5123815aefcecbcefc5946908faeffd00dfd05e7704345e4d1"
+        },
+        "test.cache_status": {
+          "bytes": 235,
+          "sha256": "d1554d2473e05ecd1d3bca3edbbbd5094a48b109a1b1145f2d51295e28d21327"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_batch_dispatch_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_execution_lifecycle_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.7,
+      "files": {
+        "test.log": {
+          "bytes": 474,
+          "sha256": "d50525bd52e668a4d8d4c453f22bb2fa44c01238c4ce1ec170a96d5757eddecf"
+        },
+        "test.xml": {
+          "bytes": 925,
+          "sha256": "ca781e5f2416c48ea6cab8a2761f00070c198a169178ffc0596a80b7d445bb12"
+        },
+        "test.cache_status": {
+          "bytes": 240,
+          "sha256": "da50f941f9217071d084204fb0478d779be052f9168e154ef1ade2b664afebe3"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_execution_lifecycle_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_execution_report_value_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 4.1,
+      "files": {
+        "test.log": {
+          "bytes": 478,
+          "sha256": "6b88b9c6d449b342cf477eb6b2fc0d0b751facdeaf225d222d44b5b9d57e0611"
+        },
+        "test.xml": {
+          "bytes": 935,
+          "sha256": "875c7fd3aef80e4321c6ea53f299b872f59d7c44dc9b10139206b587e65ac004"
+        },
+        "test.cache_status": {
+          "bytes": 243,
+          "sha256": "4adb47b50537ffe3f746faec917f81a580a329fa7df6482acd1a3601f33a08c2"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_execution_report_value_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_graph_algorithm_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 5.0,
+      "files": {
+        "test.log": {
+          "bytes": 477,
+          "sha256": "6eb619e683fc07f6e87ec1ee8141c64b72b33d1423effb9b847609c74009e541"
+        },
+        "test.xml": {
+          "bytes": 920,
+          "sha256": "e271d978bd759f3d48c033a4d497718e05097b3451790583f08a349c7f2226fc"
+        },
+        "test.cache_status": {
+          "bytes": 236,
+          "sha256": "9d128bfc5c588645378aa0b39707adb0bfa5fa2e6971beb1b913fcecf9f05d08"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_graph_algorithm_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_graph_hash_join_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 45.3,
+      "files": {
+        "test.log": {
+          "bytes": 382,
+          "sha256": "a536f5cb4b1700b82d5961bde0bf2014b64c14bb3c001315253a0e10b86becd1"
+        },
+        "test.xml": {
+          "bytes": 827,
+          "sha256": "4c177be143d5064068962fec90eaee6ac70b366ea5c45e76c5d942a3b36d565f"
+        },
+        "test.cache_status": {
+          "bytes": 239,
+          "sha256": "c7dc33b80bdf5c9aaa248d75d9c56474a795fe34b9c4c0ed09b7d9ebf6bc1ad3"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_graph_hash_join_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_morsel_oracle_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 2.7,
+      "files": {
+        "test.log": {
+          "bytes": 461,
+          "sha256": "0dfda41c5267bd2559c91149ffb47cf605a3bab76494fc005764037227b2418f"
+        },
+        "test.xml": {
+          "bytes": 900,
+          "sha256": "13d3de40a18c1122b2969983f829e89d23837bbec1f38259ab89f4aa4459c2a3"
+        },
+        "test.cache_status": {
+          "bytes": 234,
+          "sha256": "b679b079e3d7f0eeaec2d4439b44dc2dcdfed64639ba21f370b3af5316353b78"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_morsel_oracle_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_mutation_lowering_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.5,
+      "files": {
+        "test.log": {
+          "bytes": 434,
+          "sha256": "fa8872b3ba112535094e15d2dc2bd18131cb07aa8363ceb40cc2f539a803265a"
+        },
+        "test.xml": {
+          "bytes": 881,
+          "sha256": "56e929c6ad914f229ed24eb92668fb2169c8438ba747e5c85b76f360b487970e"
+        },
+        "test.cache_status": {
+          "bytes": 238,
+          "sha256": "dd68808b99ea64d8fcb1258cf63397ec58e0d0bfb830759b12e8d7e74f0cf29e"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_mutation_lowering_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_mutation_preflight_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 2.0,
+      "files": {
+        "test.log": {
+          "bytes": 448,
+          "sha256": "a28c6a3b79848eb6cf96e5ce676704c56cf636cc03286fe6f78f8f6c6648bbc7"
+        },
+        "test.xml": {
+          "bytes": 897,
+          "sha256": "3b0e1cb0d5011ff528cf2aadd2d9cc53688d1bb510629b3540a38c13bb5ff770"
+        },
+        "test.cache_status": {
+          "bytes": 239,
+          "sha256": "8564f3f963d794fa0899416ce8911690be08cbdab6bbf84ca957a0eda7b80ec5"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_mutation_preflight_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_numeric_execution_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.9,
+      "files": {
+        "test.log": {
+          "bytes": 451,
+          "sha256": "67ec81c47ac21f45495f254be4ae3c737e4caccf4e347f0f427c909148dd2a0d"
+        },
+        "test.xml": {
+          "bytes": 898,
+          "sha256": "dd70fa51080db8813f0973a1cdefa407fd35118f4c993a012be2f30e60a2b18b"
+        },
+        "test.cache_status": {
+          "bytes": 238,
+          "sha256": "f322e858e21f8ed0ca97aeecd39e8ff25d5847ec0080f91194098c322059964a"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_numeric_execution_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_query_observer_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.6,
+      "files": {
+        "test.log": {
+          "bytes": 425,
+          "sha256": "8b3b1d898e8213753196fef2d453742c8b3ab194949b54398a90433007a271fc"
+        },
+        "test.xml": {
+          "bytes": 866,
+          "sha256": "42f53208de1d8de6bdeb14d3b73597a56caec54da497cad4f7ffaea316ed8ddf"
+        },
+        "test.cache_status": {
+          "bytes": 235,
+          "sha256": "3c4b620dcf6fb61ba6019053095b996429ee60cdd30ce0ad0633c9aea067bede"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_query_observer_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_result_delivery_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.1,
+      "files": {
+        "test.log": {
+          "bytes": 445,
+          "sha256": "f0beac29804973073ee75459042ad426258824b30a3128987a8c7c32a569ff5d"
+        },
+        "test.xml": {
+          "bytes": 888,
+          "sha256": "d4d70f4ec89eb40345b8d25b6a745e544b5b329f76e32628db17cae0debf45a8"
+        },
+        "test.cache_status": {
+          "bytes": 236,
+          "sha256": "1a0172f6e82112b0827cd0b121f6374739a405855cd5f1c6d879a8888a165ebf"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_result_delivery_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_sort_merge_account_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 10.5,
+      "files": {
+        "test.log": {
+          "bytes": 447,
+          "sha256": "c824007eb1e3dba17dafcf250cc5a8ae3326ed5b99f4aeca431ba5f2d0209bcb"
+        },
+        "test.xml": {
+          "bytes": 898,
+          "sha256": "41381731ac053330fa7578489ece94e23d05d1d85356f4629be03b21522aad90"
+        },
+        "test.cache_status": {
+          "bytes": 239,
+          "sha256": "b6cb25bf4f7c095779b46a3e9494672e2f4f5c9370c1788aee766afdff61453b"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_sort_merge_account_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_spill_compaction_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 275.9,
+      "files": {
+        "test.log": {
+          "bytes": 603,
+          "sha256": "14530c692e0fddc35de616b765496585326e8aec1db4d4d276176dafdd19368b"
+        },
+        "test.xml": {
+          "bytes": 1052,
+          "sha256": "d01faf20bbc00ae84f545e7e0d0c2229f81a55956052eed7e4bc17e4ef137cdd"
+        },
+        "test.cache_status": {
+          "bytes": 240,
+          "sha256": "103ed00d297313cde1cb4a428fc8937adc9614345f983d444cd4fd825268cc3e"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_spill_compaction_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_transform_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 5.7,
+      "files": {
+        "test.log": {
+          "bytes": 437,
+          "sha256": "35910855276ed9b0bc8cb6fe4ead146d9885bb0958238d92bd17cf17e9b3bcae"
+        },
+        "test.xml": {
+          "bytes": 868,
+          "sha256": "1820b1fc25dc691dfd316494a8476d3ef9713fc958e26c3332e9203a7a54c9a1"
+        },
+        "test.cache_status": {
+          "bytes": 230,
+          "sha256": "52fd230be34c25c65673d52104eb247bcb7fba394a6402ce2aa1b96e07f32072"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_transform_fuzz_tests"
+    },
+    {
+      "label": "//crates/executor:hawdb_vector_seed_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.0,
+      "files": {
+        "test.log": {
+          "bytes": 461,
+          "sha256": "f390a3fe089e8634c12d06c2b8606fde6bb429d685eb78a1678b8a9177aeae5e"
+        },
+        "test.xml": {
+          "bytes": 896,
+          "sha256": "06748cbc9df44f44cf998431fc21daaa487de7f5263f8033b653df046e24a859"
+        },
+        "test.cache_status": {
+          "bytes": 232,
+          "sha256": "2400d52fdb6f1e7d340338e5fd91f7fb154b202c3b25ccf9b26dd56278a57b31"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__executor__hawdb_vector_seed_fuzz_tests"
+    },
+    {
+      "label": "//crates/fuzz:hawdb_append_fuzz_cli_tests",
+      "cached": false,
+      "reported_duration_seconds": 52.9,
+      "files": {
+        "test.log": {
+          "bytes": 623,
+          "sha256": "20b9c9796d3466d05854cb691a94d000830080c4a53d81a95d166617a377e6f7"
+        },
+        "test.xml": {
+          "bytes": 1050,
+          "sha256": "8e49e5ddf73dc30318219414da324e7991c0b11df2e79bd9f1f2682692933947"
+        },
+        "test.cache_status": {
+          "bytes": 230,
+          "sha256": "1ccef7bbba41b4a2edcfdc584b0afd0695778ea5d40185bed4a4bf644463c484"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__fuzz__hawdb_append_fuzz_cli_tests"
+    },
+    {
+      "label": "//crates/fuzz:hawdb_fuzz_append_replay_tests",
+      "cached": false,
+      "reported_duration_seconds": 73.6,
+      "files": {
+        "test.log": {
+          "bytes": 504,
+          "sha256": "e26b469adb02c94b7428ef4b1b38d443b576a01cba7ad0637152d4e5ea0cf3af"
+        },
+        "test.xml": {
+          "bytes": 937,
+          "sha256": "2d2d5af836ec8c913a9edcf07d066311bf9a34bf35aa75e4c034f1d32baad9ef"
+        },
+        "test.cache_status": {
+          "bytes": 233,
+          "sha256": "6421956feeda72a0aa458728bdeb17b7f5f9c910e9db0555285f56916ec1b9ee"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__fuzz__hawdb_fuzz_append_replay_tests"
+    },
+    {
+      "label": "//crates/fuzz:hawdb_fuzz_append_seed_7_tests",
+      "cached": false,
+      "reported_duration_seconds": 41.0,
+      "files": {
+        "test.log": {
+          "bytes": 395,
+          "sha256": "a4283f6db8665c7f05ef6e1d22da29409d253d3fc30bda6c6056e888b37e53a9"
+        },
+        "test.xml": {
+          "bytes": 828,
+          "sha256": "2718ae4aa3e6aa5e263216426ba07ccbfef43412dc262299c33f5e577ef1e47e"
+        },
+        "test.cache_status": {
+          "bytes": 233,
+          "sha256": "ddc52f44be84d32b8ca16e2aeecf740c6964d8a5717f5e8dfafa5b2d1e8bfdbf"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__fuzz__hawdb_fuzz_append_seed_7_tests"
+    },
+    {
+      "label": "//crates/fuzz:hawdb_fuzz_cli_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.8,
+      "files": {
+        "test.log": {
+          "bytes": 484,
+          "sha256": "e31f73190ae627ee0306ef795c9c2460715b173ecd33ef9e095968f44e036b2a"
+        },
+        "test.xml": {
+          "bytes": 895,
+          "sha256": "36b2946c80ccdb094e28ce8222a09468627dab70da127128bc2e4dd6a495380d"
+        },
+        "test.cache_status": {
+          "bytes": 220,
+          "sha256": "c9c4ca15189e26afe4fd989d401c27f90334cf51215b0c537d7051143b8e8224"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__fuzz__hawdb_fuzz_cli_tests"
+    },
+    {
+      "label": "//crates/fuzz:hawdb_fuzz_fast_tests",
+      "cached": false,
+      "reported_duration_seconds": 212.5,
+      "files": {
+        "test.log": {
+          "bytes": 3993,
+          "sha256": "2e0b9e219bea3af82e024127ce3708cccf278d52d54167c60d03024e2255f04a"
+        },
+        "test.xml": {
+          "bytes": 4410,
+          "sha256": "beb543fd3f618b08945e08366a8baf4bd80a031333669daa2df9ec979cd10e64"
+        },
+        "test.cache_status": {
+          "bytes": 224,
+          "sha256": "8cdbc58dd5da3cbacb016f0d057b70f3a61c5da93c265ebe814ab76e85d41222"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__fuzz__hawdb_fuzz_fast_tests"
+    },
+    {
+      "label": "//crates/fuzz:hawdb_fuzz_relational_join_rewrite_tests",
+      "cached": false,
+      "reported_duration_seconds": 5.2,
+      "files": {
+        "test.log": {
+          "bytes": 407,
+          "sha256": "0dac93222b6d4e0048db73e706d5bd20c608d28d182bb6922496ac557bacb7e6"
+        },
+        "test.xml": {
+          "bytes": 858,
+          "sha256": "50ef279ae75a8e50e5ff96557edb09d6782f1200a1bf15111dca77efc302b881"
+        },
+        "test.cache_status": {
+          "bytes": 240,
+          "sha256": "89a7c3492deec3e94d86c64ede0231957d23d511b964451aba6dcb7033f2f15d"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__fuzz__hawdb_fuzz_relational_join_rewrite_tests"
+    },
+    {
+      "label": "//crates/fuzz:hawdb_parser_fuzz_cli_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.6,
+      "files": {
+        "test.log": {
+          "bytes": 414,
+          "sha256": "b69a5693bb2c94906df137d42f9ba1b01749f4630ecd9bb48021d43bdb25c0d3"
+        },
+        "test.xml": {
+          "bytes": 839,
+          "sha256": "ab9dca6f73721816faaecd6e299cbb9e36d2b764caec5431cdb69fe29e6b4c95"
+        },
+        "test.cache_status": {
+          "bytes": 227,
+          "sha256": "2a68e3d6570d63ca24b3569699ad466c5624835bbb63c5d1273bd3fbf034ac9e"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__fuzz__hawdb_parser_fuzz_cli_tests"
+    },
+    {
+      "label": "//crates/fuzz:hawdb_storage_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 69.0,
+      "files": {
+        "test.log": {
+          "bytes": 1324,
+          "sha256": "21b2834f42f9082160cc5fbbc2d2e89c6c9ffb369233da1e948783bb0291cbb9"
+        },
+        "test.xml": {
+          "bytes": 1745,
+          "sha256": "e6162526b3ae4eac5e1ea84b4beb4c0541470194108fc35e62fa20fd43c98e8b"
+        },
+        "test.cache_status": {
+          "bytes": 227,
+          "sha256": "6e9488a7820c0d5bbc34090c24d8d19e803da5860f62eca12360cdfc31f1f629"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__fuzz__hawdb_storage_fuzz_tests"
+    },
+    {
+      "label": "//crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.5,
+      "files": {
+        "test.log": {
+          "bytes": 464,
+          "sha256": "570622ef8c3df2ff3e5d56b5e1dfe28f01d8fe77b47f87042c4134488232dbde"
+        },
+        "test.xml": {
+          "bytes": 933,
+          "sha256": "392304c1d924ed14dd3aa43b4456e42178547f79e43079aea8333e788bc20d15"
+        },
+        "test.cache_status": {
+          "bytes": 249,
+          "sha256": "09895ca4bcc64a0fd6effbb7e4512a164425563095f0674f005eac73b146bf01"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__optimizer-graph__hawdb_optimizer_ddl_command_fuzz_tests"
+    },
+    {
+      "label": "//crates/readiness:hawdb_graph_route_readiness_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 53.3,
+      "files": {
+        "test.log": {
+          "bytes": 511,
+          "sha256": "fbd98bceaef3ba0e3e82f0972af73fbf14df4692767a05f6ad0bfa649052dd17"
+        },
+        "test.xml": {
+          "bytes": 970,
+          "sha256": "478031295f27d58f92c4c1b21ce8ed1c7e896f12054e477df36b63f3983b108e"
+        },
+        "test.cache_status": {
+          "bytes": 246,
+          "sha256": "7dc2b7a1edee0a2994416832e7b6f7658fe9d0ea0300369120c7b7b21a80deb4"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__readiness__hawdb_graph_route_readiness_fuzz_tests"
+    },
+    {
+      "label": "//crates/readiness:hawdb_integration_bundle_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 25.4,
+      "files": {
+        "test.log": {
+          "bytes": 504,
+          "sha256": "780044fc1b4a3a403f0c5e7b7f49a54e1186ff48ec860f9512eb7fa03234b987"
+        },
+        "test.xml": {
+          "bytes": 957,
+          "sha256": "c7a7da222705f1ba2e5ffcd58d662a9fb6c81f0d81366dc8de6d9ddd551b1ee6"
+        },
+        "test.cache_status": {
+          "bytes": 243,
+          "sha256": "c3cb5c3ff84452bd41cb4ed164a4af0f526fe8a40c53f1c08cc6683dae84d870"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__readiness__hawdb_integration_bundle_fuzz_tests"
+    },
+    {
+      "label": "//crates/readiness:hawdb_replacement_summary_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 69.2,
+      "files": {
+        "test.log": {
+          "bytes": 627,
+          "sha256": "80d9007e53d4bc6d608b21b48a9ec7f8ecfd8f20d34cad75a9a6e7d9d7837d39"
+        },
+        "test.xml": {
+          "bytes": 1082,
+          "sha256": "af4e56016f9d0638989bf3b458f948ecafe3cc977e94f4b0c066ec2c403d8e58"
+        },
+        "test.cache_status": {
+          "bytes": 244,
+          "sha256": "c08b9f3a730a6b2c7864cf804d6d9f4cd1f0d71f3e7e953fdbfd02ac674d5026"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__readiness__hawdb_replacement_summary_fuzz_tests"
+    },
+    {
+      "label": "//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 16.6,
+      "files": {
+        "test.log": {
+          "bytes": 519,
+          "sha256": "8403e24125ca30f92a3cf64ff04727970ad9880ec575c63e4c49eaf86f929953"
+        },
+        "test.xml": {
+          "bytes": 986,
+          "sha256": "8bc8132e449e86e0ae95c44eb33f282e1d9bee6a179bb642280bf618e11ebf0d"
+        },
+        "test.cache_status": {
+          "bytes": 250,
+          "sha256": "821618407d84c58a3c4b5ea9983189dc214709fa8e0df0af2261333f7f3c9e7d"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__readiness__hawdb_source_mutation_readiness_fuzz_tests"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_aggregate_state_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 32.3,
+      "files": {
+        "test.log": {
+          "bytes": 479,
+          "sha256": "dd1848c5f6faf509b21e78d119d9f4eb267f13ef3b3e3d98be6c6b5ef5e29f18"
+        },
+        "test.xml": {
+          "bytes": 950,
+          "sha256": "430988e0fea3d8b464f96b2611c867a47aa067ac14e819ab497d697b598262bf"
+        },
+        "test.cache_status": {
+          "bytes": 252,
+          "sha256": "21f238c7c1924ba27bea1cb8f4d99aa6eed0c3bcc3d0a39451ec3ba9f03471ae"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__relational__hawdb_relational_aggregate_state_fuzz_tests"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 4.7,
+      "files": {
+        "test.log": {
+          "bytes": 496,
+          "sha256": "6d9126338c7a1ea890e5805ce0b406bc47eca6da4d3e22f287361f94a8f9106e"
+        },
+        "test.xml": {
+          "bytes": 971,
+          "sha256": "dfada42a307a0a1b9af2ee6b7047a3a6d601bb6613e318a1705c059ce526370e"
+        },
+        "test.cache_status": {
+          "bytes": 252,
+          "sha256": "bd10b055231ed3572744b117453dd8c03e6de39560d337204e10fbaccd3609d3"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__relational__hawdb_relational_columnar_aggregate_fuzz_tests"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_explain_report_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 3.9,
+      "files": {
+        "test.log": {
+          "bytes": 385,
+          "sha256": "c3491c56f77c553a461fa044d3a04ef2ca4c9dda1669cf73672b5fff086fa7a3"
+        },
+        "test.xml": {
+          "bytes": 852,
+          "sha256": "064704a2525cc635942bfbb1b266a22599c67450f952d7ff9fdcb0f7f35eadd2"
+        },
+        "test.cache_status": {
+          "bytes": 248,
+          "sha256": "35e56320f30042af5315f2241db90083b496b50cfe22730d360c9c6bd0ebb0e8"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__relational__hawdb_relational_explain_report_fuzz_tests"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_field_plan_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 2.2,
+      "files": {
+        "test.log": {
+          "bytes": 510,
+          "sha256": "15b603af6f5f327c3d1aea87b233e7d8fc309f20767bdd8641313bd8a292ac2f"
+        },
+        "test.xml": {
+          "bytes": 969,
+          "sha256": "0a5834817d0b2fa45635a686caaca5f6e25248046257c660993e2eb44e090667"
+        },
+        "test.cache_status": {
+          "bytes": 244,
+          "sha256": "a1d3a03087ecb86565b95149f6448c8c4535bdbb14947a869e0e0520850c0fe9"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__relational__hawdb_relational_field_plan_fuzz_tests"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_index_runtime_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 25.5,
+      "files": {
+        "test.log": {
+          "bytes": 390,
+          "sha256": "6225896b8da0a493de10da0a5ba06305601a3f8476e636caf7c264219ed178d7"
+        },
+        "test.xml": {
+          "bytes": 857,
+          "sha256": "a75c80fbed6ac4c2cb1f6f4ab838de4c0a01fe0786cd4794b8c6e469bc80ba7c"
+        },
+        "test.cache_status": {
+          "bytes": 250,
+          "sha256": "8028af0a03f874f3ce209bca54bc57c8803ca9631849ec0d54a14844c6fa2b79"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__relational__hawdb_relational_index_runtime_fuzz_tests"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_physical_plan_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 4.0,
+      "files": {
+        "test.log": {
+          "bytes": 481,
+          "sha256": "b73a11c72118bff0cd96945b3ffd73f671fc7f24f74b48601940f3d664e80d63"
+        },
+        "test.xml": {
+          "bytes": 946,
+          "sha256": "e1aa5808dbbb11874fc16b38b7d0f94054e9f1a9c576d8e2f3cb2c961b2ffc38"
+        },
+        "test.cache_status": {
+          "bytes": 247,
+          "sha256": "5ce20ccb4d31e10c1c265b531d7dde2a7be3c0b68ae2f51ac3183000a6ae9c15"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__relational__hawdb_relational_physical_plan_fuzz_tests"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_qualification_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.1,
+      "files": {
+        "test.log": {
+          "bytes": 452,
+          "sha256": "ef2d017d341bc2c7596b7aec6ec060791cc56a6291aa53181e126d7fffc7b201"
+        },
+        "test.xml": {
+          "bytes": 917,
+          "sha256": "7056927d18df2a643e3f9ea94aaa8c2717076eda77a4dfa473074092fd023416"
+        },
+        "test.cache_status": {
+          "bytes": 247,
+          "sha256": "f740835127a038187557e7daebebdbdec05fa0c0371150f59cf023a3da0f152c"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__relational__hawdb_relational_qualification_fuzz_tests"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_row_runtime_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 22.7,
+      "files": {
+        "test.log": {
+          "bytes": 384,
+          "sha256": "68c6cde149191bcffb02bea271f183707f068ee3a23731093b39147121cd7249"
+        },
+        "test.xml": {
+          "bytes": 847,
+          "sha256": "cc1a2f63b35027b5d292d16d290180f72add76622054afa37cb63498761f5a28"
+        },
+        "test.cache_status": {
+          "bytes": 248,
+          "sha256": "63cea07fc976cf1a67dd9753291ce368524bc5fdb978ecbe9e18cbb3c5dd6307"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__relational__hawdb_relational_row_runtime_fuzz_tests"
+    },
+    {
+      "label": "//crates/relational:hawdb_relational_statement_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.9,
+      "files": {
+        "test.log": {
+          "bytes": 434,
+          "sha256": "b398897e751f48ff8b8c9c2bad62759714b2a055cf4771f8b72d669ee0a7fe14"
+        },
+        "test.xml": {
+          "bytes": 891,
+          "sha256": "788a12278dd9bcbc3704d390dafa84956cd07a2336936e3c54de5f6fc1aeef81"
+        },
+        "test.cache_status": {
+          "bytes": 243,
+          "sha256": "bec073aecf80afd72082c173a73d9692589bf0af1a9341fd07095df0467b4f19"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__relational__hawdb_relational_statement_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_block_encoding_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 5.8,
+      "files": {
+        "test.log": {
+          "bytes": 404,
+          "sha256": "bcdd53114d88c13292114ea15a16505a6051d41db9949764dd78a7faee21a970"
+        },
+        "test.xml": {
+          "bytes": 855,
+          "sha256": "c88e2452b5dc4fa854fa97f764a4fba2d1e5d753b31765ab8a919246e2b76592"
+        },
+        "test.cache_status": {
+          "bytes": 240,
+          "sha256": "d02c1e06dbf47ccbf9680343046a8f103f3d0c22f02b4822b7d7e316b3f192e9"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_block_encoding_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_bounded_file_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.0,
+      "files": {
+        "test.log": {
+          "bytes": 378,
+          "sha256": "427e6d6d908b7db479a0d51e26b2a4b7c4649729575bc90c9e9c060f3de42691"
+        },
+        "test.xml": {
+          "bytes": 825,
+          "sha256": "f29e45e7c870a05654a74c90781bcb19fc1e655bea34baa827f5faf7072207d8"
+        },
+        "test.cache_status": {
+          "bytes": 238,
+          "sha256": "b2dad6d7fff9f55cbc8db48c3154faa3dc31ff5fa9d3574ab1ec370b5a7074e8"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_bounded_file_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_candidate_evidence_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.0,
+      "files": {
+        "test.log": {
+          "bytes": 403,
+          "sha256": "fcc1982d0093dabcc57ddd068ab0b5774babb99371f344edd00383601dfc3840"
+        },
+        "test.xml": {
+          "bytes": 862,
+          "sha256": "a9f4317a382887a050152c86ccc93cdf73f4413e14aee3f4c2aa5d8d448306c4"
+        },
+        "test.cache_status": {
+          "bytes": 244,
+          "sha256": "881c56bd5e72c23234f8228dd611c4498fd0f5413ebddace04db4861078660b0"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_candidate_evidence_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_compression_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.9,
+      "files": {
+        "test.log": {
+          "bytes": 382,
+          "sha256": "648c3069daedba294e7c2fb403c46184dbc2dccc9c653f179880101d219d5a07"
+        },
+        "test.xml": {
+          "bytes": 827,
+          "sha256": "7920cd4dc2bc15d917fe6ce4c508e124c6840868418e8a71145cdd5a4daafe14"
+        },
+        "test.cache_status": {
+          "bytes": 237,
+          "sha256": "319110e255838de7c9053d4514942e4d76c63d77742130618f4d0120d5eaa8c0"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_compression_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_concurrent_read_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.5,
+      "files": {
+        "test.log": {
+          "bytes": 414,
+          "sha256": "5480d0983077a4f3ad69f9327343fa0b27a7e73800b9972b6151ad341aee4e31"
+        },
+        "test.xml": {
+          "bytes": 867,
+          "sha256": "ad750827c59c082fdfd70c9c70aeeea8b1e19371a1fa655194cf1f85b9e8d277"
+        },
+        "test.cache_status": {
+          "bytes": 241,
+          "sha256": "9bcdfff64c42163290884f565c50ae19b75d03a7d67fb01d163d3478c31f2db3"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_concurrent_read_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_document_analysis_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 15.7,
+      "files": {
+        "test.log": {
+          "bytes": 404,
+          "sha256": "2e5844b754cbd786e84d5bc753877d40e59dfdf66064f0ae3555f359246502d4"
+        },
+        "test.xml": {
+          "bytes": 863,
+          "sha256": "cad3f276c341cfee7e0caa6f5113e8bf4d61965711164f3b559350a2700d34b0"
+        },
+        "test.cache_status": {
+          "bytes": 243,
+          "sha256": "575cd3e68c65f9ea7208f80c57f15289e9fc5a9e9628c109b92ce843010e4fd7"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_document_analysis_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_document_frequency_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 114.1,
+      "files": {
+        "test.log": {
+          "bytes": 560,
+          "sha256": "1d7aeee16e8f30394434a936a9a2f6581ee76ecf43562634b368a174b9faa745"
+        },
+        "test.xml": {
+          "bytes": 1023,
+          "sha256": "b3587c82922af6b5bfc840ebe2b57c4c19e3d6ac4484d277dfdb1444a48c74c7"
+        },
+        "test.cache_status": {
+          "bytes": 247,
+          "sha256": "651e28f5a1d11ca5026b19bd0908c0fb07ba62d3e6b766f696de7fec0727817b"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_document_frequency_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_hex_decoding_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.8,
+      "files": {
+        "test.log": {
+          "bytes": 382,
+          "sha256": "46569a19e6b68a7e9013b27eae97f02503a96646fa4469f4d5f5d370e5fe1b7e"
+        },
+        "test.xml": {
+          "bytes": 829,
+          "sha256": "e7710ca371224d27ee376a94dde8fe708942e8b0a88b7d87683a2d1b1d9471a4"
+        },
+        "test.cache_status": {
+          "bytes": 238,
+          "sha256": "bb193acb6b1555517a1f0a37d474aa8016b002cc9e1783817fa7c7f69d17b0e2"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_hex_decoding_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_hydration_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.8,
+      "files": {
+        "test.log": {
+          "bytes": 382,
+          "sha256": "dc504fe25246c01d52a675aa983501eb1c8be5c3e424d808e008217c1bf6e1cd"
+        },
+        "test.xml": {
+          "bytes": 823,
+          "sha256": "4054037ecf402cce132c4cd3636f90db069c1ca7f1f0dbd9c97014f6faa9a9fc"
+        },
+        "test.cache_status": {
+          "bytes": 235,
+          "sha256": "88f9a822d32ebe3af23f89fd1e6fa6afc2085acdb3befeadde1d9bafc85909b0"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_hydration_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_lexical_spill_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 82.6,
+      "files": {
+        "test.log": {
+          "bytes": 536,
+          "sha256": "093cf7ffa542d40cdf0b592fdc3d4d5276511f41e5f1f131aee4c51eb725bf38"
+        },
+        "test.xml": {
+          "bytes": 987,
+          "sha256": "34405eeb4a634412fcf5b5c75eef9653f8a92f791e940ca640e1e34e951a7e09"
+        },
+        "test.cache_status": {
+          "bytes": 242,
+          "sha256": "05fb840fcbb7d09634e3d884b744ce296bf9dad7ba31f59ee47d96b9cb5742c1"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_lexical_spill_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_manifest_budget_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 128.9,
+      "files": {
+        "test.log": {
+          "bytes": 551,
+          "sha256": "e3345c047b2ccd5e45fca9e6bd8474a1ac788e81cf89051e6306c3abf14e4da4"
+        },
+        "test.xml": {
+          "bytes": 1008,
+          "sha256": "a7f7f9545b843cd4d71539c4a859a70cbf709e5bcae656ca75ffaecc4cf9e46d"
+        },
+        "test.cache_status": {
+          "bytes": 244,
+          "sha256": "16543dd89e2bd387062df31179c658e7937e41b3a6ba301af7d15018b09c0470"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_manifest_budget_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_manifest_encoding_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.3,
+      "files": {
+        "test.log": {
+          "bytes": 413,
+          "sha256": "7d1727b74b2c93c4e778c9e31867bc72301f368902b08a4852730ab50fa6d3a7"
+        },
+        "test.xml": {
+          "bytes": 870,
+          "sha256": "3a5213490437a6f8e9ec5f8ce69eac7ab84b3708ed5a0c750825e2e3e0d15dd3"
+        },
+        "test.cache_status": {
+          "bytes": 243,
+          "sha256": "022d09f2a96171c1adccafe2eaa40ae4da35607ad7f8e8f25d7598ed05135c6a"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_manifest_encoding_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.9,
+      "files": {
+        "test.log": {
+          "bytes": 407,
+          "sha256": "ba7554b9221d9a81c0d1a8c38cc39123ad49fa9c8b950567f565ed2a868f7bef"
+        },
+        "test.xml": {
+          "bytes": 868,
+          "sha256": "92ab12d0c41ec525fc1ddbe947c50ccddf4cb7b676d162032017cadc0fc6c380"
+        },
+        "test.cache_status": {
+          "bytes": 245,
+          "sha256": "0d326acc4cded37797bd1d948a641cb4e9b0d08900cf037a9616d8ebecc49c4a"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_mini_delta_snapshot_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_projection_evidence_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 94.0,
+      "files": {
+        "test.log": {
+          "bytes": 664,
+          "sha256": "103923f8bbe0dda426b0934de13d351b9097c6dda2c47ffd112dc3c023e73058"
+        },
+        "test.xml": {
+          "bytes": 1127,
+          "sha256": "664623d80ff075d9e2b35b513d306dc7227acaa77a104a05eb4ce53717fac7b5"
+        },
+        "test.cache_status": {
+          "bytes": 248,
+          "sha256": "3a9c355adb747f397ab76db78dc9a61fb9f4d9796faa21df204a4f0a3177c20d"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_projection_evidence_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_spool_decoding_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 5.6,
+      "files": {
+        "test.log": {
+          "bytes": 417,
+          "sha256": "a86727dc4169e5e6cf098be6cb288995e96aa759a58a8f47fe87d746bd514a8f"
+        },
+        "test.xml": {
+          "bytes": 868,
+          "sha256": "26ffb4a6e063d129b4e9d7b2cf60d4af23857d8fbdc4b07cd85cf3884ca1e674"
+        },
+        "test.cache_status": {
+          "bytes": 240,
+          "sha256": "3360881db7685e91b8ea5053b1e0a69c828984f852718946cc24ee4fda7f0e02"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_spool_decoding_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_spool_encoding_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.6,
+      "files": {
+        "test.log": {
+          "bytes": 413,
+          "sha256": "d4e9f0ba82a73d06e3f63731ce1e134878e02c4a052bcbc3c5074448069fcb12"
+        },
+        "test.xml": {
+          "bytes": 864,
+          "sha256": "663e4dbc0066c3c017b27ded98d710dd822c546c76f0da43591f8c4bf13687e3"
+        },
+        "test.cache_status": {
+          "bytes": 240,
+          "sha256": "0229a0d67da48341d0fbedc9b790ff06317a7217143b2a2a926fefc0cff8aed0"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_spool_encoding_fuzz_tests"
+    },
+    {
+      "label": "//crates/search:hawdb_search_term_policy_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 62.6,
+      "files": {
+        "test.log": {
+          "bytes": 556,
+          "sha256": "eae841351f0cc3af93bd85b798baa14fe33eb0b80659c702f8ccba8b70c872ca"
+        },
+        "test.xml": {
+          "bytes": 1003,
+          "sha256": "81109fd510fa7ca31187fea1dcb0382452f929fa1b129a8839e563614e156003"
+        },
+        "test.cache_status": {
+          "bytes": 240,
+          "sha256": "36d0e41e1da98a01ed09ecd30490f83a1195b1c1506bad7c384f64d0b1c5bedb"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__search__hawdb_search_term_policy_fuzz_tests"
+    },
+    {
+      "label": "//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.2,
+      "files": {
+        "test.log": {
+          "bytes": 460,
+          "sha256": "569a0192dc8fc89f444a26a5b0ca0d0983bb252c21ab0349c461814f7e7d9f27"
+        },
+        "test.xml": {
+          "bytes": 907,
+          "sha256": "2430201059f34dc7163ca50d38b0af9fd5d898c599a6ae8027cddc8654da021e"
+        },
+        "test.cache_status": {
+          "bytes": 238,
+          "sha256": "8edc84a0e91beac84c973fbf85bd5d93d3c1f96f431a61eacb9628c4ec7ea216"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__sql__hawdb_sql_clause_diagnostics_fuzz_tests"
+    },
+    {
+      "label": "//crates/sql:hawdb_sql_create_binding_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.7,
+      "files": {
+        "test.log": {
+          "bytes": 374,
+          "sha256": "bf31fe4fcdadc4e9670daefd5416f3de8f711a764266b6b027331ecea8e8c509"
+        },
+        "test.xml": {
+          "bytes": 813,
+          "sha256": "8fc50991ce5626aa0331b9a771121a63f7ac98c5582e5af52fa8be18707e48ad"
+        },
+        "test.cache_status": {
+          "bytes": 234,
+          "sha256": "14d3abe5864fd1fad430eaf7d5b6ca39bec2443e4c3643620876115a782c868b"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__sql__hawdb_sql_create_binding_fuzz_tests"
+    },
+    {
+      "label": "//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.4,
+      "files": {
+        "test.log": {
+          "bytes": 380,
+          "sha256": "ea986d1927c1ffe2cf1e7c0e437fac71130ae7168c07b97ad30199c25201592c"
+        },
+        "test.xml": {
+          "bytes": 821,
+          "sha256": "d5a560c2809eae63a8ba0798b7e639a3bb7284297b9db8b181d05bb9b975f3db"
+        },
+        "test.cache_status": {
+          "bytes": 235,
+          "sha256": "5b681b64106ab7c1da095413a80827856d330ce8c6d6d606b8d81f1a43265b6d"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__sql__hawdb_sql_frontend_corpus_fuzz_tests"
+    },
+    {
+      "label": "//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 0.7,
+      "files": {
+        "test.log": {
+          "bytes": 452,
+          "sha256": "213a05c8bbabf9b6bd8d07fa216578542ecb64aa3d7526573608867a55511120"
+        },
+        "test.xml": {
+          "bytes": 905,
+          "sha256": "084c64ee4ee58adba2f87254db05cbac75306afd818265eac4e923348526dca5"
+        },
+        "test.cache_status": {
+          "bytes": 241,
+          "sha256": "eb4008436a30b199bbb24458740cf420880ac5c9c9bbb4ddf472ee8f2bd4578a"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__sql-syntax__hawdb_sql_alias_boundary_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_artifact_binding_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.7,
+      "files": {
+        "test.log": {
+          "bytes": 460,
+          "sha256": "080fcb5edd8edc123ea3e8c12642180599ac994cb095c35d403e3f3bbb0b0eb7"
+        },
+        "test.xml": {
+          "bytes": 919,
+          "sha256": "e7a8da00bb1c455ed71dd789b2a13b4fc367bdbc80be1046a20cf1a4d3e903a9"
+        },
+        "test.cache_status": {
+          "bytes": 244,
+          "sha256": "3908ca0d625b1bba1f9ca4e43aa46bcdd037022419512c5a4a7c97d798bc3192"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_artifact_binding_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 3.2,
+      "files": {
+        "test.log": {
+          "bytes": 427,
+          "sha256": "b69497fb13b1cbf4f9422a31ec460ffa6f98820a475e48bc15e6bfaf87ddf1dc"
+        },
+        "test.xml": {
+          "bytes": 900,
+          "sha256": "396723d4392baceb370ccb6b98c06bcae1eb97213014aad488f81dc0e41d6de9"
+        },
+        "test.cache_status": {
+          "bytes": 251,
+          "sha256": "b7a0f929c66f94d1efde70c80985a26b99bb9a9f9ec71dd1577f3138a20da586"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_checkpoint_wal_verbatim_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_durable_envelope_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 3.6,
+      "files": {
+        "test.log": {
+          "bytes": 450,
+          "sha256": "b6917687054353509ec7fcec22d37d4aa48ffe8f7c7d51a3a80434fb2267d489"
+        },
+        "test.xml": {
+          "bytes": 909,
+          "sha256": "8a5feb8ac10fcd42da9625e67d5b1bf41854f7f73daec4b1ba7bbe4aa83a3861"
+        },
+        "test.cache_status": {
+          "bytes": 244,
+          "sha256": "9cedb7d56d8761bbb7206eb76463921a60c68cec6729cf6e5ecc8243da1e7fe5"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_durable_envelope_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_durable_manifest_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 7.5,
+      "files": {
+        "test.log": {
+          "bytes": 444,
+          "sha256": "987f96b8cd7282f85833c3b95c42d2fc712a26e85915ce238253c5087a543852"
+        },
+        "test.xml": {
+          "bytes": 903,
+          "sha256": "8c79fdb2873f10da147be9e2e7ca5b112e340fd580471dc29d7614c4eace517d"
+        },
+        "test.cache_status": {
+          "bytes": 244,
+          "sha256": "e6149e5afad313c2815aa03950998de7a3c13a6def2a63329b775dbe09c0e8a2"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_durable_manifest_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_positioned_read_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.1,
+      "files": {
+        "test.log": {
+          "bytes": 438,
+          "sha256": "3e2c030895e2fae3052db5018bff13fc57ce5c5d443a9d9db2be1ce5180f244b"
+        },
+        "test.xml": {
+          "bytes": 895,
+          "sha256": "1e8a0f32b95ccfd92b61ba0f32b63089b4fc41e51e53f15dfcaa9c6f1f2ea287"
+        },
+        "test.cache_status": {
+          "bytes": 243,
+          "sha256": "23dccb5c2fcf16561718d5e47aa1956107d22f7a539a26859bcdc87047b1e110"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_positioned_read_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_set_value_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 2.2,
+      "files": {
+        "test.log": {
+          "bytes": 427,
+          "sha256": "3a0a20a8c297736cdd251f1c2bfb4c2c509f68cad180fcb504e7cb4782bd5fea"
+        },
+        "test.xml": {
+          "bytes": 872,
+          "sha256": "b35c98d3e7ee1468883827713b63cf48240fb6d9e7f76ad8bad0cfead47a9258"
+        },
+        "test.cache_status": {
+          "bytes": 237,
+          "sha256": "d703cf32b768cf12d57724602fe0f478618abd9cd40ed9c5762c35d535708e86"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_set_value_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 1.7,
+      "files": {
+        "test.log": {
+          "bytes": 496,
+          "sha256": "6ab8575eafbcb88247f75d812fdde1855fb2b44b4c443311047fee14cc5dc35e"
+        },
+        "test.xml": {
+          "bytes": 953,
+          "sha256": "b07260349af8d2502c1cd22861f88bdc1aff872ecb42cf1ca02d3afbedb54115"
+        },
+        "test.cache_status": {
+          "bytes": 243,
+          "sha256": "7e06144c84f3d8393de4fd01dbe5087bd37bea89d95f612e9027da2128a82e36"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_shadow_metadata_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_sharded_cache_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 3.4,
+      "files": {
+        "test.log": {
+          "bytes": 464,
+          "sha256": "5f71d653b0b6897fef7717237f34c4ea9cff6f2286c0cc7bd62bbe638e85d88c"
+        },
+        "test.xml": {
+          "bytes": 917,
+          "sha256": "aae3b5cbbb1834170784c9c1df01ff8c7dd4d762bccb1ea4d41d70f70b7191ed"
+        },
+        "test.cache_status": {
+          "bytes": 241,
+          "sha256": "6d208a921683a6095244787724ce774ef8a97bc0a60461291a5ed729abb1b0a2"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_sharded_cache_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 4.1,
+      "files": {
+        "test.log": {
+          "bytes": 465,
+          "sha256": "b83d6760c47f44c1d974358c5f916905ab4a8951a031833b4f4866fa85b1ad6f"
+        },
+        "test.xml": {
+          "bytes": 928,
+          "sha256": "d4ada6039de05cf8f95d3c8c2fb0333857062e13aabee7a0c76071fc018096b1"
+        },
+        "test.cache_status": {
+          "bytes": 246,
+          "sha256": "047717e2274f7195b1b74f0521b7ad53560ccb9ea08b5135fc8b7dc12474887b"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_statistics_refresh_fuzz_tests"
+    },
+    {
+      "label": "//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests",
+      "cached": false,
+      "reported_duration_seconds": 5.1,
+      "files": {
+        "test.log": {
+          "bytes": 556,
+          "sha256": "65542c6b9415f706ec1b8d2790709da8a949b69074a6b137d8d449abd8f28e8d"
+        },
+        "test.xml": {
+          "bytes": 1027,
+          "sha256": "7bb1f8c2ece38fbeccf98ed3823c68a35836666a0de646a7909b3442f02c08a4"
+        },
+        "test.cache_status": {
+          "bytes": 250,
+          "sha256": "96226a2361fe9e8e0be813e97107177076fa99a652e0df293a349bde02fcc330"
+        }
+      },
+      "archive": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fuzz-qualified-logs/crates__storage__hawdb_storage_transaction_compaction_fuzz_tests"
+    }
+  ],
+  "residency": [
+    {
+      "label": "//:hawdb_graph_projection_residency_fuzz_first_half_tests",
+      "cached": false,
+      "summary_lines": [
+        "graph-projection-residency-v1 first_seed=0 seeds=16 state_checks=992",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2108 filtered out; finished in 165.42s"
+      ]
+    },
+    {
+      "label": "//:hawdb_graph_projection_residency_fuzz_second_half_tests",
+      "cached": false,
+      "summary_lines": [
+        "graph-projection-residency-v1 first_seed=16 seeds=16 state_checks=992",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2108 filtered out; finished in 191.04s"
+      ]
+    }
+  ],
+  "observed_at": 1792398554.9852421,
+  "scope": "Exact required local-only command passed on published311. All98 statuses/logs archived:76 freshly executed,22 reported Bazel-cached; not98 fresh executions. Full original seeds/assertions/deadlines retained. Does not establish performance acceptance, root-cause disposition, Prow/approval or physical power-loss guarantees."
+}

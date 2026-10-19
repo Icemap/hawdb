@@ -1,0 +1,5 @@
+{
+  "original_bytes": 474,
+  "original_sha256": "d50525bd52e668a4d8d4c453f22bb2fa44c01238c4ce1ec170a96d5757eddecf",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_execution_lifecycle_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nexecution lifecycle: 128 seeds, 8192 admission pairs and full-profile comparisons\ntest observer::profile::tests::execution_lifecycle_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 474 filtered out; finished in 0.10s\n\n"
+}

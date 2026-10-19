@@ -1,0 +1,1177 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "engine_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "source": "ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+  "tree": "2de750bb8fa6c627a2e2b3517417090b4c005fe9",
+  "run": 39221994638,
+  "url": "https://github.com/nowledge-co/hawdb/actions/runs/39221994638",
+  "status": "queued",
+  "conclusion": null,
+  "expected_groups": 110,
+  "observed_complete_groups": 2,
+  "full_requested_matrix_observed": false,
+  "missing_groups": [
+    [
+      "numeric",
+      1000,
+      "file",
+      "default",
+      "false",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      100000,
+      "file",
+      "default",
+      "false",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      100000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      100000,
+      "memory",
+      "default",
+      "false",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000000,
+      "file",
+      "default",
+      "false",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000000,
+      "file",
+      "large",
+      "false",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000000,
+      "file",
+      "large",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000000,
+      "memory",
+      "default",
+      "false",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000000,
+      "memory",
+      "large",
+      "false",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000000,
+      "memory",
+      "large",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000001,
+      "file",
+      "large",
+      "false",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000001,
+      "file",
+      "large",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000001,
+      "memory",
+      "large",
+      "false",
+      "select",
+      "python"
+    ],
+    [
+      "numeric",
+      1000001,
+      "memory",
+      "large",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "file",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "fill_bulk",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "point",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "rust"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "go"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "python"
+    ],
+    [
+      "ordinary",
+      1000000,
+      "memory",
+      "default",
+      "true",
+      "wide",
+      "rust"
+    ]
+  ],
+  "reports": [
+    {
+      "group": [
+        "numeric",
+        1000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "run": 39221994638,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3634681856,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 71892992,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 936139,
+            "nearest_rank_p95_ns": 987606,
+            "maximum_ns": 991252,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3639621632,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 71217152,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 70476,
+            "nearest_rank_p95_ns": 82655,
+            "maximum_ns": 93821,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3634813952,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 72146944,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 90995,
+            "nearest_rank_p95_ns": 119843,
+            "maximum_ns": 134341,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12171933496
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39221994638,
+      "complete": true,
+      "verified_files": 11,
+      "modes": {
+        "owned": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3664686080,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 71520256,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 5103788,
+            "nearest_rank_p95_ns": 5740719,
+            "maximum_ns": 5877234,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "retained": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3671336960,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 70979584,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 507481,
+            "nearest_rank_p95_ns": 593831,
+            "maximum_ns": 620551,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        },
+        "arrow": {
+          "success": true,
+          "expected_success": true,
+          "row_boundary_required": false,
+          "row_boundary_proven": false,
+          "acceptance_failure": null,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3665384448,
+            16777216,
+            67108864
+          ],
+          "process_peak_rss_bytes": 71958528,
+          "observed_latency": {
+            "samples": 31,
+            "median_ns": 1133409,
+            "nearest_rank_p95_ns": 1217444,
+            "maximum_ns": 1220850,
+            "scope": "Observed sample quantiles; instrumented and ordinary producers must be compared separately."
+          },
+          "adverse": []
+        }
+      },
+      "scope": "Independent mode processes; 31 observed samples, no owned reference contamination. No whole-memory bound or source-reuse qualification.",
+      "artifact": 12172338365
+    }
+  ],
+  "collection_or_integrity_errors": [],
+  "scope": "Source/selection and complete archived producer/report verification. Persistent range cache and incremental summaries only; benchmark source, workloads, budgets, samples and deadlines unchanged. All adverse/partial/setup failures remain explicit. No final acceptance, approval or whole-memory/source-reuse proof."
+}

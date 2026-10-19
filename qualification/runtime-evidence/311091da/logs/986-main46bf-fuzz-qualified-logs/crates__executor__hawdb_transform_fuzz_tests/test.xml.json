@@ -1,0 +1,5 @@
+{
+  "original_bytes": 868,
+  "original_sha256": "1820b1fc25dc691dfd316494a8476d3ef9713fc958e26c3332e9203a7a54c9a1",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/executor/hawdb_transform_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/executor/hawdb_transform_fuzz_tests\" classname=\"\" status=\"run\" duration=\"5\" time=\"5\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_transform_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nstreaming transform campaign: 256 seeds, 20736 operator/batch/exit cases\ntest transform::tests::transform_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 474 filtered out; finished in 5.19s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

@@ -1,0 +1,22 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "scripts": [
+    {
+      "script": "prepare-python-failure-heap-main46bf-311091da.py",
+      "sha256": "8e107af51bddb9120fe68b234c1643dd8772a9894352c558776e67bece16dc31"
+    },
+    {
+      "script": "run-python-failure-heap-main46bf-311091da.py",
+      "sha256": "dd82f615e2684cc950596524e5e378b889727a4594fa1568f47ec85fe32dff12"
+    },
+    {
+      "script": "audit-python-failure-heap-source-main46bf-311091da.py",
+      "sha256": "ddeacd3758b0ea24cc1a5d2dd563b3d2391d7a9ae3f0d6ed532004b45adac362"
+    },
+    {
+      "script": "audit-python-failure-heap-samples-main46bf-311091da.py",
+      "sha256": "6ec56ffe7860676a3ae9658efb946acb2d402d7de75065371e565b5b9249b2b2"
+    }
+  ],
+  "scope": "Rebind candidate to fresh final311 profiled native package; preserve fixed original baseline, its binary/native-input equivalence checks, real success/warmup/execute probes and16attempts/12measured samples. Strict source/interpreter/wrapper/checksum guards retained. Does not replace90/110 or compare failure heap windows to successful-query latency."
+}

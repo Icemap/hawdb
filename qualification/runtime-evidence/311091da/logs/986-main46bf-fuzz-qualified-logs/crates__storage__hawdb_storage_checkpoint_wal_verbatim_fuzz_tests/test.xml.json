@@ -1,0 +1,5 @@
+{
+  "original_bytes": 900,
+  "original_sha256": "396723d4392baceb370ccb6b98c06bcae1eb97213014aad488f81dc0e41d6de9",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/storage/hawdb_storage_checkpoint_wal_verbatim_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/storage/hawdb_storage_checkpoint_wal_verbatim_fuzz_tests\" classname=\"\" status=\"run\" duration=\"3\" time=\"3\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest wal::frame::checkpoint::stream_tests::checkpoint_wal_verbatim_stream_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 2.07s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

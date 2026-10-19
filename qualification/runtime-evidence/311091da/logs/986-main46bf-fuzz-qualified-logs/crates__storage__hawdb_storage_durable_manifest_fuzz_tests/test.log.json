@@ -1,0 +1,5 @@
+{
+  "original_bytes": 444,
+  "original_sha256": "987f96b8cd7282f85833c3b95c42d2fc712a26e85915ce238253c5087a543852",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_durable_manifest_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ndurable-manifest-mutation-v1 seeds=128 cases=32896\ntest durable_manifest::tests::durable_manifest_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 6.43s\n\n"
+}

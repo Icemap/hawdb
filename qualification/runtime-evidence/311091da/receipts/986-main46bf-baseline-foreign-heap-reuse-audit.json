@@ -1,0 +1,61 @@
+{
+  "candidate_engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "fixed_baseline": "3cdb2610ba8b984676b80ba22df64821787886d3",
+  "baseline_native_build_tree": "8c30cf48bc6ced6fef624c8333759892ff6b21a4",
+  "baseline_observer_tree": "4a235b06362ae6306a300e45d5974495c1229c2b",
+  "baseline_native_input_paths_equal": [
+    "src",
+    "crates",
+    "bindings/python",
+    "Cargo.toml",
+    "Cargo.lock",
+    "BUILD.bazel",
+    "MODULE.bazel",
+    "MODULE.bazel.lock",
+    "rust-toolchain.toml",
+    ".bazelrc",
+    ".cargo",
+    "build.rs",
+    "tools/bazel",
+    "bindings/benchmarks/native_alloc.rs",
+    "bindings/benchmarks/native_profile.rs"
+  ],
+  "final_and_historical_host_inputs_equal": [
+    {
+      "path": "bindings/benchmarks/run.py",
+      "sha256": "5d4f8a55c5b196f44230e4f9db7398809e49b45a1589b2151426ab94fa4253be"
+    },
+    {
+      "path": "bindings/benchmarks/python_boundary.py",
+      "sha256": "61f09752225e1794c4caf8aa48e77f2f90815c44dc210ed17ca8c75c61df8bc5"
+    },
+    {
+      "path": "bindings/benchmarks/checksum.py",
+      "sha256": "9fac220dad093e1ce18189fc1582481172d3efa8dc5b7919c676cb8fae23b123"
+    },
+    {
+      "path": "bindings/go/cmd/boundary/main.go",
+      "sha256": "33f6bf14e2545b2ee70da7b690ff1c2ffd60c380468390f53d546071639bb09b"
+    }
+  ],
+  "revalidated_controls": [
+    {
+      "kind": "go_error",
+      "receipt": "986-main46bf-baseline-go_error-revalidated.json",
+      "sha256": "60ce40f5a9121c9dacf04418bb9ea2f2edb015bcf7a167df85f9dfc3dde23954",
+      "attempts": 8,
+      "probes": 3,
+      "scope": "Supplemental Go profiling observer; error heap delta includes query execution, error return, deferred db.Close and failure-host snapshot, unlike original successful query-only heap fields. No cross-scope ratio."
+    },
+    {
+      "kind": "whole_run",
+      "receipt": "986-main46bf-baseline-whole_run-revalidated.json",
+      "sha256": "3ca630dd6788e0cf2e312e40e0863136b75650001de4304b884a4a2ed39622ef",
+      "attempts": 16,
+      "probes": 6,
+      "scope": "run_including_store_open_setup_warmup_query_and_cleanup_excluding_job_decode_and_library_load"
+    }
+  ],
+  "observed_at": 1792398594.522683,
+  "scope": "Baseline-only reuse audit: byte/hash-check existing immutable local Darwin/arm64 artifacts, all jobs/raw outputs/probes and samples. No new measurement. Does not relabel historical0c candidate results as311, prove Linux heap magnitudes, or compare failed/warmup/whole-run windows to successful query timings. New311 Python candidate error-heap sampling is separate and pending. Original90/110 counts unchanged."
+}

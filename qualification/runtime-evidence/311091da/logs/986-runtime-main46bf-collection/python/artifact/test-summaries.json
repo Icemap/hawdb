@@ -1,0 +1,62 @@
+[
+  {
+    "label": "//bindings/python:requirements.test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/bindings/python/requirements.test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398288741",
+      "lastStopTimeMillis": "1792398291201",
+      "totalRunDurationMillis": "2460",
+      "runCount": 1,
+      "totalRunDuration": "2.460s",
+      "firstStartTime": "2026-10-19T08:24:48.741Z",
+      "lastStopTime": "2026-10-19T08:24:51.201Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//bindings/python:hawdb_python_pydantic_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/bindings/python/hawdb_python_pydantic_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398429275",
+      "lastStopTimeMillis": "1792398434722",
+      "totalRunDurationMillis": "5447",
+      "runCount": 1,
+      "totalRunDuration": "5.447s",
+      "firstStartTime": "2026-10-19T08:27:09.275Z",
+      "lastStopTime": "2026-10-19T08:27:14.722Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//bindings/python:hawdb_python_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/bindings/python/hawdb_python_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398429275",
+      "lastStopTimeMillis": "1792398465091",
+      "totalRunDurationMillis": "35816",
+      "runCount": 1,
+      "totalRunDuration": "35.816s",
+      "firstStartTime": "2026-10-19T08:27:09.275Z",
+      "lastStopTime": "2026-10-19T08:27:45.091Z",
+      "attemptCount": 1
+    }
+  }
+]

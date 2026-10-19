@@ -1,0 +1,5 @@
+{
+  "original_bytes": 504,
+  "original_sha256": "780044fc1b4a3a403f0c5e7b7f49a54e1186ff48ec860f9512eb7fa03234b987",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/readiness:hawdb_integration_bundle_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nintegration-bundle-differential-v1 seeds=32 combined_cases=4096 corpus_cases=1266 combined_corpus_entries=1266\ntest integration_bundle::tests::integration_bundle_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 359 filtered out; finished in 24.81s\n\n"
+}

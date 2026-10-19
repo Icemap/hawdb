@@ -1,0 +1,18 @@
+{
+  "status": "command_passed",
+  "pid": 61373,
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "started": 1792397612.491667,
+  "command": [
+    "bazel",
+    "test",
+    "//crates/fuzz:hawdb_fuzz_tests",
+    "//crates/fuzz:hawdb_fuzz_cli_tests",
+    "//:hawdb_linux_ci_fuzz_smoke_test"
+  ],
+  "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-local-fuzz.log",
+  "scope": "Original required local-only fuzz command. No CI fuzz campaign, seed reduction, deadline override or retry.",
+  "exit": 0,
+  "ended": 1792398486.5570729
+}

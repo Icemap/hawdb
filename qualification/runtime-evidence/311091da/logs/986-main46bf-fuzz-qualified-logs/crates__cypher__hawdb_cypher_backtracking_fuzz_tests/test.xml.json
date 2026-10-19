@@ -1,0 +1,5 @@
+{
+  "original_bytes": 909,
+  "original_sha256": "1188d45f357e2f01f25240b0c6fb01a62059f99fe4f8d0c72d65beaad91bf5c7",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/cypher/hawdb_cypher_backtracking_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/cypher/hawdb_cypher_backtracking_fuzz_tests\" classname=\"\" status=\"run\" duration=\"2\" time=\"2\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/cypher:hawdb_cypher_backtracking_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nParser backtracking differential: 5184 full-AST comparisons, 5184 rejections\ntest tests::backtracking::parser_backtracking_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 176 filtered out; finished in 1.11s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

@@ -1,0 +1,7 @@
+{
+  "published_pr_head": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "main": "46bfde00131a6d711d51aad6e5e237279a287061",
+  "production_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "qualification_tree": "f4582ceafc6e2ae9a7d82420790b00ce3842bb97",
+  "scope": "One workflow overlay on published311, whose second parent is main46bf. Source guard verifies ancestry and reconstructs exact production tree. Original full root/crates/Python coverage and budgets, no fuzz CI."
+}

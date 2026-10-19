@@ -1,0 +1,17 @@
+{
+  "status": "run_identity_verified",
+  "source": "ef412c48ba3a89b30abaf809e33512f58ed60e66",
+  "branch": "qualify/986-runtime-main46bfde00",
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "main": "46bfde00131a6d711d51aad6e5e237279a287061",
+  "production_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "qualification_tree": "f4582ceafc6e2ae9a7d82420790b00ce3842bb97",
+  "inputs": {
+    "runtime_qualification": "true"
+  },
+  "scope": "Standalone full runtime coverage; does not replace Prow/Tide status, original failures, full performance acceptance or genuine approval.",
+  "before_run_ids": [],
+  "requested_at": 1792398180.0526478,
+  "run": 39222367162,
+  "url": "https://github.com/nowledge-co/hawdb/actions/runs/39222367162"
+}

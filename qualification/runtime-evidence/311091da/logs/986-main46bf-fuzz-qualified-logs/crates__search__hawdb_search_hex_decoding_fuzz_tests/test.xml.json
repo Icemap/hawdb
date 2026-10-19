@@ -1,0 +1,5 @@
+{
+  "original_bytes": 829,
+  "original_sha256": "e7710ca371224d27ee376a94dde8fe708942e8b0a88b7d87683a2d1b1d9471a4",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/search/hawdb_search_hex_decoding_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/search/hawdb_search_hex_decoding_fuzz_tests\" classname=\"\" status=\"run\" duration=\"0\" time=\"0\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_hex_decoding_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest document_decoding_tests::hex_decoding_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 856 filtered out; finished in 0.06s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

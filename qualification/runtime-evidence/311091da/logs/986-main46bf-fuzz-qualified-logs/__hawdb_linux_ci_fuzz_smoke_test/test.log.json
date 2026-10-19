@@ -1,0 +1,5 @@
+{
+  "original_bytes": 177,
+  "original_sha256": "39a8074ffb316bc145747528fc427d5aa07a63870080cab075ae99cdfeeb8059",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_linux_ci_fuzz_smoke_test\n-----------------------------------------------------------------------------\n"
+}

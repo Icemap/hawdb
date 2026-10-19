@@ -1,0 +1,5 @@
+{
+  "original_bytes": 395,
+  "original_sha256": "8691016d5aed3341bd12c5049bc07cf06b43e6d6f2dffd02a5b1914644386c98",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest relational::cost_tests::access_cost_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 74 filtered out; finished in 6.94s\n\n"
+}

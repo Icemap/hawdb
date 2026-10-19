@@ -1,0 +1,5 @@
+{
+  "original_bytes": 263,
+  "original_sha256": "580932e965b400a52d7e7f484944de9242420eb534a3e741b3029bd730250208",
+  "raw_utf8": "Cargo format check (workspace)...........................................Passed\nCargo Clippy (workspace, all targets and features).......................Passed\n[integrate/986-main-46bfde00 311091da] test(qualification): integrate executor scalar memory admission\n"
+}

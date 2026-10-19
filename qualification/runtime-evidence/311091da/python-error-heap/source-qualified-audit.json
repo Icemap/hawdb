@@ -1,0 +1,32 @@
+{
+  "verified": true,
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "source_manifest_sha256": "746936e81c82729abee97b741858d3b36f4f2ab40a563642d4f90647888a0f37",
+  "observer_patch_sha256": "e5e9f529bfee3906234962a7406af5c312ffaf6949eef8ee801849aa7ff8859d",
+  "candidate_package_matches_prior_final_source_build": true,
+  "baseline_binary_matches_original_build_receipt": true,
+  "baseline_native_input_paths_unchanged": [
+    "src",
+    "crates",
+    "bindings/python",
+    "Cargo.toml",
+    "Cargo.lock",
+    "BUILD.bazel",
+    "MODULE.bazel",
+    "MODULE.bazel.lock",
+    "rust-toolchain.toml",
+    ".bazelrc",
+    ".cargo",
+    "build.rs",
+    "tools/bazel",
+    "bindings/benchmarks/native_alloc.rs",
+    "bindings/benchmarks/native_profile.rs"
+  ],
+  "original_python_wrapper_checksum_and_fixture_generator_equal_current_baseline": true,
+  "interpreter": {
+    "path": "/Users/hawkingrei/tmp/bazel/repositories/contents/d4b81707e7f8b2ed947ecb016b57a66d8641030b72497b0e47896b5b625fbc87/6f7abe37-f074-4ee6-a52b-40b52f563b9e/bin/python3.11",
+    "sha256": "bb713af5187134b02839a3ef0bef2aa95457e4c1c6c17f1db16f49e798c41a8b"
+  },
+  "real_probe_count": 3,
+  "scope": "Source/observer wiring qualification only. Supplemental sampling may still run; no completed performance or original matrix acceptance implied."
+}

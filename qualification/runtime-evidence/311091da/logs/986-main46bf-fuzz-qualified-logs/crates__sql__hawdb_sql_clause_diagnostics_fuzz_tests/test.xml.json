@@ -1,0 +1,5 @@
+{
+  "original_bytes": 907,
+  "original_sha256": "2430201059f34dc7163ca50d38b0af9fd5d898c599a6ae8027cddc8654da021e",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/sql/hawdb_sql_clause_diagnostics_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/sql/hawdb_sql_clause_diagnostics_fuzz_tests\" classname=\"\" status=\"run\" duration=\"1\" time=\"1\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nclause diagnostics: 1816 AST condition pairs; 9216 SQL sources through parse and prepare\ntest parser::clause_tests::clause_diagnostics_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 93 filtered out; finished in 0.61s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

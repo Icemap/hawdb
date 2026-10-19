@@ -1,0 +1,5 @@
+{
+  "original_bytes": 623,
+  "original_sha256": "20b9c9796d3466d05854cb691a94d000830080c4a53d81a95d166617a377e6f7",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/fuzz:hawdb_append_fuzz_cli_tests\n-----------------------------------------------------------------------------\n\nrunning 5 tests\ntest tests::parses_sharding_progress_and_resume_options ... ok\ntest tests::exact_replay_rejects_sharding_and_resume ... ok\ntest tests::resume_requires_a_strict_shard_prefix ... ok\ntest tests::sharded_campaign_is_quiet_and_writes_complete_report ... ok\ntest tests::campaign_resumes_without_reexecuting_completed_cases ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 51.82s\n\n"
+}

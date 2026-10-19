@@ -1,0 +1,5 @@
+{
+  "original_bytes": 556,
+  "original_sha256": "65542c6b9415f706ec1b8d2790709da8a949b69074a6b137d8d449abd8f28e8d",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_transaction_compaction_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntransaction-compaction-differential-v1 seeds=256 arbitrary_prefixes=12544 admitted_prefixes=17539 admitted_kinds=[5033, 2654, 2734, 1650, 2676, 2536]\ntest mutation::compact::tests::transaction_compaction_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 4.02s\n\n"
+}

@@ -1,0 +1,133 @@
+{
+  "status": "checks_passed_uncommitted",
+  "pid": 55211,
+  "tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "steps": [
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792397125.010311,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-install.log",
+      "exit": 0,
+      "ended": 1792397125.105886
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792397125.1712818,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-fmt.log",
+      "exit": 0,
+      "ended": 1792397130.2233531
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792397130.311507,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-clippy.log",
+      "exit": 0,
+      "ended": 1792397183.049248
+    },
+    {
+      "name": "wasm-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "hawdb",
+        "--no-default-features",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--lib",
+        "--test",
+        "in_memory_portable",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792397183.1753879,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-wasm-clippy.log",
+      "exit": 0,
+      "ended": 1792397221.6967318
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792397221.766337,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-prek.log",
+      "exit": 0,
+      "ended": 1792397227.406282
+    },
+    {
+      "name": "executor-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "hawdb-executor"
+      ],
+      "started": 1792397227.478666,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-executor-tests.log",
+      "exit": 0,
+      "ended": 1792397310.927416
+    },
+    {
+      "name": "portable-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "hawdb",
+        "--no-default-features",
+        "--test",
+        "in_memory_portable"
+      ],
+      "started": 1792397310.992338,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-portable-tests.log",
+      "exit": 0,
+      "ended": 1792397349.14759
+    },
+    {
+      "name": "execution-contract",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "hawdb",
+        "--test",
+        "execution_request_contract"
+      ],
+      "started": 1792397349.2214358,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-execution-contract.log",
+      "exit": 0,
+      "ended": 1792397498.048064
+    }
+  ],
+  "ended": 1792397498.08031
+}

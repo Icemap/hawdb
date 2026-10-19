@@ -1,0 +1,5 @@
+{
+  "original_bytes": 898,
+  "original_sha256": "dd70fa51080db8813f0973a1cdefa407fd35118f4c993a012be2f30e60a2b18b",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/executor/hawdb_numeric_execution_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/executor/hawdb_numeric_execution_fuzz_tests\" classname=\"\" status=\"run\" duration=\"1\" time=\"1\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_numeric_execution_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nnumeric execution campaign: 256 seeds, 9216 path/batch/exit cases\ntest numeric::differential::numeric_execution_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 474 filtered out; finished in 1.36s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}

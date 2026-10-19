@@ -1,0 +1,5 @@
+{
+  "original_bytes": 496,
+  "original_sha256": "6ab8575eafbcb88247f75d812fdde1855fb2b44b4c443311047fee14cc5dc35e",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_shadow_metadata_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nshadow metadata: 128 seeds, 8192 admission/encoding/decoding/corruption cases\ntest column_group::shadow_metadata::tests::differential::shadow_metadata_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 0.35s\n\n"
+}

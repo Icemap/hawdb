@@ -1,0 +1,5 @@
+{
+  "original_bytes": 857,
+  "original_sha256": "a75c80fbed6ac4c2cb1f6f4ab838de4c0a01fe0786cd4794b8c6e469bc80ba7c",
+  "raw_utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n  <testsuite name=\"crates/relational/hawdb_relational_index_runtime_fuzz_tests\" tests=\"1\" failures=\"0\" errors=\"0\">\n    <testcase name=\"crates/relational/hawdb_relational_index_runtime_fuzz_tests\" classname=\"\" status=\"run\" duration=\"25\" time=\"25\"></testcase>\n      <system-out>\nGenerated test.log (if the file is not UTF-8, then this may be unreadable):\n<![CDATA[exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/relational:hawdb_relational_index_runtime_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest index_runtime::tests::index_runtime_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 225 filtered out; finished in 23.58s]]>\n      </system-out>\n    </testsuite>\n</testsuites>\n"
+}
