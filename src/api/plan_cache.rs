@@ -1549,7 +1549,7 @@ mod tests {
     }
 
     #[test]
-    fn point_plan_cache_replans_only_when_crossing_the_small_label_index_boundary() {
+    fn point_plan_cache_tracks_the_small_label_index_boundary() {
         let mut db = crate::Database::new();
         for statement in [
             "CREATE NODE TABLE Item",
@@ -1652,11 +1652,19 @@ mod tests {
         assert_eq!(output.rows[0].get("score"), Some(&Value::Int(0)));
         db.query("MATCH (n:Item) WHERE n.id >= 8 DELETE n").unwrap();
         let shrunk = plan(&db);
-        assert_eq!(shrunk.plan_cache_lookup, PlanCacheLookup::Miss);
+        // Returning to the small-label class reuses its original scan plan.
+        assert_eq!(shrunk.plan_cache_lookup, PlanCacheLookup::Hit);
+        assert_eq!(shrunk.optimizer_environment, initial.optimizer_environment);
+        assert_eq!(
+            shrunk.physical_plan.fingerprint(),
+            initial.physical_plan.fingerprint()
+        );
         assert!(shrunk
             .physical_plan
             .explain(0)
             .contains("access=SeqNodeScan"));
+        let shrunk_output = db.query_with_params(query, &parameters).unwrap();
+        assert_eq!(shrunk_output.rows, output.rows);
     }
 
     #[test]
