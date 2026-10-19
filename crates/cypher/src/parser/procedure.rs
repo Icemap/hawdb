@@ -57,14 +57,22 @@ impl Parser<'_> {
             _ => return Err(self.error("unsupported procedure")),
         };
         let options = self.parse_graph_algorithm_options()?;
-        let (score_column, return_node_identity) = self.parse_algorithm_return_clause(algorithm)?;
-        Ok(Statement::GraphAlgorithm(GraphAlgorithm {
-            algorithm,
-            graph_name,
-            options: Box::new(options),
-            score_column,
-            return_node_identity,
-        }))
+        if let Ok((score_column, return_node_identity)) =
+            self.parse_algorithm_return_clause(algorithm)
+        {
+            self.skip_ws();
+            if self.pos == self.input.len() || self.input[self.pos..].starts_with(';') {
+                return Ok(Statement::GraphAlgorithm(GraphAlgorithm {
+                    algorithm,
+                    graph_name,
+                    options: Box::new(options),
+                    score_column,
+                    return_node_identity,
+                }));
+            }
+        }
+        self.pos = call_start;
+        Ok(Statement::Pipeline(Box::new(self.parse_query_pipeline()?)))
     }
 
     pub(super) fn parse_graph_seed_search_arguments(&mut self) -> Result<GraphSeedSearch> {

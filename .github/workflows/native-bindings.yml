@@ -117,6 +117,13 @@ jobs:
           cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
             2>&1 | tee windows-native-results/clippy.txt
 
+      - name: Test complete graph algorithm identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb --lib -- identity_898_ --nocapture --test-threads=1
+          bash scripts/cargo-test-required.sh --locked -p hawdb-executor --lib -- identity_898_ --nocapture --test-threads=1
+
       - name: Build and test the retained Windows C ABI
         shell: bash
         run: |

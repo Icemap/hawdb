@@ -234,6 +234,7 @@ pub enum PhysicalPlan {
         return_node_identity: bool,
         node_visibility_predicate: Option<Predicate>,
     },
+    GraphAlgorithmOutput(Box<crate::GraphAlgorithmOutput>),
     GraphSeedScan {
         query_parameter: String,
         label: String,
