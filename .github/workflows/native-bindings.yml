@@ -498,6 +498,12 @@ jobs:
             -- --exact --nocapture --test-threads=1 \
             2>&1 | tee windows-native-results/consumer-creation-refusal.txt
 
+      - name: Test legacy projection source epoch fences
+        shell: bash
+        run: >-
+          bash scripts/cargo-test-required.sh --locked -p hawdb --lib --
+          _1043_ --nocapture --test-threads=1
+
       - name: Build and test the retained Windows C ABI
         shell: bash
         run: |

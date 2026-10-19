@@ -4556,6 +4556,10 @@ impl Database {
         })
     }
 
+    /// Hydrate graph changes from the current source view. A declared complete-through
+    /// watermark must equal that view's commit epoch; a changefeed prefix does not
+    /// provide historical row contents. Requests without a watermark do not claim
+    /// complete coverage and preserve their existing ad hoc behavior.
     pub fn build_search_projection_graph_delta(
         &self,
         request: &SearchProjectionGraphDeltaRequest,
