@@ -83,6 +83,9 @@ impl QueryBridge {
                     HawDBError::Semantic(_) => "semantic",
                     HawDBError::Storage(_) => "storage",
                     HawDBError::ProjectionBusy => "projection_busy",
+                    HawDBError::ProjectionSourceEpochMismatch { .. } => {
+                        "projection_source_epoch_mismatch"
+                    }
                     HawDBError::StorageIntegrity(_) => "storage_integrity",
                     HawDBError::FileDescriptors(_) => "file_descriptors",
                     HawDBError::Execution(_)

@@ -91,6 +91,11 @@ pub enum HawDBError {
     StorageIntegrity(String),
     /// A registered Search target is retained by another native operation.
     ProjectionBusy,
+    /// A watermark can describe only the snapshot used to hydrate its rows.
+    ProjectionSourceEpochMismatch {
+        expected: u64,
+        actual: u64,
+    },
     Execution(String),
     /// Box the diagnostic so successful Result values do not grow with its fields.
     ResourceBudgetExceeded(Box<ResourceBudgetError>),
@@ -147,6 +152,13 @@ impl Display for HawDBError {
             HawDBError::FileDescriptors(error) => Display::fmt(error, f),
             HawDBError::StorageIntegrity(message) => {
                 write!(f, "storage integrity error: {message}")
+            }
+            HawDBError::ProjectionSourceEpochMismatch { expected, actual } => {
+                if expected > actual {
+                    write!(f, "search projection complete-through epoch {expected} is ahead of graph commit epoch {actual}; watermark was not published")
+                } else {
+                    write!(f, "search projection complete-through epoch {expected} differs from source snapshot epoch {actual}; hydrate a matching pinned snapshot or prepare the complete change interval; watermark was not published")
+                }
             }
             HawDBError::Execution(message) => write!(f, "execution error: {message}"),
             HawDBError::ResourceBudgetExceeded(error) => write!(f, "execution error: {error}"),

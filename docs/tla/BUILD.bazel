@@ -1091,3 +1091,28 @@ tla_check(
     )
     for control in ["EarlyIdentity", "EarlyEffect", "RegistryReset", "CancelRefund", "MissingReset"]
 ]
+
+
+# Legacy catch-up may hydrate only from a snapshot matching its watermark.
+[
+    genrule(
+        name = "HawDBLegacyProjectionEpoch" + control + "_config",
+        srcs = ["HawDBLegacyProjectionEpoch.cfg"],
+        outs = ["generated/HawDBLegacyProjectionEpoch" + control + ".cfg"],
+        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBLegacyProjectionEpoch.cfg) > $@",
+        tags = ["manual"],
+    )
+    for control in ["SkipHostFence", "SkipGraphFence", "ForbidPinnedWitness"]
+]
+[
+    tla_check(
+        name = "HawDBLegacyProjectionEpoch" + control + "_check",
+        module = "HawDBLegacyProjectionEpoch.tla",
+        config = ":HawDBLegacyProjectionEpoch" + control + "_config",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["SkipHostFence", "SkipGraphFence", "ForbidPinnedWitness"]
+]

@@ -497,6 +497,13 @@ fn json_error_from_hawdb(error: HawDBError) -> serde_json::Value {
         }
         error @ (HawDBError::GraphExpansionCandidateLimitExceeded { .. }
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. }) => json_error("execution", error),
+        error @ HawDBError::ProjectionSourceEpochMismatch { expected, actual } => {
+            let mut response = json_error("execution", error);
+            response["error"]["details"] = serde_json::json!({
+                "kind": "projection_source_epoch_mismatch", "expected": expected, "actual": actual,
+            });
+            response
+        }
         error @ HawDBError::TransactionConflict { .. } => json_error("execution", error),
         error @ HawDBError::AppendSequenceExhausted { .. } => json_error("storage", error),
         error @ (HawDBError::ProjectionBusy

@@ -4557,12 +4557,9 @@ impl Database {
         &self,
         request: &SearchProjectionGraphDeltaRequest,
     ) -> Result<SearchProjectionDelta> {
-        let result = search_projection_graph_delta_for(
-            &self.runtime.get()?.catalog,
-            &self.runtime.get()?.store,
-            request,
-        );
-        self.runtime.get()?.store.poison_on_storage_error(&result);
+        let runtime = self.runtime.get()?;
+        let result = search_projection_graph_delta_for(&runtime.catalog, &runtime.store, request);
+        runtime.store.poison_on_storage_error(&result);
         result
     }
 
@@ -20018,11 +20015,23 @@ fn knowledge_induced_edge_row_from_query_row(
     })
 }
 
-fn search_projection_graph_delta_for(
+fn require_search_projection_source_epoch(expected: Option<u64>, actual: u64) -> Result<()> {
+    if let Some(expected) = expected
+        && expected != actual
+    {
+        return Err(HawDBError::ProjectionSourceEpochMismatch { expected, actual });
+    }
+    Ok(())
+}
+
+fn search_projection_graph_delta_for<S>(
     catalog: &Catalog,
-    store: &GraphStore,
+    store: &S,
     request: &SearchProjectionGraphDeltaRequest,
-) -> Result<SearchProjectionDelta> {
+) -> Result<SearchProjectionDelta>
+where
+    S: crate::executor::ExecutionStore + hawdb_search::SearchProjectionSource,
+{
     let operation_count = request.operation_count();
     if let Some(limit) = request.max_operations
         && operation_count > limit
@@ -20031,14 +20040,13 @@ fn search_projection_graph_delta_for(
                 "search projection graph delta operation count {operation_count} exceeded configured limit {limit}"
             )));
     }
-    if let Some(epoch) = request.complete_through_graph_commit_epoch {
-        let current_epoch = store.commit_epoch();
-        if epoch > current_epoch {
-            return Err(HawDBError::Storage(format!(
-                "search projection graph delta complete-through epoch {epoch} is ahead of graph commit epoch {current_epoch}"
-            )));
-        }
-    }
+    // A changefeed prefix is an ID description, not a historical read view.
+    // Hydrating it from a newer head would publish future data under an old
+    // watermark. Pinned read transactions retain their own matching epoch.
+    require_search_projection_source_epoch(
+        request.complete_through_graph_commit_epoch,
+        store.source_graph_commit_epoch(),
+    )?;
 
     let mut upserts = Vec::new();
     for node_id in &request.upsert_node_ids {
@@ -23218,6 +23226,19 @@ impl<S> DatabaseReadTransaction<S>
 where
     S: crate::executor::ExecutionStore + hawdb_search::SearchProjectionSource,
 {
+    /// Hydrate a changefeed description through this pinned source snapshot.
+    /// An acknowledged watermark must match both the view and its data source.
+    pub fn build_search_projection_graph_delta(
+        &self,
+        request: &SearchProjectionGraphDeltaRequest,
+    ) -> Result<SearchProjectionDelta> {
+        require_search_projection_source_epoch(
+            request.complete_through_graph_commit_epoch,
+            self.commit_epoch(),
+        )?;
+        search_projection_graph_delta_for(&self.catalog, &self.store, request)
+    }
+
     pub fn rebuild_search_projection(
         &self,
         search_index: &mut SearchIndex,

@@ -436,6 +436,7 @@ impl ExpectedErrorClass {
             | HawDBError::GraphExpansionCandidateLimitExceeded { .. }
             | HawDBError::GraphExpansionPayloadLimitExceeded { .. }
             | HawDBError::TransactionConflict { .. }
+            | HawDBError::ProjectionSourceEpochMismatch { .. }
             | HawDBError::BranchCommandUnsupported { .. } => Self::Execution,
             HawDBError::CapabilityUnavailable { .. } => Self::CapabilityUnavailable,
         }
