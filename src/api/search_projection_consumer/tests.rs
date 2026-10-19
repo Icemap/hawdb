@@ -1383,6 +1383,37 @@ fn candidate_reference(bytes: &[u8]) -> hawdb_storage::immutable_object::ObjectR
     )
 }
 
+fn candidate_metadata_identity(
+    pending: &hawdb_storage::consumer_allocation::PendingConsumerGeneration,
+) -> (
+    hawdb_search::consumer::ConsumerBinding,
+    NonZeroU64,
+    NonZeroU64,
+    NonZeroU64,
+) {
+    let original = pending.reservation_binding().unwrap();
+    (
+        hawdb_search::consumer::ConsumerBinding {
+            database_uuid: original.database_uuid,
+            projection_uuid: original.projection_uuid,
+            consumer_id: original.consumer_id.to_owned(),
+            registration_uuid: original.registration_uuid,
+            checkpoint_uuid: original.checkpoint_uuid,
+        },
+        original.target_incarnation,
+        original.generation,
+        original.operation,
+    )
+}
+
+fn candidate_metadata_limits() -> hawdb_search::consumer::generation_metadata::MetadataLimits {
+    hawdb_search::consumer::generation_metadata::MetadataLimits {
+        encoded_bytes: 64 << 10,
+        artifacts: 128,
+        artifact_bytes: 1 << 20,
+    }
+}
+
 #[test]
 fn consumer_native_generation_metadata_requires_the_original_reservation_identity() {
     let fixture = Fixture::new();
@@ -1392,21 +1423,8 @@ fn consumer_native_generation_metadata_requires_the_original_reservation_identit
         .prepare_stationary_generation(&fixture.0)
         .unwrap();
     pending.create().unwrap();
-    let (binding, target_incarnation, generation, operation) = {
-        let original = pending.reservation_binding().unwrap();
-        (
-            hawdb_search::consumer::ConsumerBinding {
-                database_uuid: original.database_uuid,
-                projection_uuid: original.projection_uuid,
-                consumer_id: original.consumer_id.to_owned(),
-                registration_uuid: original.registration_uuid,
-                checkpoint_uuid: original.checkpoint_uuid,
-            },
-            original.target_incarnation,
-            original.generation,
-            original.operation,
-        )
-    };
+    let (binding, target_incarnation, generation, operation) =
+        candidate_metadata_identity(&pending);
     let task = hawdb_core::RuntimeTaskContext::default();
     let lease = hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
         .unwrap();
@@ -1626,6 +1644,141 @@ fn consumer_native_candidate_output_uses_the_original_stage_after_label_replacem
         .unwrap();
     assert_eq!(std::fs::read(generation.join("copied")).unwrap(), original);
     assert_eq!(std::fs::read(stage_path.join("payload")).unwrap(), foreign);
+}
+
+#[test]
+fn consumer_native_candidate_metadata_seals_verified_files_in_the_born_target() {
+    use hawdb_search::consumer::generation_metadata::{
+        ArtifactReference, MetadataInput, MetadataView,
+    };
+
+    const MANIFEST: &str = "search_projection.out_of_core.manifest.hawdb";
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let target_path = fixture.0.join(pending.generation_name());
+    let context = pending.born_directory().unwrap().operation_context();
+    let stage_path = fixture.0.join("candidate-metadata-stage");
+    std::fs::create_dir(&stage_path).unwrap();
+    let stage = hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
+    let manifest_bytes = b"private search head";
+    let artifact_bytes = b"private segment descriptor";
+    std::fs::write(stage_path.join("manifest"), manifest_bytes).unwrap();
+    std::fs::write(stage_path.join("segment"), artifact_bytes).unwrap();
+
+    let (binding, target_incarnation, generation, operation) =
+        candidate_metadata_identity(&pending);
+    let artifact_name = format!("search_projection_segments.{}.hawdb", generation.get());
+    let artifacts = [ArtifactReference {
+        name: &artifact_name,
+        reference: candidate_reference(artifact_bytes),
+    }];
+    let input = MetadataInput {
+        binding: &binding,
+        source_epoch: 7,
+        target_incarnation,
+        generation,
+        operation,
+        component_uuid: hawdb_core::Uuid::from_bytes([5; 16]),
+        search_manifest: candidate_reference(manifest_bytes),
+        artifacts: &artifacts,
+    };
+    let limits = candidate_metadata_limits();
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let metadata_len = input.encoded_len(limits, &task).unwrap() as u64;
+    let total = manifest_bytes.len() as u64 + artifact_bytes.len() as u64 + metadata_len;
+    let mut lease =
+        hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
+            .unwrap();
+    let mut output = lease.begin_candidate_output(total).unwrap();
+    output
+        .install_artifact(&stage, "manifest", MANIFEST, input.search_manifest)
+        .unwrap();
+    output
+        .install_artifact(&stage, "segment", &artifact_name, artifacts[0].reference)
+        .unwrap();
+    let receipt = output.seal_generation_metadata(&input, limits).unwrap();
+    let bytes = std::fs::read(target_path.join("consumer-generation.meta.hawdb")).unwrap();
+    assert_eq!(receipt.encoded_len, metadata_len);
+    assert_eq!(receipt.reference, candidate_reference(&bytes));
+    assert_eq!(output.remaining_bytes(), 0);
+    let view = MetadataView::decode(&bytes, limits, &task).unwrap();
+    assert!(view.matches_binding(&binding));
+    assert_eq!(view.operation(), operation);
+    assert_eq!(view.search_manifest(), input.search_manifest);
+    assert_eq!(view.artifact(&artifact_name), Some(artifacts[0].reference));
+    assert!(output
+        .install_artifact(&stage, "segment", "after-seal", artifacts[0].reference)
+        .is_err());
+    assert!(output.seal_generation_metadata(&input, limits).is_err());
+}
+
+#[test]
+fn consumer_native_candidate_metadata_refuses_a_changed_child_before_sealing() {
+    use hawdb_search::consumer::generation_metadata::MetadataInput;
+
+    const MANIFEST: &str = "search_projection.out_of_core.manifest.hawdb";
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let target_path = fixture.0.join(pending.generation_name());
+    let context = pending.born_directory().unwrap().operation_context();
+    let stage_path = fixture.0.join("candidate-metadata-changed-stage");
+    std::fs::create_dir(&stage_path).unwrap();
+    let stage = hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
+    let original = b"manifest one";
+    let changed = b"manifest two";
+    assert_eq!(original.len(), changed.len());
+    std::fs::write(stage_path.join("manifest"), original).unwrap();
+    let (binding, target_incarnation, generation, operation) =
+        candidate_metadata_identity(&pending);
+    let input = MetadataInput {
+        binding: &binding,
+        source_epoch: 7,
+        target_incarnation,
+        generation,
+        operation,
+        component_uuid: hawdb_core::Uuid::from_bytes([5; 16]),
+        search_manifest: candidate_reference(original),
+        artifacts: &[],
+    };
+    let limits = candidate_metadata_limits();
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let metadata_len = input.encoded_len(limits, &task).unwrap() as u64;
+    let mut lease =
+        hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
+            .unwrap();
+    let mut output = lease
+        .begin_candidate_output(original.len() as u64 + metadata_len)
+        .unwrap();
+    output
+        .install_artifact(&stage, "manifest", MANIFEST, input.search_manifest)
+        .unwrap();
+    std::fs::write(target_path.join(MANIFEST), changed).unwrap();
+    let error = output.seal_generation_metadata(&input, limits).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("differs from producer reference"),
+        "{error}"
+    );
+    assert!(!target_path.join("consumer-generation.meta.hawdb").exists());
+    assert_eq!(output.remaining_bytes(), metadata_len);
+    assert!(output.seal_generation_metadata(&input, limits).is_err());
+    drop(output);
+    drop(lease);
+    assert_eq!(
+        allocation_evidence(&fixture).1["pending"][0]["native_birth"]["state"],
+        "Recorded"
+    );
 }
 
 #[test]

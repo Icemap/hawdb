@@ -236,7 +236,7 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            -- consumer_native_birth_ consumer_native_candidate_output_ consumer_native_generation_metadata_ consumer_native_settlement_ consumer_native_retirement_ --nocapture --test-threads=1 \
+            -- consumer_native_birth_ consumer_native_candidate_output_ consumer_native_candidate_metadata_ consumer_native_generation_metadata_ consumer_native_settlement_ consumer_native_retirement_ --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/consumer-native-birth.txt
 
       - name: Test durable Consumer allocation and activation refusal

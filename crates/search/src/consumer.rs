@@ -25,6 +25,8 @@ use hawdb_storage::immutable_object::{ObjectKind, ObjectReference, ObjectReferen
 use std::io::{Read, Write};
 use std::path::Path;
 
+const GENERATION_METADATA_FILE: &str = "consumer-generation.meta.hawdb";
+
 mod control;
 #[doc(hidden)]
 pub mod generation_metadata;
@@ -115,6 +117,7 @@ pub struct ConsumerCandidateOutput<'lease, 'birth> {
     memory: BuildMemory,
     task: RuntimeTaskContext,
     remaining_bytes: u64,
+    metadata_seal_attempted: bool,
 }
 
 /// Producer evidence for exactly the bytes copied into one native target file.
@@ -123,6 +126,15 @@ pub struct ConsumerCandidateOutput<'lease, 'birth> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConsumerCandidateArtifact {
     pub length: u64,
+    pub reference: ObjectReference,
+}
+
+/// Producer evidence for a private, bounded generation metadata file. It is
+/// not a selector or a serving receipt.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConsumerCandidateMetadata {
+    pub encoded_len: u64,
     pub reference: ObjectReference,
 }
 
@@ -196,6 +208,7 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
             task: self.task.clone(),
             target: self,
             remaining_bytes: max_bytes,
+            metadata_seal_attempted: false,
         })
     }
 }
@@ -221,6 +234,11 @@ impl ConsumerCandidateOutput<'_, '_> {
         use crate::build_memory::SPOOL_BUFFER_BYTES;
         use std::num::NonZeroUsize;
 
+        if self.metadata_seal_attempted {
+            return Err(invalid(
+                "consumer candidate metadata seal was already attempted",
+            ));
+        }
         crate::build_control::checkpoint(&self.task)?;
         let _scratch = self.memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
         let permit = self
@@ -312,6 +330,147 @@ impl ConsumerCandidateOutput<'_, '_> {
             Ok(ConsumerCandidateArtifact { length, reference })
         })
     }
+
+    /// Verify the complete described private file set against producer
+    /// references, then write bounded metadata in this same captured target.
+    /// The caller must still prove semantic manifest closure and source E
+    /// before any selector may be prepared. A seal attempt is never retried
+    /// through a new token after a native validation or write uncertainty.
+    pub fn seal_generation_metadata(
+        &mut self,
+        input: &generation_metadata::MetadataInput<'_>,
+        limits: generation_metadata::MetadataLimits,
+    ) -> Result<ConsumerCandidateMetadata> {
+        use crate::build_memory::SPOOL_BUFFER_BYTES;
+        use std::num::NonZeroUsize;
+
+        if self.metadata_seal_attempted {
+            return Err(invalid(
+                "consumer candidate metadata seal was already attempted",
+            ));
+        }
+        self.target.validate_generation_identity(input)?;
+        let length = input.encoded_len(limits, &self.task)?;
+        let length_u64 = length as u64;
+        if length_u64 > self.remaining_bytes {
+            return Err(HawDBError::Storage(format!(
+                "consumer generation metadata requires {length_u64} bytes, exceeding remaining {}",
+                self.remaining_bytes
+            )));
+        }
+        let _frame = self.memory.spool.reserve(length)?;
+        let _scratch = self.memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
+        let permit = self
+            .task
+            .acquire_io_wave(NonZeroUsize::MIN)
+            .map_err(|error| HawDBError::Execution(error.to_string()))?;
+        if self.task.has_resource_controllers() && permit.is_none() {
+            return Err(HawDBError::Execution(
+                "consumer generation metadata requires I/O admission".into(),
+            ));
+        }
+        let mut bytes = Vec::new();
+        bytes.try_reserve_exact(length).map_err(|error| {
+            HawDBError::Execution(format!("consumer metadata allocation failed: {error}"))
+        })?;
+        if bytes.capacity() > length {
+            return Err(HawDBError::Execution(
+                "consumer metadata allocation exceeds admission".into(),
+            ));
+        }
+        if input.encode_to(&mut bytes, limits, &self.task)? != length || bytes.len() != length {
+            return Err(HawDBError::StorageIntegrity(
+                "consumer generation metadata encoded length changed".into(),
+            ));
+        }
+        let reference = ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, &bytes);
+        self.metadata_seal_attempted = true;
+        self.target.lease.with_captured_directory(|target| {
+            let context = target.operation_context();
+            let mut buffer = [0u8; SPOOL_BUFFER_BYTES];
+            verify_candidate_child(
+                target,
+                &context,
+                crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE,
+                input.search_manifest,
+                &self.task,
+                &mut buffer,
+            )?;
+            for artifact in input.artifacts {
+                verify_candidate_child(
+                    target,
+                    &context,
+                    artifact.name,
+                    artifact.reference,
+                    &self.task,
+                    &mut buffer,
+                )?;
+            }
+            // Charge before the first metadata effect. Any uncertain write
+            // retains both this cost and the original born-generation debt.
+            self.remaining_bytes -= length_u64;
+            let mut output = target.create_child_new(&context, GENERATION_METADATA_FILE)?;
+            output.write_all(&bytes)?;
+            if !target.matches_child_file(&context, GENERATION_METADATA_FILE, &output)? {
+                return Err(HawDBError::StorageIntegrity(
+                    "consumer metadata target file identity changed".into(),
+                ));
+            }
+            output.sync_all()?;
+            target.sync(&context)?;
+            Ok(ConsumerCandidateMetadata {
+                encoded_len: length_u64,
+                reference,
+            })
+        })
+    }
+}
+
+fn verify_candidate_child(
+    target: &fs::SourceDirectory,
+    context: &hawdb_storage::file_descriptors::FileOpenContext,
+    name: &str,
+    expected: ObjectReference,
+    task: &RuntimeTaskContext,
+    buffer: &mut [u8; crate::build_memory::SPOOL_BUFFER_BYTES],
+) -> Result<()> {
+    let mut file = target.open_child(context, name)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || metadata.len() != expected.byte_length {
+        return Err(HawDBError::StorageIntegrity(
+            "consumer generation child length differs from producer reference".into(),
+        ));
+    }
+    let mut digest =
+        ObjectReferenceWriter::new(expected.kind, expected.format_version, expected.byte_length)
+            .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
+    let mut read_bytes = 0u64;
+    loop {
+        crate::build_control::checkpoint(task)?;
+        let read = file.read(buffer)?;
+        if read == 0 {
+            break;
+        }
+        read_bytes = read_bytes
+            .checked_add(read as u64)
+            .filter(|read_bytes| *read_bytes <= expected.byte_length)
+            .ok_or_else(|| {
+                HawDBError::StorageIntegrity("consumer generation child grew during seal".into())
+            })?;
+        digest.write_all(&buffer[..read])?;
+    }
+    if read_bytes != expected.byte_length
+        || digest
+            .finish()
+            .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?
+            != expected
+        || !target.matches_child_file(context, name, &file)?
+    {
+        return Err(HawDBError::StorageIntegrity(
+            "consumer generation child differs from producer reference".into(),
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Debug)]

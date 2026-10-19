@@ -87,8 +87,12 @@ directory in the same project descriptor domain into that born target with a
 new child name, checks its exact copied bytes against a prior producer-supplied
 object reference, and completes file/directory barriers. A same-length change to
 the private source fails with born debt retained. Attempted bytes stay charged
-after an error; no path or marker content grants target authority.
-This is artifact custody only, not a complete C/E closure or selected view.
+after an error. The same target can verify the copied manifest and each declared
+artifact through original native handles before durably writing bounded private
+generation metadata. A failed seal retains birth debt and cannot be retried
+through that output token; no path or marker content grants target authority.
+This is private artifact and metadata custody, not semantic C/E closure or a
+selected view.
 Explicit resolution with admitted native custody, complete producer closure,
 stationary query views, selector/receipt
 publication, C..E validation and eventual known-debt reclamation remain required.
