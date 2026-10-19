@@ -89,10 +89,12 @@ object reference, and completes file/directory barriers. A same-length change to
 the private source fails with born debt retained. Attempted bytes stay charged
 after an error. The same target can verify the copied manifest and each declared
 artifact through original native handles before durably writing bounded private
-generation metadata. A failed seal retains birth debt and cannot be retried
+generation metadata. It parses the verified Search manifest and requires its
+source epoch and top-level artifact set to match the metadata exactly. A failed
+seal retains birth debt and cannot be retried
 through that output token; no path or marker content grants target authority.
-This is private artifact and metadata custody, not semantic C/E closure or a
-selected view.
+This is private artifact and metadata custody with top-level manifest checks;
+complete serving closure and a selected view remain unproven.
 Explicit resolution with admitted native custody, complete producer closure,
 stationary query views, selector/receipt
 publication, C..E validation and eventual known-debt reclamation remain required.

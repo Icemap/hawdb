@@ -221,4 +221,68 @@ mod tests {
         let reader = SearchOutOfCoreReader::open(&resident.0).unwrap();
         check(&resident.0, &reader.manifest);
     }
+
+    #[test]
+    fn consumer_manifest_requires_exact_declared_files_and_source_epoch() {
+        use crate::consumer::generation_metadata::ArtifactReference;
+
+        let fixture = Fixture::new();
+        let root = &fixture.0;
+        let mut index = crate::SearchIndex::open(root).unwrap();
+        index
+            .apply_projection_delta(crate::SearchProjectionDelta {
+                upserts: vec![crate::SearchProjectionRow {
+                    kind: crate::SearchProjectionKind::Memory,
+                    external_id: "m1".into(),
+                    title: "candidate".into(),
+                    body: "semantic closure".into(),
+                    embedding: None,
+                    source_id: None,
+                    metadata: Default::default(),
+                }],
+                source_graph_commit_epoch: Some(7),
+                ..Default::default()
+            })
+            .unwrap();
+        index.checkpoint().unwrap();
+        drop(index);
+        let manifest = std::fs::read(root.join(OUT_OF_CORE_MANIFEST_FILE)).unwrap();
+        let mut names = std::fs::read_dir(root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .filter(|name| name == crate::SEARCH_SNAPSHOT_FILE || name.ends_with(".1.hawdb"))
+            .collect::<Vec<_>>();
+        names.sort();
+        let mut artifacts = names
+            .iter()
+            .map(|name| ArtifactReference {
+                name,
+                reference: ObjectReference::for_bytes(
+                    ObjectKind::CheckpointArtifact,
+                    1,
+                    &std::fs::read(root.join(name)).unwrap(),
+                ),
+            })
+            .collect::<Vec<_>>();
+        let task = hawdb_core::RuntimeTaskContext::default();
+        validate_consumer_manifest_artifacts(&manifest, 7, &artifacts, &task).unwrap();
+        assert!(validate_consumer_manifest_artifacts(&manifest, 8, &artifacts, &task).is_err());
+        assert!(
+            validate_consumer_manifest_artifacts(&manifest, 7, &artifacts[1..], &task).is_err()
+        );
+        artifacts[0].reference =
+            ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, b"wrong producer bytes");
+        assert!(validate_consumer_manifest_artifacts(&manifest, 7, &artifacts, &task).is_err());
+        artifacts[0].reference = ObjectReference::for_bytes(
+            ObjectKind::CheckpointArtifact,
+            1,
+            &std::fs::read(root.join(&names[0])).unwrap(),
+        );
+        let extra = "search_rabitq.99.hawdb";
+        artifacts.push(ArtifactReference {
+            name: extra,
+            reference: ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, b"extra"),
+        });
+        assert!(validate_consumer_manifest_artifacts(&manifest, 7, &artifacts, &task).is_err());
+    }
 }

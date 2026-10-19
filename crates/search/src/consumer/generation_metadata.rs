@@ -344,7 +344,8 @@ impl<'a> MetadataView<'a> {
 
 fn validate_name(name: &str) -> Result<()> {
     if u16::try_from(name.len()).is_err()
-        || crate::out_of_core::artifact_key::ArtifactKey::from_file_name(name).is_none()
+        || (name != crate::SEARCH_SNAPSHOT_FILE
+            && crate::out_of_core::artifact_key::ArtifactKey::from_file_name(name).is_none())
     {
         return Err(invalid());
     }

@@ -93,7 +93,7 @@ use vector_serving::VectorScoreScan;
 pub(crate) const OUT_OF_CORE_MANIFEST_FILE: &str = "search_projection.out_of_core.manifest.hawdb";
 const OUT_OF_CORE_FORMAT: &str = "HAWDB_SEARCH_OUT_OF_CORE_V4";
 const OUT_OF_CORE_LAYOUT_FORMAT: &str = "HAWDB_SEARCH_OUT_OF_CORE_LAYOUT_V1";
-const MAX_OUT_OF_CORE_MANIFEST_BYTES: u64 = 1024 * 1024;
+pub(crate) const MAX_OUT_OF_CORE_MANIFEST_BYTES: u64 = 1024 * 1024;
 const MAX_MARKER_BYTES: u64 = 64 * 1024;
 const CANDIDATE_FILE_HEADER: &[u8; 8] = b"SKNCAND1";
 static CANDIDATE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -522,6 +522,107 @@ impl SearchOutOfCoreManifestBody {
         envelope.body.validate_names_with_context(task)?;
         Ok(envelope.body)
     }
+}
+
+/// Check the producer's declared artifact closure against the Consumer's
+/// immutable references. The caller owns admission for `decode_capacity`, the
+/// manifest bytes and the artifact list before invoking this validator.
+pub(crate) fn validate_consumer_manifest_artifacts(
+    bytes: &[u8],
+    source_epoch: u64,
+    artifacts: &[crate::consumer::generation_metadata::ArtifactReference<'_>],
+    task: &hawdb_core::RuntimeTaskContext,
+) -> Result<()> {
+    let manifest = SearchOutOfCoreManifestBody::decode_with_context(bytes, Some(task))?;
+    if manifest.source_graph_commit_epoch != Some(source_epoch)
+        || (manifest.resident_snapshot.is_none() && !manifest.resident_snapshot_absent)
+    {
+        return Err(HawDBError::StorageIntegrity(
+            "consumer candidate manifest lacks the requested source epoch or resident absence proof"
+                .into(),
+        ));
+    }
+    let require = |name: &str, object: ArtifactObject| -> Result<()> {
+        let index = artifacts
+            .binary_search_by(|artifact| artifact.name.cmp(name))
+            .map_err(|_| {
+                HawDBError::StorageIntegrity(
+                    "consumer candidate omits an artifact declared by its Search manifest".into(),
+                )
+            })?;
+        if artifacts[index].reference != object.reference() {
+            return Err(HawDBError::StorageIntegrity(
+                "consumer candidate artifact reference differs from its Search manifest".into(),
+            ));
+        }
+        Ok(())
+    };
+    if let Some(snapshot) = manifest.resident_snapshot {
+        require(crate::SEARCH_SNAPSHOT_FILE, snapshot.object)?;
+    }
+    for segment in &manifest.segments {
+        crate::build_control::checkpoint(task)?;
+        for (name, object) in [
+            (segment.descriptor_file.as_str(), segment.objects.descriptor),
+            (segment.payload_file.as_str(), segment.objects.payload),
+            (
+                segment.metadata_payload_file.as_str(),
+                segment.objects.metadata,
+            ),
+            (segment.vector_payload_file.as_str(), segment.objects.vector),
+            (segment.layout_file.as_str(), segment.objects.layout),
+            (
+                segment.lexical_manifest_file.as_str(),
+                segment.objects.lexical_manifest,
+            ),
+        ] {
+            require(name, object)?;
+        }
+        require(
+            &crate::lexical_projection::artifact_file(segment.objects.lexical_generation),
+            segment.objects.lexical_payload,
+        )?;
+        if let Some(name) = &segment.rabitq_artifact_file {
+            require(
+                name,
+                segment.objects.rabitq.ok_or_else(|| {
+                    HawDBError::StorageIntegrity(
+                        "consumer candidate manifest has an unbound RaBitQ artifact".into(),
+                    )
+                })?,
+            )?;
+        }
+    }
+    for run in &manifest.mutation_runs {
+        crate::build_control::checkpoint(task)?;
+        require(&run.file, run.object)?;
+    }
+    for artifact in artifacts {
+        crate::build_control::checkpoint(task)?;
+        let declared = (artifact.name == crate::SEARCH_SNAPSHOT_FILE
+            && manifest.resident_snapshot.is_some())
+            || manifest
+                .segments
+                .iter()
+                .any(|segment| segment.object_for(artifact.name).is_some())
+            || manifest
+                .mutation_runs
+                .iter()
+                .any(|run| run.file == artifact.name);
+        if !declared {
+            return Err(HawDBError::StorageIntegrity(
+                "consumer candidate contains an artifact absent from its Search manifest".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn consumer_manifest_decode_capacity(
+    bytes: &[u8],
+    task: &hawdb_core::RuntimeTaskContext,
+) -> Result<usize> {
+    SearchOutOfCoreManifestBody::decode_capacity(bytes, task)
 }
 
 impl<S: AsRef<str>> SearchOutOfCoreManifestBody<S> {

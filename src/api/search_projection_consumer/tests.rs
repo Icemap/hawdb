@@ -1663,20 +1663,49 @@ fn consumer_native_candidate_metadata_seals_verified_files_in_the_born_target() 
     let target_path = fixture.0.join(pending.generation_name());
     let context = pending.born_directory().unwrap().operation_context();
     let stage_path = fixture.0.join("candidate-metadata-stage");
-    std::fs::create_dir(&stage_path).unwrap();
+    let mut producer = hawdb_search::SearchIndex::open(&stage_path).unwrap();
+    producer
+        .apply_projection_delta(hawdb_search::SearchProjectionDelta {
+            upserts: vec![hawdb_search::SearchProjectionRow {
+                kind: hawdb_search::SearchProjectionKind::Memory,
+                external_id: "m1".into(),
+                title: "candidate".into(),
+                body: "immutable Search artifact".into(),
+                embedding: None,
+                source_id: None,
+                metadata: Default::default(),
+            }],
+            source_graph_commit_epoch: Some(7),
+            ..Default::default()
+        })
+        .unwrap();
+    producer.checkpoint().unwrap();
+    drop(producer);
     let stage = hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
-    let manifest_bytes = b"private search head";
-    let artifact_bytes = b"private segment descriptor";
-    std::fs::write(stage_path.join("manifest"), manifest_bytes).unwrap();
-    std::fs::write(stage_path.join("segment"), artifact_bytes).unwrap();
+    let manifest_bytes = std::fs::read(stage_path.join(MANIFEST)).unwrap();
+    let mut artifact_files = std::fs::read_dir(&stage_path)
+        .unwrap()
+        .map(|entry| entry.unwrap())
+        .filter(|entry| entry.file_type().unwrap().is_file())
+        .map(|entry| entry.file_name().into_string().unwrap())
+        .filter(|name| name == "search_projection.hawdb" || name.ends_with(".1.hawdb"))
+        .collect::<Vec<_>>();
+    artifact_files.sort();
+    let artifact_bytes = artifact_files
+        .iter()
+        .map(|name| std::fs::read(stage_path.join(name)).unwrap())
+        .collect::<Vec<_>>();
 
     let (binding, target_incarnation, generation, operation) =
         candidate_metadata_identity(&pending);
-    let artifact_name = format!("search_projection_segments.{}.hawdb", generation.get());
-    let artifacts = [ArtifactReference {
-        name: &artifact_name,
-        reference: candidate_reference(artifact_bytes),
-    }];
+    let artifacts = artifact_files
+        .iter()
+        .zip(&artifact_bytes)
+        .map(|(name, bytes)| ArtifactReference {
+            name,
+            reference: candidate_reference(bytes),
+        })
+        .collect::<Vec<_>>();
     let input = MetadataInput {
         binding: &binding,
         source_epoch: 7,
@@ -1684,23 +1713,30 @@ fn consumer_native_candidate_metadata_seals_verified_files_in_the_born_target() 
         generation,
         operation,
         component_uuid: hawdb_core::Uuid::from_bytes([5; 16]),
-        search_manifest: candidate_reference(manifest_bytes),
+        search_manifest: candidate_reference(&manifest_bytes),
         artifacts: &artifacts,
     };
     let limits = candidate_metadata_limits();
     let task = hawdb_core::RuntimeTaskContext::default();
     let metadata_len = input.encoded_len(limits, &task).unwrap() as u64;
-    let total = manifest_bytes.len() as u64 + artifact_bytes.len() as u64 + metadata_len;
+    let total = manifest_bytes.len() as u64
+        + artifact_bytes
+            .iter()
+            .map(|bytes| bytes.len() as u64)
+            .sum::<u64>()
+        + metadata_len;
     let mut lease =
         hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
             .unwrap();
     let mut output = lease.begin_candidate_output(total).unwrap();
     output
-        .install_artifact(&stage, "manifest", MANIFEST, input.search_manifest)
+        .install_artifact(&stage, MANIFEST, MANIFEST, input.search_manifest)
         .unwrap();
-    output
-        .install_artifact(&stage, "segment", &artifact_name, artifacts[0].reference)
-        .unwrap();
+    for artifact in &artifacts {
+        output
+            .install_artifact(&stage, artifact.name, artifact.name, artifact.reference)
+            .unwrap();
+    }
     let receipt = output.seal_generation_metadata(&input, limits).unwrap();
     let bytes = std::fs::read(target_path.join("consumer-generation.meta.hawdb")).unwrap();
     assert_eq!(receipt.encoded_len, metadata_len);
@@ -1710,9 +1746,16 @@ fn consumer_native_candidate_metadata_seals_verified_files_in_the_born_target() 
     assert!(view.matches_binding(&binding));
     assert_eq!(view.operation(), operation);
     assert_eq!(view.search_manifest(), input.search_manifest);
-    assert_eq!(view.artifact(&artifact_name), Some(artifacts[0].reference));
+    for artifact in &artifacts {
+        assert_eq!(view.artifact(artifact.name), Some(artifact.reference));
+    }
     assert!(output
-        .install_artifact(&stage, "segment", "after-seal", artifacts[0].reference)
+        .install_artifact(
+            &stage,
+            artifacts[0].name,
+            "after-seal",
+            artifacts[0].reference
+        )
         .is_err());
     assert!(output.seal_generation_metadata(&input, limits).is_err());
 }

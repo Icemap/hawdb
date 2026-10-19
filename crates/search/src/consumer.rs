@@ -333,8 +333,9 @@ impl ConsumerCandidateOutput<'_, '_> {
 
     /// Verify the complete described private file set against producer
     /// references, then write bounded metadata in this same captured target.
-    /// The caller must still prove semantic manifest closure and source E
-    /// before any selector may be prepared. A seal attempt is never retried
+    /// This checks the Search manifest's top-level artifact set and epoch;
+    /// complete serving closure and source E are still required before a
+    /// selector may be prepared. A seal attempt is never retried
     /// through a new token after a native validation or write uncertainty.
     pub fn seal_generation_metadata(
         &mut self,
@@ -388,6 +389,29 @@ impl ConsumerCandidateOutput<'_, '_> {
         self.target.lease.with_captured_directory(|target| {
             let context = target.operation_context();
             let mut buffer = [0u8; SPOOL_BUFFER_BYTES];
+            let manifest_len =
+                usize::try_from(input.search_manifest.byte_length).map_err(|_| {
+                    HawDBError::StorageIntegrity("consumer Search manifest length overflows".into())
+                })?;
+            if input.search_manifest.byte_length
+                > crate::out_of_core::MAX_OUT_OF_CORE_MANIFEST_BYTES
+            {
+                return Err(HawDBError::StorageIntegrity(
+                    "consumer Search manifest exceeds its read limit".into(),
+                ));
+            }
+            let _manifest_memory = self.memory.spool.reserve(manifest_len)?;
+            let mut manifest = Vec::new();
+            manifest.try_reserve_exact(manifest_len).map_err(|error| {
+                HawDBError::Execution(format!(
+                    "consumer Search manifest allocation failed: {error}"
+                ))
+            })?;
+            if manifest.capacity() > manifest_len {
+                return Err(HawDBError::Execution(
+                    "consumer Search manifest allocation exceeds admission".into(),
+                ));
+            }
             verify_candidate_child(
                 target,
                 &context,
@@ -395,6 +419,16 @@ impl ConsumerCandidateOutput<'_, '_> {
                 input.search_manifest,
                 &self.task,
                 &mut buffer,
+                Some(&mut manifest),
+            )?;
+            let _decode_memory = self.memory.spool.reserve(
+                crate::out_of_core::consumer_manifest_decode_capacity(&manifest, &self.task)?,
+            )?;
+            crate::out_of_core::validate_consumer_manifest_artifacts(
+                &manifest,
+                input.source_epoch,
+                input.artifacts,
+                &self.task,
             )?;
             for artifact in input.artifacts {
                 verify_candidate_child(
@@ -404,6 +438,7 @@ impl ConsumerCandidateOutput<'_, '_> {
                     artifact.reference,
                     &self.task,
                     &mut buffer,
+                    None,
                 )?;
             }
             // Charge before the first metadata effect. Any uncertain write
@@ -433,6 +468,7 @@ fn verify_candidate_child(
     expected: ObjectReference,
     task: &RuntimeTaskContext,
     buffer: &mut [u8; crate::build_memory::SPOOL_BUFFER_BYTES],
+    mut capture: Option<&mut Vec<u8>>,
 ) -> Result<()> {
     let mut file = target.open_child(context, name)?;
     let metadata = file.metadata()?;
@@ -458,6 +494,9 @@ fn verify_candidate_child(
                 HawDBError::StorageIntegrity("consumer generation child grew during seal".into())
             })?;
         digest.write_all(&buffer[..read])?;
+        if let Some(bytes) = capture.as_mut() {
+            bytes.extend_from_slice(&buffer[..read]);
+        }
     }
     if read_bytes != expected.byte_length
         || digest
