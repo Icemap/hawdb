@@ -1,7 +1,18 @@
-# Retained numeric delivery: review follow-up measurements
+# Historical retained numeric delivery measurements
 
-This experiment advances [PR #986](https://github.com/nowledge-co/hawdb/pull/986)
-and references [#976](https://github.com/nowledge-co/hawdb/issues/976) and
+Historical engines: Linux `1554c7b6ef5d9dbff9b3bc21b0fee4f045aee349`, integrated
+producer `94bace8ae7a28087d81c3eac8edafe92eb9ac4f4`, and earlier staged tree
+`738557a05038b258ccf8dbb33ea62d2fe89af0da`. Each section keeps its original
+producer/consumer identity; these are not current-checkout measurements.
+
+Regenerate with: `PYTHONPATH="$PWD/bazel-bin/bindings/benchmarks/retained_boundary.runfiles/_main/bindings/python/python" uv run --no-project --python 3.14.6 --with pyarrow==26.0.0 python bindings/benchmarks/retained_boundary.py --rows 10000 --backend memory --mode all --samples 7`.
+
+First build `//bindings/benchmarks:retained_boundary` and `//bindings/ffi:hawdb_ffi`
+with `bazel build -c opt` at the selected source. This command regenerates one Python
+numeric/Arrow group with the pinned optional consumer; repeat the documented
+sizes/backends and separate Go controls. Older driver failures remain historical.
+
+These experiments reference [#976](https://github.com/nowledge-co/hawdb/issues/976) and
 [#987](https://github.com/nowledge-co/hawdb/issues/987). Both issues remain open.
 The complete samples, failures, source identity and artifact hashes are in
 [retained-observations.json](evidence/README.md#historical-boundary-observations).

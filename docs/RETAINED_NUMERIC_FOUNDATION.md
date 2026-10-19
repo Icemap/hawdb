@@ -1,5 +1,18 @@
 # Experimental retained numeric delivery
 
+Historical evidence engines include label-owner parent `ca347097`, prototype `60899139`,
+and native-node probes based on `da02e302` plus the candidate source/module hashes
+recorded below. This design document combines multiple prototype stages; its
+measurements do not implicitly describe the current checkout.
+
+Regenerate with: `PYTHONPATH="$PWD/bazel-bin/bindings/benchmarks/retained_boundary.runfiles/_main/bindings/python/python" uv run --no-project --python 3.14.6 --with pyarrow==26.0.0 python bindings/benchmarks/retained_boundary.py --rows 10000 --backend memory --mode all --samples 7`.
+
+For a new numeric/Arrow group, first build `//bindings/benchmarks:retained_boundary` and
+`//bindings/ffi:hawdb_ffi` with `bazel build -c opt` at the selected source. This
+command does not regenerate the separate label-owner or native-node probes: use their
+archived drivers linked in the corresponding sections. Preserve their recorded source
+and module hashes.
+
 This implements ownership building blocks and an experimental native cursor for
 [issue #987](https://github.com/nowledge-co/hawdb/issues/987), under the
 [columnar interchange proposal](specs/ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md).

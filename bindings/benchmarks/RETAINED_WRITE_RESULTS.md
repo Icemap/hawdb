@@ -1,8 +1,20 @@
-# Source capacity and ordinary-write controls
+# Historical source-capacity and ordinary-write controls
+
+Historical engines: candidate `c7e8a08e0dc62907c5ae3165b150d69d36130fd7` (tree
+`8898b1e48f84d23bbfb5e845c66dc935e908c65d`) and uncached prototype staged tree
+`335f77639782140211c9c24d16697e9e900972df` on
+`6aab8299d96ab8727225cac3e63e50d76a0cce8c`. These are not measurements of the current
+checkout.
+
+Regenerate with: `bazel run -c opt //bindings/benchmarks:retained_write_control -- --rows 1000 --pad-bytes 4096 --samples 7 --backend file`.
+
+Use the matching frozen source/package for each producer; repeat the documented second
+size and memory backend. Preserve the archived consumer and producer ordering when
+reproducing the historical comparison.
 
 These observations explain why retained reads can affect writes even though
 Arrow export does not participate in WAL, index maintenance or commit fsync.
-They do not complete PR #986's performance or memory qualification.
+They do not establish comprehensive performance or memory qualification.
 
 ## Mechanism and measurement boundary
 

@@ -1,4 +1,13 @@
-# Initial host-boundary observations
+# Historical host-boundary observations
+
+Historical engine base: `1519433bb70900bf3f51f5a3ed93de0873072713`; measured staged
+trees are listed below. These are not measurements of the current checkout.
+
+Regenerate with: `python3 -B bindings/benchmarks/run.py --sizes 1000 --samples 1 --output /tmp/hawdb-initial-boundary`.
+
+Build the selected frozen producer and its matching harness as described in
+[README.md](README.md). Repeat the instrumented and refusal selections below separately;
+this command regenerates the ordinary 1k group.
 
 These are partial measurements for [#976](https://github.com/nowledge-co/hawdb/issues/976)
 and the first two stages of the [interchange proposal](../../docs/specs/ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md).

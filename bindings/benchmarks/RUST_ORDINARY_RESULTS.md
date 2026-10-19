@@ -1,10 +1,21 @@
-# Current-main ordinary Rust controls
+# Historical ordinary Rust controls
 
-This frozen comparison supports the ordinary API control for
-[PR #986](https://github.com/nowledge-co/hawdb/pull/986),
+Historical engines: initial baseline `3cdb2610ba8b984676b80ba22df64821787886d3` and
+candidate `9630934b84a1d69e7713b4652322bfb08e242f86`; later controls identify their own
+engine commits, staged trees and producer hashes in each section. No section measures
+the current checkout implicitly.
+
+Regenerate with: `python3 -B bindings/benchmarks/compare.py --sizes 1000,10000 --layers rust --samples 7 --output /tmp/hawdb-rust-boundary`.
+
+Run from the selected clean candidate checkout with its matching harness. This
+maintained driver generates a new sequential baseline/candidate comparison; historical
+alternating-pair and mixed-growth experiments require their archived drivers and
+ordering, not this command alone.
+
+These frozen comparisons record ordinary API controls for
 [issue #976](https://github.com/nowledge-co/hawdb/issues/976) and
 [the projected point-seek issue](https://github.com/nowledge-co/hawdb/issues/992).
-It does not complete the comprehensive performance gate.
+They do not complete the comprehensive performance gate.
 
 ## Revisions and measurement boundary
 

@@ -1,7 +1,18 @@
-# Indexed retained-node readers and point-write controls
+# Historical indexed retained-node write controls
+
+Historical engine build: `48a2c8beb881494920e75848b849ee3b8c28982d`; measured checkout
+`3f71ac4efcba443279642c550746239b49767304` changes only tests/docs afterward. These
+measurements predate the current unique-constraint eligibility contract and do not
+qualify the current checkout.
+
+Regenerate with: `python3 bindings/benchmarks/retained_node_write_control.py --package /path/to/frozen/package --rows 1000 --pad-bytes 4096 --backend file --hold-rows 32 --samples 8`.
+
+Select the matching ordinary or profiled frozen package, then repeat both
+sizes/backends. Replaying these historical measurements requires the archived consumer:
+the maintained driver now declares the unique constraint required by current main.
 
 This is a same-source conditional write diagnostic, not comprehensive performance
-acceptance for PR #986. It measures ordinary parameterized point `SET` with four
+acceptance. It measures ordinary parameterized point `SET` with four
 modes: no active reader, closed source buffers, an owned Python node dictionary,
 and original source buffers held across writes. All fixtures use the same default
 lazy retained governor initialized by an empty indexed query outside timing.

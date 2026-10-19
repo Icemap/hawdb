@@ -1,4 +1,16 @@
-# Projected point seek measurements
+# Historical projected point seek measurements
+
+Historical engines: before `4f70a5e03742d0391eb77a1d7cad50e358be0437` (tree
+`8fd5fd53b4985b8634dbd4979a33c2c623745df4`), after staged tree
+`4d13555901dab518561231dc58d1575ac66a2509` on main
+`2d05f068925aabb5af93e360c63c6f2e576eed1f`. These are not measurements of the current
+checkout.
+
+Regenerate with: `python3 -B bindings/benchmarks/run.py --sizes 1000 --samples 3 --output /tmp/hawdb-point-boundary`.
+
+Run separately with each frozen producer after the builds in [README.md](README.md);
+retain separate outputs. This command regenerates the ordinary matrix; the allocation
+matrices require the separate instrumentation described below.
 
 Issue Number: ref [#992](https://github.com/nowledge-co/hawdb/issues/992),
 ref [#976](https://github.com/nowledge-co/hawdb/issues/976),
