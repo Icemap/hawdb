@@ -85,7 +85,11 @@ Tracker-growth refusals report the additional charge and current tracker usage.
 Spill decode reports usage before releasing its temporary decoded state on error.
 Counter overflow is a refusal even when the configured limit is `usize::MAX`.
 Generic tracker constructors identify their explicit argument, rather than
-inventing a connection to the database configuration. Corrupt spill records and
+inventing a connection to the database configuration. The public
+`merge_sort_runs(memory_budget)` entrypoint uses the explicit
+`OperatorMemoryTracker::with_account(budget_bytes)` origin for its merge-state
+tracker; configured Sort/TopN paths retain their blocking configuration origin.
+Corrupt spill records and
 invalid ownership transfers remain ordinary execution errors.
 
 When a typed resource refusal escapes a contextual morsel worker or its ordered
@@ -96,6 +100,8 @@ not the secondary cancellation error. Memory, spill, descriptor exhaustion, read
 budgets, and graph expansion limits participate. Invalid resource configuration
 and ordinary callback errors do not signal resource exhaustion. A reservation
 refusal handled inside an operator (for example, by spilling) does not cancel it.
+Typed blocking-operator refusals now participate in this sibling cancellation;
+spill decisions made through `would_exceed` before charging remain handled pressure.
 The Tokio operation wrapper also preserves an operation error after a resource
 stop; an operation that returns success after that signal is still rejected.
 Explicit user cancellation and deadlines keep their existing precedence.

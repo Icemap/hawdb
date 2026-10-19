@@ -247,9 +247,11 @@ impl<'plan, 'runtime> SortOperator<'plan, 'runtime> {
             &self.runs,
             self.items,
             self.catalog,
-            self.memory.blocking_operator_bytes,
+            OperatorMemoryTracker::with_blocking_account(
+                self.memory.blocking_operator_bytes,
+                self.blocking_account.clone(),
+            ),
             &self.spill_budget,
-            &self.blocking_account,
             &self.key_memory,
             AccountedBindingBatch::with_ledger(
                 "SortExec",
@@ -443,9 +445,11 @@ impl<'plan, 'runtime> TopNOperator<'plan, 'runtime> {
                 &self.runs,
                 self.items,
                 self.catalog,
-                self.memory.blocking_operator_bytes,
+                OperatorMemoryTracker::with_blocking_account(
+                    self.memory.blocking_operator_bytes,
+                    self.blocking_account.clone(),
+                ),
                 &self.spill_budget,
-                &self.blocking_account,
                 &self.key_memory,
                 AccountedBindingBatch::with_ledger(
                     "TopNExec",
@@ -737,9 +741,8 @@ pub fn merge_sort_runs(
         runs,
         items,
         catalog,
-        memory_budget,
+        OperatorMemoryTracker::with_account(memory_budget, blocking_account.clone()),
         spill_budget,
-        blocking_account,
         &key_memory,
         output,
         skip_rows,
@@ -754,9 +757,8 @@ fn merge_sort_runs_with_output(
     runs: &[spill::SpillRun],
     items: &[SortItem],
     catalog: &Catalog,
-    memory_budget: NonZeroUsize,
+    mut tracker: OperatorMemoryTracker,
     spill_budget: &SpillBudgetTracker,
-    blocking_account: &QueryMemoryAccount,
     key_memory: &KeyMemory,
     mut output: AccountedBindingBatch,
     skip_rows: usize,
@@ -769,8 +771,7 @@ fn merge_sort_runs_with_output(
         .iter()
         .map(spill::SpillRun::reader)
         .collect::<Result<Vec<_>>>()?;
-    let mut tracker =
-        OperatorMemoryTracker::with_blocking_account(memory_budget, blocking_account.clone());
+    let memory_budget = tracker.budget_bytes;
     let mut heap = BinaryHeap::new();
     for (run_index, reader) in readers.iter_mut().enumerate() {
         runtime_checkpoint(task_context)?;
@@ -779,8 +780,8 @@ fn merge_sort_runs_with_output(
             run_index,
             items,
             catalog,
-            memory_budget.get(),
-            memory_budget.get(),
+            memory_budget,
+            memory_budget,
             spill_budget,
             &mut tracker,
             key_memory,
@@ -819,8 +820,8 @@ fn merge_sort_runs_with_output(
             run_index,
             items,
             catalog,
-            memory_budget.get(),
-            memory_budget.get(),
+            memory_budget,
+            memory_budget,
             spill_budget,
             &mut tracker,
             key_memory,
