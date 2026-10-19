@@ -1375,6 +1375,14 @@ fn consumer_native_birth_target_lease_excludes_a_second_publication_owner() {
     assert_eq!(pending.born_directory().unwrap().identity(), original);
 }
 
+fn candidate_reference(bytes: &[u8]) -> hawdb_storage::immutable_object::ObjectReference {
+    hawdb_storage::immutable_object::ObjectReference::for_bytes(
+        hawdb_storage::immutable_object::ObjectKind::CheckpointArtifact,
+        1,
+        bytes,
+    )
+}
+
 #[test]
 fn consumer_native_candidate_output_installs_a_bounded_durable_artifact() {
     let fixture = Fixture::new();
@@ -1406,24 +1414,23 @@ fn consumer_native_candidate_output_installs_a_bounded_durable_artifact() {
             &stage,
             "payload",
             "search_projection_segment_payloads.0.hawdb",
+            candidate_reference(payload),
         )
         .unwrap();
     assert_eq!(receipt.length, payload.len() as u64);
-    assert_eq!(
-        receipt.reference,
-        hawdb_storage::immutable_object::ObjectReference::for_bytes(
-            hawdb_storage::immutable_object::ObjectKind::CheckpointArtifact,
-            1,
-            payload,
-        )
-    );
+    assert_eq!(receipt.reference, candidate_reference(payload));
     assert_eq!(output.remaining_bytes(), 0);
     assert_eq!(
         std::fs::read(generation.join("search_projection_segment_payloads.0.hawdb")).unwrap(),
         payload
     );
     assert!(output
-        .install_artifact(&stage, "payload", "over-budget")
+        .install_artifact(
+            &stage,
+            "payload",
+            "over-budget",
+            candidate_reference(payload)
+        )
         .is_err());
     assert!(!generation.join("over-budget").exists());
     drop(output);
@@ -1462,7 +1469,12 @@ fn consumer_native_candidate_output_rejects_a_foreign_descriptor_domain_before_c
             .unwrap();
     let mut output = lease.begin_candidate_output(7).unwrap();
     let error = output
-        .install_artifact(&source, "payload", "foreign-output")
+        .install_artifact(
+            &source,
+            "payload",
+            "foreign-output",
+            candidate_reference(b"foreign"),
+        )
         .unwrap_err();
     assert!(
         error.to_string().contains("foreign descriptor domain"),
@@ -1470,6 +1482,63 @@ fn consumer_native_candidate_output_rejects_a_foreign_descriptor_domain_before_c
     );
     assert_eq!(output.remaining_bytes(), 7);
     assert!(!generation.join("foreign-output").exists());
+}
+
+#[test]
+fn consumer_native_candidate_output_rejects_changed_bytes_against_producer_reference() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let generation = fixture.0.join(pending.generation_name());
+    let context = pending.born_directory().unwrap().operation_context();
+    let stage_path = fixture.0.join("candidate-source-changed-in-place");
+    std::fs::create_dir(&stage_path).unwrap();
+    let stage = hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
+    let original = b"original candidate bytes";
+    let changed = b"modified candidate bytes";
+    assert_eq!(original.len(), changed.len());
+    std::fs::write(stage_path.join("payload"), original).unwrap();
+    let expected = candidate_reference(original);
+    std::fs::write(stage_path.join("payload"), changed).unwrap();
+
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let mut lease =
+        hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
+            .unwrap();
+    let mut output = lease.begin_candidate_output(original.len() as u64).unwrap();
+    let unsupported = hawdb_storage::immutable_object::ObjectReference {
+        format_version: 2,
+        ..expected
+    };
+    let error = output
+        .install_artifact(&stage, "payload", "unsupported", unsupported)
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("unsupported kind or version"),
+        "{error}"
+    );
+    assert!(!generation.join("unsupported").exists());
+    assert_eq!(output.remaining_bytes(), original.len() as u64);
+
+    let error = output
+        .install_artifact(&stage, "payload", "changed", expected)
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("differ from producer reference"),
+        "{error}"
+    );
+    assert_eq!(output.remaining_bytes(), 0);
+    assert!(generation.join("changed").exists());
+    drop(output);
+    drop(lease);
+    assert_eq!(
+        allocation_evidence(&fixture).1["pending"][0]["native_birth"]["state"],
+        "Recorded"
+    );
 }
 
 #[cfg(unix)]
@@ -1505,7 +1574,7 @@ fn consumer_native_candidate_output_uses_the_original_stage_after_label_replacem
             .unwrap();
     let mut output = lease.begin_candidate_output(original.len() as u64).unwrap();
     output
-        .install_artifact(&stage, "payload", "copied")
+        .install_artifact(&stage, "payload", "copied", candidate_reference(original))
         .unwrap();
     assert_eq!(std::fs::read(generation.join("copied")).unwrap(), original);
     assert_eq!(std::fs::read(stage_path.join("payload")).unwrap(), foreign);

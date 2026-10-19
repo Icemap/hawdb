@@ -185,13 +185,15 @@ impl ConsumerCandidateOutput<'_, '_> {
     /// Copy from an already captured private source in the target's project
     /// descriptor domain. Both opens and the final name check are relative to
     /// original directory handles; no diagnostic path selects either file.
-    /// The target must be a new child. An attempted output keeps its charged
-    /// bytes even if a later copy or durability barrier fails.
+    /// The producer's prior full reference must match the copied bytes. The
+    /// target must be a new child. An attempted output keeps its charged bytes
+    /// even if a later copy or durability barrier fails.
     pub fn install_artifact(
         &mut self,
         source: &hawdb_storage::file_io::SourceDirectory,
         source_name: &str,
         target_name: &str,
+        expected: ObjectReference,
     ) -> Result<ConsumerCandidateArtifact> {
         use crate::build_memory::SPOOL_BUFFER_BYTES;
         use std::num::NonZeroUsize;
@@ -205,6 +207,11 @@ impl ConsumerCandidateOutput<'_, '_> {
         if self.task.has_resource_controllers() && permit.is_none() {
             return Err(HawDBError::Execution(
                 "consumer candidate output requires I/O admission".into(),
+            ));
+        }
+        if expected.kind != ObjectKind::CheckpointArtifact || expected.format_version != 1 {
+            return Err(HawDBError::StorageIntegrity(
+                "consumer candidate producer reference has an unsupported kind or version".into(),
             ));
         }
         let source_context = source.operation_context();
@@ -223,6 +230,11 @@ impl ConsumerCandidateOutput<'_, '_> {
                 ));
             }
             let length = metadata.len();
+            if length != expected.byte_length {
+                return Err(HawDBError::StorageIntegrity(
+                    "consumer candidate source length differs from producer reference".into(),
+                ));
+            }
             if length > self.remaining_bytes {
                 return Err(HawDBError::Storage(format!(
                     "consumer candidate artifact requires {length} bytes, exceeding remaining {}",
@@ -262,6 +274,11 @@ impl ConsumerCandidateOutput<'_, '_> {
             let reference = hasher
                 .finish()
                 .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
+            if reference != expected {
+                return Err(HawDBError::StorageIntegrity(
+                    "consumer candidate source bytes differ from producer reference".into(),
+                ));
+            }
             if !target.matches_child_file(&target_context, target_name, &output)? {
                 return Err(HawDBError::StorageIntegrity(
                     "consumer candidate target file identity changed".into(),

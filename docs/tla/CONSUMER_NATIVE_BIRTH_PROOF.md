@@ -84,8 +84,10 @@ rollback. The born target can now acquire Search publication exclusion through
 its original native directory handle while retaining a borrow of the birth
 token. A bounded candidate-output token can copy one file from another captured
 directory in the same project descriptor domain into that born target with a
-new child name, an object reference and file/directory barriers. Attempted bytes
-stay charged after an error; no path or marker content grants target authority.
+new child name, checks its exact copied bytes against a prior producer-supplied
+object reference, and completes file/directory barriers. A same-length change to
+the private source fails with born debt retained. Attempted bytes stay charged
+after an error; no path or marker content grants target authority.
 This is artifact custody only, not a complete C/E closure or selected view.
 Explicit resolution with admitted native custody, complete producer closure,
 stationary query views, selector/receipt
