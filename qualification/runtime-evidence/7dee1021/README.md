@@ -42,3 +42,30 @@ are JSON-wrapped to preserve original ANSI and whitespace without rendering it.
 The30 historical raw benchmark blobs are absent from the production tree and
 current main history; they remain reachable on feature history and require the
 squash-only final integration and an actual-main history audit afterward.
+
+## Completed held-result write controls and retained failures
+
+All12 source7dee held-write groups are audited: Node8 (normal/profiled,1k/10k,
+memory/file) and numeric4. Item(id) uniqueness is explicit in untimed Node setup.
+The auditor checks all rotated rounds, point-write sums, empirical quantiles,
+native allocation counts where instrumented, checksums, updated/old values and
+owner release. These are same-source held/no-reader controls, not additional
+ordinary90/resource110 groups or production tails.
+
+Preserve observed adverse costs: held numeric cursor write medians are1.10628
+for1k/memory and1.39173 for10k/file relative to the no-reader mode. Other modes
+and all paired ratios, allocations and whole-child RSS remain in the reports;
+no cause, universal improvement, hard memory bound or leak absence is claimed.
+
+A predeclared direct-launcher Pydantic diagnostic timed out with default temp
+but completed43/1skip in46.36s with explicit fresh basetemp. The subsequent
+one-file pytest TEST_TMPDIR isolation proposal still timed out both original
+Bazel targets at60/300s. Actual output runfile matches that staged source.
+The proposal is uncommitted and is not production source or a proven timeout
+fix. Native/benchmark action queries exclude the harness while a test positive
+control includes it; this input equivalence does not establish correctness.
+Original general/Python failures still require disposition.
+
+Counters and controls here are frozen snapshots. Full original performance
+matrices, complete resource/error qualification, exact-head Prow and genuine
+independent review/approval remain open. No held-write result waives them.

@@ -1,0 +1,46 @@
+{
+  "status": "qualified_scoped_input_equivalence",
+  "pid": 48750,
+  "steps": [
+    {
+      "role": "native_and_benchmark",
+      "command": [
+        "bazel",
+        "aquery",
+        "inputs(\".*pytest_main[.]py\", deps(set(//bindings/python:_hawdb //bindings/python:_hawdb_boundary_profile //bindings/ffi:hawdb_ffi //bindings/benchmarks:python_boundary //bindings/benchmarks:retained_boundary //bindings/benchmarks:retained_write_control)))",
+        "--output=jsonproto",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true"
+      ],
+      "started": 1792391701.2883961,
+      "exit": 0,
+      "ended": 1792391705.6998882,
+      "actions": 0,
+      "sha256": "d914176fd50bd7f565700006a31aa97b79d3ad17cee20c8e5ff2061d5cb74817"
+    },
+    {
+      "role": "test_positive_control",
+      "command": [
+        "bazel",
+        "aquery",
+        "inputs(\".*pytest_main[.]py\", deps(//bindings/python:hawdb_python_pydantic_tests))",
+        "--output=jsonproto",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true"
+      ],
+      "started": 1792391705.7011971,
+      "exit": 0,
+      "ended": 1792391710.721136,
+      "actions": 3,
+      "sha256": "c2eb942c6da675a791e663eb96bde0843437085432d19537caad88cba5528d4d"
+    }
+  ],
+  "parent": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "tree": "5181fd4924dd14f80b4eb54df60638bc42281fc0",
+  "changed_paths": [
+    "bindings/python/tests/pytest_main.py"
+  ],
+  "validation_status": "failed",
+  "ended": 1792391710.7694468,
+  "scope": "Only pytest_main.py differs across all tracked source. It is absent from queried native and production benchmark action inputs and present in test action inputs. Engine/native/consumer/lock/config files are byte-identical. Existing runs retain their actual7dee source; this bridges only relevant build inputs, not new-head Python tests/CI or failure disposition/approval."
+}

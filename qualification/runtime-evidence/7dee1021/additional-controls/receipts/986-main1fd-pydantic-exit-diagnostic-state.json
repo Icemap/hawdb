@@ -1,0 +1,45 @@
+{
+  "status": "complete_diagnostic_only",
+  "pid": 37066,
+  "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "frozen": {
+    "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a33c60dac74ab8647bed043668c4e440/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_pydantic_tests": "85cba09ca6b1c06a2f181735e3b266b023f11406c42f4683e58fc563a9d1b49d",
+    "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a33c60dac74ab8647bed043668c4e440/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/lib_hawdb.dylib": "4655822d435574a0034f64ef9d14f182f3136adc7e666fd91c131b3ae3ea7770"
+  },
+  "cases": [
+    {
+      "role": "default_temp",
+      "command": [
+        "/private/tmp/hawdb-wip-ready-20261015/integrate-main-1fd242eb/bazel-bin/bindings/python/hawdb_python_pydantic_tests",
+        "-vv",
+        "--durations=0"
+      ],
+      "started": 1792390850.0771682,
+      "stdout": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-pydantic-exit-diagnostic/default_temp.log",
+      "pid": 37083,
+      "sample_exit": 0,
+      "timed_out": true,
+      "exit": -15,
+      "ended": 1792390910.23073,
+      "log_sha256": "90317257303f8fc57ffadfe39c3fdb8332ed25436cef6b96ef53eb2fb7c79703"
+    },
+    {
+      "role": "fresh_basetemp",
+      "command": [
+        "/private/tmp/hawdb-wip-ready-20261015/integrate-main-1fd242eb/bazel-bin/bindings/python/hawdb_python_pydantic_tests",
+        "-vv",
+        "--durations=0",
+        "--basetemp=/private/tmp/hawdb-wip-ready-20261015/986-main1fd-pydantic-exit-diagnostic/fresh-basetemp"
+      ],
+      "started": 1792390910.439292,
+      "stdout": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-pydantic-exit-diagnostic/fresh_basetemp.log",
+      "pid": 37457,
+      "sample_exit": 0,
+      "exit": 0,
+      "ended": 1792390957.366414,
+      "log_sha256": "e003466471e6b1e8252e540c064b1afd80d0984ef0f06bc66959f6dca635153b"
+    }
+  ],
+  "scope": "Two predeclared direct built-launcher diagnostic cases, default temporary root then explicit fresh basetemp. Both retain60s timeout plus15s termination grace. Direct launcher environment differs from original Bazel execution; no replacement qualification, benchmark, root-cause or acceptance claim.",
+  "ended": 1792390957.473665
+}

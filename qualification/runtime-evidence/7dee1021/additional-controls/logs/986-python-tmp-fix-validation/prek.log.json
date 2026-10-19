@@ -1,0 +1,5 @@
+{
+  "original_bytes": 160,
+  "original_sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf",
+  "raw_utf8": "Cargo format check (workspace)...........................................Passed\nCargo Clippy (workspace, all targets and features).......................Passed\n"
+}

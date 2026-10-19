@@ -1,0 +1,13 @@
+{
+  "status": "pydantic_timeout_on_staged_hermetic_entrypoint_campaign",
+  "raw_log": "/private/tmp/hawdb-wip-ready-20261015/986-python-tmp-fix-validation/pydantic-timeout-original-testlogs/test.log",
+  "raw_log_sha256": "31b57aca8732f726fcc2ad24b0e99fd7d30e27f0b4df39ffad317f2d7cb15d17",
+  "runfile_inspection": {
+    "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/2b3dc4746bf43e1f509d2168f595f1ad/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_pydantic_tests.runfiles/_main/bindings/python/tests/pytest_main.py",
+    "resolved": "/private/tmp/hawdb-wip-ready-20261015/fix-python-test-tmp-7dee/bindings/python/tests/pytest_main.py",
+    "sha256": "822f43627e839e57cacfc4b24fc8002535f53df695bfd383e09eabb09d194b4f",
+    "matches_staged_source": true
+  },
+  "scope": "Temporary-directory hypothesis insufficient; staged patch remains uncommitted. Original deadline and scope preserved.",
+  "observation": "Timed out after about76% of test items, rather than prior100%; no directory-cleanup root cause established."
+}

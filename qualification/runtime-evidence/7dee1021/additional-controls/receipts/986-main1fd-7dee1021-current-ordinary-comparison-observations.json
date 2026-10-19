@@ -1,0 +1,149 @@
+{
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "engine_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "source": "1200a20af7b70af712da3d6ab716d93861100d61",
+  "source_summary_sha256": "d17cd0383f3bd8cc3d1b1da047cdec5ec53900d8fb12736fe65bc56e59b8fede",
+  "observed_at": 1792391735.2599838,
+  "observed_complete_groups": 5,
+  "expected_groups": 90,
+  "comparable": [
+    {
+      "artifact": 12166870794,
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.1392153596346835,
+        "query_boundary_ns_median_speedup": 1.142581511620065,
+        "write_boundary_ns_median_speedup": 1.077775691378831,
+        "read_boundary_ns_median_speedup": 1.687201904488009,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12166568721,
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "rust",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.086921747037995,
+        "query_boundary_ns_median_speedup": 1.0913514801974535,
+        "write_boundary_ns_median_speedup": 1.0374631217639902,
+        "read_boundary_ns_median_speedup": 1.573871487671052,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12166013863,
+      "selection": [
+        "fill_bulk",
+        "python",
+        "file",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.053795382029298,
+        "query_boundary_ns_median_speedup": 1.0685300948818242,
+        "write_boundary_ns_median_speedup": 1.0151839531654154,
+        "read_boundary_ns_median_speedup": 1.4629014247096188,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12166885602,
+      "selection": [
+        "fill_bulk",
+        "python",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "python",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0753988642801688,
+        "query_boundary_ns_median_speedup": 1.102385015782964,
+        "write_boundary_ns_median_speedup": 1.042066470721945,
+        "read_boundary_ns_median_speedup": 1.5468365913272561,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12166704838,
+      "selection": [
+        "fill_bulk",
+        "go",
+        "memory",
+        1000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "fill_bulk",
+        "size": 1000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 1.0753702878917313,
+        "query_boundary_ns_median_speedup": 1.0763678622165493,
+        "write_boundary_ns_median_speedup": 1.0327700361983556,
+        "read_boundary_ns_median_speedup": 1.2881700348268348,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    }
+  ],
+  "adverse": [],
+  "non_comparable": [],
+  "scope": "Producer-verified original ordinary observations. Ratios are baseline/candidate medians, three samples per side. None means unavailable, not zero. No significance, causality, universal improvement or acceptance claim."
+}

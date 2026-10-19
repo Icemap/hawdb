@@ -1,0 +1,34 @@
+{
+  "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "command": [
+    "bazel",
+    "test",
+    "//crates/fuzz:hawdb_fuzz_tests",
+    "//crates/fuzz:hawdb_fuzz_cli_tests",
+    "//:hawdb_linux_ci_fuzz_smoke_test",
+    "--repo_env=CARGO_BAZEL_ISOLATED=false",
+    "--repo_env=CARGO_NET_OFFLINE=true",
+    "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-main1fd-post-python-validation/fuzz.bep.json"
+  ],
+  "exit": 0,
+  "targets_passed": 98,
+  "executed": 98,
+  "residency_halves": [
+    {
+      "first_seed": 0,
+      "seeds": 16,
+      "state_checks": 992,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-post-python-validation/fuzz-passed-98-0.test.log",
+      "sha256": "2135a0c5c6e9e13df4b1f72d212a0786c7f3fff2b3f74adf647d0d5e0baf6328"
+    },
+    {
+      "first_seed": 16,
+      "seeds": 16,
+      "state_checks": 992,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-post-python-validation/fuzz-passed-97-0.test.log",
+      "sha256": "b201f91028904aef53bf8e4aa7a47f2f7c302780ed417528129b71cd1eea6dc7"
+    }
+  ],
+  "scope": "Full unchanged required local fuzz command passed; does not dispose of general/Python failures, establish physical power-loss guarantees, or complete performance/review acceptance."
+}

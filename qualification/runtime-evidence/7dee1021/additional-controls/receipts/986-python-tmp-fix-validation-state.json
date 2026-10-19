@@ -1,0 +1,91 @@
+{
+  "status": "failed",
+  "pid": 45509,
+  "parent": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "tree": "5181fd4924dd14f80b4eb54df60638bc42281fc0",
+  "steps": [
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792391170.414405,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-python-tmp-fix-validation/install.log",
+      "exit": 0,
+      "ended": 1792391170.571361,
+      "sha256": "6dd3a3ee6c0892e5369e843cabf8ddc982f55665d60d1d1359fc0d198ee6f427"
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792391170.709933,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-python-tmp-fix-validation/fmt.log",
+      "exit": 0,
+      "ended": 1792391190.978496,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792391191.092028,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-python-tmp-fix-validation/clippy.log",
+      "exit": 0,
+      "ended": 1792391292.003854,
+      "sha256": "a1e6550985e5dd6c5e00b694b95c962975f76a393d919afc77c6b277362aaf92"
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792391292.112115,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-python-tmp-fix-validation/prek.log",
+      "exit": 0,
+      "ended": 1792391300.135024,
+      "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
+    },
+    {
+      "name": "python",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/python:hawdb_python_tests",
+        "//bindings/python:hawdb_python_pydantic_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-python-tmp-fix-validation/python.bep.json"
+      ],
+      "started": 1792391300.210607,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-python-tmp-fix-validation/python.log",
+      "exit": 3,
+      "ended": 1792391699.8658812,
+      "sha256": "320e6004f4b4380fb73399ddc0096a24a2d9b273ba6045384e16e7ec15788e40"
+    }
+  ],
+  "scope": "Hermetic Python test temporary-directory fix. Only pytest entrypoint differs; original deadlines, assertions, cases and native/library/benchmark source unchanged. No original failure disposition or new acceptance claim.",
+  "source_diff": "diff --git a/bindings/python/tests/pytest_main.py b/bindings/python/tests/pytest_main.py\nindex 2053a61b..e227ab81 100644\n--- a/bindings/python/tests/pytest_main.py\n+++ b/bindings/python/tests/pytest_main.py\n@@ -15,12 +15,17 @@\n \"\"\"Run the binding tests against the extension in Bazel's runfiles.\"\"\"\n \n from pathlib import Path\n+import os\n import sys\n \n import pytest\n \n \n if __name__ == \"__main__\":\n-    raise SystemExit(\n-        pytest.main([\"--import-mode=importlib\", str(Path(__file__).parent), *sys.argv[1:]])\n-    )\n+    args = [\"--import-mode=importlib\"]\n+    if test_tmpdir := os.environ.get(\"TEST_TMPDIR\"):\n+        # Keep fixture creation and pytest's retained-directory cleanup inside\n+        # the current Bazel test attempt rather than the host's shared temp root.\n+        args.extend([\"--basetemp\", str(Path(test_tmpdir) / \"pytest\")])\n+    args.extend([str(Path(__file__).parent), *sys.argv[1:]])\n+    raise SystemExit(pytest.main(args))",
+  "changed_paths": [
+    "bindings/python/tests/pytest_main.py"
+  ],
+  "error": "python failed; original log preserved",
+  "ended": 1792391699.945937
+}

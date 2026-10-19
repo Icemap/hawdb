@@ -1,0 +1,5 @@
+{
+  "original_bytes": 276,
+  "original_sha256": "fea50ba599854a5f2e67140a94c367cf69923aa40431ed8ecbbc6544d233a0bf",
+  "raw_utf8": "Sampling process 37457 for 1 second with 10 milliseconds of run time between samples\nSampling completed, processing symbols...\nSample analysis of process 37457 written to file /private/tmp/hawdb-wip-ready-20261015/986-main1fd-pydantic-exit-diagnostic/fresh_basetemp-stack.txt\n"
+}

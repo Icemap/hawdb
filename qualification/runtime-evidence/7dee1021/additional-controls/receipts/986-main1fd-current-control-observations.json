@@ -1,0 +1,204 @@
+{
+  "captured_at": 1792390584.290715,
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "source": "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+  "retained_observed": 5,
+  "retained_groups": [
+    {
+      "group": [
+        "default",
+        1000,
+        "file"
+      ],
+      "success": true,
+      "released": true,
+      "mode_records": {
+        "('owned', 'ok')": 7,
+        "('retained', 'ok')": 7,
+        "('arrow', 'ok')": 7
+      },
+      "ratios": {
+        "retained": {
+          "median": 2.491239821750687,
+          "minimum": 1.3178005052277033,
+          "pairs": [
+            2.3946757577794497,
+            1.3178005052277033,
+            2.5803582335607924,
+            2.491239821750687,
+            2.4949618334124435,
+            2.4853191993300174,
+            2.5924481968286637
+          ],
+          "every_pair_at_least_10_percent": true
+        },
+        "arrow": {
+          "median": 2.3400016046077576,
+          "minimum": 2.2644660143593116,
+          "pairs": [
+            2.288210744741301,
+            2.332269101325926,
+            2.2644660143593116,
+            2.3400016046077576,
+            2.3566132976611,
+            2.3685544630591244,
+            2.410310715268091
+          ],
+          "every_pair_at_least_10_percent": true
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000,
+        "memory"
+      ],
+      "success": true,
+      "released": true,
+      "mode_records": {
+        "('owned', 'ok')": 7,
+        "('retained', 'ok')": 7,
+        "('arrow', 'ok')": 7
+      },
+      "ratios": {
+        "retained": {
+          "median": 2.6412405680218636,
+          "minimum": 2.371150885795815,
+          "pairs": [
+            2.6592598588169998,
+            2.6642504319449363,
+            2.641544128092444,
+            2.371150885795815,
+            2.6276329318366622,
+            2.3920669735516715,
+            2.6412405680218636
+          ],
+          "every_pair_at_least_10_percent": true
+        },
+        "arrow": {
+          "median": 2.4371317527177987,
+          "minimum": 1.3839663803903075,
+          "pairs": [
+            2.4957146329711732,
+            2.5135051748180604,
+            1.3839663803903075,
+            2.2513250926924266,
+            2.5581371765416576,
+            2.4371317527177987,
+            2.4035266859053386
+          ],
+          "every_pair_at_least_10_percent": true
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "file"
+      ],
+      "success": true,
+      "released": true,
+      "mode_records": {
+        "('owned', 'ok')": 7,
+        "('retained', 'ok')": 7,
+        "('arrow', 'ok')": 7
+      },
+      "ratios": {
+        "retained": {
+          "median": 2.984246826075597,
+          "minimum": 2.8770881674925475,
+          "pairs": [
+            3.169518320323788,
+            3.0522878447373754,
+            3.027194002361319,
+            2.8770881674925475,
+            2.984246826075597,
+            2.897141624093176,
+            2.9134379608409104
+          ],
+          "every_pair_at_least_10_percent": true
+        },
+        "arrow": {
+          "median": 2.9540780686834305,
+          "minimum": 2.853644163147837,
+          "pairs": [
+            3.052410051322616,
+            3.077116716569248,
+            2.893839688342409,
+            2.9040674534781523,
+            2.853644163147837,
+            2.9540780686834305,
+            3.019221404092125
+          ],
+          "every_pair_at_least_10_percent": true
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "memory"
+      ],
+      "success": true,
+      "released": true,
+      "mode_records": {
+        "('owned', 'ok')": 7,
+        "('retained', 'ok')": 7,
+        "('arrow', 'ok')": 7
+      },
+      "ratios": {
+        "retained": {
+          "median": 2.9785326855933434,
+          "minimum": 2.9299531356967456,
+          "pairs": [
+            2.9785326855933434,
+            2.9630723213678665,
+            2.992419604380415,
+            3.02522908275291,
+            2.993565120239314,
+            2.977334134226994,
+            2.9299531356967456
+          ],
+          "every_pair_at_least_10_percent": true
+        },
+        "arrow": {
+          "median": 2.9072096599488937,
+          "minimum": 2.8274647965893567,
+          "pairs": [
+            2.8737862461850625,
+            2.869266041977429,
+            2.9386049641222,
+            2.9072096599488937,
+            2.9083821128348277,
+            2.9072142913503196,
+            2.8274647965893567
+          ],
+          "every_pair_at_least_10_percent": true
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "memory"
+      ],
+      "success": false,
+      "released": true,
+      "mode_records": {
+        "('owned', 'error')": 7,
+        "('retained', 'error')": 7,
+        "('arrow', 'error')": 7
+      },
+      "ratios": {}
+    }
+  ],
+  "phase_complete_observation_groups": 2,
+  "phase_source_receipts": 4,
+  "retained_snapshot_sha256": "4a6461c700fa0b18b471594f4318768ae3c98fadcb2b6f7b64a738e2ee700777",
+  "phase_snapshot_sha256": "02d21242437f0e416fc3a6e7cb99adc246931c87e264f4c45bc07dcfd4903f53",
+  "scope": "Current source-bound incremental control observations. No complete10, whole-memory qualification, causal comparison, independent approval or acceptance claim."
+}

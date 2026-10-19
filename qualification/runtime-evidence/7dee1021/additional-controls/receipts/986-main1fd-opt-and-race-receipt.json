@@ -1,0 +1,49 @@
+{
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "checks": [
+    {
+      "name": "opt-native-build",
+      "command": [
+        "bazel",
+        "build",
+        "-c",
+        "opt",
+        "//bindings/ffi:hawdb_ffi",
+        "//bindings/python:_hawdb",
+        "//bindings/python:_hawdb_boundary_profile",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true"
+      ],
+      "started": 1792391088.955401,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-post-python-validation/opt-native-build.log",
+      "exit": 0,
+      "ended": 1792391356.62759,
+      "sha256": "e70030746f952c845ff279ed95f103395f6769433b3e6e3e786bc538206a552e"
+    },
+    {
+      "name": "retained-go-race",
+      "command": [
+        "go",
+        "-C",
+        "bindings/go",
+        "test",
+        "-race",
+        "-count=1",
+        "-run",
+        "^TestRetained",
+        "./..."
+      ],
+      "started": 1792391356.75515,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-post-python-validation/retained-go-race.log",
+      "exit": 0,
+      "ended": 1792391366.388176,
+      "sha256": "ade09c31440b56b6031ad9b75df650b85e14eed544ec624ebe983d4ae09c34cf"
+    }
+  ],
+  "race_library": {
+    "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a33c60dac74ab8647bed043668c4e440/execroot/_main/bazel-out/darwin_arm64-opt/bin/bindings/ffi/libhawdb_ffi.dylib",
+    "sha256": "5f775d395b294e8d26ac834cf66b0c8538e66a43b6ca9ee0950e88c851569b4e"
+  },
+  "scope": "Opt native normal/profile Python and FFI outputs built; CGO_ENABLED1 retained Go race check passed on hashed opt FFI. Portable, prior failures, full matrices and genuine approval remain open."
+}

@@ -1,0 +1,22 @@
+{
+  "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "command": [
+    "bazel",
+    "test",
+    "//:hawdb_in_memory_portable_tests",
+    "--repo_env=CARGO_BAZEL_ISOLATED=false",
+    "--repo_env=CARGO_NET_OFFLINE=true",
+    "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-main1fd-post-python-validation/portable.bep.json"
+  ],
+  "logs": [
+    {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-post-python-validation/portable-passed-1-0.test.log",
+      "sha256": "20cdcd82a74bcadc7a37878212f404a03494c7d6692e33b2c03c0bc8c5c6111e",
+      "result_lines": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s"
+      ]
+    }
+  ],
+  "scope": "Native portable integration passed; minimal WASM compilation/lint is separate. General/Python failures and full acceptance remain open."
+}
