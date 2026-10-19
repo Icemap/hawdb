@@ -3,6 +3,10 @@ name: Native Bindings
 on:
   workflow_dispatch:
     inputs:
+      runtime_qualification:
+        description: "Run source-bound full root/crates/Python qualification"
+        type: boolean
+        default: false
       boundary_comparison:
         description: "Run the manual Linux ordinary-boundary comparison instead of binding tests"
         type: boolean
@@ -69,7 +73,7 @@ concurrency:
 
 jobs:
   bazel:
-    if: github.event_name != 'workflow_dispatch' || (!inputs.boundary_comparison && !inputs.rabitq_baseline)
+    if: (github.event_name != 'workflow_dispatch' || (!inputs.boundary_comparison && !inputs.rabitq_baseline)) && !inputs.runtime_qualification
     name: Bazel native bindings (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -118,7 +122,7 @@ jobs:
         run: go test -race -count=1 -run '^TestRetained' ./...
 
   windows-native-contracts:
-    if: github.event_name != 'workflow_dispatch' || (!inputs.boundary_comparison && !inputs.rabitq_baseline)
+    if: (github.event_name != 'workflow_dispatch' || (!inputs.boundary_comparison && !inputs.rabitq_baseline)) && !inputs.runtime_qualification
     name: Windows native contracts
     runs-on: windows-2025
     timeout-minutes: 120
@@ -317,3 +321,294 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+  runtime-qualification:
+    if: github.event_name == 'workflow_dispatch' && inputs.runtime_qualification
+    name: Full runtime qualification (${{ matrix.lane }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [root, crates, python]
+    env:
+      USE_BAZEL_VERSION: "9.3.0"
+      QUAL_LANE: ${{ matrix.lane }}
+    steps:
+      - name: Checkout qualification source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust
+        uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: clippy
+      - name: Install Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+      - name: Verify production source and qualification overlay
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess, tempfile
+          engine = "311091da6b23a292b7385b46362d3a12f6ec0064"
+          main = "46bfde00131a6d711d51aad6e5e237279a287061"
+          expected_tree = "6ea7fb5da52df432df022ac29eab4a74baa6c27b"
+          workflow = ".github/workflows/native-bindings.yml"
+          out = pathlib.Path("runtime-qualification-results")
+          out.mkdir(exist_ok=True)
+          def git(*args, env=None):
+              return subprocess.check_output(["git", *args], text=True, env=env).strip()
+          assert git("rev-parse", "HEAD^1") == engine
+          subprocess.run(["git", "merge-base", "--is-ancestor", main, engine], check=True)
+          assert git("diff", "--name-only", engine, "HEAD").splitlines() == [workflow]
+          fd, index_path = tempfile.mkstemp(prefix="runtime-source-index-")
+          os.close(fd)
+          os.unlink(index_path)
+          try:
+              env = {**os.environ, "GIT_INDEX_FILE": index_path}
+              subprocess.run(["git", "read-tree", "HEAD"], env=env, check=True)
+              mode, _, blob, _ = git("ls-tree", engine, "--", workflow).split()
+              subprocess.run(["git", "update-index", "--cacheinfo", mode + "," + blob + "," + workflow], env=env, check=True)
+              production_tree = git("write-tree", env=env)
+              assert production_tree == expected_tree
+          finally:
+              pathlib.Path(index_path).unlink(missing_ok=True)
+          record = {"published_pr_head": engine, "current_main": main, "qualification_head": git("rev-parse", "HEAD"), "qualification_tree": git("rev-parse", "HEAD^{tree}"), "production_integration_tree": production_tree, "qualification_overlay": [workflow], "lane": os.environ["QUAL_LANE"], "scope": "Standalone current-main integration tests; not a Prow/Tide status or approval. No fuzz campaign, deadline or internal thread override."}
+          (out / "source-check.json").write_text(json.dumps(record, indent=2) + "\n")
+          (out / "source.txt").write_text(git("show", "-s", "--format=%H%n%T%n%P", "HEAD") + "\n")
+          (out / "toolchain.txt").write_bytes(subprocess.check_output(["rustc", "-vV"]))
+          PY
+      - name: Run complete declared runtime scope
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, subprocess, sys
+          recorded = {'crates': ['//crates/analytics:hawdb_analytics_tests',
+                      '//crates/cascades:hawdb_cascades_integration_test',
+                      '//crates/cascades:hawdb_cascades_tests',
+                      '//crates/cgroup:hawdb_cgroup_tests',
+                      '//crates/core:hawdb_core_tests',
+                      '//crates/ddl:hawdb_ddl_tests',
+                      '//crates/evidence:hawdb_evidence_tests',
+                      '//crates/fuzz-contracts:hawdb_fuzz_contracts_tests',
+                      '//crates/integrity:hawdb_integrity_tests',
+                      '//crates/optimizer:hawdb_optimizer_tests',
+                      '//crates/optimizer-predicate:hawdb_optimizer_predicate_tests',
+                      '//crates/optimizer-relational:hawdb_optimizer_relational_tests',
+                      '//crates/optimizer-vector:hawdb_optimizer_vector_tests',
+                      '//crates/plan-core:hawdb_plan_core_tests',
+                      '//crates/qos:hawdb_qos_loom_tests',
+                      '//crates/qos:hawdb_qos_tests',
+                      '//crates/query:hawdb_query_tests',
+                      '//crates/route-ownership:hawdb_route_ownership_tests',
+                      '//crates/search:hawdb_search_analyzer_workspace_allocation_tests',
+                      '//crates/search:hawdb_search_identifier_allocation_tests',
+                      '//crates/sql-syntax:hawdb_sql_syntax_tests',
+                      '//crates/sql-syntax:postgres_pgq_tests',
+                      '//crates/sql-syntax:postgres_select_pgq_tests',
+                      '//crates/system-sql:hawdb_system_sql_loom_tests',
+                      '//crates/telemetry:hawdb_telemetry_tests',
+                      '//crates/artifact:hawdb_artifact_tests',
+                      '//crates/bootstrap:hawdb_bootstrap_tests',
+                      '//crates/compat:hawdb_compat_tests',
+                      '//crates/cypher:hawdb_cypher_tests',
+                      '//crates/executor:hawdb_executor_unit_tests',
+                      '//crates/executor:hawdb_morsel_oracle_tests',
+                      '//crates/executor:hawdb_projection_allocation_tests',
+                      '//crates/executor:hawdb_query_observer_release_tests',
+                      '//crates/explain:hawdb_explain_tests',
+                      '//crates/expression:hawdb_expression_tests',
+                      '//crates/nowledge-contracts:hawdb_nowledge_contracts_tests',
+                      '//crates/optimizer-graph:hawdb_optimizer_graph_tests',
+                      '//crates/optimizer-graph:planner_golden_test',
+                      '//crates/plan-cache:hawdb_plan_cache_loom_tests',
+                      '//crates/plan-cache:hawdb_plan_cache_tests',
+                      '//crates/plan-cypher:hawdb_plan_cypher_tests',
+                      '//crates/qualification:hawdb_content_store_contract_tests',
+                      '//crates/qualification:hawdb_content_store_initial_row_page_qualification_tests',
+                      '//crates/qualification:hawdb_content_store_memory_qualification_cli_tests',
+                      '//crates/qualification:hawdb_content_store_mutation_qualification_cli_tests',
+                      '//crates/qualification:hawdb_content_store_overflow_compaction_qualification_cli_tests',
+                      '//crates/qualification:hawdb_content_store_production_mutation_tests',
+                      '//crates/qualification:hawdb_content_store_production_overflow_compaction_tests',
+                      '//crates/qualification:hawdb_content_store_production_read_tests',
+                      '//crates/qualification:hawdb_content_store_read_qualification_cli_tests',
+                      '//crates/qualification:hawdb_graph_index_qualification_cli_tests',
+                      '//crates/qualification:hawdb_graph_storage_qualification_cli_tests',
+                      '//crates/qualification:hawdb_qualification_content_store_tests',
+                      '//crates/qualification:hawdb_qualification_misc_tests',
+                      '//crates/qualification:hawdb_qualification_production_tests',
+                      '//crates/qualification:hawdb_qualification_release_bundle_tests',
+                      '//crates/qualification:hawdb_release_bundle_cli_tests',
+                      '//crates/qualification:hawdb_soak_cli_tests',
+                      '//crates/query-policy:hawdb_query_policy_tests',
+                      '//crates/readiness:hawdb_readiness_tests',
+                      '//crates/relational:hawdb_relational_tests',
+                      '//crates/resource-profile:hawdb_resource_profile_tests',
+                      '//crates/runtime-tokio:hawdb_runtime_tokio_tests',
+                      '//crates/search:hawdb_search_acl_source_policy_tests',
+                      '//crates/search:hawdb_search_acl_streamed_lifecycle_tests',
+                      '//crates/search:hawdb_search_acl_tests',
+                      '//crates/search:hawdb_search_analyzer_allocation_tests',
+                      '//crates/search:hawdb_search_analyzer_observation_tests',
+                      '//crates/search:hawdb_search_background_only_source_policy_tests',
+                      '//crates/search:hawdb_search_background_only_tests',
+                      '//crates/search:hawdb_search_descriptor_allocation_tests',
+                      '//crates/search:hawdb_search_lexical_delta_allocation_tests',
+                      '//crates/search:hawdb_search_minimal_source_policy_tests',
+                      '//crates/search:hawdb_search_minimal_tests',
+                      '//crates/search:hawdb_search_segment_allocation_tests',
+                      '//crates/search:hawdb_search_source_policy_tests',
+                      '//crates/search:hawdb_search_streamed_lifecycle_tests',
+                      '//crates/search:hawdb_search_tests',
+                      '//crates/search:hawdb_search_text_background_source_policy_tests',
+                      '//crates/search:hawdb_search_text_background_streamed_lifecycle_tests',
+                      '//crates/search:hawdb_search_text_background_tests',
+                      '//crates/search:hawdb_search_text_only_source_policy_tests',
+                      '//crates/search:hawdb_search_text_only_streamed_lifecycle_tests',
+                      '//crates/search:hawdb_search_text_only_tests',
+                      '//crates/search:hawdb_search_text_vector_source_policy_tests',
+                      '//crates/search:hawdb_search_text_vector_streamed_lifecycle_tests',
+                      '//crates/search:hawdb_search_text_vector_tests',
+                      '//crates/search:hawdb_search_vector_background_source_policy_tests',
+                      '//crates/search:hawdb_search_vector_background_tests',
+                      '//crates/search:hawdb_search_vector_only_source_policy_tests',
+                      '//crates/search:hawdb_search_vector_only_tests',
+                      '//crates/sql:hawdb_sql_tests',
+                      '//crates/storage:hawdb_storage_tests',
+                      '//crates/system-sql:hawdb_system_sql_tests',
+                      '//crates/vector-projection:hawdb_vector_projection_tests'],
+           'python': ['//bindings/python:hawdb_python_tests',
+                      '//bindings/python:hawdb_python_pydantic_tests',
+                      '//bindings/python:requirements.test'],
+           'root': ['//:cargo_bazel_package_parity_script_test',
+                    '//:cargo_bazel_package_parity_test',
+                    '//:hawdb_graph_text_dependency_boundary_test',
+                    '//:hawdb_linux_ci_benchmark_dispatch_tests',
+                    '//:hawdb_minimal_native_vector_boundary_test',
+                    '//:query_limit_inventory_script_test',
+                    '//:root_unit_partition_script_test',
+                    '//:hawdb_acl_capability_tests',
+                    '//:hawdb_branch_project_open_minimal_tests',
+                    '//:hawdb_branch_project_open_tests',
+                    '//:hawdb_cli_tests',
+                    '//:hawdb_default_consumer_tests',
+                    '//:hawdb_execution_request_contract_tests',
+                    '//:hawdb_fallible_search_contract_minimal_tests',
+                    '//:hawdb_fallible_search_contract_tests',
+                    '//:hawdb_graph_text_consumer_tests',
+                    '//:hawdb_host_allocator_minimal_tests',
+                    '//:hawdb_host_allocator_tests',
+                    '//:hawdb_in_memory_portable_tests',
+                    '//:hawdb_linux_ci_background_maintenance_smoke_test',
+                    '//:hawdb_linux_ci_benchmark_index_restart_cost_smoke_test',
+                    '//:hawdb_linux_ci_benchmark_integrity_checksum_smoke_test',
+                    '//:hawdb_linux_ci_benchmark_relational_index_access_smoke_test',
+                    '//:hawdb_linux_ci_benchmark_relational_index_page_cache_smoke_test',
+                    '//:hawdb_linux_ci_benchmark_relational_monotonic_append_smoke_test',
+                    '//:hawdb_linux_ci_benchmark_relational_oltp_mix_smoke_test',
+                    '//:hawdb_linux_ci_fixture_contract_smoke_test',
+                    '//:hawdb_linux_ci_migration_gate_blocked_smoke_test',
+                    '//:hawdb_linux_ci_migration_gate_smoke_test',
+                    '//:hawdb_linux_ci_optimizer_group_1_smoke_test',
+                    '//:hawdb_linux_ci_optimizer_group_3_smoke_test',
+                    '//:hawdb_linux_ci_optimizer_summary_smoke_test',
+                    '//:hawdb_linux_ci_previous_wrapper_adapter_smoke_test',
+                    '//:hawdb_linux_ci_relational_row_page_lending_smoke_test',
+                    '//:hawdb_linux_ci_storage_recovery_smoke_test',
+                    '//:hawdb_linux_ci_wal_group_commit_smoke_test',
+                    '//:hawdb_minimal_consumer_tests',
+                    '//:hawdb_pgq_create_binder_tests',
+                    '//:hawdb_process_memory_policy_contract_minimal_tests',
+                    '//:hawdb_process_memory_policy_contract_tests',
+                    '//:hawdb_search_generation_context_minimal_tests',
+                    '//:hawdb_search_generation_context_tests',
+                    '//:hawdb_search_lexical_corpus_qualification_tests',
+                    '//:hawdb_search_projection_consumer_minimal_tests',
+                    '//:hawdb_search_projection_consumer_tests',
+                    '//:hawdb_shadow_self_tests',
+                    '//:hawdb_unit_analytics_core_general_tests',
+                    '//:hawdb_unit_concurrent_tests',
+                    '//:hawdb_unit_general_tests',
+                    '//:hawdb_unit_recovery_tests',
+                    '//:hawdb_unit_row_page_compaction_admission_tests',
+                    '//:hawdb_unit_row_page_compaction_materialized_tests',
+                    '//:hawdb_unit_row_page_compaction_out_of_core_tests',
+                    '//:hawdb_unit_storage_crash_matrix_tests',
+                    '//:hawdb_wal_group_commit_recovery_tests',
+                    '//:hawdb_wasm_playground_bridge_tests',
+                    '//:query_limit_inventory_test',
+                    '//crates/system-sql:hawdb_system_sql_loom_tests']}
+          lane = os.environ["QUAL_LANE"]
+          out = pathlib.Path("runtime-qualification-results")
+          assert len(recorded["root"]) == 58 and len(recorded["crates"]) == 95
+          assert not any(t.startswith("//crates/fuzz:") or t.endswith("_fuzz_tests") or t == "//:hawdb_linux_ci_fuzz_smoke_test" for values in recorded.values() for t in values)
+          def query(expr):
+              value = subprocess.check_output(["bazel", "query", expr], text=True)
+              return set(value.splitlines())
+          if lane == "root":
+              required = query("tests(//:hawdb_unit_tests) union tests(//:hawdb_linux_ci_smoke_tests)")
+              selected = set(recorded[lane]) | required
+              targets = sorted(selected)
+          elif lane == "crates":
+              selected = query("tests(//:hawdb_presubmit_crate_tests)")
+              assert set(recorded[lane]) <= selected
+              targets = ["//:hawdb_presubmit_crate_tests"]
+          else:
+              assert lane == "python"
+              selected = set(recorded[lane])
+              targets = sorted(selected)
+          assert not any(t.startswith("//crates/fuzz:") or t.endswith("_fuzz_tests") or t == "//:hawdb_linux_ci_fuzz_smoke_test" for t in selected)
+          assert all(re.fullmatch(r"//[A-Za-z0-9_./:-]+", t) for t in targets)
+          command = ["bazel", "test", *targets, "--test_output=errors", "--build_event_json_file=" + str(out / "tests.bep.json")]
+          (out / "selection.json").write_text(json.dumps({"lane": lane, "recorded_scope": recorded[lane], "selected_tests": sorted(selected), "command": command}, indent=2) + "\n")
+          with (out / "command.log").open("wb") as log:
+              child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+              for line in child.stdout:
+                  log.write(line)
+                  sys.stdout.buffer.write(line)
+                  sys.stdout.buffer.flush()
+              status = child.wait()
+          (out / "command-result.json").write_text(json.dumps({"exit": status, "lane": lane}) + "\n")
+          raise SystemExit(status)
+          PY
+      - name: Preserve complete test logs and source evidence
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, shutil, urllib.parse
+          out = pathlib.Path("runtime-qualification-results")
+          summaries = []
+          bep = out / "tests.bep.json"
+          if bep.exists():
+              for line in bep.read_text().splitlines():
+                  event = json.loads(line)
+                  if "testSummary" not in event:
+                      continue
+                  label = event["id"]["testSummary"]["label"]
+                  summary = event["testSummary"]
+                  summaries.append({"label": label, "summary": summary})
+                  for status in ("passed", "failed"):
+                      for i, item in enumerate(summary.get(status, [])):
+                          uri = item.get("uri", "")
+                          if not uri.startswith("file://"):
+                              continue
+                          source = pathlib.Path(urllib.parse.unquote(urllib.parse.urlparse(uri).path))
+                          name = label.removeprefix("//").replace("/", "_").replace(":", "_")
+                          target = out / (name + "-" + status + "-" + str(i) + ".test.log")
+                          shutil.copyfile(source, target)
+          (out / "test-summaries.json").write_text(json.dumps(summaries, indent=2) + "\n")
+          files = {str(p.relative_to(out)): {"bytes": p.stat().st_size, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in out.rglob("*") if p.is_file()}
+          (out / "files.json").write_text(json.dumps(files, indent=2) + "\n")
+          PY
+      - name: Upload runtime qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-qualification-${{ matrix.lane }}-${{ github.sha }}
+          path: runtime-qualification-results
+          if-no-files-found: error
