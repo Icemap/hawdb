@@ -1,6 +1,6 @@
 # Task-bound retained node pulls
 
-Issue Number: ref #987, ref #1008
+Issue Number: ref #1081, ref #987
 
 ## Rust host contract
 
@@ -14,6 +14,15 @@ runtime access or parsing, after parsing, before admission and after capture.
 An already stopped task preserves its exact stop cause even for malformed
 Cypher. Planning remains synchronous and is not interruptible inside each
 parser/optimizer operation.
+
+The seek property must have a node property unique constraint in the query's
+catalog, for example `CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE`. An equality
+index alone is not sufficient: without that constraint, construction returns
+`UnsupportedPlan` before retained-source access or admission, even when the
+lookup currently has zero or one match or requests `LIMIT 0`. A second match
+under a unique constraint is `Execution(StorageIntegrity(..))`, as is an index
+entry pointing to a missing row. No cursor or partial node is published.
+Consumed read snapshots use their own catalog for this eligibility check.
 
 The cursor does not clone the context, cancellation ancestry or I/O controller.
 Its Rust borrow requires the host to keep the context alive through cursor use.

@@ -51,7 +51,6 @@ pub(crate) fn error(py: Python<'_>, source: &RetainedQueryError) -> PyErr {
     } else {
         match source {
             RetainedQueryError::UnsupportedPlan => "unsupported_plan",
-            RetainedQueryError::MultipleMatches => "multiple_matches",
             RetainedQueryError::UnsupportedLayout => "unsupported_layout",
             RetainedQueryError::UnsupportedType => "unsupported_type",
             RetainedQueryError::CopyRequired => "copy_required",

@@ -11437,7 +11437,7 @@ mod tests {
     }
 
     #[test]
-    fn embedded_query_runtime_bounds_vector_seed_graph_fanout() {
+    fn embedded_query_runtime_admits_vector_seed_graph_fanout() {
         let mut index = SearchIndex::in_memory();
         index
             .upsert_projection_row(SearchProjectionRow {
@@ -11472,21 +11472,35 @@ mod tests {
             Value::List(vec![Value::Float(1.0), Value::Float(0.0)]),
         )]);
 
-        let error = store
+        let output = store
             .query_with_params_with_report(
                 "CALL vector_search($embedding, topK := 1) YIELD id, score \
                  MATCH (m:Memory)-[:MENTIONS]->(e:Entity) \
                  RETURN e.id AS entity_id",
                 &parameters,
             )
-            .unwrap_err();
+            .unwrap();
+        assert_eq!(output.output.rows.len(), 65);
+        let identities = output
+            .output
+            .rows
+            .iter()
+            .map(|row| match &row["entity_id"] {
+                Value::String(id) => id.clone(),
+                other => panic!("unexpected entity identity: {other:?}"),
+            })
+            .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(
-            error,
-            HawDBError::GraphExpansionCandidateLimitExceeded {
-                requested: 65,
-                limit: 64
-            }
+            identities,
+            (0..65).map(|index| format!("entity-{index}")).collect()
         );
+        let report = &output.report.graph_expansion_reports[0];
+        assert_eq!(report.returned_count, 65);
+        assert_eq!(report.expanded_node_count, 65);
+        assert_eq!(report.expanded_edge_count, 65);
+        assert_eq!(report.candidate_limit, usize::MAX);
+        assert_eq!(report.payload_byte_limit, usize::MAX);
+        assert!(!report.truncated());
     }
 
     #[test]

@@ -346,6 +346,7 @@ fn public_expression_at(expression: &ProjectionExpression, depth: usize) -> bool
         | ProjectionExpression::ColumnProperty { column, .. } => public_name(column),
         ProjectionExpression::Literal(_)
         | ProjectionExpression::Coalesce(_)
+        | ProjectionExpression::JsonValue { .. }
         | ProjectionExpression::Left { .. }
         | ProjectionExpression::Lower(_)
         | ProjectionExpression::Case { .. }

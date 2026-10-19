@@ -1,14 +1,18 @@
 # Experimental Python retained node views
 
 `Database.execute_retained_node` uses the native indexed complete-node cursor.
-It accepts an equality-index point plan returning one node variable. An existing
+It accepts an equality-index point plan returning one node variable, with a
+unique constraint on the seek property, for example
+`CREATE CONSTRAINT ON :Document(id) ASSERT UNIQUE`. Without the constraint,
+construction raises `RetainedError` with `kind="unsupported_plan"` before
+retained-source access or admission, regardless of the current match count.
+A second match under a unique constraint is a storage integrity failure exposed
+with `kind="execution"`; no cursor or partial row is published. An existing
 index alone is insufficient: the optimizer may choose a scan for a tiny label,
 which refuses explicitly. The API does not force index selection or secretly
 materialize an owned fallback. Missing
-matches complete with no row owner. A multi-match seek raises a non-retryable
-`RetainedError` with `kind="multiple_matches"`; unsupported query shapes retain
-`kind="unsupported_plan"`. Scans, computed node projections, and layouts requiring
-hydration refuse explicitly. An open user
+matches complete with no row owner. Scans, computed node
+projections, and layouts requiring hydration refuse explicitly. An open user
 transaction is rejected by the embedded facade, as for numeric retained queries.
 
 ```python

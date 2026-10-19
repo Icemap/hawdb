@@ -429,6 +429,10 @@ pub enum ScalarExpressionKind {
     RelationshipType(String),
     Value(ValueExpression),
     Coalesce(Vec<ScalarExpression>),
+    JsonValue {
+        expression: Box<ScalarExpression>,
+        path: ValueExpression,
+    },
     Left {
         expression: Box<ScalarExpression>,
         length: ValueExpression,
@@ -617,7 +621,8 @@ impl ScalarExpressionKind {
             Self::Not(expression)
             | Self::IsNull { expression, .. }
             | Self::Lower(expression)
-            | Self::Left { expression, .. } => visit(expression),
+            | Self::Left { expression, .. }
+            | Self::JsonValue { expression, .. } => visit(expression),
             Self::Coalesce(expressions) => expressions.iter().all(visit),
             _ => true,
         }

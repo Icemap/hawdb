@@ -119,6 +119,10 @@ fn promote_native_column_properties(
                 .map(|expression| promote_native_column_properties(expression, input))
                 .collect(),
         ),
+        ProjectionExpression::JsonValue { expression, path } => ProjectionExpression::JsonValue {
+            expression: Box::new(promote_native_column_properties(expression, input)),
+            path: path.clone(),
+        },
         ProjectionExpression::Left { expression, length } => ProjectionExpression::Left {
             expression: Box::new(promote_native_column_properties(expression, input)),
             length: *length,
@@ -204,6 +208,7 @@ fn has_native_bindings(expression: &ProjectionExpression, input: &LogicalPlan) -
             .iter()
             .all(|expression| has_native_bindings(expression, input)),
         ProjectionExpression::Left { expression, .. }
+        | ProjectionExpression::JsonValue { expression, .. }
         | ProjectionExpression::Lower(expression)
         | ProjectionExpression::Not(expression) => has_native_bindings(expression, input),
         ProjectionExpression::Case {

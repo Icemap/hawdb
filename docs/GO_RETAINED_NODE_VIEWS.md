@@ -1,17 +1,20 @@
 # Experimental retained node views for C and Go
 
-Issue Number: ref #987, ref #1008
+Issue Number: ref #1081, ref #987
 
 ## Workload and layout
 
 `DB.QueryRetainedNode` forwards parameterized Cypher to the embedded retained
 node runtime. The eligible physical plan is a materialized, single-match index
 seek returning one complete node, optionally with the exact predicate and a
-zero-offset limit. An index existing in the catalog is insufficient: a tiny
-label can cost-select a scan. An eligible seek that matches multiple rows returns
-`RetainedMultipleMatches` (`HAWDB_RETAINED_MULTIPLE_MATCHES`, code 19), distinct
-from `RetainedUnsupportedPlan` for unsupported query shapes. Neither refusal is
-retryable. Hydrated/out-of-core rows, open user transactions, and writable requests refuse
+zero-offset limit. The seek property must also have a unique constraint, such
+as `CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE`. Without it, the lookup returns
+`RetainedUnsupportedPlan` before retained-source access or admission, regardless
+of the current match count. A second match under a unique constraint reports
+storage integrity failure through `RetainedExecutionError` and publishes no
+cursor or partial row. An index existing in the catalog is insufficient: a tiny
+label can cost-select a scan. Unsupported plans,
+hydrated/out-of-core rows, open user transactions, and writable requests refuse
 explicitly. There is no JSON result fallback or copied Arrow packing.
 
 The node remains row-oriented. Its immutable native row owns properties and

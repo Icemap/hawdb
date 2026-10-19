@@ -136,7 +136,7 @@ impl Parser<'_> {
                 self.expect_char(')')?;
                 OrderExpression::Id { variable }
             } else if first.eq_ignore_ascii_case("case")
-                || (matches_ignore_ascii_case(&first, &["coalesce", "left", "lower"])
+                || (matches_ignore_ascii_case(&first, &["coalesce", "left", "lower", "json_value"])
                     && self.peek_char() == Some('('))
             {
                 self.restore(expression_start);
@@ -213,6 +213,16 @@ impl Parser<'_> {
                 self.expect_char(',')?;
             }
             return Ok(ScalarExpressionKind::Coalesce(expressions));
+        }
+        if variable.eq_ignore_ascii_case("json_value") && self.consume_char('(') {
+            let expression = self.parse_scalar_expression()?;
+            self.expect_char(',')?;
+            let path = self.parse_value()?;
+            self.expect_char(')')?;
+            return Ok(ScalarExpressionKind::JsonValue {
+                expression: Box::new(expression),
+                path,
+            });
         }
         if variable.eq_ignore_ascii_case("left") && self.consume_char('(') {
             let expression = self.parse_scalar_expression()?;

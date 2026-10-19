@@ -53,10 +53,6 @@ mod tests;
 
 type GraphMemo = Memo<GroupExpr>;
 
-const GRAPH_EXPANSION_FANOUT_PER_SEED_HOP: usize = 64;
-const GRAPH_EXPANSION_MAX_CANDIDATES: usize = 8_192;
-const GRAPH_EXPANSION_PAYLOAD_BYTE_LIMIT: usize = 8 * 1024 * 1024;
-
 #[derive(Debug)]
 struct GroupExpr {
     logical: LogicalPlan,
@@ -644,19 +640,6 @@ fn vector_plan_top_k(plan: &hawdb_plan_cypher::VectorPhysicalPlan) -> Option<usi
     }
 }
 
-fn graph_expansion_budget(top_k: usize, max_hops: usize) -> GraphExpansionBudget {
-    let candidate_limit = top_k
-        .max(1)
-        .saturating_mul(max_hops.max(1))
-        .saturating_mul(GRAPH_EXPANSION_FANOUT_PER_SEED_HOP)
-        .min(GRAPH_EXPANSION_MAX_CANDIDATES)
-        .max(top_k);
-    GraphExpansionBudget {
-        candidate_limit,
-        payload_byte_limit: GRAPH_EXPANSION_PAYLOAD_BYTE_LIMIT,
-    }
-}
-
 fn logical_group_count(logical: &LogicalPlan) -> usize {
     match logical {
         LogicalPlan::GraphMatch { input, .. } => {
@@ -876,17 +859,18 @@ fn lower_logical(
                 decisions,
                 stage_events,
             );
-            let graph_budget =
-                seed_window(&input).map(|(_, top_k)| graph_expansion_budget(top_k, *max_hops));
-            if let Some(graph_budget) = graph_budget {
-                let producer = seed_window(&input)
-                    .map(|(producer, _)| producer)
-                    .unwrap_or("retriever");
+            let graph_budget = seed_window(&input).map(|(producer, _)| {
                 decisions.push(format!(
-                    "bound {producer}-seeded graph expansion to {} candidates and {} payload bytes",
-                    graph_budget.candidate_limit, graph_budget.payload_byte_limit
+                    "admit {producer}-seeded graph expansion using execution memory budgets"
                 ));
-            }
+                // Keep seeded expansion reporting and admitted identity tracking.
+                // Live ownership, not seed fanout or cumulative throughput, sets
+                // the default resource boundary. Hosts may add explicit caps.
+                GraphExpansionBudget {
+                    candidate_limit: usize::MAX,
+                    payload_byte_limit: usize::MAX,
+                }
+            });
             PhysicalPlan::AdjacencyExpandExec {
                 source_variable: source_variable.clone(),
                 source_label: source_label.clone(),
@@ -1723,7 +1707,9 @@ fn collect_projection_properties(
         ProjectionExpression::Coalesce(expressions) => expressions
             .iter()
             .all(|expression| collect_projection_properties(expression, variable, required)),
-        ProjectionExpression::Left { expression, .. } | ProjectionExpression::Lower(expression) => {
+        ProjectionExpression::Left { expression, .. }
+        | ProjectionExpression::Lower(expression)
+        | ProjectionExpression::JsonValue { expression, .. } => {
             collect_projection_properties(expression, variable, required)
         }
         ProjectionExpression::CaseCoalesceDifferenceFloorZero {

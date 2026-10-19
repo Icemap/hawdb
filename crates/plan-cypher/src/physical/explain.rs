@@ -505,10 +505,16 @@ impl PhysicalPlan {
                     .unwrap_or_else(|| format!(" rel_type={rel_type}"));
                 let budget = graph_budget
                     .map(|budget| {
-                        format!(
-                            " graph_candidate_limit={} graph_payload_byte_limit={}",
-                            budget.candidate_limit, budget.payload_byte_limit
-                        )
+                        if budget.candidate_limit == usize::MAX
+                            && budget.payload_byte_limit == usize::MAX
+                        {
+                            " graph_budget=execution_memory".to_string()
+                        } else {
+                            format!(
+                                " graph_candidate_limit={} graph_payload_byte_limit={}",
+                                budget.candidate_limit, budget.payload_byte_limit
+                            )
+                        }
                     })
                     .unwrap_or_default();
                 format!(

@@ -1,11 +1,31 @@
 # PR986 review disposition
 
-Issue Number: ref #987, ref #976
+Issue Number: ref #987, ref #976, ref #1081
 
 This records the bounded review fixes and remaining decisions. It does not
 constitute independent approval of the retained implementation.
 
-## Current delivery and qualification snapshots
+## Main integration in progress
+
+Actual main advanced to `1fd242eb` after production snapshot `0c298984`.
+The current merge adopts #1082's unique-constraint eligibility before source
+access/admission, including zero matches and `LIMIT 0`. Non-unique seeks return
+`UnsupportedPlan`; a second match under a unique constraint returns
+`Execution(StorageIntegrity(..))` and publishes no cursor or partial row.
+Consumed snapshots use their own catalogs. The draft-only `MultipleMatches`
+variant/C-Go status19/Python `multiple_matches` proposal is withdrawn to match
+main; existing error variants/status0..18 and descriptor layouts are unchanged.
+The C refusal test retains sentinel-output zeroing and zero-owner accounting.
+
+The held-node write observer now declares the required unique constraint in
+untimed setup for every mode and reports that setup explicitly. Its earlier
+0c controls are historical; they are not new-source evidence. Main also brings
+JSON scalar extraction, governed seeded expansion, statistics-safe point-plan
+refresh, release0.11 metadata and a rules_python update. Existing0c runtime,
+CI and performance records do not qualify those changed native inputs.
+Final merged-head checks and the complete source-bound matrices remain required.
+
+## Historical delivery and qualification snapshots
 
 The ordinary tooling, session policy, numeric ownership/bindings and Arrow
 prerequisites have landed on main. These actual commits are ancestors of the
@@ -23,17 +43,13 @@ observed main e864272e:
 | #1070 Python read budgets and plans | da58476d |
 | #1071 admitted retained Arrow handoff | 6db1c013 |
 
-PR986 remains the indexed-node composition and final qualification delivery,
-directly against main. Node component #1082 is Ready against main at ecb9202d;
-its current twelve execution checks pass, with approval still outstanding.
-Its accepted changes `4e78f6d6`/`ecb9202d` preserve configured/runtime budget
-origins, report missing indexed rows as storage-integrity failures and document
-close-before-EOF observation. This branch also distinguishes data-dependent
-multiple matches from unsupported plan shapes across Rust/C/Go/Python:
-`MultipleMatches`, C/Go status19 and Python `kind="multiple_matches"`.
-Existing C descriptor layouts, signatures and status values0..18 are unchanged.
-Rust exhaustive matches on `RetainedQueryError` must handle the new variant.
-These changes do not constitute independent approval.
+Before this integration, PR986 composed the indexed-node delivery against
+main e864272e. Separate component #1082 subsequently landed on main as1fd242eb
+with unique-constraint eligibility; its earlier ecb9202d readiness record is
+historical. The earlier0c branch distinguished data-dependent multi-matches
+using a new enum/status, which this integration supersedes as described above.
+Those changes and historical checks do not constitute independent approval of
+this final composition.
 
 The Node review source passed the unchanged complete local general selection
 (1781passed/0failed/1existingignored/322filtered,427.72s within900s), contracts33,

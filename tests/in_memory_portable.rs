@@ -71,6 +71,211 @@ fn writes_parameters_traversal_and_error_recovery_share_one_database() {
 }
 
 #[test]
+fn json_value_groups_string_properties_without_host_row_scans() {
+    let mut db = Database::new();
+    for (id, metadata) in [
+        (1, r#"{"original_source":"claude-code","count":3}"#),
+        (2, r#"{"original_source":"claude-code"}"#),
+        (3, r#"{"original_source":"mcp"}"#),
+    ] {
+        db.query_with_params(
+            "CREATE (:Memory {id: $id, metadata: $metadata})",
+            &BTreeMap::from([
+                ("id".into(), Value::Int(id)),
+                ("metadata".into(), Value::String(metadata.into())),
+            ]),
+        )
+        .unwrap();
+    }
+
+    let grouped = db
+        .query_with_params(
+            "MATCH (m:Memory) WITH json_value(m.metadata, $path) AS origin, COUNT(*) AS total RETURN origin, total ORDER BY origin",
+            &BTreeMap::from([(
+                "path".into(),
+                Value::String("$.original_source".into()),
+            )]),
+        )
+        .unwrap();
+    assert_eq!(grouped.rows.len(), 2);
+    assert_eq!(
+        grouped.rows[0].get("origin"),
+        Some(&Value::String("claude-code".into()))
+    );
+    assert_eq!(grouped.rows[0].get("total"), Some(&Value::Int(2)));
+    assert_eq!(
+        grouped.rows[1].get("origin"),
+        Some(&Value::String("mcp".into()))
+    );
+    assert_eq!(grouped.rows[1].get("total"), Some(&Value::Int(1)));
+
+    let count = db
+        .query_with_params(
+            "MATCH (m:Memory) WHERE json_value(m.metadata, $path) = 'claude-code' RETURN COUNT(*) AS total",
+            &BTreeMap::from([(
+                "path".into(),
+                Value::String("$.original_source".into()),
+            )]),
+        )
+        .unwrap();
+    assert_eq!(count.rows[0].get("total"), Some(&Value::Int(2)));
+
+    let same_query =
+        "MATCH (m:Memory) WHERE m.id = 1 RETURN json_value(m.metadata, $path) AS value";
+    let source = db
+        .query_with_params(
+            same_query,
+            &BTreeMap::from([("path".into(), Value::String("$.original_source".into()))]),
+        )
+        .unwrap();
+    let numeric = db
+        .query_with_params(
+            same_query,
+            &BTreeMap::from([("path".into(), Value::String("$.count".into()))]),
+        )
+        .unwrap();
+    assert_eq!(
+        source.rows[0].get("value"),
+        Some(&Value::String("claude-code".into()))
+    );
+    assert_eq!(numeric.rows[0].get("value"), Some(&Value::Int(3)));
+
+    let mut budgeted = Database::new_with_config(DatabaseConfig {
+        max_read_result_rows: Some(1),
+        ..DatabaseConfig::default()
+    });
+    budgeted
+        .query(r#"CREATE (:Memory {metadata: '{"source":"a"}'})"#)
+        .unwrap();
+    budgeted
+        .query(r#"CREATE (:Memory {metadata: '{"source":"b"}'})"#)
+        .unwrap();
+    let grouped_query = "MATCH (m:Memory) WITH json_value(m.metadata, '$.source') AS source, COUNT(*) AS total RETURN source, total";
+    assert!(budgeted
+        .query(grouped_query)
+        .unwrap_err()
+        .to_string()
+        .contains("max_read_result_rows"));
+
+    let mut payload_limited = Database::new_with_config(DatabaseConfig {
+        max_read_result_payload_bytes: Some(16),
+        ..DatabaseConfig::default()
+    });
+    payload_limited
+        .query(r#"CREATE (:Memory {metadata: '{"source":"a-long-source-name"}'})"#)
+        .unwrap();
+    assert!(payload_limited
+        .query("MATCH (m:Memory) RETURN json_value(m.metadata, '$.source') AS source")
+        .unwrap_err()
+        .to_string()
+        .contains("max_read_result_payload_bytes"));
+
+    let mut memory_limited = Database::new_with_config(DatabaseConfig {
+        execution_memory: hawdb::executor::ExecutionMemoryConfig {
+            query_memory_bytes: std::num::NonZeroUsize::new(1536).unwrap(),
+            ..hawdb::executor::ExecutionMemoryConfig::default()
+        },
+        ..DatabaseConfig::default()
+    });
+    memory_limited
+        .query(r#"CREATE (:Memory {metadata: '{"source":"limited"}'})"#)
+        .unwrap();
+    assert!(memory_limited
+        .query("MATCH (m:Memory) RETURN m.metadata AS metadata")
+        .is_ok());
+    let memory_error = memory_limited
+        .query("MATCH (m:Memory) RETURN json_value(m.metadata, '$.source') AS source")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        memory_error.contains("query memory account"),
+        "{memory_error}"
+    );
+
+    assert!(db
+        .query_with_context(
+            "MATCH (m:Memory) RETURN json_value(m.metadata, '$.original_source') AS source",
+            &RuntimeTaskContext::with_timeout(Duration::ZERO),
+        )
+        .is_err());
+}
+
+#[test]
+fn json_value_distinguishes_missing_invalid_and_non_string_documents() {
+    let mut db = Database::new();
+    db.query(r#"CREATE (:Memory {id: 1, metadata: '{"flag":true,"count":3,"nested":{"name":"Ada"},"nothing":null}'})"#)
+        .unwrap();
+    let row = &db
+        .query("MATCH (m:Memory) RETURN json_value(m.metadata, '$.flag') AS flag, json_value(m.metadata, '$.count') AS count, json_value(m.metadata, '$.nested.name') AS name, json_value(m.metadata, '$.missing') AS missing, coalesce(json_value(m.metadata, '$.nothing'), 'fallback') AS fallback")
+        .unwrap()
+        .rows[0];
+    assert_eq!(row.get("flag"), Some(&Value::Bool(true)));
+    assert_eq!(row.get("count"), Some(&Value::Int(3)));
+    assert_eq!(row.get("name"), Some(&Value::String("Ada".into())));
+    assert_eq!(row.get("missing"), Some(&Value::Null));
+    assert_eq!(row.get("fallback"), Some(&Value::String("fallback".into())));
+    let case = db
+        .query("MATCH (m:Memory) RETURN CASE WHEN json_value(m.metadata, '$.flag') = true THEN 'yes' ELSE 'no' END AS verdict")
+        .unwrap();
+    assert_eq!(
+        case.rows[0].get("verdict"),
+        Some(&Value::String("yes".into()))
+    );
+
+    assert!(db
+        .query("MATCH (m:Memory) RETURN json_value(m.metadata, '$.nested') AS value")
+        .unwrap_err()
+        .to_string()
+        .contains("not scalar"));
+    assert!(db
+        .query("MATCH (m:Memory) RETURN json_value(m.metadata, '$[0]') AS value")
+        .unwrap_err()
+        .to_string()
+        .contains("path"));
+    db.query("CREATE (:Memory {id: 2, metadata: '{invalid'})")
+        .unwrap();
+    assert!(db
+        .query("MATCH (m:Memory) WHERE m.id = 2 RETURN json_value(m.metadata, '$.flag') AS value")
+        .unwrap_err()
+        .to_string()
+        .contains("invalid JSON"));
+    db.query("CREATE (:Memory {id: 3, metadata: 12})").unwrap();
+    assert!(db
+        .query("MATCH (m:Memory) WHERE m.id = 3 RETURN json_value(m.metadata, '$.flag') AS value")
+        .unwrap_err()
+        .to_string()
+        .contains("string document"));
+    db.query(r#"CREATE (:Memory {id: 5, metadata: '{"count":18446744073709551615}'})"#)
+        .unwrap();
+    assert!(db
+        .query("MATCH (m:Memory) WHERE m.id = 5 RETURN json_value(m.metadata, '$.count') AS value")
+        .unwrap_err()
+        .to_string()
+        .contains("signed 64-bit range"));
+    assert!(db
+        .query_with_params(
+            "MATCH (m:Memory) WHERE m.id = 1 RETURN json_value(m.metadata, $path) AS value",
+            &BTreeMap::from([("path".into(), Value::Int(1))]),
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("path must be a string"));
+    db.query_with_params(
+        "CREATE (:Memory {id: 4, metadata: $metadata})",
+        &BTreeMap::from([(
+            "metadata".into(),
+            Value::String(format!(r#"{{"field":"{}"}}"#, "a".repeat(1024 * 1024))),
+        )]),
+    )
+    .unwrap();
+    assert!(db
+        .query("MATCH (m:Memory) WHERE m.id = 4 RETURN json_value(m.metadata, '$.field') AS value")
+        .unwrap_err()
+        .to_string()
+        .contains("1 MiB input limit"));
+}
+
+#[test]
 fn browser_clock_and_randomness_generate_distinct_uuidv7_values() {
     let mut db = Database::new();
     db.query_sql("CREATE TABLE items (id BIGINT PRIMARY KEY)")
@@ -258,6 +463,8 @@ fn consumed_retained_node_snapshot_keeps_old_data_and_task_bound_after_database_
     db.query("CREATE PROPERTY ON NODE TABLE Item(key) TYPE INT")
         .unwrap();
     db.query("CREATE INDEX ON :Item(key)").unwrap();
+    db.query("CREATE CONSTRAINT ON :Item(key) ASSERT UNIQUE")
+        .unwrap();
     db.query_with_params(
         "UNWIND $rows AS row CREATE (:Item {key: row.key, text: 'original'})",
         &BTreeMap::from([(

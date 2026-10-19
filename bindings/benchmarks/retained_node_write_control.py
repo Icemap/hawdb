@@ -69,6 +69,7 @@ def run(args):
                            {"rows": [{"id": key, "score": 0, "pad": pad,
                                       "nested": {"items": [key, None, True]}}
                                      for key in range(start, min(start + 512, args.rows))]})
+            db.execute("CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE")
             # Initialize the same lazy retained governor for every mode via
             # an empty indexed cursor; ordinary modes retain no row or buffer.
             missing = db.execute_retained_node(QUERY, {"id": -1})
@@ -199,6 +200,7 @@ def run(args):
             "records": records, "summary": summary, "setup_ns": setup_ns,
             "durability": "SyncOnEveryWrite", "prefetch": 0,
             "process_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024),
+            "setup_unique_constraint": "Item(id)",
             "scope": "Same-source point SET with held old row owners. Reader setup and old/new checks are outside writes. Instrumented allocations and times are distinct from ordinary runs. RSS includes all fixtures/setup; no mode-specific RSS attribution or comprehensive performance qualification."}
 
 

@@ -150,8 +150,10 @@ impl Parser<'_> {
             self.expect_char(')')?;
             return Ok(PropertyPredicate::ExpressionContains { expression, value });
         }
-        if matches_ignore_ascii_case(&variable, &["coalesce", "left", "lower", "case"])
-            && self.peek_char() == Some('(')
+        if matches_ignore_ascii_case(
+            &variable,
+            &["coalesce", "left", "lower", "json_value", "case"],
+        ) && self.peek_char() == Some('(')
         {
             self.restore(expression_start);
             let expression = self.parse_scalar_expression()?;

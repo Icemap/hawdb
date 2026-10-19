@@ -73,8 +73,6 @@ pub enum RetainedQueryError {
     InvalidColumn,
     SizeOverflow,
     AdapterDelivery,
-    /// An eligible indexed node lookup matched more than one row.
-    MultipleMatches,
 }
 
 impl RetainedQueryError {
