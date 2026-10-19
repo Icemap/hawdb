@@ -17,6 +17,8 @@ use hawdb_core::RuntimeCancellationToken;
 use hawdb_executor::{QueryMemoryClass, QueryMemoryLedger};
 use std::cell::{Cell, RefCell};
 
+mod memory_budget;
+
 thread_local! {
     static ALLOCATION_COUNT: Cell<Option<usize>> = const { Cell::new(None) };
     static CANCELLATION: RefCell<Option<(usize, RuntimeCancellationToken)>> = const { RefCell::new(None) };
