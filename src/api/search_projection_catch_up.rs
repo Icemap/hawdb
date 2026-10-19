@@ -63,6 +63,8 @@ impl Database {
     /// not advance the projection watermark. A prefix ending before the pinned
     /// snapshot epoch is rejected before the hydrator runs; the selected interval
     /// must cover the complete source head within the caller's existing budgets.
+    /// See [`Self::catch_up_search_projection_with_batch_hydrator`] for progress
+    /// limitations and retry options under ongoing writes.
     pub fn catch_up_search_projection_with_relational<F>(
         &self,
         search_index: &mut SearchIndex,
@@ -106,6 +108,14 @@ impl Database {
     /// the projection watermark. A prefix ending before the pinned source epoch
     /// is rejected before invoking the host. Partial-prefix progress requires the
     /// separately qualified bounded preparation protocol tracked by #1043.
+    ///
+    /// Under sustained writes, a bounded batch can repeatedly miss the pinned
+    /// head and make no progress. Hosts may retry with larger source/projection
+    /// batches within their resource limits or temporarily quiesce writes.
+    /// Increasing `max_batches` alone cannot make a refused prefix publishable.
+    /// Sustained refusal requires the bounded C..E staging protocol in #1043.
+    /// This interim refusal remains [`HawDBError::Execution`]; a typed retry
+    /// condition belongs to that staging protocol rather than error-text parsing.
     pub fn catch_up_search_projection_with_batch_hydrator<F>(
         &self,
         search_index: &mut SearchIndex,
