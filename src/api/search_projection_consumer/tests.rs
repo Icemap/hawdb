@@ -1663,3 +1663,175 @@ fn legacy_registered_prefix_1043_refuses_before_hydration_and_reopens_complete_r
     );
     assert_eq!(reopened.projection().receipt().source_epoch, final_epoch);
 }
+
+#[test]
+fn consumer_native_settlement_revokes_creation_and_reuses_only_pending_capacity() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    let name = pending.generation_name().to_owned();
+    let before = db.file_descriptor_metrics().unwrap().open;
+    pending.settle_no_effect().unwrap();
+    assert_eq!(db.file_descriptor_metrics().unwrap().open, before - 1);
+    assert!(!fixture.0.join(&name).exists());
+    assert!(pending.create().is_err());
+    assert!(pending.born_directory().is_err());
+    let evidence = allocation_evidence(&fixture);
+    assert_eq!(evidence.1["high_water"], 3);
+    assert!(evidence.1["pending"].as_array().unwrap().is_empty());
+    pending.settle_no_effect().unwrap();
+    assert_eq!(allocation_evidence(&fixture).0, evidence.0);
+    drop((pending, db));
+    let mut db = fixture.database();
+    let next = reserve_native_generation(&mut db, &fixture);
+    assert_eq!(allocation_evidence(&fixture).1["high_water"], 6);
+    let next = next.prepare_stationary_generation(&fixture.0).unwrap();
+    assert_ne!(next.generation_name(), name);
+}
+
+#[test]
+fn consumer_native_settlement_collision_preserves_a_complete_matching_foreign_marker() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    let path = fixture.0.join(pending.generation_name());
+    let evidence = allocation_evidence(&fixture).1;
+    let binding = serde_json::json!([evidence["project_id"], evidence["pending"][0]]);
+    let mut marker = b"HAWDB_CONSUMER_BIRTH_V1\n".to_vec();
+    marker.extend(serde_json::to_vec(&binding).unwrap());
+    marker.extend(hawdb_integrity::crc32c(&marker).get().to_le_bytes());
+    std::fs::create_dir(&path).unwrap();
+    std::fs::write(path.join("consumer-birth.hawdb"), &marker).unwrap();
+    assert!(pending.create().is_err());
+    pending.settle_no_effect().unwrap();
+    assert_eq!(
+        std::fs::read(path.join("consumer-birth.hawdb")).unwrap(),
+        marker
+    );
+    assert_eq!(allocation_evidence(&fixture).1["high_water"], 3);
+    assert!(allocation_evidence(&fixture).1["pending"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn consumer_native_settlement_refuses_an_actual_birth_and_preserves_native_and_ledger_evidence() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let path = fixture.0.join(pending.generation_name());
+    let marker = std::fs::read(path.join("consumer-birth.hawdb")).unwrap();
+    let ledger = allocation_evidence(&fixture).0;
+    assert!(matches!(
+        pending.settle_no_effect(),
+        Err(HawDBError::Execution(_))
+    ));
+    assert!(pending.born_directory().is_ok());
+    assert_eq!(
+        std::fs::read(path.join("consumer-birth.hawdb")).unwrap(),
+        marker
+    );
+    assert_eq!(allocation_evidence(&fixture).0, ledger);
+}
+
+#[test]
+fn consumer_native_settlement_fd_refusal_keeps_retry_custody_after_revoking_creation() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    let name = pending.generation_name().to_owned();
+    let before = allocation_evidence(&fixture).0;
+    let context = db
+        .runtime
+        .get()
+        .unwrap()
+        .store
+        .file_descriptor_context()
+        .unwrap();
+    let capture = hawdb_storage::file_io::SourceDirectory::capture(&fixture.0, &context).unwrap();
+    let mut blockers = Vec::new();
+    loop {
+        match capture.duplicate(&context) {
+            Ok(blocker) => blockers.push(blocker),
+            Err(error) => {
+                assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+                break;
+            }
+        }
+    }
+    let error = pending.settle_no_effect().unwrap_err();
+    assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+    assert_eq!(allocation_evidence(&fixture).0, before);
+    assert!(pending.create().is_err());
+    assert!(!fixture.0.join(name).exists());
+    drop((blockers, capture));
+    pending.settle_no_effect().unwrap();
+    assert!(allocation_evidence(&fixture).1["pending"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert_eq!(allocation_evidence(&fixture).1["high_water"], 3);
+    assert_eq!(db.file_descriptor_metrics().unwrap().reserved, 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn consumer_native_settlement_refuses_uncertain_creation_even_when_no_path_exists() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let parent = fixture.0.join("unlinked-parent");
+    std::fs::create_dir(&parent).unwrap();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation.prepare_stationary_generation(&parent).unwrap();
+    std::fs::remove_dir(&parent).unwrap();
+    assert!(pending.create().is_err());
+    let before = allocation_evidence(&fixture).0;
+    assert!(matches!(
+        pending.settle_no_effect(),
+        Err(HawDBError::Execution(_))
+    ));
+    assert_eq!(allocation_evidence(&fixture).0, before);
+    assert_eq!(
+        allocation_evidence(&fixture).1["pending"][0]["native_birth"]["state"],
+        "Pending"
+    );
+    assert!(!parent.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn consumer_native_settlement_updates_the_original_source_after_label_replacement() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    let source = fixture.0.join("database");
+    let retained = fixture.0.join("retained-database");
+    std::fs::rename(&source, &retained).unwrap();
+    std::fs::create_dir(&source).unwrap();
+    let foreign = source.join("consumer-allocations.hawdb");
+    std::fs::write(&foreign, b"foreign source evidence").unwrap();
+    pending.settle_no_effect().unwrap();
+    assert_eq!(std::fs::read(foreign).unwrap(), b"foreign source evidence");
+    let bytes = std::fs::read(retained.join("consumer-allocations.hawdb")).unwrap();
+    let start = bytes.iter().position(|byte| *byte == b'\n').unwrap() + 1;
+    let ledger: serde_json::Value = serde_json::from_slice(&bytes[start..bytes.len() - 4]).unwrap();
+    assert_eq!(ledger["high_water"], 3);
+    assert!(ledger["pending"].as_array().unwrap().is_empty());
+}

@@ -1129,3 +1129,16 @@ tla_check(
     )
     for control in ["SkipParentBarrier", "AdoptMarkerOnRecovery", "ForgetDebtOnClose"]
 ]
+
+[
+    tla_check(
+        name = "HawDBConsumerNoEffectSettlement" + control + "_check",
+        module = "HawDBConsumerNoEffectSettlement.tla",
+        config = "mutants/HawDBConsumerNoEffectSettlement" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["SettleUnknown", "RefundIdentity", "CloseTargetLate", "SkipRetryBarrier", "ReopenRevokedParent"]
+]

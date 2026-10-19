@@ -22,11 +22,44 @@ impl std::ops::Deref for DirectoryOwner<'_> {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 type RenameHook = std::cell::RefCell<Option<Box<dyn FnOnce()>>>;
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static AFTER_RENAME: RenameHook = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl SourceDirectory {
+    /// Test-only, thread-local observation after one successful native rename
+    /// and before its completion barriers. The scope resets on return/unwind.
+    #[doc(hidden)]
+    pub fn observe_next_control_rename<T>(
+        callback: impl FnOnce() + 'static,
+        operation: impl FnOnce() -> T,
+    ) -> io::Result<T> {
+        AFTER_RENAME.with(|hook| {
+            let mut slot = hook.borrow_mut();
+            if slot.is_some() {
+                return Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "a control rename observer is already installed",
+                ));
+            }
+            *slot = Some(Box::new(callback));
+            Ok(())
+        })?;
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                AFTER_RENAME.with(|hook| *hook.borrow_mut() = None);
+            }
+        }
+        let reset = Reset;
+        let result = operation();
+        drop(reset);
+        Ok(result)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -227,7 +260,7 @@ impl<'directory> CapturedControlCandidate<'directory> {
             #[cfg(not(any(test, feature = "test-support")))]
             native()?;
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         AFTER_RENAME.with(|hook| {
             let callback = hook.borrow_mut().take();
             if let Some(callback) = callback {

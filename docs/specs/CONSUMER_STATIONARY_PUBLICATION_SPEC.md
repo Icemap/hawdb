@@ -72,7 +72,9 @@ refusal/retry and old-reader assertions remain; no owner or barrier is dropped.
 
 This does not migrate all GraphStore/registry I/O. Initial creation now reserves
 through the original captured project and actual UUID branch owner; its bounded
-journal does not implement birth/debt settlement or stationary publication. Capturing whatever directory a saved label names later,
+journal alone does not implement native birth or stationary publication.
+The separate live native primitive and its no-effect settlement subset are
+described below. Capturing whatever directory a saved label names later,
 even with a matching decoded database UUID, is not an acceptable substitute.
 Physical SourceDirectory identities remain process-local keys, never serialized
 logical incarnations or durable birth receipts. The native ownership refinement
@@ -99,9 +101,9 @@ than recreating zero. Missing/corrupt evidence also refuses Consumer creation,
 status, readiness and activation, while ordinary graph writes remain available.
 
 The canonical bounded codec admits at most 1 MiB and 256 pending reservations;
-locators are UTF-8 and at most 16 KiB. All reservations are currently retained,
-including completed legacy creations: no settlement exists yet, so the 257th
-reservation fails closed. Registration/projection/checkpoint UUIDs are bound in
+locators are UTF-8 and at most 16 KiB. Legacy creations, known-born and uncertain
+native attempts remain retained. Only live proven no-effect attempts can settle;
+the 257th unresolved reservation fails closed. Registration/projection/checkpoint UUIDs are bound in
 the record, but its locator and counters grant no native birth, adoption or
 deletion authority. Rebind, clear and subsequent candidate producers still need
 this protocol. The existing Consumer directory move and its Windows failures
@@ -116,8 +118,13 @@ The kernel now also has a separate native birth path, described in
 original parent, persists intent, exclusively creates and synchronizes the
 bound marker/directory, and records the receipt before exposing a producer
 directory. It retains debt on errors and close. The legacy relocating facade
-does not use that path yet; target lease integration, recovery resolution,
-settlement and stationary serving/selection remain unfinished. Allocation ledger
+does not use that path yet. A live native token can revoke creation, close its
+target-parent descriptor and durably settle only proven no-effect debt without
+refunding identifiers. A lost response requires fresh file/root barriers even
+when the selected ledger already lacks its row; see
+[the no-effect settlement refinement](../tla/CONSUMER_NO_EFFECT_SETTLEMENT_PROOF.md).
+Known-born/uncertain debt, target lease integration, recovery resolution and
+stationary serving/selection remain unfinished. Allocation ledger
 V2 replaces the earlier development-only envelope without a compatibility migration.
 
 The source project's durable allocation ledger is authoritative for reservations,

@@ -147,13 +147,13 @@ jobs:
             --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/projection-source-epoch.txt
 
-      - name: Test stationary Consumer native birth and retained debt
+      - name: Test native Consumer birth and no-effect settlement
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -euo pipefail
           bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            -- consumer_native_birth_ --nocapture --test-threads=1 \
+            -- consumer_native_birth_ consumer_native_settlement_ --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/consumer-native-birth.txt
 
       - name: Test durable Consumer allocation and activation refusal

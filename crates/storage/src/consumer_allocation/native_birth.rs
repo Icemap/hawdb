@@ -9,6 +9,15 @@ use crate::file_io::CapturedDirectoryCandidate;
 const BIRTH_FILE: &str = "consumer-birth.hawdb";
 const BIRTH_HEADER: &[u8] = b"HAWDB_CONSUMER_BIRTH_V1\n";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    Prepared,
+    Attempted,
+    Recorded,
+    Settling,
+    Settled,
+}
+
 /// A single native attempt and its durable debt. Drop never removes a name or
 /// refunds identities. The caller must exclude mutation of its private name;
 /// serving publication additionally requires the target publication lease.
@@ -16,15 +25,15 @@ const BIRTH_HEADER: &[u8] = b"HAWDB_CONSUMER_BIRTH_V1\n";
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct PendingConsumerGeneration {
-    allocation: ReservedConsumerAllocation,
-    parent: SourceDirectory,
+    allocation: Option<ReservedConsumerAllocation>,
+    parent: Option<SourceDirectory>,
     candidate: CapturedDirectoryCandidate,
     directory: Option<SourceDirectory>,
     marker: Option<File>,
     marker_bytes: Vec<u8>,
     parent_locator: String,
-    attempted: bool,
-    recorded: bool,
+    phase: Phase,
+    settlement_publication_attempted: bool,
 }
 
 impl ReservedConsumerAllocation {
@@ -77,15 +86,15 @@ impl ReservedConsumerAllocation {
             },
         )?;
         Ok(PendingConsumerGeneration {
-            allocation: self,
-            parent,
+            allocation: Some(self),
+            parent: Some(parent),
             candidate,
             directory: None,
             marker: None,
             marker_bytes,
             parent_locator,
-            attempted: false,
-            recorded: false,
+            phase: Phase::Prepared,
+            settlement_publication_attempted: false,
         })
     }
 
@@ -161,6 +170,56 @@ impl ReservedConsumerAllocation {
             Ok(())
         })
     }
+
+    fn settle_no_effect_record(
+        &self,
+        expected: NativeBirth,
+        publication_attempted: &mut bool,
+    ) -> Result<()> {
+        self._project.with_locked_catalog(|root, context, catalog| {
+            let mut ledger = check_source(
+                &self._project,
+                &self._source,
+                self.source_branch,
+                root,
+                context,
+                &catalog,
+            )?;
+            let index = ledger
+                .pending
+                .iter()
+                .position(|row| row.operation == self.operation.0);
+            let Some(index) = index else {
+                if !*publication_attempted || ledger.high_water < self.operation.0 {
+                    return Err(invalid("unattempted settlement record is missing"));
+                }
+                // A previous response can be lost after the row disappeared.
+                // Repeat actual file and original-parent barriers before ACK;
+                // reading absent metadata alone cannot establish durability.
+                let file = root.open_mutable_child(context, LEDGER_FILE, false)?;
+                file.sync_all()?;
+                root.sync(context)?;
+                return Ok(());
+            };
+            let row = &ledger.pending[index];
+            self.require_row(row)?;
+            if row.native_birth != expected {
+                return Err(invalid("no-effect settlement birth state differs"));
+            }
+            ledger.pending.remove(index);
+            // high_water deliberately survives removal. A settled operation
+            // remains issued, including after close/reopen or lost response.
+            validate(&ledger)?;
+            let bytes = encode(&ledger)?;
+            let name = format!("consumer-settlement-{}.tmp", hawdb_core::generate_uuidv7()?);
+            let mut candidate = root.create_control_candidate(context, &name)?;
+            candidate.write_all(&bytes)?;
+            candidate.seal()?;
+            *publication_attempted = true;
+            candidate.replace_head(context, LEDGER_FILE)?;
+            Ok(())
+        })
+    }
 }
 
 impl PendingConsumerGeneration {
@@ -173,50 +232,81 @@ impl PendingConsumerGeneration {
     /// No producer receives the directory until both target and ledger barriers
     /// have completed. A birth receipt is not source freshness or activation.
     pub fn create(&mut self) -> Result<()> {
-        if self.attempted {
+        if self.phase != Phase::Prepared {
             return Err(invalid(
                 "native birth already attempted; resolve original debt",
             ));
         }
-        self.attempted = true;
-        let context = self.parent.operation_context();
-        self.parent
-            .create_directory_candidate(&context, &mut self.candidate)?;
-        self.directory = Some(
-            self.parent
-                .open_created_directory(&context, &self.candidate)?,
-        );
+        self.phase = Phase::Attempted;
+        let parent = self.parent.as_ref().expect("prepared birth retains parent");
+        let context = parent.operation_context();
+        parent.create_directory_candidate(&context, &mut self.candidate)?;
+        self.directory = Some(parent.open_created_directory(&context, &self.candidate)?);
         let directory = self.directory.as_ref().expect("opened created directory");
         self.marker = Some(directory.create_child_new(&context, BIRTH_FILE)?);
         let marker = self.marker.as_mut().expect("created marker");
         marker.write_all(&self.marker_bytes)?;
         marker.sync_all()?;
         directory.sync(&context)?;
-        self.parent.sync(&context)?;
+        parent.sync(&context)?;
         let generation_name = self.generation_name().to_owned();
-        self.allocation.transition_birth(
-            NativeBirth::Pending {
-                generation_name: generation_name.clone(),
-                parent_locator: self.parent_locator.clone(),
-            },
-            NativeBirth::Recorded {
-                generation_name,
-                parent_locator: self.parent_locator.clone(),
-            },
-        )?;
-        self.recorded = true;
+        self.allocation
+            .as_ref()
+            .expect("unsettled allocation")
+            .transition_birth(
+                NativeBirth::Pending {
+                    generation_name: generation_name.clone(),
+                    parent_locator: self.parent_locator.clone(),
+                },
+                NativeBirth::Recorded {
+                    generation_name,
+                    parent_locator: self.parent_locator.clone(),
+                },
+            )?;
+        self.phase = Phase::Recorded;
         Ok(())
     }
 
     /// Original captured directory for a producer, never reconstructed by name.
     /// Preparing/selecting a complete serving view remains a separate protocol.
     pub fn born_directory(&self) -> Result<&SourceDirectory> {
-        if !self.recorded {
+        if self.phase != Phase::Recorded {
             return Err(invalid("native birth has no completed durable receipt"));
         }
         Ok(self
             .directory
             .as_ref()
             .expect("recorded birth retains directory"))
+    }
+
+    /// Settle only native evidence that proves this operation owns no entry.
+    /// Fresh admission refusal and exclusive-create collision qualify; a
+    /// possible creation, successful birth or path absence never does.
+    /// Errors retain this token for fresh admission and lost-response retry.
+    pub fn settle_no_effect(&mut self) -> Result<()> {
+        if self.phase == Phase::Settled {
+            return Ok(());
+        }
+        if self.candidate.may_own_entry() || self.directory.is_some() || self.marker.is_some() {
+            return Err(HawDBError::Execution(
+                "consumer generation may own a native entry; retain its debt".into(),
+            ));
+        }
+        // Revoke creation before closing native target capacity. Even a
+        // pre-publication settlement error must not allow a later mkdir.
+        self.phase = Phase::Settling;
+        drop(self.parent.take());
+        drop(std::mem::take(&mut self.marker_bytes));
+        let expected = NativeBirth::Pending {
+            generation_name: self.generation_name().to_owned(),
+            parent_locator: self.parent_locator.clone(),
+        };
+        self.allocation
+            .as_ref()
+            .expect("unsettled allocation")
+            .settle_no_effect_record(expected, &mut self.settlement_publication_attempted)?;
+        drop(self.allocation.take());
+        self.phase = Phase::Settled;
+        Ok(())
     }
 }

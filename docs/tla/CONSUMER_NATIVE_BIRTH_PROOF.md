@@ -70,8 +70,10 @@ test or a running crash-image campaign into a passing result.
 
 ## Remaining implementation
 
-There is no recovery constructor, no adoption from marker/path equality, and no
-reclamation or settlement operation. A lost response can leave a complete
+There is no recovery constructor or adoption from marker/path equality.
+[Live no-effect settlement](CONSUMER_NO_EFFECT_SETTLEMENT_PROOF.md) now handles
+only attempts proven to own no entry; known-born and uncertain attempts remain
+retained debt. A lost response can leave a complete
 recorded birth but no live producer token. That outcome remains debt; it is not
 rollback. Target lease integration, explicit resolution with admitted native
 custody, complete producer closure, stationary query views, selector/receipt
