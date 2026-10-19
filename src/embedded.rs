@@ -332,6 +332,33 @@ impl HawDBEmbedded {
         }
     }
 
+    #[doc(hidden)]
+    pub fn open_in_memory_for_result_qualification(
+        config: DatabaseConfig,
+        governor: RuntimeGovernorConfig,
+    ) -> Self {
+        let deployment_profile = EmbeddedDeploymentProfile::SharedHost;
+        let storage_device = StorageDeviceProfile::host_provided(StorageMediaKind::Memory, None);
+        let setup = embedded_runtime_setup(
+            deployment_profile,
+            storage_device,
+            None,
+            None,
+            Some(governor),
+            None,
+        );
+        let mut database = Database::new_with_config(config);
+        database.set_runtime_governor(setup.runtime_governor.clone());
+        Self {
+            path: PathBuf::new(),
+            database,
+            deployment_profile,
+            runtime_resources: setup.runtime_resources,
+            runtime_governor: setup.runtime_governor,
+            transaction: None,
+        }
+    }
+
     pub fn open_nowledge_mem(
         options: NowledgeMemOpenOptions,
     ) -> Result<(NowledgeMemEmbeddedStore, NowledgeMemOpenReport)> {
@@ -408,6 +435,10 @@ impl HawDBEmbedded {
         cypher_text: &str,
         parameters: &BTreeMap<String, Value>,
     ) -> std::result::Result<QueryOutput, EmbeddedQueryError> {
+        #[cfg(feature = "retained-phase-profiling")]
+        let _retained_phase = crate::retained_phase_profile::Timer::start(
+            crate::retained_phase_profile::Phase::Owned,
+        );
         self.query_with_params_admitted_context(
             cypher_text,
             parameters,
@@ -423,6 +454,10 @@ impl HawDBEmbedded {
         parameters: &BTreeMap<String, Value>,
         options: RetainedQueryOptions,
     ) -> std::result::Result<RetainedQueryCursor, RetainedQueryError> {
+        #[cfg(feature = "retained-phase-profiling")]
+        let _retained_phase = crate::retained_phase_profile::Timer::start(
+            crate::retained_phase_profile::Phase::Prepare,
+        );
         if self.transaction.is_some() {
             return Err(HawDBError::Execution(
                 "a user transaction is open on this database".into(),
@@ -456,6 +491,10 @@ impl HawDBEmbedded {
         parameters: &BTreeMap<String, Value>,
         task_context: &RuntimeTaskContext,
     ) -> std::result::Result<QueryOutput, EmbeddedQueryError> {
+        #[cfg(feature = "retained-phase-profiling")]
+        let _retained_phase = crate::retained_phase_profile::Timer::start(
+            crate::retained_phase_profile::Phase::Owned,
+        );
         if self.transaction.is_some() {
             return Err(EmbeddedQueryError::Database(HawDBError::Execution(
                 "a user transaction is open on this database".into(),

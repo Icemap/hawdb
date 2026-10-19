@@ -506,6 +506,10 @@ impl Database {
         parameters: &BTreeMap<String, Value>,
         options: RetainedQueryOptions,
     ) -> Result<RetainedQueryCursor> {
+        #[cfg(feature = "retained-phase-profiling")]
+        let _retained_phase = crate::retained_phase_profile::Timer::start(
+            crate::retained_phase_profile::Phase::Prepare,
+        );
         let runtime = self.runtime.get()?;
         require_materialized_source(&runtime.store, options.require_source_reuse, None)?;
         let prepared = query_runtime::parse_runtime_execution(cypher)?;
@@ -551,6 +555,10 @@ impl DatabaseReadTransaction {
         parameters: &BTreeMap<String, Value>,
         options: RetainedQueryOptions,
     ) -> Result<RetainedQueryCursor> {
+        #[cfg(feature = "retained-phase-profiling")]
+        let _retained_phase = crate::retained_phase_profile::Timer::start(
+            crate::retained_phase_profile::Phase::Prepare,
+        );
         require_materialized_source(
             &self.store,
             options.require_source_reuse,
@@ -834,6 +842,9 @@ impl RetainedQueryCursor {
         &mut self,
         adapter_metadata_bytes: usize,
     ) -> Result<Option<RetainedQueryBatch>> {
+        #[cfg(feature = "retained-phase-profiling")]
+        let _retained_phase =
+            crate::retained_phase_profile::Timer::start(crate::retained_phase_profile::Phase::Pull);
         match self.status() {
             RetainedQueryStatus::Completed => return Ok(None),
             RetainedQueryStatus::Closed => return Err(RetainedQueryError::Closed),
