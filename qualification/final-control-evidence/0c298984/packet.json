@@ -26,8 +26,8 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "7496e23afe0853d1810cb21e63a1243e4a8c018e173239636c50718fe3af818b",
-      "bytes": 10601,
+      "sha256": "3700b36ad74028498d9d2e41b9330be4b0a05088d26026b400a61b1ec6c5483e",
+      "bytes": 11148,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-control-evidence-0c298984/qualification/final-control-evidence/0c298984/README.md"
     },
     {
@@ -716,8 +716,8 @@
     },
     {
       "path": "original-matrix-snapshot/auditors/audit-final-ordinary-resource-pairs-0c298984.py",
-      "sha256": "92d88e0570ec44e9bb9c09543a27334b6ac044677f92ee463a18f788af759c8b",
-      "bytes": 4325,
+      "sha256": "1015c298c00fe8348c4e1325edab8d281048a9f4b42abbc251d6de689a341a2b",
+      "bytes": 5298,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-final-ordinary-resource-pairs-0c298984.py"
     },
     {
@@ -788,14 +788,14 @@
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-pairs-audit.json",
-      "sha256": "abea65a83c23e447f5cf38df9a771f0ec5ab5d15d3ec744e3f633c8e238b7db5",
-      "bytes": 126479,
+      "sha256": "2684f22d3f6b784b98e65b2784d56349d4ff14d51c357a928c9444dc1ca7de31",
+      "bytes": 128730,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-pairs-audit.json"
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-refusals-audit.json",
-      "sha256": "27576358990d6eb2ec2efbd1a436ace3d1e292f77d2dddaab347ff3d76c0d4ae",
-      "bytes": 62724,
+      "sha256": "e68391389539944543f90417590e0c3c5e1fada8c8d7edd30f4f8f6a9b94f3d1",
+      "bytes": 62723,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-refusals-audit.json"
     },
     {
@@ -3304,7 +3304,7 @@
       "summary_sha256": "2e144fa67ea6ffc78dcd59a2ff82cc9f0ca7b8ee4f036e333ace8fe3ac339d71"
     }
   },
-  "updated_at": 1792385913.2472188,
+  "updated_at": 1792386381.2104561,
   "numeric20_original_controls": {
     "positive": 12,
     "default_memory_refusals": 4,
@@ -3371,5 +3371,16 @@
     "latency_ratio": null,
     "native_and_RSS_scope": "full producer/process includes setup, warmup and cleanup; no memory-bound or leak claim",
     "python_foreign_heap": "original field absent; narrow select supplement not relabeled as wide"
+  },
+  "positive_resource_audit_strengthening": {
+    "passed_pairs": 30,
+    "checks": [
+      "exact source heads",
+      "original seed/defaults/samples",
+      "full checksum equality",
+      "row/value shape",
+      "phase timing identity",
+      "all medians"
+    ]
   }
 }

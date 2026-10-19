@@ -28,14 +28,28 @@ for group in s['reports']:
     reports = json.loads(raw)['reports']
     values = {}
     go_host_profiles = {}
+    checksums = set()
     for side in ['baseline', 'candidate']:
         report = reports[side + '/report.json']
+        expected_head = ('3cdb2610ba8b984676b80ba22df64821787886d3'
+                         if side == 'baseline' else s['engine'])
+        assert report['source']['head'] == expected_head
         assert report['all_paths_succeeded'] and report['samples'] == 3
+        assert report['seed'] == 24301 and report['discarded_iterations'] == 1
+        assert report['native_profiles'] and not report['defaults_changed']
         assert len(report['records']) == 4
         records = [x for x in report['records'] if not x['discarded']]
         assert len(records) == 3
         for x in report['records']:
             assert x['status'] == 'ok' and x['parity'] and x['profile_valid']
+            assert x['phase_timing_valid']
+            assert (x['case'], x['layer'], x['backend']) == (
+                group['group'][-2], group['group'][-1], group['group'][2])
+            assert x['input_rows'] == group['group'][1]
+            assert x['values'] == group['group'][1] * (20 if x['case'] == 'wide' else 3)
+            assert x['checksum'] == x['expected_checksum']
+            checksums.add(x['checksum'])
+            assert x['query_boundary_ns'] == x['write_boundary_ns'] + x['read_boundary_ns']
             assert x['durability'] == 'SyncOnEveryWrite'
             assert x['output_rows'] == group['group'][1]
         observed = group['sides'][side]['observed_medians']
@@ -55,10 +69,12 @@ for group in s['reports']:
                 key: statistics.median(x['go_host_profile'][key] for x in records)
                 for key in numeric_keys}
             go_host_profiles[side]['scope_detail'] = profile['scope_detail']
+    assert len(checksums) == 1
     before, after = values['baseline'], values['candidate']
     audits.append({
         'group': group['group'], 'artifact': group['artifact'],
         'bundle_sha256': hashlib.sha256(raw).hexdigest(), 'observed_medians': values,
+        'complete_consumer_checksums': sorted(checksums),
         'process_RSS_relative_increase': after['process_peak_rss_bytes'] / before['process_peak_rss_bytes'] - 1,
         'go_host_profiles': go_host_profiles,
     })
