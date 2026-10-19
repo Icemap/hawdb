@@ -1344,6 +1344,38 @@ fn consumer_native_birth_requires_original_creation_and_retains_receipt_across_c
 }
 
 #[test]
+fn consumer_native_birth_target_lease_excludes_a_second_publication_owner() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let generation = fixture.0.join(pending.generation_name());
+    let original = pending.born_directory().unwrap().identity();
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let lease = hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
+        .unwrap();
+    assert_eq!(lease.source_identity(), original);
+    let error = ConsumerProjection::open(&generation).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("another search projection publication is active"),
+        "{error}"
+    );
+    assert!(generation.join("consumer-birth.hawdb").exists());
+    assert_eq!(
+        allocation_evidence(&fixture).1["pending"][0]["native_birth"]["state"],
+        "Recorded"
+    );
+    drop(lease);
+    assert_eq!(pending.born_directory().unwrap().identity(), original);
+}
+
+#[test]
 fn consumer_native_birth_collision_never_adopts_matching_marker_or_forgets_debt() {
     let fixture = Fixture::new();
     let mut db = fixture.database();

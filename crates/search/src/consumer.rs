@@ -14,10 +14,12 @@
 
 //! Internal projection ownership used by the embedded database facade.
 use super::{SearchIndex, SEARCH_SNAPSHOT_FILE};
+use crate::build_memory::BuildMemory;
 use crate::error::{HawDBError, Result};
 use crate::out_of_core::SearchProjectionPublishLease;
-use hawdb_core::Uuid;
+use hawdb_core::{RuntimeTaskContext, Uuid};
 use hawdb_integrity::IntegrityHasher;
+use hawdb_storage::consumer_allocation::PendingConsumerGeneration;
 use hawdb_storage::file_io::{self as fs, File};
 use std::io::Read;
 use std::path::Path;
@@ -85,6 +87,41 @@ pub struct CheckpointReceipt {
     pub source_epoch: u64,
     pub encoded_len: u64,
     pub sha256: String,
+}
+
+/// Native target ownership for a born but unpublished Consumer generation.
+/// The birth token stays borrowed so failures cannot silently discard its
+/// durable debt while a target publication lease is active. This grants no
+/// serving view, source watermark or selector publication authority.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct ConsumerStationaryTargetLease<'birth> {
+    _birth: &'birth mut PendingConsumerGeneration,
+    lease: SearchProjectionPublishLease,
+}
+
+impl<'birth> ConsumerStationaryTargetLease<'birth> {
+    /// Acquire against the original native generation, never its saved path.
+    /// A failed acquisition leaves the caller's birth token available for
+    /// resolution and conservatively retains exposed-birth debt.
+    pub fn acquire(
+        birth: &'birth mut PendingConsumerGeneration,
+        task: &RuntimeTaskContext,
+    ) -> Result<Self> {
+        let memory = BuildMemory::new(task)?;
+        let born = birth.born_directory()?;
+        let directory = born.duplicate(&born.operation_context())?;
+        let lease = SearchProjectionPublishLease::acquire_captured(directory, &memory, task)?;
+        Ok(Self {
+            _birth: birth,
+            lease,
+        })
+    }
+
+    /// Physical target identity, useful for later selector/birth binding.
+    pub fn source_identity(&self) -> hawdb_storage::file_io::SourceDirectoryIdentity {
+        self.lease.source_identity()
+    }
 }
 
 #[derive(Debug)]
