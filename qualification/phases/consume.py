@@ -99,8 +99,12 @@ def main():
     parser.add_argument("--backend", choices=("memory", "file"), required=True)
     parser.add_argument("--configuration", choices=("default", "large"), required=True)
     parser.add_argument("--progress-report", type=Path)
+    parser.add_argument("--setup-checkpoint-rows", type=int, default=0,
+                        help="Explicit supplemental fixture maintenance; zero preserves original setup")
     args = parser.parse_args()
     assert args.rows > 0 and args.samples > 0
+    assert args.setup_checkpoint_rows >= 0
+    assert args.setup_checkpoint_rows == 0 or args.backend == "file"
     assert not tracemalloc.is_tracing(), "refuse pre-existing allocation tracing"
     sys.path.insert(0, str(args.package.resolve()))
     loader = ExtensionFileLoader("hawdb._hawdb", str(args.extension.resolve()))
@@ -127,6 +131,7 @@ def main():
                   pyarrow=pyarrow.__version__, records=[],
                   phase_instrumented=True, allocation_instrumented=False,
                   terminal=False,
+                  setup_checkpoint_rows=args.setup_checkpoint_rows, setup_checkpoints=[],
                   consumer_sha256=args.consumer_sha256, extension_sha256=args.extension_sha256,
                   scope="Phase-only observed costs; separate from ordinary and allocation-instrumented latency. "
                         "No pure-conversion, source-reuse, process-memory-bound or speedup claim.")
@@ -158,6 +163,16 @@ def main():
             for start in range(0, args.rows, 512):
                 database.execute("UNWIND $rows AS row CREATE (:Delivery {score: row.score})",
                                  {"rows": [{"score": n} for n in range(start, min(start + 512, args.rows))]})
+                completed = min(start + 512, args.rows)
+                report["setup_completed_rows"] = completed
+                if (args.setup_checkpoint_rows and
+                        completed // args.setup_checkpoint_rows >
+                        start // args.setup_checkpoint_rows):
+                    checkpoint_started = time.perf_counter_ns()
+                    database.execute("CHECKPOINT")
+                    report["setup_checkpoints"].append(dict(
+                        completed_rows=completed, elapsed_ns=time.perf_counter_ns() - checkpoint_started))
+                    save_progress()
             report["setup_ns"] = time.perf_counter_ns() - started
             expected = consumer.fixture_reference(args.rows)
             report["fixture_reference"] = expected
