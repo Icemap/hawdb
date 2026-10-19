@@ -1,0 +1,5 @@
+{
+  "original_bytes": 387,
+  "original_sha256": "6db62a8126495e3d52bcba6d5e2140c9322f785a5f8753af6c65220966ed3230",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/plan-cache:hawdb_plan_cache_loom_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest loom_tests::lfu_cache_preserves_bounds_under_modeled_concurrent_access ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.02s\n\n"
+}

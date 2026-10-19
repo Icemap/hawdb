@@ -1,0 +1,5 @@
+{
+  "original_bytes": 823,
+  "original_sha256": "5618a9d54f00f9e7fbe8cbcdbe4e1a3aaec8128ffc9785dbc4366f89de2bc447",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/cgroup:hawdb_cgroup_tests\n-----------------------------------------------------------------------------\n\nrunning 8 tests\ntest tests::hosts_without_resource_controller_membership_are_unconstrained ... ok\ntest tests::detects_v2_limits_from_mount_root ... ok\ntest tests::invalid_paths_and_missing_mounts_fail_closed ... ok\ntest tests::v1_resource_controllers_are_explicitly_unsupported ... ok\ntest tests::zero_is_a_valid_v2_memory_boundary ... ok\ntest tests::hybrid_resource_controllers_are_not_partially_detected ... ok\ntest tests::inherits_v2_cpuset_and_preserves_unlimited_values ... ok\ntest tests::invalid_v2_values_remain_typed_and_fail_closed ... ok\n\ntest result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n"
+}

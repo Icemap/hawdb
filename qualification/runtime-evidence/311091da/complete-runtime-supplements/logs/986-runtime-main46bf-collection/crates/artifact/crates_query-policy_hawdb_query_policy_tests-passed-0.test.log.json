@@ -1,0 +1,5 @@
+{
+  "original_bytes": 621,
+  "original_sha256": "fad5187e13c0387a0f41b2fe9961db7ed5d39fcf1dd52dc5bf9b2f8952531a3f",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/query-policy:hawdb_query_policy_tests\n-----------------------------------------------------------------------------\n\nrunning 4 tests\ntest tests::invalid_set_assignment_does_not_change_policy ... ok\ntest tests::set_assignment_updates_typed_policy_and_returns_canonical_value ... ok\ntest tests::policy_rejects_duplicate_hints_non_literal_values_and_set_parameters ... ok\ntest tests::statement_hints_override_policy_without_mutating_session_state ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

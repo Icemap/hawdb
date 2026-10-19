@@ -1,0 +1,5 @@
+{
+  "original_bytes": 654,
+  "original_sha256": "baef0a2733ef9306837bbc4cfbf7371ce072a9f15892bb5a30f1b2abc5890a2c",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/sql-syntax:hawdb_sql_syntax_tests\n-----------------------------------------------------------------------------\n\nrunning 5 tests\ntest lexer::tests::skips_nested_comments_and_preserves_byte_spans ... ok\ntest lexer::tests::tokenizes_postgres_sql_pgq_surface ... ok\ntest lexer::tests::enforces_token_and_comment_depth_limits ... ok\ntest lexer::tests::rejects_zero_parameter_and_unterminated_input ... ok\ntest lexer::tests::recognizes_dollar_quoted_strings_and_unicode_identifiers ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n"
+}

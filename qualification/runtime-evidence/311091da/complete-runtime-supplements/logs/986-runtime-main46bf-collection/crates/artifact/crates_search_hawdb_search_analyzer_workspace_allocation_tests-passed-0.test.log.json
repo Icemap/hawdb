@@ -1,0 +1,5 @@
+{
+  "original_bytes": 917,
+  "original_sha256": "bf781d24733bca68a1c33118c00c084120418b02191b70b1aece50b687c1e543",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_analyzer_workspace_allocation_tests\n-----------------------------------------------------------------------------\n\nrunning 7 tests\ntest bounds::tests::opaque_table_envelope_retains_its_separate_replacement_model ... ok\ntest bounds::tests::retained_table_envelope_tracks_pinned_bucket_steps ... ok\ntest bounds::tests::syntax_and_compiler_shape_match_the_pinned_construction_envelope ... ok\ntest bounds::tests::growing_envelope_covers_minimum_growth_and_replacement ... ok\ntest bounds::tests::source_dimensions_and_overflow_fail_closed ... ok\ntest opaque_workspace_capacity_covers_construction_growth_and_tls_destruction ... ok\ntest bounds::tests::complete_lazy_state_space_stays_below_cache_clear_and_fallback_thresholds ... ok\n\ntest result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s\n\n"
+}

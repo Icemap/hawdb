@@ -1,0 +1,5 @@
+{
+  "original_bytes": 431,
+  "original_sha256": "4118787ff9d58c9a196266394edae0de66b2008aee2dfd7f50bff1b2ed361e6e",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/resource-profile:hawdb_resource_profile_tests\n-----------------------------------------------------------------------------\n\nrunning 2 tests\ntest tests::limits_reject_zero_budgets ... ok\ntest tests::row_page_occupancy_is_visible_in_resource_profile_json ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

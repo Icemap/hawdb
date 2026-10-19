@@ -1,0 +1,414 @@
+{
+  "source-check.json": {
+    "bytes": 592,
+    "sha256": "d34eccb425e3e3c4000983d1b79143da90fc946ae1458a496188f303d88f9751"
+  },
+  "toolchain.txt": {
+    "bytes": 196,
+    "sha256": "b2bdf493bcf6d1dc55181a0efc2774b6d9cf7bf5c8dcc5bed592c994b2ad38c4"
+  },
+  "crates_ddl_hawdb_ddl_tests-passed-0.test.log": {
+    "bytes": 563,
+    "sha256": "4786bd1427b21bccd7e0bfe94e700fadcbe5e203628fda13d09684b5f02597dd"
+  },
+  "crates_search_hawdb_search_lexical_delta_allocation_tests-passed-0.test.log": {
+    "bytes": 394,
+    "sha256": "6ef5eb207860ddc57e1d5de087bbeb42657fa67e312d22de29b9fc780cc67a0f"
+  },
+  "crates_relational_hawdb_relational_tests-passed-0.test.log": {
+    "bytes": 22141,
+    "sha256": "39b0d01523abb5660268bf8d8d1ff66c93de5b57d496b6802103a83d5c753939"
+  },
+  "crates_qualification_hawdb_content_store_initial_row_page_qualification_tests-passed-0.test.log": {
+    "bytes": 452,
+    "sha256": "8f3b01a4db816db2c892811412dff61d83b44ad6fddb141ba9455506a2809f6d"
+  },
+  "crates_search_hawdb_search_text_only_source_policy_tests-passed-0.test.log": {
+    "bytes": 801,
+    "sha256": "48891b6705d1ba66446ba2b6f25a88e514c9fcb24094f93b44be081a3addd627"
+  },
+  "crates_query_hawdb_query_tests-passed-0.test.log": {
+    "bytes": 1127,
+    "sha256": "b55d5bd486d53c7fadd9d3192af1657ef558862c40439ee8938a83cfd1690ce7"
+  },
+  "crates_executor_hawdb_executor_unit_tests-passed-0.test.log": {
+    "bytes": 45364,
+    "sha256": "6342fd91e4999a329629e5d25f2e70ca104d2eee3b2f9fdfb79f05f100369c03"
+  },
+  "crates_cypher_hawdb_cypher_tests-passed-0.test.log": {
+    "bytes": 11944,
+    "sha256": "85f52f87af5932ac2478df22683fdcd609af4711a71d36b8bf7bb2d0511e6bd5"
+  },
+  "crates_search_hawdb_search_text_vector_streamed_lifecycle_tests-passed-0.test.log": {
+    "bytes": 517,
+    "sha256": "e6522225fbfda54715c3c1ba63e372de045b2ee23a7bc3cb5ee0929ee4283e92"
+  },
+  "command-result.json": {
+    "bytes": 30,
+    "sha256": "d966c241b6c930b1ddb42517d4d53d767a3aad91a6f720432a4bf1bf09db1c15"
+  },
+  "command.log": {
+    "bytes": 86211,
+    "sha256": "e370c8919fbe3b96b9ed2aa9ba145fb76c8dd3842c35a6aff5b6c4b34dfa14fa"
+  },
+  "crates_search_hawdb_search_acl_streamed_lifecycle_tests-passed-0.test.log": {
+    "bytes": 509,
+    "sha256": "fc0e9ac8338977c3a1a9da2039afe0cf35e93416ba12f706c884ebc44adbb212"
+  },
+  "crates_sql-syntax_hawdb_sql_syntax_tests-passed-0.test.log": {
+    "bytes": 654,
+    "sha256": "baef0a2733ef9306837bbc4cfbf7371ce072a9f15892bb5a30f1b2abc5890a2c"
+  },
+  "crates_route-ownership_hawdb_route_ownership_tests-passed-0.test.log": {
+    "bytes": 2090,
+    "sha256": "fd7341c17172d9273ea59d338d6480e18e9820c9e401f86a5fd47bdf76e8471c"
+  },
+  "crates_search_hawdb_search_analyzer_observation_tests-passed-0.test.log": {
+    "bytes": 542,
+    "sha256": "6f383b91cba4afb15eaf5cbbb2f37f38c027178bd06d9b94f7182ad4dac2f8e7"
+  },
+  "crates_cgroup_hawdb_cgroup_tests-passed-0.test.log": {
+    "bytes": 823,
+    "sha256": "5618a9d54f00f9e7fbe8cbcdbe4e1a3aaec8128ffc9785dbc4366f89de2bc447"
+  },
+  "crates_search_hawdb_search_analyzer_allocation_tests-passed-0.test.log": {
+    "bytes": 387,
+    "sha256": "a3164a6121e7027019000567267402591a3830e90708f7e84c4329efee13d97c"
+  },
+  "crates_vector-projection_hawdb_vector_projection_tests-passed-0.test.log": {
+    "bytes": 5315,
+    "sha256": "409238e882dd87dc2d44fbc7c995e4f425432741aefa371277dea249af153feb"
+  },
+  "crates_search_hawdb_search_acl_tests-passed-0.test.log": {
+    "bytes": 93895,
+    "sha256": "dda5fea6b1e64d0575459ea94476d0e15f002225e1f9dd4d866b3f3501bfe4c7"
+  },
+  "crates_search_hawdb_search_text_background_tests-passed-0.test.log": {
+    "bytes": 88832,
+    "sha256": "c1027899e919777927294a4bb075931573855974724db4a0f9ea1d0df2f4b58d"
+  },
+  "crates_executor_hawdb_morsel_oracle_tests-passed-0.test.log": {
+    "bytes": 1220,
+    "sha256": "8179d7a6c77a67317a2700680743b4b82ca2519caa07ba805f10f7451c62c95b"
+  },
+  "crates_optimizer_hawdb_optimizer_tests-passed-0.test.log": {
+    "bytes": 297,
+    "sha256": "529901be100bc12b4e02302cd58a9d8a97b73dffb7cb8ceb31e4a52bd83098a0"
+  },
+  "crates_system-sql_hawdb_system_sql_loom_tests-passed-0.test.log": {
+    "bytes": 392,
+    "sha256": "6a6a42f96bdb8ea1c6626df2cb2f52a2f554388c8189ade48f107b6585196653"
+  },
+  "crates_search_hawdb_search_text_vector_tests-passed-0.test.log": {
+    "bytes": 92072,
+    "sha256": "7e98f905a9e0364fabd4eddc56c13d0ea18ef7d14384addd450428517452a735"
+  },
+  "crates_qualification_hawdb_qualification_content_store_tests-passed-0.test.log": {
+    "bytes": 3583,
+    "sha256": "237c224f26c705ecfd2a7265b8817dd19afd1422ec89327bcca7d7fc525b0ebf"
+  },
+  "selection.json": {
+    "bytes": 11383,
+    "sha256": "22686a001d66613a657915803fd565c963ed202d381841e84994a5e66e992704"
+  },
+  "crates_qos_hawdb_qos_loom_tests-passed-0.test.log": {
+    "bytes": 391,
+    "sha256": "6981fd1bf9b31749345676a19179cd6ee8913c4437ac827c4f8bf7dce056b3d7"
+  },
+  "crates_compat_hawdb_compat_tests-passed-0.test.log": {
+    "bytes": 3970,
+    "sha256": "aae556bb385e17f0d093d750733bd2b41bfe57f8bbd189d831db165ffb38600c"
+  },
+  "crates_search_hawdb_search_vector_background_tests-passed-0.test.log": {
+    "bytes": 81889,
+    "sha256": "4d31ea52fb5ee9c94153d83b31f89604084b0becc20c9f5fd06b3ca65fc2f1d5"
+  },
+  "crates_search_hawdb_search_tests-passed-0.test.log": {
+    "bytes": 93723,
+    "sha256": "fa21039cddb9f5cfe74a7d9641675bac36f6f1a6e053c6420d14fb81cbf6ac71"
+  },
+  "crates_search_hawdb_search_text_vector_source_policy_tests-passed-0.test.log": {
+    "bytes": 803,
+    "sha256": "fde13d0e4fd8bd13528c7e59f924ce55f4088e95deb1bfcdbe9c81156b43aaba"
+  },
+  "crates_search_hawdb_search_source_policy_tests-passed-0.test.log": {
+    "bytes": 791,
+    "sha256": "70fc3659d0e4a633c56bd94f611a804a2a46d2da049b6760626dd4b6669393a5"
+  },
+  "crates_cascades_hawdb_cascades_tests-passed-0.test.log": {
+    "bytes": 2029,
+    "sha256": "7a8974326c334c5d08a803e1bc5dc8d42b508cfd74aaf8cf1177bb3064d850e4"
+  },
+  "crates_qualification_hawdb_content_store_read_qualification_cli_tests-passed-0.test.log": {
+    "bytes": 792,
+    "sha256": "590caea55005b7d71c4670df2a568d80fce4659b035509a5836fc26f1d089e5f"
+  },
+  "crates_search_hawdb_search_text_background_source_policy_tests-passed-0.test.log": {
+    "bytes": 807,
+    "sha256": "cac44f07d243c19a51ff795f692d5a124beaf24c97dde4d17f3b933c12ec42cc"
+  },
+  "crates_search_hawdb_search_background_only_tests-passed-0.test.log": {
+    "bytes": 78516,
+    "sha256": "a10d9a6bac1f12a0e8e560f2dad4cfc97eb7ca0c85e6e1e12000786ff09f6710"
+  },
+  "crates_search_hawdb_search_text_only_streamed_lifecycle_tests-passed-0.test.log": {
+    "bytes": 515,
+    "sha256": "e641c73eb152965cb595c2920eeb8d7a97809a1ca4a473dcfcbb8f08adf5553a"
+  },
+  "crates_qos_hawdb_qos_tests-passed-0.test.log": {
+    "bytes": 11582,
+    "sha256": "5e70973a6835e64b22dd198d9fd8e70828c861e569a12e6a270876704fb46df2"
+  },
+  "crates_runtime-tokio_hawdb_runtime_tokio_tests-passed-0.test.log": {
+    "bytes": 2414,
+    "sha256": "4b6691d69eb08187e21649a9734e4356f4ddf741af02b7b0578a1d702c96ab2f"
+  },
+  "crates_search_hawdb_search_text_only_tests-passed-0.test.log": {
+    "bytes": 87004,
+    "sha256": "2ff55c98b6b738dbf956848e6e33bd6162bd752c7e2eaf80ae78830499d1048a"
+  },
+  "crates_search_hawdb_search_text_background_streamed_lifecycle_tests-passed-0.test.log": {
+    "bytes": 521,
+    "sha256": "5350012d76b15e10d85e64b427e35776fd45477cbb2a907b49700428e9d28c68"
+  },
+  "crates_optimizer-graph_hawdb_optimizer_graph_tests-passed-0.test.log": {
+    "bytes": 13342,
+    "sha256": "60856d025257822ab56e6f7930f1c87f1073a8ecae973192e72f4b061459b265"
+  },
+  "crates_search_hawdb_search_minimal_source_policy_tests-passed-0.test.log": {
+    "bytes": 388,
+    "sha256": "3e1e3a9be4d0df1e12466d8b9fbccb4fffb968675ff8f43d9e371daac1bfda87"
+  },
+  "crates_qualification_hawdb_release_bundle_cli_tests-passed-0.test.log": {
+    "bytes": 368,
+    "sha256": "721d2f079b1c0153ca748e1f1217b1a7aef95afa556262c88f0e0d23b171e23c"
+  },
+  "crates_executor_hawdb_projection_allocation_tests-passed-0.test.log": {
+    "bytes": 7842,
+    "sha256": "34e97ba03b74af9f0331b2c0df96651c87684124c6297e57705eee4f3d6d9d19"
+  },
+  "crates_qualification_hawdb_soak_cli_tests-passed-0.test.log": {
+    "bytes": 366,
+    "sha256": "28f257a5791287a291654ed51dee35cfbf413a4eeed9bec1d0b8e205e9d23ab2"
+  },
+  "crates_fuzz-contracts_hawdb_fuzz_contracts_tests-passed-0.test.log": {
+    "bytes": 447,
+    "sha256": "d9df1a0fa6d96d182851a7ace953a40ddc1ee10ad439e01632b78dff009e7ba7"
+  },
+  "tests.bep.json": {
+    "bytes": 549307,
+    "sha256": "e455afacc68802e1a70aaccc25f6f3880ea8e098fa99a68afcc2b59faeb790b5"
+  },
+  "crates_optimizer-vector_hawdb_optimizer_vector_tests-passed-0.test.log": {
+    "bytes": 1032,
+    "sha256": "86432aea68d84ae3b60831cc58c6bf3c7898baf6dca33b3a65774bd1f5d9fc21"
+  },
+  "crates_core_hawdb_core_tests-passed-0.test.log": {
+    "bytes": 5351,
+    "sha256": "d877f4b39922a77a27bcd5837c8b597acf6f054ecad58516b1d36bb9388ec069"
+  },
+  "crates_plan-core_hawdb_plan_core_tests-passed-0.test.log": {
+    "bytes": 367,
+    "sha256": "1cc531b6f0f014ade217cdd261289b939624ff0f885ca35f6ca13e4ffad5cfcc"
+  },
+  "crates_search_hawdb_search_vector_background_source_policy_tests-passed-0.test.log": {
+    "bytes": 398,
+    "sha256": "ba207203eeed3cd7de257f02516e6a261b33232ac10afd382d636f5078cb8e87"
+  },
+  "crates_qualification_hawdb_content_store_memory_qualification_cli_tests-passed-0.test.log": {
+    "bytes": 586,
+    "sha256": "9707ca4d842a5fca629f5761d1e74d2f084763c9bb1c214ee4398e41ba76783d"
+  },
+  "crates_qualification_hawdb_qualification_release_bundle_tests-passed-0.test.log": {
+    "bytes": 2873,
+    "sha256": "a09492ffa21d9c8c08da16add761fea985f9c4524bdc83e4e02d2a803e7a520e"
+  },
+  "crates_plan-cache_hawdb_plan_cache_loom_tests-passed-0.test.log": {
+    "bytes": 387,
+    "sha256": "6db62a8126495e3d52bcba6d5e2140c9322f785a5f8753af6c65220966ed3230"
+  },
+  "crates_plan-cache_hawdb_plan_cache_tests-passed-0.test.log": {
+    "bytes": 2105,
+    "sha256": "81f31d314504d0eaf97d2329786d7ef4d155e6d8b54c3313c21eb1e37b2487c4"
+  },
+  "crates_search_hawdb_search_descriptor_allocation_tests-passed-0.test.log": {
+    "bytes": 522,
+    "sha256": "b3407ee3b8d5f048dd7ec6100bef5a71754f756bf6e7bf04eed3d82f7e51c1da"
+  },
+  "crates_sql-syntax_postgres_pgq_tests-passed-0.test.log": {
+    "bytes": 822,
+    "sha256": "49b4a99552a9871b88d8ec222958a855df48195bdc99f58a11cf0c5c10d59d46"
+  },
+  "crates_optimizer-predicate_hawdb_optimizer_predicate_tests-passed-0.test.log": {
+    "bytes": 1428,
+    "sha256": "c155550e127ca70142ac218e2c102d53d4b749d5cf5699e359895887c99ce26e"
+  },
+  "crates_qualification_hawdb_content_store_production_overflow_compaction_tests-passed-0.test.log": {
+    "bytes": 744,
+    "sha256": "f959d6c3749db670ca72e874d28cbd4ddc14c6008372fcda0c66bb15cea886b1"
+  },
+  "crates_analytics_hawdb_analytics_tests-passed-0.test.log": {
+    "bytes": 1308,
+    "sha256": "c0ba273af68268313d58b42e08c9730df317e31bbd75f9dcaeb07555edc89669"
+  },
+  "crates_readiness_hawdb_readiness_tests-passed-0.test.log": {
+    "bytes": 36736,
+    "sha256": "f27492cce74fa285af6cdc6c263b3391f9bf68b005e39ef89a0749a3dd3fce0a"
+  },
+  "crates_integrity_hawdb_integrity_tests-passed-0.test.log": {
+    "bytes": 582,
+    "sha256": "20481d4c20d4ffa6e56fa8ef7a1c908442a88ab3409e8daf18f451ef1089c3dc"
+  },
+  "crates_qualification_hawdb_content_store_mutation_qualification_cli_tests-passed-0.test.log": {
+    "bytes": 610,
+    "sha256": "cb8e4011f917970892135a063c717789a9a19f037b0758450730c7eac9fef7bb"
+  },
+  "crates_search_hawdb_search_minimal_tests-passed-0.test.log": {
+    "bytes": 76679,
+    "sha256": "13c1c1058517af451f52c9038fec22ac04689a099bb0067dfb656691c2a06d25"
+  },
+  "crates_telemetry_hawdb_telemetry_tests-passed-0.test.log": {
+    "bytes": 426,
+    "sha256": "2e239ebbf11eb4f0d25f87fb67ab0a6f277f0a037ea77c1a542a227bf63018ac"
+  },
+  "crates_system-sql_hawdb_system_sql_tests-passed-0.test.log": {
+    "bytes": 763,
+    "sha256": "db2f0670b197187d81c73db70e298c510d7ddb6f338a089bb9177a521cf00cb9"
+  },
+  "crates_optimizer-graph_planner_golden_test-passed-0.test.log": {
+    "bytes": 418,
+    "sha256": "830477cfde30c9040f0de41637919605c3b6923ff065ce0f2b7bce342aeb3a6f"
+  },
+  "crates_optimizer-relational_hawdb_optimizer_relational_tests-passed-0.test.log": {
+    "bytes": 8219,
+    "sha256": "61f41e0dcc7bde4c3cd91025e0f4c5e37d8b19d06b6ada1e4f30b87970027cd5"
+  },
+  "crates_search_hawdb_search_background_only_source_policy_tests-passed-0.test.log": {
+    "bytes": 396,
+    "sha256": "29918ff748b2309cf975993b811dec4193e2099432bb15349f83f5201e773e61"
+  },
+  "crates_qualification_hawdb_qualification_production_tests-passed-0.test.log": {
+    "bytes": 2049,
+    "sha256": "67e304b4eac0abcc0906a05c4b6d5a5c4cc077296b7fed798fe984445e1ec2f7"
+  },
+  "crates_qualification_hawdb_content_store_contract_tests-passed-0.test.log": {
+    "bytes": 415,
+    "sha256": "78750b31a0683fc26c3f734123b1e7882008eb8b21230efd2c57a2e11814998c"
+  },
+  "crates_query-policy_hawdb_query_policy_tests-passed-0.test.log": {
+    "bytes": 621,
+    "sha256": "fad5187e13c0387a0f41b2fe9961db7ed5d39fcf1dd52dc5bf9b2f8952531a3f"
+  },
+  "crates_search_hawdb_search_streamed_lifecycle_tests-passed-0.test.log": {
+    "bytes": 505,
+    "sha256": "e4289e4923ed496913de3c4bcedb950ce5bce7441a9c7e05892d9dff4fbdf712"
+  },
+  "crates_sql_hawdb_sql_tests-passed-0.test.log": {
+    "bytes": 8265,
+    "sha256": "f760c8e841e91ad4e6c31867d8f0a90757cbc59dc217a8b2048ce64f4583586b"
+  },
+  "crates_search_hawdb_search_acl_source_policy_tests-passed-0.test.log": {
+    "bytes": 795,
+    "sha256": "ecc24a6e28d3f1d26c0d073b77f92d8c3830bf3896a03a139aa1c4269bd02c35"
+  },
+  "crates_expression_hawdb_expression_tests-passed-0.test.log": {
+    "bytes": 1285,
+    "sha256": "1bcb03d752b6f0113ca029d3096d38e122ba963bb68ec7d05efc5dfc9b08cadc"
+  },
+  "crates_qualification_hawdb_qualification_misc_tests-passed-0.test.log": {
+    "bytes": 511,
+    "sha256": "4445e0811c5779560758475dd4a15704337c6f679b1a725f7622a449bef9453a"
+  },
+  "crates_search_hawdb_search_vector_only_tests-passed-0.test.log": {
+    "bytes": 80386,
+    "sha256": "b16fb4eab1eb682a488b94994201190a25cb6ad28eaa23e4f970f6de2208b74f"
+  },
+  "crates_qualification_hawdb_content_store_production_mutation_tests-passed-0.test.log": {
+    "bytes": 451,
+    "sha256": "33848af8c38774440e629c93ddf08654283ad7b5eb764d93e78918374b6634ec"
+  },
+  "crates_explain_hawdb_explain_tests-passed-0.test.log": {
+    "bytes": 501,
+    "sha256": "884e24ba0f411bc42a7d7ba35882dc649a0d7a3141ce01e11387bb00378d0846"
+  },
+  "crates_qualification_hawdb_graph_storage_qualification_cli_tests-passed-0.test.log": {
+    "bytes": 660,
+    "sha256": "b65c872143814006b988b512bf62314ff4f34394756c6cf5a521abe59ee82537"
+  },
+  "test-summaries.json": {
+    "bytes": 63853,
+    "sha256": "5121856aa556fb7ef9a57653cb0d2bfb8713a2c12450478524717586b7a5075a"
+  },
+  "crates_nowledge-contracts_hawdb_nowledge_contracts_tests-passed-0.test.log": {
+    "bytes": 996,
+    "sha256": "37313909ad94af2a3eca28e688f640308d1ed55dcf27d5cf23e6635b985b390b"
+  },
+  "crates_qualification_hawdb_content_store_production_read_tests-passed-0.test.log": {
+    "bytes": 683,
+    "sha256": "2bba8647818978a41dabb2d51e6cb6b989934aeb89877fdd77c8226aacf3780e"
+  },
+  "crates_search_hawdb_search_segment_allocation_tests-passed-0.test.log": {
+    "bytes": 380,
+    "sha256": "341702cd44556be76fa2d6fdbfc7ee0f94163e2e8673313bb06f8a35d0b24198"
+  },
+  "crates_sql-syntax_postgres_select_pgq_tests-passed-0.test.log": {
+    "bytes": 1371,
+    "sha256": "ee419ae550230f26ab7f927cd4ed489048a3002a71a80e37a7f07c5a8a4e1c8b"
+  },
+  "crates_evidence_hawdb_evidence_tests-passed-0.test.log": {
+    "bytes": 9375,
+    "sha256": "354c3fe6abb2bad6aed108f19b81f1804b8dede8ca6662a4e4a60718c014ccf3"
+  },
+  "crates_search_hawdb_search_vector_only_source_policy_tests-passed-0.test.log": {
+    "bytes": 392,
+    "sha256": "e7e5ada5da00a07a2da659ba5eadbf12875860a6a18cda7be3f1c631128b095a"
+  },
+  "crates_qualification_hawdb_graph_index_qualification_cli_tests-passed-0.test.log": {
+    "bytes": 658,
+    "sha256": "b02de4d25db998f6f25e6d89c952ba7ef562c122ed1f4f186da389269b1ea7e1"
+  },
+  "crates_executor_hawdb_query_observer_release_tests-passed-0.test.log": {
+    "bytes": 399,
+    "sha256": "a77045e5d56bef25b1583af2efff634ef47e08eca34b5522cab06f945f7436b4"
+  },
+  "crates_cascades_hawdb_cascades_integration_test-passed-0.test.log": {
+    "bytes": 372,
+    "sha256": "d534b82a0dc75b9ef77a0ecd23c43fe216370ad302091c5ff5a059462f072977"
+  },
+  "source.txt": {
+    "bytes": 123,
+    "sha256": "6e3e24337321dec389198a2f26ac93eb8feed3861a6fee0512fc91ec7edfd4a1"
+  },
+  "crates_artifact_hawdb_artifact_tests-passed-0.test.log": {
+    "bytes": 769,
+    "sha256": "a238a8d76eb6b7a9ba0415deb99b5ae97f383636a8c18b377a4c1f0074b00020"
+  },
+  "crates_search_hawdb_search_analyzer_workspace_allocation_tests-passed-0.test.log": {
+    "bytes": 917,
+    "sha256": "bf781d24733bca68a1c33118c00c084120418b02191b70b1aece50b687c1e543"
+  },
+  "crates_storage_hawdb_storage_tests-passed-0.test.log": {
+    "bytes": 224065,
+    "sha256": "e60b780f94f798758223b2c97a9fb7e440e91ffaf80b179d47b2da8764fb87d5"
+  },
+  "crates_search_hawdb_search_identifier_allocation_tests-passed-0.test.log": {
+    "bytes": 534,
+    "sha256": "2a665d58c67480cef6694d29552eced01884d1a26ae70fe2aafd9513fb719860"
+  },
+  "crates_bootstrap_hawdb_bootstrap_tests-passed-0.test.log": {
+    "bytes": 682,
+    "sha256": "1b6f97507c07bdd9258ab0718d755b6e57983b100b7476fdc6b40b0016e24bd2"
+  },
+  "crates_plan-cypher_hawdb_plan_cypher_tests-passed-0.test.log": {
+    "bytes": 6106,
+    "sha256": "6403d1f61a142af605e936c9e6035be5cd04c70b3972e500ef35a1e54e1ce84e"
+  },
+  "crates_resource-profile_hawdb_resource_profile_tests-passed-0.test.log": {
+    "bytes": 431,
+    "sha256": "4118787ff9d58c9a196266394edae0de66b2008aee2dfd7f50bff1b2ed361e6e"
+  },
+  "crates_qualification_hawdb_content_store_overflow_compaction_qualification_cli_tests-passed-0.test.log": {
+    "bytes": 630,
+    "sha256": "97068589adc9c28e44747cfb7eadc2412c97daaee923bfe3f55849e2e664c104"
+  }
+}

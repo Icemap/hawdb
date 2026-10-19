@@ -1,0 +1,157 @@
+{
+  "status": "prepared_and_native_built",
+  "pid": 8108,
+  "started": 1792402225.8739479,
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "native_source": "ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+  "native_tree": "2de750bb8fa6c627a2e2b3517417090b4c005fe9",
+  "steps": [
+    {
+      "name": "worktree",
+      "command": [
+        "git",
+        "worktree",
+        "add",
+        "--quiet",
+        "-b",
+        "qualify/986-supplemental-file-final-main46bf-311091da",
+        "/private/tmp/hawdb-wip-ready-20261015/qualify-supplemental-file-final-main46bf-311091da",
+        "ebcc9b0549ace3f3c7bb93145a8077ee2b616eef"
+      ],
+      "started": 1792402225.8828642,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-main46bf-311091da-worktree.log",
+      "exit": 0,
+      "ended": 1792402226.793322
+    },
+    {
+      "name": "stage",
+      "command": [
+        "git",
+        "add",
+        "qualification/phases/consume.py",
+        "qualification/resources/numeric.py",
+        "qualification/resources/numeric_driver.py"
+      ],
+      "started": 1792402227.1198258,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-main46bf-311091da-stage.log",
+      "exit": 0,
+      "ended": 1792402227.327478
+    },
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792402227.3640041,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-main46bf-311091da-install.log",
+      "exit": 0,
+      "ended": 1792402227.4380631
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792402227.484428,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-main46bf-311091da-fmt.log",
+      "exit": 0,
+      "ended": 1792402232.950182
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792402232.992716,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-main46bf-311091da-clippy.log",
+      "exit": 0,
+      "ended": 1792402272.665519
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792402272.809388,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-main46bf-311091da-prek.log",
+      "exit": 0,
+      "ended": 1792402283.043655
+    },
+    {
+      "name": "commit",
+      "command": [
+        "git",
+        "commit",
+        "-m",
+        "ci(qualification): bind supplemental file controls to main integration source",
+        "-m",
+        "Only three opt-in Python observer files change; defaults, native inputs, consumers, 512-row mutation batches and 31 measured samples remain unchanged. Ref #976, ref #987, ref #1081."
+      ],
+      "started": 1792402283.11895,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-main46bf-311091da-commit.log",
+      "exit": 0,
+      "ended": 1792402292.646086
+    },
+    {
+      "name": "push",
+      "command": [
+        "git",
+        "push",
+        "-u",
+        "origin",
+        "HEAD"
+      ],
+      "started": 1792402292.739161,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-main46bf-311091da-push.log",
+      "exit": 0,
+      "ended": 1792402295.3243752
+    },
+    {
+      "name": "native-build",
+      "command": [
+        "bazel",
+        "build",
+        "-c",
+        "opt",
+        "//bindings/python:_hawdb_boundary_profile",
+        "//bindings/python:_hawdb_retained_phase_profile",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true"
+      ],
+      "started": 1792402296.495716,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-final-supplemental-main46bf-311091da-native-build.log",
+      "exit": 0,
+      "ended": 1792402389.9521039
+    }
+  ],
+  "scope": "Separate opt-in explicit-checkpoint file controls; no original matrix replacement or budget/consumer/sample changes.",
+  "observer_patch_sha256": "365822c4859de05eb277dd813f439a034d79d211aa827ac4fdac2e07717029a9",
+  "observer_tree": "822ea52c764a2611aeabc3974303cfc1bfa90759",
+  "observer_source": "f26509bae83b549a42dbd1fcc35ef96369ddb290",
+  "native_extensions": {
+    "lib_hawdb_boundary_profile.dylib": {
+      "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/8dffc351aa309c1d37345a73d118e625/execroot/_main/bazel-out/darwin_arm64-opt/bin/bindings/python/lib_hawdb_boundary_profile.dylib",
+      "sha256": "c332ecf15d2f58ed4281212bf949cbcf2ee55e976e346e1147a10248cf7121d8"
+    },
+    "lib_hawdb_retained_phase_profile.dylib": {
+      "path": "/Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/8dffc351aa309c1d37345a73d118e625/execroot/_main/bazel-out/darwin_arm64-opt/bin/bindings/python/lib_hawdb_retained_phase_profile.dylib",
+      "sha256": "766d89f8da9dd359bcaa92d5c74c7233f15e64e111accb793b622e617dd6b891"
+    }
+  },
+  "ended": 1792402390.2138188
+}

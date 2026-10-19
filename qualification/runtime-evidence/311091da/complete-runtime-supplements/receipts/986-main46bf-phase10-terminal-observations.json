@@ -1,0 +1,1210 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "production_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "qualification_source": "ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+  "run": 39222030620,
+  "original_workflow_conclusion": "failure",
+  "observed_groups": 10,
+  "complete_observation_groups": 9,
+  "summary_sha256": "95e93e4f901f15000316bbafeab1668ee6227ef25b12c3fc42c128ff2427c755",
+  "positive_cost_groups": [
+    {
+      "group": [
+        "default",
+        1000,
+        "memory"
+      ],
+      "costs": {
+        "owned": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1003930,
+            "nearest_rank_p95": 1040420,
+            "maximum": 1062949
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1361876,
+            "nearest_rank_p95": 1396192,
+            "maximum": 1422706
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 814318,
+            "nearest_rank_p95": 853256,
+            "maximum": 853721
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 184476,
+            "nearest_rank_p95": 205978,
+            "maximum": 209693
+          },
+          "owned_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "owned_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 814318,
+            "nearest_rank_p95": 853256,
+            "maximum": 853721
+          }
+        },
+        "retained": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 109323,
+            "nearest_rank_p95": 124325,
+            "maximum": 124936
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 499917,
+            "nearest_rank_p95": 518445,
+            "maximum": 520488
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 74622,
+            "nearest_rank_p95": 85537,
+            "maximum": 89633
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 34540,
+            "nearest_rank_p95": 42523,
+            "maximum": 48902
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 52388,
+            "nearest_rank_p95": 63074,
+            "maximum": 67581
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 5,
+            "nearest_rank_p95": 5,
+            "maximum": 5
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 22162,
+            "nearest_rank_p95": 23124,
+            "maximum": 23976
+          }
+        },
+        "arrow": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 156573,
+            "nearest_rank_p95": 254420,
+            "maximum": 421289
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 547428,
+            "nearest_rank_p95": 1010551,
+            "maximum": 1014917
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 77725,
+            "nearest_rank_p95": 164194,
+            "maximum": 223304
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 73970,
+            "nearest_rank_p95": 142554,
+            "maximum": 197985
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 54741,
+            "nearest_rank_p95": 87060,
+            "maximum": 179649
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 5,
+            "nearest_rank_p95": 5,
+            "maximum": 5
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 21743,
+            "nearest_rank_p95": 52159,
+            "maximum": 110524
+          }
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000,
+        "file"
+      ],
+      "costs": {
+        "owned": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1581749,
+            "nearest_rank_p95": 1651359,
+            "maximum": 1702976
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 2241457,
+            "nearest_rank_p95": 2299626,
+            "maximum": 2340484
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1234387,
+            "nearest_rank_p95": 1278900,
+            "maximum": 1332662
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 343274,
+            "nearest_rank_p95": 372789,
+            "maximum": 380333
+          },
+          "owned_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "owned_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1234387,
+            "nearest_rank_p95": 1278900,
+            "maximum": 1332662
+          }
+        },
+        "retained": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 162618,
+            "nearest_rank_p95": 187401,
+            "maximum": 190157
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 899479,
+            "nearest_rank_p95": 915418,
+            "maximum": 920999
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 106589,
+            "nearest_rank_p95": 127569,
+            "maximum": 129371
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 55493,
+            "nearest_rank_p95": 63948,
+            "maximum": 71862
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 70853,
+            "nearest_rank_p95": 82836,
+            "maximum": 93014
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 5,
+            "nearest_rank_p95": 5,
+            "maximum": 5
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 35766,
+            "nearest_rank_p95": 45204,
+            "maximum": 45465
+          }
+        },
+        "arrow": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 244010,
+            "nearest_rank_p95": 272361,
+            "maximum": 289554
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 969841,
+            "nearest_rank_p95": 1007691,
+            "maximum": 1017349
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 112640,
+            "nearest_rank_p95": 128000,
+            "maximum": 137308
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 130207,
+            "nearest_rank_p95": 146513,
+            "maximum": 172845
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 75481,
+            "nearest_rank_p95": 91462,
+            "maximum": 101451
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 5,
+            "nearest_rank_p95": 5,
+            "maximum": 5
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 36709,
+            "nearest_rank_p95": 39574,
+            "maximum": 41246
+          }
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "memory"
+      ],
+      "costs": {
+        "owned": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 162850099,
+            "nearest_rank_p95": 171639670,
+            "maximum": 172049054
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 219899529,
+            "nearest_rank_p95": 228595692,
+            "maximum": 228805676
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 111553188,
+            "nearest_rank_p95": 114873813,
+            "maximum": 116048577
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 51676462,
+            "nearest_rank_p95": 57159275,
+            "maximum": 58068601
+          },
+          "owned_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "owned_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 111553188,
+            "nearest_rank_p95": 114873813,
+            "maximum": 116048577
+          }
+        },
+        "retained": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 11735595,
+            "nearest_rank_p95": 11964400,
+            "maximum": 12059984
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 76065321,
+            "nearest_rank_p95": 77085441,
+            "maximum": 77705576
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 8654962,
+            "nearest_rank_p95": 8915545,
+            "maximum": 8948525
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 3097870,
+            "nearest_rank_p95": 3165547,
+            "maximum": 3174247
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 151742,
+            "nearest_rank_p95": 171328,
+            "maximum": 181807
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 392,
+            "nearest_rank_p95": 392,
+            "maximum": 392
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 8500601,
+            "nearest_rank_p95": 8760870,
+            "maximum": 8796956
+          }
+        },
+        "arrow": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 14223609,
+            "nearest_rank_p95": 14890064,
+            "maximum": 14935933
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 78121304,
+            "nearest_rank_p95": 79299359,
+            "maximum": 79808523
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 8980234,
+            "nearest_rank_p95": 9575662,
+            "maximum": 9665367
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 5237562,
+            "nearest_rank_p95": 5381732,
+            "maximum": 5488387
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 159263,
+            "nearest_rank_p95": 183251,
+            "maximum": 189970
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 392,
+            "nearest_rank_p95": 392,
+            "maximum": 392
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 8821105,
+            "nearest_rank_p95": 9395011,
+            "maximum": 9487774
+          }
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "file"
+      ],
+      "costs": {
+        "owned": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 115666619,
+            "nearest_rank_p95": 125444719,
+            "maximum": 136931696
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 155693359,
+            "nearest_rank_p95": 164932998,
+            "maximum": 176294436
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 78139157,
+            "nearest_rank_p95": 87485916,
+            "maximum": 98090473
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 36806345,
+            "nearest_rank_p95": 42352731,
+            "maximum": 48842241
+          },
+          "owned_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "owned_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 78139157,
+            "nearest_rank_p95": 87485916,
+            "maximum": 98090473
+          }
+        },
+        "retained": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 11083396,
+            "nearest_rank_p95": 12503928,
+            "maximum": 22299892
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 52026047,
+            "nearest_rank_p95": 55723354,
+            "maximum": 90171399
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 9208865,
+            "nearest_rank_p95": 10611983,
+            "maximum": 17380619
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1891945,
+            "nearest_rank_p95": 2100275,
+            "maximum": 4919273
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 156496,
+            "nearest_rank_p95": 210778,
+            "maximum": 213702
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 392,
+            "nearest_rank_p95": 392,
+            "maximum": 392
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 9055624,
+            "nearest_rank_p95": 10438181,
+            "maximum": 17169841
+          }
+        },
+        "arrow": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 10782453,
+            "nearest_rank_p95": 13019746,
+            "maximum": 14202525
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 48342780,
+            "nearest_rank_p95": 50743372,
+            "maximum": 56900160
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 7694084,
+            "nearest_rank_p95": 9923704,
+            "maximum": 10844732
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 3104694,
+            "nearest_rank_p95": 3171869,
+            "maximum": 3357793
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 136606,
+            "nearest_rank_p95": 166291,
+            "maximum": 175885
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 392,
+            "nearest_rank_p95": 392,
+            "maximum": 392
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 7554724,
+            "nearest_rank_p95": 9762321,
+            "maximum": 10709879
+          }
+        }
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000000,
+        "memory"
+      ],
+      "costs": {
+        "owned": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1836128077,
+            "nearest_rank_p95": 1866549178,
+            "maximum": 1878741343
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 2483579000,
+            "nearest_rank_p95": 2515296155,
+            "maximum": 2545273780
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1201663109,
+            "nearest_rank_p95": 1229271374,
+            "maximum": 1242871650
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 633955815,
+            "nearest_rank_p95": 642850386,
+            "maximum": 665542044
+          },
+          "owned_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "owned_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1201663109,
+            "nearest_rank_p95": 1229271374,
+            "maximum": 1242871650
+          }
+        },
+        "retained": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 131531815,
+            "nearest_rank_p95": 135138748,
+            "maximum": 135433580
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 870322118,
+            "nearest_rank_p95": 880223707,
+            "maximum": 882540028
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 103034304,
+            "nearest_rank_p95": 106678286,
+            "maximum": 107080716
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 28501944,
+            "nearest_rank_p95": 28815516,
+            "maximum": 29218695
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 159861,
+            "nearest_rank_p95": 192011,
+            "maximum": 251461
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 3908,
+            "nearest_rank_p95": 3908,
+            "maximum": 3908
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 102875876,
+            "nearest_rank_p95": 106510832,
+            "maximum": 106913653
+          }
+        },
+        "arrow": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 166960513,
+            "nearest_rank_p95": 172615712,
+            "maximum": 183963680
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 899581425,
+            "nearest_rank_p95": 921014350,
+            "maximum": 956337615
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 102505840,
+            "nearest_rank_p95": 106649662,
+            "maximum": 114975422
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 64287807,
+            "nearest_rank_p95": 66739041,
+            "maximum": 68988258
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 161634,
+            "nearest_rank_p95": 178665,
+            "maximum": 184756
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 3908,
+            "nearest_rank_p95": 3908,
+            "maximum": 3908
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 102341442,
+            "nearest_rank_p95": 106492818,
+            "maximum": 114817285
+          }
+        }
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000000,
+        "file"
+      ],
+      "costs": {
+        "owned": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 2466195395,
+            "nearest_rank_p95": 2483929465,
+            "maximum": 2486850592
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 3116813542,
+            "nearest_rank_p95": 3151337728,
+            "maximum": 3161760637
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1763306107,
+            "nearest_rank_p95": 1773968041,
+            "maximum": 1781271110
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 703226727,
+            "nearest_rank_p95": 711953066,
+            "maximum": 715334503
+          },
+          "owned_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "owned_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 1763306107,
+            "nearest_rank_p95": 1773968041,
+            "maximum": 1781271110
+          }
+        },
+        "retained": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 138007089,
+            "nearest_rank_p95": 148281094,
+            "maximum": 203488116
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 876511714,
+            "nearest_rank_p95": 894560343,
+            "maximum": 927937955
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 109417232,
+            "nearest_rank_p95": 118533407,
+            "maximum": 174927769
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 28596483,
+            "nearest_rank_p95": 28882268,
+            "maximum": 29747687
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 191937,
+            "nearest_rank_p95": 218696,
+            "maximum": 65519222
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 3908,
+            "nearest_rank_p95": 3908,
+            "maximum": 3908
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 109234399,
+            "nearest_rank_p95": 114408474,
+            "maximum": 118357194
+          }
+        },
+        "arrow": {
+          "query_boundary_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 165023120,
+            "nearest_rank_p95": 169998179,
+            "maximum": 228161473
+          },
+          "elapsed_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 866386658,
+            "nearest_rank_p95": 875114360,
+            "maximum": 922194034
+          },
+          "native_work_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 108540861,
+            "nearest_rank_p95": 113335643,
+            "maximum": 169854377
+          },
+          "handoff_boundary_residual_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 56171780,
+            "nearest_rank_p95": 57541048,
+            "maximum": 58307096
+          },
+          "prepare_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 1,
+            "nearest_rank_p95": 1,
+            "maximum": 1
+          },
+          "prepare_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 192647,
+            "nearest_rank_p95": 211975,
+            "maximum": 62398139
+          },
+          "pull_calls": {
+            "unit": "calls",
+            "samples": 31,
+            "median": 3908,
+            "nearest_rank_p95": 3908,
+            "maximum": 3908
+          },
+          "pull_ns": {
+            "unit": "ns",
+            "samples": 31,
+            "median": 108333632,
+            "nearest_rank_p95": 112128610,
+            "maximum": 113142996
+          }
+        }
+      }
+    }
+  ],
+  "query_refusals": [
+    {
+      "group": [
+        "default",
+        1000000,
+        "memory"
+      ],
+      "mode": "owned",
+      "stage": "query",
+      "row_boundary_proven": false,
+      "first_error": {
+        "sample": -1,
+        "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+        "error_type": "ResourceBudgetError"
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "memory"
+      ],
+      "mode": "retained",
+      "stage": "query",
+      "row_boundary_proven": false,
+      "first_error": {
+        "sample": -1,
+        "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+        "error_type": "RetainedError"
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "memory"
+      ],
+      "mode": "arrow",
+      "stage": "query",
+      "row_boundary_proven": false,
+      "first_error": {
+        "sample": -1,
+        "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+        "error_type": "RetainedError"
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "file"
+      ],
+      "mode": "owned",
+      "stage": "query",
+      "row_boundary_proven": false,
+      "first_error": {
+        "sample": -1,
+        "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+        "error_type": "ResourceBudgetError"
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "file"
+      ],
+      "mode": "retained",
+      "stage": "query",
+      "row_boundary_proven": false,
+      "first_error": {
+        "sample": -1,
+        "error": "execution error: query memory account retained_source (external_read) would use 1071029616 bytes, exceeding its 268435456-byte budget",
+        "error_type": "RetainedError"
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "file"
+      ],
+      "mode": "arrow",
+      "stage": "query",
+      "row_boundary_proven": false,
+      "first_error": {
+        "sample": -1,
+        "error": "execution error: query memory account retained_source (external_read) would use 1071029744 bytes, exceeding its 268435456-byte budget",
+        "error_type": "RetainedError"
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "memory"
+      ],
+      "mode": "owned",
+      "stage": "query",
+      "row_boundary_proven": true,
+      "first_error": {
+        "sample": -1,
+        "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+        "error_type": "ExecutionError"
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "memory"
+      ],
+      "mode": "retained",
+      "stage": "query",
+      "row_boundary_proven": true,
+      "first_error": {
+        "sample": -1,
+        "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+        "error_type": "RetainedError"
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "memory"
+      ],
+      "mode": "arrow",
+      "stage": "query",
+      "row_boundary_proven": true,
+      "first_error": {
+        "sample": -1,
+        "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+        "error_type": "ArrowMemoryError"
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "file"
+      ],
+      "mode": "owned",
+      "stage": "query",
+      "row_boundary_proven": true,
+      "first_error": {
+        "sample": -1,
+        "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+        "error_type": "ExecutionError"
+      }
+    }
+  ],
+  "fixture_setup_refusals": [
+    {
+      "group": [
+        "large",
+        1000001,
+        "file"
+      ],
+      "mode": "retained",
+      "error": {
+        "type": "StorageError",
+        "message": "storage error: MVCC version index estimated payload budget exhausted; release old snapshots and checkpoint before retrying"
+      },
+      "query_attempted": false,
+      "costs": null
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "file"
+      ],
+      "mode": "arrow",
+      "error": {
+        "type": "StorageError",
+        "message": "storage error: MVCC version index estimated payload budget exhausted; release old snapshots and checkpoint before retrying"
+      },
+      "query_attempted": false,
+      "costs": null
+    }
+  ],
+  "observed_at": 1792402533.904187,
+  "scope": "All original phase10 outcomes preserved;6 positive cost groups qualify original31-sample source/conversion/handoff observations, default refusals and memory1M+1 row proof remain distinct. File1M+1 retained/Arrow failed untimed fixture MVCC budget, not query-row limit; no zero cost or query-attempt inference. Separate explicit-checkpoint fixture controls are being prepared without changing original consumers, budgets, samples or counts. Native work/handoff residual is not pure conversion; separately computed medians do not add. No full original10/10,90/110, whole-memory, causal, Prow or approval claim."
+}

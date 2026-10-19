@@ -1,0 +1,5 @@
+{
+  "original_bytes": 534,
+  "original_sha256": "2a665d58c67480cef6694d29552eced01884d1a26ae70fe2aafd9513fb719860",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_identifier_allocation_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest identifier::reference::identifier_boundary_sequences_match_the_frozen_splitter ... ok\ntest splitter_removes_source_sized_character_scratch ... ok\ntest borrowed_part_cursors_do_not_allocate_input_sized_scratch ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.89s\n\n"
+}

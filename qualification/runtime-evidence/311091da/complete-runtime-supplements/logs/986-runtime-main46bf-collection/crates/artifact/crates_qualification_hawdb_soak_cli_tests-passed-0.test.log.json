@@ -1,0 +1,5 @@
+{
+  "original_bytes": 366,
+  "original_sha256": "28f257a5791287a291654ed51dee35cfbf413a4eeed9bec1d0b8e205e9d23ab2",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_soak_cli_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest tests::parses_required_identity_and_resource_overrides ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 388,
+  "original_sha256": "3e1e3a9be4d0df1e12466d8b9fbccb4fffb968675ff8f43d9e371daac1bfda87",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_minimal_source_policy_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest source_policy_covers_build_reopen_and_prepared_update_lifecycle ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.49s\n\n"
+}

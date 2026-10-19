@@ -1,0 +1,5 @@
+{
+  "original_bytes": 660,
+  "original_sha256": "b65c872143814006b988b512bf62314ff4f34394756c6cf5a521abe59ee82537",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_graph_storage_qualification_cli_tests\n-----------------------------------------------------------------------------\n\nrunning 5 tests\ntest plan::tests::plan_rejects_empty_cypher_and_out_of_range_parameter ... ok\ntest tests::plan_protocol_is_stable ... ok\ntest plan::tests::plan_rejects_short_measurement_and_profile_overcommit ... ok\ntest tests::argument_parser_requires_both_paths ... ok\ntest plan::tests::checked_in_example_plan_builds_one_bounded_read_only_run ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

@@ -1,0 +1,1630 @@
+{
+  "artifact": 12175728228,
+  "artifact_name": "resources-numeric-1000001-file-large-false-select-python-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+  "group": [
+    "large",
+    1000001,
+    "file"
+  ],
+  "reports": {
+    "manifest.json": {
+      "source": {
+        "head": "ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+        "tree": "2de750bb8fa6c627a2e2b3517417090b4c005fe9"
+      },
+      "engine_source": "311091da6b23a292b7385b46362d3a12f6ec0064",
+      "engine_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+      "rows": 1000001,
+      "backend": "file",
+      "configuration": "large",
+      "instrumented": false,
+      "samples": 31,
+      "producer_hashes": {
+        "/home/runner/work/_temp/resource-qualification/frozen/_hawdb.so": "af6a7e2178856bd9bbdfee9c0aa18a7406d07289be4e02374dde86128d35d6d8",
+        "/home/runner/work/_temp/resource-qualification/frozen/python-interpreter.bin": "a5230d8adbd26c2185d77fb003597c4ee9c44c2369fc179122ff7c3a3a58ae59",
+        "/home/runner/work/_temp/resource-qualification/frozen/retained_boundary.py": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+        "/home/runner/work/_temp/resource-qualification/frozen/consume.py": "30be4cf3c40205ca27d5ed2190319b842795b692a2a10cacc882858a6363b668",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/pydantic.py": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/magic.py": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/_hawdb.pyi": "6c84c802cae732f8446298f18d9901e111d20d9d573add30d10f04c2656cbaf2",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/_display.py": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/__init__.py": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6"
+      },
+      "interpreter": {
+        "path": "/opt/hostedtoolcache/Python/3.14.8/x64/bin/python3.14",
+        "sha256": "a5230d8adbd26c2185d77fb003597c4ee9c44c2369fc179122ff7c3a3a58ae59",
+        "archived": "frozen/python-interpreter.bin"
+      },
+      "overlay_files": [
+        ".github/workflows/native-bindings.yml",
+        "BUILD.bazel",
+        "Cargo.toml",
+        "bindings/python/BUILD.bazel",
+        "bindings/python/Cargo.toml",
+        "bindings/python/src/database.rs",
+        "bindings/python/src/lib.rs",
+        "qualification/phases/consume.py",
+        "qualification/resources/baseline-source.json",
+        "qualification/resources/campaign.json",
+        "qualification/resources/numeric.py",
+        "qualification/resources/numeric_driver.py",
+        "qualification/resources/run.py",
+        "qualification/retained/configured.py",
+        "qualification/retained/run.py",
+        "src/api/retained_query.rs",
+        "src/embedded.rs",
+        "src/lib.rs",
+        "src/retained_phase_profile.rs"
+      ],
+      "scope": "Phase-only owned-native or retained prepare/pull and boundary residual. Separate from ordinary and allocation-instrumented measurements; no pure-conversion or whole-memory bound.",
+      "phase_instrumented": true,
+      "driver_sha256": "6f9389c6d699a0203f2348718e7cbddbbddf976ba0816c89a04f1c6b01310142"
+    },
+    "outcomes.json": [
+      {
+        "mode": "owned",
+        "exit": 1
+      },
+      {
+        "mode": "retained",
+        "exit": 1
+      },
+      {
+        "mode": "arrow",
+        "exit": 1
+      }
+    ],
+    "owned.stdout": {
+      "rows": 1000001,
+      "backend": "file",
+      "mode": "owned",
+      "configuration": "large",
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 776993310,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 776926519
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 812673973,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 812617237
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 1
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 773774454,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 773714443
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 2
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 769666782,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 769609286
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 3
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 775057287,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 774998809
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 4
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 785838204,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 785778333
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 5
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 812586987,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 812526575
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 6
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 776210914,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 776140057
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 7
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 755200969,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 755139456
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 8
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 793518658,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 793459870
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 9
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 772020050,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 771957015
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 10
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 777819840,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 777760530
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 11
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 770178678,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 770121110
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 12
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 772002058,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 771933394
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 13
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 775143383,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 775082231
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 14
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 770751776,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 770691754
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 15
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 770088105,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 770027053
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 16
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 854213065,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 854151692
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 17
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 854224588,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 854162654
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 18
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 861999095,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 861937672
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 19
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 859524517,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 859468543
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 20
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 851890206,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 851829003
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 21
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 854144363,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 854086566
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 22
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 856301759,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 856244422
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 23
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 859820245,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 859763098
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 24
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 864818467,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 864760940
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 25
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 858120432,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 858064187
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 26
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 854193052,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 854133672
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 27
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 855402087,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 855345171
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 28
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 884637369,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 884577328
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 29
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 845871274,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 845807588
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 30
+        }
+      ],
+      "phase_instrumented": true,
+      "allocation_instrumented": false,
+      "terminal": true,
+      "consumer_sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+      "extension_sha256": "af6a7e2178856bd9bbdfee9c0aa18a7406d07289be4e02374dde86128d35d6d8",
+      "scope": "Phase-only observed costs; separate from ordinary and allocation-instrumented latency. No pure-conversion, source-reuse, process-memory-bound or speedup claim.",
+      "actual_limits": [
+        1000000,
+        1073741824,
+        1073741824,
+        1073741824,
+        2147483648,
+        268435456,
+        67108864
+      ],
+      "setup_ns": 105189755843,
+      "fixture_reference": {
+        "rows": 1000001,
+        "checksum": "25f3e16559f54d37"
+      },
+      "warmup": {
+        "status": "error",
+        "error_type": "ExecutionError",
+        "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+        "retained_snapshot": null,
+        "complete_attempt_ns": 1138835730,
+        "native_phases": {
+          "prepare_calls": 0,
+          "prepare_ns": 0,
+          "pull_calls": 0,
+          "pull_ns": 0,
+          "owned_calls": 1,
+          "owned_ns": 1138738243
+        },
+        "phase_control_valid": true,
+        "phase_attribution_valid": false,
+        "handoff_boundary_residual_ns": null,
+        "native_work_ns": null,
+        "phase_scope": "Failed/refused original consumer; no boundary residual qualifies."
+      },
+      "process_peak_rss_bytes": 1230344192,
+      "all_paths_succeeded": false
+    },
+    "owned-progress.json": {
+      "rows": 1000001,
+      "backend": "file",
+      "mode": "owned",
+      "configuration": "large",
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 776993310,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 776926519
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 812673973,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 812617237
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 1
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 773774454,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 773714443
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 2
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 769666782,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 769609286
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 3
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 775057287,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 774998809
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 4
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 785838204,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 785778333
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 5
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 812586987,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 812526575
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 6
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 776210914,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 776140057
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 7
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 755200969,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 755139456
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 8
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 793518658,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 793459870
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 9
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 772020050,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 771957015
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 10
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 777819840,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 777760530
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 11
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 770178678,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 770121110
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 12
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 772002058,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 771933394
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 13
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 775143383,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 775082231
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 14
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 770751776,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 770691754
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 15
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 770088105,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 770027053
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 16
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 854213065,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 854151692
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 17
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 854224588,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 854162654
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 18
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 861999095,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 861937672
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 19
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 859524517,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 859468543
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 20
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 851890206,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 851829003
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 21
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 854144363,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 854086566
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 22
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 856301759,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 856244422
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 23
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 859820245,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 859763098
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 24
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 864818467,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 864760940
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 25
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 858120432,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 858064187
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 26
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 854193052,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 854133672
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 27
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 855402087,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 855345171
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 28
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 884637369,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 884577328
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 29
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "complete_attempt_ns": 845871274,
+          "native_phases": {
+            "prepare_calls": 0,
+            "prepare_ns": 0,
+            "pull_calls": 0,
+            "pull_ns": 0,
+            "owned_calls": 1,
+            "owned_ns": 845807588
+          },
+          "phase_control_valid": true,
+          "phase_attribution_valid": false,
+          "handoff_boundary_residual_ns": null,
+          "native_work_ns": null,
+          "phase_scope": "Failed/refused original consumer; no boundary residual qualifies.",
+          "sample": 30
+        }
+      ],
+      "phase_instrumented": true,
+      "allocation_instrumented": false,
+      "terminal": true,
+      "consumer_sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+      "extension_sha256": "af6a7e2178856bd9bbdfee9c0aa18a7406d07289be4e02374dde86128d35d6d8",
+      "scope": "Phase-only observed costs; separate from ordinary and allocation-instrumented latency. No pure-conversion, source-reuse, process-memory-bound or speedup claim.",
+      "actual_limits": [
+        1000000,
+        1073741824,
+        1073741824,
+        1073741824,
+        2147483648,
+        268435456,
+        67108864
+      ],
+      "setup_ns": 105189755843,
+      "fixture_reference": {
+        "rows": 1000001,
+        "checksum": "25f3e16559f54d37"
+      },
+      "warmup": {
+        "status": "error",
+        "error_type": "ExecutionError",
+        "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+        "retained_snapshot": null,
+        "complete_attempt_ns": 1138835730,
+        "native_phases": {
+          "prepare_calls": 0,
+          "prepare_ns": 0,
+          "pull_calls": 0,
+          "pull_ns": 0,
+          "owned_calls": 1,
+          "owned_ns": 1138738243
+        },
+        "phase_control_valid": true,
+        "phase_attribution_valid": false,
+        "handoff_boundary_residual_ns": null,
+        "native_work_ns": null,
+        "phase_scope": "Failed/refused original consumer; no boundary residual qualifies."
+      },
+      "process_peak_rss_bytes": 1230344192,
+      "all_paths_succeeded": false
+    },
+    "retained.stdout": {
+      "rows": 1000001,
+      "backend": "file",
+      "mode": "retained",
+      "configuration": "large",
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [],
+      "phase_instrumented": true,
+      "allocation_instrumented": false,
+      "terminal": true,
+      "consumer_sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+      "extension_sha256": "af6a7e2178856bd9bbdfee9c0aa18a7406d07289be4e02374dde86128d35d6d8",
+      "scope": "Phase-only observed costs; separate from ordinary and allocation-instrumented latency. No pure-conversion, source-reuse, process-memory-bound or speedup claim.",
+      "actual_limits": [
+        1000000,
+        1073741824,
+        1073741824,
+        1073741824,
+        2147483648,
+        268435456,
+        67108864
+      ],
+      "setup_or_probe_error": {
+        "type": "StorageError",
+        "message": "storage error: MVCC version index estimated payload budget exhausted; release old snapshots and checkpoint before retrying"
+      },
+      "process_peak_rss_bytes": 877649920,
+      "all_paths_succeeded": false
+    },
+    "retained-progress.json": {
+      "rows": 1000001,
+      "backend": "file",
+      "mode": "retained",
+      "configuration": "large",
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [],
+      "phase_instrumented": true,
+      "allocation_instrumented": false,
+      "terminal": true,
+      "consumer_sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+      "extension_sha256": "af6a7e2178856bd9bbdfee9c0aa18a7406d07289be4e02374dde86128d35d6d8",
+      "scope": "Phase-only observed costs; separate from ordinary and allocation-instrumented latency. No pure-conversion, source-reuse, process-memory-bound or speedup claim.",
+      "actual_limits": [
+        1000000,
+        1073741824,
+        1073741824,
+        1073741824,
+        2147483648,
+        268435456,
+        67108864
+      ],
+      "setup_or_probe_error": {
+        "type": "StorageError",
+        "message": "storage error: MVCC version index estimated payload budget exhausted; release old snapshots and checkpoint before retrying"
+      },
+      "process_peak_rss_bytes": 877649920,
+      "all_paths_succeeded": false
+    },
+    "arrow.stdout": {
+      "rows": 1000001,
+      "backend": "file",
+      "mode": "arrow",
+      "configuration": "large",
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [],
+      "phase_instrumented": true,
+      "allocation_instrumented": false,
+      "terminal": true,
+      "consumer_sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+      "extension_sha256": "af6a7e2178856bd9bbdfee9c0aa18a7406d07289be4e02374dde86128d35d6d8",
+      "scope": "Phase-only observed costs; separate from ordinary and allocation-instrumented latency. No pure-conversion, source-reuse, process-memory-bound or speedup claim.",
+      "actual_limits": [
+        1000000,
+        1073741824,
+        1073741824,
+        1073741824,
+        2147483648,
+        268435456,
+        67108864
+      ],
+      "setup_or_probe_error": {
+        "type": "StorageError",
+        "message": "storage error: MVCC version index estimated payload budget exhausted; release old snapshots and checkpoint before retrying"
+      },
+      "process_peak_rss_bytes": 877436928,
+      "all_paths_succeeded": false
+    },
+    "arrow-progress.json": {
+      "rows": 1000001,
+      "backend": "file",
+      "mode": "arrow",
+      "configuration": "large",
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [],
+      "phase_instrumented": true,
+      "allocation_instrumented": false,
+      "terminal": true,
+      "consumer_sha256": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+      "extension_sha256": "af6a7e2178856bd9bbdfee9c0aa18a7406d07289be4e02374dde86128d35d6d8",
+      "scope": "Phase-only observed costs; separate from ordinary and allocation-instrumented latency. No pure-conversion, source-reuse, process-memory-bound or speedup claim.",
+      "actual_limits": [
+        1000000,
+        1073741824,
+        1073741824,
+        1073741824,
+        2147483648,
+        268435456,
+        67108864
+      ],
+      "setup_or_probe_error": {
+        "type": "StorageError",
+        "message": "storage error: MVCC version index estimated payload budget exhausted; release old snapshots and checkpoint before retrying"
+      },
+      "process_peak_rss_bytes": 877436928,
+      "all_paths_succeeded": false
+    }
+  },
+  "unparsed_reports": {},
+  "verified_files": [
+    "frozen/_hawdb.so",
+    "frozen/python-interpreter.bin",
+    "frozen/retained_boundary.py",
+    "frozen/consume.py",
+    "frozen/hawdb/pydantic.py",
+    "frozen/hawdb/py.typed",
+    "frozen/hawdb/magic.py",
+    "frozen/hawdb/_hawdb.pyi",
+    "frozen/hawdb/_display.py",
+    "frozen/hawdb/__init__.py",
+    "frozen/hawdb/__init__.pyi"
+  ],
+  "file_sha256": {
+    "manifest.json": "9c31428e5e609f2934bd5b6f43c328154ede5170564a0b9fff36ad3c015ed7ce",
+    "outcomes.json": "d70a6c8a80b9fb717fe8923b680f5a6c388478b75d38fccbf0a3a31952602034",
+    "owned.stdout": "4c00f7dfa4071594c7b6f4c7599ca2c73cd66079a45269875fbe5630f623b653",
+    "owned-progress.json": "4c00f7dfa4071594c7b6f4c7599ca2c73cd66079a45269875fbe5630f623b653",
+    "retained.stdout": "dd94ddb8f51e556ec927f723622ee04cfb562c2e1a0e5722c37e5b8d01d833f6",
+    "retained-progress.json": "dd94ddb8f51e556ec927f723622ee04cfb562c2e1a0e5722c37e5b8d01d833f6",
+    "arrow.stdout": "1a1fb121c8ec330dd915fcc89db792fd26ff2cec12a26d792e1588d9898f1f79",
+    "arrow-progress.json": "1a1fb121c8ec330dd915fcc89db792fd26ff2cec12a26d792e1588d9898f1f79"
+  }
+}

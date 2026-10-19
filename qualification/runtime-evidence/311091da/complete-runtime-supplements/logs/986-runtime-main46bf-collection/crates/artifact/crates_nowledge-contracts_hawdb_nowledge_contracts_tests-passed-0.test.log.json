@@ -1,0 +1,5 @@
+{
+  "original_bytes": 996,
+  "original_sha256": "37313909ad94af2a3eca28e688f640308d1ed55dcf27d5cf23e6635b985b390b",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/nowledge-contracts:hawdb_nowledge_contracts_tests\n-----------------------------------------------------------------------------\n\nrunning 8 tests\ntest maintenance::tests::summary_json_preserves_empty_contract_shape ... ok\ntest read_snapshot::tests::report_json_preserves_protocol_and_budget_accounting ... ok\ntest retrieval::contract_tests::pipeline_contract_preserves_search_owner_identity ... ok\ntest storage_lifecycle::tests::torn_tail_requires_repair_before_lifecycle_is_ready ... ok\ntest storage_lifecycle::tests::clean_recovery_is_ready_and_preserves_protocol_fields ... ok\ntest test_support::graph_read::tests::fallback_reason_codes_parse_only_known_values ... ok\ntest workload::tests::workload_report_json_preserves_nested_evidence ... ok\ntest workload::tests::default_workload_options_preserve_qualified_bounds ... ok\n\ntest result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n"
+}

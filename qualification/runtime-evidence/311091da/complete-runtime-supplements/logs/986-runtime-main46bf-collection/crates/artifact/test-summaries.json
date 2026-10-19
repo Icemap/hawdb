@@ -1,0 +1,1902 @@
+[
+  {
+    "label": "//crates/cgroup:hawdb_cgroup_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/cgroup/hawdb_cgroup_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398296240",
+      "lastStopTimeMillis": "1792398296310",
+      "totalRunDurationMillis": "70",
+      "runCount": 1,
+      "totalRunDuration": "0.070s",
+      "firstStartTime": "2026-10-19T08:24:56.240Z",
+      "lastStopTime": "2026-10-19T08:24:56.310Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/cascades:hawdb_cascades_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/cascades/hawdb_cascades_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398296398",
+      "lastStopTimeMillis": "1792398296454",
+      "totalRunDurationMillis": "56",
+      "runCount": 1,
+      "totalRunDuration": "0.056s",
+      "firstStartTime": "2026-10-19T08:24:56.398Z",
+      "lastStopTime": "2026-10-19T08:24:56.454Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/sql-syntax:postgres_pgq_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/sql-syntax/postgres_pgq_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398296490",
+      "lastStopTimeMillis": "1792398296549",
+      "totalRunDurationMillis": "59",
+      "runCount": 1,
+      "totalRunDuration": "0.059s",
+      "firstStartTime": "2026-10-19T08:24:56.490Z",
+      "lastStopTime": "2026-10-19T08:24:56.549Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/plan-core:hawdb_plan_core_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/plan-core/hawdb_plan_core_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398296504",
+      "lastStopTimeMillis": "1792398296569",
+      "totalRunDurationMillis": "65",
+      "runCount": 1,
+      "totalRunDuration": "0.065s",
+      "firstStartTime": "2026-10-19T08:24:56.504Z",
+      "lastStopTime": "2026-10-19T08:24:56.569Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/optimizer-vector:hawdb_optimizer_vector_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/optimizer-vector/hawdb_optimizer_vector_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398296618",
+      "lastStopTimeMillis": "1792398296688",
+      "totalRunDurationMillis": "70",
+      "runCount": 1,
+      "totalRunDuration": "0.070s",
+      "firstStartTime": "2026-10-19T08:24:56.618Z",
+      "lastStopTime": "2026-10-19T08:24:56.688Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/sql-syntax:hawdb_sql_syntax_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/sql-syntax/hawdb_sql_syntax_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398296753",
+      "lastStopTimeMillis": "1792398296820",
+      "totalRunDurationMillis": "67",
+      "runCount": 1,
+      "totalRunDuration": "0.067s",
+      "firstStartTime": "2026-10-19T08:24:56.753Z",
+      "lastStopTime": "2026-10-19T08:24:56.820Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/cascades:hawdb_cascades_integration_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/cascades/hawdb_cascades_integration_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398296877",
+      "lastStopTimeMillis": "1792398296924",
+      "totalRunDurationMillis": "47",
+      "runCount": 1,
+      "totalRunDuration": "0.047s",
+      "firstStartTime": "2026-10-19T08:24:56.877Z",
+      "lastStopTime": "2026-10-19T08:24:56.924Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/sql-syntax:postgres_select_pgq_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/sql-syntax/postgres_select_pgq_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398296978",
+      "lastStopTimeMillis": "1792398297078",
+      "totalRunDurationMillis": "100",
+      "runCount": 1,
+      "totalRunDuration": "0.100s",
+      "firstStartTime": "2026-10-19T08:24:56.978Z",
+      "lastStopTime": "2026-10-19T08:24:57.078Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_identifier_allocation_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_identifier_allocation_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398296593",
+      "lastStopTimeMillis": "1792398297524",
+      "totalRunDurationMillis": "931",
+      "runCount": 1,
+      "totalRunDuration": "0.931s",
+      "firstStartTime": "2026-10-19T08:24:56.593Z",
+      "lastStopTime": "2026-10-19T08:24:57.524Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/route-ownership:hawdb_route_ownership_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/route-ownership/hawdb_route_ownership_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398398820",
+      "lastStopTimeMillis": "1792398399526",
+      "totalRunDurationMillis": "706",
+      "runCount": 1,
+      "totalRunDuration": "0.706s",
+      "firstStartTime": "2026-10-19T08:26:38.820Z",
+      "lastStopTime": "2026-10-19T08:26:39.526Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/optimizer-predicate:hawdb_optimizer_predicate_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/optimizer-predicate/hawdb_optimizer_predicate_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398399572",
+      "lastStopTimeMillis": "1792398399611",
+      "totalRunDurationMillis": "39",
+      "runCount": 1,
+      "totalRunDuration": "0.039s",
+      "firstStartTime": "2026-10-19T08:26:39.572Z",
+      "lastStopTime": "2026-10-19T08:26:39.611Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/query:hawdb_query_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/query/hawdb_query_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398399631",
+      "lastStopTimeMillis": "1792398399655",
+      "totalRunDurationMillis": "24",
+      "runCount": 1,
+      "totalRunDuration": "0.024s",
+      "firstStartTime": "2026-10-19T08:26:39.631Z",
+      "lastStopTime": "2026-10-19T08:26:39.655Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/integrity:hawdb_integrity_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/integrity/hawdb_integrity_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398399673",
+      "lastStopTimeMillis": "1792398399704",
+      "totalRunDurationMillis": "31",
+      "runCount": 1,
+      "totalRunDuration": "0.031s",
+      "firstStartTime": "2026-10-19T08:26:39.673Z",
+      "lastStopTime": "2026-10-19T08:26:39.704Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/ddl:hawdb_ddl_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/ddl/hawdb_ddl_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398399760",
+      "lastStopTimeMillis": "1792398399793",
+      "totalRunDurationMillis": "33",
+      "runCount": 1,
+      "totalRunDuration": "0.033s",
+      "firstStartTime": "2026-10-19T08:26:39.760Z",
+      "lastStopTime": "2026-10-19T08:26:39.793Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/core:hawdb_core_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/core/hawdb_core_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398399824",
+      "lastStopTimeMillis": "1792398400142",
+      "totalRunDurationMillis": "318",
+      "runCount": 1,
+      "totalRunDuration": "0.318s",
+      "firstStartTime": "2026-10-19T08:26:39.824Z",
+      "lastStopTime": "2026-10-19T08:26:40.142Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/analytics:hawdb_analytics_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/analytics/hawdb_analytics_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398400187",
+      "lastStopTimeMillis": "1792398400234",
+      "totalRunDurationMillis": "47",
+      "runCount": 1,
+      "totalRunDuration": "0.047s",
+      "firstStartTime": "2026-10-19T08:26:40.187Z",
+      "lastStopTime": "2026-10-19T08:26:40.234Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qos:hawdb_qos_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qos/hawdb_qos_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398400261",
+      "lastStopTimeMillis": "1792398400339",
+      "totalRunDurationMillis": "78",
+      "runCount": 1,
+      "totalRunDuration": "0.078s",
+      "firstStartTime": "2026-10-19T08:26:40.261Z",
+      "lastStopTime": "2026-10-19T08:26:40.339Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/optimizer-relational:hawdb_optimizer_relational_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/optimizer-relational/hawdb_optimizer_relational_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398400410",
+      "lastStopTimeMillis": "1792398404629",
+      "totalRunDurationMillis": "4219",
+      "runCount": 1,
+      "totalRunDuration": "4.219s",
+      "firstStartTime": "2026-10-19T08:26:40.410Z",
+      "lastStopTime": "2026-10-19T08:26:44.629Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/fuzz-contracts:hawdb_fuzz_contracts_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/fuzz-contracts/hawdb_fuzz_contracts_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398404817",
+      "lastStopTimeMillis": "1792398404995",
+      "totalRunDurationMillis": "178",
+      "runCount": 1,
+      "totalRunDuration": "0.178s",
+      "firstStartTime": "2026-10-19T08:26:44.817Z",
+      "lastStopTime": "2026-10-19T08:26:44.995Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/telemetry:hawdb_telemetry_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/telemetry/hawdb_telemetry_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398405143",
+      "lastStopTimeMillis": "1792398405329",
+      "totalRunDurationMillis": "186",
+      "runCount": 1,
+      "totalRunDuration": "0.186s",
+      "firstStartTime": "2026-10-19T08:26:45.143Z",
+      "lastStopTime": "2026-10-19T08:26:45.329Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/evidence:hawdb_evidence_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/evidence/hawdb_evidence_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398405419",
+      "lastStopTimeMillis": "1792398407898",
+      "totalRunDurationMillis": "2479",
+      "runCount": 1,
+      "totalRunDuration": "2.479s",
+      "firstStartTime": "2026-10-19T08:26:45.419Z",
+      "lastStopTime": "2026-10-19T08:26:47.898Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qos:hawdb_qos_loom_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qos/hawdb_qos_loom_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398408028",
+      "lastStopTimeMillis": "1792398408176",
+      "totalRunDurationMillis": "148",
+      "runCount": 1,
+      "totalRunDuration": "0.148s",
+      "firstStartTime": "2026-10-19T08:26:48.028Z",
+      "lastStopTime": "2026-10-19T08:26:48.176Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/expression:hawdb_expression_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/expression/hawdb_expression_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398408261",
+      "lastStopTimeMillis": "1792398408387",
+      "totalRunDurationMillis": "126",
+      "runCount": 1,
+      "totalRunDuration": "0.126s",
+      "firstStartTime": "2026-10-19T08:26:48.261Z",
+      "lastStopTime": "2026-10-19T08:26:48.387Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/plan-cypher:hawdb_plan_cypher_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/plan-cypher/hawdb_plan_cypher_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398408512",
+      "lastStopTimeMillis": "1792398409943",
+      "totalRunDurationMillis": "1431",
+      "runCount": 1,
+      "totalRunDuration": "1.431s",
+      "firstStartTime": "2026-10-19T08:26:48.512Z",
+      "lastStopTime": "2026-10-19T08:26:49.943Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/cypher:hawdb_cypher_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/cypher/hawdb_cypher_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398409995",
+      "lastStopTimeMillis": "1792398410512",
+      "totalRunDurationMillis": "517",
+      "runCount": 1,
+      "totalRunDuration": "0.517s",
+      "firstStartTime": "2026-10-19T08:26:49.995Z",
+      "lastStopTime": "2026-10-19T08:26:50.512Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/optimizer-graph:hawdb_optimizer_graph_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/optimizer-graph/hawdb_optimizer_graph_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398433273",
+      "lastStopTimeMillis": "1792398433481",
+      "totalRunDurationMillis": "208",
+      "runCount": 1,
+      "totalRunDuration": "0.208s",
+      "firstStartTime": "2026-10-19T08:27:13.273Z",
+      "lastStopTime": "2026-10-19T08:27:13.481Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/optimizer-graph:planner_golden_test",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/optimizer-graph/planner_golden_test/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398433520",
+      "lastStopTimeMillis": "1792398433552",
+      "totalRunDurationMillis": "32",
+      "runCount": 1,
+      "totalRunDuration": "0.032s",
+      "firstStartTime": "2026-10-19T08:27:13.520Z",
+      "lastStopTime": "2026-10-19T08:27:13.552Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/query-policy:hawdb_query_policy_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/query-policy/hawdb_query_policy_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398433589",
+      "lastStopTimeMillis": "1792398433634",
+      "totalRunDurationMillis": "45",
+      "runCount": 1,
+      "totalRunDuration": "0.045s",
+      "firstStartTime": "2026-10-19T08:27:13.589Z",
+      "lastStopTime": "2026-10-19T08:27:13.634Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/optimizer:hawdb_optimizer_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/optimizer/hawdb_optimizer_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398433670",
+      "lastStopTimeMillis": "1792398433699",
+      "totalRunDurationMillis": "29",
+      "runCount": 1,
+      "totalRunDuration": "0.029s",
+      "firstStartTime": "2026-10-19T08:27:13.670Z",
+      "lastStopTime": "2026-10-19T08:27:13.699Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/plan-cache:hawdb_plan_cache_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/plan-cache/hawdb_plan_cache_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398433730",
+      "lastStopTimeMillis": "1792398433780",
+      "totalRunDurationMillis": "50",
+      "runCount": 1,
+      "totalRunDuration": "0.050s",
+      "firstStartTime": "2026-10-19T08:27:13.730Z",
+      "lastStopTime": "2026-10-19T08:27:13.780Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/plan-cache:hawdb_plan_cache_loom_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/plan-cache/hawdb_plan_cache_loom_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398433808",
+      "lastStopTimeMillis": "1792398433856",
+      "totalRunDurationMillis": "48",
+      "runCount": 1,
+      "totalRunDuration": "0.048s",
+      "firstStartTime": "2026-10-19T08:27:13.808Z",
+      "lastStopTime": "2026-10-19T08:27:13.856Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/sql:hawdb_sql_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/sql/hawdb_sql_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398433886",
+      "lastStopTimeMillis": "1792398434455",
+      "totalRunDurationMillis": "569",
+      "runCount": 1,
+      "totalRunDuration": "0.569s",
+      "firstStartTime": "2026-10-19T08:27:13.886Z",
+      "lastStopTime": "2026-10-19T08:27:14.455Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/vector-projection:hawdb_vector_projection_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/vector-projection/hawdb_vector_projection_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398719828",
+      "lastStopTimeMillis": "1792398731556",
+      "totalRunDurationMillis": "11728",
+      "runCount": 1,
+      "totalRunDuration": "11.728s",
+      "firstStartTime": "2026-10-19T08:31:59.828Z",
+      "lastStopTime": "2026-10-19T08:32:11.556Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_query_observer_release_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/executor/hawdb_query_observer_release_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398731601",
+      "lastStopTimeMillis": "1792398731642",
+      "totalRunDurationMillis": "41",
+      "runCount": 1,
+      "totalRunDuration": "0.041s",
+      "firstStartTime": "2026-10-19T08:32:11.601Z",
+      "lastStopTime": "2026-10-19T08:32:11.642Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/runtime-tokio:hawdb_runtime_tokio_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/runtime-tokio/hawdb_runtime_tokio_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398731672",
+      "lastStopTimeMillis": "1792398731847",
+      "totalRunDurationMillis": "175",
+      "runCount": 1,
+      "totalRunDuration": "0.175s",
+      "firstStartTime": "2026-10-19T08:32:11.672Z",
+      "lastStopTime": "2026-10-19T08:32:11.847Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_executor_unit_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/executor/hawdb_executor_unit_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398731877",
+      "lastStopTimeMillis": "1792398741157",
+      "totalRunDurationMillis": "9280",
+      "runCount": 1,
+      "totalRunDuration": "9.280s",
+      "firstStartTime": "2026-10-19T08:32:11.877Z",
+      "lastStopTime": "2026-10-19T08:32:21.157Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_analyzer_workspace_allocation_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_analyzer_workspace_allocation_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398741226",
+      "lastStopTimeMillis": "1792398742359",
+      "totalRunDurationMillis": "1133",
+      "runCount": 1,
+      "totalRunDuration": "1.133s",
+      "firstStartTime": "2026-10-19T08:32:21.226Z",
+      "lastStopTime": "2026-10-19T08:32:22.359Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_content_store_mutation_qualification_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_content_store_mutation_qualification_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398920767",
+      "lastStopTimeMillis": "1792398920830",
+      "totalRunDurationMillis": "63",
+      "runCount": 1,
+      "totalRunDuration": "0.063s",
+      "firstStartTime": "2026-10-19T08:35:20.767Z",
+      "lastStopTime": "2026-10-19T08:35:20.830Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_vector_only_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_vector_only_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398742392",
+      "lastStopTimeMillis": "1792398966427",
+      "totalRunDurationMillis": "224035",
+      "runCount": 1,
+      "totalRunDuration": "224.035s",
+      "firstStartTime": "2026-10-19T08:32:22.392Z",
+      "lastStopTime": "2026-10-19T08:36:06.427Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_text_background_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_text_background_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398927765",
+      "lastStopTimeMillis": "1792399496693",
+      "totalRunDurationMillis": "568928",
+      "runCount": 1,
+      "totalRunDuration": "568.928s",
+      "firstStartTime": "2026-10-19T08:35:27.765Z",
+      "lastStopTime": "2026-10-19T08:44:56.693Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/storage:hawdb_storage_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/storage/hawdb_storage_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398914331",
+      "lastStopTimeMillis": "1792399630108",
+      "totalRunDurationMillis": "715777",
+      "runCount": 1,
+      "totalRunDuration": "715.777s",
+      "firstStartTime": "2026-10-19T08:35:14.331Z",
+      "lastStopTime": "2026-10-19T08:47:10.108Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_streamed_lifecycle_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_streamed_lifecycle_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398966546",
+      "lastStopTimeMillis": "1792399083521",
+      "totalRunDurationMillis": "116975",
+      "runCount": 1,
+      "totalRunDuration": "116.975s",
+      "firstStartTime": "2026-10-19T08:36:06.546Z",
+      "lastStopTime": "2026-10-19T08:38:03.521Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/artifact:hawdb_artifact_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/artifact/hawdb_artifact_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399535547",
+      "lastStopTimeMillis": "1792399535609",
+      "totalRunDurationMillis": "62",
+      "runCount": 1,
+      "totalRunDuration": "0.062s",
+      "firstStartTime": "2026-10-19T08:45:35.547Z",
+      "lastStopTime": "2026-10-19T08:45:35.609Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_vector_background_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_vector_background_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792398966598",
+      "lastStopTimeMillis": "1792399097526",
+      "totalRunDurationMillis": "130928",
+      "runCount": 1,
+      "totalRunDuration": "130.928s",
+      "firstStartTime": "2026-10-19T08:36:06.598Z",
+      "lastStopTime": "2026-10-19T08:38:17.526Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_background_only_source_policy_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_background_only_source_policy_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399652461",
+      "lastStopTimeMillis": "1792399657236",
+      "totalRunDurationMillis": "4775",
+      "runCount": 1,
+      "totalRunDuration": "4.775s",
+      "firstStartTime": "2026-10-19T08:47:32.461Z",
+      "lastStopTime": "2026-10-19T08:47:37.236Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/system-sql:hawdb_system_sql_loom_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/system-sql/hawdb_system_sql_loom_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399652544",
+      "lastStopTimeMillis": "1792399654303",
+      "totalRunDurationMillis": "1759",
+      "runCount": 1,
+      "totalRunDuration": "1.759s",
+      "firstStartTime": "2026-10-19T08:47:32.544Z",
+      "lastStopTime": "2026-10-19T08:47:34.303Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/compat:hawdb_compat_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/compat/hawdb_compat_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399761121",
+      "lastStopTimeMillis": "1792399761265",
+      "totalRunDurationMillis": "144",
+      "runCount": 1,
+      "totalRunDuration": "0.144s",
+      "firstStartTime": "2026-10-19T08:49:21.121Z",
+      "lastStopTime": "2026-10-19T08:49:21.265Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_text_background_streamed_lifecycle_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_text_background_streamed_lifecycle_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399630395",
+      "lastStopTimeMillis": "1792399826306",
+      "totalRunDurationMillis": "195911",
+      "runCount": 1,
+      "totalRunDuration": "195.911s",
+      "firstStartTime": "2026-10-19T08:47:10.395Z",
+      "lastStopTime": "2026-10-19T08:50:26.306Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/explain:hawdb_explain_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/explain/hawdb_explain_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399767611",
+      "lastStopTimeMillis": "1792399767674",
+      "totalRunDurationMillis": "63",
+      "runCount": 1,
+      "totalRunDuration": "0.063s",
+      "firstStartTime": "2026-10-19T08:49:27.611Z",
+      "lastStopTime": "2026-10-19T08:49:27.674Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_analyzer_observation_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_analyzer_observation_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399767754",
+      "lastStopTimeMillis": "1792399767809",
+      "totalRunDurationMillis": "55",
+      "runCount": 1,
+      "totalRunDuration": "0.055s",
+      "firstStartTime": "2026-10-19T08:49:27.754Z",
+      "lastStopTime": "2026-10-19T08:49:27.809Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_text_only_streamed_lifecycle_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_text_only_streamed_lifecycle_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399848466",
+      "lastStopTimeMillis": "1792400006246",
+      "totalRunDurationMillis": "157780",
+      "runCount": 1,
+      "totalRunDuration": "157.780s",
+      "firstStartTime": "2026-10-19T08:50:48.466Z",
+      "lastStopTime": "2026-10-19T08:53:26.246Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_text_only_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_text_only_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399765840",
+      "lastStopTimeMillis": "1792400111416",
+      "totalRunDurationMillis": "345576",
+      "runCount": 1,
+      "totalRunDuration": "345.576s",
+      "firstStartTime": "2026-10-19T08:49:25.840Z",
+      "lastStopTime": "2026-10-19T08:55:11.416Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_text_vector_streamed_lifecycle_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_text_vector_streamed_lifecycle_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399848512",
+      "lastStopTimeMillis": "1792399958663",
+      "totalRunDurationMillis": "110151",
+      "runCount": 1,
+      "totalRunDuration": "110.151s",
+      "firstStartTime": "2026-10-19T08:50:48.512Z",
+      "lastStopTime": "2026-10-19T08:52:38.663Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_minimal_source_policy_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_minimal_source_policy_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792399848576",
+      "lastStopTimeMillis": "1792399854089",
+      "totalRunDurationMillis": "5513",
+      "runCount": 1,
+      "totalRunDuration": "5.513s",
+      "firstStartTime": "2026-10-19T08:50:48.576Z",
+      "lastStopTime": "2026-10-19T08:50:54.089Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/system-sql:hawdb_system_sql_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/system-sql/hawdb_system_sql_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400113391",
+      "lastStopTimeMillis": "1792400113460",
+      "totalRunDurationMillis": "69",
+      "runCount": 1,
+      "totalRunDuration": "0.069s",
+      "firstStartTime": "2026-10-19T08:55:13.391Z",
+      "lastStopTime": "2026-10-19T08:55:13.460Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/relational:hawdb_relational_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/relational/hawdb_relational_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400116493",
+      "lastStopTimeMillis": "1792400126743",
+      "totalRunDurationMillis": "10250",
+      "runCount": 1,
+      "totalRunDuration": "10.250s",
+      "firstStartTime": "2026-10-19T08:55:16.493Z",
+      "lastStopTime": "2026-10-19T08:55:26.743Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/resource-profile:hawdb_resource_profile_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/resource-profile/hawdb_resource_profile_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400118862",
+      "lastStopTimeMillis": "1792400118918",
+      "totalRunDurationMillis": "56",
+      "runCount": 1,
+      "totalRunDuration": "0.056s",
+      "firstStartTime": "2026-10-19T08:55:18.862Z",
+      "lastStopTime": "2026-10-19T08:55:18.918Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_background_only_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_background_only_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400006348",
+      "lastStopTimeMillis": "1792400168593",
+      "totalRunDurationMillis": "162245",
+      "runCount": 1,
+      "totalRunDuration": "162.245s",
+      "firstStartTime": "2026-10-19T08:53:26.348Z",
+      "lastStopTime": "2026-10-19T08:56:08.593Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_projection_allocation_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/executor/hawdb_projection_allocation_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400129243",
+      "lastStopTimeMillis": "1792400131870",
+      "totalRunDurationMillis": "2627",
+      "runCount": 1,
+      "totalRunDuration": "2.627s",
+      "firstStartTime": "2026-10-19T08:55:29.243Z",
+      "lastStopTime": "2026-10-19T08:55:31.870Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_text_only_source_policy_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_text_only_source_policy_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400118938",
+      "lastStopTimeMillis": "1792400593659",
+      "totalRunDurationMillis": "474721",
+      "runCount": 1,
+      "totalRunDuration": "474.721s",
+      "firstStartTime": "2026-10-19T08:55:18.938Z",
+      "lastStopTime": "2026-10-19T09:03:13.659Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_text_background_source_policy_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_text_background_source_policy_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400129290",
+      "lastStopTimeMillis": "1792400494303",
+      "totalRunDurationMillis": "365013",
+      "runCount": 1,
+      "totalRunDuration": "365.013s",
+      "firstStartTime": "2026-10-19T08:55:29.290Z",
+      "lastStopTime": "2026-10-19T09:01:34.303Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_acl_streamed_lifecycle_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_acl_streamed_lifecycle_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400281388",
+      "lastStopTimeMillis": "1792400412414",
+      "totalRunDurationMillis": "131026",
+      "runCount": 1,
+      "totalRunDuration": "131.026s",
+      "firstStartTime": "2026-10-19T08:58:01.388Z",
+      "lastStopTime": "2026-10-19T09:00:12.414Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/nowledge-contracts:hawdb_nowledge_contracts_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/nowledge-contracts/hawdb_nowledge_contracts_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400603987",
+      "lastStopTimeMillis": "1792400604017",
+      "totalRunDurationMillis": "30",
+      "runCount": 1,
+      "totalRunDuration": "0.030s",
+      "firstStartTime": "2026-10-19T09:03:23.987Z",
+      "lastStopTime": "2026-10-19T09:03:24.017Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_segment_allocation_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_segment_allocation_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400646398",
+      "lastStopTimeMillis": "1792400648131",
+      "totalRunDurationMillis": "1733",
+      "runCount": 1,
+      "totalRunDuration": "1.733s",
+      "firstStartTime": "2026-10-19T09:04:06.398Z",
+      "lastStopTime": "2026-10-19T09:04:08.131Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_acl_source_policy_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_acl_source_policy_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400278838",
+      "lastStopTimeMillis": "1792400608745",
+      "totalRunDurationMillis": "329907",
+      "runCount": 1,
+      "totalRunDuration": "329.907s",
+      "firstStartTime": "2026-10-19T08:57:58.838Z",
+      "lastStopTime": "2026-10-19T09:03:28.745Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_source_policy_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_source_policy_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400777431",
+      "lastStopTimeMillis": "1792401195678",
+      "totalRunDurationMillis": "418247",
+      "runCount": 1,
+      "totalRunDuration": "418.247s",
+      "firstStartTime": "2026-10-19T09:06:17.431Z",
+      "lastStopTime": "2026-10-19T09:13:15.678Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/bootstrap:hawdb_bootstrap_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/bootstrap/hawdb_bootstrap_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400779206",
+      "lastStopTimeMillis": "1792400779246",
+      "totalRunDurationMillis": "40",
+      "runCount": 1,
+      "totalRunDuration": "0.040s",
+      "firstStartTime": "2026-10-19T09:06:19.206Z",
+      "lastStopTime": "2026-10-19T09:06:19.246Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_vector_background_source_policy_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_vector_background_source_policy_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400933887",
+      "lastStopTimeMillis": "1792400939081",
+      "totalRunDurationMillis": "5194",
+      "runCount": 1,
+      "totalRunDuration": "5.194s",
+      "firstStartTime": "2026-10-19T09:08:53.887Z",
+      "lastStopTime": "2026-10-19T09:08:59.081Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_lexical_delta_allocation_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_lexical_delta_allocation_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401197459",
+      "lastStopTimeMillis": "1792401198639",
+      "totalRunDurationMillis": "1180",
+      "runCount": 1,
+      "totalRunDuration": "1.180s",
+      "firstStartTime": "2026-10-19T09:13:17.459Z",
+      "lastStopTime": "2026-10-19T09:13:18.639Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_vector_only_source_policy_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_vector_only_source_policy_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401197491",
+      "lastStopTimeMillis": "1792401204757",
+      "totalRunDurationMillis": "7266",
+      "runCount": 1,
+      "totalRunDuration": "7.266s",
+      "firstStartTime": "2026-10-19T09:13:17.491Z",
+      "lastStopTime": "2026-10-19T09:13:24.757Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_descriptor_allocation_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_descriptor_allocation_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401202692",
+      "lastStopTimeMillis": "1792401205807",
+      "totalRunDurationMillis": "3115",
+      "runCount": 1,
+      "totalRunDuration": "3.115s",
+      "firstStartTime": "2026-10-19T09:13:22.692Z",
+      "lastStopTime": "2026-10-19T09:13:25.807Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_analyzer_allocation_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_analyzer_allocation_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401203875",
+      "lastStopTimeMillis": "1792401204012",
+      "totalRunDurationMillis": "137",
+      "runCount": 1,
+      "totalRunDuration": "0.137s",
+      "firstStartTime": "2026-10-19T09:13:23.875Z",
+      "lastStopTime": "2026-10-19T09:13:24.012Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/executor:hawdb_morsel_oracle_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/executor/hawdb_morsel_oracle_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401211141",
+      "lastStopTimeMillis": "1792401211214",
+      "totalRunDurationMillis": "73",
+      "runCount": 1,
+      "totalRunDuration": "0.073s",
+      "firstStartTime": "2026-10-19T09:13:31.141Z",
+      "lastStopTime": "2026-10-19T09:13:31.214Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792400777459",
+      "lastStopTimeMillis": "1792401268975",
+      "totalRunDurationMillis": "491516",
+      "runCount": 1,
+      "totalRunDuration": "491.516s",
+      "firstStartTime": "2026-10-19T09:06:17.459Z",
+      "lastStopTime": "2026-10-19T09:14:28.975Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_text_vector_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_text_vector_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401214266",
+      "lastStopTimeMillis": "1792401587749",
+      "totalRunDurationMillis": "373483",
+      "runCount": 1,
+      "totalRunDuration": "373.483s",
+      "firstStartTime": "2026-10-19T09:13:34.266Z",
+      "lastStopTime": "2026-10-19T09:19:47.749Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/readiness:hawdb_readiness_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/readiness/hawdb_readiness_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401214480",
+      "lastStopTimeMillis": "1792401229165",
+      "totalRunDurationMillis": "14685",
+      "runCount": 1,
+      "totalRunDuration": "14.685s",
+      "firstStartTime": "2026-10-19T09:13:34.480Z",
+      "lastStopTime": "2026-10-19T09:13:49.165Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_text_vector_source_policy_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_text_vector_source_policy_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401214400",
+      "lastStopTimeMillis": "1792401645573",
+      "totalRunDurationMillis": "431173",
+      "runCount": 1,
+      "totalRunDuration": "431.173s",
+      "firstStartTime": "2026-10-19T09:13:34.400Z",
+      "lastStopTime": "2026-10-19T09:20:45.573Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_graph_storage_qualification_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_graph_storage_qualification_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401602689",
+      "lastStopTimeMillis": "1792401602714",
+      "totalRunDurationMillis": "25",
+      "runCount": 1,
+      "totalRunDuration": "0.025s",
+      "firstStartTime": "2026-10-19T09:20:02.689Z",
+      "lastStopTime": "2026-10-19T09:20:02.714Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_minimal_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_minimal_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401588094",
+      "lastStopTimeMillis": "1792401722253",
+      "totalRunDurationMillis": "134159",
+      "runCount": 1,
+      "totalRunDuration": "134.159s",
+      "firstStartTime": "2026-10-19T09:19:48.094Z",
+      "lastStopTime": "2026-10-19T09:22:02.253Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_soak_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_soak_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401856594",
+      "lastStopTimeMillis": "1792401856624",
+      "totalRunDurationMillis": "30",
+      "runCount": 1,
+      "totalRunDuration": "0.030s",
+      "firstStartTime": "2026-10-19T09:24:16.594Z",
+      "lastStopTime": "2026-10-19T09:24:16.624Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_content_store_read_qualification_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_content_store_read_qualification_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401990778",
+      "lastStopTimeMillis": "1792401990805",
+      "totalRunDurationMillis": "27",
+      "runCount": 1,
+      "totalRunDuration": "0.027s",
+      "firstStartTime": "2026-10-19T09:26:30.778Z",
+      "lastStopTime": "2026-10-19T09:26:30.805Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_qualification_release_bundle_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_qualification_release_bundle_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401990788",
+      "lastStopTimeMillis": "1792401992506",
+      "totalRunDurationMillis": "1718",
+      "runCount": 1,
+      "totalRunDuration": "1.718s",
+      "firstStartTime": "2026-10-19T09:26:30.788Z",
+      "lastStopTime": "2026-10-19T09:26:32.506Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_content_store_overflow_compaction_qualification_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_content_store_overflow_compaction_qualification_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401990808",
+      "lastStopTimeMillis": "1792401990832",
+      "totalRunDurationMillis": "24",
+      "runCount": 1,
+      "totalRunDuration": "0.024s",
+      "firstStartTime": "2026-10-19T09:26:30.808Z",
+      "lastStopTime": "2026-10-19T09:26:30.832Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_content_store_memory_qualification_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_content_store_memory_qualification_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401990831",
+      "lastStopTimeMillis": "1792401990855",
+      "totalRunDurationMillis": "24",
+      "runCount": 1,
+      "totalRunDuration": "0.024s",
+      "firstStartTime": "2026-10-19T09:26:30.831Z",
+      "lastStopTime": "2026-10-19T09:26:30.855Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_graph_index_qualification_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_graph_index_qualification_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401992554",
+      "lastStopTimeMillis": "1792401992579",
+      "totalRunDurationMillis": "25",
+      "runCount": 1,
+      "totalRunDuration": "0.025s",
+      "firstStartTime": "2026-10-19T09:26:32.554Z",
+      "lastStopTime": "2026-10-19T09:26:32.579Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_qualification_content_store_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_qualification_content_store_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401992578",
+      "lastStopTimeMillis": "1792401992771",
+      "totalRunDurationMillis": "193",
+      "runCount": 1,
+      "totalRunDuration": "0.193s",
+      "firstStartTime": "2026-10-19T09:26:32.578Z",
+      "lastStopTime": "2026-10-19T09:26:32.771Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_release_bundle_cli_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_release_bundle_cli_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401992606",
+      "lastStopTimeMillis": "1792401992629",
+      "totalRunDurationMillis": "23",
+      "runCount": 1,
+      "totalRunDuration": "0.023s",
+      "firstStartTime": "2026-10-19T09:26:32.606Z",
+      "lastStopTime": "2026-10-19T09:26:32.629Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_content_store_contract_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_content_store_contract_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401992632",
+      "lastStopTimeMillis": "1792401992678",
+      "totalRunDurationMillis": "46",
+      "runCount": 1,
+      "totalRunDuration": "0.046s",
+      "firstStartTime": "2026-10-19T09:26:32.632Z",
+      "lastStopTime": "2026-10-19T09:26:32.678Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_qualification_misc_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_qualification_misc_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401992829",
+      "lastStopTimeMillis": "1792401992855",
+      "totalRunDurationMillis": "26",
+      "runCount": 1,
+      "totalRunDuration": "0.026s",
+      "firstStartTime": "2026-10-19T09:26:32.829Z",
+      "lastStopTime": "2026-10-19T09:26:32.855Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/search:hawdb_search_acl_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/search/hawdb_search_acl_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792401425478",
+      "lastStopTimeMillis": "1792401872031",
+      "totalRunDurationMillis": "446553",
+      "runCount": 1,
+      "totalRunDuration": "446.553s",
+      "firstStartTime": "2026-10-19T09:17:05.478Z",
+      "lastStopTime": "2026-10-19T09:24:32.031Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_content_store_production_mutation_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_content_store_production_mutation_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792402049241",
+      "lastStopTimeMillis": "1792402086352",
+      "totalRunDurationMillis": "37111",
+      "runCount": 1,
+      "totalRunDuration": "37.111s",
+      "firstStartTime": "2026-10-19T09:27:29.241Z",
+      "lastStopTime": "2026-10-19T09:28:06.352Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_content_store_production_overflow_compaction_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_content_store_production_overflow_compaction_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792402086372",
+      "lastStopTimeMillis": "1792402097115",
+      "totalRunDurationMillis": "10743",
+      "runCount": 1,
+      "totalRunDuration": "10.743s",
+      "firstStartTime": "2026-10-19T09:28:06.372Z",
+      "lastStopTime": "2026-10-19T09:28:17.115Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_qualification_production_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_qualification_production_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792402097133",
+      "lastStopTimeMillis": "1792402101264",
+      "totalRunDurationMillis": "4131",
+      "runCount": 1,
+      "totalRunDuration": "4.131s",
+      "firstStartTime": "2026-10-19T09:28:17.133Z",
+      "lastStopTime": "2026-10-19T09:28:21.264Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_content_store_initial_row_page_qualification_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_content_store_initial_row_page_qualification_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792402101282",
+      "lastStopTimeMillis": "1792402146446",
+      "totalRunDurationMillis": "45164",
+      "runCount": 1,
+      "totalRunDuration": "45.164s",
+      "firstStartTime": "2026-10-19T09:28:21.282Z",
+      "lastStopTime": "2026-10-19T09:29:06.446Z",
+      "attemptCount": 1
+    }
+  },
+  {
+    "label": "//crates/qualification:hawdb_content_store_production_read_tests",
+    "summary": {
+      "totalRunCount": 1,
+      "passed": [
+        {
+          "uri": "file:///home/runner/.bazel/execroot/_main/bazel-out/k8-fastbuild/testlogs/crates/qualification/hawdb_content_store_production_read_tests/test.log"
+        }
+      ],
+      "overallStatus": "PASSED",
+      "firstStartTimeMillis": "1792402146463",
+      "lastStopTimeMillis": "1792402150921",
+      "totalRunDurationMillis": "4458",
+      "runCount": 1,
+      "totalRunDuration": "4.458s",
+      "firstStartTime": "2026-10-19T09:29:06.463Z",
+      "lastStopTime": "2026-10-19T09:29:10.921Z",
+      "attemptCount": 1
+    }
+  }
+]

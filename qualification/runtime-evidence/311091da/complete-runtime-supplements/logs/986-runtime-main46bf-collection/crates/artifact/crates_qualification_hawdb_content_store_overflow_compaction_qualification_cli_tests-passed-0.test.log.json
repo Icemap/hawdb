@@ -1,0 +1,5 @@
+{
+  "original_bytes": 630,
+  "original_sha256": "97068589adc9c28e44747cfb7eadc2412c97daaee923bfe3f55849e2e664c104",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_content_store_overflow_compaction_qualification_cli_tests\n-----------------------------------------------------------------------------\n\nrunning 4 tests\ntest tests::argument_parser_requires_one_replica_and_plan ... ok\ntest tests::shared_host_profile_keeps_dynamic_memory_admission ... ok\ntest tests::plan_builds_a_bounded_writable_capability_profile ... ok\ntest tests::plan_rejects_zero_compaction_bounds_and_unbounded_result_memory ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

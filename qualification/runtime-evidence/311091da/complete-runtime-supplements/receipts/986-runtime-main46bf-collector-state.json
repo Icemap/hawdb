@@ -1,0 +1,74 @@
+{
+  "status": "complete_observations",
+  "pid": 71996,
+  "run": 39222367162,
+  "source": "ef412c48ba3a89b30abaf809e33512f58ed60e66",
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "main": "46bfde00131a6d711d51aad6e5e237279a287061",
+  "production_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "jobs": {
+    "python": {
+      "role": "python",
+      "job": 117960456935,
+      "head": "ef412c48ba3a89b30abaf809e33512f58ed60e66",
+      "job_conclusion": "success",
+      "source_verified": true,
+      "indexed_files_verified": 11,
+      "zip_sha256": "9f38ac09743c32b23dea0b599572462988c74b024cf9ab7a8c25cf113168f0d4",
+      "log_sha256": "1a39a175c697b94c7e10b56b280d569d5efb8b51a624f8da5b7b259d7b778ad0",
+      "command_exit": 0,
+      "selected_test_count": 3,
+      "observed_test_summaries": 3,
+      "missing_summaries": [],
+      "statuses": {
+        "PASSED": 3
+      },
+      "all_selected_passed": true,
+      "scope": "Standalone current-main runtime evidence, preserving all outcomes. Not Prow/Tide status, local failure disposition, complete performance acceptance or genuine approval."
+    },
+    "root": {
+      "role": "root",
+      "job": 117960457287,
+      "head": "ef412c48ba3a89b30abaf809e33512f58ed60e66",
+      "job_conclusion": "success",
+      "source_verified": true,
+      "indexed_files_verified": 67,
+      "zip_sha256": "2b4ef4abfd55fd403d495479f47714b6b732c5f845bcc2f06c4f5cd9dd886aed",
+      "log_sha256": "48a68d0699f4350b089369584485dd200c9a690a891e15586dea42a82ed1411c",
+      "command_exit": 0,
+      "selected_test_count": 59,
+      "observed_test_summaries": 59,
+      "missing_summaries": [],
+      "statuses": {
+        "PASSED": 59
+      },
+      "all_selected_passed": true,
+      "scope": "Standalone current-main runtime evidence, preserving all outcomes. Not Prow/Tide status, local failure disposition, complete performance acceptance or genuine approval."
+    },
+    "crates": {
+      "role": "crates",
+      "job": 117960457303,
+      "head": "ef412c48ba3a89b30abaf809e33512f58ed60e66",
+      "job_conclusion": "success",
+      "source_verified": true,
+      "indexed_files_verified": 103,
+      "zip_sha256": "a267e9f6973b3fca9b9be0a95419886601e8180b58b77057b5d42eed11893ad1",
+      "log_sha256": "24be79ba903596210ba618ae735c79c02970ed4a8d0e2eb8bc423a3783266761",
+      "command_exit": 0,
+      "selected_test_count": 95,
+      "observed_test_summaries": 95,
+      "missing_summaries": [],
+      "statuses": {
+        "PASSED": 95
+      },
+      "all_selected_passed": true,
+      "scope": "Standalone current-main runtime evidence, preserving all outcomes. Not Prow/Tide status, local failure disposition, complete performance acceptance or genuine approval."
+    }
+  },
+  "errors": [],
+  "run_status": "completed",
+  "run_conclusion": "success",
+  "updated": 1792402196.3251631,
+  "all_lanes_passed": true,
+  "ended": 1792402196.325305
+}

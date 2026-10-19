@@ -1,0 +1,26 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "engine_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "qualification_base": "ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+  "qualification_tree": "2de750bb8fa6c627a2e2b3517417090b4c005fe9",
+  "observer_source": "f26509bae83b549a42dbd1fcc35ef96369ddb290",
+  "observer_tree": "822ea52c764a2611aeabc3974303cfc1bfa90759",
+  "file_sha256": {
+    "retained_boundary.py": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+    "consume.py": "1fa8de3575a4476487baf81a4753ddadd3bee450f989cae5960283c4ed426032",
+    "hawdb/magic.py": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+    "hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6",
+    "hawdb/__init__.py": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+    "hawdb/_display.py": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+    "hawdb/_hawdb.so": "766d89f8da9dd359bcaa92d5c74c7233f15e64e111accb793b622e617dd6b891",
+    "hawdb/pydantic.py": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+    "hawdb/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hawdb/_hawdb.pyi": "6c84c802cae732f8446298f18d9901e111d20d9d573add30d10f04c2656cbaf2"
+  },
+  "interpreter": {
+    "path": "/Users/hawkingrei/tmp/bazel/repositories/contents/d4b81707e7f8b2ed947ecb016b57a66d8641030b72497b0e47896b5b625fbc87/6f7abe37-f074-4ee6-a52b-40b52f563b9e/bin/python3.11",
+    "sha256": "bb713af5187134b02839a3ef0bef2aa95457e4c1c6c17f1db16f49e798c41a8b"
+  },
+  "setup_checkpoint_rows": 65536,
+  "scope": "Explicit untimed fixture maintenance only. Three file1M+1 negative phase modes, original31samples/warmup/full consumer. Original phase9/10, six positive phase cost groups and failed setup remain unchanged; not original10/10 replacement."
+}

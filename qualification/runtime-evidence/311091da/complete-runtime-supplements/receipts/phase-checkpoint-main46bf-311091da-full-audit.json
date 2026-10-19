@@ -1,0 +1,589 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "supplemental_source": "f26509bae83b549a42dbd1fcc35ef96369ddb290",
+  "groups": [
+    {
+      "rows": 1000001,
+      "mode": "owned",
+      "setup_checkpoints": 15,
+      "setup_ns": 109346568958,
+      "report_sha256": "c0e5dcbf05f51298ed1091342fc314ffd0f34adb124a7eed488b3c969c32289a",
+      "audit": {
+        "mode": "owned",
+        "samples": 31,
+        "complete": true,
+        "query_success": false,
+        "observer_valid": true,
+        "costs": null,
+        "setup_or_probe_error": null,
+        "process_peak_rss_bytes": 1390936064,
+        "actual_limits": [
+          1000000,
+          1073741824,
+          1073741824,
+          1073741824,
+          2147483648,
+          268435456,
+          67108864
+        ],
+        "errors": [
+          {
+            "sample": -1,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 0,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 1,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 2,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 3,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 4,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 5,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 6,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 7,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 8,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 9,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 10,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 11,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 12,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 13,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 14,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 15,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 16,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 17,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 18,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 19,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 20,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 21,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 22,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 23,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 24,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 25,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 26,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 27,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 28,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 29,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          },
+          {
+            "sample": 30,
+            "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+            "error_type": "ExecutionError"
+          }
+        ],
+        "observer_errors": [],
+        "stage": "query",
+        "row_boundary_proven": true,
+        "declared_positive_refused": false,
+        "acceptance_approved": false
+      }
+    },
+    {
+      "rows": 1000001,
+      "mode": "retained",
+      "setup_checkpoints": 15,
+      "setup_ns": 89752034917,
+      "report_sha256": "88fcb311851e9e6b397385b394821dc7bbfca29209a2418064411d681a1e147c",
+      "audit": {
+        "mode": "retained",
+        "samples": 31,
+        "complete": true,
+        "query_success": false,
+        "observer_valid": true,
+        "costs": null,
+        "setup_or_probe_error": null,
+        "process_peak_rss_bytes": 1319452672,
+        "actual_limits": [
+          1000000,
+          1073741824,
+          1073741824,
+          1073741824,
+          2147483648,
+          268435456,
+          67108864
+        ],
+        "errors": [
+          {
+            "sample": -1,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 0,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 1,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 2,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 3,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 4,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 5,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 6,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 7,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 8,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 9,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 10,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 11,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 12,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 13,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 14,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 15,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 16,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 17,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 18,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 19,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 20,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 21,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 22,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 23,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 24,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 25,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 26,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 27,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 28,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 29,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          },
+          {
+            "sample": 30,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "RetainedError"
+          }
+        ],
+        "observer_errors": [],
+        "stage": "query",
+        "row_boundary_proven": true,
+        "declared_positive_refused": false,
+        "acceptance_approved": false
+      }
+    },
+    {
+      "rows": 1000001,
+      "mode": "arrow",
+      "setup_checkpoints": 15,
+      "setup_ns": 88843536667,
+      "report_sha256": "b90756ddce9907b5a261f64005dc94a5f1068aef9a1f9591e5993724441e4f65",
+      "audit": {
+        "mode": "arrow",
+        "samples": 31,
+        "complete": true,
+        "query_success": false,
+        "observer_valid": true,
+        "costs": null,
+        "setup_or_probe_error": null,
+        "process_peak_rss_bytes": 1319239680,
+        "actual_limits": [
+          1000000,
+          1073741824,
+          1073741824,
+          1073741824,
+          2147483648,
+          268435456,
+          67108864
+        ],
+        "errors": [
+          {
+            "sample": -1,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 0,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 1,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 2,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 3,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 4,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 5,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 6,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 7,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 8,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 9,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 10,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 11,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 12,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 13,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 14,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 15,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 16,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 17,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 18,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 19,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 20,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 21,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 22,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 23,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 24,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 25,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 26,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 27,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 28,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 29,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          },
+          {
+            "sample": 30,
+            "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+            "error_type": "ArrowMemoryError"
+          }
+        ],
+        "observer_errors": [],
+        "stage": "query",
+        "row_boundary_proven": true,
+        "declared_positive_refused": false,
+        "acceptance_approved": false
+      }
+    }
+  ],
+  "missing": [],
+  "complete": true,
+  "acceptance_approved": false,
+  "scope": "Supplemental file explicit-checkpoint fixture only; same frozen native producer and full consumer. Original failure retained; no ordinary latency ratio or original matrix substitution."
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 658,
+  "original_sha256": "b02de4d25db998f6f25e6d89c952ba7ef562c122ed1f4f186da389269b1ea7e1",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_graph_index_qualification_cli_tests\n-----------------------------------------------------------------------------\n\nrunning 5 tests\ntest plan::tests::checked_in_example_plan_builds_one_ordered_read_only_matrix ... ok\ntest plan::tests::plan_rejects_invalid_digest_and_parameter_integer ... ok\ntest tests::argument_parser_requires_both_paths ... ok\ntest tests::plan_protocol_is_stable ... ok\ntest plan::tests::plan_rejects_reordered_classes_and_profile_overcommit ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

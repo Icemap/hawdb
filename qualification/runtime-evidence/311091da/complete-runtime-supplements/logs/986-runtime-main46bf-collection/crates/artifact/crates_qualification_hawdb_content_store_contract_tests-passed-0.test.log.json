@@ -1,0 +1,5 @@
+{
+  "original_bytes": 415,
+  "original_sha256": "78750b31a0683fc26c3f734123b1e7882008eb8b21230efd2c57a2e11814998c",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_content_store_contract_tests\n-----------------------------------------------------------------------------\n\nrunning 2 tests\ntest tests::rejects_arguments ... ok\ntest tests::emits_schema_and_statement_corpus_identities ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s\n\n"
+}

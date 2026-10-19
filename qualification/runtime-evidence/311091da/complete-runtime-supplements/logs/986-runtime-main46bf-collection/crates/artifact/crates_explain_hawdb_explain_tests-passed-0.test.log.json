@@ -1,0 +1,5 @@
+{
+  "original_bytes": 501,
+  "original_sha256": "884e24ba0f411bc42a7d7ba35882dc649a0d7a3141ce01e11387bb00378d0846",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/explain:hawdb_explain_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest tests::formats_binary_byte_units_without_platform_dependencies ... ok\ntest json::tests::empty_profile_has_no_execution_observations ... ok\ntest tests::aligns_wide_unicode_by_terminal_column_width ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

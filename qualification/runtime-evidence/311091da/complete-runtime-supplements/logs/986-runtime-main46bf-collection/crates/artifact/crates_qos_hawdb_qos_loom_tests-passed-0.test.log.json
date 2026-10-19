@@ -1,0 +1,5 @@
+{
+  "original_bytes": 391,
+  "original_sha256": "6981fd1bf9b31749345676a19179cd6ee8913c4437ac827c4f8bf7dce056b3d7",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qos:hawdb_qos_loom_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest loom_tests::scheduler_preserves_background_budget_under_modeled_concurrent_start_finish ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 122 filtered out; finished in 0.03s\n\n"
+}

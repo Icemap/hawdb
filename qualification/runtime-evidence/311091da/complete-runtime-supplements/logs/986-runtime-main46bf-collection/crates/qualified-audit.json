@@ -1,0 +1,19 @@
+{
+  "role": "crates",
+  "job": 117960457303,
+  "head": "ef412c48ba3a89b30abaf809e33512f58ed60e66",
+  "job_conclusion": "success",
+  "source_verified": true,
+  "indexed_files_verified": 103,
+  "zip_sha256": "a267e9f6973b3fca9b9be0a95419886601e8180b58b77057b5d42eed11893ad1",
+  "log_sha256": "24be79ba903596210ba618ae735c79c02970ed4a8d0e2eb8bc423a3783266761",
+  "command_exit": 0,
+  "selected_test_count": 95,
+  "observed_test_summaries": 95,
+  "missing_summaries": [],
+  "statuses": {
+    "PASSED": 95
+  },
+  "all_selected_passed": true,
+  "scope": "Standalone current-main runtime evidence, preserving all outcomes. Not Prow/Tide status, local failure disposition, complete performance acceptance or genuine approval."
+}

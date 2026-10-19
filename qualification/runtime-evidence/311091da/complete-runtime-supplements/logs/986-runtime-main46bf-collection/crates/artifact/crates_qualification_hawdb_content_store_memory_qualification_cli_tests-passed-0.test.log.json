@@ -1,0 +1,5 @@
+{
+  "original_bytes": 586,
+  "original_sha256": "9707ca4d842a5fca629f5761d1e74d2f084763c9bb1c214ee4398e41ba76783d",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_content_store_memory_qualification_cli_tests\n-----------------------------------------------------------------------------\n\nrunning 4 tests\ntest plan::tests::checked_in_example_plan_builds_bound_detected_config ... ok\ntest plan::tests::plan_rejects_unknown_protocol_and_missing_storage_path ... ok\ntest tests::argument_parser_requires_both_paths ... ok\ntest tests::plan_protocol_is_stable ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

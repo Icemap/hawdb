@@ -1,0 +1,5 @@
+{
+  "original_bytes": 394,
+  "original_sha256": "6ef5eb207860ddc57e1d5de087bbeb42657fa67e312d22de29b9fc780cc67a0f",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_lexical_delta_allocation_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest retained_base_terms_do_not_multiply_read_update_delete_allocations ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s\n\n"
+}

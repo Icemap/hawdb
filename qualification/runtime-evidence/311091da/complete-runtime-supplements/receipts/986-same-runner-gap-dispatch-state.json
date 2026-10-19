@@ -1,0 +1,27 @@
+{
+  "status": "run_identity_verified",
+  "source": "671094db1557d3176465945cee9b5c31f01a1df2",
+  "qualification_tree": "d19549229d231d649b71fc0cc0a144f9a22977c9",
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "engine_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "branch": "qualify/986-ordinary-final-main46bf-311091da",
+  "baseline": "3cdb2610ba8b984676b80ba22df64821787886d3",
+  "inputs": {
+    "boundary_comparison": "true",
+    "ordinary_matrix": "false",
+    "benchmark_sizes": "100000",
+    "benchmark_cases": "select,fill",
+    "benchmark_layers": "rust,python,go",
+    "benchmark_backends": "memory,file",
+    "benchmark_samples": "3"
+  },
+  "expected_groups": 12,
+  "timeout_minutes": 360,
+  "scope": "Additional same-runner Rust lower-bound/host gap control, not replacement for original90/110. Preserve exact original100k select/fill,3measured+discard, defaults, consumer, safe file durability. All3hosts/two backends/both revisions in one job; sequential revision order remains disclosed. Dedicated concurrency key includes true boundary_comparison and false ordinary_matrix, so no original run is canceled.",
+  "before_run_ids": [
+    39221987077
+  ],
+  "requested_at": 1792403261.218318,
+  "run": 39232726821,
+  "url": "https://github.com/nowledge-co/hawdb/actions/runs/39232726821"
+}

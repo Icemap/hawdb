@@ -1,0 +1,5 @@
+{
+  "original_bytes": 297,
+  "original_sha256": "529901be100bc12b4e02302cd58a9d8a97b73dffb7cb8ceb31e4a52bd83098a0",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/optimizer:hawdb_optimizer_tests\n-----------------------------------------------------------------------------\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

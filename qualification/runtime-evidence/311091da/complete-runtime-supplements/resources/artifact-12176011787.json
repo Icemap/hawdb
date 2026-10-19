@@ -1,0 +1,1719 @@
+{
+  "artifact": 12176011787,
+  "reports": {
+    "manifest.json": {
+      "source": {
+        "head": "ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+        "tree": "2de750bb8fa6c627a2e2b3517417090b4c005fe9"
+      },
+      "engine_source": "311091da6b23a292b7385b46362d3a12f6ec0064",
+      "engine_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+      "rows": 1000000,
+      "backend": "memory",
+      "configuration": "default",
+      "instrumented": false,
+      "samples": 31,
+      "producer_hashes": {
+        "/home/runner/work/_temp/resource-qualification/frozen/_hawdb.so": "a26058141b85587ba626d88ce31f15add2efcd715beb745963ffbccf5bab6fcd",
+        "/home/runner/work/_temp/resource-qualification/frozen/python-interpreter.bin": "a5230d8adbd26c2185d77fb003597c4ee9c44c2369fc179122ff7c3a3a58ae59",
+        "/home/runner/work/_temp/resource-qualification/frozen/retained_boundary.py": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+        "/home/runner/work/_temp/resource-qualification/frozen/numeric.py": "2e557b27a9527b0cfcd2af9459b16935a255a5c471326c1a836f7ff9063fa780",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/pydantic.py": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/magic.py": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/_hawdb.pyi": "6c84c802cae732f8446298f18d9901e111d20d9d573add30d10f04c2656cbaf2",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/_display.py": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/__init__.py": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6"
+      },
+      "interpreter": {
+        "path": "/opt/hostedtoolcache/Python/3.14.8/x64/bin/python3.14",
+        "sha256": "a5230d8adbd26c2185d77fb003597c4ee9c44c2369fc179122ff7c3a3a58ae59",
+        "archived": "frozen/python-interpreter.bin"
+      },
+      "overlay_files": [
+        ".github/workflows/native-bindings.yml",
+        "BUILD.bazel",
+        "Cargo.toml",
+        "bindings/python/BUILD.bazel",
+        "bindings/python/Cargo.toml",
+        "bindings/python/src/database.rs",
+        "bindings/python/src/lib.rs",
+        "qualification/phases/consume.py",
+        "qualification/resources/baseline-source.json",
+        "qualification/resources/campaign.json",
+        "qualification/resources/numeric.py",
+        "qualification/resources/numeric_driver.py",
+        "qualification/resources/run.py",
+        "qualification/retained/configured.py",
+        "qualification/retained/run.py",
+        "src/api/retained_query.rs",
+        "src/embedded.rs",
+        "src/lib.rs",
+        "src/retained_phase_profile.rs"
+      ],
+      "scope": "Per-mode process RSS, native/foreign observations and31-sample observed tails. Plain and instrumented results are separate; no owned reference can pollute retained/Arrow RSS.",
+      "phase_instrumented": false,
+      "driver_sha256": "6f9389c6d699a0203f2348718e7cbddbbddf976ba0816c89a04f1c6b01310142"
+    },
+    "outcomes.json": [
+      {
+        "mode": "owned",
+        "exit": 1
+      },
+      {
+        "mode": "retained",
+        "exit": 1
+      },
+      {
+        "mode": "arrow",
+        "exit": 1
+      }
+    ],
+    "owned.stdout": {
+      "rows": 1000000,
+      "backend": "memory",
+      "mode": "owned",
+      "configuration": "default",
+      "instrumented": false,
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 0,
+          "complete_attempt_ns": 193277118,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 1,
+          "complete_attempt_ns": 194452999,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 2,
+          "complete_attempt_ns": 192707089,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 3,
+          "complete_attempt_ns": 191868910,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 4,
+          "complete_attempt_ns": 193112433,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 5,
+          "complete_attempt_ns": 188780902,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 6,
+          "complete_attempt_ns": 189907915,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 7,
+          "complete_attempt_ns": 190007493,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 8,
+          "complete_attempt_ns": 195287480,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 9,
+          "complete_attempt_ns": 192567246,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 10,
+          "complete_attempt_ns": 187751191,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 11,
+          "complete_attempt_ns": 192459503,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 12,
+          "complete_attempt_ns": 193770213,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 13,
+          "complete_attempt_ns": 195249220,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 14,
+          "complete_attempt_ns": 191862710,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 15,
+          "complete_attempt_ns": 191976713,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 16,
+          "complete_attempt_ns": 194400540,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 17,
+          "complete_attempt_ns": 193289057,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 18,
+          "complete_attempt_ns": 192333810,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 19,
+          "complete_attempt_ns": 190733584,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 20,
+          "complete_attempt_ns": 196318766,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 21,
+          "complete_attempt_ns": 192189024,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 22,
+          "complete_attempt_ns": 192150027,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 23,
+          "complete_attempt_ns": 188279469,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 24,
+          "complete_attempt_ns": 188592062,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 25,
+          "complete_attempt_ns": 189878392,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 26,
+          "complete_attempt_ns": 189276413,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 27,
+          "complete_attempt_ns": 192482647,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 28,
+          "complete_attempt_ns": 191221520,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 29,
+          "complete_attempt_ns": 205165114,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ResourceBudgetError",
+          "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+          "retained_snapshot": null,
+          "sample": 30,
+          "complete_attempt_ns": 191773801,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        }
+      ],
+      "scope": "One mode per fresh process; RSS includes fixture/setup/own-mode warmup/all samples; independent oracle instead of an owned reference. Instrumented timing is separate from uninstrumented tails. No whole-memory bound.",
+      "actual_limits": [
+        0,
+        67108864,
+        268435456,
+        16777216,
+        3660488704,
+        16777216,
+        67108864
+      ],
+      "setup_ns": 15480734261,
+      "fixture_reference": {
+        "rows": 1000000,
+        "checksum": "06d5a702fb1d7e65"
+      },
+      "warmup": {
+        "status": "error",
+        "error_type": "ResourceBudgetError",
+        "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+        "retained_snapshot": null
+      },
+      "process_peak_rss_bytes": 1044451328,
+      "all_paths_succeeded": false
+    },
+    "retained.stdout": {
+      "rows": 1000000,
+      "backend": "memory",
+      "mode": "retained",
+      "configuration": "default",
+      "instrumented": false,
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 0,
+          "complete_attempt_ns": 221388,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 1,
+          "complete_attempt_ns": 143029,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 2,
+          "complete_attempt_ns": 119095,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 3,
+          "complete_attempt_ns": 99378,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 4,
+          "complete_attempt_ns": 98095,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 5,
+          "complete_attempt_ns": 104557,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 6,
+          "complete_attempt_ns": 96642,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 7,
+          "complete_attempt_ns": 105660,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 8,
+          "complete_attempt_ns": 94438,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 9,
+          "complete_attempt_ns": 94819,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 10,
+          "complete_attempt_ns": 94288,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 11,
+          "complete_attempt_ns": 92475,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 12,
+          "complete_attempt_ns": 93035,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 13,
+          "complete_attempt_ns": 91873,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 14,
+          "complete_attempt_ns": 94067,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 15,
+          "complete_attempt_ns": 93125,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 16,
+          "complete_attempt_ns": 93627,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 17,
+          "complete_attempt_ns": 92204,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 18,
+          "complete_attempt_ns": 94368,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 19,
+          "complete_attempt_ns": 92745,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 20,
+          "complete_attempt_ns": 92274,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 21,
+          "complete_attempt_ns": 89679,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 22,
+          "complete_attempt_ns": 92745,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 23,
+          "complete_attempt_ns": 106691,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 24,
+          "complete_attempt_ns": 98325,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 25,
+          "complete_attempt_ns": 103145,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 26,
+          "complete_attempt_ns": 94077,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 27,
+          "complete_attempt_ns": 93246,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 28,
+          "complete_attempt_ns": 87314,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 29,
+          "complete_attempt_ns": 84589,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 30,
+          "complete_attempt_ns": 83097,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        }
+      ],
+      "scope": "One mode per fresh process; RSS includes fixture/setup/own-mode warmup/all samples; independent oracle instead of an owned reference. Instrumented timing is separate from uninstrumented tails. No whole-memory bound.",
+      "actual_limits": [
+        0,
+        67108864,
+        268435456,
+        16777216,
+        3677973504,
+        16777216,
+        67108864
+      ],
+      "setup_ns": 15580794518,
+      "fixture_reference": {
+        "rows": 1000000,
+        "checksum": "06d5a702fb1d7e65"
+      },
+      "warmup": {
+        "status": "error",
+        "error_type": "RetainedError",
+        "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+        "retained_snapshot": {
+          "budget_bytes": 16777216,
+          "handle_limit": 1024,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 2631,
+          "buffer_owners": 0,
+          "view_handles": 0,
+          "peak_view_handles": 1,
+          "backpressure_events": 0
+        }
+      },
+      "process_peak_rss_bytes": 1044492288,
+      "all_paths_succeeded": false
+    },
+    "arrow.stdout": {
+      "rows": 1000000,
+      "backend": "memory",
+      "mode": "arrow",
+      "configuration": "default",
+      "instrumented": false,
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 0,
+          "complete_attempt_ns": 186271,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 1,
+          "complete_attempt_ns": 89789,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 2,
+          "complete_attempt_ns": 87184,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 3,
+          "complete_attempt_ns": 85251,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 4,
+          "complete_attempt_ns": 87645,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 5,
+          "complete_attempt_ns": 85482,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 6,
+          "complete_attempt_ns": 83788,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 7,
+          "complete_attempt_ns": 84850,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 8,
+          "complete_attempt_ns": 83968,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 9,
+          "complete_attempt_ns": 83107,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 10,
+          "complete_attempt_ns": 85180,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 11,
+          "complete_attempt_ns": 85982,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 12,
+          "complete_attempt_ns": 96181,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 13,
+          "complete_attempt_ns": 82636,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 14,
+          "complete_attempt_ns": 89258,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 15,
+          "complete_attempt_ns": 86132,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 16,
+          "complete_attempt_ns": 85962,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 17,
+          "complete_attempt_ns": 84630,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 18,
+          "complete_attempt_ns": 85181,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 19,
+          "complete_attempt_ns": 83758,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 20,
+          "complete_attempt_ns": 83828,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 21,
+          "complete_attempt_ns": 83518,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 22,
+          "complete_attempt_ns": 85060,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 23,
+          "complete_attempt_ns": 97384,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 24,
+          "complete_attempt_ns": 95520,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 25,
+          "complete_attempt_ns": 87675,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 26,
+          "complete_attempt_ns": 86914,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 27,
+          "complete_attempt_ns": 85531,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 28,
+          "complete_attempt_ns": 90711,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 29,
+          "complete_attempt_ns": 100349,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+          "retained_snapshot": {
+            "budget_bytes": 16777216,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 2631,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 1,
+            "backpressure_events": 0
+          },
+          "sample": 30,
+          "complete_attempt_ns": 93526,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        }
+      ],
+      "scope": "One mode per fresh process; RSS includes fixture/setup/own-mode warmup/all samples; independent oracle instead of an owned reference. Instrumented timing is separate from uninstrumented tails. No whole-memory bound.",
+      "actual_limits": [
+        0,
+        67108864,
+        268435456,
+        16777216,
+        3728520192,
+        16777216,
+        67108864
+      ],
+      "setup_ns": 15336249162,
+      "fixture_reference": {
+        "rows": 1000000,
+        "checksum": "06d5a702fb1d7e65"
+      },
+      "warmup": {
+        "status": "error",
+        "error_type": "RetainedError",
+        "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+        "retained_snapshot": {
+          "budget_bytes": 16777216,
+          "handle_limit": 1024,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 2631,
+          "buffer_owners": 0,
+          "view_handles": 0,
+          "peak_view_handles": 1,
+          "backpressure_events": 0
+        }
+      },
+      "process_peak_rss_bytes": 1044570112,
+      "all_paths_succeeded": false
+    }
+  },
+  "verified_files": [
+    "frozen/_hawdb.so",
+    "frozen/python-interpreter.bin",
+    "frozen/retained_boundary.py",
+    "frozen/numeric.py",
+    "frozen/hawdb/pydantic.py",
+    "frozen/hawdb/py.typed",
+    "frozen/hawdb/magic.py",
+    "frozen/hawdb/_hawdb.pyi",
+    "frozen/hawdb/_display.py",
+    "frozen/hawdb/__init__.py",
+    "frozen/hawdb/__init__.pyi"
+  ],
+  "group_selection": {
+    "group": [
+      "numeric",
+      1000000,
+      "memory",
+      "default",
+      "false",
+      "select",
+      "python"
+    ],
+    "run": 39221994638,
+    "inputs": {
+      "kind": "numeric",
+      "rows": "1000000",
+      "backend": "memory",
+      "configuration": "default",
+      "instrumented": "false",
+      "case": "select",
+      "layer": "python",
+      "samples": "31"
+    }
+  },
+  "artifact_name": "resources-numeric-1000000-memory-default-false-select-python-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+  "workflow_run": 39221994638
+}

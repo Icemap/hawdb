@@ -1,0 +1,5 @@
+{
+  "original_bytes": 372,
+  "original_sha256": "d534b82a0dc75b9ef77a0ecd23c43fe216370ad302091c5ff5a059462f072977",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/cascades:hawdb_cascades_integration_test\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest external_consumer_can_build_a_domain_specific_pipeline ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

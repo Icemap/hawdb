@@ -1,0 +1,5 @@
+{
+  "original_bytes": 367,
+  "original_sha256": "1cc531b6f0f014ade217cdd261289b939624ff0f885ca35f6ca13e4ffad5cfcc",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/plan-core:hawdb_plan_core_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest vector::tests::backend_selection_reasons_have_stable_names ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

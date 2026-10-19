@@ -1,0 +1,337 @@
+{
+  "total_count": 3,
+  "jobs": [
+    {
+      "id": 117976170031,
+      "run_id": 39227172435,
+      "workflow_name": "Python Bindings",
+      "head_branch": "feat/978-boundary-baseline",
+      "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39227172435",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTX6JAc8AAAAbd-1-Lw",
+      "head_sha": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/117976170031",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39227172435/job/117976170031",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-19T09:03:09Z",
+      "started_at": "2026-10-19T09:03:17Z",
+      "completed_at": "2026-10-19T09:12:03Z",
+      "name": "Bazel build and test (macos-latest)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-19T09:03:18Z",
+          "completed_at": "2026-10-19T09:03:20Z"
+        },
+        {
+          "name": "Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-19T09:03:20Z",
+          "completed_at": "2026-10-19T09:03:25Z"
+        },
+        {
+          "name": "Install Bazel",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-19T09:03:25Z",
+          "completed_at": "2026-10-19T09:04:04Z"
+        },
+        {
+          "name": "Build the Python package and native extension",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-19T09:04:04Z",
+          "completed_at": "2026-10-19T09:10:34Z"
+        },
+        {
+          "name": "Test the Bazel extension and dependency lock",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-19T09:10:34Z",
+          "completed_at": "2026-10-19T09:11:56Z"
+        },
+        {
+          "name": "Post Install Bazel",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-19T09:11:56Z",
+          "completed_at": "2026-10-19T09:11:57Z"
+        },
+        {
+          "name": "Post Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-19T09:11:57Z",
+          "completed_at": "2026-10-19T09:11:58Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-19T09:11:58Z",
+          "completed_at": "2026-10-19T09:12:03Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117976170031",
+      "labels": [
+        "macos-latest"
+      ],
+      "runner_id": 1000085261,
+      "runner_name": "GitHub Actions 1000085261",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 117976170348,
+      "run_id": 39227172435,
+      "workflow_name": "Python Bindings",
+      "head_branch": "feat/978-boundary-baseline",
+      "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39227172435",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTX6JAc8AAAAbd-1_bA",
+      "head_sha": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/117976170348",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39227172435/job/117976170348",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-19T09:03:09Z",
+      "started_at": "2026-10-19T09:03:11Z",
+      "completed_at": "2026-10-19T09:09:16Z",
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-19T09:03:12Z",
+          "completed_at": "2026-10-19T09:03:14Z"
+        },
+        {
+          "name": "Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-19T09:03:14Z",
+          "completed_at": "2026-10-19T09:03:17Z"
+        },
+        {
+          "name": "Install Bazel",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-19T09:03:17Z",
+          "completed_at": "2026-10-19T09:03:57Z"
+        },
+        {
+          "name": "Build the Python package and native extension",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-19T09:03:57Z",
+          "completed_at": "2026-10-19T09:08:06Z"
+        },
+        {
+          "name": "Test the Bazel extension and dependency lock",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-19T09:08:06Z",
+          "completed_at": "2026-10-19T09:09:13Z"
+        },
+        {
+          "name": "Post Install Bazel",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-19T09:09:13Z",
+          "completed_at": "2026-10-19T09:09:13Z"
+        },
+        {
+          "name": "Post Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-19T09:09:13Z",
+          "completed_at": "2026-10-19T09:09:13Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-19T09:09:13Z",
+          "completed_at": "2026-10-19T09:09:13Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117976170348",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "runner_id": 1000085262,
+      "runner_name": "GitHub Actions 1000085262",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 117976170458,
+      "run_id": 39227172435,
+      "workflow_name": "Python Bindings",
+      "head_branch": "feat/978-boundary-baseline",
+      "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39227172435",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTX6JAc8AAAAbd-1_2g",
+      "head_sha": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/117976170458",
+      "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39227172435/job/117976170458",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-19T09:03:09Z",
+      "started_at": "2026-10-19T09:03:11Z",
+      "completed_at": "2026-10-19T09:10:45Z",
+      "name": "Build and test",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-19T09:03:12Z",
+          "completed_at": "2026-10-19T09:03:12Z"
+        },
+        {
+          "name": "Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-19T09:03:12Z",
+          "completed_at": "2026-10-19T09:03:15Z"
+        },
+        {
+          "name": "Install Rust",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-19T09:03:15Z",
+          "completed_at": "2026-10-19T09:03:23Z"
+        },
+        {
+          "name": "Install Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-19T09:03:23Z",
+          "completed_at": "2026-10-19T09:03:24Z"
+        },
+        {
+          "name": "Install maturin and pytest",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-19T09:03:24Z",
+          "completed_at": "2026-10-19T09:03:26Z"
+        },
+        {
+          "name": "Build the extension wheel",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-19T09:03:26Z",
+          "completed_at": "2026-10-19T09:10:26Z"
+        },
+        {
+          "name": "Install the built wheel",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-19T09:10:26Z",
+          "completed_at": "2026-10-19T09:10:26Z"
+        },
+        {
+          "name": "Run tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-19T09:10:26Z",
+          "completed_at": "2026-10-19T09:10:37Z"
+        },
+        {
+          "name": "Install the pydantic extra",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-19T09:10:37Z",
+          "completed_at": "2026-10-19T09:10:39Z"
+        },
+        {
+          "name": "Run tests with the pydantic extra",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-19T09:10:39Z",
+          "completed_at": "2026-10-19T09:10:40Z"
+        },
+        {
+          "name": "Provision the optional public Arrow consumer",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-19T09:10:40Z",
+          "completed_at": "2026-10-19T09:10:43Z"
+        },
+        {
+          "name": "Test public Arrow protocols against the installed wheel",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-10-19T09:10:43Z",
+          "completed_at": "2026-10-19T09:10:43Z"
+        },
+        {
+          "name": "Post Install Python",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23,
+          "started_at": "2026-10-19T09:10:43Z",
+          "completed_at": "2026-10-19T09:10:43Z"
+        },
+        {
+          "name": "Post Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24,
+          "started_at": "2026-10-19T09:10:43Z",
+          "completed_at": "2026-10-19T09:10:44Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25,
+          "started_at": "2026-10-19T09:10:44Z",
+          "completed_at": "2026-10-19T09:10:44Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/117976170458",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "runner_id": 1000085263,
+      "runner_name": "GitHub Actions 1000085263",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}

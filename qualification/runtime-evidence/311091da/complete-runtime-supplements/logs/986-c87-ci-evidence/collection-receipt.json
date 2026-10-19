@@ -1,0 +1,52 @@
+{
+  "head": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+  "captured_at": 1792401311.317627,
+  "completed_job_logs": [
+    {
+      "id": 117976170031,
+      "name": "Bazel build and test (macos-latest)",
+      "head": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+      "conclusion": "success",
+      "bytes": 54822,
+      "sha256": "e14896c60a202584040df0cff8d73f506aa8074b8c1aa0f9bdddf7b01dfebd87",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-c87-ci-evidence/117976170031.log"
+    },
+    {
+      "id": 117976170348,
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "head": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+      "conclusion": "success",
+      "bytes": 50639,
+      "sha256": "73fa27706fc257018e5480cd05bec4bbffe2bac3fac75caa6cb80adf062c665a",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-c87-ci-evidence/117976170348.log"
+    },
+    {
+      "id": 117976170458,
+      "name": "Build and test",
+      "head": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+      "conclusion": "success",
+      "bytes": 71669,
+      "sha256": "a757cb7441adaeab4b735a2a1dfcf6f6c4aa500d3c543699d7db587d0ec730bd",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-c87-ci-evidence/117976170458.log"
+    },
+    {
+      "id": 117976168908,
+      "name": "Bazel native bindings (macos-latest)",
+      "head": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+      "conclusion": "success",
+      "bytes": 60369,
+      "sha256": "596f55c4321a516d7c728798c24f992d26d7f3aea7f7a2388a2fb29583406583",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-c87-ci-evidence/117976168908.log"
+    },
+    {
+      "id": 117976169178,
+      "name": "Bazel native bindings (ubuntu-24.04)",
+      "head": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+      "conclusion": "success",
+      "bytes": 51344,
+      "sha256": "3295b28935338416bbb89e50b57f39c9d5972a58af87a388337b5b4d19f714f6",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-c87-ci-evidence/117976169178.log"
+    }
+  ],
+  "scope": "Exact-head GitHub run/job metadata and complete downloaded logs; checkout contents and test summaries still require audit. Local failures are preserved; no independent approval or acceptance claim."
+}

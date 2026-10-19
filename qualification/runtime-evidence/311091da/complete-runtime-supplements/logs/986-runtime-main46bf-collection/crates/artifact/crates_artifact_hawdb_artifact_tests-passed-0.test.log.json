@@ -1,0 +1,5 @@
+{
+  "original_bytes": 769,
+  "original_sha256": "a238a8d76eb6b7a9ba0415deb99b5ae97f383636a8c18b377a4c1f0074b00020",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/artifact:hawdb_artifact_tests\n-----------------------------------------------------------------------------\n\nrunning 6 tests\ntest tests::completion_and_failure_rows_preserve_the_external_runtime_protocol ... ok\ntest tests::completion_builder_preserves_provenance_fields ... ok\ntest tests::external_summary_retains_first_pending_and_failed_job_in_queue_order ... ok\ntest tests::queue_owns_fifo_claims_and_retryable_external_job_state ... ok\ntest tests::runtime_claim_requires_an_external_type_supported_action_and_payload ... ok\ntest tests::runtime_manifest_defaults_and_collects_capabilities ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

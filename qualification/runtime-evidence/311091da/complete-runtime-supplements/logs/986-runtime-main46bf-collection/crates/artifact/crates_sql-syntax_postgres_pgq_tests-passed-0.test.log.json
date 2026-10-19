@@ -1,0 +1,5 @@
+{
+  "original_bytes": 822,
+  "original_sha256": "49b4a99552a9871b88d8ec222958a855df48195bdc99f58a11cf0c5c10d59d46",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/sql-syntax:postgres_pgq_tests\n-----------------------------------------------------------------------------\n\nrunning 9 tests\ntest parses_postgres_graph_path_shapes ... ok\ntest bounds_recursive_graph_pattern_nesting ... ok\ntest keeps_postgres_transform_rejections_out_of_the_syntax_layer ... ok\ntest parses_postgres_property_graph_endpoint_shorthand ... ok\ntest rejects_malformed_graph_table_syntax ... ok\ntest parses_postgres_property_graph_label_and_property_forms ... ok\ntest preserves_edge_direction_and_quantifier_syntax ... ok\ntest preserves_postgres_source_spans_and_table_aliases ... ok\ntest rejects_postgres_property_graph_syntax_errors ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n"
+}

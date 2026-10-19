@@ -1,0 +1,59 @@
+{
+  "head": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+  "tree": "b38a95a769af9e468c6bfa49e53c4fbc05de72af",
+  "synthetic_checkout": "9585b9c7465bdd2fbd1efc7e071c869ba30831ee",
+  "parents": [
+    "46bfde00131a6d711d51aad6e5e237279a287061",
+    "c87fc09796a56daa4a55cc59b06633ca06a116a8"
+  ],
+  "jobs": [
+    {
+      "job": 117976170031,
+      "name": "Bazel build and test (macos-latest)",
+      "checkout": "9585b9c7465bdd2fbd1efc7e071c869ba30831ee",
+      "log_sha256": "e14896c60a202584040df0cff8d73f506aa8074b8c1aa0f9bdddf7b01dfebd87",
+      "summary_lines": [
+        "2026-10-19T09:11:56.2279370Z Executed 3 out of 3 tests: 3 tests pass."
+      ]
+    },
+    {
+      "job": 117976170348,
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "checkout": "9585b9c7465bdd2fbd1efc7e071c869ba30831ee",
+      "log_sha256": "73fa27706fc257018e5480cd05bec4bbffe2bac3fac75caa6cb80adf062c665a",
+      "summary_lines": [
+        "2026-10-19T09:09:13.2478104Z Executed 3 out of 3 tests: 3 tests pass."
+      ]
+    },
+    {
+      "job": 117976170458,
+      "name": "Build and test",
+      "checkout": "9585b9c7465bdd2fbd1efc7e071c869ba30831ee",
+      "log_sha256": "a757cb7441adaeab4b735a2a1dfcf6f6c4aa500d3c543699d7db587d0ec730bd",
+      "summary_lines": [
+        "2026-10-19T09:10:37.4093918Z ======================= 357 passed, 7 skipped in 10.04s ========================",
+        "2026-10-19T09:10:40.8526565Z ======================== 43 passed, 1 skipped in 1.37s ========================="
+      ]
+    },
+    {
+      "job": 117976168908,
+      "name": "Bazel native bindings (macos-latest)",
+      "checkout": "9585b9c7465bdd2fbd1efc7e071c869ba30831ee",
+      "log_sha256": "596f55c4321a516d7c728798c24f992d26d7f3aea7f7a2388a2fb29583406583",
+      "summary_lines": [
+        "2026-10-19T09:10:22.4861120Z ok  \tgithub.com/nowledge-co/hawdb/bindings/go\t1.557s"
+      ]
+    },
+    {
+      "job": 117976169178,
+      "name": "Bazel native bindings (ubuntu-24.04)",
+      "checkout": "9585b9c7465bdd2fbd1efc7e071c869ba30831ee",
+      "log_sha256": "3295b28935338416bbb89e50b57f39c9d5972a58af87a388337b5b4d19f714f6",
+      "summary_lines": [
+        "2026-10-19T09:07:12.7908164Z ok  \tgithub.com/nowledge-co/hawdb/bindings/go\t2.749s"
+      ]
+    }
+  ],
+  "observed_at": 1792401350.095325,
+  "scope": "Five completed currentc87 automatic binding/platform jobs on exactb38a tree. Windows is still running. These workflows are not complete root/crates Prow; source311 standalone root59 plus separate formatting equivalence remain distinct. No prior-failure cause, full matrix or approval claim."
+}

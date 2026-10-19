@@ -1,0 +1,5 @@
+{
+  "original_bytes": 682,
+  "original_sha256": "1b6f97507c07bdd9258ab0718d755b6e57983b100b7476fdc6b40b0016e24bd2",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/bootstrap:hawdb_bootstrap_tests\n-----------------------------------------------------------------------------\n\nrunning 4 tests\ntest developer_json::tests::stable_identity_json_preserves_canonical_value_encoding ... ok\ntest developer_staging::tests::artifact_summary_preserves_missing_and_measured_lengths ... ok\ntest developer_staging_import::tests::reports_created_before_any_staging_artifact_exists ... ok\ntest developer_staging_verification::tests::verifies_a_staged_export_through_the_bootstrap_owner ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n"
+}

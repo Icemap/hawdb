@@ -1,0 +1,5 @@
+{
+  "original_bytes": 763,
+  "original_sha256": "db2f0670b197187d81c73db70e298c510d7ddb6f338a089bb9177a521cf00cb9",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/system-sql:hawdb_system_sql_tests\n-----------------------------------------------------------------------------\n\nrunning 6 tests\ntest tests::query_plan_cache_virtual_table_with_predicate_and_projection ... ok\ntest tests::predicate_binding_preserves_source_spans_and_system_null_behavior ... ok\ntest tests::query_catalog_virtual_tables_expose_schema_without_typed_getters ... ok\ntest tests::query_slow_queries_pushes_filter_order_and_limit_into_scan ... ok\ntest tests::query_system_table_rejects_parameter_contract_mismatch ... ok\ntest tests::query_system_table_with_postgres_parameters ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n"
+}

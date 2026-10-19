@@ -1,0 +1,5 @@
+{
+  "original_bytes": 610,
+  "original_sha256": "cb8e4011f917970892135a063c717789a9a19f037b0758450730c7eac9fef7bb",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_content_store_mutation_qualification_cli_tests\n-----------------------------------------------------------------------------\n\nrunning 4 tests\ntest tests::argument_parser_requires_complete_replica_slots ... ok\ntest tests::checked_in_example_plan_matches_the_parser_contract ... ok\ntest tests::plan_binds_exact_writer_paths_and_writable_storage ... ok\ntest tests::plan_rejects_writer_order_and_invalid_wal_evidence ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\n"
+}

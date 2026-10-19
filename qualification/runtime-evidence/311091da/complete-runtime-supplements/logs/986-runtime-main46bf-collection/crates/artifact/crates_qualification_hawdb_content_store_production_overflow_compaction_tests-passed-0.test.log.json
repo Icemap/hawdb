@@ -1,0 +1,5 @@
+{
+  "original_bytes": 744,
+  "original_sha256": "f959d6c3749db670ca72e874d28cbd4ddc14c6008372fcda0c66bb15cea886b1",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_content_store_production_overflow_compaction_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest content_store_row_pages::production_overflow_compaction::tests::artifact_measurement_counts_growth_and_removed_overflow_files ... ok\ntest content_store_row_pages::production_overflow_compaction::tests::qualification_requires_a_writable_disposable_replica ... ok\ntest content_store_row_pages::production_overflow_compaction::tests::qualification_proves_exact_rewrite_physical_reclaim_and_reopen ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 84 filtered out; finished in 10.72s\n\n"
+}

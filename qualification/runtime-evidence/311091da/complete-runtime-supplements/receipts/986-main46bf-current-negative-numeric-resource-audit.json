@@ -1,0 +1,7 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "production_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "observed_at": 1792401585.981279,
+  "groups": [],
+  "scope": "Collected source7dee negative numeric groups only. Original collector validates frozen producers. All31 failures and discarded warmup retained. Complete-attempt durations are failed-operation costs, not successful-query latency or speedup. Tracemalloc, native traffic/global windows, Arrow pool and whole-child RSS are distinct. Final owner cleanup does not prove no earlier valid batch delivery. Does not qualify newer main46bf, whole resource110, leak absence or independent approval."
+}

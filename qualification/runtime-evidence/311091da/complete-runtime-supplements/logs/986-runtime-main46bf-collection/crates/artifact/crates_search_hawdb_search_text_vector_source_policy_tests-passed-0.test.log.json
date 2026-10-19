@@ -1,0 +1,5 @@
+{
+  "original_bytes": 803,
+  "original_sha256": "fde13d0e4fd8bd13528c7e59f924ce55f4088e95deb1bfcdbe9c81156b43aaba",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_text_vector_source_policy_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest source_policy_covers_build_reopen_and_prepared_update_lifecycle ... ok\ntest reader_token_policy_covers_default_updates_compaction_and_retraction has been running for over 60 seconds\ntest review_token_policy_survives_default_option_compaction_replace_delete_and_reopen has been running for over 60 seconds\ntest review_token_policy_survives_default_option_compaction_replace_delete_and_reopen ... ok\ntest reader_token_policy_covers_default_updates_compaction_and_retraction ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 431.14s\n\n"
+}

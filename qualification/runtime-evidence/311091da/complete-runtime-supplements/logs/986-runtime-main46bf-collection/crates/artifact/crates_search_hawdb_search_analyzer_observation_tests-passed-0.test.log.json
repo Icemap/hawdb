@@ -1,0 +1,5 @@
+{
+  "original_bytes": 542,
+  "original_sha256": "6f383b91cba4afb15eaf5cbbb2f37f38c027178bd06d9b94f7182ad4dac2f8e7",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_analyzer_observation_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest native_worker_exit_records_the_lease_before_parent_release ... ok\ntest cancellation_observation_crosses_the_worker_and_guard_drop_disarms_it ... ok\ntest read_evidence_follows_the_worker_and_restores_its_previous_scope ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 582,
+  "original_sha256": "20481d4c20d4ffa6e56fa8ef7a1c908442a88ab3409e8daf18f451ef1089c3dc",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/integrity:hawdb_integrity_tests\n-----------------------------------------------------------------------------\n\nrunning 5 tests\ntest tests::crc32c_matches_castagnoli_known_vector ... ok\ntest tests::combined_hasher_matches_independent_digests ... ok\ntest tests::sha256_parser_rejects_non_canonical_input ... ok\ntest tests::streaming_crc32c_matches_one_shot ... ok\ntest tests::sha256_round_trips_through_hex ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

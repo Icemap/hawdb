@@ -1,0 +1,40 @@
+{
+  "status": "complete_supplemental_only",
+  "pid": 16995,
+  "steps": [
+    {
+      "role": "resource_controls",
+      "script": "run-resource-checkpoint-main46bf-311091da.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-supplemental-resource_controls.log",
+      "started": 1792402412.361155,
+      "exit": 0,
+      "ended": 1792403722.853618
+    },
+    {
+      "role": "resource_audit",
+      "script": "audit-resource-checkpoint-main46bf-311091da.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-supplemental-resource_audit.log",
+      "started": 1792403722.854342,
+      "exit": 0,
+      "ended": 1792403723.45998
+    },
+    {
+      "role": "phase_controls",
+      "script": "run-phase-checkpoint-main46bf-311091da.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-supplemental-phase_controls.log",
+      "started": 1792403723.460603,
+      "exit": 0,
+      "ended": 1792404055.675025
+    },
+    {
+      "role": "phase_audit",
+      "script": "audit-phase-checkpoint-main46bf-311091da.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main46bf-supplemental-phase_audit.log",
+      "started": 1792404055.675301,
+      "exit": 0,
+      "ended": 1792404056.0941398
+    }
+  ],
+  "scope": "Separate opt-in fixture checkpoint controls. Preserve original terminal phase9/10 and its two setup refusals in file1M+1. Resource default1k/large1M+1 six controls and three negative phase controls retain31samples/warmup/full consumer and512-row mutations. Original positive phase groups already qualify their six costs. No original matrix, sample, budget, consumer or deadline replacement.",
+  "ended": 1792404056.094545
+}

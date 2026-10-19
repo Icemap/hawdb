@@ -1,0 +1,5 @@
+{
+  "original_bytes": 563,
+  "original_sha256": "4786bd1427b21bccd7e0bfe94e700fadcbe5e203628fda13d09684b5f02597dd",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/ddl:hawdb_ddl_tests\n-----------------------------------------------------------------------------\n\nrunning 4 tests\ntest convert::tests::maps_ddl_property_type_to_core_schema_type ... ok\ntest convert::tests::exposes_stable_state_fingerprints ... ok\ntest convert::tests::maps_all_ddl_object_states_to_core_schema_states ... ok\ntest convert::tests::maps_ddl_table_kind_to_core_schema_kind ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

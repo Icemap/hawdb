@@ -1,0 +1,5 @@
+{
+  "original_bytes": 418,
+  "original_sha256": "830477cfde30c9040f0de41637919605c3b6923ff065ce0f2b7bce342aeb3a6f",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/optimizer-graph:planner_golden_test\n-----------------------------------------------------------------------------\n\nrunning 2 tests\ntest filtered_vector_pipeline_matches_planner_golden ... ok\ntest indexed_memory_lookup_matches_planner_golden ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

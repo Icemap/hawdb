@@ -1,0 +1,5 @@
+{
+  "original_bytes": 426,
+  "original_sha256": "2e239ebbf11eb4f0d25f87fb67ab0a6f277f0a037ea77c1a542a227bf63018ac",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/telemetry:hawdb_telemetry_tests\n-----------------------------------------------------------------------------\n\nrunning 2 tests\ntest tests::readiness_requires_both_library_owned_sinks ... ok\ntest tests::telemetry_contract_does_not_require_query_text ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s\n\n"
+}

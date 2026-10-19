@@ -1,0 +1,12 @@
+{
+  "status": "observer_stopped_for_auditor_correction",
+  "pid": 54868,
+  "run": 39232726821,
+  "source": "671094db1557d3176465945cee9b5c31f01a1df2",
+  "errors": [],
+  "run_status": "in_progress",
+  "run_conclusion": null,
+  "updated": 1792403515.8568509,
+  "ended": 1792403519.290175,
+  "reason": "Existing producer-verified Go report omits prefetch; strict Go prefetch==0 assertion was incorrect. No artifact measurement had been audited. Remote run39232726821 remains untouched; v2 only corrects availability handling and uses separate local output/state."
+}

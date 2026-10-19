@@ -1,0 +1,68 @@
+{
+  "head": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+  "tree": "b38a95a769af9e468c6bfa49e53c4fbc05de72af",
+  "checkout": "9585b9c7465bdd2fbd1efc7e071c869ba30831ee",
+  "artifact": 12177901232,
+  "run": 39227172030,
+  "job": 117976169131,
+  "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "results": {
+    "retained-ffi.txt": "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.15s",
+    "retained-node.txt": "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 2083 filtered out; finished in 0.67s",
+    "retained-arrow.txt": "test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 2133 filtered out; finished in 0.07s",
+    "abandonment.txt": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2164 filtered out; finished in 1933.86s"
+  },
+  "modeled_schedules": 922,
+  "members": {
+    "job.log": {
+      "bytes": 122392,
+      "sha256": "86d1f331b50ebda07a3a0061821c5ed387960f8b10ba57b6c4f27334d5c261ed"
+    },
+    "artifact-metadata.json": {
+      "bytes": 831,
+      "sha256": "253d04fd21fd5398f9eb0f3ebb7586863bdc44a402bdbee8c776889f764ba683"
+    },
+    "artifact.zip": {
+      "bytes": 10102,
+      "sha256": "865b13346e0ed73ba744c7534b06cb4b430727e26e3d004f06217ca8e9cb22be"
+    },
+    "job.json": {
+      "bytes": 4462,
+      "sha256": "042720d5e93e496b8d1ad9087c500797311ee9a4e7d3b32af18d814ea0775927"
+    },
+    "artifact/retained-node.txt": {
+      "bytes": 10609,
+      "sha256": "13dd46758b1c700c17564d73368e81a3969a327c2830adefc2a4376b776101ba"
+    },
+    "artifact/toolchain.txt": {
+      "bytes": 194,
+      "sha256": "7fad09dd8c16d49de37932475436003b5b1763c1015c5ce081ad7692db368ca3"
+    },
+    "artifact/retained-arrow.txt": {
+      "bytes": 6761,
+      "sha256": "7d45f61b969a01f8effebdf3948f63d7afa656a7f4ac4e00dcc9b4fa6b71af46"
+    },
+    "artifact/source.txt": {
+      "bytes": 164,
+      "sha256": "28ae812b7c3161da6894b345ac4dfd21e5230f78a086d9eaa4cbba6cdb4da07a"
+    },
+    "artifact/clippy.txt": {
+      "bytes": 14965,
+      "sha256": "082430982b10b6b312b4d4edfd0253ca7d080e97958f02bbb19ce6c97697878a"
+    },
+    "artifact/go.txt": {
+      "bytes": 2759,
+      "sha256": "e4986969c0a8e2668cc5da379542c80e612e42c3ebeebb60925bae447ac8d7a9"
+    },
+    "artifact/retained-ffi.txt": {
+      "bytes": 2675,
+      "sha256": "81b636c6f48356fc545bae546754f4ee2f17d0ca61713db351dbf408eb08d3ed"
+    },
+    "artifact/abandonment.txt": {
+      "bytes": 1555,
+      "sha256": "4d5c1afb93001804f983411b1e8ac174b823a9c9f0145102ad8accbc52d677de"
+    }
+  },
+  "observed_at": 1792403923.713968,
+  "scope": "Complete currentc87 Windows source/toolchain/native-Clippy/FFI/Node/Arrow/Go and922 modeled GC schedules verified on exactb38a tree. Physical synchronization, Prow/full-root status, prior-failure cause, full performance/resource acceptance and genuine approval are not established."
+}

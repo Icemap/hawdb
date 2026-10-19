@@ -1,0 +1,5 @@
+{
+  "original_bytes": 683,
+  "original_sha256": "2bba8647818978a41dabb2d51e6cb6b989934aeb89877fdd77c8226aacf3780e",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_content_store_production_read_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest content_store_row_pages::production::tests::lifecycle_faults_are_not_compared_with_per_run_limits ... ok\ntest content_store_row_pages::production::tests::production_content_store_runner_requires_read_only_authoritative_open ... ok\ntest content_store_row_pages::production::tests::production_content_store_runner_binds_cold_warm_relational_residency ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 84 filtered out; finished in 4.44s\n\n"
+}

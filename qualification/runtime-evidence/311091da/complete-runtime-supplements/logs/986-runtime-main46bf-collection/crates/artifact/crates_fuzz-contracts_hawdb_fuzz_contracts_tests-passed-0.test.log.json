@@ -1,0 +1,5 @@
+{
+  "original_bytes": 447,
+  "original_sha256": "d9df1a0fa6d96d182851a7ace953a40ddc1ee10ad439e01632b78dff009e7ba7",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/fuzz-contracts:hawdb_fuzz_contracts_tests\n-----------------------------------------------------------------------------\n\nrunning 2 tests\ntest tests::case_generation_is_deterministic_and_bounded ... ok\ntest tests::harness_report_fails_closed_for_missing_and_capped_cases ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s\n\n"
+}

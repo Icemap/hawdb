@@ -1,0 +1,5 @@
+{
+  "original_bytes": 522,
+  "original_sha256": "b3407ee3b8d5f048dd7ec6100bef5a71754f756bf6e7bf04eed3d82f7e51c1da",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_descriptor_allocation_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest concurrent_projection_fixtures_keep_independent_directories ... ok\ntest generation_descriptor_does_not_collect_repeated_labels ... ok\ntest generation_descriptor_avoids_materializing_hex_dictionary ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.09s\n\n"
+}

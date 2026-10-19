@@ -1,0 +1,5 @@
+{
+  "original_bytes": 511,
+  "original_sha256": "4445e0811c5779560758475dd4a15704337c6f679b1a725f7622a449bef9453a",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_qualification_misc_tests\n-----------------------------------------------------------------------------\n\nrunning 3 tests\ntest evidence_digest::tests::uuid_values_have_a_distinct_canonical_digest ... ok\ntest tests::latency_percentiles_use_nearest_rank ... ok\ntest tests::deterministic_payload_and_digest_are_stable ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 84 filtered out; finished in 0.00s\n\n"
+}

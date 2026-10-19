@@ -1,0 +1,5 @@
+{
+  "original_bytes": 792,
+  "original_sha256": "590caea55005b7d71c4670df2a568d80fce4659b035509a5836fc26f1d089e5f",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/qualification:hawdb_content_store_read_qualification_cli_tests\n-----------------------------------------------------------------------------\n\nrunning 7 tests\ntest tests::checked_in_example_plan_matches_the_parser_contract ... ok\ntest tests::argument_parser_requires_both_paths ... ok\ntest tests::rejects_unknown_nested_identity_fields ... ok\ntest tests::plan_builds_fixed_read_only_authoritative_profile ... ok\ntest tests::rejects_unknown_protocol_and_oversized_integer_parameter ... ok\ntest tests::configured_profile_requires_a_bounded_nonzero_ceiling ... ok\ntest tests::shared_host_profile_keeps_dynamic_governor ... ok\n\ntest result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+}

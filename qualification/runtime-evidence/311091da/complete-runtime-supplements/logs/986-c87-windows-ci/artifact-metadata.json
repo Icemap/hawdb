@@ -1,0 +1,20 @@
+{
+  "id": 12177901232,
+  "node_id": "MDg6QXJ0aWZhY3QxMjE3NzkwMTIzMg==",
+  "name": "windows-native-contracts-9585b9c7465bdd2fbd1efc7e071c869ba30831ee",
+  "size_in_bytes": 10102,
+  "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/artifacts/12177901232",
+  "archive_download_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/artifacts/12177901232/zip",
+  "expired": false,
+  "digest": "sha256:865b13346e0ed73ba744c7534b06cb4b430727e26e3d004f06217ca8e9cb22be",
+  "created_at": "2026-10-19T09:43:06Z",
+  "updated_at": "2026-10-19T09:43:06Z",
+  "expires_at": "2027-01-17T09:03:08Z",
+  "workflow_run": {
+    "id": 39227172030,
+    "repository_id": 1300138241,
+    "head_repository_id": 1300138241,
+    "head_branch": "feat/978-boundary-baseline",
+    "head_sha": "c87fc09796a56daa4a55cc59b06633ca06a116a8"
+  }
+}

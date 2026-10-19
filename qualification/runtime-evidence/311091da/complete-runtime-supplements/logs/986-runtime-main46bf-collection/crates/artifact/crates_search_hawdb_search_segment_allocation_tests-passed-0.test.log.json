@@ -1,0 +1,5 @@
+{
+  "original_bytes": 380,
+  "original_sha256": "341702cd44556be76fa2d6fdbfc7ee0f94163e2e8673313bb06f8a35d0b24198",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_segment_allocation_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest generation_finish_does_not_allocate_an_encoded_source_copy ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.70s\n\n"
+}

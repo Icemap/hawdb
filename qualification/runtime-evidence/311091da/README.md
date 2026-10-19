@@ -90,3 +90,52 @@ Full ordinary90/resource110, phase observations, independent disposition of
 earlier local failures, genuine review/approval, required CI and normal Tide
 integration remain open. Actual final main-history exclusion audit is still
 required. This incremental packet is not a Ready, approval or merge claim.
+
+## Complete runtime, current-head platforms and supplemental fixture controls
+
+All standalone sourceEf412/engine311 lanes pass: root59, crates95 and Python3,
+with complete source/scope/artifact guards and raw logs. Currentc87 automatic
+platform jobs all pass on checkout9585b9c7/treeb38a95a7. Full current Windows
+artifacts verify Rust1.97.1/MSVC, native strict Clippy, FFI18/Node26/Arrow32/Go and
+922 modeled GC schedules. Keep source311/c87 labels and the formatting bridge
+explicit. These are not Prow statuses, prior-local-failure dispositions, physical
+synchronization proof or genuine approval.
+
+The original phase workflow ended with10 observed groups but only9 complete
+observations. Its6 positive groups qualify31-sample phase costs. In file1M+1,
+owned reached the expected row refusal, while retained/Arrow hit the MVCC
+version-index budget during untimed fixture setup and never queried. Preserve
+those failures and missing costs; the original workflow is not called10/10.
+
+Separate supplemental fixture sourcef26509ba changes only3 Python observer files
+relative to native qualificationebcc9b05 for engine311. Native inputs, full
+consumer,512-row mutation batches,31samples/warmup and large/default budgets
+are unchanged. Explicit65536-row checkpoints occur only during untimed setup.
+Resource6 controls complete (default1k three modes; file1M+1 three exact row
+refusals). Final owners and Arrow pools release; retained/Arrow respectively
+have2/1 nonzero process-global native windows with consistent counter arithmetic.
+These windows neither prove per-query leakage nor leak absence. Supplemental
+negative phase3 controls also prove exact file1M+1 row refusals after15setup
+checkpoints. They complement the missing query-boundary proof and do not replace
+the original phase9/10, ordinary90/resource110, or their costs/counts.
+
+Partial ordinary comparison snapshots preserve four adverse write-stage medians
+for1k fill_bulk across Rust/Python and memory/file. Costs are0.23%–2.79% higher
+while complete-operation medians improve. Original3samples per side establish
+neither significance nor cause; no smoothing, success-only retry or universal
+performance claim is made. Numeric resource observations retain their native,
+foreign-heap, pool, RSS and timing scopes; missing data is not zero.
+
+An additional same-runner control39232726821 covers100k select/fill across all3
+hosts and2backends, both revisions and original3samples+discard. It is still
+running and not counted toward90/110. It reports signed host-minus-Rust gaps and
+only interprets a closure fraction where measured gaps support it. Fixed
+baseline-then-candidate order is disclosed, not randomized causal evidence.
+Its first read-only observer incorrectly expected Go's absent prefetch field;
+v2 corrects availability handling. The original observer state/source is kept;
+no remote measurement was canceled or retried, and absence is not measured zero.
+
+Full90/110 acceptance and same-runner interpretation, independent disposition
+of earlier failures, genuine review/approval, required Prow and normal Tide
+integration remain open. Keep Draft and verify actual final main history excludes
+all30 removed report blobs. No performance, approval or merge shortcut is taken.

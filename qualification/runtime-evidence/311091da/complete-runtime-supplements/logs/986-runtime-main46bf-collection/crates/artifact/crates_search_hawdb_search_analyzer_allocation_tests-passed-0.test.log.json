@@ -1,0 +1,5 @@
+{
+  "original_bytes": 387,
+  "original_sha256": "a3164a6121e7027019000567267402591a3830e90708f7e84c4329efee13d97c",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_analyzer_allocation_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest rejected_identifier_stops_before_collecting_all_parts_and_tokens ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s\n\n"
+}
