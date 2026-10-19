@@ -451,6 +451,62 @@ impl GraphStore {
             .reserve_project_bootstrap_identity(proposed)
     }
 
+    /// Reserve persistent Consumer identities before native creation/callbacks.
+    /// The receipt does not authorize birth, adoption or publication.
+    #[doc(hidden)]
+    pub fn reserve_search_consumer_allocation(
+        &self,
+        consumer: &str,
+        destination: &Path,
+    ) -> Result<crate::consumer_allocation::ReservedConsumerAllocation> {
+        if self
+            .durable
+            .as_ref()
+            .is_some_and(|durable| durable.read_only)
+        {
+            return Err(HawDBError::Storage(
+                "read-only allocation is forbidden".into(),
+            ));
+        }
+        let database = self.search_projection_database_identity().ok_or_else(|| {
+            HawDBError::StorageIntegrity("allocation requires source database identity".into())
+        })?;
+        self.consumer_allocation_source_inner()?
+            .reserve(database, consumer, destination)
+    }
+
+    #[doc(hidden)]
+    pub fn verify_search_consumer_allocation_evidence(&self) -> Result<()> {
+        self.consumer_allocation_source_inner().map(|_| ())
+    }
+
+    fn consumer_allocation_source_inner(
+        &self,
+    ) -> Result<crate::consumer_allocation::ConsumerAllocationSource> {
+        self.ensure_usable()?;
+        let durable = self
+            .durable
+            .as_ref()
+            .ok_or_else(|| HawDBError::Storage("allocation requires persistent storage".into()))?;
+        let project = durable.allocation_project.as_ref().ok_or_else(|| {
+            HawDBError::StorageIntegrity(
+                "allocation requires original captured project custody".into(),
+            )
+        })?;
+        let branch = durable.branch_runtime.as_ref().ok_or_else(|| {
+            HawDBError::StorageIntegrity("allocation requires branch identity".into())
+        })?;
+        let owner = self.branch_lease.as_ref().ok_or_else(|| {
+            HawDBError::StorageIntegrity("allocation requires original UUID owner".into())
+        })?;
+        crate::consumer_allocation::source(
+            project,
+            Arc::clone(owner),
+            branch_catalog::BranchId::new(hawdb_core::Uuid::from_bytes(branch.head.branch_id))
+                .map_err(HawDBError::from_storage_error)?,
+        )
+    }
+
     /// Publishes the project selector last, while the legacy directory lease
     /// still protects the authoritative source. A stale development main is
     /// rejected rather than replacing acknowledged legacy writes with it.
@@ -468,6 +524,7 @@ impl GraphStore {
                 "project publication requires the writable legacy directory lease".into(),
             ));
         }
+        durable.verify_consumer_allocation_domain(selector)?;
         let catalog_path = crate::branch_project::catalog_path(&durable.root_path);
         let branch_directory = durable
             .root_path
@@ -1229,6 +1286,7 @@ impl GraphStore {
                         durable.wal_append_open_count = 1;
                     }
                 }
+                durable.allocation_project = project.cloned();
                 let runtime_owner = durable.retain_admitted_runtime();
                 durable.branch_runtime = Some(BranchRuntimeBinding {
                     catalog_path: request.catalog_path.to_path_buf(),

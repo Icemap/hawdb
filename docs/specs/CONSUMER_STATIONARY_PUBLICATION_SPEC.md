@@ -1,14 +1,15 @@
 # Consumer stationary publication and durable allocation custody
 
-Status: implementation contract and checked bounded safety model. The runtime
-ledger, stationary generation view/selector and adoption below are **not
-implemented**. This document preserves the complete acceptance scope in
+Status: implementation contract with checked bounded safety models. A bounded
+runtime allocation/bootstrap ledger now backs initial Consumer creation. Native
+birth/debt settlement, stationary generation view/selector and adoption below
+are **not implemented**. This document preserves the complete acceptance scope in
 [MVCC_VERSIONED_PUBLICATION_SPEC.md](MVCC_VERSIONED_PUBLICATION_SPEC.md).
 
 ## Source-backed problem
 
 `Database::create_search_projection_consumer` currently creates a sibling
-`.hawdb-consumer-<registration UUID>.stage`, initializes a resident SearchIndex,
+`.hawdb-consumer-<project UUID>-<incarnation>-<generation>-<operation>.stage`, initializes a resident SearchIndex,
 then calls `ConsumerProjection::publish_directory`. The live lexical readers
 keep files open. Native Windows refuses the enclosing directory move. Closing
 those readers, changing fixture order, copying after E or weakening the tests
@@ -69,13 +70,44 @@ CI 39165974322 and six-slot completion in CI 39167950514 for head `3261af9f`.
 The separate three directory-move failures remain. The lower-budget
 refusal/retry and old-reader assertions remain; no owner or barrier is dropped.
 
-This does not migrate all GraphStore/registry I/O or implement the allocation
-journal. A new ledger must borrow qualified source/project/branch custody from
-the actual kernel owner. Capturing whatever directory a saved label names later,
+This does not migrate all GraphStore/registry I/O. Initial creation now reserves
+through the original captured project and actual UUID branch owner; its bounded
+journal does not implement birth/debt settlement or stationary publication. Capturing whatever directory a saved label names later,
 even with a matching decoded database UUID, is not an acceptable substitute.
 Physical SourceDirectory identities remain process-local keys, never serialized
 logical incarnations or durable birth receipts. The native ownership refinement
 and its limits are described in [the custody argument](../tla/ROOT_PROCESS_CUSTODY_PROOF.md#native-database-directory-ownership).
+
+## Implemented reservation boundary
+
+`consumer-allocations.hawdb` lives in the project root, outside disposable runtime
+directories. Under the captured catalog lock, bootstrap writes and synchronizes
+an empty CRC-framed ledger before publishing the bootstrap intent. Project and
+bootstrap headers are V2: they designate an initialized allocation domain.
+Earlier development-only V1 project databases require recreation; there is no
+compatibility migration. Valid legacy graph manifests remain adoptable. This
+baseline change never authorizes deletion of authoritative legacy or Cloud data.
+
+The kernel obtains database identity from the admitted store, verifies the ready
+branch against its original UUID directory owner, and reserves three checked
+monotonic role counters before stage creation or initializer callbacks. A sealed
+control candidate replaces the ledger with file and parent barriers before a
+reservation returns. Failures and lost replies do not refund selected identities.
+An empty orphan bootstrap ledger retains its identity on retry. Existing intent,
+catalog or selector evidence with a missing ledger refuses initialization rather
+than recreating zero. Missing/corrupt evidence also refuses Consumer creation,
+status, readiness and activation, while ordinary graph writes remain available.
+
+The canonical bounded codec admits at most 1 MiB and 256 pending reservations;
+locators are UTF-8 and at most 16 KiB. All reservations are currently retained,
+including completed legacy creations: no settlement exists yet, so the 257th
+reservation fails closed. Registration/projection/checkpoint UUIDs are bound in
+the record, but its locator and counters grant no native birth, adoption or
+deletion authority. Rebind, clear and subsequent candidate producers still need
+this protocol. The existing Consumer directory move and its Windows failures
+remain open under #1092. This stage does not authorize Mem stable/GA activation.
+
+See [the bootstrap/reservation refinement and its limits](../tla/CONSUMER_ALLOCATION_BOOTSTRAP_PROOF.md).
 
 ## Authorities and identity domains
 

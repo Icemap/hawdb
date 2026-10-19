@@ -58,6 +58,8 @@ pub mod config;
 #[doc(hidden)]
 pub mod consistency;
 #[doc(hidden)]
+pub mod consumer_allocation;
+#[doc(hidden)]
 pub mod cow;
 pub mod derived_repair;
 pub mod doctor;

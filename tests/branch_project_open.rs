@@ -598,7 +598,7 @@ fn ordinary_open_bootstraps_main_and_reopens_its_private_wal() {
         assert_no_runtime(&database);
         let main = main_id(&database);
         let selector = std::fs::read(project.0.join("manifest.hawdb")).unwrap();
-        assert!(selector.starts_with(b"HAWDB_BRANCH_PROJECT_V1\n"));
+        assert!(selector.starts_with(b"HAWDB_BRANCH_PROJECT_V2\n"));
         let current = database.query_sql("SHOW CURRENT BRANCH").unwrap();
         assert_eq!(current.rows[0]["branch_id"], Value::Uuid(main));
         database

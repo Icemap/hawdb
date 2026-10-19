@@ -38,8 +38,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-pub const PROJECT_HEADER: &str = "HAWDB_BRANCH_PROJECT_V1";
-const BOOTSTRAP_HEADER: &str = "HAWDB_BRANCH_BOOTSTRAP_V1";
+pub const PROJECT_HEADER: &str = "HAWDB_BRANCH_PROJECT_V2";
+const BOOTSTRAP_HEADER: &str = "HAWDB_BRANCH_BOOTSTRAP_V2";
 const LEGACY_HEADER: &[u8] = b"HAWDB_MANIFEST_V1\n";
 const MANIFEST_FILE: &str = "manifest.hawdb";
 const BRANCH_DIRECTORY: &str = "branches";
@@ -204,6 +204,21 @@ impl CapturedProject {
     }
 
     pub(crate) fn locked_catalog(&self) -> Result<branch_catalog::Catalog> {
+        self.with_locked_catalog(|_, _, catalog| Ok(catalog))
+    }
+
+    pub(crate) fn allocation_identity(&self) -> ProjectSelector {
+        self.selector
+    }
+
+    pub(crate) fn with_locked_catalog<T>(
+        &self,
+        operation: impl FnOnce(
+            &SourceDirectory,
+            &crate::file_descriptors::FileOpenContext,
+            branch_catalog::Catalog,
+        ) -> Result<T>,
+    ) -> Result<T> {
         let context = self.files.io_context();
         let branches = self.root.open_directory(&context, BRANCH_DIRECTORY)?;
         let _lease = CatalogMetadataLease::acquire_captured(&branches).map_err(|error| {
@@ -221,7 +236,7 @@ impl CapturedProject {
         let catalog =
             branch_catalog::read_catalog_file(branches.open_child(&context, CATALOG_FILE)?)?;
         validate_ready_catalog(self.selector, &catalog)?;
-        Ok(catalog)
+        operation(&self.root, &context, catalog)
     }
 
     pub(crate) fn capture_branch_directory(&self, branch: BranchId) -> io::Result<SourceDirectory> {
@@ -356,14 +371,36 @@ pub fn reserve_bootstrap_identity(
     files: &ProjectFileDescriptors,
     proposed: ProjectSelector,
 ) -> Result<ProjectSelector> {
-    let root = files.root();
-    let metadata_directory = root.join(BRANCH_DIRECTORY);
-    fs::create_dir_all(&metadata_directory)?;
-    durability::sync_parent_directory(&metadata_directory)?;
-    let _metadata_lease = CatalogMetadataLease::acquire(&metadata_directory)?;
-    let manifest = inspect_project_manifest(root)?;
-    let intent_path = root.join(BOOTSTRAP_FILE);
-    let intent = match read_bounded(&intent_path) {
+    fs::create_dir_all(files.root())?;
+    let root = SourceDirectory::capture(files.root(), &files.io_context())?;
+    reserve_bootstrap_identity_captured(files, &root, proposed)
+}
+
+pub(crate) fn reserve_bootstrap_identity_captured(
+    files: &ProjectFileDescriptors,
+    root: &SourceDirectory,
+    proposed: ProjectSelector,
+) -> Result<ProjectSelector> {
+    let context = files.io_context();
+    match root.create_directory_new(&context, BRANCH_DIRECTORY) {
+        Ok(()) => root.sync(&context)?,
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(error.into()),
+    }
+    let branches = root.open_directory(&context, BRANCH_DIRECTORY)?;
+    let _metadata_lease = CatalogMetadataLease::acquire_captured(&branches)?;
+    let manifest = match root
+        .open_child(&context, MANIFEST_FILE)
+        .and_then(read_bounded_file)
+    {
+        Ok(bytes) => decode_project_manifest(&bytes)?,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => ProjectManifest::Missing,
+        Err(error) => return Err(error.into()),
+    };
+    let intent = match root
+        .open_child(&context, BOOTSTRAP_FILE)
+        .and_then(read_bounded_file)
+    {
         Ok(encoded) => Some(ProjectSelector::decode_with_header(
             &encoded,
             BOOTSTRAP_HEADER,
@@ -372,13 +409,16 @@ pub fn reserve_bootstrap_identity(
         Err(error) => return Err(error.into()),
     };
     if let ProjectManifest::Branch(selector) = manifest {
-        let published = ProjectMetadata::from_files(files.clone())?;
-        if intent.is_some_and(|intent| intent != published.selector) {
+        if intent.is_some_and(|intent| intent != selector) {
             return Err(integrity("bootstrap intent differs from published project"));
         }
+        crate::consumer_allocation::bootstrap(root, &context, selector, false)?;
         return Ok(selector);
     }
-    let catalog = match branch_catalog::read_catalog(&catalog_path(root)) {
+    let catalog = match branches
+        .open_child(&context, CATALOG_FILE)
+        .and_then(branch_catalog::read_catalog_file)
+    {
         Ok(catalog) => Some(catalog),
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
         Err(error) => return Err(error.into()),
@@ -398,8 +438,25 @@ pub fn reserve_bootstrap_identity(
     if let Some(catalog) = &catalog {
         validate_catalog_identity(selector, catalog)?;
     }
+    let selector = crate::consumer_allocation::bootstrap(
+        root,
+        &context,
+        selector,
+        intent.is_none() && catalog.is_none(),
+    )?;
     if intent.is_none() {
-        publish_bootstrap_intent(&intent_path, selector)?;
+        let name = format!("bootstrap-{}.tmp", hawdb_core::generate_uuidv7()?);
+        let mut candidate = root.create_control_candidate(&context, &name)?;
+        candidate.write_all(&selector.encode_with_header(BOOTSTRAP_HEADER))?;
+        candidate.seal()?;
+        candidate.replace_head(&context, BOOTSTRAP_FILE)?;
+        #[cfg(test)]
+        AFTER_BOOTSTRAP_INTENT.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook()?;
+            }
+            Ok::<_, HawDBError>(())
+        })?;
     }
     Ok(selector)
 }
@@ -445,10 +502,6 @@ pub(crate) fn publish_validated_selector(
     publish_identity_file(&files.root().join(MANIFEST_FILE), selector, PROJECT_HEADER)
 }
 
-fn publish_bootstrap_intent(path: &Path, selector: ProjectSelector) -> Result<()> {
-    publish_identity_file(path, selector, BOOTSTRAP_HEADER)
-}
-
 fn publish_identity_file(path: &Path, selector: ProjectSelector, header: &str) -> Result<()> {
     let name = path
         .file_name()
@@ -489,3 +542,11 @@ fn integrity(message: impl Into<String>) -> HawDBError {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+type BootstrapIntentHook = Box<dyn FnOnce() -> Result<()>>;
+
+#[cfg(test)]
+thread_local! {
+    static AFTER_BOOTSTRAP_INTENT: std::cell::RefCell<Option<BootstrapIntentHook>> = const { std::cell::RefCell::new(None) };
+}

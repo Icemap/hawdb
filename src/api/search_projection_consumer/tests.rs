@@ -178,13 +178,64 @@ fn creation_checkpoint_catch_up_and_reopen_use_real_receipts() {
 #[test]
 fn empty_source_epoch_zero_and_repeated_catch_up_are_valid() {
     let fixture = Fixture::new();
-    let mut db = Database::default();
+    // Build a genuinely empty epoch-zero kernel project, without the facade's
+    // implicit system-schema transaction. Admission still uses real custody.
+    let root = fixture.0.join("database");
+    let mut db = Database {
+        project_root_path: Some(root.clone()),
+        ..Database::default()
+    };
     {
         let mut runtime = db.runtime.get_mut().unwrap();
-        runtime.store =
-            crate::store::GraphStore::open(fixture.0.join("database"), &mut runtime.catalog)
-                .unwrap();
+        runtime.store = crate::store::GraphStore::open(&root, &mut runtime.catalog).unwrap();
     }
+    let selector = hawdb_storage::branch_project::ProjectSelector::new(
+        hawdb_storage::branch_catalog::BranchId::new(generate_uuidv7().unwrap()).unwrap(),
+        hawdb_storage::branch_catalog::BranchId::new(generate_uuidv7().unwrap()).unwrap(),
+    )
+    .unwrap();
+    db.runtime
+        .get()
+        .unwrap()
+        .store
+        .reserve_branch_project_identity(selector)
+        .unwrap();
+    db.checkpoint().unwrap();
+    db.initialize_main_branch(
+        selector.project_id().as_uuid(),
+        selector.main_branch_id().as_uuid(),
+    )
+    .unwrap();
+    db.runtime
+        .get()
+        .unwrap()
+        .store
+        .publish_branch_project_selector(selector)
+        .unwrap();
+    db.runtime.get_mut().unwrap().store = crate::store::GraphStore::default();
+    let project =
+        hawdb_storage::branch_project::ProjectMetadata::open(&root, db.config.max_open_files)
+            .unwrap()
+            .into_capture();
+    let revision = project.metadata().unwrap().main().metadata_revision;
+    let admitted = crate::store::GraphStore::admit_captured_branch(
+        hawdb_storage::store::CapturedBranchAdmissionRequest {
+            project: &project,
+            branch_id: selector.main_branch_id(),
+            expected_metadata_revision: revision,
+            durability: db.durability,
+            replay_config: db.config.wal_replay_config(),
+            read_only: false,
+        },
+    )
+    .unwrap();
+    let (store, catalog) = admitted.into_parts();
+    {
+        let mut runtime = db.runtime.get_mut().unwrap();
+        runtime.store = store;
+        runtime.catalog = catalog;
+    }
+    assert_eq!(db.runtime.get().unwrap().store.commit_epoch(), 0);
     let mut consumer = db
         .create_search_projection_consumer(
             id("empty"),
@@ -1197,4 +1248,169 @@ fn expired_feed_allows_fresh_preparation_without_restoring_delta_readiness() {
             .state,
         State::RebuildRequired(Reason::Expired { .. })
     ));
+}
+
+fn allocation_evidence(fixture: &Fixture) -> (Vec<u8>, serde_json::Value) {
+    let bytes = std::fs::read(fixture.0.join("database/consumer-allocations.hawdb")).unwrap();
+    let start = bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
+    let value = serde_json::from_slice(&bytes[start..bytes.len() - 4]).unwrap();
+    (bytes, value)
+}
+
+#[test]
+fn consumer_allocation_precedes_callback_survives_failure_registry_loss_and_reopen() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    assert_eq!(allocation_evidence(&fixture).1["high_water"], 0);
+    let result = db.create_search_projection_consumer(
+        id("failed"),
+        fixture.0.join("failed"),
+        options(100),
+        |_, _| {
+            let evidence = allocation_evidence(&fixture).1;
+            assert_eq!(evidence["high_water"], 3);
+            assert_eq!(evidence["pending"][0]["consumer_id"], "failed");
+            Err(HawDBError::Execution(
+                "initializer failure after durable reserve".into(),
+            ))
+        },
+    );
+    assert!(result.is_err());
+    assert_eq!(allocation_evidence(&fixture).1["high_water"], 3);
+    drop(db);
+    let mut db = fixture.database();
+    let consumer = db
+        .create_search_projection_consumer(
+            id("main"),
+            fixture.0.join("projection"),
+            options(100),
+            initialize,
+        )
+        .unwrap();
+    assert_eq!(allocation_evidence(&fixture).1["high_water"], 6);
+    drop(consumer);
+    drop(db);
+    std::fs::remove_file(fixture.registry_path("database")).unwrap();
+    let mut db = fixture.database();
+    let consumer = db
+        .create_search_projection_consumer(
+            id("replacement"),
+            fixture.0.join("replacement"),
+            options(100),
+            initialize,
+        )
+        .unwrap();
+    let evidence = allocation_evidence(&fixture).1;
+    assert_eq!(evidence["high_water"], 9);
+    assert_eq!(evidence["pending"].as_array().unwrap().len(), 3);
+    assert_eq!(consumer.search_index().document_count(), 1);
+}
+
+#[test]
+fn consumer_allocation_missing_or_corrupt_ledger_refuses_before_identity_and_callback() {
+    for missing in [false, true] {
+        let fixture = Fixture::new();
+        let mut db = fixture.database();
+        append(&mut db, 1);
+        let ledger = fixture.0.join("database/consumer-allocations.hawdb");
+        if missing {
+            std::fs::remove_file(&ledger).unwrap();
+        } else {
+            std::fs::write(&ledger, b"damaged allocation evidence").unwrap();
+        }
+        let before = db
+            .runtime
+            .get()
+            .unwrap()
+            .store
+            .search_projection_database_identity();
+        let destination = fixture.0.join("never-created");
+        assert!(db
+            .create_search_projection_consumer(
+                id("blocked"),
+                &destination,
+                options(100),
+                |_, _| panic!("missing allocation evidence must reject before callback")
+            )
+            .is_err());
+        assert!(!destination.exists());
+        assert_eq!(
+            db.runtime
+                .get()
+                .unwrap()
+                .store
+                .search_projection_database_identity(),
+            before
+        );
+        if missing {
+            assert!(!ledger.exists());
+        } else {
+            assert_eq!(
+                std::fs::read(&ledger).unwrap(),
+                b"damaged allocation evidence"
+            );
+        }
+        append(&mut db, 2);
+    }
+}
+
+#[test]
+fn consumer_allocation_missing_evidence_revokes_source_readiness_and_activation() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let projection = fixture.0.join("projection");
+    let consumer = db
+        .create_search_projection_consumer(id("main"), &projection, options(100), initialize)
+        .unwrap();
+    assert!(db
+        .search_projection_consumer_readiness(&consumer, None)
+        .unwrap()
+        .is_ready());
+    std::fs::remove_file(fixture.0.join("database/consumer-allocations.hawdb")).unwrap();
+    assert!(db
+        .search_projection_consumer_readiness(&consumer, None)
+        .is_err());
+    assert!(db.search_projection_consumer_status(&id("main")).is_err());
+    drop(consumer);
+    assert!(db
+        .open_search_projection_consumer(&id("main"), &projection)
+        .is_err());
+    append(&mut db, 1);
+}
+
+#[test]
+fn consumer_allocation_exhaustion_refuses_without_effect_or_counter_reset() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let (bytes, _) = allocation_evidence(&fixture);
+    let body = std::str::from_utf8(&bytes[..bytes.len() - 4]).unwrap();
+    assert_eq!(body.matches("\"high_water\":0").count(), 1);
+    let mut exhausted = body
+        .replace("\"high_water\":0", &format!("\"high_water\":{}", u64::MAX))
+        .into_bytes();
+    exhausted.extend_from_slice(&hawdb_integrity::crc32c(&exhausted).get().to_le_bytes());
+    let ledger = fixture.0.join("database/consumer-allocations.hawdb");
+    std::fs::write(&ledger, &exhausted).unwrap();
+    let destination = fixture.0.join("never-created");
+    let error = db
+        .create_search_projection_consumer(id("exhausted"), &destination, options(100), |_, _| {
+            panic!("exhaustion must precede callback")
+        })
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("allocation identities exhausted"),
+        "{error}"
+    );
+    assert_eq!(std::fs::read(&ledger).unwrap(), exhausted);
+    assert!(!destination.exists());
+    assert!(!std::fs::read_dir(&fixture.0).unwrap().any(|entry| entry
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .ends_with(".stage")));
+    append(&mut db, 2);
 }

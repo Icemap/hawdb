@@ -67,11 +67,11 @@ fn selector_rejects_torn_noncanonical_and_unknown_encodings() {
     assert_eq!(
         bytes,
         concat!(
-            "HAWDB_BRANCH_PROJECT_V1\n",
+            "HAWDB_BRANCH_PROJECT_V2\n",
             "project_id\t00000000-0000-0000-0000-000000000001\n",
             "main_branch_id\t00000000-0000-0000-0000-000000000002\n",
             "catalog_format\t2\n",
-            "checksum\t4139119803\n",
+            "checksum\t4233522556\n",
         )
         .as_bytes(),
     );
@@ -81,7 +81,7 @@ fn selector_rejects_torn_noncanonical_and_unknown_encodings() {
     }
     let text = String::from_utf8(bytes).unwrap();
     for invalid in [
-        text.replace(PROJECT_HEADER, "HAWDB_BRANCH_PROJECT_V2"),
+        text.replace(PROJECT_HEADER, "HAWDB_BRANCH_PROJECT_V3"),
         text.replace("catalog_format\t2", "catalog_format\t1"),
         text.replace("main_branch_id\t", "project_id\t"),
         text.replace(
@@ -238,7 +238,7 @@ fn metadata_exhaustion_preserves_files_and_can_be_retried() {
 
 #[test]
 fn bootstrap_lost_response_reuses_the_original_durable_identity() {
-    let fixture = Fixture::new(4);
+    let fixture = Fixture::new(8);
     let original = identity(51, 52);
     reserve_bootstrap_identity(&fixture.files, original).unwrap();
     let path = fixture.root().join(BOOTSTRAP_FILE);
@@ -256,9 +256,10 @@ fn bootstrap_lost_response_reuses_the_original_durable_identity() {
 }
 
 #[test]
-fn bootstrap_uses_existing_development_catalog_identity_and_checks_conflicts() {
-    let fixture = Fixture::new(4);
+fn bootstrap_uses_reserved_development_catalog_identity_and_checks_conflicts() {
+    let fixture = Fixture::new(8);
     let existing = identity(71, 72);
+    reserve_bootstrap_identity(&fixture.files, existing).unwrap();
     initialize_catalog_file(
         &catalog_path(fixture.root()),
         existing.project_id,
@@ -288,7 +289,7 @@ fn bootstrap_uses_existing_development_catalog_identity_and_checks_conflicts() {
 
 #[test]
 fn damaged_bootstrap_intent_is_retained_instead_of_replaced() {
-    let fixture = Fixture::new(4);
+    let fixture = Fixture::new(8);
     let original = identity(101, 102);
     reserve_bootstrap_identity(&fixture.files, original).unwrap();
     let path = fixture.root().join(BOOTSTRAP_FILE);
@@ -304,13 +305,12 @@ fn damaged_bootstrap_intent_is_retained_instead_of_replaced() {
 #[test]
 #[cfg(not(windows))]
 fn uncertain_intent_publication_keeps_identity_available_for_reopen() {
-    let fixture = Fixture::new(4);
+    let fixture = Fixture::new(8);
     let selector = identity(121, 122);
-    let path = fixture.root().join(BOOTSTRAP_FILE);
-    {
-        let _failure = durability::fail_sync_directory_for(fixture.root());
-        assert!(publish_bootstrap_intent(&path, selector).is_err());
-    }
+    AFTER_BOOTSTRAP_INTENT.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(|| Err(integrity("lost intent response"))))
+    });
+    assert!(reserve_bootstrap_identity(&fixture.files, selector).is_err());
     assert_eq!(
         reserve_bootstrap_identity(&fixture.files, identity(131, 132)).unwrap(),
         selector,
@@ -320,7 +320,7 @@ fn uncertain_intent_publication_keeps_identity_available_for_reopen() {
 
 #[test]
 fn busy_metadata_rejects_bootstrap_without_publishing_an_identity() {
-    let fixture = Fixture::new(4);
+    let fixture = Fixture::new(8);
     let directory = fixture.root().join(BRANCH_DIRECTORY);
     std::fs::create_dir(&directory).unwrap();
     let lease = CatalogMetadataLease::acquire(&directory).unwrap();
@@ -467,4 +467,68 @@ fn captured_metadata_descriptor_refusal_preserves_original_and_retries() {
     assert_eq!(fixture.files.metrics().open, 1);
     drop(metadata);
     assert_eq!(fixture.files.metrics().open, 0);
+}
+
+#[test]
+fn bootstrap_initialized_missing_ledger_never_recreates_empty_evidence() {
+    let fixture = Fixture::new(8);
+    let selected = identity(151, 152);
+    reserve_bootstrap_identity(&fixture.files, selected).unwrap();
+    let intent = std::fs::read(fixture.root().join(BOOTSTRAP_FILE)).unwrap();
+    let ledger = fixture.root().join(crate::consumer_allocation::LEDGER_FILE);
+    std::fs::remove_file(&ledger).unwrap();
+    assert!(reserve_bootstrap_identity(&fixture.files, identity(153, 154)).is_err());
+    assert!(!ledger.exists());
+    assert_eq!(
+        std::fs::read(fixture.root().join(BOOTSTRAP_FILE)).unwrap(),
+        intent
+    );
+    assert_eq!(fixture.files.metrics().open, 0);
+}
+
+#[test]
+fn bootstrap_catalog_without_ledger_is_not_virgin_evidence() {
+    let fixture = Fixture::new(8);
+    let selected = identity(161, 162);
+    initialize_catalog_file(
+        &catalog_path(fixture.root()),
+        selected.project_id,
+        selected.main_branch_id,
+    )
+    .unwrap();
+    let before = std::fs::read(catalog_path(fixture.root())).unwrap();
+    assert!(reserve_bootstrap_identity(&fixture.files, selected).is_err());
+    assert!(!fixture
+        .root()
+        .join(crate::consumer_allocation::LEDGER_FILE)
+        .exists());
+    assert!(!fixture.root().join(BOOTSTRAP_FILE).exists());
+    assert_eq!(std::fs::read(catalog_path(fixture.root())).unwrap(), before);
+}
+
+#[test]
+fn bootstrap_descriptor_refusal_preserves_empty_ledger_for_original_identity_retry() {
+    let root = std::env::temp_dir().join(format!(
+        "hawdb-bootstrap-budget-{}",
+        hawdb_core::generate_uuidv7().unwrap()
+    ));
+    let selected = identity(171, 172);
+    let ledger = root.join(crate::consumer_allocation::LEDGER_FILE);
+    let evidence = {
+        let files = ProjectFileDescriptors::acquire(&root, 4).unwrap();
+        let error = reserve_bootstrap_identity(&files, selected).unwrap_err();
+        assert!(matches!(error, HawDBError::FileDescriptors(_)), "{error}");
+        assert_eq!(files.metrics().open, 0);
+        assert!(!root.join(BOOTSTRAP_FILE).exists());
+        std::fs::read(&ledger).unwrap()
+    };
+    let files = ProjectFileDescriptors::acquire(&root, 8).unwrap();
+    assert_eq!(
+        reserve_bootstrap_identity(&files, identity(173, 174)).unwrap(),
+        selected
+    );
+    assert_eq!(std::fs::read(&ledger).unwrap(), evidence);
+    assert_eq!(files.metrics().open, 0);
+    drop(files);
+    std::fs::remove_dir_all(root).unwrap();
 }

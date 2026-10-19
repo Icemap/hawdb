@@ -749,7 +749,7 @@ physical device; broader qualification remains #819/#820 work.
 
 ## On-disk compatibility and immutable objects
 
-The project selector uses a distinct `HAWDB_BRANCH_PROJECT_V1` header in
+The project selector uses a distinct `HAWDB_BRANCH_PROJECT_V2` header in
 `manifest.hawdb`. Branch catalogs use the v2 format described below; sealed
 roots use the v2 format and branch heads retain their own v1 format tag. An
 older single-root engine
@@ -758,15 +758,21 @@ reclamation. Readers MUST
 reject unknown versions, duplicate fields, invalid identities, and incomplete
 references; absence/corruption of the catalog MUST NOT trigger legacy fallback.
 
-The storage seam's exact v1 selector encoding is five newline-terminated ASCII
+The storage seam's exact v2 selector encoding is five newline-terminated ASCII
 lines in this order: the header, `project_id`, `main_branch_id`, `catalog_format`,
 and `checksum`. Fields use one tab separator. UUIDs use canonical lowercase
 hyphenated encoding; project and main UUIDs are non-nil and distinct. Catalog
 format is `2`. The checksum is decimal CRC32C over the first four lines, including
 their newlines. The decoder enforces a 512-byte limit, exact canonical bytes,
 field order, and no trailing fields. A bootstrap intent uses the same fields with
-the distinct `HAWDB_BRANCH_BOOTSTRAP_V1` header; it is identity reservation, never
-a substitute for a published project selector. A recognized legacy header only
+the distinct `HAWDB_BRANCH_BOOTSTRAP_V2` header; it is identity reservation, never
+a substitute for a published project selector. V2 also designates an initialized
+Consumer allocation domain: synchronize the independent root ledger before the
+bootstrap intent, and never recreate it from registry/catalog counts. Earlier
+development-only V1 project databases require recreation; this is not a migration
+or deletion policy for authoritative legacy or Cloud stores. See the
+[allocation contract](CONSUMER_STATIONARY_PUBLICATION_SPEC.md).
+A recognized legacy header only
 selects the legacy decoder; it does not bypass its complete manifest validation.
 
 New empty projects bootstrap `main` directly. When adopting an existing

@@ -136,6 +136,17 @@ jobs:
             -- branch_project::tests:: --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/project-metadata.txt
 
+      - name: Test durable Consumer allocation and activation refusal
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
+            -- api::search_projection_consumer::tests::consumer_allocation_ \
+            api::search_projection_consumer::tests::empty_source_epoch_zero_and_repeated_catch_up_are_valid \
+            --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/consumer-allocation.txt
+
       - name: Test deferred project capture and original namespace retry
         if: ${{ !cancelled() }}
         shell: bash

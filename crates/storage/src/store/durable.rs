@@ -82,6 +82,7 @@ pub(super) struct DurableStore {
     project_files: crate::file_descriptors::ProjectFileDescriptors,
     _directory_lease: Arc<DatabaseDirectoryLease>,
     pub(super) branch_runtime: Option<super::immutable_root::BranchRuntimeBinding>,
+    pub(super) allocation_project: Option<crate::branch_project::CapturedProject>,
     // UUID-leased branch admission may reconstruct derived row/index deltas
     // even for read-only queries. This never authorizes WAL or head writes.
     pub(super) recovery_artifact_writes_allowed: bool,
@@ -283,7 +284,24 @@ impl DurableStore {
         // This DurableStore owns the original directory lease. Keep it alive
         // while choosing identities for metadata adoption; no source copy or
         // second branch runtime is needed.
-        crate::branch_project::reserve_bootstrap_identity(&self.project_files, proposed)
+        crate::branch_project::reserve_bootstrap_identity_captured(
+            &self.project_files,
+            self._directory_lease.captured_directory(),
+            proposed,
+        )
+    }
+
+    pub(super) fn verify_consumer_allocation_domain(
+        &self,
+        selector: crate::branch_project::ProjectSelector,
+    ) -> Result<()> {
+        crate::consumer_allocation::bootstrap(
+            self._directory_lease.captured_directory(),
+            &self.project_files.io_context(),
+            selector,
+            false,
+        )
+        .map(|_| ())
     }
 
     pub(super) fn file_descriptor_context(&self) -> crate::file_descriptors::FileOpenContext {
@@ -551,6 +569,7 @@ impl DurableStore {
             project_files,
             _directory_lease: Arc::new(directory_lease),
             branch_runtime: None,
+            allocation_project: None,
             recovery_artifact_writes_allowed: !read_only,
             root_path: artifact_path.to_path_buf(),
             checkpoint_path,

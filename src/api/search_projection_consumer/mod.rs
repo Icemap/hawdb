@@ -57,6 +57,10 @@ impl Database {
         F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
     {
         let root = self.consumer_writable_root()?;
+        self.runtime
+            .get()?
+            .store
+            .verify_search_consumer_allocation_evidence()?;
         if self.runtime.get_mut()?.projection_consumers.unavailable {
             let identity = self
                 .runtime
@@ -131,15 +135,20 @@ impl Database {
         };
         // Also retry this checkpoint after an earlier identity publication error.
         self.checkpoint()?;
-        let registration_uuid = generate_uuidv7()?;
+        let allocation = self
+            .runtime
+            .get()?
+            .store
+            .reserve_search_consumer_allocation(id.as_str(), destination)?;
+        let registration_uuid = allocation.registration_uuid();
         let binding = ConsumerBinding {
             database_uuid,
-            projection_uuid: generate_uuidv7()?,
+            projection_uuid: allocation.projection_uuid(),
             consumer_id: id.as_str().into(),
             registration_uuid,
-            checkpoint_uuid: generate_uuidv7()?,
+            checkpoint_uuid: allocation.checkpoint_uuid(),
         };
-        let stage = parent.join(format!(".hawdb-consumer-{registration_uuid}.stage"));
+        let stage = parent.join(allocation.stage_name());
         fs::create_dir(&stage).map_err(HawDBError::from)?;
         let stage_guard = StageDirectory(stage.clone());
         let mut snapshot = self.begin_read_transaction()?;
@@ -419,6 +428,10 @@ impl Database {
         &self,
         id: &SearchProjectionConsumerId,
     ) -> SearchProjectionConsumerResult<SearchProjectionConsumerStatus> {
+        self.runtime
+            .get()?
+            .store
+            .verify_search_consumer_allocation_evidence()?;
         if self.runtime.get()?.projection_consumers.unavailable {
             return Err(Error::RebuildRequired(Reason::RegistryUnavailable));
         }
