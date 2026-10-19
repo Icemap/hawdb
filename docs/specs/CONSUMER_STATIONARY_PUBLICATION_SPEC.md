@@ -24,7 +24,9 @@ a non-reused allocation high-water mark exists there. Registry records, their
 count and a maximum selected generation must not mint an allocation sequence.
 
 `ConsumerProjection::reserve_preparation` already excludes competing internal
-mutations and rejects dirty/failed checkpoints. The generation metadata codec
+mutations and rejects dirty/failed checkpoints. The development-only generation
+metadata V2 codec records nonzero incarnation, generation and operation identities;
+a native target lease compares them with its original recorded reservation. This
 retains descriptions without granting source or receipt authority. Snapshot and
 all seven resident segment families now preserve producer expectations, but the
 ordinary checkpoint still serializes the complete resident dataset. These are

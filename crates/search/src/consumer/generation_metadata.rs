@@ -16,10 +16,10 @@ use hawdb_storage::immutable_object::{ObjectKind, ObjectReference};
 use std::io::{self, Write};
 use std::num::NonZeroU64;
 
-const MAGIC: &[u8; 8] = b"HAWCGM01";
+const MAGIC: &[u8; 8] = b"HAWCGM02";
 const REFERENCE_BYTES: usize = 1 + 2 + 8 + 32;
 const CHECKSUM_BYTES: usize = 32;
-const HEADER_BYTES: usize = 8 + 4 * 16 + 2 + 3 * 8 + 16 + REFERENCE_BYTES + 4;
+const HEADER_BYTES: usize = 8 + 4 * 16 + 2 + 4 * 8 + 16 + REFERENCE_BYTES + 4;
 
 /// Operation-supplied bounds; these do not create a separate resource allowance.
 #[derive(Debug, Clone, Copy)]
@@ -43,6 +43,7 @@ pub struct MetadataInput<'a> {
     pub source_epoch: u64,
     pub target_incarnation: NonZeroU64,
     pub generation: NonZeroU64,
+    pub operation: NonZeroU64,
     pub component_uuid: Uuid,
     pub search_manifest: ObjectReference,
     pub artifacts: &'a [ArtifactReference<'a>],
@@ -60,6 +61,7 @@ pub struct MetadataView<'a> {
     source_epoch: u64,
     target_incarnation: NonZeroU64,
     generation: NonZeroU64,
+    operation: NonZeroU64,
     component_uuid: Uuid,
     search_manifest: ObjectReference,
     offsets: &'a [u8],
@@ -148,6 +150,7 @@ impl MetadataInput<'_> {
             self.source_epoch,
             self.target_incarnation.get(),
             self.generation.get(),
+            self.operation.get(),
         ] {
             writer.write_all(&value.to_le_bytes())?;
         }
@@ -221,6 +224,7 @@ impl<'a> MetadataView<'a> {
         let source_epoch = reader.u64()?;
         let target_incarnation = NonZeroU64::new(reader.u64()?).ok_or_else(invalid)?;
         let generation = NonZeroU64::new(reader.u64()?).ok_or_else(invalid)?;
+        let operation = NonZeroU64::new(reader.u64()?).ok_or_else(invalid)?;
         let component_uuid = reader.uuid()?;
         if component_uuid.is_nil() {
             return Err(invalid());
@@ -244,6 +248,7 @@ impl<'a> MetadataView<'a> {
             source_epoch,
             target_incarnation,
             generation,
+            operation,
             component_uuid,
             search_manifest,
             offsets,
@@ -274,6 +279,9 @@ impl<'a> MetadataView<'a> {
     }
     pub fn generation(&self) -> NonZeroU64 {
         self.generation
+    }
+    pub fn operation(&self) -> NonZeroU64 {
+        self.operation
     }
     pub fn component_uuid(&self) -> Uuid {
         self.component_uuid

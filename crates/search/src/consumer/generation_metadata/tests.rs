@@ -48,6 +48,7 @@ fn input<'a>(
         source_epoch: 91,
         target_incarnation: NonZeroU64::new(7).unwrap(),
         generation: NonZeroU64::new(19).unwrap(),
+        operation: NonZeroU64::new(23).unwrap(),
         component_uuid: Uuid::from_bytes([5; 16]),
         search_manifest: ObjectReference::for_bytes(
             ObjectKind::CheckpointArtifact,
@@ -88,9 +89,14 @@ fn complete_reference_index_roundtrips_and_exact_lookup_never_falls_back() {
     assert_eq!(view.source_epoch(), 91);
     assert_eq!(view.target_incarnation().get(), 7);
     assert_eq!(view.generation().get(), 19);
+    assert_eq!(view.operation().get(), 23);
     assert_eq!(view.component_uuid(), input.component_uuid);
     assert_eq!(view.search_manifest(), input.search_manifest);
     assert_eq!(view.artifact_count(), 3);
+    let mut old_baseline = bytes.clone();
+    old_baseline[..MAGIC.len()].copy_from_slice(b"HAWCGM01");
+    resign(&mut old_baseline);
+    assert!(MetadataView::decode(&old_baseline, limits(), &RuntimeTaskContext::default()).is_err());
     for artifact in artifacts {
         assert_eq!(view.artifact(artifact.name), Some(artifact.reference));
     }
@@ -147,7 +153,7 @@ fn valid_checksum_does_not_authorize_bad_offsets_counts_or_reference_types() {
     let index = bytes.len() - CHECKSUM_BYTES - view.records.len() - view.offsets.len();
     let count = index - 4;
     let incarnation = 8 + 4 * 16 + 2 + binding.consumer_id.len() + 8;
-    let reference = incarnation + 16 + 16;
+    let reference = incarnation + 3 * 8 + 16;
     for (offset, replacement) in [
         (index, 1u32.to_le_bytes().to_vec()),
         (index + 4, 0u32.to_le_bytes().to_vec()),
@@ -155,7 +161,8 @@ fn valid_checksum_does_not_authorize_bad_offsets_counts_or_reference_types() {
         (count, u32::MAX.to_le_bytes().to_vec()),
         (incarnation, 0u64.to_le_bytes().to_vec()),
         (incarnation + 8, 0u64.to_le_bytes().to_vec()),
-        (incarnation + 16, vec![0; 16]),
+        (incarnation + 16, 0u64.to_le_bytes().to_vec()),
+        (incarnation + 24, vec![0; 16]),
         (reference, vec![ObjectKind::SealedWal as u8]),
         (reference + 1, 2u16.to_le_bytes().to_vec()),
         (

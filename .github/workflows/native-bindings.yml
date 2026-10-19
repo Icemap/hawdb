@@ -221,13 +221,22 @@ jobs:
             -- out_of_core::publish_lease::tests:: --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/captured-publication-lease.txt
 
+      - name: Test Consumer generation metadata identity
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            -- consumer::generation_metadata::tests:: --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/consumer-generation-metadata.txt
+
       - name: Test native Consumer birth and no-effect settlement
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -euo pipefail
           bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            -- consumer_native_birth_ consumer_native_candidate_output_ consumer_native_settlement_ consumer_native_retirement_ --nocapture --test-threads=1 \
+            -- consumer_native_birth_ consumer_native_candidate_output_ consumer_native_generation_metadata_ consumer_native_settlement_ consumer_native_retirement_ --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/consumer-native-birth.txt
 
       - name: Test durable Consumer allocation and activation refusal

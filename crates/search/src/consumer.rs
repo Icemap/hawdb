@@ -152,6 +152,29 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
         self.lease.source_identity()
     }
 
+    /// Compare metadata identities with this token's original recorded
+    /// reservation. Source epoch and artifact closure need separate proof.
+    pub fn validate_generation_identity(
+        &self,
+        input: &generation_metadata::MetadataInput<'_>,
+    ) -> Result<()> {
+        let original = self._birth.reservation_binding()?;
+        if input.binding.database_uuid != original.database_uuid
+            || input.binding.projection_uuid != original.projection_uuid
+            || input.binding.consumer_id != original.consumer_id
+            || input.binding.registration_uuid != original.registration_uuid
+            || input.binding.checkpoint_uuid != original.checkpoint_uuid
+            || input.target_incarnation != original.target_incarnation
+            || input.generation != original.generation
+            || input.operation != original.operation
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "consumer generation metadata differs from native reservation".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Reserve a cumulative file-output bound once for this born target before
     /// installing any artifact. Dropping the token cannot reset its byte cap.
     /// The caller still owns the candidate's complete workspace and cleanup

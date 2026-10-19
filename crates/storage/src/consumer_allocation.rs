@@ -13,6 +13,7 @@ use crate::ownership::DatabaseDirectoryLease;
 use hawdb_core::{HawDBError, Result, Uuid};
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
+use std::num::NonZeroU64;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -163,6 +164,23 @@ pub struct ReservedConsumerAllocation {
     target_locator: String,
     _project: CapturedProject,
     _source: Arc<DatabaseDirectoryLease>,
+}
+
+/// Original reservation identities retained by a recorded native birth.
+/// This description cannot mint a new reservation or authorize publication.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConsumerReservationBinding<'a> {
+    pub source_branch: BranchId,
+    pub database_uuid: Uuid,
+    pub consumer_id: &'a str,
+    pub target_locator: &'a str,
+    pub target_incarnation: NonZeroU64,
+    pub generation: NonZeroU64,
+    pub operation: NonZeroU64,
+    pub registration_uuid: Uuid,
+    pub projection_uuid: Uuid,
+    pub checkpoint_uuid: Uuid,
 }
 
 impl ReservedConsumerAllocation {

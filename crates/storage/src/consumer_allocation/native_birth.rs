@@ -253,6 +253,32 @@ impl PendingConsumerGeneration {
         self.candidate.name()
     }
 
+    /// Return the original reservation binding only after fresh recorded-birth
+    /// validation. The borrowed strings remain tied to this live native token;
+    /// a decoded marker or generation name cannot supply them independently.
+    pub fn reservation_binding(&self) -> Result<ConsumerReservationBinding<'_>> {
+        self.born_directory()?;
+        let allocation = self
+            .allocation
+            .as_ref()
+            .ok_or_else(|| invalid("recorded birth lost its reservation"))?;
+        Ok(ConsumerReservationBinding {
+            source_branch: allocation.source_branch,
+            database_uuid: allocation.database,
+            consumer_id: &allocation.consumer_id,
+            target_locator: &allocation.target_locator,
+            target_incarnation: NonZeroU64::new(allocation.incarnation.0)
+                .ok_or_else(|| invalid("target incarnation is zero"))?,
+            generation: NonZeroU64::new(allocation.generation.0)
+                .ok_or_else(|| invalid("generation is zero"))?,
+            operation: NonZeroU64::new(allocation.operation.0)
+                .ok_or_else(|| invalid("operation is zero"))?,
+            registration_uuid: allocation.registration,
+            projection_uuid: allocation.projection,
+            checkpoint_uuid: allocation.checkpoint,
+        })
+    }
+
     /// One exclusive native attempt. Any error retains intent and all acquired
     /// handles in this owner; retry/recovery must resolve the original attempt.
     /// No producer receives the directory until both target and ledger barriers

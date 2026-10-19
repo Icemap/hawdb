@@ -1384,6 +1384,54 @@ fn candidate_reference(bytes: &[u8]) -> hawdb_storage::immutable_object::ObjectR
 }
 
 #[test]
+fn consumer_native_generation_metadata_requires_the_original_reservation_identity() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let (binding, target_incarnation, generation, operation) = {
+        let original = pending.reservation_binding().unwrap();
+        (
+            hawdb_search::consumer::ConsumerBinding {
+                database_uuid: original.database_uuid,
+                projection_uuid: original.projection_uuid,
+                consumer_id: original.consumer_id.to_owned(),
+                registration_uuid: original.registration_uuid,
+                checkpoint_uuid: original.checkpoint_uuid,
+            },
+            original.target_incarnation,
+            original.generation,
+            original.operation,
+        )
+    };
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let lease = hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
+        .unwrap();
+    let mut input = hawdb_search::consumer::generation_metadata::MetadataInput {
+        binding: &binding,
+        source_epoch: 7,
+        target_incarnation,
+        generation,
+        operation,
+        component_uuid: hawdb_core::Uuid::from_bytes([5; 16]),
+        search_manifest: candidate_reference(b"search head"),
+        artifacts: &[],
+    };
+    lease.validate_generation_identity(&input).unwrap();
+    input.operation = NonZeroU64::new(operation.get() + 1).unwrap();
+    let error = lease.validate_generation_identity(&input).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("differs from native reservation"));
+    input.operation = operation;
+    input.generation = NonZeroU64::new(generation.get() + 1).unwrap();
+    assert!(lease.validate_generation_identity(&input).is_err());
+}
+
+#[test]
 fn consumer_native_candidate_output_installs_a_bounded_durable_artifact() {
     let fixture = Fixture::new();
     let mut db = fixture.database();
