@@ -28,6 +28,7 @@ mod automatic_checkpoint;
 mod branch_abandonment;
 mod consumer_allocation;
 mod consumer_native_birth;
+mod consumer_retirement;
 mod consumer_settlement;
 mod runtime_roots;
 mod search_projection;

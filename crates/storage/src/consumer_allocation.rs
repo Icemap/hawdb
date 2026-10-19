@@ -61,6 +61,14 @@ enum NativeBirth {
         generation_name: String,
         parent_locator: String,
     },
+    Retiring {
+        generation_name: String,
+        parent_locator: String,
+    },
+    Retired {
+        generation_name: String,
+        parent_locator: String,
+    },
 }
 
 #[derive(Debug)]
@@ -267,6 +275,14 @@ fn validate(ledger: &Ledger) -> Result<()> {
             parent_locator,
         }
         | NativeBirth::Recorded {
+            generation_name,
+            parent_locator,
+        }
+        | NativeBirth::Retiring {
+            generation_name,
+            parent_locator,
+        }
+        | NativeBirth::Retired {
             generation_name,
             parent_locator,
         } = &row.native_birth

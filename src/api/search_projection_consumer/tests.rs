@@ -1835,3 +1835,123 @@ fn consumer_native_settlement_updates_the_original_source_after_label_replacemen
     assert_eq!(ledger["high_water"], 3);
     assert!(ledger["pending"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn consumer_native_retirement_closes_unused_birth_before_settlement_without_refund() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let mut pending = reserve_native_generation(&mut db, &fixture)
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    let name = pending.generation_name().to_owned();
+    pending.create().unwrap();
+    assert!(fixture.0.join(&name).join("consumer-birth.hawdb").exists());
+    pending.retire_unpublished().unwrap();
+    assert!(!fixture.0.join(&name).exists());
+    let evidence = allocation_evidence(&fixture);
+    assert_eq!(evidence.1["high_water"], 3);
+    assert!(evidence.1["pending"].as_array().unwrap().is_empty());
+    assert!(pending.create().is_err());
+    assert!(pending.born_directory().is_err());
+    pending.retire_unpublished().unwrap();
+    assert_eq!(allocation_evidence(&fixture).0, evidence.0);
+    assert!(pending.settle_no_effect().is_err());
+    drop((pending, db));
+    let mut db = fixture.database();
+    let _next = reserve_native_generation(&mut db, &fixture);
+    assert_eq!(allocation_evidence(&fixture).1["high_water"], 6);
+}
+
+#[test]
+fn consumer_native_retirement_refuses_even_a_previously_borrowed_producer_directory() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let mut pending = reserve_native_generation(&mut db, &fixture)
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let directory = pending.born_directory().unwrap();
+    let context = directory.operation_context();
+    let retained = directory.duplicate(&context).unwrap();
+    let before = allocation_evidence(&fixture).0;
+    assert!(pending.retire_unpublished().is_err());
+    let marker = retained
+        .open_child(&context, "consumer-birth.hawdb")
+        .unwrap();
+    assert!(marker.metadata().unwrap().len() > 32);
+    drop((marker, retained));
+    // Closing a producer's visible handles cannot revoke access it might have
+    // handed onward. Selector/reader accounting is needed for this later case.
+    assert!(pending.retire_unpublished().is_err());
+    assert_eq!(allocation_evidence(&fixture).0, before);
+    assert!(pending.born_directory().is_ok());
+}
+
+#[test]
+fn consumer_native_retirement_retries_admission_without_exposing_or_forgetting_birth() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let mut pending = reserve_native_generation(&mut db, &fixture)
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let before = allocation_evidence(&fixture).0;
+    let context = db
+        .runtime
+        .get()
+        .unwrap()
+        .store
+        .file_descriptor_context()
+        .unwrap();
+    let source = hawdb_storage::file_io::SourceDirectory::capture(&fixture.0, &context).unwrap();
+    let mut blockers = Vec::new();
+    loop {
+        match source.duplicate(&context) {
+            Ok(fd) => blockers.push(fd),
+            Err(error) => {
+                assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+                break;
+            }
+        }
+    }
+    assert!(pending.retire_unpublished().is_err());
+    assert!(pending.born_directory().is_err());
+    assert!(pending.create().is_err());
+    assert!(pending.settle_no_effect().is_err());
+    drop(blockers);
+    assert_eq!(allocation_evidence(&fixture).0, before);
+    pending.retire_unpublished().unwrap();
+    assert!(allocation_evidence(&fixture).1["pending"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn consumer_native_retirement_uses_original_parent_after_label_replacement() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let parent = fixture.0.join("birth-parent");
+    std::fs::create_dir(&parent).unwrap();
+    let original = fixture.0.join("original-parent");
+    let mut pending = reserve_native_generation(&mut db, &fixture)
+        .prepare_stationary_generation(&parent)
+        .unwrap();
+    pending.create().unwrap();
+    let name = pending.generation_name().to_owned();
+    std::fs::rename(&parent, &original).unwrap();
+    std::fs::create_dir(&parent).unwrap();
+    std::fs::create_dir(parent.join(&name)).unwrap();
+    std::fs::write(parent.join(&name).join("foreign"), b"keep").unwrap();
+    pending.retire_unpublished().unwrap();
+    assert!(!original.join(&name).exists());
+    assert_eq!(
+        std::fs::read(parent.join(&name).join("foreign")).unwrap(),
+        b"keep"
+    );
+    assert!(allocation_evidence(&fixture).1["pending"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+}

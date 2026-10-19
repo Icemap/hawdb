@@ -101,8 +101,9 @@ than recreating zero. Missing/corrupt evidence also refuses Consumer creation,
 status, readiness and activation, while ordinary graph writes remain available.
 
 The canonical bounded codec admits at most 1 MiB and 256 pending reservations;
-locators are UTF-8 and at most 16 KiB. Legacy creations, known-born and uncertain
-native attempts remain retained. Only live proven no-effect attempts can settle;
+locators are UTF-8 and at most 16 KiB. Legacy creations, exposed known-born and
+uncertain attempts remain retained. Live proven no-effect attempts and completed
+private births that never granted producer access can settle;
 the 257th unresolved reservation fails closed. Registration/projection/checkpoint UUIDs are bound in
 the record, but its locator and counters grant no native birth, adoption or
 deletion authority. Rebind, clear and subsequent candidate producers still need
@@ -123,7 +124,10 @@ target-parent descriptor and durably settle only proven no-effect debt without
 refunding identifiers. A lost response requires fresh file/root barriers even
 when the selected ledger already lacks its row; see
 [the no-effect settlement refinement](../tla/CONSUMER_NO_EFFECT_SETTLEMENT_PROOF.md).
-Known-born/uncertain debt, target lease integration, recovery resolution and
+A completed private birth can also persist retirement intent, delete through its
+original native custody, persist the deletion/tombstone and close target handles
+before settlement; see [the private-birth retirement refinement](../tla/CONSUMER_PRIVATE_BIRTH_RETIREMENT_PROOF.md).
+Exposed known-born/uncertain debt, target lease integration, recovery resolution and
 stationary serving/selection remain unfinished. Allocation ledger
 V2 replaces the earlier development-only envelope without a compatibility migration.
 

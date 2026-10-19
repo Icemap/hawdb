@@ -5,6 +5,10 @@
 
 use super::*;
 use crate::file_io::CapturedDirectoryCandidate;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+mod retirement;
+use retirement::RetirementStep;
 
 const BIRTH_FILE: &str = "consumer-birth.hawdb";
 const BIRTH_HEADER: &[u8] = b"HAWDB_CONSUMER_BIRTH_V1\n";
@@ -16,6 +20,8 @@ enum Phase {
     Recorded,
     Settling,
     Settled,
+    Retiring,
+    Retired,
 }
 
 /// A single native attempt and its durable debt. Drop never removes a name or
@@ -34,6 +40,8 @@ pub struct PendingConsumerGeneration {
     parent_locator: String,
     phase: Phase,
     settlement_publication_attempted: bool,
+    producer_exposed: AtomicBool,
+    retirement_step: RetirementStep,
 }
 
 impl ReservedConsumerAllocation {
@@ -95,6 +103,8 @@ impl ReservedConsumerAllocation {
             parent_locator,
             phase: Phase::Prepared,
             settlement_publication_attempted: false,
+            producer_exposed: AtomicBool::new(false),
+            retirement_step: RetirementStep::Intent,
         })
     }
 
@@ -136,6 +146,15 @@ impl ReservedConsumerAllocation {
     }
 
     fn transition_birth(&self, expected: NativeBirth, next: NativeBirth) -> Result<()> {
+        self.transition_birth_with_retry(expected, next, false)
+    }
+
+    fn transition_birth_with_retry(
+        &self,
+        expected: NativeBirth,
+        next: NativeBirth,
+        retry_selected: bool,
+    ) -> Result<()> {
         self._project.with_locked_catalog(|root, context, catalog| {
             let mut ledger = check_source(
                 &self._project,
@@ -151,6 +170,13 @@ impl ReservedConsumerAllocation {
                 .find(|row| row.operation == self.operation.0)
                 .ok_or_else(|| invalid("native attempt reservation is missing"))?;
             self.require_row(row)?;
+            if retry_selected && row.native_birth == next {
+                // A prior rename may have completed without its final barrier.
+                let file = root.open_mutable_child(context, LEDGER_FILE, false)?;
+                file.sync_all()?;
+                root.sync(context)?;
+                return Ok(());
+            }
             if row.native_birth != expected {
                 return Err(invalid(
                     "native attempt state differs; retain original debt",
@@ -171,7 +197,7 @@ impl ReservedConsumerAllocation {
         })
     }
 
-    fn settle_no_effect_record(
+    fn settle_closed_record(
         &self,
         expected: NativeBirth,
         publication_attempted: &mut bool,
@@ -204,7 +230,7 @@ impl ReservedConsumerAllocation {
             let row = &ledger.pending[index];
             self.require_row(row)?;
             if row.native_birth != expected {
-                return Err(invalid("no-effect settlement birth state differs"));
+                return Err(invalid("closed settlement birth state differs"));
             }
             ledger.pending.remove(index);
             // high_water deliberately survives removal. A settled operation
@@ -273,6 +299,9 @@ impl PendingConsumerGeneration {
         if self.phase != Phase::Recorded {
             return Err(invalid("native birth has no completed durable receipt"));
         }
+        // Returning even a borrowed directory can let a producer retain native
+        // children or duplicate custody. Never later treat it as an unused birth.
+        self.producer_exposed.store(true, Ordering::Relaxed);
         Ok(self
             .directory
             .as_ref()
@@ -286,6 +315,14 @@ impl PendingConsumerGeneration {
     pub fn settle_no_effect(&mut self) -> Result<()> {
         if self.phase == Phase::Settled {
             return Ok(());
+        }
+        if !matches!(
+            self.phase,
+            Phase::Prepared | Phase::Attempted | Phase::Settling
+        ) {
+            return Err(HawDBError::Execution(
+                "consumer birth requires its original retirement protocol".into(),
+            ));
         }
         if self.candidate.may_own_entry() || self.directory.is_some() || self.marker.is_some() {
             return Err(HawDBError::Execution(
@@ -304,7 +341,7 @@ impl PendingConsumerGeneration {
         self.allocation
             .as_ref()
             .expect("unsettled allocation")
-            .settle_no_effect_record(expected, &mut self.settlement_publication_attempted)?;
+            .settle_closed_record(expected, &mut self.settlement_publication_attempted)?;
         drop(self.allocation.take());
         self.phase = Phase::Settled;
         Ok(())

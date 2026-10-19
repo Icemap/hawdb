@@ -1142,3 +1142,16 @@ tla_check(
     )
     for control in ["SettleUnknown", "RefundIdentity", "CloseTargetLate", "SkipRetryBarrier", "ReopenRevokedParent"]
 ]
+
+[
+    tla_check(
+        name = "HawDBConsumerPrivateBirthRetirement" + control + "_check",
+        module = "HawDBConsumerPrivateBirthRetirement.tla",
+        config = "mutants/HawDBConsumerPrivateBirthRetirement" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["SkipIntentBarrier", "SkipRemovalBarrier", "CloseTargetLate", "ExposeAllowed", "RefundIdentity", "ForgetDebtOnClose"]
+]
