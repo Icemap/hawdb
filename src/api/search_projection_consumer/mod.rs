@@ -46,6 +46,9 @@ impl Database {
     /// errors; it owns the mapping of graph and relational rows into documents.
     /// The initializer must retain the staging index and its default analyzer;
     /// custom analyzer rules are not persisted by the current snapshot format.
+    /// Unavailable publication returns `HawDBError::CapabilityUnavailable`
+    /// with `RuntimeCapability::SearchProjectionPublication`
+    /// before initialization, checkpoint, directory creation, or registration.
     pub fn create_search_projection_consumer<F>(
         &mut self,
         id: SearchProjectionConsumerId,
@@ -57,6 +60,9 @@ impl Database {
         F: FnOnce(&mut DatabaseReadTransaction, &mut SearchIndex) -> Result<()>,
     {
         let root = self.consumer_writable_root()?;
+        // The legacy move cannot publish under a held child lock on Windows.
+        // Refuse before allocation, identity changes or the host initializer.
+        self.ensure_runtime_capability(hawdb_core::RuntimeCapability::SearchProjectionPublication)?;
         self.runtime
             .get()?
             .store

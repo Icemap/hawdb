@@ -243,9 +243,17 @@ impl ConsumerProjection {
         Ok(self.receipt())
     }
 
+    /// Windows refuses before any namespace effect and retains the owner receipt.
     pub fn publish_directory(&mut self, destination: &Path) -> Result<()> {
         let operation = self.authority.acquire()?;
         self.authority.require_index(&self.index)?;
+        // A child publication lock prevents moving its directory on Windows.
+        // Keep native ownership and the completed receipt intact on refusal.
+        if cfg!(windows) {
+            return Err(HawDBError::CapabilityUnavailable {
+                capability: hawdb_core::RuntimeCapability::SearchProjectionPublication,
+            });
+        }
         let pending_mutation = self.pending_mutation;
         self.pending_mutation = true;
         // Revoke before the native operation: an error may follow a completed
@@ -1001,9 +1009,14 @@ mod tests {
         let snapshot = fs::read(source.join(SEARCH_SNAPSHOT_FILE)).unwrap();
 
         // The retained in-directory publication handle prevents a Windows
-        // directory rename. The legacy relocating facade must fail closed.
+        // directory rename. The legacy API refuses before touching either root.
         let error = owner.publish_directory(&destination).unwrap_err();
-        assert!(error.to_string().contains("os error 5"), "{error}");
+        assert!(matches!(
+            error,
+            HawDBError::CapabilityUnavailable {
+                capability: hawdb_core::RuntimeCapability::SearchProjectionPublication
+            }
+        ));
         assert!(source.is_dir());
         assert!(!destination.exists());
         assert_eq!(
@@ -1013,12 +1026,8 @@ mod tests {
         assert_eq!(fs::read(&foreign).unwrap(), b"unrelated namespace");
         assert_eq!(owner.index().path.as_deref(), Some(source.as_path()));
         assert_eq!(owner.receipt(), receipt);
-        assert!(!owner.binding_is_valid());
-        assert!(owner.checkpoint().is_err());
-        assert!(owner.reserve_preparation().is_err());
-        assert!(owner
-            .apply(|index| index.mark_full_reindex_needed("refused move"))
-            .is_err());
+        assert!(owner.binding_is_valid());
+        drop(owner.reserve_preparation().unwrap());
         assert!(ConsumerProjection::open(&source).is_err());
 
         drop(owner);
@@ -1036,7 +1045,12 @@ mod tests {
     ) {
         let snapshot = fs::read(source.join(SEARCH_SNAPSHOT_FILE)).unwrap();
         let error = owner.publish_directory(destination).unwrap_err();
-        assert!(error.to_string().contains("os error 5"), "{error}");
+        assert!(matches!(
+            error,
+            HawDBError::CapabilityUnavailable {
+                capability: hawdb_core::RuntimeCapability::SearchProjectionPublication
+            }
+        ));
         assert!(source.is_dir());
         assert!(!destination.exists());
         assert_eq!(
@@ -1045,12 +1059,8 @@ mod tests {
         );
         assert_eq!(owner.index().path.as_deref(), Some(source));
         assert_eq!(&owner.receipt(), receipt);
-        assert!(!owner.binding_is_valid());
-        assert!(owner.checkpoint().is_err());
-        assert!(owner.reserve_preparation().is_err());
-        assert!(owner
-            .apply(|index| index.mark_full_reindex_needed("refused move"))
-            .is_err());
+        assert!(owner.binding_is_valid());
+        drop(owner.reserve_preparation().unwrap());
         assert!(ConsumerProjection::open(source).is_err());
         drop(owner);
         let reopened = ConsumerProjection::open(source).unwrap();
@@ -1252,8 +1262,13 @@ mod tests {
             } else {
                 assert!(fs::read_dir(&destination).unwrap().next().is_none());
             }
-            assert!(!owner.binding_is_valid());
-            assert!(owner.checkpoint().is_err());
+            if cfg!(windows) {
+                assert!(owner.binding_is_valid());
+                drop(owner.reserve_preparation().unwrap());
+            } else {
+                assert!(!owner.binding_is_valid());
+                assert!(owner.checkpoint().is_err());
+            }
             drop(owner);
             let reopened = ConsumerProjection::open(&source).unwrap();
             assert_eq!(reopened.receipt(), receipt);
@@ -1328,5 +1343,55 @@ mod tests {
         assert!(reopened.index().full_reindex_needed());
         drop(reopened);
         fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_publication_refusal_preserves_receipt_and_native_lease() {
+        let root = directory();
+        let source = root.join("source");
+        let destination = root.join("destination");
+        fs::create_dir(&source).unwrap();
+        let mut owner = ConsumerProjection::initialize(&source, binding(), 7, |_| Ok(())).unwrap();
+        let receipt = owner.receipt();
+        let snapshot = fs::read(source.join(SEARCH_SNAPSHOT_FILE)).unwrap();
+
+        // Retry both an absent and a foreign occupied destination. Neither
+        // refusal grants ownership of the destination or releases the source.
+        for occupied in [false, true] {
+            if occupied {
+                fs::create_dir(&destination).unwrap();
+                fs::write(destination.join("foreign"), b"keep").unwrap();
+            }
+            for _ in 0..2 {
+                assert!(matches!(
+                    owner.publish_directory(&destination),
+                    Err(HawDBError::CapabilityUnavailable {
+                        capability: hawdb_core::RuntimeCapability::SearchProjectionPublication
+                    })
+                ));
+                assert_eq!(owner.receipt(), receipt);
+                assert_eq!(owner.index.path.as_deref(), Some(source.as_path()));
+                assert_eq!(
+                    fs::read(source.join(SEARCH_SNAPSHOT_FILE)).unwrap(),
+                    snapshot
+                );
+                assert!(matches!(
+                    ConsumerProjection::open(&source),
+                    Err(HawDBError::Storage(message))
+                        if message == "another search projection publication is active"
+                ));
+                if occupied {
+                    assert_eq!(fs::read(destination.join("foreign")).unwrap(), b"keep");
+                } else {
+                    assert!(!destination.exists());
+                }
+            }
+        }
+        drop(owner);
+        let reopened = ConsumerProjection::open(&source).unwrap();
+        assert_eq!(reopened.receipt(), receipt);
+        drop(reopened);
+        fs::remove_dir_all(root).unwrap();
     }
 }
