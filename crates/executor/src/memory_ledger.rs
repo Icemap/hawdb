@@ -565,12 +565,24 @@ impl QueryMemoryAccount {
         owner: impl Into<Arc<str>>,
         budget_bytes: NonZeroUsize,
     ) -> Self {
-        let mut account = self.ledger.account_with_budget_option(
+        self.sibling_with_budget_option(
             class,
             owner,
             budget_bytes,
             "QueryMemoryAccount::sibling(budget_bytes)",
-        );
+        )
+    }
+
+    pub(crate) fn sibling_with_budget_option(
+        &self,
+        class: QueryMemoryClass,
+        owner: impl Into<Arc<str>>,
+        budget_bytes: NonZeroUsize,
+        budget_option: &'static str,
+    ) -> Self {
+        let mut account =
+            self.ledger
+                .account_with_budget_option(class, owner, budget_bytes, budget_option);
         account.backing = self.backing.clone();
         account
     }

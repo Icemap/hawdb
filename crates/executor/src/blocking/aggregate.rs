@@ -659,6 +659,13 @@ pub fn stream_aggregate_batches(
         memory.blocking_operator_bytes,
         primary_account.clone(),
     );
+    let key_memory = KeyMemory::new(
+        &primary_account,
+        memory.query_memory_bytes,
+        "ExecutionMemoryConfig.query_memory_bytes",
+        "AggregateExec expressions",
+        "AggregateExec keys",
+    );
     let mut spill_budget = SpillBudgetTracker::with_ledger("AggregateExec", memory, memory_ledger);
     let mut groups = BufferedGroups::default();
     let key_hasher = RandomState::new();
@@ -667,10 +674,10 @@ pub fn stream_aggregate_batches(
     source.execute(input, ExecutionLimit::unlimited(), &mut |batch| {
         runtime_checkpoint(task_context)?;
         for binding in batch {
-            let key = group_keys
-                .iter()
-                .map(|item| group_key_value(item, catalog, &binding))
-                .collect::<Vec<_>>();
+            let PreparedKey {
+                mut allocation,
+                values: key,
+            } = key_memory.group(group_keys, catalog, &binding, task_context)?;
             let inputs = items
                 .iter()
                 .map(|item| aggregate_input(item, catalog, &binding))
@@ -701,7 +708,13 @@ pub fn stream_aggregate_batches(
             if let Some(rows) = groups.get_mut(&key) {
                 push_buffered_row(rows, row, &mut tracker)?;
             } else {
-                groups.insert(key, vec![row], new_group_payload, &mut tracker)?;
+                groups.insert_prepared(
+                    key,
+                    vec![row],
+                    new_group_payload,
+                    &mut tracker,
+                    Some(&mut allocation),
+                )?;
             }
             ordinal = ordinal.saturating_add(1);
         }
