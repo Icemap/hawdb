@@ -1,0 +1,24 @@
+--- prior-query-error-observer/main.go
++++ whole-run/main.go
+@@ -409,7 +409,21 @@
+ 			failureBefore = new(nativeSnapshot)
+ 			nativeRead(failureBefore)
+ 		}
++		var wholeBefore, wholeAfter runtime.MemStats
++		runtime.ReadMemStats(&wholeBefore)
+ 		result, err = run(j, lib, nativeRead)
++		runtime.ReadMemStats(&wholeAfter)
++		if result == nil {
++			result = make(map[string]any)
++		}
++		valid := wholeAfter.Mallocs >= wholeBefore.Mallocs && wholeAfter.TotalAlloc >= wholeBefore.TotalAlloc
++		whole := map[string]any{"available": valid,
++			"scope": "run_including_store_open_setup_warmup_query_and_cleanup_excluding_job_decode_and_library_load"}
++		if valid {
++			whole["go_allocations"] = wholeAfter.Mallocs - wholeBefore.Mallocs
++			whole["go_allocated_bytes"] = wholeAfter.TotalAlloc - wholeBefore.TotalAlloc
++		}
++		result["whole_run_go_heap"] = whole
+ 	}
+ 	if err != nil {
+ 		if result == nil {

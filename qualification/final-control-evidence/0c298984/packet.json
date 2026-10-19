@@ -26,8 +26,8 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "4d2d3ac67f88ea35d1cdd12097f3df668ee57b1ce9baed3e758574cb0d11ce14",
-      "bytes": 8036,
+      "sha256": "833360c492755c40b10b2732a12684673f8e3b276d316b4907e095843b58a26e",
+      "bytes": 9075,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-control-evidence-0c298984/qualification/final-control-evidence/0c298984/README.md"
     },
     {
@@ -788,14 +788,14 @@
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-pairs-audit.json",
-      "sha256": "698459e2777096495818e5850295a13bed28bed5fd2ffb4a2ec6c8c5e60a043a",
-      "bytes": 98933,
+      "sha256": "5d28c46fa15ae8e51e73034df1ca2eece0d2391b8f727321e3cfa7d586a96da6",
+      "bytes": 102840,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-pairs-audit.json"
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-refusals-audit.json",
-      "sha256": "1be0a714198ce24a45e470a9cc00bd0d341eb3300b2ee41ae23cdf649391026a",
-      "bytes": 35177,
+      "sha256": "359fc6fc0296f8847289d01f7888d056143c255b383973232d215878ced585f4",
+      "bytes": 39084,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-refusals-audit.json"
     },
     {
@@ -1525,9 +1525,15 @@
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12161000262.json"
     },
     {
+      "path": "original-matrix-snapshot/resources/artifact-12161380525.json",
+      "sha256": "373e1f9aa465b51099ede9986592c1fbe56988d5b6900ccccc859067e94a16a6",
+      "bytes": 38840,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12161380525.json"
+    },
+    {
       "path": "original-matrix-snapshot/resources-summary.json",
-      "sha256": "fa305ed5c217c649e60dd8b8407fe56e6d214ffde7e05085023c1ebb8c3d7229",
-      "bytes": 237326,
+      "sha256": "18d915896a3ba14b2095f5242331afe46352365724933c73dac35e73b0070fe6",
+      "bytes": 239760,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/summary.json"
     },
     {
@@ -2735,6 +2741,486 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/resource-checkpoint-0c298984-results/1000001-retained.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/checksum.py",
+      "sha256": "9fac220dad093e1ce18189fc1582481172d3efa8dc5b7919c676cb8fae23b123",
+      "bytes": 1937,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/checksum.py"
+    },
+    {
+      "path": "whole-run-warmup-heap/functional-qualified-audit.json",
+      "sha256": "a6be52f55f625a842182a71cc9d5914494db012733258a5a6ac81fb4819970d7",
+      "bytes": 2512,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/functional-qualified-audit.json"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-file-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-file-0.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-file-0.stdout",
+      "sha256": "1f0e00fe4363e818ca6db122d683dbb24154526c3037de3d0a42a0b89da4c044",
+      "bytes": 1646,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-file-0.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-file-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-file-1.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-file-1.stdout",
+      "sha256": "4895da3a893166feb2a41e76b62cfe99263eba7efafbc63fd31524376f01cc52",
+      "bytes": 1646,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-file-1.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-file-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-file-2.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-file-2.stdout",
+      "sha256": "6a0885a55e65a3aff7475afc1b033a860c9a733e542d7feb01891d873857eed2",
+      "bytes": 1645,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-file-2.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-file-3.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-file-3.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-file-3.stdout",
+      "sha256": "ca5cbaa2cbcb2b97a788ee088cfb8a250c45db32bdfd0fc5a640529981814b3b",
+      "bytes": 1645,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-file-3.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-memory-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-memory-0.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-memory-0.stdout",
+      "sha256": "5c193740a68af0ab834bf002641123d265d78cfaa1edb082b8bea3e64186adad",
+      "bytes": 1641,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-memory-0.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-memory-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-memory-1.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-memory-1.stdout",
+      "sha256": "386cefc9ebd7054558bd589bad8b309974f4cbf12bd337ec69e26f9f276774e3",
+      "bytes": 1641,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-memory-1.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-memory-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-memory-2.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-memory-2.stdout",
+      "sha256": "ab3628360d6ee177157f00eaa2d34446d59cd9ca52397f8385a19da3dfb2e3a9",
+      "bytes": 1641,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-memory-2.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-memory-3.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-memory-3.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-100k-select-memory-3.stdout",
+      "sha256": "6fe68f6f94b702db77342ce44f7d38fb98659ac083ec4b0c2971316d5d237ee1",
+      "bytes": 1641,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-100k-select-memory-3.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/BUILD.bazel",
+      "sha256": "14f54319a9f85bed4625e77d3af4ed46256c46a8085750adfa4540becc732751",
+      "bytes": 1045,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/BUILD.bazel"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/README.md",
+      "sha256": "1c02f6faf8739299743a648120c86e0bc8fa537c02c1f7d85eb700dc0e251ba9",
+      "bytes": 559,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/README.md"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/bazel_test.go",
+      "sha256": "1f77fdfe360a115a00af6d3f5171b99f9f0b19044c682394a732aac77e74afcf",
+      "bytes": 1199,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/bazel_test.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/boundary_profile_disabled.go",
+      "sha256": "8937ea7c30d9cad846f2d84dbb5a626ddcfc41c77057cf2b42b5c5224a6c5380",
+      "bytes": 456,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/boundary_profile_disabled.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/boundary_profile_enabled.go",
+      "sha256": "4f2c774033a60b915d7caf63e43f44e72485a26e827b68473a10c86723b0a959",
+      "bytes": 2853,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/boundary_profile_enabled.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/boundary_profile_test.go",
+      "sha256": "4352e3c9a6dd9f733b8f96d75276d5e12c2cb623affe4f78b793c6a74357b1b1",
+      "bytes": 4298,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/boundary_profile_test.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/cmd/boundary/BUILD.bazel",
+      "sha256": "39db0df5b810ba8972e40bca92623d6c3edf480db3133a2788eb065c172f28c1",
+      "bytes": 874,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/cmd/boundary/BUILD.bazel"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/cmd/boundary/host_profile_disabled.go",
+      "sha256": "e38f0a829ddf10e49257a9997dac416dab6d42713a7d7250a177a0b38bea0c32",
+      "bytes": 271,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/cmd/boundary/host_profile_disabled.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/cmd/boundary/host_profile_enabled.go",
+      "sha256": "083819ad8f6785ae19e6d4031e7959cee0a8a166eb6a2186e532a10301dc1a54",
+      "bytes": 527,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/cmd/boundary/host_profile_enabled.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/cmd/boundary/main.go",
+      "sha256": "4e5aa7b3372a1fcead02f2c86a576a9116e9a4f2fd865bd0c0ebf1b1c6caced0",
+      "bytes": 13061,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/cmd/boundary/main.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/cmd/boundary/profile_unix.go",
+      "sha256": "43f81e712a5166ecfd6284bdb8a37f04abe757107c3daa6e7262e82c73e654ec",
+      "bytes": 373,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/cmd/boundary/profile_unix.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/cmd/boundary/profile_windows.go",
+      "sha256": "987815e836424f5aa3d56805ae77e939cd59be899c672bc8afb9717168e56a71",
+      "bytes": 383,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/cmd/boundary/profile_windows.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/ffi.go",
+      "sha256": "494e5534d33e4153f57b9c93770b4630cfbd536f8a23000eecfd97372f0ad3bf",
+      "bytes": 4786,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/ffi.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/go.mod",
+      "sha256": "04828490a37f7d2a25512ccdc500c857fba4fb2e66dbf0f5579288bae2dd244b",
+      "bytes": 105,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/go.mod"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/go.sum",
+      "sha256": "e61efba99d08cb90bba662f433bafe55580a6056320ab9f444b46a2e400a8799",
+      "bytes": 177,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/go.sum"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/hawdb.go",
+      "sha256": "44ae0d60861a5e6077dd8ef92eb0e1031d8cf519eebe86574e1c5951304ebdff",
+      "bytes": 10072,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/hawdb.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/hawdb_test.go",
+      "sha256": "f9e0a63adf6ae07e168f8548b78cf446158f8764cb03b355fb8f54bab326ed63",
+      "bytes": 6641,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/hawdb_test.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/lib_unix.go",
+      "sha256": "11e022a5c0d1b8ab6650cf3c6cba1b039e4ee6d2382dca6459ae6171e9e4ab55",
+      "bytes": 1215,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/lib_unix.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/go-module/lib_windows.go",
+      "sha256": "07810ba24ae862cd306959a34025d4773ceda99d604b6f9dff28cda658c035f5",
+      "bytes": 994,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/go-module/lib_windows.go"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-go-execute_refusal.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-go-execute_refusal.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-go-execute_refusal.stdout",
+      "sha256": "d63e4f8c673854be8b907487139cf98baa7695a9bf190c4b264c62b1f105d11f",
+      "bytes": 1629,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-go-execute_refusal.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-go-success.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-go-success.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-go-success.stdout",
+      "sha256": "6a8f94cfa5ed2c70b32a65b6a71d21f970765009386ea5bcfbee784bd778644c",
+      "bytes": 1488,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-go-success.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-go-warmup_refusal.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-go-warmup_refusal.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-go-warmup_refusal.stdout",
+      "sha256": "3ec2db785005eac158a5d70422a59fd3d4359c959b1638718b8f4b8f355b6f74",
+      "bytes": 1630,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-go-warmup_refusal.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-python-execute_refusal.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-python-execute_refusal.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-python-execute_refusal.stdout",
+      "sha256": "3c6e9f1e766be8b81ed1020d6f27fb1024e263a352e1a9e9523f5526b0a4bc21",
+      "bytes": 1063,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-python-execute_refusal.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-python-success.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-python-success.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-python-success.stdout",
+      "sha256": "f96b1cd6dce029d46d664dd0c3762457db66ae3d2308fe6f1e37859790eec545",
+      "bytes": 1087,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-python-success.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-python-warmup_refusal.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-python-warmup_refusal.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/probe-python-warmup_refusal.stdout",
+      "sha256": "7c8d4c7c3ececc782f7aa89ba68a23ca80357b4ae16211d07901e91cf76e3d05",
+      "bytes": 1060,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/probe-python-warmup_refusal.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-file-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-file-0.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-file-0.stdout",
+      "sha256": "2d6ec92a91001df25d213dd8f5de4066c28f6b7198dd6ed77d036678910048b1",
+      "bytes": 1070,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-file-0.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-file-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-file-1.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-file-1.stdout",
+      "sha256": "654c2b7c4cc7f824d5f3199b53d178b4120376614f875cc5165f3c544ca0d2bc",
+      "bytes": 1071,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-file-1.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-file-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-file-2.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-file-2.stdout",
+      "sha256": "6d81a76f91f09cdffc8caacf4c1240275dd5bb32d549faf60902cd2b524c5d33",
+      "bytes": 1070,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-file-2.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-file-3.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-file-3.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-file-3.stdout",
+      "sha256": "aad221162d66c5c53ab4ecb52948474340106a11ff6635272e03c402a51e78c8",
+      "bytes": 1070,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-file-3.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-memory-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-memory-0.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-memory-0.stdout",
+      "sha256": "88f63cbec6b48194e71524d536142df7e72d9b0b1b3ada3b0093f00a8d8d92cd",
+      "bytes": 1067,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-memory-0.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-memory-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-memory-1.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-memory-1.stdout",
+      "sha256": "60d610f1e818818679aed0afc7fe55974e8d3237fc1dfd746f5206fe4e1c0c10",
+      "bytes": 1067,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-memory-1.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-memory-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-memory-2.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-memory-2.stdout",
+      "sha256": "d278a83f98d42d709769b4f2197170f4874451d6c29ca9f15a069f193bbd7b44",
+      "bytes": 1068,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-memory-2.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-memory-3.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-memory-3.stderr"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-100k-select-memory-3.stdout",
+      "sha256": "dc2def85c545b05ba8e7d88cb5f5c4774e1e2cdbe160e72ae493bb8b82732def",
+      "bytes": 1067,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-100k-select-memory-3.stdout"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-baseline/hawdb/__init__.py",
+      "sha256": "d275169828625976f22e5797e6a86c1999b294f7b68c8d8abbd7617f4f0a96fe",
+      "bytes": 1296,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-baseline/hawdb/__init__.py"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-baseline/hawdb/__init__.pyi",
+      "sha256": "aff3f48698244fbf6d3629e087ec1e1ab57b3b59a0fca6471b6b27d9a282d7eb",
+      "bytes": 234,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-baseline/hawdb/__init__.pyi"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-baseline/hawdb/_hawdb.pyi",
+      "sha256": "4bbfa8af0cbfc7e9a3ee2541299e90bb12b15e6eb16684a0c78b94f565143331",
+      "bytes": 2372,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-baseline/hawdb/_hawdb.pyi"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-baseline/hawdb/py.typed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-baseline/hawdb/py.typed"
+    },
+    {
+      "path": "whole-run-warmup-heap/python-baseline/hawdb/pydantic.py",
+      "sha256": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+      "bytes": 3721,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python-baseline/hawdb/pydantic.py"
+    },
+    {
+      "path": "whole-run-warmup-heap/python_boundary.py",
+      "sha256": "fd9fa312a86621b91617e8675d6c7fce4ae824346e3ae8951f44a40ea918e4bc",
+      "bytes": 6010,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/python_boundary.py"
+    },
+    {
+      "path": "whole-run-warmup-heap/receipt.json",
+      "sha256": "fecf749eb2b88990b3f17a56a39dd2259e0aa90ca85418b3f14b2b4109757b0a",
+      "bytes": 44589,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/receipt.json"
+    },
+    {
+      "path": "whole-run-warmup-heap/run.log",
+      "sha256": "373ab518a2ea8934ac681d74cd2025edc7ce44a97b52fb45eb7ed95c12a65f01",
+      "bytes": 823,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/run.log"
+    },
+    {
+      "path": "whole-run-warmup-heap/sample-qualified-audit.json",
+      "sha256": "3ca630dd6788e0cf2e312e40e0863136b75650001de4304b884a4a2ed39622ef",
+      "bytes": 1842,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/sample-qualified-audit.json"
+    },
+    {
+      "path": "whole-run-warmup-heap/scripts/audit-whole-run-warmup-heap.py",
+      "sha256": "e59d5914e20b513689fea65abe4876fb8c91ee7fffb25f6e76e15b6439e6ecff",
+      "bytes": 3338,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-whole-run-warmup-heap.py"
+    },
+    {
+      "path": "whole-run-warmup-heap/scripts/prepare-whole-run-warmup-heap.py",
+      "sha256": "04bccb828fe57a4f5236500dd5afe744d656d5ca15f686dcbdb720d69d448180",
+      "bytes": 4462,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/prepare-whole-run-warmup-heap.py"
+    },
+    {
+      "path": "whole-run-warmup-heap/scripts/run-whole-run-warmup-heap.py",
+      "sha256": "049d480fb37f56eb7bf982fedc5087fd7d909e4a52822e00958633cf6b6fcd07",
+      "bytes": 3632,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/run-whole-run-warmup-heap.py"
+    },
+    {
+      "path": "whole-run-warmup-heap/source-manifest.json",
+      "sha256": "55d222650bda2401b108afc9dcdee08d13e7783d8269664a25fa7534e0793066",
+      "bytes": 3803,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/source-manifest.json"
+    },
+    {
+      "path": "whole-run-warmup-heap/whole-go.patch",
+      "sha256": "c9c96e2343f3c326db55c966b1492283040990970334d06e13fe004d89fc202d",
+      "bytes": 898,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/whole-go.patch"
+    },
+    {
+      "path": "whole-run-warmup-heap/whole-python.patch",
+      "sha256": "d9df17c2ec0dd94a4efd63d7497bedfcd3b46983ecdc398d819b634d62c178c6",
+      "bytes": 2017,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/whole-run-warmup-heap-0c298984/whole-python.patch"
     }
   ],
   "created_at": 1792351101.2527812,
@@ -2775,14 +3261,14 @@
       "summary_sha256": "800111bf7c796a3e5e3b83b285f76964a23681a9ec1d0d72e8b5e13626afeebf"
     },
     "resources": {
-      "audited": 61,
+      "audited": 62,
       "expected": 110,
       "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
       "run": 39154779183,
-      "summary_sha256": "fa305ed5c217c649e60dd8b8407fe56e6d214ffde7e05085023c1ebb8c3d7229"
+      "summary_sha256": "18d915896a3ba14b2095f5242331afe46352365724933c73dac35e73b0070fe6"
     }
   },
-  "updated_at": 1792379815.575767,
+  "updated_at": 1792380707.058974,
   "numeric20_original_controls": {
     "positive": 12,
     "default_memory_refusals": 4,
@@ -2832,5 +3318,15 @@
     "probes": 3,
     "terminal": true,
     "scope": "Supplemental Go profiling observer; error heap delta includes query execution, error return, deferred db.Close and failure-host snapshot, unlike original successful query-only heap fields. No cross-scope ratio."
+  },
+  "whole_run_warmup_heap_supplement": {
+    "baseline_head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+    "groups": 4,
+    "attempts": 16,
+    "measured": 12,
+    "probes": 6,
+    "terminal": true,
+    "scope": "run_including_store_open_setup_warmup_query_and_cleanup_excluding_job_decode_and_library_load",
+    "paired_ratio": null
   }
 }

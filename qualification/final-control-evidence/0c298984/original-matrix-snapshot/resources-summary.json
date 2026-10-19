@@ -8,7 +8,7 @@
   "status": "queued",
   "conclusion": null,
   "expected_groups": 110,
-  "observed_complete_groups": 61,
+  "observed_complete_groups": 62,
   "full_requested_matrix_observed": false,
   "missing_groups": [
     [
@@ -64,15 +64,6 @@
       "true",
       "point",
       "rust"
-    ],
-    [
-      "ordinary",
-      100000,
-      "file",
-      "default",
-      "true",
-      "select",
-      "go"
     ],
     [
       "ordinary",
@@ -5545,6 +5536,74 @@
       },
       "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
       "artifact": 12161000262
+    },
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": false,
+          "adverse": [
+            {
+              "iteration": 0,
+              "status": "error",
+              "error": "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 1,
+              "status": "error",
+              "error": "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 2,
+              "status": "error",
+              "error": "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 3,
+              "status": "error",
+              "error": "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+            }
+          ],
+          "observed_medians": {}
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 430264320,
+            "query_boundary_ns": 504480299,
+            "consumer_ns": 19669744,
+            "go_allocated_bytes": 70738400,
+            "go_allocations": 1699844,
+            "native_profile": {
+              "allocated_bytes": 2170524825,
+              "allocation_calls": 1404131,
+              "deallocated_bytes": 2170524825,
+              "deallocation_calls": 1404131,
+              "engine_call_ns": 266422590,
+              "live_requested_bytes_after": 131844344,
+              "live_requested_bytes_before": 131844344,
+              "parameter_conversion_ns": 3226,
+              "process_peak_requested_bytes": 224291117,
+              "reallocation_calls": 199323,
+              "result_conversion_ns": 60987921
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12161380525
     }
   ],
   "collection_or_integrity_errors": [],

@@ -2,8 +2,8 @@
   "engine": "0c2989842321d10e91f136f3c924badb07038add",
   "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
   "run": 39154779183,
-  "observed_at": 1792379815.329963,
-  "summary_sha256": "fa305ed5c217c649e60dd8b8407fe56e6d214ffde7e05085023c1ebb8c3d7229",
+  "observed_at": 1792380706.906282,
+  "summary_sha256": "18d915896a3ba14b2095f5242331afe46352365724933c73dac35e73b0070fe6",
   "audited_pairs": 30,
   "pairs": [
     {
@@ -2604,6 +2604,95 @@
             "parameter_conversion_ns": 9003,
             "result_conversion_calls": 1,
             "result_conversion_ns": 86224371
+          },
+          "go_host_phase_scope": "successful query window",
+          "go_heap_allocation_fields_present": true
+        }
+      },
+      "paired_query_or_allocation_ratio": null
+    },
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "go"
+      ],
+      "artifact": 12161380525,
+      "bundle_sha256": "373e1f9aa465b51099ede9986592c1fbe56988d5b6900ccccc859067e94a16a6",
+      "sides": {
+        "baseline": {
+          "success": false,
+          "errors": [
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget"
+          ],
+          "reported_error_types": [],
+          "reported_error_phases": [],
+          "failed_child_attempts": 4,
+          "measured_failure_native_medians": {
+            "allocated_bytes": 10246746539,
+            "allocation_calls": 165312582,
+            "deallocated_bytes": 10246745725,
+            "deallocation_calls": 165312577,
+            "engine_call_ns": 34042758097,
+            "live_requested_bytes_after": 814,
+            "live_requested_bytes_before": 0,
+            "parameter_conversion_ns": 130602266,
+            "process_peak_requested_bytes": 206086355,
+            "reallocation_calls": 1279488,
+            "result_conversion_ns": 44486438
+          },
+          "failure_python_traced_fields_present": false,
+          "failure_process_peak_RSS_median": 367431680,
+          "scope": "producer_run_including_setup_warmup_and_cleanup",
+          "usable_query_latency": false,
+          "observed_go_host_phase_medians": {
+            "ffi_call_ns": 34257005716,
+            "ffi_calls": 198,
+            "parameter_conversion_calls": 198,
+            "parameter_conversion_ns": 148160109,
+            "result_conversion_calls": 198,
+            "result_conversion_ns": 54523733
+          },
+          "go_host_phase_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+          "go_heap_allocation_fields_present": false
+        },
+        "candidate": {
+          "success": true,
+          "observed_medians": {
+            "process_peak_rss_bytes": 430264320,
+            "query_boundary_ns": 504480299,
+            "consumer_ns": 19669744,
+            "go_allocated_bytes": 70738400,
+            "go_allocations": 1699844,
+            "native_profile": {
+              "allocated_bytes": 2170524825,
+              "allocation_calls": 1404131,
+              "deallocated_bytes": 2170524825,
+              "deallocation_calls": 1404131,
+              "engine_call_ns": 266422590,
+              "live_requested_bytes_after": 131844344,
+              "live_requested_bytes_before": 131844344,
+              "parameter_conversion_ns": 3226,
+              "process_peak_requested_bytes": 224291117,
+              "reallocation_calls": 199323,
+              "result_conversion_ns": 60987921
+            }
+          },
+          "scope": "successful query window; whole-process RSS separately includes setup/runtime/consumer",
+          "observed_go_host_phase_medians": {
+            "ffi_call_ns": 342746238,
+            "ffi_calls": 1,
+            "parameter_conversion_calls": 1,
+            "parameter_conversion_ns": 6973,
+            "result_conversion_calls": 1,
+            "result_conversion_ns": 161721428
           },
           "go_host_phase_scope": "successful query window",
           "go_heap_allocation_fields_present": true

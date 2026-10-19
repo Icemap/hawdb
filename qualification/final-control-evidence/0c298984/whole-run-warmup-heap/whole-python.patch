@@ -1,0 +1,45 @@
+--- original/python_boundary.py
++++ whole-run/python_boundary.py
+@@ -59,9 +59,6 @@
+         phase = "execute"
+         profiling = hasattr(native, "_boundary_profile_snapshot")
+         if profiling:
+-            import tracemalloc
+-            tracemalloc.start()
+-            tracing_started = True
+             native_before = native._boundary_profile_snapshot()
+         started = time.perf_counter_ns()
+         if job["case"] == "fill":
+@@ -90,12 +87,7 @@
+         profile = None
+         if profiling:
+             native_after = native._boundary_profile_snapshot()
+-            host_current, host_peak = tracemalloc.get_traced_memory()
+-            tracemalloc.stop()
+-            tracing_started = False
+             profile = native_delta(native_before, native_after)
+-            profile["python_traced_current_bytes"] = host_current
+-            profile["python_traced_peak_bytes"] = host_peak
+         return {
+             "status": "ok", "layer": "python", "case": job["case"], "backend": job["backend"],
+             "input_rows": len(job["rows"]), "output_rows": rows_seen,
+@@ -118,9 +110,19 @@
+ if __name__ == "__main__":
+     with open(sys.argv[1], encoding="utf-8") as source:
+         job = json.load(source)
++    import tracemalloc
++    tracemalloc.start()
+     failure_before = (native._boundary_profile_snapshot()
+                       if hasattr(native, "_boundary_profile_snapshot") else None)
+     result = run(job)
++    whole_current, whole_peak = tracemalloc.get_traced_memory()
++    tracemalloc.stop()
++    result["whole_run_python_heap"] = {
++        "available": True,
++        "python_traced_current_bytes": whole_current,
++        "python_traced_peak_bytes": whole_peak,
++        "scope": "run_including_store_open_setup_warmup_query_and_cleanup_excluding_job_decode_and_library_load",
++    }
+     if result["status"] != "ok" and failure_before is not None:
+         result["failure_native_profile"] = native_delta(
+             failure_before, native._boundary_profile_snapshot())
