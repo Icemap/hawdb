@@ -2,9 +2,9 @@
   "engine": "0c2989842321d10e91f136f3c924badb07038add",
   "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
   "source": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
-  "source_summary_sha256": "305cab792fe59863da9e3f00456f6bbe2b8143d7a27d91828395a6df1871f81f",
-  "observed_at": 1792372791.433402,
-  "observed_complete_groups": 52,
+  "source_summary_sha256": "800111bf7c796a3e5e3b83b285f76964a23681a9ec1d0d72e8b5e13626afeebf",
+  "observed_at": 1792379815.1962419,
+  "observed_complete_groups": 54,
   "expected_groups": 90,
   "comparable": [
     {
@@ -932,6 +932,60 @@
         "query_boundary_ns_median_speedup": 49.41371712161293,
         "write_boundary_ns_median_speedup": null,
         "read_boundary_ns_median_speedup": 49.41371712161293,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12160267708,
+      "selection": [
+        "point",
+        "go",
+        "memory",
+        100000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "point",
+        "size": 100000,
+        "backend": "memory",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 49.2541826861867,
+        "query_boundary_ns_median_speedup": 49.59078563989953,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 49.59078563989953,
+        "refusals_or_failures": {
+          "baseline": [],
+          "candidate": []
+        }
+      },
+      "adverse_metrics": {}
+    },
+    {
+      "artifact": 12160798210,
+      "selection": [
+        "point",
+        "go",
+        "file",
+        100000
+      ],
+      "result": {
+        "layer": "go",
+        "case": "point",
+        "size": 100000,
+        "backend": "file",
+        "qualified": true,
+        "before_samples": 3,
+        "after_samples": 3,
+        "elapsed_ns_median_speedup": 45.727698080700485,
+        "query_boundary_ns_median_speedup": 46.04517301258297,
+        "write_boundary_ns_median_speedup": null,
+        "read_boundary_ns_median_speedup": 46.04517301258297,
         "refusals_or_failures": {
           "baseline": [],
           "candidate": []

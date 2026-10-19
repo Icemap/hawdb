@@ -8,7 +8,7 @@
   "status": "queued",
   "conclusion": null,
   "expected_groups": 90,
-  "observed_complete_groups": 52,
+  "observed_complete_groups": 54,
   "full_requested_matrix_observed": false,
   "missing_groups": [
     [
@@ -123,19 +123,7 @@
       "point",
       "go",
       "file",
-      100000
-    ],
-    [
-      "point",
-      "go",
-      "file",
       1000000
-    ],
-    [
-      "point",
-      "go",
-      "memory",
-      100000
     ],
     [
       "point",
@@ -1772,6 +1760,64 @@
       ],
       "verified_uploaded_producers_and_manifests": 12,
       "artifact": 12157310028
+    },
+    {
+      "shard": [
+        "point",
+        "go",
+        "memory"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "point",
+          "size": 100000,
+          "backend": "memory",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 49.2541826861867,
+          "query_boundary_ns_median_speedup": 49.59078563989953,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 49.59078563989953,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12160267708
+    },
+    {
+      "shard": [
+        "point",
+        "go",
+        "file"
+      ],
+      "complete": true,
+      "groups": [
+        {
+          "layer": "go",
+          "case": "point",
+          "size": 100000,
+          "backend": "file",
+          "qualified": true,
+          "before_samples": 3,
+          "after_samples": 3,
+          "elapsed_ns_median_speedup": 45.727698080700485,
+          "query_boundary_ns_median_speedup": 46.04517301258297,
+          "write_boundary_ns_median_speedup": null,
+          "read_boundary_ns_median_speedup": 46.04517301258297,
+          "refusals_or_failures": {
+            "baseline": [],
+            "candidate": []
+          }
+        }
+      ],
+      "verified_uploaded_producers_and_manifests": 12,
+      "artifact": 12160798210
     }
   ],
   "collection_or_integrity_errors": [],

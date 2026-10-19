@@ -1,0 +1,823 @@
+{
+  "artifact": 12161000262,
+  "reports": {
+    "manifest.json": {
+      "engine_source": "0c2989842321d10e91f136f3c924badb07038add",
+      "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+      "sources": {
+        "baseline": {
+          "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+          "tree": "4a235b06362ae6306a300e45d5974495c1229c2b"
+        },
+        "candidate": {
+          "head": "0c2989842321d10e91f136f3c924badb07038add",
+          "tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3"
+        }
+      },
+      "producers": {
+        "baseline": {
+          "rust": {
+            "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/hawdb_bench_host_boundary_allocations",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary_allocations",
+            "sha256": "0f4c8d1aa04d77d8065937228ff316ac6454f231a9260085f74f580739bc3a3c"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary.runfiles",
+              "sha256": "b2a5d5145e944e2a4cfcb91e3dc5fbc202a1ac974db389d9297146568185dac0",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "90004839edb125783b74e5a1a75aa1a5ff67835f1269bcedb987f20297f1b009"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/libhawdb_ffi_boundary_profile.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi_boundary_profile.so",
+            "sha256": "1de1fe544214b32958874b5441b709edd2eeac640ffae6549acc69664dd81bec"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/lib_hawdb_boundary_profile.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/lib_hawdb_boundary_profile.so",
+            "sha256": "15545f2921adc8fc016db7d14c93bfdc4f2fda882153bbcc141c6db304485af1"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/boundary_profile",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+            "sha256": "5bc6d48dc9bceec648d0fcbdc79a73b52839dba442060c7e2d7420cd8c2c4485"
+          }
+        },
+        "candidate": {
+          "rust": {
+            "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/hawdb_bench_host_boundary_allocations",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary_allocations",
+            "sha256": "7cf4fb9feb491dbe66f456eb8098241ec5fcf5817be84949d95cc2700be10f07"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary.runfiles",
+              "sha256": "d26a9c537070ec19a6bee7b936fb8e2602ddfbdd9b0af6144afa44e95ddc3221",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "f7a86d5a01951cb4e801741f57d0709e145dfaee0e9f78ce79e2a87bda2efab9"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/libhawdb_ffi_boundary_profile.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi_boundary_profile.so",
+            "sha256": "d15433738c9e2274a6161156945094eb979ba23e042d68df2720d8cebbfa6434"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/lib_hawdb_boundary_profile.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/lib_hawdb_boundary_profile.so",
+            "sha256": "5cb7a2ebeedbfb365fbb690239da28a46a78f69c6ca81cb4e1ef9badedec7749"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+            "sha256": "5bc6d48dc9bceec648d0fcbdc79a73b52839dba442060c7e2d7420cd8c2c4485"
+          }
+        }
+      },
+      "shared_go_source": {
+        "head": "0c2989842321d10e91f136f3c924badb07038add",
+        "tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3"
+      },
+      "shared_go_producer": {
+        "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+        "sha256": "5bc6d48dc9bceec648d0fcbdc79a73b52839dba442060c7e2d7420cd8c2c4485"
+      },
+      "independently_built_reference_go": {
+        "path": "/home/runner/work/_temp/resource-qualification/baseline-built-go",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+        "sha256": "b26afdc8f3005ce06eb0ff8c6ad284314879a9edac379cd5abc1460fa3de4222"
+      },
+      "go_host_profiles": true,
+      "overlay_files": [],
+      "baseline_observer_patch_sha256": "8dd4d5317635ba2ebb79971cea3cc3d118cd66504f587262c07859880e08e871",
+      "matrix_selection": {
+        "sizes": "100000",
+        "cases": "select",
+        "layers": "go",
+        "backends": "memory",
+        "samples": 3
+      },
+      "defaults_changed_by_qualification": false,
+      "instrumented": true,
+      "scope": [
+        "Native Rust allocation requests, Python traced heap and Go heap remain separate observations.",
+        "Per-child process RSS includes runtime, fixture, setup, warmup and complete operation.",
+        "Native phases and Go host JSON/copy/free phases remain separate; native phases nest inside complete Go FFI time.",
+        "Instrumented timing is not uninstrumented performance qualification or a whole-memory bound.",
+        "The ordinary candidate uses the exact frozen engine, bindings, workloads and build configuration; only qualification/workflow files may differ.",
+        "All refusals, nonzero exits, unsupported groups and absent profiles remain adverse outcomes."
+      ]
+    },
+    "outcomes.json": {
+      "baseline": 1,
+      "candidate": 0
+    },
+    "baseline/report.json": {
+      "source": {
+        "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+        "tree": "4a235b06362ae6306a300e45d5974495c1229c2b"
+      },
+      "spec": "ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md",
+      "seed": 24301,
+      "sizes": [
+        100000
+      ],
+      "cases": [
+        "select"
+      ],
+      "backends": [
+        "memory"
+      ],
+      "layers": [
+        "go"
+      ],
+      "samples": 3,
+      "discarded_iterations": 1,
+      "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu": "x86_64",
+      "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "go": "go version go1.27.2 linux/amd64",
+      "build": "Bazel opt, all three engine dependencies compiled together",
+      "defaults_changed": false,
+      "strict_zero_copy": false,
+      "terminal": true,
+      "instrumented": true,
+      "go_host_profiles": true,
+      "native_profiles": true,
+      "go_cpu_profiles": false,
+      "binaries": {
+        "go": {
+          "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/boundary_profile",
+          "sha256": "5bc6d48dc9bceec648d0fcbdc79a73b52839dba442060c7e2d7420cd8c2c4485"
+        }
+      },
+      "library_sha256": "1de1fe544214b32958874b5441b709edd2eeac640ffae6549acc69664dd81bec",
+      "python_extension_path": "/home/runner/work/_temp/resource-qualification/baseline-producer/lib_hawdb_boundary_profile.so",
+      "python_extension_sha256": "15545f2921adc8fc016db7d14c93bfdc4f2fda882153bbcc141c6db304485af1",
+      "records": [
+        {
+          "error": "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+          "failure_go_host_profile": {
+            "ffi_call_ns": 24237244264,
+            "ffi_calls": 198,
+            "parameter_conversion_calls": 198,
+            "parameter_conversion_ns": 78792791,
+            "result_conversion_calls": 198,
+            "result_conversion_ns": 34500596,
+            "scope": "go_query_parameter_native_call_result_phases",
+            "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+            "valid": true
+          },
+          "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+          "failure_native_profile": {
+            "allocated_bytes": 10065052900,
+            "allocation_calls": 162903411,
+            "deallocated_bytes": 10065052900,
+            "deallocation_calls": 162903411,
+            "engine_call_ns": 24081367244,
+            "live_requested_bytes_after": 0,
+            "live_requested_bytes_before": 0,
+            "parameter_conversion_ns": 95229915,
+            "process_peak_requested_bytes": 206042270,
+            "reallocation_calls": 175861,
+            "result_conversion_ns": 27966243,
+            "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+          },
+          "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+          "go_version": "go1.27.2",
+          "layer": "go",
+          "pointer_bits": 64,
+          "status": "error",
+          "process_exit": 0,
+          "process_seconds": 24.60921689399993,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/boundary_profile",
+            "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-0.job.json",
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/libhawdb_ffi_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-0.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-0.stderr",
+          "process_peak_rss_bytes": 390725632,
+          "case": "select",
+          "size": 100000,
+          "backend": "memory",
+          "iteration": 0,
+          "discarded": true,
+          "fixture_sha256": "43ac63a204b281f98f23cde91947e462a4ea04dfd4a6cf944951a4d2c40982e2",
+          "expected_checksum": "5f3c5c12795e362d",
+          "parity": null,
+          "phase_timing_valid": null,
+          "profile_valid": null,
+          "failure_profile_valid": true,
+          "go_host_profile_valid": null,
+          "failure_go_host_profile_valid": true
+        },
+        {
+          "error": "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+          "failure_go_host_profile": {
+            "ffi_call_ns": 24262382416,
+            "ffi_calls": 198,
+            "parameter_conversion_calls": 198,
+            "parameter_conversion_ns": 80597872,
+            "result_conversion_calls": 198,
+            "result_conversion_ns": 34677143,
+            "scope": "go_query_parameter_native_call_result_phases",
+            "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+            "valid": true
+          },
+          "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+          "failure_native_profile": {
+            "allocated_bytes": 10065052900,
+            "allocation_calls": 162903411,
+            "deallocated_bytes": 10065052900,
+            "deallocation_calls": 162903411,
+            "engine_call_ns": 24100502689,
+            "live_requested_bytes_after": 0,
+            "live_requested_bytes_before": 0,
+            "parameter_conversion_ns": 95779021,
+            "process_peak_requested_bytes": 206042270,
+            "reallocation_calls": 175861,
+            "result_conversion_ns": 28650297,
+            "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+          },
+          "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+          "go_version": "go1.27.2",
+          "layer": "go",
+          "pointer_bits": 64,
+          "status": "error",
+          "process_exit": 0,
+          "process_seconds": 24.596225792999917,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/boundary_profile",
+            "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-1.job.json",
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/libhawdb_ffi_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-1.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-1.stderr",
+          "process_peak_rss_bytes": 357937152,
+          "case": "select",
+          "size": 100000,
+          "backend": "memory",
+          "iteration": 1,
+          "discarded": false,
+          "fixture_sha256": "ae789d56e6d28036bcd746d7012bd47287ff71a74f8ca1f14138545e7e539a9a",
+          "expected_checksum": "5f3c5c12795e362d",
+          "parity": null,
+          "phase_timing_valid": null,
+          "profile_valid": null,
+          "failure_profile_valid": true,
+          "go_host_profile_valid": null,
+          "failure_go_host_profile_valid": true
+        },
+        {
+          "error": "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+          "failure_go_host_profile": {
+            "ffi_call_ns": 24286482115,
+            "ffi_calls": 198,
+            "parameter_conversion_calls": 198,
+            "parameter_conversion_ns": 79688007,
+            "result_conversion_calls": 198,
+            "result_conversion_ns": 33387413,
+            "scope": "go_query_parameter_native_call_result_phases",
+            "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+            "valid": true
+          },
+          "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+          "failure_native_profile": {
+            "allocated_bytes": 10065052900,
+            "allocation_calls": 162903411,
+            "deallocated_bytes": 10065052900,
+            "deallocation_calls": 162903411,
+            "engine_call_ns": 24123462429,
+            "live_requested_bytes_after": 0,
+            "live_requested_bytes_before": 0,
+            "parameter_conversion_ns": 96865811,
+            "process_peak_requested_bytes": 206042270,
+            "reallocation_calls": 175861,
+            "result_conversion_ns": 29428182,
+            "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+          },
+          "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+          "go_version": "go1.27.2",
+          "layer": "go",
+          "pointer_bits": 64,
+          "status": "error",
+          "process_exit": 0,
+          "process_seconds": 24.62705086799997,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/boundary_profile",
+            "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-2.job.json",
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/libhawdb_ffi_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-2.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-2.stderr",
+          "process_peak_rss_bytes": 361725952,
+          "case": "select",
+          "size": 100000,
+          "backend": "memory",
+          "iteration": 2,
+          "discarded": false,
+          "fixture_sha256": "db710652eec822902fc1b12ac8df964d773d1e4a5f5784ee24a2bf35bded0117",
+          "expected_checksum": "5f3c5c12795e362d",
+          "parity": null,
+          "phase_timing_valid": null,
+          "profile_valid": null,
+          "failure_profile_valid": true,
+          "go_host_profile_valid": null,
+          "failure_go_host_profile_valid": true
+        },
+        {
+          "error": "warmup: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+          "failure_go_host_profile": {
+            "ffi_call_ns": 24192282436,
+            "ffi_calls": 198,
+            "parameter_conversion_calls": 198,
+            "parameter_conversion_ns": 80303452,
+            "result_conversion_calls": 198,
+            "result_conversion_ns": 32910068,
+            "scope": "go_query_parameter_native_call_result_phases",
+            "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+            "valid": true
+          },
+          "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+          "failure_native_profile": {
+            "allocated_bytes": 10065052900,
+            "allocation_calls": 162903411,
+            "deallocated_bytes": 10065052900,
+            "deallocation_calls": 162903411,
+            "engine_call_ns": 24031529322,
+            "live_requested_bytes_after": 0,
+            "live_requested_bytes_before": 0,
+            "parameter_conversion_ns": 97986493,
+            "process_peak_requested_bytes": 206042270,
+            "reallocation_calls": 175861,
+            "result_conversion_ns": 28286059,
+            "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+          },
+          "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+          "go_version": "go1.27.2",
+          "layer": "go",
+          "pointer_bits": 64,
+          "status": "error",
+          "process_exit": 0,
+          "process_seconds": 24.526187162000042,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/boundary_profile",
+            "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-3.job.json",
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/libhawdb_ffi_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-3.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/baseline/go-select-100000-memory-3.stderr",
+          "process_peak_rss_bytes": 385540096,
+          "case": "select",
+          "size": 100000,
+          "backend": "memory",
+          "iteration": 3,
+          "discarded": false,
+          "fixture_sha256": "c1d1686b3d3db3dc7fcca0f0bc2b3946be9ed98e32742657386bb121594bca0a",
+          "expected_checksum": "5f3c5c12795e362d",
+          "parity": null,
+          "phase_timing_valid": null,
+          "profile_valid": null,
+          "failure_profile_valid": true,
+          "go_host_profile_valid": null,
+          "failure_go_host_profile_valid": true
+        }
+      ],
+      "summaries": [
+        {
+          "layer": "go",
+          "case": "select",
+          "size": 100000,
+          "backend": "memory",
+          "successful_samples": 0,
+          "failed_samples": 3,
+          "median_query_boundary_ns": null,
+          "median_write_boundary_ns": null,
+          "median_read_boundary_ns": null,
+          "median_elapsed_ns": null
+        }
+      ],
+      "measurement_limits": [
+        "A selected layer/backend shard qualifies only its recorded groups; full-matrix acceptance requires complete coverage across shards.",
+        "Process peak RSS includes runtime, fixture, setup and query; it is not a query-only allocation ledger.",
+        "Allocator observations count Rust requests; Go/Python heaps and non-Rust workspace are separate.",
+        "Each iteration opens its own store; seeded read runs measure a warm store, not cold artifact reads.",
+        "Write cases include a final verification query in query_boundary_ns; write_boundary_ns and read_boundary_ns separate the phases without removing calls.",
+        "The query timer excludes the identical checksum algorithm; consumer time is reported separately."
+      ],
+      "parity_failures": 0,
+      "value_parity_records": 0,
+      "successful_records": 0,
+      "refused_or_failed_records": 4,
+      "profile_failures": 0,
+      "failure_profile_failures": 0,
+      "go_host_profile_failures": 0,
+      "failure_go_host_profile_failures": 0,
+      "phase_timing_failures": 0,
+      "all_paths_succeeded": false
+    },
+    "candidate/report.json": {
+      "source": {
+        "head": "0c2989842321d10e91f136f3c924badb07038add",
+        "tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3"
+      },
+      "spec": "ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md",
+      "seed": 24301,
+      "sizes": [
+        100000
+      ],
+      "cases": [
+        "select"
+      ],
+      "backends": [
+        "memory"
+      ],
+      "layers": [
+        "go"
+      ],
+      "samples": 3,
+      "discarded_iterations": 1,
+      "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu": "x86_64",
+      "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "go": "go version go1.27.2 linux/amd64",
+      "build": "Bazel opt, all three engine dependencies compiled together",
+      "defaults_changed": false,
+      "strict_zero_copy": false,
+      "terminal": true,
+      "instrumented": true,
+      "go_host_profiles": true,
+      "native_profiles": true,
+      "go_cpu_profiles": false,
+      "binaries": {
+        "go": {
+          "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+          "sha256": "5bc6d48dc9bceec648d0fcbdc79a73b52839dba442060c7e2d7420cd8c2c4485"
+        }
+      },
+      "library_sha256": "d15433738c9e2274a6161156945094eb979ba23e042d68df2720d8cebbfa6434",
+      "python_extension_path": "/home/runner/work/_temp/resource-qualification/candidate-producer/lib_hawdb_boundary_profile.so",
+      "python_extension_sha256": "5cb7a2ebeedbfb365fbb690239da28a46a78f69c6ca81cb4e1ef9badedec7749",
+      "records": [
+        {
+          "backend": "memory",
+          "case": "select",
+          "cgo_enabled": false,
+          "checksum": "5f3c5c12795e362d",
+          "consumer_ns": 6272202,
+          "cpu_profile": "",
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 348609925,
+          "go_allocated_bytes": 70733696,
+          "go_allocations": 1699837,
+          "go_host_profile": {
+            "ffi_call_ns": 261839810,
+            "ffi_calls": 1,
+            "parameter_conversion_calls": 1,
+            "parameter_conversion_ns": 7511,
+            "result_conversion_calls": 1,
+            "result_conversion_ns": 80487817,
+            "scope": "go_query_parameter_native_call_result_phases",
+            "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+            "valid": true
+          },
+          "go_version": "go1.27.2",
+          "input_rows": 100000,
+          "layer": "go",
+          "native_profile": {
+            "allocated_bytes": 2170523510,
+            "allocation_calls": 1404121,
+            "deallocated_bytes": 2170523510,
+            "deallocation_calls": 1404121,
+            "engine_call_ns": 201100168,
+            "live_requested_bytes_after": 115449975,
+            "live_requested_bytes_before": 115449975,
+            "parameter_conversion_ns": 4928,
+            "process_peak_requested_bytes": 207895778,
+            "reallocation_calls": 199321,
+            "result_conversion_ns": 53224209,
+            "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+          },
+          "output_rows": 100000,
+          "pointer_bits": 64,
+          "query_boundary_ns": 342336529,
+          "read_boundary_ns": 342336529,
+          "setup_ns": 2182809610,
+          "status": "ok",
+          "values": 300000,
+          "write_boundary_ns": 0,
+          "process_exit": 0,
+          "process_seconds": 3.2622807530000273,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+            "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-0.job.json",
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/libhawdb_ffi_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-0.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-0.stderr",
+          "process_peak_rss_bytes": 476106752,
+          "size": 100000,
+          "iteration": 0,
+          "discarded": true,
+          "fixture_sha256": "5d95d1e5cde275048218b786452383c0786438bb6bc9fe13b9ed310b8d94d0ed",
+          "expected_checksum": "5f3c5c12795e362d",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "backend": "memory",
+          "case": "select",
+          "cgo_enabled": false,
+          "checksum": "5f3c5c12795e362d",
+          "consumer_ns": 6083368,
+          "cpu_profile": "",
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 365414531,
+          "go_allocated_bytes": 70738576,
+          "go_allocations": 1699844,
+          "go_host_profile": {
+            "ffi_call_ns": 271882762,
+            "ffi_calls": 1,
+            "parameter_conversion_calls": 1,
+            "parameter_conversion_ns": 9003,
+            "result_conversion_calls": 1,
+            "result_conversion_ns": 87437054,
+            "scope": "go_query_parameter_native_call_result_phases",
+            "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+            "valid": true
+          },
+          "go_version": "go1.27.2",
+          "input_rows": 100000,
+          "layer": "go",
+          "native_profile": {
+            "allocated_bytes": 2170523510,
+            "allocation_calls": 1404121,
+            "deallocated_bytes": 2170523510,
+            "deallocation_calls": 1404121,
+            "engine_call_ns": 207609309,
+            "live_requested_bytes_after": 115449975,
+            "live_requested_bytes_before": 115449975,
+            "parameter_conversion_ns": 4727,
+            "process_peak_requested_bytes": 207895778,
+            "reallocation_calls": 199321,
+            "result_conversion_ns": 56594143,
+            "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+          },
+          "output_rows": 100000,
+          "pointer_bits": 64,
+          "query_boundary_ns": 359329941,
+          "read_boundary_ns": 359329941,
+          "setup_ns": 2140269525,
+          "status": "ok",
+          "values": 300000,
+          "write_boundary_ns": 0,
+          "process_exit": 0,
+          "process_seconds": 3.2818533239999397,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+            "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-1.job.json",
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/libhawdb_ffi_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-1.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-1.stderr",
+          "process_peak_rss_bytes": 425017344,
+          "size": 100000,
+          "iteration": 1,
+          "discarded": false,
+          "fixture_sha256": "4dc4194973f01663f1c7413f2d42efebb305297f3994645b1f4a95955c3a3708",
+          "expected_checksum": "5f3c5c12795e362d",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "backend": "memory",
+          "case": "select",
+          "cgo_enabled": false,
+          "checksum": "5f3c5c12795e362d",
+          "consumer_ns": 6171450,
+          "cpu_profile": "",
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 353151672,
+          "go_allocated_bytes": 70738960,
+          "go_allocations": 1699846,
+          "go_host_profile": {
+            "ffi_call_ns": 260744844,
+            "ffi_calls": 1,
+            "parameter_conversion_calls": 1,
+            "parameter_conversion_ns": 8533,
+            "result_conversion_calls": 1,
+            "result_conversion_ns": 86224371,
+            "scope": "go_query_parameter_native_call_result_phases",
+            "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+            "valid": true
+          },
+          "go_version": "go1.27.2",
+          "input_rows": 100000,
+          "layer": "go",
+          "native_profile": {
+            "allocated_bytes": 2170523510,
+            "allocation_calls": 1404121,
+            "deallocated_bytes": 2170523510,
+            "deallocation_calls": 1404121,
+            "engine_call_ns": 195099256,
+            "live_requested_bytes_after": 115449975,
+            "live_requested_bytes_before": 115449975,
+            "parameter_conversion_ns": 4767,
+            "process_peak_requested_bytes": 207895778,
+            "reallocation_calls": 199321,
+            "result_conversion_ns": 57966198,
+            "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+          },
+          "output_rows": 100000,
+          "pointer_bits": 64,
+          "query_boundary_ns": 346979270,
+          "read_boundary_ns": 346979270,
+          "setup_ns": 2150168171,
+          "status": "ok",
+          "values": 300000,
+          "write_boundary_ns": 0,
+          "process_exit": 0,
+          "process_seconds": 3.207583365000005,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+            "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-2.job.json",
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/libhawdb_ffi_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-2.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-2.stderr",
+          "process_peak_rss_bytes": 377606144,
+          "size": 100000,
+          "iteration": 2,
+          "discarded": false,
+          "fixture_sha256": "32e7e2b7010c182d4a89464ef1821465205d49ba1b28284349ae66d5444e1391",
+          "expected_checksum": "5f3c5c12795e362d",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "backend": "memory",
+          "case": "select",
+          "cgo_enabled": false,
+          "checksum": "5f3c5c12795e362d",
+          "consumer_ns": 6110168,
+          "cpu_profile": "",
+          "durability": "SyncOnEveryWrite",
+          "elapsed_ns": 354716698,
+          "go_allocated_bytes": 70738960,
+          "go_allocations": 1699847,
+          "go_host_profile": {
+            "ffi_call_ns": 266230678,
+            "ffi_calls": 1,
+            "parameter_conversion_calls": 1,
+            "parameter_conversion_ns": 10296,
+            "result_conversion_calls": 1,
+            "result_conversion_ns": 82362542,
+            "scope": "go_query_parameter_native_call_result_phases",
+            "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+            "valid": true
+          },
+          "go_version": "go1.27.2",
+          "input_rows": 100000,
+          "layer": "go",
+          "native_profile": {
+            "allocated_bytes": 2170523510,
+            "allocation_calls": 1404121,
+            "deallocated_bytes": 2170523510,
+            "deallocation_calls": 1404121,
+            "engine_call_ns": 203796546,
+            "live_requested_bytes_after": 115449975,
+            "live_requested_bytes_before": 115449975,
+            "parameter_conversion_ns": 4707,
+            "process_peak_requested_bytes": 207895778,
+            "reallocation_calls": 199321,
+            "result_conversion_ns": 54526898,
+            "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+          },
+          "output_rows": 100000,
+          "pointer_bits": 64,
+          "query_boundary_ns": 348604977,
+          "read_boundary_ns": 348604977,
+          "setup_ns": 2210416457,
+          "status": "ok",
+          "values": 300000,
+          "write_boundary_ns": 0,
+          "process_exit": 0,
+          "process_seconds": 3.294699678000029,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+            "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-3.job.json",
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/libhawdb_ffi_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-3.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/candidate/go-select-100000-memory-3.stderr",
+          "process_peak_rss_bytes": 455217152,
+          "size": 100000,
+          "iteration": 3,
+          "discarded": false,
+          "fixture_sha256": "8f4f8d37144530f1d925af03ad4b347e41544ddd416ad3e32b13ae5043cba0a1",
+          "expected_checksum": "5f3c5c12795e362d",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        }
+      ],
+      "summaries": [
+        {
+          "layer": "go",
+          "case": "select",
+          "size": 100000,
+          "backend": "memory",
+          "successful_samples": 3,
+          "failed_samples": 0,
+          "median_query_boundary_ns": 348604977,
+          "median_write_boundary_ns": 0,
+          "median_read_boundary_ns": 348604977,
+          "median_elapsed_ns": 354716698
+        }
+      ],
+      "measurement_limits": [
+        "A selected layer/backend shard qualifies only its recorded groups; full-matrix acceptance requires complete coverage across shards.",
+        "Process peak RSS includes runtime, fixture, setup and query; it is not a query-only allocation ledger.",
+        "Allocator observations count Rust requests; Go/Python heaps and non-Rust workspace are separate.",
+        "Each iteration opens its own store; seeded read runs measure a warm store, not cold artifact reads.",
+        "Write cases include a final verification query in query_boundary_ns; write_boundary_ns and read_boundary_ns separate the phases without removing calls.",
+        "The query timer excludes the identical checksum algorithm; consumer time is reported separately."
+      ],
+      "parity_failures": 0,
+      "value_parity_records": 4,
+      "successful_records": 4,
+      "refused_or_failed_records": 0,
+      "profile_failures": 0,
+      "failure_profile_failures": 0,
+      "go_host_profile_failures": 0,
+      "failure_go_host_profile_failures": 0,
+      "phase_timing_failures": 0,
+      "all_paths_succeeded": true
+    }
+  },
+  "verified_files": [
+    "baseline-producer/hawdb_bench_host_boundary_allocations",
+    "baseline-producer/python_boundary",
+    "baseline-producer/libhawdb_ffi_boundary_profile.so",
+    "baseline-producer/lib_hawdb_boundary_profile.so",
+    "baseline-producer/boundary_profile",
+    "baseline-producer/python_boundary.runfiles_manifest",
+    "candidate-producer/hawdb_bench_host_boundary_allocations",
+    "candidate-producer/python_boundary",
+    "candidate-producer/libhawdb_ffi_boundary_profile.so",
+    "candidate-producer/lib_hawdb_boundary_profile.so",
+    "candidate-producer/boundary_profile",
+    "candidate-producer/python_boundary.runfiles_manifest"
+  ],
+  "group_selection": {
+    "group": [
+      "ordinary",
+      100000,
+      "memory",
+      "default",
+      "true",
+      "select",
+      "go"
+    ],
+    "run": 39154779183,
+    "inputs": {
+      "kind": "ordinary",
+      "rows": "100000",
+      "backend": "memory",
+      "configuration": "default",
+      "instrumented": "true",
+      "case": "select",
+      "layer": "go",
+      "samples": "3"
+    }
+  },
+  "artifact_name": "resources-ordinary-100000-memory-default-true-select-go-bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+  "workflow_run": 39154779183
+}

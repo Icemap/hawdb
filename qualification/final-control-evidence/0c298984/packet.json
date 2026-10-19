@@ -26,8 +26,8 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "b505de6ae50c27bc872139a0a30683c1bcd921ba12a6b0f3af2b009852fa42db",
-      "bytes": 7370,
+      "sha256": "4d2d3ac67f88ea35d1cdd12097f3df668ee57b1ce9baed3e758574cb0d11ce14",
+      "bytes": 8036,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-control-evidence-0c298984/qualification/final-control-evidence/0c298984/README.md"
     },
     {
@@ -698,8 +698,8 @@
     },
     {
       "path": "original-matrix-snapshot/auditors/audit-final-ordinary-100k-point.py",
-      "sha256": "7af711c7392ee39b056affe4e1909d28b680f055439e14fde15dc3ce51ab002b",
-      "bytes": 3620,
+      "sha256": "4e4c7253aed071c7e4dcb6cd1694c61fdd4a66cb8b6130998d67ed7027e109aa",
+      "bytes": 4958,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-final-ordinary-100k-point.py"
     },
     {
@@ -746,8 +746,8 @@
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-current-ordinary-comparison-observations.json",
-      "sha256": "6adced4b377ad9487ffd0343ba327b830148c710b24b51e965b77722abee9617",
-      "bytes": 50343,
+      "sha256": "f23ee54e28fc4c07fc84c2e3be31be16c86ebc022d73474bfed39df8b6066e47",
+      "bytes": 51750,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-current-ordinary-comparison-observations.json"
     },
     {
@@ -764,8 +764,8 @@
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-ordinary-100k-point-qualified-audit.json",
-      "sha256": "ef4568dc7d8212435d8358e1b4f057cc2b4ccdd89f4b7189f63383a5fb29ccf4",
-      "bytes": 4565,
+      "sha256": "38b858686e6af613ebb168c84e07a3c1d1452ee7f4761b837e4f0c08539c8b38",
+      "bytes": 9196,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-ordinary-100k-point-qualified-audit.json"
     },
     {
@@ -788,14 +788,14 @@
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-pairs-audit.json",
-      "sha256": "2ba9a8ef62cd43a9140fdb3da8d0c2427ac59e8945e33893aa9a9b7d2789bd98",
-      "bytes": 95030,
+      "sha256": "698459e2777096495818e5850295a13bed28bed5fd2ffb4a2ec6c8c5e60a043a",
+      "bytes": 98933,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-pairs-audit.json"
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-refusals-audit.json",
-      "sha256": "138a7239b24a4079dcfa6f520768f61bf0ce9dfd2ffb9b138b0b0b8c35f6b109",
-      "bytes": 31275,
+      "sha256": "1be0a714198ce24a45e470a9cc00bd0d341eb3300b2ee41ae23cdf649391026a",
+      "bytes": 35177,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-refusals-audit.json"
     },
     {
@@ -815,6 +815,18 @@
       "sha256": "4c5e42db11a85c712d75f191833dbdcaead443dfcc3c83a8ff64fbbaafa008fa",
       "bytes": 6225,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-root-completed-log-observations.json"
+    },
+    {
+      "path": "original-matrix-snapshot/go-point-source/baseline-main.go",
+      "sha256": "33f6bf14e2545b2ee70da7b690ff1c2ffd60c380468390f53d546071639bb09b",
+      "bytes": 11295,
+      "source_path": "763e87c8f105b96b354ccaa75db687db8d5d1478:bindings/go/cmd/boundary/main.go"
+    },
+    {
+      "path": "original-matrix-snapshot/go-point-source/candidate-main.go",
+      "sha256": "33f6bf14e2545b2ee70da7b690ff1c2ffd60c380468390f53d546071639bb09b",
+      "bytes": 11295,
+      "source_path": "949e1be98ceec7ddedf146073b23cc187c3e52ed:bindings/go/cmd/boundary/main.go"
     },
     {
       "path": "original-matrix-snapshot/ordinary/artifact-12146514605.json",
@@ -1129,9 +1141,21 @@
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/ordinary/artifact-12157310028.json"
     },
     {
+      "path": "original-matrix-snapshot/ordinary/artifact-12160267708.json",
+      "sha256": "702f79b8b0f6cc4e11404732f767e4ea7fecf12fb2eaaa8a1c2e14ec4eda95da",
+      "bytes": 39010,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/ordinary/artifact-12160267708.json"
+    },
+    {
+      "path": "original-matrix-snapshot/ordinary/artifact-12160798210.json",
+      "sha256": "f0426fbebef1e6239615b41b07cfd2f5222a3cc35d2cc3f35802a6c14edf7cf7",
+      "bytes": 38939,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/ordinary/artifact-12160798210.json"
+    },
+    {
       "path": "original-matrix-snapshot/ordinary-summary.json",
-      "sha256": "305cab792fe59863da9e3f00456f6bbe2b8143d7a27d91828395a6df1871f81f",
-      "bytes": 52613,
+      "sha256": "800111bf7c796a3e5e3b83b285f76964a23681a9ec1d0d72e8b5e13626afeebf",
+      "bytes": 54043,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/ordinary/summary.json"
     },
     {
@@ -1495,9 +1519,15 @@
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12160925235.json"
     },
     {
+      "path": "original-matrix-snapshot/resources/artifact-12161000262.json",
+      "sha256": "8def9a43be2bee65889b32deca30706e0630472af41bac0919df36997682ec15",
+      "bytes": 38900,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12161000262.json"
+    },
+    {
       "path": "original-matrix-snapshot/resources-summary.json",
-      "sha256": "c098809139f7443f7ccc4e25ceed279252d4ee8e21a55718a9f96657436d7fe4",
-      "bytes": 234893,
+      "sha256": "fa305ed5c217c649e60dd8b8407fe56e6d214ffde7e05085023c1ebb8c3d7229",
+      "bytes": 237326,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/summary.json"
     },
     {
@@ -2738,21 +2768,21 @@
   },
   "original_matrix_snapshot": {
     "ordinary": {
-      "audited": 52,
+      "audited": 54,
       "expected": 90,
       "source": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
       "run": 39154768120,
-      "summary_sha256": "305cab792fe59863da9e3f00456f6bbe2b8143d7a27d91828395a6df1871f81f"
+      "summary_sha256": "800111bf7c796a3e5e3b83b285f76964a23681a9ec1d0d72e8b5e13626afeebf"
     },
     "resources": {
-      "audited": 60,
+      "audited": 61,
       "expected": 110,
       "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
       "run": 39154779183,
-      "summary_sha256": "c098809139f7443f7ccc4e25ceed279252d4ee8e21a55718a9f96657436d7fe4"
+      "summary_sha256": "fa305ed5c217c649e60dd8b8407fe56e6d214ffde7e05085023c1ebb8c3d7229"
     }
   },
-  "updated_at": 1792379127.881919,
+  "updated_at": 1792379815.575767,
   "numeric20_original_controls": {
     "positive": 12,
     "default_memory_refusals": 4,
@@ -2773,9 +2803,10 @@
     "full_grid_verified": true
   },
   "original_100k_point_snapshot": {
-    "groups": 4,
+    "groups": 6,
     "expected": 6,
-    "timing_scope": "workload elapsed excludes full child fixture/setup/warmup lifetime"
+    "Go_prefetch": "not reported; exact eager point-loop source archived",
+    "scope": "Original100k point groups,100000returned rows/300000values,seed24301; Rust/Python report prefetch0, Go omits that field,SyncOnEveryWrite,three measured independent processes+discardedwarmup per side. Query boundary excludes identical checksum consumer; seeded reads use warm stores. Workload elapsed excludes full child lifetime including fixture/setup/warmup; process_seconds and RSS are separate. No significance,causality,production tails or full90/110 acceptance."
   },
   "original_100k_bulk_resource_slice": {
     "groups": 6,

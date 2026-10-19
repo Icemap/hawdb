@@ -1,9 +1,9 @@
 {
   "engine": "0c2989842321d10e91f136f3c924badb07038add",
   "source": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
-  "observed_at": 1792373017.7209752,
-  "summary_sha256": "305cab792fe59863da9e3f00456f6bbe2b8143d7a27d91828395a6df1871f81f",
-  "audited_groups": 4,
+  "observed_at": 1792379815.1547751,
+  "summary_sha256": "800111bf7c796a3e5e3b83b285f76964a23681a9ec1d0d72e8b5e13626afeebf",
+  "audited_groups": 6,
   "expected_groups": 6,
   "groups": [
     {
@@ -35,7 +35,15 @@
       "query_boundary_median_ratio": 57.872779993851324,
       "checksums": [
         "5f3c5c12795e362d"
-      ]
+      ],
+      "prefetch_evidence": {
+        "baseline": {
+          "reported_value": 0
+        },
+        "candidate": {
+          "reported_value": 0
+        }
+      }
     },
     {
       "selection": [
@@ -66,7 +74,15 @@
       "query_boundary_median_ratio": 65.32240707609607,
       "checksums": [
         "5f3c5c12795e362d"
-      ]
+      ],
+      "prefetch_evidence": {
+        "baseline": {
+          "reported_value": 0
+        },
+        "candidate": {
+          "reported_value": 0
+        }
+      }
     },
     {
       "selection": [
@@ -97,7 +113,15 @@
       "query_boundary_median_ratio": 55.96083105547448,
       "checksums": [
         "5f3c5c12795e362d"
-      ]
+      ],
+      "prefetch_evidence": {
+        "baseline": {
+          "reported_value": 0
+        },
+        "candidate": {
+          "reported_value": 0
+        }
+      }
     },
     {
       "selection": [
@@ -128,8 +152,114 @@
       "query_boundary_median_ratio": 49.41371712161293,
       "checksums": [
         "5f3c5c12795e362d"
-      ]
+      ],
+      "prefetch_evidence": {
+        "baseline": {
+          "reported_value": 0
+        },
+        "candidate": {
+          "reported_value": 0
+        }
+      }
+    },
+    {
+      "selection": [
+        "go",
+        "memory"
+      ],
+      "artifact": 12160267708,
+      "bundle_sha256": "702f79b8b0f6cc4e11404732f767e4ea7fecf12fb2eaaa8a1c2e14ec4eda95da",
+      "measured_medians": {
+        "baseline": {
+          "elapsed_ns": 921873735061,
+          "query_boundary_ns": 921597910984,
+          "consumer_ns": 75203421,
+          "setup_ns": 31209301425,
+          "process_seconds": 1906.2331523409994,
+          "process_peak_rss_bytes": 286724096
+        },
+        "candidate": {
+          "elapsed_ns": 18716658866,
+          "query_boundary_ns": 18584055467,
+          "consumer_ns": 39821828,
+          "setup_ns": 3308937859,
+          "process_seconds": 40.80042881200097,
+          "process_peak_rss_bytes": 266661888
+        }
+      },
+      "elapsed_median_ratio": 49.2541826861867,
+      "query_boundary_median_ratio": 49.59078563989953,
+      "checksums": [
+        "5f3c5c12795e362d"
+      ],
+      "prefetch_evidence": {
+        "baseline": {
+          "reported_value": null,
+          "reason": "ordinary Go producer omits prefetch field",
+          "source_tree": "763e87c8f105b96b354ccaa75db687db8d5d1478",
+          "producer_source_sha256": "33f6bf14e2545b2ee70da7b690ff1c2ffd60c380468390f53d546071639bb09b",
+          "call_shape": "one eager DB.Query per point row, full same checksum consumer",
+          "scope": "source shape and successful parity; missing field is not inferred as zero"
+        },
+        "candidate": {
+          "reported_value": null,
+          "reason": "ordinary Go producer omits prefetch field",
+          "source_tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed",
+          "producer_source_sha256": "33f6bf14e2545b2ee70da7b690ff1c2ffd60c380468390f53d546071639bb09b",
+          "call_shape": "one eager DB.Query per point row, full same checksum consumer",
+          "scope": "source shape and successful parity; missing field is not inferred as zero"
+        }
+      }
+    },
+    {
+      "selection": [
+        "go",
+        "file"
+      ],
+      "artifact": 12160798210,
+      "bundle_sha256": "f0426fbebef1e6239615b41b07cfd2f5222a3cc35d2cc3f35802a6c14edf7cf7",
+      "measured_medians": {
+        "baseline": {
+          "elapsed_ns": 884593751601,
+          "query_boundary_ns": 884320693464,
+          "consumer_ns": 80019283,
+          "setup_ns": 32617248037,
+          "process_seconds": 1852.2877713069997,
+          "process_peak_rss_bytes": 334667776
+        },
+        "candidate": {
+          "elapsed_ns": 19344812635,
+          "query_boundary_ns": 19205502675,
+          "consumer_ns": 45157779,
+          "setup_ns": 6260831009,
+          "process_seconds": 45.60552638599984,
+          "process_peak_rss_bytes": 289660928
+        }
+      },
+      "elapsed_median_ratio": 45.727698080700485,
+      "query_boundary_median_ratio": 46.04517301258297,
+      "checksums": [
+        "5f3c5c12795e362d"
+      ],
+      "prefetch_evidence": {
+        "baseline": {
+          "reported_value": null,
+          "reason": "ordinary Go producer omits prefetch field",
+          "source_tree": "763e87c8f105b96b354ccaa75db687db8d5d1478",
+          "producer_source_sha256": "33f6bf14e2545b2ee70da7b690ff1c2ffd60c380468390f53d546071639bb09b",
+          "call_shape": "one eager DB.Query per point row, full same checksum consumer",
+          "scope": "source shape and successful parity; missing field is not inferred as zero"
+        },
+        "candidate": {
+          "reported_value": null,
+          "reason": "ordinary Go producer omits prefetch field",
+          "source_tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed",
+          "producer_source_sha256": "33f6bf14e2545b2ee70da7b690ff1c2ffd60c380468390f53d546071639bb09b",
+          "call_shape": "one eager DB.Query per point row, full same checksum consumer",
+          "scope": "source shape and successful parity; missing field is not inferred as zero"
+        }
+      }
     }
   ],
-  "scope": "Original100k point groups,100000returned rows/300000values,seed24301,prefetch0,SyncOnEveryWrite,three measured independent processes+discardedwarmup per side. Query boundary excludes identical checksum consumer; seeded reads use warm stores. Workload elapsed excludes full child lifetime including fixture/setup/warmup; process_seconds and RSS are separate. No significance,causality,production tails or full90/110 acceptance."
+  "scope": "Original100k point groups,100000returned rows/300000values,seed24301; Rust/Python report prefetch0, Go omits that field,SyncOnEveryWrite,three measured independent processes+discardedwarmup per side. Query boundary excludes identical checksum consumer; seeded reads use warm stores. Workload elapsed excludes full child lifetime including fixture/setup/warmup; process_seconds and RSS are separate. No significance,causality,production tails or full90/110 acceptance."
 }
