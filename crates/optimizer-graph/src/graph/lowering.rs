@@ -393,6 +393,7 @@ impl GroupExpr {
             | LogicalPlan::CreateRelationshipPropertyExistsConstraint { .. }
             | LogicalPlan::ProjectGraph { .. }
             | LogicalPlan::GraphAlgorithm { .. }
+            | LogicalPlan::GraphAlgorithmOutput(_)
             | LogicalPlan::VectorSeed { .. }
             | LogicalPlan::TextSeed { .. }
             | LogicalPlan::GraphSeed { .. }
@@ -686,6 +687,7 @@ fn logical_group_count(logical: &LogicalPlan) -> usize {
         | LogicalPlan::CreateRelationshipPropertyExistsConstraint { .. }
         | LogicalPlan::ProjectGraph { .. }
         | LogicalPlan::GraphAlgorithm { .. }
+        | LogicalPlan::GraphAlgorithmOutput(_)
         | LogicalPlan::VectorSeed { .. }
         | LogicalPlan::TextSeed { .. }
         | LogicalPlan::GraphSeed { .. }

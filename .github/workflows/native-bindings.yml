@@ -419,6 +419,14 @@ jobs:
             consumer::tests:: -- --nocapture --test-threads=1 \
             2>&1 | tee windows-native-results/directory-publication-consumer.txt
 
+      - name: Test complete graph algorithm identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb --lib -- identity_898_ --nocapture --test-threads=1
+          bash scripts/cargo-test-required.sh --locked -p hawdb-executor --lib -- identity_898_ --nocapture --test-threads=1
+          bash scripts/cargo-test-required.sh --locked -p hawdb-cypher --lib -- identity_898_ --nocapture --test-threads=1
+
       - name: Test explicit consumer publication refusal under retained ownership
         shell: bash
         run: |
