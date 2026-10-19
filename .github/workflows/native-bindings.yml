@@ -70,6 +70,11 @@ jobs:
       - name: Test Go against the Bazel-built C ABI
         run: bazel test --test_output=errors --test_arg=-test.v //bindings/go:hawdb_go_tests
 
+      - name: Test original generation spool ownership
+        run: >-
+          bazel test --test_output=errors --test_arg=generation_spool
+          //crates/search:hawdb_search_tests
+
       - name: Test the retained C ABI contract
         run: bazel test --test_output=errors //bindings/ffi:hawdb_ffi_tests
 
@@ -116,6 +121,14 @@ jobs:
           set -euo pipefail
           cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
             2>&1 | tee windows-native-results/clippy.txt
+
+      - name: Test original generation spool ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            -- generation_spool --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/held-generation-spool.txt
 
       - name: Build and test the retained Windows C ABI
         shell: bash
