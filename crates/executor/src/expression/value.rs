@@ -83,10 +83,6 @@ fn integer_value(value: &Value, context: &str) -> Result<i64> {
     }
 }
 
-pub fn group_key_value(item: &Projection, catalog: &Catalog, binding: &Binding) -> Value {
-    project_value(item, catalog, binding).unwrap_or(Value::Null)
-}
-
 fn timestamp_date_part(part: DatePart, nanos: i64) -> i64 {
     let days = div_floor(nanos, 86_400_000_000_000);
     let (year, month, _) = civil_from_days(days);
