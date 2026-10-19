@@ -28,6 +28,7 @@ version = "0.11.0"
 [workspace]
 
 [features]
+retained-phase-profiling = ["hawdb/retained-phase-profiling"]
 boundary-profiling = []
 # Default profile: the engine's own default feature set (full-text, vector,
 # analytics, background maintenance, tokio runtime).

@@ -125,6 +125,24 @@ impl Database {
 
 #[pymethods]
 impl Database {
+    fn _qualification_limits(&self) -> PyResult<Vec<u64>> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| PyRuntimeError::new_err("database is closed"))?;
+        let config = inner.database().config();
+        let limits = inner.runtime_governor().snapshot().limits;
+        Ok(vec![
+            u64::try_from(config.max_read_result_rows.unwrap_or(0)).unwrap(),
+            u64::try_from(config.max_read_result_payload_bytes.unwrap()).unwrap(),
+            u64::try_from(config.execution_memory.query_memory_bytes.get()).unwrap(),
+            limits.result_budget_bytes,
+            limits.memory_budget_bytes,
+            u64::try_from(config.execution_memory.batch_payload_bytes.get()).unwrap(),
+            u64::try_from(config.execution_memory.blocking_operator_bytes.get()).unwrap(),
+        ])
+    }
+
     #[new]
     #[pyo3(signature = (path = None, read_only = false, *, max_read_result_rows = None, max_read_result_payload_bytes = None))]
     fn new(
@@ -885,4 +903,37 @@ pub fn open(
         max_read_result_rows,
         max_read_result_payload_bytes,
     )
+}
+
+// Untimed constructor on an isolated manual evidence branch only.
+#[pyfunction]
+#[pyo3(signature = (path = None))]
+pub fn _open_large_result_qualification(path: Option<PathBuf>) -> PyResult<Database> {
+    let config = DatabaseConfig {
+        max_read_result_rows: Some(1_000_000),
+        max_read_result_payload_bytes: Some(1024 * 1024 * 1024),
+        execution_memory: hawdb::executor::ExecutionMemoryConfig {
+            query_memory_bytes: std::num::NonZeroUsize::new(1024 * 1024 * 1024).unwrap(),
+            batch_payload_bytes: std::num::NonZeroUsize::new(256 * 1024 * 1024).unwrap(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let governor = hawdb::RuntimeGovernorConfig {
+        memory_budget_bytes: Some(2 * 1024 * 1024 * 1024),
+        result_budget_bytes: 1024 * 1024 * 1024,
+        ..hawdb::RuntimeGovernorConfig::shared_host()
+    };
+    let inner = if let Some(path) = &path {
+        let mut options = HawDBEmbeddedOpenOptions::new(path.clone());
+        options.config = config;
+        options.runtime_governor_config = Some(governor);
+        HawDBEmbedded::open_with_options(options).map_err(|error| format_hawdb_error(&error))?
+    } else {
+        HawDBEmbedded::open_in_memory_for_result_qualification(config, governor)
+    };
+    Ok(Database {
+        inner: Some(inner),
+        path,
+    })
 }

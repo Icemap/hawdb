@@ -1088,3 +1088,19 @@ rust_test(
     edition = "2024",
     deps = [":hawdb_minimal"],
 )
+
+# Private qualification build; never a default production target.
+rust_library(
+    name = "hawdb_retained_phase_profile",
+    tags = ["manual"],
+    crate_name = "hawdb",
+    crate_root = "src/lib.rs",
+    crate_features = _HAWDB_DEFAULT_FEATURES + ["retained-phase-profiling"],
+    srcs = _HAWDB_SRCS,
+    edition = "2024",
+    aliases = aliases(),
+    deps = _HAWDB_FULL_DEPS + _HAWDB_VECTOR_DEPS + [
+        "//crates/runtime-tokio:hawdb_runtime_tokio",
+    ],
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)
