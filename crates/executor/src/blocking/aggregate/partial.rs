@@ -152,6 +152,13 @@ pub(super) fn stream_partial_aggregate_batches(
         memory.blocking_operator_bytes,
         blocking_account.clone(),
     );
+    let key_memory = KeyMemory::new(
+        &blocking_account,
+        memory.query_memory_bytes,
+        "ExecutionMemoryConfig.query_memory_bytes",
+        "AggregateExec expressions",
+        "AggregateExec keys",
+    );
     let mut spill_budget =
         SpillBudgetTracker::with_ledger("AggregateExec", memory, context.memory_ledger);
     let mut groups = HashGroups::<Vec<Value>, PartialGroup>::default();
@@ -167,13 +174,11 @@ pub(super) fn stream_partial_aggregate_batches(
     source.execute(input, ExecutionLimit::unlimited(), &mut |batch| {
         runtime_checkpoint(context.task_context)?;
         for binding in batch {
-            let key = HashedKey::new(
-                group_keys
-                    .iter()
-                    .map(|item| project_value(item, context.catalog, &binding))
-                    .collect::<Result<Vec<_>>>()?,
-                &key_hasher,
-            );
+            let PreparedKey {
+                mut allocation,
+                values,
+            } = key_memory.group(group_keys, context.catalog, &binding, context.task_context)?;
+            let key = HashedKey::new(values, &key_hasher);
             let incoming = partial_states_for_binding(items, context.catalog, &binding);
 
             if let Some(group) = groups.get(&key) {
@@ -202,6 +207,7 @@ pub(super) fn stream_partial_aggregate_batches(
                         ordinal,
                         incoming,
                         &mut tracker,
+                        &mut allocation,
                         partial_item_limit,
                     )?;
                 } else {
@@ -236,6 +242,7 @@ pub(super) fn stream_partial_aggregate_batches(
                     ordinal,
                     incoming,
                     &mut tracker,
+                    &mut allocation,
                     partial_item_limit,
                 )?;
             }
@@ -293,6 +300,7 @@ fn insert_partial_group(
     ordinal: u64,
     states: Vec<AggregateState>,
     tracker: &mut OperatorMemoryTracker,
+    key_allocation: &mut crate::QueryMemoryLease,
     partial_item_limit: usize,
 ) -> Result<()> {
     let bytes = partial_group_memory_bytes(&key.key, &states);
@@ -306,11 +314,12 @@ fn insert_partial_group(
             tracker.budget_bytes
         )));
     }
-    groups.insert(
+    groups.insert_prepared(
         key,
         PartialGroup { ordinal, states },
         payload_bytes,
         tracker,
+        Some(key_allocation),
     )
 }
 

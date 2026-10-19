@@ -162,6 +162,14 @@ fn evaluate_predicate_truth(
     context: &PredicateEvaluationContext<'_>,
 ) -> Result<PredicateTruth> {
     let catalog = context.catalog;
+    let evaluate = |expression| {
+        evaluate_projection_borrowed(
+            expression,
+            catalog,
+            binding,
+            context.adjacency_memory.account,
+        )
+    };
     Ok(match predicate {
         Predicate::And(predicates) => {
             let mut truth = PredicateTruth::True;
@@ -266,45 +274,50 @@ fn evaluate_predicate_truth(
             |actual, expected| compare_property_values(actual, *op, expected),
         ),
         Predicate::ExpressionEq { expression, value } => {
-            let actual = project_expression_value(expression, catalog, binding)?;
-            let expected = project_expression_value(value, catalog, binding)?;
-            predicate_comparison_truth(Some(&actual), &expected, |actual, expected| {
-                actual == expected
-            })
+            let actual = evaluate(expression)?;
+            let expected = evaluate(value)?;
+            predicate_comparison_truth(
+                Some(actual.as_ref()),
+                expected.as_ref(),
+                |actual, expected| actual == expected,
+            )
         }
         Predicate::ExpressionNotEq { expression, value } => {
-            let actual = project_expression_value(expression, catalog, binding)?;
-            let expected = project_expression_value(value, catalog, binding)?;
-            predicate_comparison_truth(Some(&actual), &expected, |actual, expected| {
-                actual != expected
-            })
+            let actual = evaluate(expression)?;
+            let expected = evaluate(value)?;
+            predicate_comparison_truth(
+                Some(actual.as_ref()),
+                expected.as_ref(),
+                |actual, expected| actual != expected,
+            )
         }
         Predicate::ExpressionCompare {
             expression,
             op,
             value,
         } => {
-            let actual = project_expression_value(expression, catalog, binding)?;
-            let expected = project_expression_value(value, catalog, binding)?;
-            predicate_comparison_truth(Some(&actual), &expected, |actual, expected| {
-                compare_property_values(actual, *op, expected)
-            })
+            let actual = evaluate(expression)?;
+            let expected = evaluate(value)?;
+            predicate_comparison_truth(
+                Some(actual.as_ref()),
+                expected.as_ref(),
+                |actual, expected| compare_property_values(actual, *op, expected),
+            )
         }
         Predicate::ExpressionContains { expression, value } => {
-            match (
-                project_expression_value(expression, catalog, binding)?,
-                project_expression_value(value, catalog, binding)?,
-            ) {
+            let actual = evaluate(expression)?;
+            let expected = evaluate(value)?;
+            match (actual.as_ref(), expected.as_ref()) {
                 (Value::Null, _) | (_, Value::Null) => PredicateTruth::Unknown,
                 (Value::String(actual), Value::String(expected)) => {
-                    PredicateTruth::from_bool(actual.contains(&expected))
+                    PredicateTruth::from_bool(actual.contains(expected.as_str()))
                 }
                 _ => PredicateTruth::False,
             }
         }
         Predicate::ExpressionIn { expression, values } => {
-            let actual = project_expression_value(expression, catalog, binding)?;
-            predicate_in_truth(Some(&actual), values)
+            let actual = evaluate(expression)?;
+            predicate_in_truth(Some(actual.as_ref()), values)
         }
         Predicate::PropertyListContains {
             variable,
