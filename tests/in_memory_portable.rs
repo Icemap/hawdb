@@ -276,6 +276,100 @@ fn json_value_distinguishes_missing_invalid_and_non_string_documents() {
 }
 
 #[test]
+fn json_value_group_keys_propagate_errors_in_partial_and_buffered_aggregates() {
+    let parameters = BTreeMap::from([("path".into(), Value::String("$.source".into()))]);
+    for (metadata, expected) in [
+        (Value::String("{invalid".into()), "invalid JSON"),
+        (Value::Int(12), "string document"),
+        (
+            Value::String(r#"{"source":{"nested":1}}"#.into()),
+            "not scalar",
+        ),
+        (Value::String(r#"{"source":[1]}"#.into()), "not scalar"),
+        (
+            Value::String(r#"{"source":18446744073709551615}"#.into()),
+            "signed 64-bit range",
+        ),
+        (
+            Value::String(format!(r#"{{"source":"{}"}}"#, "a".repeat(1024 * 1024))),
+            "1 MiB input limit",
+        ),
+    ] {
+        let mut db = Database::new();
+        db.query(r#"CREATE (:Memory {id: 1, metadata: '{"source":"valid"}'})"#)
+            .unwrap();
+        db.query_with_params(
+            "CREATE (:Memory {id: 2, metadata: $metadata})",
+            &BTreeMap::from([("metadata".into(), metadata)]),
+        )
+        .unwrap();
+        for aggregate in ["COUNT(*)", "COUNT(DISTINCT m.id)"] {
+            for expression in [
+                "json_value(m.metadata, $path)",
+                "coalesce(json_value(m.metadata, $path), 'fallback')",
+                "CASE WHEN m.id > 0 THEN json_value(m.metadata, $path) ELSE NULL END",
+            ] {
+                let query = format!(
+                    "MATCH (m:Memory) WITH {expression} AS origin, {aggregate} AS total RETURN origin, total"
+                );
+                let error = db.query_with_params(&query, &parameters).unwrap_err();
+                assert!(matches!(error, hawdb::HawDBError::Execution(_)), "{error}");
+                assert!(error.to_string().contains(expected), "{query}: {error}");
+            }
+        }
+        let count = db
+            .query("MATCH (m:Memory) RETURN COUNT(*) AS total")
+            .unwrap();
+        assert_eq!(count.rows[0].get("total"), Some(&Value::Int(2)));
+    }
+}
+
+#[test]
+fn json_value_group_keys_preserve_missing_and_null_values() {
+    let mut db = Database::new();
+    for (id, metadata) in [
+        (1, Value::Null),
+        (2, Value::String("{}".into())),
+        (3, Value::String(r#"{"source":null}"#.into())),
+        (4, Value::String(r#"{"source":"valid"}"#.into())),
+    ] {
+        db.query_with_params(
+            "CREATE (:Memory {id: $id, metadata: $metadata})",
+            &BTreeMap::from([("id".into(), Value::Int(id)), ("metadata".into(), metadata)]),
+        )
+        .unwrap();
+    }
+    for aggregate in ["COUNT(*)", "COUNT(DISTINCT m.id)"] {
+        for (expression, missing) in [
+            ("json_value(m.metadata, $path)", Value::Null),
+            (
+                "coalesce(json_value(m.metadata, $path), 'fallback')",
+                Value::String("fallback".into()),
+            ),
+        ] {
+            let query = format!(
+                "MATCH (m:Memory) WITH {expression} AS origin, {aggregate} AS total RETURN origin, total"
+            );
+            let result = db
+                .query_with_params(
+                    &query,
+                    &BTreeMap::from([("path".into(), Value::String("$.source".into()))]),
+                )
+                .unwrap();
+            assert_eq!(result.rows.len(), 2, "{query}");
+            for (origin, total) in [(missing, 3), (Value::String("valid".into()), 1)] {
+                let row = result
+                    .rows
+                    .iter()
+                    .find(|row| row.get("origin") == Some(&origin))
+                    .unwrap();
+                assert_eq!(row.get("total"), Some(&Value::Int(total)), "{query}");
+            }
+        }
+    }
+}
+
+#[test]
 fn browser_clock_and_randomness_generate_distinct_uuidv7_values() {
     let mut db = Database::new();
     db.query_sql("CREATE TABLE items (id BIGINT PRIMARY KEY)")

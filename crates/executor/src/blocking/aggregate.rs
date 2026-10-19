@@ -669,8 +669,8 @@ pub fn stream_aggregate_batches(
         for binding in batch {
             let key = group_keys
                 .iter()
-                .map(|item| group_key_value(item, catalog, &binding))
-                .collect::<Vec<_>>();
+                .map(|item| project_value(item, catalog, &binding))
+                .collect::<Result<Vec<_>>>()?;
             let inputs = items
                 .iter()
                 .map(|item| aggregate_input(item, catalog, &binding))

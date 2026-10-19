@@ -170,8 +170,8 @@ pub(super) fn stream_partial_aggregate_batches(
             let key = HashedKey::new(
                 group_keys
                     .iter()
-                    .map(|item| group_key_value(item, context.catalog, &binding))
-                    .collect::<Vec<_>>(),
+                    .map(|item| project_value(item, context.catalog, &binding))
+                    .collect::<Result<Vec<_>>>()?,
                 &key_hasher,
             );
             let incoming = partial_states_for_binding(items, context.catalog, &binding);
