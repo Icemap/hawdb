@@ -139,3 +139,9 @@ Full90/110 acceptance and same-runner interpretation, independent disposition
 of earlier failures, genuine review/approval, required Prow and normal Tide
 integration remain open. Keep Draft and verify actual final main history excludes
 all30 removed report blobs. No performance, approval or merge shortcut is taken.
+
+## Explicit 1M numeric resource observations and partial matrix snapshot
+
+All four explicit1M successful numeric configurations are now observed: memory/file, ordinary/profiled builds; each has31 measured samples per owned/retained/Arrow mode plus discarded warmups. Source311/qualificationebcc remains the measured runtime; c87 is linked only through the separately documented test-format equivalence. The file/profiled group preserves process-global nonzero live-byte windows, consistent counter arithmetic, released owners and unchanged Arrow pool counters. Global deltas neither establish per-query leaks nor prove leak absence. Whole-child RSS includes setup and native/foreign heaps; allocation traffic is not live bytes, and retained/Arrow generic conversion zeros mean unavailable attribution. Full phase costs remain separately scoped.
+
+This snapshot contains ordinary29/90 and resources18/110 source-verified reports. The full matrix registration audit preserves all required groups; no subset completes acceptance. Four adverse write-stage medians remain recorded, with three samples per revision and no causal/significance claim. Full campaigns and same-runner gap control remain live; required Prow, independent failure disposition/review, genuine approval and actual final-main history audit remain open. The history receipt describes the observed main/c87 state, not a future merge guarantee. Draft/WIP remains.

@@ -1,0 +1,17 @@
+{
+  "observed_at": 1792404822.145493,
+  "current_pr_head": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+  "current_tree": "b38a95a769af9e468c6bfa49e53c4fbc05de72af",
+  "actual_main": "46bfde00131a6d711d51aad6e5e237279a287061",
+  "main_unchanged_since_qualification": true,
+  "report_count": 30,
+  "main_history_overlap": [],
+  "feature_tree_overlap": [],
+  "feature_history_overlap_count": 30,
+  "draft": true,
+  "mergeable": true,
+  "labels": [
+    "do-not-merge/work-in-progress"
+  ],
+  "scope": "Fresh current-main/head audit only. Thirty old reports remain feature-history reachable; do not normal-merge feature history to main. Final real Tide squash and actual main reachable-history audit remain mandatory. Not readiness/approval or future merge proof."
+}
