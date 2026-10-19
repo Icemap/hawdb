@@ -82,8 +82,13 @@ retained debt. A lost response can leave a complete
 recorded birth but no live producer token. That outcome remains debt; it is not
 rollback. The born target can now acquire Search publication exclusion through
 its original native directory handle while retaining a borrow of the birth
-token; this is target custody only. Explicit resolution with admitted native
-custody, complete producer closure, stationary query views, selector/receipt
+token. A bounded candidate-output token can copy one file from another captured
+directory in the same project descriptor domain into that born target with a
+new child name, an object reference and file/directory barriers. Attempted bytes
+stay charged after an error; no path or marker content grants target authority.
+This is artifact custody only, not a complete C/E closure or selected view.
+Explicit resolution with admitted native custody, complete producer closure,
+stationary query views, selector/receipt
 publication, C..E validation and eventual known-debt reclamation remain required.
 Metadata/workspace physical accounting and all-platform lost/torn/reordered
 qualification remain independent gates. A private birth never grants readiness,

@@ -21,7 +21,8 @@ use hawdb_core::{RuntimeTaskContext, Uuid};
 use hawdb_integrity::IntegrityHasher;
 use hawdb_storage::consumer_allocation::PendingConsumerGeneration;
 use hawdb_storage::file_io::{self as fs, File};
-use std::io::Read;
+use hawdb_storage::immutable_object::{ObjectKind, ObjectReference, ObjectReferenceWriter};
+use std::io::{Read, Write};
 use std::path::Path;
 
 mod control;
@@ -98,6 +99,30 @@ pub struct CheckpointReceipt {
 pub struct ConsumerStationaryTargetLease<'birth> {
     _birth: &'birth mut PendingConsumerGeneration,
     lease: SearchProjectionPublishLease,
+    memory: BuildMemory,
+    task: RuntimeTaskContext,
+}
+
+/// One bounded native output operation within a born Consumer generation.
+/// Completed files remain private until a separate complete selector protocol
+/// publishes them. Failed writes retain their attempted disk charge and the
+/// birth token's durable debt; dropping this value never removes a file.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct ConsumerCandidateOutput<'lease, 'birth> {
+    target: &'lease mut ConsumerStationaryTargetLease<'birth>,
+    memory: BuildMemory,
+    task: RuntimeTaskContext,
+    remaining_bytes: u64,
+}
+
+/// Producer evidence for exactly the bytes copied into one native target file.
+/// This is neither a complete generation closure nor a serving receipt.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConsumerCandidateArtifact {
+    pub length: u64,
+    pub reference: ObjectReference,
 }
 
 impl<'birth> ConsumerStationaryTargetLease<'birth> {
@@ -115,12 +140,130 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
         Ok(Self {
             _birth: birth,
             lease,
+            memory,
+            task: task.clone(),
         })
     }
 
     /// Physical target identity, useful for later selector/birth binding.
     pub fn source_identity(&self) -> hawdb_storage::file_io::SourceDirectoryIdentity {
         self.lease.source_identity()
+    }
+
+    /// Reserve a cumulative file-output bound before installing any artifact.
+    /// The caller still owns the candidate's complete workspace and cleanup
+    /// admission; this token only bounds the native output files it creates.
+    pub fn begin_candidate_output(
+        &mut self,
+        max_bytes: u64,
+    ) -> Result<ConsumerCandidateOutput<'_, 'birth>> {
+        crate::build_control::checkpoint(&self.task)?;
+        if max_bytes == 0 {
+            return Err(invalid("consumer candidate output budget is empty"));
+        }
+        Ok(ConsumerCandidateOutput {
+            memory: self.memory.clone(),
+            task: self.task.clone(),
+            target: self,
+            remaining_bytes: max_bytes,
+        })
+    }
+}
+
+impl ConsumerCandidateOutput<'_, '_> {
+    pub fn remaining_bytes(&self) -> u64 {
+        self.remaining_bytes
+    }
+
+    /// Copy from an already captured private source in the target's project
+    /// descriptor domain. Both opens and the final name check are relative to
+    /// original directory handles; no diagnostic path selects either file.
+    /// The target must be a new child. An attempted output keeps its charged
+    /// bytes even if a later copy or durability barrier fails.
+    pub fn install_artifact(
+        &mut self,
+        source: &hawdb_storage::file_io::SourceDirectory,
+        source_name: &str,
+        target_name: &str,
+    ) -> Result<ConsumerCandidateArtifact> {
+        use crate::build_memory::SPOOL_BUFFER_BYTES;
+        use std::num::NonZeroUsize;
+
+        crate::build_control::checkpoint(&self.task)?;
+        let _scratch = self.memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
+        let permit = self
+            .task
+            .acquire_io_wave(NonZeroUsize::MIN)
+            .map_err(|error| HawDBError::Execution(error.to_string()))?;
+        if self.task.has_resource_controllers() && permit.is_none() {
+            return Err(HawDBError::Execution(
+                "consumer candidate output requires I/O admission".into(),
+            ));
+        }
+        let source_context = source.operation_context();
+        self.target.lease.with_captured_directory(|target| {
+            let target_context = target.operation_context();
+            if !source.shares_project_context(&target_context) {
+                return Err(HawDBError::StorageIntegrity(
+                    "consumer candidate source has a foreign descriptor domain".into(),
+                ));
+            }
+            let mut input = source.open_child(&source_context, source_name)?;
+            let metadata = input.metadata()?;
+            if !metadata.is_file() {
+                return Err(HawDBError::StorageIntegrity(
+                    "consumer candidate source is not a file".into(),
+                ));
+            }
+            let length = metadata.len();
+            if length > self.remaining_bytes {
+                return Err(HawDBError::Storage(format!(
+                    "consumer candidate artifact requires {length} bytes, exceeding remaining {}",
+                    self.remaining_bytes
+                )));
+            }
+            let mut hasher = ObjectReferenceWriter::new(ObjectKind::CheckpointArtifact, 1, length)
+                .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
+            // Charge before the first native target effect. A failed attempt
+            // cannot reuse capacity while its partial file remains on disk.
+            self.remaining_bytes -= length;
+            let mut output = target.create_child_new(&target_context, target_name)?;
+            let mut copied = 0u64;
+            let mut buffer = [0u8; SPOOL_BUFFER_BYTES];
+            loop {
+                crate::build_control::checkpoint(&self.task)?;
+                let read = input.read(&mut buffer)?;
+                if read == 0 {
+                    break;
+                }
+                copied = copied
+                    .checked_add(read as u64)
+                    .filter(|copied| *copied <= length)
+                    .ok_or_else(|| {
+                        HawDBError::StorageIntegrity(
+                            "consumer candidate source grew during copy".into(),
+                        )
+                    })?;
+                output.write_all(&buffer[..read])?;
+                hasher.write_all(&buffer[..read])?;
+            }
+            if copied != length {
+                return Err(HawDBError::StorageIntegrity(
+                    "consumer candidate source shrank during copy".into(),
+                ));
+            }
+            let reference = hasher
+                .finish()
+                .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
+            if !target.matches_child_file(&target_context, target_name, &output)? {
+                return Err(HawDBError::StorageIntegrity(
+                    "consumer candidate target file identity changed".into(),
+                ));
+            }
+            output.sync_all()?;
+            target.sync(&target_context)?;
+            Ok(ConsumerCandidateArtifact { length, reference })
+        })
     }
 }
 

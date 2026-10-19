@@ -1,9 +1,11 @@
 # Consumer stationary publication and durable allocation custody
 
 Status: implementation contract with checked bounded safety models. A bounded
-runtime allocation/bootstrap ledger now backs initial Consumer creation. Native
-birth/debt settlement, stationary generation view/selector and adoption below
-are **not implemented**. This document preserves the complete acceptance scope in
+runtime allocation/bootstrap ledger, native birth, proven no-effect settlement,
+private-unused retirement, target publication lease and bounded native artifact
+copy now cover separate prerequisites. Complete C/E construction, stationary
+generation view/selector, exposed-debt recovery and adoption below remain
+**not implemented**. This document preserves the complete acceptance scope in
 [MVCC_VERSIONED_PUBLICATION_SPEC.md](MVCC_VERSIONED_PUBLICATION_SPEC.md).
 
 ## Source-backed problem
@@ -127,7 +129,7 @@ when the selected ledger already lacks its row; see
 A completed private birth can also persist retirement intent, delete through its
 original native custody, persist the deletion/tombstone and close target handles
 before settlement; see [the private-birth retirement refinement](../tla/CONSUMER_PRIVATE_BIRTH_RETIREMENT_PROOF.md).
-Exposed known-born/uncertain debt, target lease integration, recovery resolution and
+Exposed known-born/uncertain debt, complete producer closure, recovery resolution and
 stationary serving/selection remain unfinished. Allocation ledger
 V2 replaces the earlier development-only envelope without a compatibility migration.
 

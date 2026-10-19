@@ -1376,6 +1376,141 @@ fn consumer_native_birth_target_lease_excludes_a_second_publication_owner() {
 }
 
 #[test]
+fn consumer_native_candidate_output_installs_a_bounded_durable_artifact() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let generation = fixture.0.join(pending.generation_name());
+    let context = pending.born_directory().unwrap().operation_context();
+    let stage_path = fixture.0.join("captured-candidate-input");
+    std::fs::create_dir(&stage_path).unwrap();
+    let stage = hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
+    let payload = b"original candidate bytes";
+    let mut staged = stage.create_child_new(&context, "payload").unwrap();
+    std::io::Write::write_all(&mut staged, payload).unwrap();
+    staged.sync_all().unwrap();
+    stage.sync(&context).unwrap();
+    drop(staged);
+
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let mut lease =
+        hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
+            .unwrap();
+    let mut output = lease.begin_candidate_output(payload.len() as u64).unwrap();
+    let receipt = output
+        .install_artifact(
+            &stage,
+            "payload",
+            "search_projection_segment_payloads.0.hawdb",
+        )
+        .unwrap();
+    assert_eq!(receipt.length, payload.len() as u64);
+    assert_eq!(
+        receipt.reference,
+        hawdb_storage::immutable_object::ObjectReference::for_bytes(
+            hawdb_storage::immutable_object::ObjectKind::CheckpointArtifact,
+            1,
+            payload,
+        )
+    );
+    assert_eq!(output.remaining_bytes(), 0);
+    assert_eq!(
+        std::fs::read(generation.join("search_projection_segment_payloads.0.hawdb")).unwrap(),
+        payload
+    );
+    assert!(output
+        .install_artifact(&stage, "payload", "over-budget")
+        .is_err());
+    assert!(!generation.join("over-budget").exists());
+    drop(output);
+    drop(lease);
+    assert!(pending.born_directory().is_ok());
+    assert_eq!(
+        allocation_evidence(&fixture).1["pending"][0]["native_birth"]["state"],
+        "Recorded"
+    );
+}
+
+#[test]
+fn consumer_native_candidate_output_rejects_a_foreign_descriptor_domain_before_creation() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let generation = fixture.0.join(pending.generation_name());
+    let foreign_path = fixture.0.join("foreign-candidate-source");
+    std::fs::create_dir(&foreign_path).unwrap();
+    let foreign_project =
+        hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire(&foreign_path, 8).unwrap();
+    let source = hawdb_storage::file_io::SourceDirectory::capture(
+        &foreign_path,
+        &foreign_project.io_context(),
+    )
+    .unwrap();
+    std::fs::write(foreign_path.join("payload"), b"foreign").unwrap();
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let mut lease =
+        hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
+            .unwrap();
+    let mut output = lease.begin_candidate_output(7).unwrap();
+    let error = output
+        .install_artifact(&source, "payload", "foreign-output")
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("foreign descriptor domain"),
+        "{error}"
+    );
+    assert_eq!(output.remaining_bytes(), 7);
+    assert!(!generation.join("foreign-output").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn consumer_native_candidate_output_uses_the_original_stage_after_label_replacement() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let generation = fixture.0.join(pending.generation_name());
+    let context = pending.born_directory().unwrap().operation_context();
+    let stage_path = fixture.0.join("candidate-stage-label");
+    let moved = fixture.0.join("original-candidate-stage");
+    std::fs::create_dir(&stage_path).unwrap();
+    let stage = hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
+    let original = b"original candidate bytes";
+    let foreign = b"replaced candidate bytes";
+    assert_eq!(original.len(), foreign.len());
+    let mut staged = stage.create_child_new(&context, "payload").unwrap();
+    std::io::Write::write_all(&mut staged, original).unwrap();
+    staged.sync_all().unwrap();
+    drop(staged);
+    std::fs::rename(&stage_path, &moved).unwrap();
+    std::fs::create_dir(&stage_path).unwrap();
+    std::fs::write(stage_path.join("payload"), foreign).unwrap();
+
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let mut lease =
+        hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
+            .unwrap();
+    let mut output = lease.begin_candidate_output(original.len() as u64).unwrap();
+    output
+        .install_artifact(&stage, "payload", "copied")
+        .unwrap();
+    assert_eq!(std::fs::read(generation.join("copied")).unwrap(), original);
+    assert_eq!(std::fs::read(stage_path.join("payload")).unwrap(), foreign);
+}
+
+#[test]
 fn consumer_native_birth_refuses_mutated_marker_before_exposing_target() {
     let fixture = Fixture::new();
     let mut db = fixture.database();
