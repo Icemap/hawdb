@@ -1,0 +1,767 @@
+{
+  "artifact": 12156239699,
+  "reports": {
+    "manifest.json": {
+      "engine_source": "0c2989842321d10e91f136f3c924badb07038add",
+      "engine_tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3",
+      "sources": {
+        "baseline": {
+          "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+          "tree": "4a235b06362ae6306a300e45d5974495c1229c2b"
+        },
+        "candidate": {
+          "head": "0c2989842321d10e91f136f3c924badb07038add",
+          "tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3"
+        }
+      },
+      "producers": {
+        "baseline": {
+          "rust": {
+            "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/hawdb_bench_host_boundary_allocations",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary_allocations",
+            "sha256": "0f4c8d1aa04d77d8065937228ff316ac6454f231a9260085f74f580739bc3a3c"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary.runfiles",
+              "sha256": "b2a5d5145e944e2a4cfcb91e3dc5fbc202a1ac974db389d9297146568185dac0",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "90004839edb125783b74e5a1a75aa1a5ff67835f1269bcedb987f20297f1b009"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/libhawdb_ffi_boundary_profile.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi_boundary_profile.so",
+            "sha256": "1de1fe544214b32958874b5441b709edd2eeac640ffae6549acc69664dd81bec"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/lib_hawdb_boundary_profile.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/lib_hawdb_boundary_profile.so",
+            "sha256": "15545f2921adc8fc016db7d14c93bfdc4f2fda882153bbcc141c6db304485af1"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/boundary_profile",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+            "sha256": "5bc6d48dc9bceec648d0fcbdc79a73b52839dba442060c7e2d7420cd8c2c4485"
+          }
+        },
+        "candidate": {
+          "rust": {
+            "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/hawdb_bench_host_boundary_allocations",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/hawdb_bench_host_boundary_allocations",
+            "sha256": "7cf4fb9feb491dbe66f456eb8098241ec5fcf5817be84949d95cc2700be10f07"
+          },
+          "python": {
+            "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/benchmarks/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883",
+            "runfiles": {
+              "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary.runfiles",
+              "sha256": "d26a9c537070ec19a6bee7b936fb8e2602ddfbdd9b0af6144afa44e95ddc3221",
+              "entries": 2517
+            },
+            "runfiles_manifest_sha256": "f7a86d5a01951cb4e801741f57d0709e145dfaee0e9f78ce79e2a87bda2efab9"
+          },
+          "library": {
+            "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/libhawdb_ffi_boundary_profile.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/ffi/libhawdb_ffi_boundary_profile.so",
+            "sha256": "d15433738c9e2274a6161156945094eb979ba23e042d68df2720d8cebbfa6434"
+          },
+          "python_extension": {
+            "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/lib_hawdb_boundary_profile.so",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt/bin/bindings/python/lib_hawdb_boundary_profile.so",
+            "sha256": "5cb7a2ebeedbfb365fbb690239da28a46a78f69c6ca81cb4e1ef9badedec7749"
+          },
+          "go": {
+            "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+            "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+            "sha256": "5bc6d48dc9bceec648d0fcbdc79a73b52839dba442060c7e2d7420cd8c2c4485"
+          }
+        }
+      },
+      "shared_go_source": {
+        "head": "0c2989842321d10e91f136f3c924badb07038add",
+        "tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3"
+      },
+      "shared_go_producer": {
+        "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/boundary_profile",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+        "sha256": "5bc6d48dc9bceec648d0fcbdc79a73b52839dba442060c7e2d7420cd8c2c4485"
+      },
+      "independently_built_reference_go": {
+        "path": "/home/runner/work/_temp/resource-qualification/baseline-built-go",
+        "source": "/home/runner/.bazel/execroot/_main/bazel-out/k8-opt-ST-9c6a1b364ac5/bin/bindings/go/cmd/boundary/boundary_profile_/boundary_profile",
+        "sha256": "b26afdc8f3005ce06eb0ff8c6ad284314879a9edac379cd5abc1460fa3de4222"
+      },
+      "go_host_profiles": false,
+      "overlay_files": [],
+      "baseline_observer_patch_sha256": "8dd4d5317635ba2ebb79971cea3cc3d118cd66504f587262c07859880e08e871",
+      "matrix_selection": {
+        "sizes": "1000",
+        "cases": "fill",
+        "layers": "python",
+        "backends": "memory",
+        "samples": 3
+      },
+      "defaults_changed_by_qualification": false,
+      "instrumented": true,
+      "scope": [
+        "Native Rust allocation requests, Python traced heap and Go heap remain separate observations.",
+        "Per-child process RSS includes runtime, fixture, setup, warmup and complete operation.",
+        "Native phases and Go host JSON/copy/free phases remain separate; native phases nest inside complete Go FFI time.",
+        "Instrumented timing is not uninstrumented performance qualification or a whole-memory bound.",
+        "The ordinary candidate uses the exact frozen engine, bindings, workloads and build configuration; only qualification/workflow files may differ.",
+        "All refusals, nonzero exits, unsupported groups and absent profiles remain adverse outcomes."
+      ]
+    },
+    "outcomes.json": {
+      "baseline": 0,
+      "candidate": 0
+    },
+    "baseline/report.json": {
+      "source": {
+        "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+        "tree": "4a235b06362ae6306a300e45d5974495c1229c2b"
+      },
+      "spec": "ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md",
+      "seed": 24301,
+      "sizes": [
+        1000
+      ],
+      "cases": [
+        "fill"
+      ],
+      "backends": [
+        "memory"
+      ],
+      "layers": [
+        "python"
+      ],
+      "samples": 3,
+      "discarded_iterations": 1,
+      "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu": "x86_64",
+      "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "go": "go version go1.27.2 linux/amd64",
+      "build": "Bazel opt, all three engine dependencies compiled together",
+      "defaults_changed": false,
+      "strict_zero_copy": false,
+      "terminal": true,
+      "instrumented": true,
+      "go_host_profiles": false,
+      "native_profiles": true,
+      "go_cpu_profiles": false,
+      "binaries": {
+        "python": {
+          "path": "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary",
+          "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+        }
+      },
+      "library_sha256": "1de1fe544214b32958874b5441b709edd2eeac640ffae6549acc69664dd81bec",
+      "python_extension_path": "/home/runner/work/_temp/resource-qualification/baseline-producer/lib_hawdb_boundary_profile.so",
+      "python_extension_sha256": "15545f2921adc8fc016db7d14c93bfdc4f2fda882153bbcc141c6db304485af1",
+      "records": [
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 283389,
+          "query_boundary_ns": 1132271742,
+          "write_boundary_ns": 1106583486,
+          "read_boundary_ns": 25688256,
+          "consumer_ns": 73616372,
+          "elapsed_ns": 1211373123,
+          "native_profile": {
+            "allocation_calls": 10812628,
+            "allocated_bytes": 756972980,
+            "deallocation_calls": 10800929,
+            "deallocated_bytes": 755680633,
+            "reallocation_calls": 142252,
+            "parameter_conversion_ns": 19443142,
+            "engine_call_ns": 1079749243,
+            "result_conversion_ns": 26642794,
+            "live_requested_bytes_before": 84615,
+            "live_requested_bytes_after": 1376962,
+            "process_peak_requested_bytes": 2315320,
+            "scope": "Rust allocator requests, excluding foreign heap/rounding/non-Rust workspace",
+            "python_traced_current_bytes": 550940,
+            "python_traced_peak_bytes": 550940
+          },
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 36790272,
+          "process_exit": 0,
+          "process_seconds": 1.3907611060001273,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary",
+            "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-0.job.json",
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/lib_hawdb_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-0.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-0.stderr",
+          "process_peak_rss_bytes": 36921344,
+          "size": 1000,
+          "iteration": 0,
+          "discarded": true,
+          "fixture_sha256": "7e7db0924eaa68ca73eab6c616d729f653e83e96b809263eeb44f60f93c67b2c",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 305481,
+          "query_boundary_ns": 1136618279,
+          "write_boundary_ns": 1110931476,
+          "read_boundary_ns": 25686803,
+          "consumer_ns": 73781770,
+          "elapsed_ns": 1215764571,
+          "native_profile": {
+            "allocation_calls": 10812628,
+            "allocated_bytes": 756972980,
+            "deallocation_calls": 10800929,
+            "deallocated_bytes": 755680633,
+            "reallocation_calls": 142252,
+            "parameter_conversion_ns": 19170473,
+            "engine_call_ns": 1084765978,
+            "result_conversion_ns": 26274652,
+            "live_requested_bytes_before": 84615,
+            "live_requested_bytes_after": 1376962,
+            "process_peak_requested_bytes": 2315320,
+            "scope": "Rust allocator requests, excluding foreign heap/rounding/non-Rust workspace",
+            "python_traced_current_bytes": 550940,
+            "python_traced_peak_bytes": 550940
+          },
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 36786176,
+          "process_exit": 0,
+          "process_seconds": 1.3846783010001218,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary",
+            "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-1.job.json",
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/lib_hawdb_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-1.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-1.stderr",
+          "process_peak_rss_bytes": 36917248,
+          "size": 1000,
+          "iteration": 1,
+          "discarded": false,
+          "fixture_sha256": "b459e9de48e692d81215d3ba99c33eb4fab8423b8609fd77fa4cc014bd079996",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 287056,
+          "query_boundary_ns": 1136504991,
+          "write_boundary_ns": 1110519660,
+          "read_boundary_ns": 25985331,
+          "consumer_ns": 74407860,
+          "elapsed_ns": 1216455878,
+          "native_profile": {
+            "allocation_calls": 10812628,
+            "allocated_bytes": 756972980,
+            "deallocation_calls": 10800929,
+            "deallocated_bytes": 755680633,
+            "reallocation_calls": 142252,
+            "parameter_conversion_ns": 19378474,
+            "engine_call_ns": 1083706147,
+            "result_conversion_ns": 26860613,
+            "live_requested_bytes_before": 84615,
+            "live_requested_bytes_after": 1376962,
+            "process_peak_requested_bytes": 2315320,
+            "scope": "Rust allocator requests, excluding foreign heap/rounding/non-Rust workspace",
+            "python_traced_current_bytes": 550940,
+            "python_traced_peak_bytes": 550940
+          },
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 36753408,
+          "process_exit": 0,
+          "process_seconds": 1.3854400079999323,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary",
+            "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-2.job.json",
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/lib_hawdb_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-2.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-2.stderr",
+          "process_peak_rss_bytes": 36753408,
+          "size": 1000,
+          "iteration": 2,
+          "discarded": false,
+          "fixture_sha256": "472bbac3e529bb10ff01f02bd6eebe3ae716e941db06e33191127a2faac6ed45",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 285503,
+          "query_boundary_ns": 1129428502,
+          "write_boundary_ns": 1103832318,
+          "read_boundary_ns": 25596184,
+          "consumer_ns": 73417019,
+          "elapsed_ns": 1208199023,
+          "native_profile": {
+            "allocation_calls": 10812628,
+            "allocated_bytes": 756972980,
+            "deallocation_calls": 10800929,
+            "deallocated_bytes": 755680633,
+            "reallocation_calls": 142252,
+            "parameter_conversion_ns": 19126647,
+            "engine_call_ns": 1077134665,
+            "result_conversion_ns": 26607819,
+            "live_requested_bytes_before": 84615,
+            "live_requested_bytes_after": 1376962,
+            "process_peak_requested_bytes": 2315320,
+            "scope": "Rust allocator requests, excluding foreign heap/rounding/non-Rust workspace",
+            "python_traced_current_bytes": 550940,
+            "python_traced_peak_bytes": 550940
+          },
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 36802560,
+          "process_exit": 0,
+          "process_seconds": 1.3746592149998378,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/python_boundary",
+            "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-3.job.json",
+            "/home/runner/work/_temp/resource-qualification/baseline-producer/lib_hawdb_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-3.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/baseline/python-fill-1000-memory-3.stderr",
+          "process_peak_rss_bytes": 36802560,
+          "size": 1000,
+          "iteration": 3,
+          "discarded": false,
+          "fixture_sha256": "6d75977cf1d2e0596757206c10a35446efb0aa25f0a696e434c8b5c4de58016b",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        }
+      ],
+      "summaries": [
+        {
+          "layer": "python",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "successful_samples": 3,
+          "failed_samples": 0,
+          "median_query_boundary_ns": 1136504991,
+          "median_write_boundary_ns": 1110519660,
+          "median_read_boundary_ns": 25686803,
+          "median_elapsed_ns": 1215764571
+        }
+      ],
+      "measurement_limits": [
+        "A selected layer/backend shard qualifies only its recorded groups; full-matrix acceptance requires complete coverage across shards.",
+        "Process peak RSS includes runtime, fixture, setup and query; it is not a query-only allocation ledger.",
+        "Allocator observations count Rust requests; Go/Python heaps and non-Rust workspace are separate.",
+        "Each iteration opens its own store; seeded read runs measure a warm store, not cold artifact reads.",
+        "Write cases include a final verification query in query_boundary_ns; write_boundary_ns and read_boundary_ns separate the phases without removing calls.",
+        "The query timer excludes the identical checksum algorithm; consumer time is reported separately."
+      ],
+      "parity_failures": 0,
+      "value_parity_records": 4,
+      "successful_records": 4,
+      "refused_or_failed_records": 0,
+      "profile_failures": 0,
+      "failure_profile_failures": 0,
+      "go_host_profile_failures": 0,
+      "failure_go_host_profile_failures": 0,
+      "phase_timing_failures": 0,
+      "all_paths_succeeded": true
+    },
+    "candidate/report.json": {
+      "source": {
+        "head": "0c2989842321d10e91f136f3c924badb07038add",
+        "tree": "122ad7e9bcbe6ccc38e49dd018bed00c4d02c3a3"
+      },
+      "spec": "ZERO_COPY_COLUMNAR_INTERCHANGE_SPEC.md",
+      "seed": 24301,
+      "sizes": [
+        1000
+      ],
+      "cases": [
+        "fill"
+      ],
+      "backends": [
+        "memory"
+      ],
+      "layers": [
+        "python"
+      ],
+      "samples": 3,
+      "discarded_iterations": 1,
+      "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu": "x86_64",
+      "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "go": "go version go1.27.2 linux/amd64",
+      "build": "Bazel opt, all three engine dependencies compiled together",
+      "defaults_changed": false,
+      "strict_zero_copy": false,
+      "terminal": true,
+      "instrumented": true,
+      "go_host_profiles": false,
+      "native_profiles": true,
+      "go_cpu_profiles": false,
+      "binaries": {
+        "python": {
+          "path": "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary",
+          "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+        }
+      },
+      "library_sha256": "d15433738c9e2274a6161156945094eb979ba23e042d68df2720d8cebbfa6434",
+      "python_extension_path": "/home/runner/work/_temp/resource-qualification/candidate-producer/lib_hawdb_boundary_profile.so",
+      "python_extension_sha256": "5cb7a2ebeedbfb365fbb690239da28a46a78f69c6ca81cb4e1ef9badedec7749",
+      "records": [
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 334054,
+          "query_boundary_ns": 148893616,
+          "write_boundary_ns": 124739133,
+          "read_boundary_ns": 24154483,
+          "consumer_ns": 76318827,
+          "elapsed_ns": 230593366,
+          "native_profile": {
+            "allocation_calls": 508080,
+            "allocated_bytes": 90385924,
+            "deallocation_calls": 495316,
+            "deallocated_bytes": 89067027,
+            "reallocation_calls": 45094,
+            "parameter_conversion_ns": 18148099,
+            "engine_call_ns": 99655795,
+            "result_conversion_ns": 25139978,
+            "live_requested_bytes_before": 183759,
+            "live_requested_bytes_after": 1502656,
+            "process_peak_requested_bytes": 2427164,
+            "scope": "Rust allocator requests, excluding foreign heap/rounding/non-Rust workspace",
+            "python_traced_current_bytes": 550924,
+            "python_traced_peak_bytes": 550924
+          },
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 38932480,
+          "process_exit": 0,
+          "process_seconds": 0.39925371300000734,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary",
+            "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-0.job.json",
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/lib_hawdb_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-0.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-0.stderr",
+          "process_peak_rss_bytes": 39194624,
+          "size": 1000,
+          "iteration": 0,
+          "discarded": true,
+          "fixture_sha256": "6ed6b4402b6bd4b066ce15cb866ba8945bdffed09795b89c6fd91b9858605cd6",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 306302,
+          "query_boundary_ns": 144131321,
+          "write_boundary_ns": 120520042,
+          "read_boundary_ns": 23611279,
+          "consumer_ns": 73282048,
+          "elapsed_ns": 222570038,
+          "native_profile": {
+            "allocation_calls": 508080,
+            "allocated_bytes": 90385924,
+            "deallocation_calls": 495316,
+            "deallocated_bytes": 89067027,
+            "reallocation_calls": 45094,
+            "parameter_conversion_ns": 18068205,
+            "engine_call_ns": 95544932,
+            "result_conversion_ns": 24764081,
+            "live_requested_bytes_before": 183759,
+            "live_requested_bytes_after": 1502656,
+            "process_peak_requested_bytes": 2427164,
+            "scope": "Rust allocator requests, excluding foreign heap/rounding/non-Rust workspace",
+            "python_traced_current_bytes": 550924,
+            "python_traced_peak_bytes": 550924
+          },
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 38821888,
+          "process_exit": 0,
+          "process_seconds": 0.39030705000004673,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary",
+            "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-1.job.json",
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/lib_hawdb_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-1.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-1.stderr",
+          "process_peak_rss_bytes": 39084032,
+          "size": 1000,
+          "iteration": 1,
+          "discarded": false,
+          "fixture_sha256": "f2d70057753679d2fb9f9c004598ba99edfb9b79bb4cc5db7234b20229cc5686",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 295502,
+          "query_boundary_ns": 145705131,
+          "write_boundary_ns": 121845067,
+          "read_boundary_ns": 23860064,
+          "consumer_ns": 73491428,
+          "elapsed_ns": 224431133,
+          "native_profile": {
+            "allocation_calls": 508080,
+            "allocated_bytes": 90385924,
+            "deallocation_calls": 495316,
+            "deallocated_bytes": 89067027,
+            "reallocation_calls": 45094,
+            "parameter_conversion_ns": 17840073,
+            "engine_call_ns": 97384414,
+            "result_conversion_ns": 24805811,
+            "live_requested_bytes_before": 183759,
+            "live_requested_bytes_after": 1502656,
+            "process_peak_requested_bytes": 2427164,
+            "scope": "Rust allocator requests, excluding foreign heap/rounding/non-Rust workspace",
+            "python_traced_current_bytes": 550924,
+            "python_traced_peak_bytes": 550924
+          },
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 38682624,
+          "process_exit": 0,
+          "process_seconds": 0.39428154000006543,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary",
+            "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-2.job.json",
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/lib_hawdb_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-2.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-2.stderr",
+          "process_peak_rss_bytes": 39075840,
+          "size": 1000,
+          "iteration": 2,
+          "discarded": false,
+          "fixture_sha256": "430570a9da07ef4d7324e1d9ae3e4f51fa7ba7d9acebf32c9a8679bfd6067c70",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        },
+        {
+          "status": "ok",
+          "layer": "python",
+          "case": "fill",
+          "backend": "memory",
+          "input_rows": 1000,
+          "output_rows": 1000,
+          "values": 3000,
+          "checksum": "ee38a8b2642c45d5",
+          "setup_ns": 283760,
+          "query_boundary_ns": 146427710,
+          "write_boundary_ns": 122563870,
+          "read_boundary_ns": 23863840,
+          "consumer_ns": 73807799,
+          "elapsed_ns": 225498054,
+          "native_profile": {
+            "allocation_calls": 508080,
+            "allocated_bytes": 90385924,
+            "deallocation_calls": 495316,
+            "deallocated_bytes": 89067027,
+            "reallocation_calls": 45094,
+            "parameter_conversion_ns": 17754778,
+            "engine_call_ns": 98164027,
+            "result_conversion_ns": 24788811,
+            "live_requested_bytes_before": 183759,
+            "live_requested_bytes_after": 1502656,
+            "process_peak_requested_bytes": 2427164,
+            "scope": "Rust allocator requests, excluding foreign heap/rounding/non-Rust workspace",
+            "python_traced_current_bytes": 550924,
+            "python_traced_peak_bytes": 550924
+          },
+          "durability": "SyncOnEveryWrite",
+          "prefetch": 0,
+          "peak_rss_bytes": 38776832,
+          "process_exit": 0,
+          "process_seconds": 0.3925998400000026,
+          "command": [
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/python_boundary",
+            "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-3.job.json",
+            "/home/runner/work/_temp/resource-qualification/candidate-producer/lib_hawdb_boundary_profile.so"
+          ],
+          "stdout": "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-3.stdout",
+          "stderr": "/home/runner/work/_temp/resource-qualification/candidate/python-fill-1000-memory-3.stderr",
+          "process_peak_rss_bytes": 39170048,
+          "size": 1000,
+          "iteration": 3,
+          "discarded": false,
+          "fixture_sha256": "16502d0fcad0e2169700d6cb74ab9222b1a0b2c0a9066ec731b05bfa2f7ce96b",
+          "expected_checksum": "ee38a8b2642c45d5",
+          "parity": true,
+          "phase_timing_valid": true,
+          "profile_valid": true,
+          "failure_profile_valid": null,
+          "go_host_profile_valid": true,
+          "failure_go_host_profile_valid": null
+        }
+      ],
+      "summaries": [
+        {
+          "layer": "python",
+          "case": "fill",
+          "size": 1000,
+          "backend": "memory",
+          "successful_samples": 3,
+          "failed_samples": 0,
+          "median_query_boundary_ns": 145705131,
+          "median_write_boundary_ns": 121845067,
+          "median_read_boundary_ns": 23860064,
+          "median_elapsed_ns": 224431133
+        }
+      ],
+      "measurement_limits": [
+        "A selected layer/backend shard qualifies only its recorded groups; full-matrix acceptance requires complete coverage across shards.",
+        "Process peak RSS includes runtime, fixture, setup and query; it is not a query-only allocation ledger.",
+        "Allocator observations count Rust requests; Go/Python heaps and non-Rust workspace are separate.",
+        "Each iteration opens its own store; seeded read runs measure a warm store, not cold artifact reads.",
+        "Write cases include a final verification query in query_boundary_ns; write_boundary_ns and read_boundary_ns separate the phases without removing calls.",
+        "The query timer excludes the identical checksum algorithm; consumer time is reported separately."
+      ],
+      "parity_failures": 0,
+      "value_parity_records": 4,
+      "successful_records": 4,
+      "refused_or_failed_records": 0,
+      "profile_failures": 0,
+      "failure_profile_failures": 0,
+      "go_host_profile_failures": 0,
+      "failure_go_host_profile_failures": 0,
+      "phase_timing_failures": 0,
+      "all_paths_succeeded": true
+    }
+  },
+  "verified_files": [
+    "baseline-producer/hawdb_bench_host_boundary_allocations",
+    "baseline-producer/python_boundary",
+    "baseline-producer/libhawdb_ffi_boundary_profile.so",
+    "baseline-producer/lib_hawdb_boundary_profile.so",
+    "baseline-producer/boundary_profile",
+    "baseline-producer/python_boundary.runfiles_manifest",
+    "candidate-producer/hawdb_bench_host_boundary_allocations",
+    "candidate-producer/python_boundary",
+    "candidate-producer/libhawdb_ffi_boundary_profile.so",
+    "candidate-producer/lib_hawdb_boundary_profile.so",
+    "candidate-producer/boundary_profile",
+    "candidate-producer/python_boundary.runfiles_manifest"
+  ],
+  "group_selection": {
+    "group": [
+      "ordinary",
+      1000,
+      "memory",
+      "default",
+      "true",
+      "fill",
+      "python"
+    ],
+    "run": 39154779183,
+    "inputs": {
+      "kind": "ordinary",
+      "rows": "1000",
+      "backend": "memory",
+      "configuration": "default",
+      "instrumented": "true",
+      "case": "fill",
+      "layer": "python",
+      "samples": "3"
+    }
+  },
+  "artifact_name": "resources-ordinary-1000-memory-default-true-fill-python-bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
+  "workflow_run": 39154779183
+}

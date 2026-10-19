@@ -18,6 +18,7 @@ for group in s['reports']:
     raw = (root / f"artifact-{group['artifact']}.json").read_bytes()
     reports = json.loads(raw)['reports']
     values = {}
+    go_host_profiles = {}
     for side in ['baseline', 'candidate']:
         report = reports[side + '/report.json']
         assert report['all_paths_succeeded'] and report['samples'] == 3
@@ -30,17 +31,27 @@ for group in s['reports']:
             assert x['output_rows'] == group['group'][1]
         observed = group['sides'][side]['observed_medians']
         medians = {key: statistics.median(x[key] for x in records)
-                   for key in ['process_peak_rss_bytes', 'query_boundary_ns', 'consumer_ns']}
+                   for key in observed if key != 'native_profile'}
         medians['native_profile'] = {
             key: statistics.median(x['native_profile'][key] for x in records)
             for key in observed['native_profile']}
         assert medians == observed
         values[side] = medians
+        if records[0].get('go_host_profile'):
+            for x in report['records']:
+                assert x['go_host_profile_valid'] and x['go_host_profile']['valid']
+            profile = records[0]['go_host_profile']
+            numeric_keys = [key for key, value in profile.items() if type(value) in [int, float]]
+            go_host_profiles[side] = {
+                key: statistics.median(x['go_host_profile'][key] for x in records)
+                for key in numeric_keys}
+            go_host_profiles[side]['scope_detail'] = profile['scope_detail']
     before, after = values['baseline'], values['candidate']
     audits.append({
         'group': group['group'], 'artifact': group['artifact'],
         'bundle_sha256': hashlib.sha256(raw).hexdigest(), 'observed_medians': values,
         'process_RSS_relative_increase': after['process_peak_rss_bytes'] / before['process_peak_rss_bytes'] - 1,
+        'go_host_profiles': go_host_profiles,
     })
 out = {'engine': s['engine'], 'source': s['source'], 'run': s['run'],
        'observed_at': time.time(), 'summary_sha256': hashlib.sha256(raw_summary).hexdigest(),

@@ -1,0 +1,135 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "source": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+  "observed_at": 1792373017.7209752,
+  "summary_sha256": "305cab792fe59863da9e3f00456f6bbe2b8143d7a27d91828395a6df1871f81f",
+  "audited_groups": 4,
+  "expected_groups": 6,
+  "groups": [
+    {
+      "selection": [
+        "rust",
+        "file"
+      ],
+      "artifact": 12156271909,
+      "bundle_sha256": "3ea36529bb363680f411696a8e1e7b61e72252dda06aa106cdf9bff5e781a734",
+      "measured_medians": {
+        "baseline": {
+          "elapsed_ns": 908803188700,
+          "query_boundary_ns": 908506334023,
+          "consumer_ns": 54008517,
+          "setup_ns": 33446149005,
+          "process_seconds": 1880.8287468160001,
+          "process_peak_rss_bytes": 258084864
+        },
+        "candidate": {
+          "elapsed_ns": 15845038085,
+          "query_boundary_ns": 15698335800,
+          "consumer_ns": 20820573,
+          "setup_ns": 5703720333,
+          "process_seconds": 37.70383883300019,
+          "process_peak_rss_bytes": 254369792
+        }
+      },
+      "elapsed_median_ratio": 57.35569607499621,
+      "query_boundary_median_ratio": 57.872779993851324,
+      "checksums": [
+        "5f3c5c12795e362d"
+      ]
+    },
+    {
+      "selection": [
+        "rust",
+        "memory"
+      ],
+      "artifact": 12156468056,
+      "bundle_sha256": "dcdd06f9ab273786f9e9cb65fe42860350db140c17634332db1b77e16ed2534c",
+      "measured_medians": {
+        "baseline": {
+          "elapsed_ns": 999347315097,
+          "query_boundary_ns": 999013726494,
+          "consumer_ns": 61482769,
+          "setup_ns": 32389640538,
+          "process_seconds": 2059.47889504,
+          "process_peak_rss_bytes": 251555840
+        },
+        "candidate": {
+          "elapsed_ns": 15440333208,
+          "query_boundary_ns": 15293584104,
+          "consumer_ns": 21759120,
+          "setup_ns": 3249758175,
+          "process_seconds": 34.20974593700157,
+          "process_peak_rss_bytes": 228966400
+        }
+      },
+      "elapsed_median_ratio": 64.7231702602904,
+      "query_boundary_median_ratio": 65.32240707609607,
+      "checksums": [
+        "5f3c5c12795e362d"
+      ]
+    },
+    {
+      "selection": [
+        "python",
+        "memory"
+      ],
+      "artifact": 12155879738,
+      "bundle_sha256": "938ca703c9ec6e2667b75445287ce2c1bebddf26797340256c19ebb7e4f69f26",
+      "measured_medians": {
+        "baseline": {
+          "elapsed_ns": 892318361929,
+          "query_boundary_ns": 889472006935,
+          "consumer_ns": 2378122163,
+          "setup_ns": 30830951017,
+          "process_seconds": 1830.0776271940003,
+          "process_peak_rss_bytes": 236236800
+        },
+        "candidate": {
+          "elapsed_ns": 17500721098,
+          "query_boundary_ns": 15894546063,
+          "consumer_ns": 1366144994,
+          "setup_ns": 3117348612,
+          "process_seconds": 36.24987286099895,
+          "process_peak_rss_bytes": 213692416
+        }
+      },
+      "elapsed_median_ratio": 50.98751971031497,
+      "query_boundary_median_ratio": 55.96083105547448,
+      "checksums": [
+        "5f3c5c12795e362d"
+      ]
+    },
+    {
+      "selection": [
+        "python",
+        "file"
+      ],
+      "artifact": 12157310028,
+      "bundle_sha256": "953545c414d41f9d0458d34c56f126a2444f2d8066f70a8970cc75d96791a838",
+      "measured_medians": {
+        "baseline": {
+          "elapsed_ns": 811073318851,
+          "query_boundary_ns": 808489278893,
+          "consumer_ns": 2128610870,
+          "setup_ns": 31941428709,
+          "process_seconds": 1662.1471152269996,
+          "process_peak_rss_bytes": 243314688
+        },
+        "candidate": {
+          "elapsed_ns": 17935491234,
+          "query_boundary_ns": 16361636525,
+          "consumer_ns": 1355165764,
+          "setup_ns": 5431922776,
+          "process_seconds": 39.74578938200011,
+          "process_peak_rss_bytes": 238628864
+        }
+      },
+      "elapsed_median_ratio": 45.22169525602189,
+      "query_boundary_median_ratio": 49.41371712161293,
+      "checksums": [
+        "5f3c5c12795e362d"
+      ]
+    }
+  ],
+  "scope": "Original100k point groups,100000returned rows/300000values,seed24301,prefetch0,SyncOnEveryWrite,three measured independent processes+discardedwarmup per side. Query boundary excludes identical checksum consumer; seeded reads use warm stores. Workload elapsed excludes full child lifetime including fixture/setup/warmup; process_seconds and RSS are separate. No significance,causality,production tails or full90/110 acceptance."
+}

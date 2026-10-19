@@ -8,243 +8,9 @@
   "status": "queued",
   "conclusion": null,
   "expected_groups": 110,
-  "observed_complete_groups": 24,
+  "observed_complete_groups": 50,
   "full_requested_matrix_observed": false,
   "missing_groups": [
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "fill",
-      "go"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "fill",
-      "python"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "fill",
-      "rust"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "fill_bulk",
-      "go"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "point",
-      "go"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "point",
-      "python"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "point",
-      "rust"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "select",
-      "go"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "select",
-      "python"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "select",
-      "rust"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "wide",
-      "go"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "wide",
-      "python"
-    ],
-    [
-      "ordinary",
-      1000,
-      "file",
-      "default",
-      "true",
-      "wide",
-      "rust"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "fill",
-      "go"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "fill",
-      "python"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "fill",
-      "rust"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "fill_bulk",
-      "go"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "point",
-      "go"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "point",
-      "python"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "point",
-      "rust"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "select",
-      "go"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "select",
-      "python"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "select",
-      "rust"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "wide",
-      "go"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "wide",
-      "python"
-    ],
-    [
-      "ordinary",
-      1000,
-      "memory",
-      "default",
-      "true",
-      "wide",
-      "rust"
-    ],
     [
       "ordinary",
       100000,
@@ -3514,6 +3280,1642 @@
       },
       "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
       "artifact": 12151019291
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "fill_bulk",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 30420992,
+            "query_boundary_ns": 36448530,
+            "consumer_ns": 194487,
+            "go_allocated_bytes": 1293616,
+            "go_allocations": 30616,
+            "native_profile": {
+              "allocated_bytes": 41549213,
+              "allocation_calls": 166483,
+              "deallocated_bytes": 40214893,
+              "deallocation_calls": 156652,
+              "engine_call_ns": 30146128,
+              "live_requested_bytes_after": 1430951,
+              "live_requested_bytes_before": 96631,
+              "parameter_conversion_ns": 1714832,
+              "process_peak_requested_bytes": 4657809,
+              "reallocation_calls": 2518,
+              "result_conversion_ns": 882093
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 31485952,
+            "query_boundary_ns": 32962838,
+            "consumer_ns": 194507,
+            "go_allocated_bytes": 1293456,
+            "go_allocations": 30615,
+            "native_profile": {
+              "allocated_bytes": 39097032,
+              "allocation_calls": 147391,
+              "deallocated_bytes": 37736388,
+              "deallocation_calls": 136495,
+              "engine_call_ns": 26959039,
+              "live_requested_bytes_after": 1553523,
+              "live_requested_bytes_before": 192879,
+              "parameter_conversion_ns": 1716677,
+              "process_peak_requested_bytes": 4752959,
+              "reallocation_calls": 2213,
+              "result_conversion_ns": 741198
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12151742538
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "fill_bulk",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 37892096,
+            "query_boundary_ns": 36462765,
+            "consumer_ns": 195246,
+            "go_allocated_bytes": 1293616,
+            "go_allocations": 30616,
+            "native_profile": {
+              "allocated_bytes": 43119634,
+              "allocation_calls": 190446,
+              "deallocated_bytes": 41785314,
+              "deallocation_calls": 180615,
+              "engine_call_ns": 31085671,
+              "live_requested_bytes_after": 1474164,
+              "live_requested_bytes_before": 139844,
+              "parameter_conversion_ns": 903225,
+              "process_peak_requested_bytes": 4986796,
+              "reallocation_calls": 13467,
+              "result_conversion_ns": 783991
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 38518784,
+            "query_boundary_ns": 33197206,
+            "consumer_ns": 201957,
+            "go_allocated_bytes": 1293296,
+            "go_allocations": 30614,
+            "native_profile": {
+              "allocated_bytes": 40667939,
+              "allocation_calls": 171359,
+              "deallocated_bytes": 39305271,
+              "deallocation_calls": 160449,
+              "engine_call_ns": 27578766,
+              "live_requested_bytes_after": 1608754,
+              "live_requested_bytes_before": 246086,
+              "parameter_conversion_ns": 915390,
+              "process_peak_requested_bytes": 5090532,
+              "reallocation_calls": 13162,
+              "result_conversion_ns": 810215
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12151888225
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 27185152,
+            "query_boundary_ns": 2220959,
+            "consumer_ns": 57377,
+            "native_profile": {
+              "allocated_bytes": 22938686,
+              "allocation_calls": 23538,
+              "deallocated_bytes": 22938686,
+              "deallocation_calls": 23538,
+              "live_requested_bytes_after": 2071815,
+              "live_requested_bytes_before": 2071815,
+              "process_peak_requested_bytes": 4485713,
+              "reallocation_calls": 2240
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 29638656,
+            "query_boundary_ns": 1322594,
+            "consumer_ns": 56716,
+            "native_profile": {
+              "allocated_bytes": 20821404,
+              "allocation_calls": 10596,
+              "deallocated_bytes": 20821404,
+              "deallocation_calls": 10596,
+              "live_requested_bytes_after": 2289721,
+              "live_requested_bytes_before": 2289721,
+              "process_peak_requested_bytes": 4057344,
+              "reallocation_calls": 2062
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12152586158
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 19791872,
+            "query_boundary_ns": 2692633,
+            "consumer_ns": 74460,
+            "native_profile": {
+              "allocated_bytes": 22937377,
+              "allocation_calls": 23528,
+              "deallocated_bytes": 22937377,
+              "deallocation_calls": 23528,
+              "live_requested_bytes_after": 2028704,
+              "live_requested_bytes_before": 2028704,
+              "process_peak_requested_bytes": 4141281,
+              "reallocation_calls": 2238
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 20578304,
+            "query_boundary_ns": 1618953,
+            "consumer_ns": 74450,
+            "native_profile": {
+              "allocated_bytes": 20820085,
+              "allocation_calls": 10586,
+              "deallocated_bytes": 20820085,
+              "deallocation_calls": 10586,
+              "live_requested_bytes_after": 2151742,
+              "live_requested_bytes_before": 2151742,
+              "process_peak_requested_bytes": 3794839,
+              "reallocation_calls": 2060
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12152347784
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 39157760,
+            "query_boundary_ns": 14692947,
+            "consumer_ns": 49557405,
+            "native_profile": {
+              "allocation_calls": 24545,
+              "allocated_bytes": 22977901,
+              "deallocation_calls": 24540,
+              "deallocated_bytes": 22969625,
+              "reallocation_calls": 2246,
+              "parameter_conversion_ns": 60,
+              "engine_call_ns": 2641765,
+              "result_conversion_ns": 12019964,
+              "live_requested_bytes_before": 1336207,
+              "live_requested_bytes_after": 1344483,
+              "process_peak_requested_bytes": 3449552,
+              "python_traced_current_bytes": 523644,
+              "python_traced_peak_bytes": 523644
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 41431040,
+            "query_boundary_ns": 13476863,
+            "consumer_ns": 49932898,
+            "native_profile": {
+              "allocation_calls": 10603,
+              "allocated_bytes": 20836609,
+              "deallocation_calls": 10598,
+              "deallocated_bytes": 20828333,
+              "reallocation_calls": 2068,
+              "parameter_conversion_ns": 60,
+              "engine_call_ns": 1474804,
+              "result_conversion_ns": 12049200,
+              "live_requested_bytes_before": 1461643,
+              "live_requested_bytes_after": 1469919,
+              "process_peak_requested_bytes": 3105508,
+              "python_traced_current_bytes": 523644,
+              "python_traced_peak_bytes": 523644
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12152433583
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 47587328,
+            "query_boundary_ns": 18231226,
+            "consumer_ns": 60011807,
+            "native_profile": {
+              "allocation_calls": 24555,
+              "allocated_bytes": 22979226,
+              "deallocation_calls": 24550,
+              "deallocated_bytes": 22970950,
+              "reallocation_calls": 2248,
+              "parameter_conversion_ns": 60,
+              "engine_call_ns": 2298324,
+              "result_conversion_ns": 15894776,
+              "live_requested_bytes_before": 1379600,
+              "live_requested_bytes_after": 1387876,
+              "process_peak_requested_bytes": 3793376,
+              "python_traced_current_bytes": 523644,
+              "python_traced_peak_bytes": 523644
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 50413568,
+            "query_boundary_ns": 17246247,
+            "consumer_ns": 59275185,
+            "native_profile": {
+              "allocation_calls": 10613,
+              "allocated_bytes": 20837940,
+              "deallocation_calls": 10608,
+              "deallocated_bytes": 20829664,
+              "reallocation_calls": 2070,
+              "parameter_conversion_ns": 61,
+              "engine_call_ns": 1403730,
+              "result_conversion_ns": 15802058,
+              "live_requested_bytes_before": 1599949,
+              "live_requested_bytes_after": 1608225,
+              "process_peak_requested_bytes": 3368340,
+              "python_traced_current_bytes": 523644,
+              "python_traced_peak_bytes": 523644
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12152314641
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 29323264,
+            "query_boundary_ns": 3637903,
+            "consumer_ns": 170797,
+            "go_allocated_bytes": 599104,
+            "go_allocations": 16799,
+            "native_profile": {
+              "allocated_bytes": 23421474,
+              "allocation_calls": 27552,
+              "deallocated_bytes": 23421474,
+              "deallocation_calls": 27552,
+              "engine_call_ns": 2184272,
+              "live_requested_bytes_after": 1348223,
+              "live_requested_bytes_before": 1348223,
+              "parameter_conversion_ns": 1102,
+              "process_peak_requested_bytes": 3461568,
+              "reallocation_calls": 2252,
+              "result_conversion_ns": 374324
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 29810688,
+            "query_boundary_ns": 2767932,
+            "consumer_ns": 171358,
+            "go_allocated_bytes": 599104,
+            "go_allocations": 16799,
+            "native_profile": {
+              "allocated_bytes": 21304182,
+              "allocation_calls": 14610,
+              "deallocated_bytes": 21304182,
+              "deallocation_calls": 14610,
+              "engine_call_ns": 1275102,
+              "live_requested_bytes_after": 1470763,
+              "live_requested_bytes_before": 1470763,
+              "parameter_conversion_ns": 921,
+              "process_peak_requested_bytes": 3114628,
+              "reallocation_calls": 2074,
+              "result_conversion_ns": 361505
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12152797476
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 38912000,
+            "query_boundary_ns": 4539849,
+            "consumer_ns": 143264,
+            "go_allocated_bytes": 599104,
+            "go_allocations": 16799,
+            "native_profile": {
+              "allocated_bytes": 23422771,
+              "allocation_calls": 27562,
+              "deallocated_bytes": 23422771,
+              "deallocation_calls": 27562,
+              "engine_call_ns": 2845166,
+              "live_requested_bytes_after": 1391148,
+              "live_requested_bytes_before": 1391148,
+              "parameter_conversion_ns": 1591,
+              "process_peak_requested_bytes": 3791920,
+              "reallocation_calls": 2254,
+              "result_conversion_ns": 512674
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 38875136,
+            "query_boundary_ns": 3362398,
+            "consumer_ns": 98829,
+            "go_allocated_bytes": 599104,
+            "go_allocations": 16799,
+            "native_profile": {
+              "allocated_bytes": 21305485,
+              "allocation_calls": 14620,
+              "deallocated_bytes": 21305485,
+              "deallocation_calls": 14620,
+              "engine_call_ns": 1754738,
+              "live_requested_bytes_after": 1608480,
+              "live_requested_bytes_before": 1608480,
+              "parameter_conversion_ns": 1604,
+              "process_peak_requested_bytes": 3376871,
+              "reallocation_calls": 2076,
+              "result_conversion_ns": 486275
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12153237252
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "wide",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 51077120,
+            "query_boundary_ns": 19726419,
+            "consumer_ns": 793353,
+            "native_profile": {
+              "allocated_bytes": 44550070,
+              "allocation_calls": 152044,
+              "deallocated_bytes": 44550070,
+              "deallocation_calls": 152044,
+              "live_requested_bytes_after": 14121014,
+              "live_requested_bytes_before": 14121014,
+              "process_peak_requested_bytes": 30246396,
+              "reallocation_calls": 5710
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 52318208,
+            "query_boundary_ns": 11120455,
+            "consumer_ns": 798072,
+            "native_profile": {
+              "allocated_bytes": 32834195,
+              "allocation_calls": 65412,
+              "deallocated_bytes": 32834195,
+              "deallocation_calls": 65412,
+              "live_requested_bytes_after": 14257300,
+              "live_requested_bytes_before": 14257300,
+              "process_peak_requested_bytes": 30267584,
+              "reallocation_calls": 2086
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12153905757
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "wide",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 58396672,
+            "query_boundary_ns": 17978480,
+            "consumer_ns": 743050,
+            "native_profile": {
+              "allocated_bytes": 44551367,
+              "allocation_calls": 152054,
+              "deallocated_bytes": 44551367,
+              "deallocation_calls": 152054,
+              "live_requested_bytes_after": 14163933,
+              "live_requested_bytes_before": 14163933,
+              "process_peak_requested_bytes": 30289315,
+              "reallocation_calls": 5712
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 61108224,
+            "query_boundary_ns": 10717284,
+            "consumer_ns": 753534,
+            "native_profile": {
+              "allocated_bytes": 32835498,
+              "allocation_calls": 65422,
+              "deallocated_bytes": 32835498,
+              "deallocation_calls": 65422,
+              "live_requested_bytes_after": 14395027,
+              "live_requested_bytes_before": 14395027,
+              "process_peak_requested_bytes": 30322639,
+              "reallocation_calls": 2088
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12153224268
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "wide",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 71065600,
+            "query_boundary_ns": 140111216,
+            "consumer_ns": 501502782,
+            "native_profile": {
+              "allocation_calls": 185095,
+              "allocated_bytes": 49158970,
+              "deallocation_calls": 185073,
+              "deallocated_bytes": 49150235,
+              "reallocation_calls": 5718,
+              "parameter_conversion_ns": 351,
+              "engine_call_ns": 19996946,
+              "result_conversion_ns": 117181808,
+              "live_requested_bytes_before": 7352441,
+              "live_requested_bytes_after": 7361176,
+              "process_peak_requested_bytes": 25375935,
+              "python_traced_current_bytes": 4709184,
+              "python_traced_peak_bytes": 4709184
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 73179136,
+            "query_boundary_ns": 130205659,
+            "consumer_ns": 488445419,
+            "native_profile": {
+              "allocation_calls": 65463,
+              "allocated_bytes": 32851637,
+              "deallocation_calls": 65441,
+              "deallocated_bytes": 32842902,
+              "reallocation_calls": 2094,
+              "parameter_conversion_ns": 180,
+              "engine_call_ns": 14549115,
+              "result_conversion_ns": 113869761,
+              "live_requested_bytes_before": 7491125,
+              "live_requested_bytes_after": 7499860,
+              "process_peak_requested_bytes": 25399521,
+              "python_traced_current_bytes": 4709184,
+              "python_traced_peak_bytes": 4709184
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12154276141
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "wide",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 78327808,
+            "query_boundary_ns": 161035846,
+            "consumer_ns": 577787997,
+            "native_profile": {
+              "allocation_calls": 185105,
+              "allocated_bytes": 49160279,
+              "deallocation_calls": 185083,
+              "deallocated_bytes": 49151544,
+              "reallocation_calls": 5720,
+              "parameter_conversion_ns": 130,
+              "engine_call_ns": 15540812,
+              "result_conversion_ns": 143728207,
+              "live_requested_bytes_before": 7395640,
+              "live_requested_bytes_after": 7404375,
+              "process_peak_requested_bytes": 25419134,
+              "python_traced_current_bytes": 4709188,
+              "python_traced_peak_bytes": 4709188
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 81408000,
+            "query_boundary_ns": 153380414,
+            "consumer_ns": 580443097,
+            "native_profile": {
+              "allocation_calls": 65473,
+              "allocated_bytes": 32852952,
+              "deallocation_calls": 65451,
+              "deallocated_bytes": 32844217,
+              "reallocation_calls": 2096,
+              "parameter_conversion_ns": 160,
+              "engine_call_ns": 9282584,
+              "result_conversion_ns": 142422991,
+              "live_requested_bytes_before": 7629177,
+              "live_requested_bytes_after": 7637912,
+              "process_peak_requested_bytes": 25454901,
+              "python_traced_current_bytes": 4709188,
+              "python_traced_peak_bytes": 4709188
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12153757530
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "wide",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 67022848,
+            "query_boundary_ns": 54447368,
+            "consumer_ns": 2388069,
+            "go_allocated_bytes": 7212208,
+            "go_allocations": 180310,
+            "native_profile": {
+              "allocated_bytes": 57009152,
+              "allocation_calls": 226088,
+              "deallocated_bytes": 57009152,
+              "deallocation_calls": 226088,
+              "engine_call_ns": 22149692,
+              "live_requested_bytes_after": 7364457,
+              "live_requested_bytes_before": 7364457,
+              "parameter_conversion_ns": 4699,
+              "process_peak_requested_bytes": 23537455,
+              "reallocation_calls": 5727,
+              "result_conversion_ns": 8902126
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 67608576,
+            "query_boundary_ns": 44095183,
+            "consumer_ns": 2377619,
+            "go_allocated_bytes": 7205864,
+            "go_allocations": 180255,
+            "native_profile": {
+              "allocated_bytes": 45293277,
+              "allocation_calls": 139456,
+              "deallocated_bytes": 45293277,
+              "deallocation_calls": 139456,
+              "engine_call_ns": 13364526,
+              "live_requested_bytes_after": 7500245,
+              "live_requested_bytes_before": 7500245,
+              "parameter_conversion_ns": 3106,
+              "process_peak_requested_bytes": 23558145,
+              "reallocation_calls": 2103,
+              "result_conversion_ns": 8608106
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12154402927
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "wide",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 95526912,
+            "query_boundary_ns": 47909943,
+            "consumer_ns": 890242,
+            "go_allocated_bytes": 7205736,
+            "go_allocations": 180254,
+            "native_profile": {
+              "allocated_bytes": 57010437,
+              "allocation_calls": 226098,
+              "deallocated_bytes": 57010437,
+              "deallocation_calls": 226098,
+              "engine_call_ns": 22451766,
+              "live_requested_bytes_after": 7407190,
+              "live_requested_bytes_before": 7407190,
+              "parameter_conversion_ns": 4557,
+              "process_peak_requested_bytes": 23580188,
+              "reallocation_calls": 5729,
+              "result_conversion_ns": 12918359
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 93786112,
+            "query_boundary_ns": 42923869,
+            "consumer_ns": 888009,
+            "go_allocated_bytes": 7212208,
+            "go_allocations": 180310,
+            "native_profile": {
+              "allocated_bytes": 45294568,
+              "allocation_calls": 139466,
+              "deallocated_bytes": 45294568,
+              "deallocation_calls": 139466,
+              "engine_call_ns": 14747665,
+              "live_requested_bytes_after": 7637710,
+              "live_requested_bytes_before": 7637710,
+              "parameter_conversion_ns": 5087,
+              "process_peak_requested_bytes": 23612938,
+              "reallocation_calls": 2105,
+              "result_conversion_ns": 13660347
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12154407989
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "point",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 26935296,
+            "query_boundary_ns": 253729503,
+            "consumer_ns": 212990,
+            "native_profile": {
+              "allocated_bytes": 221728780,
+              "allocation_calls": 1956000,
+              "deallocated_bytes": 221728780,
+              "deallocation_calls": 1956000,
+              "live_requested_bytes_after": 2071716,
+              "live_requested_bytes_before": 2071716,
+              "process_peak_requested_bytes": 4485675,
+              "reallocation_calls": 187000
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 29237248,
+            "query_boundary_ns": 151000258,
+            "consumer_ns": 229425,
+            "native_profile": {
+              "allocated_bytes": 125812780,
+              "allocation_calls": 909000,
+              "deallocated_bytes": 125812780,
+              "deallocation_calls": 909000,
+              "live_requested_bytes_after": 2253405,
+              "live_requested_bytes_before": 2253405,
+              "process_peak_requested_bytes": 4057215,
+              "reallocation_calls": 39000
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12154614105
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "point",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 19644416,
+            "query_boundary_ns": 244923626,
+            "consumer_ns": 216130,
+            "native_profile": {
+              "allocated_bytes": 220425780,
+              "allocation_calls": 1946000,
+              "deallocated_bytes": 220425780,
+              "deallocation_calls": 1946000,
+              "live_requested_bytes_after": 2028701,
+              "live_requested_bytes_before": 2028701,
+              "process_peak_requested_bytes": 4141278,
+              "reallocation_calls": 185000
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 20414464,
+            "query_boundary_ns": 148543146,
+            "consumer_ns": 212478,
+            "native_profile": {
+              "allocated_bytes": 124499780,
+              "allocation_calls": 899000,
+              "deallocated_bytes": 124499780,
+              "deallocation_calls": 899000,
+              "live_requested_bytes_after": 2115552,
+              "live_requested_bytes_before": 2115552,
+              "process_peak_requested_bytes": 3794836,
+              "reallocation_calls": 37000
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12154084230
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "point",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 39288832,
+            "query_boundary_ns": 212155739,
+            "consumer_ns": 66682301,
+            "native_profile": {
+              "allocation_calls": 1957000,
+              "allocated_bytes": 220669780,
+              "deallocation_calls": 1956995,
+              "deallocated_bytes": 220669664,
+              "reallocation_calls": 185000,
+              "parameter_conversion_ns": 994144,
+              "engine_call_ns": 189748670,
+              "result_conversion_ns": 15240459,
+              "live_requested_bytes_before": 1336207,
+              "live_requested_bytes_after": 1336323,
+              "process_peak_requested_bytes": 3449552,
+              "python_traced_current_bytes": 3375,
+              "python_traced_peak_bytes": 10746
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 40890368,
+            "query_boundary_ns": 125902539,
+            "consumer_ns": 65653967,
+            "native_profile": {
+              "allocation_calls": 909000,
+              "allocated_bytes": 124719780,
+              "deallocation_calls": 908995,
+              "deallocated_bytes": 124719664,
+              "reallocation_calls": 37000,
+              "parameter_conversion_ns": 863334,
+              "engine_call_ns": 105048725,
+              "result_conversion_ns": 14406402,
+              "live_requested_bytes_before": 1425456,
+              "live_requested_bytes_after": 1425572,
+              "process_peak_requested_bytes": 3105508,
+              "python_traced_current_bytes": 3375,
+              "python_traced_peak_bytes": 10746
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12154832752
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "point",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 47411200,
+            "query_boundary_ns": 246895080,
+            "consumer_ns": 86491919,
+            "native_profile": {
+              "allocation_calls": 1967000,
+              "allocated_bytes": 221988780,
+              "deallocation_calls": 1966995,
+              "deallocated_bytes": 221988664,
+              "reallocation_calls": 187000,
+              "parameter_conversion_ns": 926251,
+              "engine_call_ns": 217598111,
+              "result_conversion_ns": 21198289,
+              "live_requested_bytes_before": 1379503,
+              "live_requested_bytes_after": 1379619,
+              "process_peak_requested_bytes": 3793340,
+              "python_traced_current_bytes": 3375,
+              "python_traced_peak_bytes": 10746
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 50233344,
+            "query_boundary_ns": 147892668,
+            "consumer_ns": 85052406,
+            "native_profile": {
+              "allocation_calls": 919000,
+              "allocated_bytes": 126044780,
+              "deallocation_calls": 918995,
+              "deallocated_bytes": 126044664,
+              "reallocation_calls": 39000,
+              "parameter_conversion_ns": 622332,
+              "engine_call_ns": 120860599,
+              "result_conversion_ns": 19947208,
+              "live_requested_bytes_before": 1563635,
+              "live_requested_bytes_after": 1563751,
+              "process_peak_requested_bytes": 3368213,
+              "python_traced_current_bytes": 3375,
+              "python_traced_peak_bytes": 10746
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12155750631
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "point",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 30134272,
+            "query_boundary_ns": 297261324,
+            "consumer_ns": 422530,
+            "go_allocated_bytes": 2390216,
+            "go_allocations": 47769,
+            "native_profile": {
+              "allocated_bytes": 222783010,
+              "allocation_calls": 1968000,
+              "deallocated_bytes": 222783010,
+              "deallocation_calls": 1968000,
+              "engine_call_ns": 269544805,
+              "live_requested_bytes_after": 1348223,
+              "live_requested_bytes_before": 1348223,
+              "parameter_conversion_ns": 1730776,
+              "process_peak_requested_bytes": 3461568,
+              "reallocation_calls": 190000,
+              "result_conversion_ns": 3523060
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 30248960,
+            "query_boundary_ns": 185639858,
+            "consumer_ns": 394819,
+            "go_allocated_bytes": 2386144,
+            "go_allocations": 47762,
+            "native_profile": {
+              "allocated_bytes": 126857010,
+              "allocation_calls": 921000,
+              "deallocated_bytes": 126857010,
+              "deallocation_calls": 921000,
+              "engine_call_ns": 159267652,
+              "live_requested_bytes_after": 1434576,
+              "live_requested_bytes_before": 1434576,
+              "parameter_conversion_ns": 1723589,
+              "process_peak_requested_bytes": 3114628,
+              "reallocation_calls": 42000,
+              "result_conversion_ns": 3408857
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12155771757
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "point",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 38666240,
+            "query_boundary_ns": 294612428,
+            "consumer_ns": 428861,
+            "go_allocated_bytes": 2397496,
+            "go_allocations": 47783,
+            "native_profile": {
+              "allocated_bytes": 224074010,
+              "allocation_calls": 1978000,
+              "deallocated_bytes": 224074010,
+              "deallocation_calls": 1978000,
+              "engine_call_ns": 266910712,
+              "live_requested_bytes_after": 1391052,
+              "live_requested_bytes_before": 1391052,
+              "parameter_conversion_ns": 1725498,
+              "process_peak_requested_bytes": 3791885,
+              "reallocation_calls": 192000,
+              "result_conversion_ns": 3491515
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 41467904,
+            "query_boundary_ns": 187629112,
+            "consumer_ns": 432052,
+            "go_allocated_bytes": 2392192,
+            "go_allocations": 47777,
+            "native_profile": {
+              "allocated_bytes": 128158010,
+              "allocation_calls": 931000,
+              "deallocated_bytes": 128158010,
+              "deallocation_calls": 931000,
+              "engine_call_ns": 161641837,
+              "live_requested_bytes_after": 1572167,
+              "live_requested_bytes_before": 1572167,
+              "parameter_conversion_ns": 1619238,
+              "process_peak_requested_bytes": 3376745,
+              "reallocation_calls": 44000,
+              "result_conversion_ns": 3359769
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12155414810
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "fill",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 18608128,
+            "query_boundary_ns": 1106473718,
+            "consumer_ns": 74679,
+            "native_profile": {
+              "allocated_bytes": 756153452,
+              "allocation_calls": 10800611,
+              "deallocated_bytes": 754869381,
+              "deallocation_calls": 10788917,
+              "live_requested_bytes_after": 2061177,
+              "live_requested_bytes_before": 777106,
+              "process_peak_requested_bytes": 3007811,
+              "reallocation_calls": 142244
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 19943424,
+            "query_boundary_ns": 95390202,
+            "consumer_ns": 76053,
+            "native_profile": {
+              "allocated_bytes": 89590396,
+              "allocation_calls": 497063,
+              "deallocated_bytes": 88279775,
+              "deallocation_calls": 484304,
+              "live_requested_bytes_after": 2184473,
+              "live_requested_bytes_before": 873852,
+              "process_peak_requested_bytes": 3117257,
+              "reallocation_calls": 45086
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12156790225
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "fill",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 26284032,
+            "query_boundary_ns": 1473050175,
+            "consumer_ns": 74569,
+            "native_profile": {
+              "allocated_bytes": 757123573,
+              "allocation_calls": 10824557,
+              "deallocated_bytes": 755839502,
+              "deallocation_calls": 10812863,
+              "live_requested_bytes_after": 2104096,
+              "live_requested_bytes_before": 820025,
+              "process_peak_requested_bytes": 4485637,
+              "reallocation_calls": 154182
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 29212672,
+            "query_boundary_ns": 425804124,
+            "consumer_ns": 74790,
+            "native_profile": {
+              "allocated_bytes": 141406163,
+              "allocation_calls": 571080,
+              "deallocated_bytes": 139930886,
+              "deallocation_calls": 558142,
+              "live_requested_bytes_after": 2401968,
+              "live_requested_bytes_before": 926691,
+              "process_peak_requested_bytes": 4054583,
+              "reallocation_calls": 57026
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12155739019
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "fill",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 36802560,
+            "query_boundary_ns": 1136504991,
+            "consumer_ns": 73781770,
+            "native_profile": {
+              "allocation_calls": 10812628,
+              "allocated_bytes": 756972980,
+              "deallocation_calls": 10800929,
+              "deallocated_bytes": 755680633,
+              "reallocation_calls": 142252,
+              "parameter_conversion_ns": 19170473,
+              "engine_call_ns": 1083706147,
+              "result_conversion_ns": 26607819,
+              "live_requested_bytes_before": 84615,
+              "live_requested_bytes_after": 1376962,
+              "process_peak_requested_bytes": 2315320,
+              "python_traced_current_bytes": 550940,
+              "python_traced_peak_bytes": 550940
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 39084032,
+            "query_boundary_ns": 145705131,
+            "consumer_ns": 73491428,
+            "native_profile": {
+              "allocation_calls": 508080,
+              "allocated_bytes": 90385924,
+              "deallocation_calls": 495316,
+              "deallocated_bytes": 89067027,
+              "reallocation_calls": 45094,
+              "parameter_conversion_ns": 17840073,
+              "engine_call_ns": 97384414,
+              "result_conversion_ns": 24788811,
+              "live_requested_bytes_before": 183759,
+              "live_requested_bytes_after": 1502656,
+              "process_peak_requested_bytes": 2427164,
+              "python_traced_current_bytes": 550924,
+              "python_traced_peak_bytes": 550924
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12156239699
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "fill",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 47558656,
+            "query_boundary_ns": 1138064393,
+            "consumer_ns": 47860125,
+            "native_profile": {
+              "allocation_calls": 10836574,
+              "allocated_bytes": 757943113,
+              "deallocation_calls": 10824875,
+              "deallocated_bytes": 756650766,
+              "reallocation_calls": 154190,
+              "parameter_conversion_ns": 11131949,
+              "engine_call_ns": 1108616105,
+              "result_conversion_ns": 14781040,
+              "live_requested_bytes_before": 127814,
+              "live_requested_bytes_after": 1420161,
+              "process_peak_requested_bytes": 3793304,
+              "python_traced_current_bytes": 550968,
+              "python_traced_peak_bytes": 550968
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 50053120,
+            "query_boundary_ns": 333843404,
+            "consumer_ns": 47584633,
+            "native_profile": {
+              "allocation_calls": 582097,
+              "allocated_bytes": 142201699,
+              "deallocation_calls": 569154,
+              "deallocated_bytes": 140718146,
+              "reallocation_calls": 57034,
+              "parameter_conversion_ns": 9971173,
+              "engine_call_ns": 306652026,
+              "result_conversion_ns": 15397888,
+              "live_requested_bytes_before": 236923,
+              "live_requested_bytes_after": 1720476,
+              "process_peak_requested_bytes": 3364839,
+              "python_traced_current_bytes": 550952,
+              "python_traced_peak_bytes": 550952
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12156443956
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "fill",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 29134848,
+            "query_boundary_ns": 863381846,
+            "consumer_ns": 171168,
+            "go_allocated_bytes": 2285328,
+            "go_allocations": 52575,
+            "native_profile": {
+              "allocated_bytes": 759319443,
+              "allocation_calls": 10831635,
+              "deallocated_bytes": 758035372,
+              "deallocation_calls": 10819941,
+              "engine_call_ns": 840059815,
+              "live_requested_bytes_after": 1380702,
+              "live_requested_bytes_before": 96631,
+              "parameter_conversion_ns": 2317257,
+              "process_peak_requested_bytes": 2327336,
+              "reallocation_calls": 147258,
+              "result_conversion_ns": 2508903
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 29237248,
+            "query_boundary_ns": 86845185,
+            "consumer_ns": 171418,
+            "go_allocated_bytes": 2283848,
+            "go_allocations": 52564,
+            "native_profile": {
+              "allocated_bytes": 92756387,
+              "allocation_calls": 528087,
+              "deallocated_bytes": 91445766,
+              "deallocation_calls": 515328,
+              "engine_call_ns": 72353956,
+              "live_requested_bytes_after": 1503500,
+              "live_requested_bytes_before": 192879,
+              "parameter_conversion_ns": 1547712,
+              "process_peak_requested_bytes": 2436284,
+              "reallocation_calls": 50100,
+              "result_conversion_ns": 1656426
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12156974052
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "fill",
+        "go"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 39514112,
+            "query_boundary_ns": 1559798256,
+            "consumer_ns": 196530,
+            "go_allocated_bytes": 2290400,
+            "go_allocations": 52581,
+            "native_profile": {
+              "allocated_bytes": 760289548,
+              "allocation_calls": 10855581,
+              "deallocated_bytes": 759005477,
+              "deallocation_calls": 10843887,
+              "engine_call_ns": 1525895149,
+              "live_requested_bytes_after": 1423435,
+              "live_requested_bytes_before": 139364,
+              "parameter_conversion_ns": 3579266,
+              "process_peak_requested_bytes": 3791850,
+              "reallocation_calls": 159196,
+              "result_conversion_ns": 3504795
+            }
+          }
+        },
+        "candidate": {
+          "success": true,
+          "adverse": [],
+          "observed_medians": {
+            "process_peak_rss_bytes": 41574400,
+            "query_boundary_ns": 514233925,
+            "consumer_ns": 208031,
+            "go_allocated_bytes": 2290736,
+            "go_allocations": 52584,
+            "native_profile": {
+              "allocated_bytes": 144572136,
+              "allocation_calls": 602104,
+              "deallocated_bytes": 143096859,
+              "deallocation_calls": 589166,
+              "engine_call_ns": 481626719,
+              "live_requested_bytes_after": 1720733,
+              "live_requested_bytes_before": 245456,
+              "parameter_conversion_ns": 3610159,
+              "process_peak_requested_bytes": 3360604,
+              "reallocation_calls": 62040,
+              "result_conversion_ns": 3779427
+            }
+          }
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12157745685
     }
   ],
   "collection_or_integrity_errors": [],

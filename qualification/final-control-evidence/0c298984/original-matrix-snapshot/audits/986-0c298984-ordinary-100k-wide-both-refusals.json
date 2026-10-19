@@ -1,0 +1,293 @@
+{
+  "engine": "0c2989842321d10e91f136f3c924badb07038add",
+  "source": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+  "observed_at": 1792364838.5002,
+  "summary_sha256": "645dff541a812758feb670c42e8c7f209a934153a00a8c8a936fee6604081806",
+  "audited_groups": 6,
+  "expected_groups": 6,
+  "groups": [
+    {
+      "selection": [
+        "wide",
+        "rust",
+        "memory",
+        100000
+      ],
+      "artifact": 12152476401,
+      "bundle_sha256": "f65020ef437588a149f58adf92126c0c1f0b0a9f1f97d93d64bebdcea34f37d7",
+      "sides": {
+        "baseline": {
+          "source": {
+            "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+            "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478"
+          },
+          "errors": [
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780548,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "query warmup"
+        },
+        "candidate": {
+          "source": {
+            "head": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+            "tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed"
+          },
+          "errors": [
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780218,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "query warmup"
+        }
+      },
+      "paired_ratio": null
+    },
+    {
+      "selection": [
+        "wide",
+        "rust",
+        "file",
+        100000
+      ],
+      "artifact": 12151869633,
+      "bundle_sha256": "a86cd431e6931ba1a04aff4e91dfe29357e20004052ce0480a4802e7e9ce0b65",
+      "sides": {
+        "baseline": {
+          "source": {
+            "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+            "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478"
+          },
+          "errors": [
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780548,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "query warmup"
+        },
+        "candidate": {
+          "source": {
+            "head": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+            "tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed"
+          },
+          "errors": [
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780218,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "query warmup"
+        }
+      },
+      "paired_ratio": null
+    },
+    {
+      "selection": [
+        "wide",
+        "python",
+        "file",
+        100000
+      ],
+      "artifact": 12152532045,
+      "bundle_sha256": "a4137fcb4a5561e6719924cdea272174107ffbc7cbd77dcf4bf6e7fa5a2fcff8",
+      "sides": {
+        "baseline": {
+          "source": {
+            "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+            "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478"
+          },
+          "errors": [
+            "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780548,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "not separately labelled by producer"
+        },
+        "candidate": {
+          "source": {
+            "head": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+            "tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed"
+          },
+          "errors": [
+            "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780218,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "not separately labelled by producer"
+        }
+      },
+      "paired_ratio": null
+    },
+    {
+      "selection": [
+        "wide",
+        "python",
+        "memory",
+        100000
+      ],
+      "artifact": 12152780300,
+      "bundle_sha256": "d28df955582e638da4cf052c11929c96f8cc8b83c9d6a99e3c6218296170b5f4",
+      "sides": {
+        "baseline": {
+          "source": {
+            "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+            "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478"
+          },
+          "errors": [
+            "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780548,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "not separately labelled by producer"
+        },
+        "candidate": {
+          "source": {
+            "head": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+            "tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed"
+          },
+          "errors": [
+            "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780218,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "not separately labelled by producer"
+        }
+      },
+      "paired_ratio": null
+    },
+    {
+      "selection": [
+        "wide",
+        "go",
+        "memory",
+        100000
+      ],
+      "artifact": 12152439833,
+      "bundle_sha256": "088de949eb7ce40868ad6d29a4688b6e94717dc2bb8a9cdc1d1c46d698848344",
+      "sides": {
+        "baseline": {
+          "source": {
+            "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+            "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478"
+          },
+          "errors": [
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780548,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "query warmup"
+        },
+        "candidate": {
+          "source": {
+            "head": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+            "tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed"
+          },
+          "errors": [
+            "warmup: resource_budget_exceeded: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: resource_budget_exceeded: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: resource_budget_exceeded: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: resource_budget_exceeded: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780218,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "query warmup"
+        }
+      },
+      "paired_ratio": null
+    },
+    {
+      "selection": [
+        "wide",
+        "go",
+        "file",
+        100000
+      ],
+      "artifact": 12153630581,
+      "bundle_sha256": "ba8ccbcb25b64f325d7f373f29d08b8c3ee1fed3979090c9a0d265f6d9c328f8",
+      "sides": {
+        "baseline": {
+          "source": {
+            "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+            "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478"
+          },
+          "errors": [
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+            "warmup: execution: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780548,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "query warmup"
+        },
+        "candidate": {
+          "source": {
+            "head": "66de653eeb6dc3aa17b03218a3b533fd68b31184",
+            "tree": "949e1be98ceec7ddedf146073b23cc187c3e52ed"
+          },
+          "errors": [
+            "warmup: resource_budget_exceeded: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: resource_budget_exceeded: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: resource_budget_exceeded: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget",
+            "warmup: resource_budget_exceeded: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+          ],
+          "failed_child_attempts": 4,
+          "would_use_bytes": 16780218,
+          "budget_bytes": 16777216,
+          "measured_latency_available": false,
+          "error_phase": "query warmup"
+        }
+      },
+      "paired_ratio": null
+    }
+  ],
+  "scope": "Original wide100k groups, both baseline and candidate independently refuse16MiB result materialization. No usable timing, row-limit diagnosis or success inferred from child exit0. Host error phases preserved exactly; no copied warmup diagnosis for unlabelled hosts. Default/workload/sample/deadline unchanged; full90/110 and review remain open."
+}
