@@ -38,6 +38,7 @@ pub use source_directory::{
 pub(crate) mod captured_immutable;
 
 mod read;
+mod wal_rollback;
 #[doc(hidden)]
 pub use read::{AdmittedFileRead, ReadAdmissionControl};
 

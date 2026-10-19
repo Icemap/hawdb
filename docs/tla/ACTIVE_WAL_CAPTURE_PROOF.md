@@ -78,7 +78,9 @@ name permits recovery of all three original nodes. A pathname reopen instead
 fails on the foreign suffix; that is not a successful custody refusal.
 
 These changes qualify active-WAL reads, not every WAL lifecycle operation.
-Append-handle opening, rollback/rotation, checkpoints, sealed-object staging,
+[Held append rollback](HELD_WAL_ROLLBACK_PROOF.md) separately restores the actual
+partial-write object without pathname truncation or unlink. Append-handle
+opening, rotation, checkpoints, sealed-object staging,
 doctor sidecars, quarantine, runtime/data/root-registry paths and later writes
 are not all migrated. Source-root and file-name fences are observations, not
 atomic exclusion against host rename. The independent durable allocator,
