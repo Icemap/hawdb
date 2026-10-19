@@ -1,0 +1,36 @@
+[
+  {
+    "totalRunCount": 1,
+    "passed": [
+      {
+        "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a33c60dac74ab8647bed043668c4e440/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/bindings/ffi/hawdb_ffi_tests/test.log"
+      }
+    ],
+    "overallStatus": "PASSED",
+    "firstStartTimeMillis": "1792388944971",
+    "lastStopTimeMillis": "1792388946078",
+    "totalRunDurationMillis": "1107",
+    "runCount": 1,
+    "totalRunDuration": "1.107s",
+    "firstStartTime": "2026-10-19T05:49:04.971Z",
+    "lastStopTime": "2026-10-19T05:49:06.078Z",
+    "attemptCount": 1
+  },
+  {
+    "totalRunCount": 1,
+    "passed": [
+      {
+        "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a33c60dac74ab8647bed043668c4e440/execroot/_main/bazel-out/darwin_arm64-fastbuild-ST-c6976e42449f/testlogs/bindings/go/hawdb_go_tests/test.log"
+      }
+    ],
+    "overallStatus": "PASSED",
+    "firstStartTimeMillis": "1792389013572",
+    "lastStopTimeMillis": "1792389030616",
+    "totalRunDurationMillis": "17044",
+    "runCount": 1,
+    "totalRunDuration": "17.044s",
+    "firstStartTime": "2026-10-19T05:50:13.572Z",
+    "lastStopTime": "2026-10-19T05:50:30.616Z",
+    "attemptCount": 1
+  }
+]

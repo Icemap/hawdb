@@ -1,0 +1,38 @@
+{
+  "status": "complete_diagnostic_only",
+  "pid": 86401,
+  "source_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "published_predecessor": "0c2989842321d10e91f136f3c924badb07038add",
+  "integrated_main": "1fd242eb70de5044740ab67a8beb4037d7ace325",
+  "steps": [
+    {
+      "name": "checkpoint-isolated",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-main1fd-checkpoint-isolation/checkpoint-isolated.bep.json",
+        "--test_arg=api::automatic_checkpoint::tests::"
+      ],
+      "started": 1792389408.237251,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-checkpoint-isolation/checkpoint-isolated.log",
+      "exit": 0,
+      "ended": 1792389625.507016,
+      "sha256": "549ebff4cd734192a3fa6af654bcca962322ea66a586c369ad606c0b47b2cf81"
+    }
+  ],
+  "prior_failure_states": [
+    "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-state.json",
+    "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-state-v2.json"
+  ],
+  "corrections": [
+    "C sentinel covers all five output fields",
+    "Deduplicate automatically merged contract timeout, retaining upstream long and explicit local300 guard"
+  ],
+  "started": 1792388877.452224,
+  "scope": "Diagnostic checkpoint subset with original internal concurrency, deadlines and assertions; not replacement for two failed full-general runs.",
+  "prior_independent_state": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-independent-validation-state.json",
+  "ended": 1792389625.6185138
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 481,
+  "original_sha256": "507317892770e29ebb7ab6134232cffe2bf370d524aa38936c2c0e50b79d9220",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/relational:hawdb_relational_physical_plan_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nhawdb-relational-physical-plan-fuzz-v1: 128 seeds, 8192 cases, 40960 complete plan outcomes\ntest physical_plan::tests::physical_plan_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 225 filtered out; finished in 6.93s\n\n"
+}

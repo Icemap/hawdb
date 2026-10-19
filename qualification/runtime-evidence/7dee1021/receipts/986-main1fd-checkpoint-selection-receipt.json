@@ -1,0 +1,9 @@
+{
+  "at": 1792389722.71946,
+  "log_prefix": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //:hawdb_unit_general_tests\n-----------------------------------------------------------------------------\n\nrunning 85 tests\ntest api::automatic_checkpoint::tests::handoff_execution::shutdown_of_adopted_retirement_does_not_wait_for_other_work_admission ... ok\ntest api::automatic_checkpoint::tests::headroom::capacity_wait::releasing_ol",
+  "actual_test_count_lines": [
+    "running 85 tests"
+  ],
+  "binary_commands": [],
+  "scope": "Live correct checkpoint diagnostic selection; no terminal result or cause claim"
+}

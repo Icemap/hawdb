@@ -1,0 +1,5 @@
+{
+  "original_bytes": 404,
+  "original_sha256": "f69b6bc6dcaa4d24ee458ca9e0fbe480011eb5aee86acb329b54f8e01f05f457",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_property_projection_hex_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest property_projection::hex_tests::persisted_hex_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 0.04s\n\n"
+}

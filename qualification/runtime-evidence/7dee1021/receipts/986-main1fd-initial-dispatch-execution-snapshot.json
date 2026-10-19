@@ -1,0 +1,62 @@
+{
+  "at": 1792389599.217868,
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "jobs": [
+    {
+      "role": "ordinary",
+      "run": 39207199690,
+      "source": "1200a20af7b70af712da3d6ab716d93861100d61",
+      "source_verified": true,
+      "run_status": "queued",
+      "conclusion": null,
+      "expanded_total_jobs": 94,
+      "first_page_statuses": {
+        "completed": 4,
+        "in_progress": 4,
+        "queued": 86
+      }
+    },
+    {
+      "role": "resources",
+      "run": 39207212017,
+      "source": "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+      "source_verified": true,
+      "run_status": "queued",
+      "conclusion": null,
+      "expanded_total_jobs": 116,
+      "first_page_statuses": {
+        "completed": 5,
+        "in_progress": 2,
+        "queued": 93
+      }
+    },
+    {
+      "role": "retained",
+      "run": 39207217884,
+      "source": "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+      "source_verified": true,
+      "run_status": "queued",
+      "conclusion": null,
+      "expanded_total_jobs": 16,
+      "first_page_statuses": {
+        "completed": 6,
+        "in_progress": 4,
+        "queued": 6
+      }
+    },
+    {
+      "role": "phases",
+      "run": 39207224832,
+      "source": "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+      "source_verified": true,
+      "run_status": "queued",
+      "conclusion": null,
+      "expanded_total_jobs": 16,
+      "first_page_statuses": {
+        "completed": 6,
+        "in_progress": 2,
+        "queued": 8
+      }
+    }
+  ]
+}

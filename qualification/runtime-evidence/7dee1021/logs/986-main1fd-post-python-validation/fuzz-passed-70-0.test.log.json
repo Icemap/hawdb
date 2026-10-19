@@ -1,0 +1,5 @@
+{
+  "original_bytes": 418,
+  "original_sha256": "b38636015b40a9b55482e3df8eda8df4594a08edb3f54b3c7cf6cdf3d54f12f0",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_spool_decoding_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest out_of_core::generation_writer::spool::decoding::tests::spool_decoding_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 856 filtered out; finished in 10.98s\n\n"
+}

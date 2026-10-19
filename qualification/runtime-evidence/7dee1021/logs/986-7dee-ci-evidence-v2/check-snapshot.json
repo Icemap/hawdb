@@ -1,0 +1,52 @@
+[
+  {
+    "link": "https://github.com/nowledge-co/hawdb/actions/runs/39207306044/job/117912842571",
+    "name": "issue-reference",
+    "state": "SKIPPED"
+  },
+  {
+    "link": "https://github.com/nowledge-co/hawdb/actions/runs/39206648185/job/117910837784",
+    "name": "Bazel build and test (macos-latest)",
+    "state": "SUCCESS"
+  },
+  {
+    "link": "https://github.com/nowledge-co/hawdb/actions/runs/39206648210/job/117910837808",
+    "name": "Bazel native bindings (macos-latest)",
+    "state": "SUCCESS"
+  },
+  {
+    "link": "https://github.com/nowledge-co/hawdb/actions/runs/39206648210/job/117910837587",
+    "name": "Bazel native bindings (ubuntu-24.04)",
+    "state": "SUCCESS"
+  },
+  {
+    "link": "https://github.com/nowledge-co/hawdb/actions/runs/39206648185/job/117910837832",
+    "name": "Bazel build and test (ubuntu-24.04)",
+    "state": "SUCCESS"
+  },
+  {
+    "link": "https://github.com/nowledge-co/hawdb/actions/runs/39206648185/job/117910837948",
+    "name": "Build and test",
+    "state": "SUCCESS"
+  },
+  {
+    "link": "https://github.com/nowledge-co/hawdb/actions/runs/39206648210/job/117910837848",
+    "name": "Windows native contracts",
+    "state": "IN_PROGRESS"
+  },
+  {
+    "link": "https://github.com/nowledge-co/hawdb/actions/runs/39206648210/job/117910838763",
+    "name": "Manual ordinary-boundary comparison (Linux)",
+    "state": "SKIPPED"
+  },
+  {
+    "link": "https://github.com/nowledge-co/hawdb/actions/runs/39206648210/job/117910838862",
+    "name": "Manual RaBitQ baseline (${{ matrix.os }})",
+    "state": "SKIPPED"
+  },
+  {
+    "link": "",
+    "name": "tide",
+    "state": "PENDING"
+  }
+]

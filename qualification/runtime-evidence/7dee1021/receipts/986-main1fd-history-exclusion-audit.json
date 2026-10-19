@@ -1,0 +1,10 @@
+{
+  "at": 1792389197.444272,
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "main": "1fd242eb70de5044740ab67a8beb4037d7ace325",
+  "report_count": 30,
+  "main_history_overlap": [],
+  "feature_history_overlap_count": 30,
+  "feature_tree_overlap": [],
+  "scope": "Current main and feature-tree exclusion audit only. Final actual Tide squash merge and main reachable-history re-audit remain mandatory."
+}

@@ -1,0 +1,163 @@
+{
+  "status": "failed",
+  "pid": 46264,
+  "source_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "published_predecessor": "0c2989842321d10e91f136f3c924badb07038add",
+  "integrated_main": "1fd242eb70de5044740ab67a8beb4037d7ace325",
+  "steps": [
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792387600.264682,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-v3/fmt.log",
+      "exit": 0,
+      "ended": 1792387605.289809,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "native-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792387605.327731,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-v3/native-clippy.log",
+      "exit": 0,
+      "ended": 1792387605.7967691,
+      "sha256": "e7a0e788c2f011df0653279f56cd58dcca091a34d28573a86e1b886eaa34b4d9"
+    },
+    {
+      "name": "ffi-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/ffi/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792387605.8337018,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-v3/ffi-clippy.log",
+      "exit": 0,
+      "ended": 1792387606.069435,
+      "sha256": "4f27ac380b22e1d975eee20ce727fa8cbc09061177f6253af0777fd4de7b7506"
+    },
+    {
+      "name": "python-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "bindings/python/Cargo.toml",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792387606.105411,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-v3/python-clippy.log",
+      "exit": 0,
+      "ended": 1792387606.303582,
+      "sha256": "a41051563a4cb5fc1b1bcdd9aa0ba28ca80f7736d629d90cc138218756e8e3a9"
+    },
+    {
+      "name": "wasm-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "hawdb",
+        "--no-default-features",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--lib",
+        "--test",
+        "in_memory_portable",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792387606.403289,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-v3/wasm-clippy.log",
+      "exit": 0,
+      "ended": 1792387606.584981,
+      "sha256": "1094a36867300c1838cdc4ee40efe961d83bac574665f8ee57a40d5b1e88698c"
+    },
+    {
+      "name": "prek-install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792387606.621817,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-v3/prek-install.log",
+      "exit": 0,
+      "ended": 1792387606.648641,
+      "sha256": "6dd3a3ee6c0892e5369e843cabf8ddc982f55665d60d1d1359fc0d198ee6f427"
+    },
+    {
+      "name": "prek-all",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792387606.683111,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-v3/prek-all.log",
+      "exit": 0,
+      "ended": 1792387612.1018722,
+      "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
+    },
+    {
+      "name": "general",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_unit_general_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-v3/general.bep.json"
+      ],
+      "started": 1792387612.138758,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-v3/general.log",
+      "exit": 3,
+      "ended": 1792388124.334181,
+      "sha256": "7528495996cd17d844fbfe4b16dbe64e2e8dbf6a008b14158b22206c399aeb32"
+    }
+  ],
+  "prior_failure_states": [
+    "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-state.json",
+    "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-state-v2.json"
+  ],
+  "corrections": [
+    "C sentinel covers all five output fields",
+    "Deduplicate automatically merged contract timeout, retaining upstream long and explicit local300 guard"
+  ],
+  "started": 1792387600.2463439,
+  "scope": "Uncommitted resolved merge qualification; no final-head CI/performance/approval claim. Legacy300-second local contract guard remains additional to upstream timeout=long.",
+  "wasm_environment": {
+    "CC_wasm32_unknown_unknown": "/usr/bin/clang",
+    "AR_wasm32_unknown_unknown": "/Users/hawkingrei/.rustup/toolchains/1.97.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/llvm-ar"
+  },
+  "failed_step": "general"
+}

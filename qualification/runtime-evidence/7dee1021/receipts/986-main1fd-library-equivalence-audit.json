@@ -1,0 +1,16 @@
+{
+  "integrated_main": "1fd242eb70de5044740ab67a8beb4037d7ace325",
+  "resolved_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "src_crates_and_binding_implementation_differences": [
+    "bindings/ffi/src/retained/node/tests.rs"
+  ],
+  "difference_scope": "C test-only output sentinel assertion",
+  "cargo_production_sections_equal": {
+    "dependencies": true,
+    "build-dependencies": true,
+    "features": true,
+    "target": true,
+    "workspace": true
+  },
+  "scope": "New library implementation matches new main; this does not prove old0c performance equivalence, runtime correctness, final-head CI or approval."
+}

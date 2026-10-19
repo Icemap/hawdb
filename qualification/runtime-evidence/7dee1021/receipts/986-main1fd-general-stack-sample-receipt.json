@@ -1,0 +1,12 @@
+{
+  "at": 1792388656.087323,
+  "artifact": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-general-live-stack-sample.txt",
+  "bytes": 823637,
+  "sha256": "49a3283f464eca2dbabdbdfe59af42101b966d53b3fd024472916fbfb4abdcbb",
+  "scope": "one-second macOS stack sample of full general process62539 during ongoing execution, after some test failures; not a sample at the instant of failure, not performance or root-cause proof",
+  "observations": [
+    "Remaining sustained-write test observed in write synchronization and query execution",
+    "One checkpoint worker observed waiting on condition variable"
+  ],
+  "outstanding": "No causal disposition of prior/current checkpoint failures"
+}

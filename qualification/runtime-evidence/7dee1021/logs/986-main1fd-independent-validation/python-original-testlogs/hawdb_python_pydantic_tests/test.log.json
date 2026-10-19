@@ -1,0 +1,5 @@
+{
+  "original_bytes": 876,
+  "original_sha256": "44f77170637e88e93af00ab6e657de78d8c769f664db6a6f8b3f04da5e925c7c",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //bindings/python:hawdb_python_pydantic_tests\n-----------------------------------------------------------------------------\n============================= test session starts ==============================\nplatform darwin -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0\nrootdir: /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a33c60dac74ab8647bed043668c4e440/sandbox/darwin-sandbox/497/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_pydantic_tests.runfiles/_main\ncollected 44 items\n\nbindings/python/tests/test_pydantic.py ................................. [ 75%]\n........                                                                 [ 93%]\nbindings/python/tests/test_pydantic_extra.py ..s                         [100%]-- Test timed out at 2026-10-19 05:52:45 UTC --\n"
+}

@@ -1,0 +1,52 @@
+{
+  "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "captured_at": 1792389647.053258,
+  "completed_job_logs": [
+    {
+      "id": 117910837784,
+      "name": "Bazel build and test (macos-latest)",
+      "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "conclusion": "success",
+      "bytes": 51329,
+      "sha256": "d2124f3d2e2e52d49253a9f9a25f4614546848947a754af733314983f9f8528e",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-ci-evidence-v2/117910837784.log"
+    },
+    {
+      "id": 117910837832,
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "conclusion": "success",
+      "bytes": 47999,
+      "sha256": "f24f383ad27817ecc00dfd38b5ca83d3744d110b0f717e7e799b66b782e6cfd5",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-ci-evidence-v2/117910837832.log"
+    },
+    {
+      "id": 117910837948,
+      "name": "Build and test",
+      "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "conclusion": "success",
+      "bytes": 71667,
+      "sha256": "751bc978d1229ab8350c296ae2164190b248fbe057305b37b9f711b68283ab66",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-ci-evidence-v2/117910837948.log"
+    },
+    {
+      "id": 117910837587,
+      "name": "Bazel native bindings (ubuntu-24.04)",
+      "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "conclusion": "success",
+      "bytes": 56168,
+      "sha256": "35fe2e9ad1635453cab346c3acdabac8ac1c6a24c6e104e6beeb0398199bc386",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-ci-evidence-v2/117910837587.log"
+    },
+    {
+      "id": 117910837808,
+      "name": "Bazel native bindings (macos-latest)",
+      "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "conclusion": "success",
+      "bytes": 55889,
+      "sha256": "9981e8a206b2633f971e84d3f564f6b511938564a3884922d76753f1c355ff47",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-ci-evidence-v2/117910837808.log"
+    }
+  ],
+  "scope": "Exact-head GitHub run/job metadata and complete downloaded logs; checkout contents and test summaries still require audit. Local failures are preserved; no independent approval or acceptance claim."
+}

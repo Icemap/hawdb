@@ -1,0 +1,5 @@
+{
+  "original_bytes": 367,
+  "original_sha256": "dd3dada464e69c7ec19a7bbafa54c01eccbfffafad9b8b4acc7d9e83866f23e1",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_batch_dispatch_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest batch::tests::dispatch::batch_dispatch_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 470 filtered out; finished in 0.36s\n\n"
+}

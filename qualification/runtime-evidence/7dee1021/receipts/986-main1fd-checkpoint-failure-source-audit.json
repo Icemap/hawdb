@@ -1,0 +1,25 @@
+{
+  "captured_at": 1792388319.9144351,
+  "staged_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "comparison_main": "1fd242eb70de5044740ab67a8beb4037d7ace325",
+  "comparison_predecessor": "0c2989842321d10e91f136f3c924badb07038add",
+  "paths": [
+    "src/api/automatic_checkpoint.rs",
+    "src/api/automatic_checkpoint/tests",
+    "src/api/runtime_cell.rs",
+    "crates/storage/src"
+  ],
+  "comparisons": {
+    "1fd242eb70de5044740ab67a8beb4037d7ace325": {
+      "diff": "",
+      "identical": true
+    },
+    "0c2989842321d10e91f136f3c924badb07038add": {
+      "diff": "",
+      "identical": true
+    }
+  },
+  "uptime": "13:38  up 20 days, 52 mins, 14 users, load averages: 12.76 9.86 9.71\n",
+  "vm_stat": "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                                  2743284.\nPages active:                                2545368.\nPages inactive:                              2527516.\nPages speculative:                             52093.\nPages throttled:                                   0.\nPages wired down:                             376757.\nPages purgeable:                               35714.\n\"Translation faults\":                    46544532006.\nPages copy-on-write:                      1926756172.\nPages zero filled:                       28359886762.\nPages reactivated:                        2623176714.\nPages purged:                               98247317.\nFile-backed pages:                           1549235.\nAnonymous pages:                             3575742.\nPages stored in compressor:                   191473.\nPages occupied by compressor:                  69061.\nDecompressions:                            977407344.\nCompressions:                             1057909142.\nPageins:                                   902485767.\nPageouts:                                       5863.\nSwapins:                                     1633638.\nSwapouts:                                    6139061.\n",
+  "df -h /private/tmp/hawdb-wip-ready-20261015/integrate-main-1fd242eb": "Filesystem      Size    Used   Avail Capacity iused ifree %iused  Mounted on\n/dev/disk3s5   3.6Ti   3.6Ti    38Gi    99%     70M  401M   15%   /System/Volumes/Data\n"
+}

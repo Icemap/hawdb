@@ -1,0 +1,5 @@
+{
+  "original_bytes": 464,
+  "original_sha256": "28ab9ee4cd1fd42d5ce8e378b4ae08dd78ab3b341189b5165a8a112021d99856",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_sharded_cache_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ncache-sharding campaign: 32768 serial operations and 65536 concurrent operations\ntest cache::shard_tests::sharded_cache_state_machine_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 3.33s\n\n"
+}

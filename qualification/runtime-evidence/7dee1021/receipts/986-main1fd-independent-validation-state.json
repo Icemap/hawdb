@@ -1,0 +1,72 @@
+{
+  "status": "failed",
+  "pid": 72112,
+  "source_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "published_predecessor": "0c2989842321d10e91f136f3c924badb07038add",
+  "integrated_main": "1fd242eb70de5044740ab67a8beb4037d7ace325",
+  "steps": [
+    {
+      "name": "contracts-legacy300",
+      "command": [
+        "bazel",
+        "test",
+        "//:hawdb_execution_request_contract_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-main1fd-independent-validation/contracts-legacy300.bep.json",
+        "--test_timeout=300"
+      ],
+      "started": 1792388811.091199,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-independent-validation/contracts-legacy300.log",
+      "exit": 0,
+      "ended": 1792388942.5219111,
+      "sha256": "9fedadc8e0aa39d257fb505b89888af3554e021bb953bbbca7203f9342194255"
+    },
+    {
+      "name": "ffi-go",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/ffi:hawdb_ffi_tests",
+        "//bindings/go:hawdb_go_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-main1fd-independent-validation/ffi-go.bep.json"
+      ],
+      "started": 1792388942.622444,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-independent-validation/ffi-go.log",
+      "exit": 0,
+      "ended": 1792389030.737237,
+      "sha256": "b42e3cb30b67e6add732f12f7a9bc3da6d515e794e974aa0304e47d5a171d9d0"
+    },
+    {
+      "name": "python",
+      "command": [
+        "bazel",
+        "test",
+        "//bindings/python:hawdb_python_tests",
+        "//bindings/python:hawdb_python_pydantic_tests",
+        "--repo_env=CARGO_BAZEL_ISOLATED=false",
+        "--repo_env=CARGO_NET_OFFLINE=true",
+        "--build_event_json_file=/private/tmp/hawdb-wip-ready-20261015/986-main1fd-independent-validation/python.bep.json"
+      ],
+      "started": 1792389030.8133771,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-independent-validation/python.log",
+      "exit": 3,
+      "ended": 1792389406.203318,
+      "sha256": "e4f4a15fbd31248286afe06750d0a13886d34444501d5c42a1e90bf7a9065309"
+    }
+  ],
+  "prior_failure_states": [
+    "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-state.json",
+    "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-state-v2.json"
+  ],
+  "corrections": [
+    "C sentinel covers all five output fields",
+    "Deduplicate automatically merged contract timeout, retaining upstream long and explicit local300 guard"
+  ],
+  "started": 1792388550.660204,
+  "scope": "Uncommitted resolved merge qualification; no final-head CI/performance/approval claim. Legacy300-second local contract guard remains additional to upstream timeout=long.",
+  "prior_full_general_state": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-remainder-state.json",
+  "failed_step": "python"
+}

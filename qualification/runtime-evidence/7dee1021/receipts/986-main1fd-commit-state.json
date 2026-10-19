@@ -1,0 +1,106 @@
+{
+  "status": "published_remote_verified",
+  "pid": 93571,
+  "tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "old": "0c2989842321d10e91f136f3c924badb07038add",
+  "main": "1fd242eb70de5044740ab67a8beb4037d7ace325",
+  "steps": [
+    {
+      "name": "prek-install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "started": 1792389027.752469,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-commit/prek-install.log",
+      "exit": 0,
+      "ended": 1792389027.866237,
+      "sha256": "6dd3a3ee6c0892e5369e843cabf8ddc982f55665d60d1d1359fc0d198ee6f427"
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started": 1792389027.930176,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-commit/fmt.log",
+      "exit": 0,
+      "ended": 1792389033.8474119,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started": 1792389033.911734,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-commit/clippy.log",
+      "exit": 0,
+      "ended": 1792389034.798909,
+      "sha256": "2a7f2bc267ab84a783d3e33a26c82086964c4f5a781be885b3a698fdde636801"
+    },
+    {
+      "name": "prek-all",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "started": 1792389034.857642,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-commit/prek-all.log",
+      "exit": 0,
+      "ended": 1792389041.4863691,
+      "sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
+    },
+    {
+      "name": "commit",
+      "command": [
+        "git",
+        "commit",
+        "-m",
+        "fix(api): reconcile indexed node views with main eligibility",
+        "-m",
+        "Merge main1fd242eb, retaining unique-constraint admission and fail-closed integrity checks. Withdraw draft-only status19 and update the held-node observer setup. Ref #987, ref #976, ref #1081.",
+        "-m",
+        "Known qualification gap: two unchanged full general runs each passed1783 and failed3 differing automatic-checkpoint cases. All failure logs are preserved; root cause is unresolved. Contracts33 and mandatory lint checks pass. Remaining binding/fuzz/portable checks, complete final-source performance/resource matrices, independent review and maintainer approval remain required. Keep PR986 Draft."
+      ],
+      "started": 1792389041.538128,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-commit/commit.log",
+      "exit": 0,
+      "ended": 1792389047.311214,
+      "sha256": "8f1aebce223b68925fa5a5473837ede3157d3252d9395678c472475087d1d805"
+    },
+    {
+      "name": "push",
+      "command": [
+        "git",
+        "push",
+        "origin",
+        "HEAD:refs/heads/feat/978-boundary-baseline"
+      ],
+      "started": 1792389048.637991,
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-commit/push.log",
+      "exit": 0,
+      "ended": 1792389051.384594,
+      "sha256": "3eec729c3625a2acd532039037281de35baf8c6c984a7b81bc00cc5b0a913bc3"
+    }
+  ],
+  "known_failures": [
+    "Two full general runs each1783pass/3fail/1ignore/322filtered; differing automatic-checkpoint cases; cause unresolved"
+  ],
+  "scope": "Publish conflict resolution while preserving Draft and all remaining acceptance gates",
+  "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "ended": 1792389052.751829
+}

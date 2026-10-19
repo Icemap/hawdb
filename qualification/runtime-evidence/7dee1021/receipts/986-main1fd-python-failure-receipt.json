@@ -1,0 +1,18 @@
+{
+  "at": 1792389479.739282,
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "targets": {
+    "hawdb_python_tests": {
+      "raw_log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-independent-validation/python-original-testlogs/hawdb_python_tests/test.log",
+      "sha256": "4ffe962bbb238b248f73826f717523f832782a9d509e325f75d95c28107f131f",
+      "tail": "xec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //bindings/python:hawdb_python_tests\n-----------------------------------------------------------------------------\n============================= test session starts ==============================\nplatform darwin -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0\nrootdir: /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a33c60dac74ab8647bed043668c4e440/sandbox/darwin-sandbox/496/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_tests.runfiles/_main\ncollected 362 items / 2 skipped\n\nbindings/python/tests/test_arrow.py ...............                      [  4%]\nbindings/python/tests/test_executemany.py .............................. [ 12%]\n.......................................                                  [ 23%]\nbindings/python/tests/test_file.py .....                                 [ 24%]\nbindings/python/tests/test_lite.py .ss                                   [ 25%]\nbindings/python/tests/test_memory.py .....                               [ 26%]\nbindings/python/tests/test_notebook.py ................................. [ 35%]\n................................                                         [ 44%]\nbindings/python/tests/test_params.py ....................ss........      [ 53%]\nbindings/python/tests/test_pydantic_extra.py .s.                         [ 53%]\nbindings/python/tests/test_read_controls.py ............................ [ 61%]\n...........                                                              [ 64%]\nbindings/python/tests/test_retained.py ...........................       [ 72%]\nbindings/python/tests/test_retained_node.py ................             [ 76%]\nbindings/python/tests/test_smoke.py .............-- Test timed out at 2026-10-19 05:56:45 UTC --\n"
+    },
+    "hawdb_python_pydantic_tests": {
+      "raw_log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-independent-validation/python-original-testlogs/hawdb_python_pydantic_tests/test.log",
+      "sha256": "44f77170637e88e93af00ab6e657de78d8c769f664db6a6f8b3f04da5e925c7c",
+      "tail": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //bindings/python:hawdb_python_pydantic_tests\n-----------------------------------------------------------------------------\n============================= test session starts ==============================\nplatform darwin -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0\nrootdir: /Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a33c60dac74ab8647bed043668c4e440/sandbox/darwin-sandbox/497/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/bindings/python/hawdb_python_pydantic_tests.runfiles/_main\ncollected 44 items\n\nbindings/python/tests/test_pydantic.py ................................. [ 75%]\n........                                                                 [ 93%]\nbindings/python/tests/test_pydantic_extra.py ..s                         [100%]-- Test timed out at 2026-10-19 05:52:45 UTC --\n"
+    }
+  },
+  "scope": "Original local native Python/Pydantic validation failures; no deadline/assertion changes, no pass claim"
+}

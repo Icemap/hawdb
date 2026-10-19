@@ -1,0 +1,5 @@
+{
+  "original_bytes": 603,
+  "original_sha256": "20225f78dcd2f5638e71c8cd3f637d3b2babda7a1f504bf8b2614c896c9a89f0",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_spill_compaction_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest spill::compaction::tests::compaction_differential_campaign has been running for over 60 seconds\nSpill compaction differential: 512 successful and 1964 failing real-file fixtures, both final fan-ins and worker limits\ntest spill::compaction::tests::compaction_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 470 filtered out; finished in 416.04s\n\n"
+}

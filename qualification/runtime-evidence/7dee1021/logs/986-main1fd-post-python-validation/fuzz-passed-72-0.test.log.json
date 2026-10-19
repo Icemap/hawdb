@@ -1,0 +1,5 @@
+{
+  "original_bytes": 496,
+  "original_sha256": "4104b6177ff3139d2383f4f6a6196340032d5cd84615fd423b7e26b45ee2c8fa",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nhawdb-relational-columnar-aggregate-fuzz-v1: 128 seeds, 8192 cases, 32768 complete outcomes\ntest columnar_aggregate::tests::columnar_aggregate_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 225 filtered out; finished in 8.82s\n\n"
+}

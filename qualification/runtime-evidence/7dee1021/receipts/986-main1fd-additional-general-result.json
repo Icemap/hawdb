@@ -1,0 +1,12 @@
+{
+  "source_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "raw_log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-remainder/general-actual-scope-original-testlogs/test.log",
+  "sha256": "81909b94656485a077206be40ce3ee626dcd67b4edbf41800bd0c65310031d85",
+  "actual_scope": "full general partition, requested Bazel filter not forwarded",
+  "result_lines": [
+    "test result: FAILED. 1783 passed; 3 failed; 1 ignored; 0 measured; 322 filtered out; finished in 497.98s"
+  ],
+  "failure_details": "failures:\n    api::automatic_checkpoint::tests::coalesced_capture::coalesced_commits_refresh_and_checkpoint_without_another_frontend_call\n    api::automatic_checkpoint::tests::denied_governor_recovers_without_another_write_or_host_checkpoint\n    api::automatic_checkpoint::tests::headroom::capacity_wait::parked_preparation_rejects_no_data_and_a_busy_writer_can_retry_after_checkpoint\n\ntest result: FAILED. 1783 passed; 3 failed; 1 ignored; 0 measured; 322 filtered out; finished in 497.98s\n\n",
+  "pipeline_state": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-validation-remainder-state.json",
+  "scope_correction": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-focused-filter-scope-correction.json"
+}

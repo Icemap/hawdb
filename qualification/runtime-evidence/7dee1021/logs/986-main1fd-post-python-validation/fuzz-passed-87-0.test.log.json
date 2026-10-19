@@ -1,0 +1,5 @@
+{
+  "original_bytes": 665,
+  "original_sha256": "ec37ebcd22022347ac05194e8724d68fb122764466a6557665294bedb795ba40",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/search:hawdb_search_projection_evidence_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest projection_evidence::differential::search_projection_evidence_differential_campaign has been running for over 60 seconds\nsearch-projection-evidence-v1 seeds=128 cases=10880 sha256=1ef7fde9e212b76a43f4ec097558befceb78d648bb9e422589dcb8265fbf4aa8\ntest projection_evidence::differential::search_projection_evidence_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 856 filtered out; finished in 205.03s\n\n"
+}

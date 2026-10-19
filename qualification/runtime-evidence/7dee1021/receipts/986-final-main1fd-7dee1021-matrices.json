@@ -1,0 +1,70 @@
+{
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "engine_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "created": 1792389437.94095,
+  "jobs": [
+    {
+      "role": "ordinary",
+      "branch": "qualify/986-ordinary-final-main1fd-7dee1021",
+      "source": "1200a20af7b70af712da3d6ab716d93861100d61",
+      "tree": "dfef3baad8797ca528ab487b6f9e54ccb439374a",
+      "inputs": {
+        "ordinary_matrix": "true"
+      },
+      "groups": 90,
+      "status": "queued",
+      "before_run_ids": [],
+      "run": 39207199690,
+      "url": "https://github.com/nowledge-co/hawdb/actions/runs/39207199690"
+    },
+    {
+      "role": "resources",
+      "branch": "qualify/986-resources-final-main1fd-7dee1021",
+      "source": "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+      "tree": "1ecec01f43efaa89e91af922cc54f8639c507ca5",
+      "inputs": {
+        "kind": "resources"
+      },
+      "groups": 110,
+      "status": "queued",
+      "before_run_ids": [],
+      "run": 39207212017,
+      "url": "https://github.com/nowledge-co/hawdb/actions/runs/39207212017"
+    },
+    {
+      "role": "retained",
+      "branch": "qualify/986-resources-final-main1fd-7dee1021",
+      "source": "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+      "tree": "1ecec01f43efaa89e91af922cc54f8639c507ca5",
+      "inputs": {
+        "kind": "retained"
+      },
+      "groups": 10,
+      "status": "queued",
+      "before_run_ids": [
+        39207212017
+      ],
+      "run": 39207217884,
+      "url": "https://github.com/nowledge-co/hawdb/actions/runs/39207217884"
+    },
+    {
+      "role": "phases",
+      "branch": "qualify/986-resources-final-main1fd-7dee1021",
+      "source": "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+      "tree": "1ecec01f43efaa89e91af922cc54f8639c507ca5",
+      "inputs": {
+        "kind": "phases"
+      },
+      "groups": 10,
+      "status": "in_progress",
+      "before_run_ids": [
+        39207217884,
+        39207212017
+      ],
+      "run": 39207224832,
+      "url": "https://github.com/nowledge-co/hawdb/actions/runs/39207224832"
+    }
+  ],
+  "baseline": "3cdb2610ba8b984676b80ba22df64821787886d3",
+  "scope": "Complete original90/110 plus retained10/phase10 controls bound to published integration head. Preserve predecessor runs and original workloads, samples, budgets, concurrency, deadlines. General/Python failures and all review/approval gates remain open."
+}

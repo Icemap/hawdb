@@ -1,0 +1,5 @@
+{
+  "original_bytes": 390,
+  "original_sha256": "a04d61e2b96000577113a501ef150028905097002ea6fc9fd75ba15f14c3a1fe",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/relational:hawdb_relational_index_runtime_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\ntest index_runtime::tests::index_runtime_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 225 filtered out; finished in 57.64s\n\n"
+}

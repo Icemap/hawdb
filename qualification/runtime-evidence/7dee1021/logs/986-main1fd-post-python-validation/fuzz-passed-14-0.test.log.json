@@ -1,0 +1,5 @@
+{
+  "original_bytes": 437,
+  "original_sha256": "bbde3d0e882989c1f88cba9df3d16928a393045bdfcd814cadb288e55819a68d",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/executor:hawdb_transform_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nstreaming transform campaign: 256 seeds, 20736 operator/batch/exit cases\ntest transform::tests::transform_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 470 filtered out; finished in 2.58s\n\n"
+}

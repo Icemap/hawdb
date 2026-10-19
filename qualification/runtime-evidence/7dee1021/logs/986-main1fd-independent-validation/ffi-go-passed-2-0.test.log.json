@@ -1,0 +1,5 @@
+{
+  "original_bytes": 177,
+  "original_sha256": "0e9861c5329a43eb57cac94191a97556fd7cc21d4c146160c2f1a7333522c268",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //bindings/go:hawdb_go_tests\n-----------------------------------------------------------------------------\nPASS\n"
+}

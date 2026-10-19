@@ -1,0 +1,19 @@
+[
+  {
+    "totalRunCount": 1,
+    "passed": [
+      {
+        "uri": "file:///Users/hawkingrei/Library/Caches/bazel/_bazel_hawkingrei/a33c60dac74ab8647bed043668c4e440/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/hawdb_unit_general_tests/test.log"
+      }
+    ],
+    "overallStatus": "PASSED",
+    "firstStartTimeMillis": "1792389411361",
+    "lastStopTimeMillis": "1792389625296",
+    "totalRunDurationMillis": "213935",
+    "runCount": 1,
+    "totalRunDuration": "213.935s",
+    "firstStartTime": "2026-10-19T05:56:51.361Z",
+    "lastStopTime": "2026-10-19T06:00:25.296Z",
+    "attemptCount": 1
+  }
+]

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 479,
+  "original_sha256": "0029188a7b3ba4d30871b4b8b4915dfbab2f39807dd59301a9c735e55d85910d",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/relational:hawdb_relational_aggregate_state_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nhawdb-relational-aggregate-state-fuzz-v1: 128 seeds, 8192 cases, 32768 complete outcomes\ntest aggregate::tests::aggregate_state_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 225 filtered out; finished in 27.90s\n\n"
+}

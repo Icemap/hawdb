@@ -1,0 +1,118 @@
+{
+  "captured_at": 1792389702.171461,
+  "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "synthetic_merge_checkout": "cef818b090dd4b1f46d21a2192fb51b776d5321e",
+  "synthetic_merge_metadata": {
+    "sha": "cef818b090dd4b1f46d21a2192fb51b776d5321e",
+    "node_id": "C_kwDOTX6JAdoAKGNlZjgxOGIwOTBkZDRiMWY0NmQyMWEyMTkyZmI1MWI3NzZkNTMyMWU",
+    "url": "https://api.github.com/repos/nowledge-co/hawdb/git/commits/cef818b090dd4b1f46d21a2192fb51b776d5321e",
+    "html_url": "https://github.com/nowledge-co/hawdb/commit/cef818b090dd4b1f46d21a2192fb51b776d5321e",
+    "author": {
+      "name": "Weizhen Wang",
+      "email": "hawking.rei@gmail.com",
+      "date": "2026-10-19T05:50:53Z"
+    },
+    "committer": {
+      "name": "GitHub",
+      "email": "noreply@github.com",
+      "date": "2026-10-19T05:50:53Z"
+    },
+    "tree": {
+      "sha": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/git/trees/562442cf50a13aac579903847ee6ba295d5d5e4e"
+    },
+    "message": "Merge 7dee10212db9d7f465853bb7d46173c188893d06 into 1fd242eb70de5044740ab67a8beb4037d7ace325",
+    "parents": [
+      {
+        "sha": "1fd242eb70de5044740ab67a8beb4037d7ace325",
+        "url": "https://api.github.com/repos/nowledge-co/hawdb/git/commits/1fd242eb70de5044740ab67a8beb4037d7ace325",
+        "html_url": "https://github.com/nowledge-co/hawdb/commit/1fd242eb70de5044740ab67a8beb4037d7ace325"
+      },
+      {
+        "sha": "7dee10212db9d7f465853bb7d46173c188893d06",
+        "url": "https://api.github.com/repos/nowledge-co/hawdb/git/commits/7dee10212db9d7f465853bb7d46173c188893d06",
+        "html_url": "https://github.com/nowledge-co/hawdb/commit/7dee10212db9d7f465853bb7d46173c188893d06"
+      }
+    ],
+    "verification": {
+      "verified": true,
+      "reason": "valid",
+      "signature": "-----BEGIN PGP SIGNATURE-----\n\nwsFcBAABCAAQBQJq1a+9CRC1aQ7uu5UhlAAAOYgQABDbMan95IzdUkM3FhVOwLNG\n0KzYxnJYVn0NQ22Pt8hiJiX2il9TlDu1Pc/sWTjRrGPd1H6zzhJRVcRDbCkFlMj+\niHDURY8T1F8zsYj6MmzJ2NnEQUDevn1UZVmuCZd1yz1KeJJyUsMEeWqbvj/uSidz\nBJYUOodUyHqtM1Hz50+aqBUlcrkEWoLNdZH2cgERUezARCEDmU0pcMA7J9vWgPNJ\n32XlfRZOgDwpeTvxjMwdMKACj5XrtvHFcAGk+/LFIrry4ESjiByqHgvpitK7BZ+4\nQew94UvQ0P1oNX4t2SGkZ5l3hamGMVFhQgnMDcV7JHYS13sNoCJWfCHquLI6U4Tz\nHNBS7i/MdSTdU+WdtZDNDYA1daumlTabmFipuzfGKWDjQpBYdNrEWCqERWM2NQnS\nLltZRkNWHC1vKPrD3Gml9q/aBj3GgpSncDUfwDdXLmagU60jz9bIxJSjgXxouPYa\nF2/WixZ5bvUOLfZXaKGaVcLB2RmsO4u0FXSltmy9OXdIXfozAcrCoP3miFA2vG++\nkcyDqE3HgDVAy4cITfhBvKtApil9tmjfwp28c0epFZpDWI0tNJsuYcZhpsdoYldS\n/7YKnIrtP3KcEHn1DZFuqgeVcN30/isiRUvGJ9XBgrdJehpLLfwmzY3YplS2SICF\nH39ZRt7/XKu3j29NUbVD\n=rHHl\n-----END PGP SIGNATURE-----\n",
+      "payload": "tree 562442cf50a13aac579903847ee6ba295d5d5e4e\nparent 1fd242eb70de5044740ab67a8beb4037d7ace325\nparent 7dee10212db9d7f465853bb7d46173c188893d06\nauthor Weizhen Wang <hawking.rei@gmail.com> 1792389053 +0000\ncommitter GitHub <noreply@github.com> 1792389053 +0000\n\nMerge 7dee10212db9d7f465853bb7d46173c188893d06 into 1fd242eb70de5044740ab67a8beb4037d7ace325\n",
+      "verified_at": "2026-10-19T05:50:54Z"
+    }
+  },
+  "tree_equivalent": true,
+  "jobs": [
+    {
+      "job": 117910837784,
+      "name": "Bazel build and test (macos-latest)",
+      "checkout": "cef818b090dd4b1f46d21a2192fb51b776d5321e",
+      "head_metadata": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "conclusion": "success",
+      "summary_lines": [
+        "2026-10-19T05:57:45.8947170Z //bindings/python:hawdb_python_pydantic_tests                            PASSED in 6.8s",
+        "2026-10-19T05:57:45.8951140Z //bindings/python:hawdb_python_tests                                     PASSED in 41.4s",
+        "2026-10-19T05:57:45.9031890Z //bindings/python:requirements.test                                      PASSED in 4.2s",
+        "2026-10-19T05:57:45.9033930Z Executed 3 out of 3 tests: 3 tests pass."
+      ],
+      "scope": "Workflow commands and complete logs audited; build-and-test labels include Python binding tests, not Prow full-root general/crates proof."
+    },
+    {
+      "job": 117910837832,
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "checkout": "cef818b090dd4b1f46d21a2192fb51b776d5321e",
+      "head_metadata": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "conclusion": "success",
+      "summary_lines": [
+        "2026-10-19T05:55:55.7114447Z //bindings/python:hawdb_python_pydantic_tests                            PASSED in 5.7s",
+        "2026-10-19T05:55:55.7123041Z //bindings/python:hawdb_python_tests                                     PASSED in 36.3s",
+        "2026-10-19T05:55:55.7124668Z //bindings/python:requirements.test                                      PASSED in 2.6s",
+        "2026-10-19T05:55:55.7127381Z Executed 3 out of 3 tests: 3 tests pass."
+      ],
+      "scope": "Workflow commands and complete logs audited; build-and-test labels include Python binding tests, not Prow full-root general/crates proof."
+    },
+    {
+      "job": 117910837948,
+      "name": "Build and test",
+      "checkout": "cef818b090dd4b1f46d21a2192fb51b776d5321e",
+      "head_metadata": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "conclusion": "success",
+      "summary_lines": [
+        "2026-10-19T05:57:01.1210864Z ======================= 357 passed, 7 skipped in 12.27s ========================",
+        "2026-10-19T05:57:04.2242096Z ======================== 43 passed, 1 skipped in 1.31s ========================="
+      ],
+      "scope": "Workflow commands and complete logs audited; build-and-test labels include Python binding tests, not Prow full-root general/crates proof."
+    },
+    {
+      "job": 117910837587,
+      "name": "Bazel native bindings (ubuntu-24.04)",
+      "checkout": "cef818b090dd4b1f46d21a2192fb51b776d5321e",
+      "head_metadata": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "conclusion": "success",
+      "summary_lines": [
+        "2026-10-19T05:55:59.5406031Z //bindings/go:hawdb_go_tests                                             PASSED in 2.4s",
+        "2026-10-19T05:55:59.5438182Z Executed 1 out of 1 test: 1 test passes.",
+        "2026-10-19T05:56:04.3276856Z //bindings/ffi:hawdb_ffi_tests                                           PASSED in 0.2s",
+        "2026-10-19T05:56:04.3284263Z Executed 1 out of 1 test: 1 test passes."
+      ],
+      "scope": "Workflow commands and complete logs audited; build-and-test labels include Python binding tests, not Prow full-root general/crates proof."
+    },
+    {
+      "job": 117910837808,
+      "name": "Bazel native bindings (macos-latest)",
+      "checkout": "cef818b090dd4b1f46d21a2192fb51b776d5321e",
+      "head_metadata": "7dee10212db9d7f465853bb7d46173c188893d06",
+      "conclusion": "success",
+      "summary_lines": [
+        "2026-10-19T05:56:25.7636290Z //bindings/go:hawdb_go_tests                                             PASSED in 1.8s",
+        "2026-10-19T05:56:25.7650000Z Executed 1 out of 1 test: 1 test passes.",
+        "2026-10-19T05:56:28.3944740Z //bindings/ffi:hawdb_ffi_tests                                           PASSED in 0.1s",
+        "2026-10-19T05:56:28.3946990Z Executed 1 out of 1 test: 1 test passes."
+      ],
+      "scope": "Workflow commands and complete logs audited; build-and-test labels include Python binding tests, not Prow full-root general/crates proof."
+    }
+  ],
+  "scope": "Exact synthetic checkout tree verified equal published PR tree. Five completed GitHub jobs including Python/C/Go pass. Full root/crates Prow, Windows, local failures, performance and independent approval remain open."
+}

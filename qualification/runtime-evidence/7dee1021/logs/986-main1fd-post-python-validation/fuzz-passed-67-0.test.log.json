@@ -1,0 +1,5 @@
+{
+  "original_bytes": 524,
+  "original_sha256": "239092ec7209de28e31daa32f3abf7f9c798f63a0f95d792995879a242342667",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests\n-----------------------------------------------------------------------------\n\nrunning 1 test\nCardinality metadata campaign: 2304 catalog/plan cases, 20748 operators, 1161888 metadata comparisons\ntest graph::cardinality::bindings::tests::cardinality_metadata_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 126 filtered out; finished in 1.64s\n\n"
+}

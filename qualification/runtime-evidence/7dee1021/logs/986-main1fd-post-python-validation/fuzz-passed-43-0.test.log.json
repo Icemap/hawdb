@@ -1,0 +1,5 @@
+{
+  "original_bytes": 548,
+  "original_sha256": "ef12c8b02f79b3e6c66b0ff1b8c04e36fbe23c37a926bb8eafd8a447d4cf65f0",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //crates/storage:hawdb_storage_durable_manifest_fuzz_tests\n-----------------------------------------------------------------------------\nexternal/bazel_tools/tools/test/test-setup.sh: child setpgid (16056 to 16056): Operation not permitted\n\nrunning 1 test\ndurable-manifest-mutation-v1 seeds=128 cases=32896\ntest durable_manifest::tests::durable_manifest_differential_campaign ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1967 filtered out; finished in 10.36s\n\n"
+}
