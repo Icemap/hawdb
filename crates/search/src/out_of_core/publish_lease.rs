@@ -74,7 +74,6 @@ impl SearchProjectionPublishLease {
         let directory = SourceDirectory::capture_for_path(root)?;
         #[cfg(test)]
         tests::after_capture(root);
-        let registered = PublicationRegistration::acquire(directory, memory, task)?;
         let lock_path = OwnedPath::join(
             root,
             Path::new(SEARCH_PROJECTION_PUBLISH_LOCK_FILE),
@@ -82,7 +81,25 @@ impl SearchProjectionPublishLease {
             task,
         )?;
         let _native = memory.spool.reserve(native_path::bytes(&lock_path)?)?;
+        let lease = Self::acquire_captured(directory, memory, task)?;
+        #[cfg(test)]
+        tests::after_lock(root);
+        // Legacy path entry additionally checks its original label. Native
+        // stationary producers use the held root directly without reopening it.
+        lease.require_current_binding(root, &lock_path)?;
         checkpoint(task)?;
+        Ok(lease)
+    }
+
+    /// Acquire through an already admitted original root and the operation's
+    /// existing accounts. No saved path, default task or new governor is used.
+    pub(crate) fn acquire_captured(
+        directory: SourceDirectory,
+        memory: &BuildMemory,
+        task: &RuntimeTaskContext,
+    ) -> Result<Self> {
+        checkpoint(task)?;
+        let registered = PublicationRegistration::acquire(directory, memory, task)?;
         let lock_file = registered.with_directory(|directory| {
             directory.open_lock_file(
                 &directory.operation_context(),
@@ -100,12 +117,18 @@ impl SearchProjectionPublishLease {
             lock_file,
             root: registered,
         };
-        #[cfg(test)]
-        tests::after_lock(root);
-        // The path may have been replaced between registration and native open,
-        // or between opening and locking. Never grant a lease for a different
-        // directory/lock file than the authority actually retained.
-        lease.require_current_binding(root, &lock_path)?;
+        lease.root.with_directory(|directory| -> Result<()> {
+            if !directory.matches_child_file(
+                &directory.operation_context(),
+                SEARCH_PROJECTION_PUBLISH_LOCK_FILE,
+                &lease.lock_file,
+            )? {
+                return Err(HawDBError::StorageIntegrity(
+                    "captured publication lock binding changed".into(),
+                ));
+            }
+            Ok(())
+        })?;
         checkpoint(task)?;
         Ok(lease)
     }
@@ -350,6 +373,95 @@ mod tests {
         if let Some(hook) = AFTER_LOCK.with(|slot| slot.take()) {
             hook(root);
         }
+    }
+
+    #[test]
+    fn captured_lease_uses_original_cancellation_and_memory_before_native_effects() {
+        let root = test_dir();
+        let project =
+            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire(&root, 8).unwrap();
+        let original = SourceDirectory::capture(&root, &project.io_context()).unwrap();
+        for cancel in [false, true] {
+            let task = if cancel {
+                RuntimeTaskContext::default()
+            } else {
+                RuntimeTaskContext::default()
+                    .with_memory_reservation(hawdb_core::RuntimeMemoryReservation::new(1, 0))
+            };
+            let memory = BuildMemory::new(&task).unwrap();
+            if cancel {
+                task.cancellation().cancel();
+            }
+            let captured = original.duplicate(&project.io_context()).unwrap();
+            assert!(
+                SearchProjectionPublishLease::acquire_captured(captured, &memory, &task).is_err()
+            );
+            assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+            assert!(!root.join(SEARCH_PROJECTION_PUBLISH_LOCK_FILE).exists());
+            assert!(!root.join(".search-source-process.lock").exists());
+        }
+        let task = RuntimeTaskContext::default();
+        let memory = BuildMemory::new(&task).unwrap();
+        let captured = original.duplicate(&project.io_context()).unwrap();
+        let lease =
+            SearchProjectionPublishLease::acquire_captured(captured, &memory, &task).unwrap();
+        assert_eq!(lease.source_identity(), original.identity());
+        drop((lease, original));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn captured_lease_keeps_original_root_without_its_old_label() {
+        let root = test_dir();
+        let moved = root.with_extension("retained");
+        let project =
+            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire(&root, 16).unwrap();
+        let directory = SourceDirectory::capture(&root, &project.io_context()).unwrap();
+        let identity = directory.identity();
+        std::fs::rename(&root, &moved).unwrap();
+        std::fs::create_dir(&root).unwrap();
+        let task = RuntimeTaskContext::default();
+        let memory = BuildMemory::new(&task).unwrap();
+        let lease =
+            SearchProjectionPublishLease::acquire_captured(directory, &memory, &task).unwrap();
+        assert_eq!(lease.source_identity(), identity);
+        assert!(moved.join(SEARCH_PROJECTION_PUBLISH_LOCK_FILE).exists());
+        assert!(!root.join(SEARCH_PROJECTION_PUBLISH_LOCK_FILE).exists());
+        let again = SourceDirectory::capture(&moved, &project.io_context()).unwrap();
+        assert!(SearchProjectionPublishLease::acquire_captured(again, &memory, &task).is_err());
+        drop(lease);
+        let again = SourceDirectory::capture(&moved, &project.io_context()).unwrap();
+        let lease = SearchProjectionPublishLease::acquire_captured(again, &memory, &task).unwrap();
+        drop(lease);
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(moved).unwrap();
+    }
+
+    #[test]
+    fn captured_lease_admission_refusal_releases_its_original_registration() {
+        let root = test_dir();
+        let project =
+            hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire(&root, 8).unwrap();
+        let context = project.io_context();
+        let original = SourceDirectory::capture(&root, &context).unwrap();
+        let captured = original.duplicate(&context).unwrap();
+        let mut blockers = Vec::new();
+        while let Ok(fd) = original.duplicate(&context) {
+            blockers.push(fd);
+        }
+        let task = RuntimeTaskContext::default();
+        let memory = BuildMemory::new(&task).unwrap();
+        let error =
+            SearchProjectionPublishLease::acquire_captured(captured, &memory, &task).unwrap_err();
+        assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+        drop(blockers);
+        let captured = original.duplicate(&context).unwrap();
+        let lease =
+            SearchProjectionPublishLease::acquire_captured(captured, &memory, &task).unwrap();
+        assert_eq!(lease.source_identity(), original.identity());
+        drop((lease, original));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

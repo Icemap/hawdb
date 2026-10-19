@@ -33,6 +33,14 @@ mod platform {
     ) -> io::Result<std::fs::File> {
         Err(unsupported())
     }
+    pub(super) fn matches_child_file(
+        _root: &std::fs::File,
+        _name: ChildName<'_>,
+        _file: &std::fs::File,
+        _context: &FileOpenContext,
+    ) -> io::Result<bool> {
+        Err(unsupported())
+    }
     pub(super) fn open_wal_append_child(
         _root: &std::fs::File,
         _name: ChildName<'_>,
@@ -388,6 +396,25 @@ impl SourceDirectory {
         kind: DescriptorKind,
     ) -> io::Result<File> {
         self.open_existing_child(context, name, kind, false)
+    }
+
+    /// Compare a held file with one regular, non-symlink component through this
+    /// original root. This is a binding fence, not publication/adoption authority.
+    /// Unix uses fstatat without another open/close of a process lock inode;
+    /// Windows charges its temporary validation handle to this original context.
+    pub fn matches_child_file(
+        &self,
+        context: &FileOpenContext,
+        name: &str,
+        file: &File,
+    ) -> io::Result<bool> {
+        self.require_context(context)?;
+        let name = ChildName::new(name)?;
+        let scope = native_scope(context)?;
+        self.require_scope(&scope)?;
+        self.root.with_native(|root| {
+            file.with_native(|file| platform::matches_child_file(root, name, file, context))
+        })
     }
 
     /// Existing current-generation WAL only: no create, truncate or publication.

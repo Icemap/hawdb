@@ -605,3 +605,18 @@ fn report_cursor_error(stage: &str, error: io::Error) -> io::Error {
     let _ = stage;
     error
 }
+
+pub(super) fn matches_child_file(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+    file: &std::fs::File,
+    context: &FileOpenContext,
+) -> io::Result<bool> {
+    let _permit = context.acquire(DescriptorKind::Transient)?;
+    // FILE_READ_ATTRIBUTES through the held directory, no reparse traversal.
+    let named = relative_open(root, name, 0x80, false)?;
+    Ok(
+        crate::native_file_identity::of_file(file)?
+            == crate::native_file_identity::of_file(&named)?,
+    )
+}

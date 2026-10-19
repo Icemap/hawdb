@@ -1015,3 +1015,86 @@ fn captured_wal_append_resize_refuses_at_the_original_descriptor_cap_and_retries
     drop((file, directory));
     assert_eq!(fixture.project.metrics().open, 0);
 }
+
+#[test]
+fn captured_file_binding_uses_original_root_and_rejects_replacement() {
+    let fixture = Fixture::new(16);
+    let root = fixture.root.join("native");
+    fs::create_dir(&root).unwrap();
+    fs::write(root.join("binding"), b"original").unwrap();
+    let directory = fixture.capture(&root);
+    let context = fixture.project.io_context();
+    let file = directory.open_child(&context, "binding").unwrap();
+    assert!(directory
+        .matches_child_file(&context, "binding", &file)
+        .unwrap());
+    fs::rename(root.join("binding"), root.join("retained")).unwrap();
+    fs::write(root.join("binding"), b"foreign").unwrap();
+    assert!(!directory
+        .matches_child_file(&context, "binding", &file)
+        .unwrap());
+    assert!(directory
+        .matches_child_file(&context, "retained", &file)
+        .unwrap());
+    assert_eq!(
+        directory
+            .matches_child_file(&context, "missing", &file)
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::NotFound
+    );
+    assert!(directory
+        .matches_child_file(&context, "../binding", &file)
+        .is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn captured_file_binding_never_follows_symlinks_or_reopens_its_root_label() {
+    let fixture = Fixture::new(16);
+    let root = fixture.root.join("native");
+    let moved = fixture.root.join("moved");
+    fs::create_dir(&root).unwrap();
+    fs::write(root.join("binding"), b"original").unwrap();
+    let directory = fixture.capture(&root);
+    let context = fixture.project.io_context();
+    let file = directory.open_child(&context, "binding").unwrap();
+    std::os::unix::fs::symlink("binding", root.join("alias")).unwrap();
+    assert_eq!(
+        directory
+            .matches_child_file(&context, "alias", &file)
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::InvalidData
+    );
+    fs::rename(&root, &moved).unwrap();
+    fs::create_dir(&root).unwrap();
+    fs::write(root.join("binding"), b"foreign").unwrap();
+    assert!(directory
+        .matches_child_file(&context, "binding", &file)
+        .unwrap());
+    assert_eq!(fs::read(root.join("binding")).unwrap(), b"foreign");
+}
+
+#[cfg(unix)]
+#[test]
+fn captured_file_binding_of_a_lock_uses_no_additional_descriptor() {
+    let fixture = Fixture::new(2);
+    let directory = fixture.capture(&fixture.root);
+    let context = fixture.project.io_context();
+    let file = directory
+        .open_lock_file(
+            &context,
+            ".search_projection.publish.lock",
+            SourceDirectoryLockMode::ReadWriteCreate,
+        )
+        .unwrap();
+    file.try_lock().unwrap();
+    assert!(directory
+        .open_child(&context, ".search_projection.publish.lock")
+        .is_err());
+    assert!(directory
+        .matches_child_file(&context, ".search_projection.publish.lock", &file)
+        .unwrap());
+    file.unlock().unwrap();
+}

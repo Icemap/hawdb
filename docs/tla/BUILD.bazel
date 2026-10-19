@@ -1155,3 +1155,16 @@ tla_check(
     )
     for control in ["SkipIntentBarrier", "SkipRemovalBarrier", "CloseTargetLate", "ExposeAllowed", "RefundIdentity", "ForgetDebtOnClose"]
 ]
+
+[
+    tla_check(
+        name = "HawDBCapturedPublicationLease" + control + "_check",
+        module = "HawDBCapturedPublicationLease.tla",
+        config = "mutants/HawDBCapturedPublicationLease" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["ReopenLabel", "SkipBinding", "DefaultAccount", "EarlyClose", "SkipNativeLock"]
+]

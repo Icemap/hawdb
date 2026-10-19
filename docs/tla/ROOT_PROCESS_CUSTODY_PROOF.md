@@ -281,3 +281,7 @@ Consumer allocation ledger, complete captured GraphStore data I/O or stationary
 activation. Those contracts, original resource/recovery/fairness gates and actual
 Mem adoption remain required. The extra retained directory FD is charged, not
 hidden in a separate allowance or removed to make a tiny budget pass.
+
+The separate [captured Consumer publication-lease refinement](CAPTURED_CONSUMER_PUBLICATION_LEASE_PROOF.md)
+checks the original-root/account and lock-entry binding handoff. It reuses this
+process custody ordering without claiming a stationary serving view or selector.

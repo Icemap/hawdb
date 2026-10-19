@@ -422,3 +422,43 @@ pub(super) fn visit_children(
         "source directory enumeration requires Linux, Apple or Windows",
     ))
 }
+
+// Do not open/close another descriptor to a POSIX process-owned lock inode.
+pub(super) fn matches_child_file(
+    root: &std::fs::File,
+    name: ChildName<'_>,
+    file: &std::fs::File,
+    _context: &FileOpenContext,
+) -> io::Result<bool> {
+    use std::os::unix::fs::MetadataExt;
+    let name = name_bytes(name);
+    let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+    // SAFETY: live root, fixed terminated component, writable stat, and no
+    // symlink traversal. On success fstatat initializes the whole stat object.
+    if unsafe {
+        libc::fstatat(
+            root.as_raw_fd(),
+            name.as_ptr().cast(),
+            stat.as_mut_ptr(),
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    } == -1
+    {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: successful fstatat initialized stat above.
+    let stat = unsafe { stat.assume_init() };
+    if stat.st_mode & libc::S_IFMT != libc::S_IFREG {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "source child is not a regular non-symlink file",
+        ));
+    }
+    let held = file.metadata()?;
+    // Darwin's dev_t is signed; normalize its sign extension just as MetadataExt
+    // does. Other Unix device types are unsigned. Both fit exactly in i128.
+    fn device_number(value: impl Into<i128>) -> u64 {
+        value.into() as u64
+    }
+    Ok(held.is_file() && held.dev() == device_number(stat.st_dev) && held.ino() == stat.st_ino)
+}
