@@ -59,7 +59,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install Bazel
-        uses: bazel-contrib/setup-bazel@0.19.0
+        uses: bazel-contrib/setup-bazel@0.19.1
         with:
           bazelisk-cache: true
           repository-cache: true
@@ -74,6 +74,12 @@ jobs:
         run: >-
           bazel test --test_output=errors --test_arg=generation_spool
           //crates/search:hawdb_search_tests
+
+      - name: Test consumer publication and reopen on Unix
+        run: >-
+          bazel test --test_output=errors
+          //:hawdb_search_projection_consumer_tests
+          //:hawdb_search_projection_consumer_minimal_tests
 
       - name: Test the retained C ABI contract
         run: bazel test --test_output=errors //bindings/ffi:hawdb_ffi_tests
@@ -129,6 +135,19 @@ jobs:
           bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
             -- generation_spool --nocapture --test-threads=1 \
             2>&1 | tee windows-native-results/held-generation-spool.txt
+
+      - name: Test explicit consumer publication refusal under retained ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            consumer::tests::windows_publication_refusal_preserves_receipt_and_native_lease \
+            -- --exact --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/consumer-publication-refusal.txt
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
+            api::search_projection_consumer::tests::windows_consumer_creation_refuses_before_callback_or_publication \
+            -- --exact --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/consumer-creation-refusal.txt
 
       - name: Build and test the retained Windows C ABI
         shell: bash
