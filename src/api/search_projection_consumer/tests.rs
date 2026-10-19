@@ -1427,6 +1427,7 @@ fn consumer_native_candidate_output_installs_a_bounded_durable_artifact() {
         .is_err());
     assert!(!generation.join("over-budget").exists());
     drop(output);
+    assert!(lease.begin_candidate_output(payload.len() as u64).is_err());
     drop(lease);
     assert!(pending.born_directory().is_ok());
     assert_eq!(

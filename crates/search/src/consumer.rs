@@ -101,6 +101,7 @@ pub struct ConsumerStationaryTargetLease<'birth> {
     lease: SearchProjectionPublishLease,
     memory: BuildMemory,
     task: RuntimeTaskContext,
+    candidate_output_begun: bool,
 }
 
 /// One bounded native output operation within a born Consumer generation.
@@ -142,6 +143,7 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
             lease,
             memory,
             task: task.clone(),
+            candidate_output_begun: false,
         })
     }
 
@@ -150,7 +152,8 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
         self.lease.source_identity()
     }
 
-    /// Reserve a cumulative file-output bound before installing any artifact.
+    /// Reserve a cumulative file-output bound once for this born target before
+    /// installing any artifact. Dropping the token cannot reset its byte cap.
     /// The caller still owns the candidate's complete workspace and cleanup
     /// admission; this token only bounds the native output files it creates.
     pub fn begin_candidate_output(
@@ -161,6 +164,10 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
         if max_bytes == 0 {
             return Err(invalid("consumer candidate output budget is empty"));
         }
+        if self.candidate_output_begun {
+            return Err(invalid("consumer candidate output was already started"));
+        }
+        self.candidate_output_begun = true;
         Ok(ConsumerCandidateOutput {
             memory: self.memory.clone(),
             task: self.task.clone(),
