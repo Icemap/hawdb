@@ -7,6 +7,11 @@ on:
         description: "Run the manual RaBitQ baseline instead of binding checks"
         type: boolean
         default: false
+      windows_power_loss_test_threads:
+        description: "Parallel Windows GC fault groups (repository uses its variable or 4)"
+        type: choice
+        default: "repository"
+        options: ["repository", "1", "2", "4", "8"]
   pull_request:
     paths:
       - "src/**"
@@ -184,12 +189,23 @@ jobs:
 
       - name: Test abandonment GC power-loss cuts
         shell: bash
+        env:
+          POWER_LOSS_TEST_THREADS: ${{ inputs.windows_power_loss_test_threads != 'repository' && inputs.windows_power_loss_test_threads || vars.HAWDB_WINDOWS_POWER_LOSS_TEST_THREADS || '4' }}
         run: |
           set -euo pipefail
+          case "$POWER_LOSS_TEST_THREADS" in
+            1|2|4|8) ;;
+            *) echo "Windows power-loss test threads must be 1, 2, 4, or 8" >&2; exit 1 ;;
+          esac
+          echo "power_loss_test_threads=$POWER_LOSS_TEST_THREADS" \
+            | tee windows-native-results/abandonment-config.txt
           bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
-            api::tests::power_loss::branch_abandonment::abandonment_gc_cuts_preserve_quarantine_and_live_branches \
-            -- --exact --nocapture --test-threads=1 \
+            api::tests::power_loss::branch_abandonment:: \
+            -- --nocapture --test-threads="$POWER_LOSS_TEST_THREADS" \
             2>&1 | tee windows-native-results/abandonment.txt
+          # Keep all two-policy/four-cut groups in the required selection.
+          grep -Eq '^test result: ok\. 8 passed; 0 failed; 0 ignored;' \
+            windows-native-results/abandonment.txt
 
       - name: Preserve Windows validation evidence
         if: always()
