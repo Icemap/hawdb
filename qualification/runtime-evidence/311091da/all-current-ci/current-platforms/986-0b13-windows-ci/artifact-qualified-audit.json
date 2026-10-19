@@ -1,0 +1,68 @@
+{
+  "head": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "checkout": "c1de19172d447e4c0ffc71f2289d6f1e85a5fda5",
+  "tested_tree": "387183f0819d1ffb8f45312a3f64b5bb6cee1b90",
+  "artifact": 12183659353,
+  "run": 39240811830,
+  "job": 118020882436,
+  "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "results": {
+    "retained-ffi.txt": "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.24s",
+    "retained-node.txt": "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 2085 filtered out; finished in 1.31s",
+    "retained-arrow.txt": "test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 2135 filtered out; finished in 0.13s",
+    "abandonment.txt": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2166 filtered out; finished in 2428.75s"
+  },
+  "modeled_schedules": 922,
+  "members": {
+    "job.log": {
+      "bytes": 123045,
+      "sha256": "a2abed363d46d6c82f9e98fd62aed2d1d9afafc5611384be36b93ba1420bd439"
+    },
+    "artifact.zip": {
+      "bytes": 10146,
+      "sha256": "2768d553077a34ba7d3cc80384d27f62dd1a7184a7b261c2ef6d14cbd359644c"
+    },
+    "job.json": {
+      "bytes": 3487,
+      "sha256": "6c23db6dd5e1ca2f38d73c795a7c104c5ff67143417d7e26502958706e221ff8"
+    },
+    "artifacts.json": {
+      "bytes": 780,
+      "sha256": "00adbf47b01f01d063f3f787fb37c389bddf715d1c49ae7fd0ba6b902b2780a1"
+    },
+    "artifact/retained-node.txt": {
+      "bytes": 10609,
+      "sha256": "b7249dfd935a3ebe2b8324c2d299ea98d301ef0d46c10d6b61cb3deb91493a34"
+    },
+    "artifact/toolchain.txt": {
+      "bytes": 194,
+      "sha256": "7fad09dd8c16d49de37932475436003b5b1763c1015c5ce081ad7692db368ca3"
+    },
+    "artifact/retained-arrow.txt": {
+      "bytes": 6761,
+      "sha256": "7f6ed0770bb392ece435ed5d177dcebcd5c01ef2ff2f77113d4a5c6dfc5058b7"
+    },
+    "artifact/source.txt": {
+      "bytes": 164,
+      "sha256": "50267d0d8a5a8a0e8c8950d3f73ebeed21f9b75b1e12a6230a8573bfc11de1ca"
+    },
+    "artifact/clippy.txt": {
+      "bytes": 14965,
+      "sha256": "db272e524252559fff28a8aefd34a3b3be950f845e9b88938dcad8975623c866"
+    },
+    "artifact/go.txt": {
+      "bytes": 2813,
+      "sha256": "52e574a045540bfefd78183cbfd469253483a11cbda4c67372c080aeef0397b0"
+    },
+    "artifact/retained-ffi.txt": {
+      "bytes": 2675,
+      "sha256": "f6bc5192a33ac4150c51137baf6f1a2ef7be645da797811fb66c40635cb04adf"
+    },
+    "artifact/abandonment.txt": {
+      "bytes": 1555,
+      "sha256": "934050e7e2b584f1b0dcdf7e34ef0cfd558b1c2a78124c867e078c62acedb97b"
+    }
+  },
+  "observed_at": 1792410536.82085,
+  "scope": "Complete current-head Windows artifact, actual tested synthetic source, strict native Clippy, FFI18/Node26/Arrow32/Go and922 modeled GC schedules verified. Test source includes main885f nullable-prefix fix. Modeled faults do not prove physical synchronization. Genuine approval, independent disposition of earlier failures and actual Tide squash publication remain separate."
+}

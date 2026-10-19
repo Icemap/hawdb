@@ -1,0 +1,72 @@
+{
+  "observed_at": 1792407453.277838,
+  "head": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "draft": false,
+  "labels": [],
+  "ruleset": {
+    "id": 20688344,
+    "name": "main",
+    "target": "branch",
+    "source_type": "Repository",
+    "source": "nowledge-co/hawdb",
+    "enforcement": "active",
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "~DEFAULT_BRANCH"
+        ]
+      }
+    },
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "type": "required_status_checks",
+        "parameters": {
+          "strict_required_status_checks_policy": false,
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "tide",
+              "integration_id": 4525174
+            }
+          ]
+        }
+      }
+    ],
+    "node_id": "RRS_lACqUmVwb3NpdG9yec5NfokBzgE7rdg",
+    "created_at": "2026-08-11T17:56:58.937+08:00",
+    "updated_at": "2026-10-15T07:14:03.078+08:00",
+    "bypass_actors": [],
+    "current_user_can_bypass": "never",
+    "_links": {
+      "self": {
+        "href": "https://api.github.com/repos/nowledge-co/hawdb/rulesets/20688344"
+      },
+      "html": {
+        "href": "https://github.com/nowledge-co/hawdb/rules/20688344"
+      }
+    }
+  },
+  "source_policy": {
+    "repo": "nowledge-co/test-infra",
+    "head": "0bff3dcbcc0715d4573ab0dc3663a28ee473f1c4",
+    "observed_at": 1792407416.499906,
+    "scope": "Source config only; deployed revision not verified."
+  },
+  "source_config_hashes": {
+    "internal_api_prow-config.yaml": "2fbdf94f797e672b38cfcbb23dbdc8e1c29c51907dd27f554332a61d5cac0a2a",
+    "config_prow_cluster_config.yaml": "2fbdf94f797e672b38cfcbb23dbdc8e1c29c51907dd27f554332a61d5cac0a2a"
+  },
+  "configured_merge_method": "squash",
+  "configured_override_label": "tide/merge-commit",
+  "configured_required_label": "approved",
+  "genuine_review_and_approval_missing": true,
+  "deployed_revision_verified": false,
+  "scope": "GitHub enforced ruleset and current source policy separately verified. Traditional branch-protection endpoint404 is not absence of enforcement: active ruleset requires tide from integration4525174. No policy bypass, approval label, review notification or merge performed."
+}

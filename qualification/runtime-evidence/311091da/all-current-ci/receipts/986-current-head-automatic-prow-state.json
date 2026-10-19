@@ -1,0 +1,60 @@
+{
+  "head": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "observed_at": 1792409192.818997,
+  "automatic_prow_started": true,
+  "manual_test_comment_required_now": false,
+  "test_comment_sent": false,
+  "check_runs": [
+    {
+      "id": 118021632972,
+      "context": "ci/skein-supply-chain",
+      "status": "completed",
+      "conclusion": "success",
+      "target_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-supply-chain/2112135525912547328",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118021628834,
+      "context": "ci/skein-storage-crash-recovery",
+      "status": "completed",
+      "conclusion": "success",
+      "target_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-storage-crash-recovery/2112135526239703040",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118021624361,
+      "context": "ci/skein-bazel-test-root",
+      "status": "completed",
+      "conclusion": "success",
+      "target_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-root/2112136029472296960",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118021620177,
+      "context": "ci/skein-bazel-test-crates",
+      "status": "completed",
+      "conclusion": "success",
+      "target_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-crates/2112135526357143552",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118021616508,
+      "context": "ci/skein-bazel-test-analytics-dense",
+      "status": "completed",
+      "conclusion": "success",
+      "target_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-test-analytics-dense/2112135526164205568",
+      "publisher_app_id": 4525174
+    },
+    {
+      "id": 118021611191,
+      "context": "ci/skein-bazel-build",
+      "status": "completed",
+      "conclusion": "success",
+      "target_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-bazel-build/2112135525996433408",
+      "publisher_app_id": 4525174
+    }
+  ],
+  "observation_correction": "These Prow signals use GitHub Check Runs, not legacy commit statuses. Initial legacy-status observer found none and wrote no state.",
+  "merge_claim": false,
+  "all_six_passed": true
+}

@@ -1,0 +1,124 @@
+{
+  "id": 118020882311,
+  "run_id": 39240811830,
+  "workflow_name": "Native Bindings",
+  "head_branch": "feat/978-boundary-baseline",
+  "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39240811830",
+  "run_attempt": 1,
+  "node_id": "CR_kwDOTX6JAc8AAAAbepe_hw",
+  "head_sha": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/118020882311",
+  "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39240811830/job/118020882311",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-10-19T10:54:36Z",
+  "started_at": "2026-10-19T10:54:38Z",
+  "completed_at": "2026-10-19T10:59:16Z",
+  "name": "Bazel native bindings (ubuntu-24.04)",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-10-19T10:54:39Z",
+      "completed_at": "2026-10-19T10:54:41Z"
+    },
+    {
+      "name": "Checkout",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-10-19T10:54:41Z",
+      "completed_at": "2026-10-19T10:54:45Z"
+    },
+    {
+      "name": "Install Bazel",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-10-19T10:54:45Z",
+      "completed_at": "2026-10-19T10:55:31Z"
+    },
+    {
+      "name": "Build the C ABI libraries and Go package",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-10-19T10:55:31Z",
+      "completed_at": "2026-10-19T10:58:32Z"
+    },
+    {
+      "name": "Test Go against the Bazel-built C ABI",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-10-19T10:58:32Z",
+      "completed_at": "2026-10-19T10:58:53Z"
+    },
+    {
+      "name": "Test the retained C ABI contract",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-10-19T10:58:53Z",
+      "completed_at": "2026-10-19T10:58:57Z"
+    },
+    {
+      "name": "Install Go for the race detector",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-10-19T10:58:57Z",
+      "completed_at": "2026-10-19T10:59:08Z"
+    },
+    {
+      "name": "Check retained read and close concurrency with the race detector",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-10-19T10:59:08Z",
+      "completed_at": "2026-10-19T10:59:12Z"
+    },
+    {
+      "name": "Post Install Go for the race detector",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 14,
+      "started_at": "2026-10-19T10:59:12Z",
+      "completed_at": "2026-10-19T10:59:12Z"
+    },
+    {
+      "name": "Post Install Bazel",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-10-19T10:59:12Z",
+      "completed_at": "2026-10-19T10:59:12Z"
+    },
+    {
+      "name": "Post Checkout",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-10-19T10:59:12Z",
+      "completed_at": "2026-10-19T10:59:13Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-10-19T10:59:13Z",
+      "completed_at": "2026-10-19T10:59:13Z"
+    }
+  ],
+  "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/118020882311",
+  "labels": [
+    "ubuntu-24.04"
+  ],
+  "runner_id": 1000085578,
+  "runner_name": "GitHub Actions 1000085578",
+  "runner_group_id": 0,
+  "runner_group_name": "GitHub Actions"
+}

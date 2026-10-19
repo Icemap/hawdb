@@ -1,0 +1,147 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "observed_at": 1792408491.942771,
+  "groups": [
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "fill_bulk",
+        "rust"
+      ],
+      "artifact": 12173610645,
+      "bundle_sha256": "74297228136c9d6dd4db8df34d6d958612c74338f6a6b36d397132c806ef38ff",
+      "sides": {
+        "baseline": {
+          "source": {
+            "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+            "tree": "4a235b06362ae6306a300e45d5974495c1229c2b"
+          },
+          "samples": 3,
+          "medians": {
+            "elapsed_ns": 29870387,
+            "query_boundary_ns": 29147188,
+            "process_peak_rss_bytes": 21135360,
+            "allocation_calls": 154418,
+            "allocated_bytes": 39922402,
+            "reallocation_calls": 2476,
+            "process_peak_requested_bytes": 5337531
+          },
+          "native_live_byte_deltas": [
+            1334320,
+            1334320,
+            1334320
+          ]
+        },
+        "candidate": {
+          "source": {
+            "head": "311091da6b23a292b7385b46362d3a12f6ec0064",
+            "tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b"
+          },
+          "samples": 3,
+          "medians": {
+            "elapsed_ns": 27843211,
+            "query_boundary_ns": 27146313,
+            "process_peak_rss_bytes": 22286336,
+            "allocation_calls": 135328,
+            "allocated_bytes": 37470329,
+            "reallocation_calls": 2171,
+            "process_peak_requested_bytes": 5433187
+          },
+          "native_live_byte_deltas": [
+            1360676,
+            1360676,
+            1360676
+          ]
+        }
+      },
+      "candidate_over_baseline_median_ratios": {
+        "elapsed_ns": 0.932134257249496,
+        "query_boundary_ns": 0.9313527260331254,
+        "process_peak_rss_bytes": 1.0544573643410853,
+        "allocation_calls": 0.8763745159243094,
+        "allocated_bytes": 0.9385790213725116,
+        "reallocation_calls": 0.8768174474959612,
+        "process_peak_requested_bytes": 1.0179213947422507
+      },
+      "higher_cost_metrics": {
+        "process_peak_rss_bytes": 1.0544573643410853,
+        "process_peak_requested_bytes": 1.0179213947422507
+      }
+    },
+    {
+      "group": [
+        "ordinary",
+        1000,
+        "file",
+        "default",
+        "true",
+        "fill_bulk",
+        "rust"
+      ],
+      "artifact": 12181721885,
+      "bundle_sha256": "48a25d210d5ef51573d6b2bdf7482dc7150ba5d7df65b24fd92294ccb79ee8f8",
+      "sides": {
+        "baseline": {
+          "source": {
+            "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+            "tree": "4a235b06362ae6306a300e45d5974495c1229c2b"
+          },
+          "samples": 3,
+          "medians": {
+            "elapsed_ns": 31811758,
+            "query_boundary_ns": 31428849,
+            "process_peak_rss_bytes": 28532736,
+            "allocation_calls": 178381,
+            "allocated_bytes": 41492835,
+            "reallocation_calls": 13425,
+            "process_peak_requested_bytes": 5666704
+          },
+          "native_live_byte_deltas": [
+            1334320,
+            1334320,
+            1334320
+          ]
+        },
+        "candidate": {
+          "source": {
+            "head": "311091da6b23a292b7385b46362d3a12f6ec0064",
+            "tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b"
+          },
+          "samples": 3,
+          "medians": {
+            "elapsed_ns": 28519868,
+            "query_boundary_ns": 28100262,
+            "process_peak_rss_bytes": 31322112,
+            "allocation_calls": 159296,
+            "allocated_bytes": 39041248,
+            "reallocation_calls": 13120,
+            "process_peak_requested_bytes": 5771022
+          },
+          "native_live_byte_deltas": [
+            1362700,
+            1362700,
+            1362700
+          ]
+        }
+      },
+      "candidate_over_baseline_median_ratios": {
+        "elapsed_ns": 0.8965197082160627,
+        "query_boundary_ns": 0.8940913490023131,
+        "process_peak_rss_bytes": 1.0977605512489232,
+        "allocation_calls": 0.8930099057635063,
+        "allocated_bytes": 0.9409154134683735,
+        "reallocation_calls": 0.9772811918063314,
+        "process_peak_requested_bytes": 1.0184089375411174
+      },
+      "higher_cost_metrics": {
+        "process_peak_rss_bytes": 1.0977605512489232,
+        "process_peak_requested_bytes": 1.0184089375411174
+      }
+    }
+  ],
+  "scope": "Two original instrumented Rust1k fill_bulk resource groups only. Three measured attempts per side plus discard. Median of whole-child peak RSS includes setup; native allocation traffic and allocator requested peak are separate. Live deltas can include persisted canonical data/indexes and do not establish per-query leakage or its absence. No generic conversion attribution or production-tail/significance/causality claim. Instrumented timings are not substituted for ordinary performance. All raw outcomes preserved as owner-approved background verification, not a new merge gate."
+}
