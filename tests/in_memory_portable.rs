@@ -258,6 +258,8 @@ fn consumed_retained_node_snapshot_keeps_old_data_and_task_bound_after_database_
     db.query("CREATE PROPERTY ON NODE TABLE Item(key) TYPE INT")
         .unwrap();
     db.query("CREATE INDEX ON :Item(key)").unwrap();
+    db.query("CREATE CONSTRAINT ON :Item(key) ASSERT UNIQUE")
+        .unwrap();
     db.query_with_params(
         "UNWIND $rows AS row CREATE (:Item {key: row.key, text: 'original'})",
         &BTreeMap::from([(

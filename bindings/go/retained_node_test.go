@@ -15,6 +15,14 @@ import (
 const retainedNodeQuery = "MATCH (n:Item) WHERE n.id = $id RETURN n"
 
 func nodeFixture(t *testing.T, persistent bool) *DB {
+	t.Helper()
+	db := indexedNodeFixture(t, persistent)
+	if err := db.Exec("CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE", nil); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+func indexedNodeFixture(t *testing.T, persistent bool) *DB {
 	if unsafe.Sizeof(uintptr(0)) != 8 {
 		t.Skip("retained node adapter is 64-bit only")
 	}
@@ -222,22 +230,15 @@ func TestRetainedNodeRefusalsAndEmptySeek(t *testing.T) {
 		t.Fatalf("unfinished close: %+v %v", state, err)
 	}
 }
-func TestRetainedNodeMultipleMatches(t *testing.T) {
-	db := nodeFixture(t, false)
-	if err := db.Exec("CREATE (:Item {id: 1})", nil); err != nil {
-		t.Fatal(err)
-	}
-	cursor, err := db.QueryRetainedNode(retainedNodeQuery, map[string]any{"id": 1}, RetainedOptions{})
-	if cursor != nil {
-		cursor.Close()
-		t.Fatal("multi-match query published a cursor")
-	}
-	assertRetainedCode(t, err, RetainedMultipleMatches)
-	if err.(*RetainedError).Retryable() {
-		t.Fatal("multi-match refusal is retryable")
-	}
-	if err.Error() != "hawdb: retained multiple_matches" {
-		t.Fatalf("unexpected multi-match message: %v", err)
+func TestRetainedNodeRequiresUniqueConstraint(t *testing.T) {
+	db := indexedNodeFixture(t, false)
+	for _, id := range []int64{1, 999} {
+		cursor, err := db.QueryRetainedNode(retainedNodeQuery, map[string]any{"id": id}, RetainedOptions{})
+		if cursor != nil {
+			cursor.Close()
+			t.Fatal("non-unique index published a cursor")
+		}
+		assertRetainedCode(t, err, RetainedUnsupportedPlan)
 	}
 }
 

@@ -16,6 +16,11 @@ TEXT = "original-\x00-\u754c-\U0001f642"
 
 
 def seed(db):
+    seed_indexed(db)
+    db.execute("CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE")
+
+
+def seed_indexed(db):
     db.execute("CREATE NODE TABLE Item")
     db.execute("CREATE INDEX ON :Item(id)")
     db.execute(
@@ -133,14 +138,14 @@ def test_missing_seek_and_explicit_refusals_do_not_materialize(db):
     assert_empty(db)
 
 
-def test_multiple_matches_have_a_distinct_nonretryable_error(db):
-    seed(db)
-    db.execute("CREATE (:Item {id: 1})")
-    with pytest.raises(hawdb.exceptions.RetainedError) as failure:
-        db.execute_retained_node(QUERY, {"id": 1})
-    assert failure.value.kind == "multiple_matches"
-    assert not failure.value.retryable
-    assert_empty(db)
+def test_indexed_lookup_requires_a_unique_constraint_before_admission(db):
+    seed_indexed(db)
+    for key in [1, 999]:
+        with pytest.raises(hawdb.exceptions.RetainedError) as failure:
+            db.execute_retained_node(QUERY, {"id": key})
+        assert failure.value.kind == "unsupported_plan"
+        assert not failure.value.retryable
+        assert db.retained_snapshot_copy() is None
 
 
 def test_node_admission_rolls_back_before_python_delivery(db):
@@ -188,6 +193,7 @@ def test_fixed_width_fields_export_original_read_only_scalar_storage(db):
 def test_tiny_cost_selected_scan_refuses_without_owned_fallback(db):
     db.execute("CREATE NODE TABLE Item")
     db.execute("CREATE INDEX ON :Item(id)")
+    db.execute("CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE")
     db.execute("CREATE (:Item {id: 1})")
     assert db.execute(QUERY, {"id": 1}).fetchone()["node"]["id"] == 1
     with pytest.raises(hawdb.exceptions.RetainedError) as failure:

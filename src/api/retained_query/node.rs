@@ -462,8 +462,9 @@ fn point_plan(plan: &PhysicalPlan) -> Option<PointPlan<'_>> {
 }
 
 impl Database {
-    /// Experimental native full-node view for a single-match indexed Cypher
-    /// projection. Other plans/layouts refuse; no Arrow or copied fallback.
+    /// Experimental native full-node view for an indexed Cypher projection
+    /// whose seek property has a unique constraint. Other plans/layouts refuse;
+    /// no Arrow or copied fallback.
     /// Planning and foreign workspace are not yet whole-operation qualified.
     pub fn query_with_params_retained_node(
         &self,
@@ -594,9 +595,10 @@ impl RetainedNodeSnapshotCursor {
 }
 
 impl DatabaseReadTransaction {
-    /// Consumes this snapshot for a single-match indexed full-node projection.
-    /// Planning uses this snapshot's schema/indexes. Other plans and layouts
-    /// refuse explicitly, and the snapshot's task remains bound through EOF.
+    /// Consumes this snapshot for an indexed full-node projection with a unique
+    /// constraint on the seek property. Planning uses this snapshot's schema
+    /// and indexes. Other plans and layouts refuse explicitly, and the
+    /// snapshot's task remains bound through EOF.
     pub fn into_retained_node_query(
         self,
         cypher: &str,
@@ -684,6 +686,12 @@ impl RetainedNodeCursor {
             cursor_metadata_bytes,
             observation,
         } = construction;
+        let label = catalog
+            .label_id(plan.label)
+            .ok_or(RetainedQueryError::UnsupportedPlan)?;
+        if catalog.unique_constraint_id(label, plan.property).is_none() {
+            return Err(RetainedQueryError::UnsupportedPlan);
+        }
         let NodeObservationRequest {
             recorder,
             cypher,
@@ -767,15 +775,16 @@ impl RetainedNodeCursor {
         let view = if plan.empty {
             None
         } else {
-            let label = catalog
-                .label_id(plan.label)
-                .ok_or(RetainedQueryError::UnsupportedPlan)?;
             let mut found = store.seek_nodes_by_property(label, plan.property, plan.value);
             match found.next() {
                 None => None,
                 Some(row) => {
                     if found.next().is_some() {
-                        return Err(RetainedQueryError::MultipleMatches);
+                        return Err(HawDBError::StorageIntegrity(format!(
+                            "unique-constrained indexed node lookup on :{}({}) returned multiple matches",
+                            plan.label, plan.property
+                        ))
+                        .into());
                     }
                     Some(admit_node(
                         store,
@@ -978,6 +987,13 @@ mod tests {
     const QUERY: &str = "MATCH (n:Item {score: $key}) RETURN n AS node";
 
     fn fixture(handles: usize) -> (Database, RuntimeGovernor) {
+        let (mut db, governor) = indexed_fixture(handles);
+        db.query("CREATE CONSTRAINT ON :Item(score) ASSERT UNIQUE")
+            .unwrap();
+        (db, governor)
+    }
+
+    fn indexed_fixture(handles: usize) -> (Database, RuntimeGovernor) {
         let mut db = Database::new();
         db.query("CREATE NODE TABLE Item").unwrap();
         db.query("CREATE PROPERTY ON NODE TABLE Item(score) TYPE INT")
@@ -1388,6 +1404,8 @@ mod tests {
         db.query("CREATE NODE TABLE Plain").unwrap();
         db.query("CREATE PROPERTY ON NODE TABLE Plain(key) TYPE INT")
             .unwrap();
+        db.query("CREATE CONSTRAINT ON :Plain(key) ASSERT UNIQUE")
+            .unwrap();
         db.query_with_params(
             "UNWIND $rows AS row CREATE (:Plain {key: row.key})",
             &BTreeMap::from([(
@@ -1576,8 +1594,8 @@ mod tests {
     }
 
     #[test]
-    fn full_node_budget_refusal_rolls_back_and_multi_match_never_truncates() {
-        let (mut db, governor) = fixture(4);
+    fn full_node_budget_refusal_rolls_back() {
+        let (db, governor) = fixture(4);
         let options = RetainedQueryOptions {
             max_result_payload_bytes: Some(0),
             ..Default::default()
@@ -1587,20 +1605,83 @@ mod tests {
             Err(RetainedQueryError::ResultBudget { rows: 1, .. })
         ));
         assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
-        db.query("CREATE (:Item {score: 37})").unwrap();
+    }
+
+    #[test]
+    fn non_unique_indexed_lookups_refuse_before_retained_admission() {
+        let (mut db, governor) = indexed_fixture(4);
+        let context = RuntimeTaskContext::default()
+            .with_memory_reservation(hawdb_core::RuntimeMemoryReservation::new(0, 0));
+        for duplicate in [false, true] {
+            if duplicate {
+                db.query("CREATE (:Item {score: 37})").unwrap();
+            }
+            for key in [37, 999] {
+                let parameters = BTreeMap::from([("key".into(), Value::Int(key))]);
+                for query in [QUERY.to_owned(), format!("{QUERY} LIMIT 0")] {
+                    assert_eq!(
+                        db.query_with_params_retained_node_context(
+                            &query,
+                            &parameters,
+                            RetainedQueryOptions::default(),
+                            &context,
+                        )
+                        .unwrap_err(),
+                        RetainedQueryError::UnsupportedPlan
+                    );
+                    assert_eq!(
+                        db.begin_read_transaction_with_context(&context)
+                            .unwrap()
+                            .into_retained_node_query(
+                                &query,
+                                &parameters,
+                                RetainedQueryOptions::default(),
+                            )
+                            .unwrap_err(),
+                        RetainedQueryError::UnsupportedPlan
+                    );
+                }
+            }
+        }
+        assert!(db.retained_runtime.bound.get().is_none());
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    }
+
+    #[test]
+    fn duplicate_unique_lookup_reports_storage_integrity() {
+        let (mut db, governor) = indexed_fixture(4);
+        let mut unconstrained_catalog = db.runtime.get().unwrap().catalog.clone();
+        db.query("CREATE CONSTRAINT ON :Item(score) ASSERT UNIQUE")
+            .unwrap();
+        assert!(db.query("CREATE (:Item {score: 37})").is_err());
+        // Inject a duplicate using the old catalog to bypass the live unique
+        // constraint, modeling an inconsistent store without a production hook.
+        db.runtime
+            .get_mut()
+            .unwrap()
+            .store
+            .create_node(
+                &mut unconstrained_catalog,
+                "Item",
+                BTreeMap::from([("score".into(), Value::Int(37))]),
+            )
+            .unwrap();
         let error = db
             .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
             .unwrap_err();
-        assert_eq!(error, RetainedQueryError::MultipleMatches);
+        assert!(matches!(
+            &error,
+            RetainedQueryError::Execution(HawDBError::StorageIntegrity(message))
+                if message.contains(":Item(score)") && message.contains("multiple matches")
+        ));
         assert!(!error.is_retryable());
-        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
-        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
         assert_eq!(
             db.begin_read_transaction()
                 .unwrap()
                 .into_retained_node_query(QUERY, &params(), RetainedQueryOptions::default())
                 .unwrap_err(),
-            RetainedQueryError::MultipleMatches
+            error
         );
         assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
         assert_eq!(governor.snapshot().admitted_memory_bytes, 0);

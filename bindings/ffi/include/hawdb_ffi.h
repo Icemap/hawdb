@@ -64,11 +64,6 @@
 
 #define HAWDB_RETAINED_ADMISSION_ERROR 18
 
-/**
- * An eligible indexed-node lookup returned more than one match.
- */
-#define HAWDB_RETAINED_MULTIPLE_MATCHES 19
-
 #define HAWDB_RETAINED_INT64 1
 
 #define HAWDB_RETAINED_FLOAT64 2

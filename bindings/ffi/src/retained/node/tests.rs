@@ -8,6 +8,17 @@ use std::collections::BTreeMap;
 
 const QUERY: &str = "MATCH (n:Item) WHERE n.id = $id RETURN n";
 fn fixture(handles: usize) -> (*mut HawdbDatabase, RuntimeGovernor) {
+    let (db, governor) = indexed_fixture(handles);
+    unsafe { &*db }
+        .inner
+        .lock()
+        .unwrap()
+        .database_mut()
+        .query("CREATE CONSTRAINT ON :Item(id) ASSERT UNIQUE")
+        .unwrap();
+    (db, governor)
+}
+fn indexed_fixture(handles: usize) -> (*mut HawdbDatabase, RuntimeGovernor) {
     let mut db = HawDBEmbedded::open_in_memory();
     db.query_admitted("CREATE NODE TABLE Item").unwrap();
     db.query_admitted("CREATE PROPERTY ON NODE TABLE Item(id) TYPE INT")
@@ -313,15 +324,8 @@ fn failed_root_registration_never_becomes_successful_eof() {
 }
 
 #[test]
-fn multiple_matches_refuse_without_publishing_a_foreign_owner() {
-    let (db, governor) = fixture(16);
-    unsafe { &*db }
-        .inner
-        .lock()
-        .unwrap()
-        .database_mut()
-        .query("CREATE (:Item {id: 1})")
-        .unwrap();
+fn non_unique_index_refuses_without_publishing_a_foreign_owner() {
+    let (db, governor) = indexed_fixture(16);
     let request = request(QUERY, r#"{"id":1}"#);
     let mut out = HawdbRetainedCursorV1::default();
     assert_eq!(
@@ -334,7 +338,7 @@ fn multiple_matches_refuse_without_publishing_a_foreign_owner() {
                 size::<HawdbRetainedCursorV1>(),
             )
         },
-        HAWDB_RETAINED_MULTIPLE_MATCHES
+        HAWDB_RETAINED_UNSUPPORTED_PLAN
     );
     assert_eq!(out.owner_id, 0);
     assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
