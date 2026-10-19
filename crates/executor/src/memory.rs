@@ -368,6 +368,7 @@ fn retains_blocking_state(plan: &PhysicalPlan) -> bool {
     matches!(
         plan,
         PhysicalPlan::GraphAlgorithm { .. }
+            | PhysicalPlan::GraphAlgorithmOutput(_)
             | PhysicalPlan::VectorSeedScan { .. }
             | PhysicalPlan::GraphSeedScan { .. }
             | PhysicalPlan::TextSeedScan { .. }

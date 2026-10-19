@@ -128,6 +128,10 @@ impl PhysicalPlan {
                     "{pad}ProjectGraph name={name} node_labels={node_labels:?} rel_types={rel_types:?} relationship_predicates={relationship_predicates:?}"
                 )
             }
+            PhysicalPlan::GraphAlgorithmOutput(output) => format!(
+                "{pad}GraphAlgorithm algorithm={:?} graph={} options={:?} score_column={} identity={:?}",
+                output.algorithm, output.graph_name, output.options, output.score_column, output.identity
+            ),
             PhysicalPlan::GraphAlgorithm {
                 algorithm,
                 graph_name,
