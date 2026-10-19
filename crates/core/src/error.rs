@@ -114,6 +114,9 @@ pub enum HawDBError {
     CapabilityUnavailable {
         capability: RuntimeCapability,
     },
+    /// Relocating a live consumer directory is unsupported on this platform.
+    /// The operation refuses before changing either directory or its receipt.
+    SearchProjectionPublicationUnsupported,
     BranchCommandUnsupported {
         command: &'static str,
         context: &'static str,
@@ -176,6 +179,9 @@ impl Display for HawDBError {
             HawDBError::CapabilityUnavailable { capability } => {
                 write!(f, "capability unavailable: {}", capability.as_str())
             }
+            HawDBError::SearchProjectionPublicationUnsupported => f.write_str(
+                "search projection directory publication is unsupported while retaining ownership on Windows",
+            ),
             HawDBError::BranchCommandUnsupported { command, context } => {
                 write!(f, "{command} is unavailable in {context}")
             }

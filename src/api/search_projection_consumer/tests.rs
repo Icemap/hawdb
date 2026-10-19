@@ -1117,3 +1117,64 @@ fn initializer_descriptor_rejection_preserves_typed_cause_and_source() {
         .unwrap();
     assert!(consumer.search_index().document("memory:m1").is_some());
 }
+
+#[cfg(windows)]
+#[test]
+fn windows_consumer_creation_refuses_before_callback_or_publication() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let epoch = db.commit_epoch().unwrap();
+    let identity = db
+        .runtime
+        .get()
+        .unwrap()
+        .store
+        .search_projection_database_identity();
+    let registry = fixture.registry_path("database");
+    assert!(!registry.exists());
+    let destination = fixture.0.join("projection");
+    let names = || {
+        let mut names = std::fs::read_dir(&fixture.0)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    };
+    for occupied in [false, true] {
+        if occupied {
+            std::fs::create_dir(&destination).unwrap();
+            std::fs::write(destination.join("foreign"), b"keep").unwrap();
+        }
+        let before = names();
+        for _ in 0..2 {
+            assert!(matches!(
+                db.create_search_projection_consumer(
+                    id("windows-refusal"),
+                    &destination,
+                    options(100),
+                    |_, _| panic!("unsupported publication must refuse before initialization"),
+                ),
+                Err(Error::Database(
+                    HawDBError::SearchProjectionPublicationUnsupported
+                ))
+            ));
+            assert_eq!(names(), before);
+            assert_eq!(db.commit_epoch().unwrap(), epoch);
+            let runtime = db.runtime.get().unwrap();
+            assert_eq!(
+                runtime.store.search_projection_database_identity(),
+                identity
+            );
+            assert!(runtime.projection_consumers.records.is_empty());
+            assert!(runtime.projection_consumers.verified.is_empty());
+            assert!(!registry.exists());
+            if occupied {
+                assert_eq!(std::fs::read(destination.join("foreign")).unwrap(), b"keep");
+            } else {
+                assert!(!destination.exists());
+            }
+        }
+    }
+}

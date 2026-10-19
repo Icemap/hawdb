@@ -97,7 +97,10 @@ impl QueryBridge {
                     }
                     HawDBError::TransactionConflict { .. } => "transaction_conflict",
                     HawDBError::AppendSequenceExhausted { .. } => "append_sequence_exhausted",
-                    HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",
+                    HawDBError::CapabilityUnavailable { .. }
+                    | HawDBError::SearchProjectionPublicationUnsupported => {
+                        "capability_unavailable"
+                    }
                 };
                 error_response(kind, &error.to_string())
             }

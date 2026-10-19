@@ -70,6 +70,12 @@ jobs:
       - name: Test Go against the Bazel-built C ABI
         run: bazel test --test_output=errors --test_arg=-test.v //bindings/go:hawdb_go_tests
 
+      - name: Test consumer publication and reopen on Unix
+        run: >-
+          bazel test --test_output=errors
+          //:hawdb_search_projection_consumer_tests
+          //:hawdb_search_projection_consumer_minimal_tests
+
       - name: Test the retained C ABI contract
         run: bazel test --test_output=errors //bindings/ffi:hawdb_ffi_tests
 
@@ -116,6 +122,19 @@ jobs:
           set -euo pipefail
           cargo clippy --locked --workspace --all-targets --all-features -- -D warnings \
             2>&1 | tee windows-native-results/clippy.txt
+
+      - name: Test explicit consumer publication refusal under retained ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            consumer::tests::windows_publication_refusal_preserves_receipt_and_native_lease \
+            -- --exact --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/consumer-publication-refusal.txt
+          bash scripts/cargo-test-required.sh --locked -p hawdb --all-features --lib \
+            api::search_projection_consumer::tests::windows_consumer_creation_refuses_before_callback_or_publication \
+            -- --exact --nocapture --test-threads=1 \
+            2>&1 | tee windows-native-results/consumer-creation-refusal.txt
 
       - name: Build and test the retained Windows C ABI
         shell: bash
