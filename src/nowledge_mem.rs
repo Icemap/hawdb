@@ -9586,7 +9586,7 @@ mod tests {
     }
 
     #[test]
-    fn embedded_store_handle_runs_durable_projection_catch_up() {
+    fn embedded_store_handle_1043_refuses_a_prefix_and_retries_complete_projection() {
         let root = unique_nowledge_mem_test_dir("embedded_projection_catch_up");
         let search_path = root.join("search");
         let db = Database::new();
@@ -9605,7 +9605,23 @@ mod tests {
         ))
         .unwrap();
 
-        let report = handle.catch_up_search_projection(1, 4).unwrap();
+        let error = handle.catch_up_search_projection(1, 4).unwrap_err();
+        assert!(matches!(
+            error,
+            HawDBError::Execution(message)
+                if message.contains("differs from source snapshot epoch")
+        ));
+        {
+            let store = handle.read_store().unwrap();
+            let index = store.search_projection().unwrap().index();
+            assert_eq!(index.document_count(), 0);
+            let freshness = index.projection_freshness();
+            assert_eq!(freshness.source_graph_commit_epoch, None);
+            assert_eq!(freshness.durable_source_graph_commit_epoch, None);
+        }
+        assert!(!handle.storage_handle_poisoned().unwrap());
+
+        let report = handle.catch_up_search_projection(2, 1).unwrap();
 
         assert!(report.complete);
         assert_eq!(report.end_applied_epoch, report.end_durable_epoch);
@@ -9613,6 +9629,7 @@ mod tests {
         let reopened = SearchIndex::open(&search_path).unwrap();
         assert!(reopened.document("memory:m1").is_some());
         assert!(reopened.document("memory:m2").is_some());
+        drop(reopened);
         std::fs::remove_dir_all(root).unwrap();
     }
 

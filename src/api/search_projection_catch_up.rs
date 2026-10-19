@@ -60,7 +60,9 @@ impl Database {
     /// the batch. HawDB validates that count before applying either the graph
     /// or relational delta, then checkpoints the combined projection before
     /// selecting another batch. Hydration errors and incomplete accounting do
-    /// not advance the projection watermark.
+    /// not advance the projection watermark. A prefix ending before the pinned
+    /// snapshot epoch is rejected before the hydrator runs; the selected interval
+    /// must cover the complete source head within the caller's existing budgets.
     pub fn catch_up_search_projection_with_relational<F>(
         &self,
         search_index: &mut SearchIndex,
@@ -101,7 +103,9 @@ impl Database {
     /// selection, while `max_projection_operations_per_batch` independently
     /// bounds the combined graph and host-derived projection delta. Hydration
     /// errors, output-budget overflow, and incomplete accounting do not advance
-    /// the projection watermark.
+    /// the projection watermark. A prefix ending before the pinned source epoch
+    /// is rejected before invoking the host. Partial-prefix progress requires the
+    /// separately qualified bounded preparation protocol tracked by #1043.
     pub fn catch_up_search_projection_with_batch_hydrator<F>(
         &self,
         search_index: &mut SearchIndex,
@@ -142,6 +146,10 @@ impl Database {
                 };
                 let operation_count = batch.operation_count();
                 let mut snapshot = database.begin_read_transaction()?;
+                super::require_search_projection_source_epoch(
+                    batch.complete_through_commit_epoch(),
+                    snapshot.commit_epoch(),
+                )?;
                 let hydrated = batch_hydrator(&mut snapshot, &batch)?;
                 batch.graph_delta_mut().max_operations = Some(max_projection_operations_per_batch);
                 database.apply_search_projection_change_batch(search_index, batch, hydrated)?;

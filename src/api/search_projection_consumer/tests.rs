@@ -1198,3 +1198,69 @@ fn assert_consumer_publication_refusal(fixture: &Fixture, mut db: Database) {
         }
     }
 }
+
+#[cfg(not(windows))]
+#[test]
+fn legacy_registered_prefix_1043_refuses_before_hydration_and_reopens_complete_retry() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    db.query("CREATE (:Memory {id: 'm1', content: 'base'})")
+        .unwrap();
+    let path = fixture.0.join("projection");
+    let mut consumer = db
+        .create_search_projection_consumer(id("coherent"), &path, options(100), initialize)
+        .unwrap();
+    let base_epoch = consumer.projection().receipt().source_epoch;
+    db.query("MATCH (m:Memory {id: 'm1'}) SET m.content = 'at-B'")
+        .unwrap();
+    let mut transaction = db.begin_transaction().unwrap();
+    transaction
+        .query("MATCH (m:Memory {id: 'm1'}) SET m.content = 'at-E'")
+        .unwrap();
+    transaction
+        .query("CREATE (:Memory {id: 'm2', content: 'new-at-E'})")
+        .unwrap();
+    transaction.commit().unwrap();
+    let hydrated = std::cell::Cell::new(false);
+    let error = db
+        .catch_up_search_projection_consumer(&mut consumer, 1, 32, 1, |_, _| {
+            hydrated.set(true);
+            Ok(SearchProjectionRelationalDelta::default())
+        })
+        .unwrap_err();
+    assert!(matches!(error, Error::Database(HawDBError::Execution(_))));
+    assert!(!hydrated.get());
+    assert_eq!(
+        consumer
+            .search_index()
+            .document("memory:m1")
+            .unwrap()
+            .content,
+        "base"
+    );
+    assert_eq!(consumer.projection().receipt().source_epoch, base_epoch);
+    assert!(catch_up(&mut db, &mut consumer).unwrap().catch_up.complete);
+    let final_epoch = db.commit_epoch().unwrap();
+    drop(consumer);
+    let reopened = db
+        .open_search_projection_consumer(&id("coherent"), &path)
+        .unwrap();
+    assert_eq!(reopened.search_index().document_count(), 2);
+    assert_eq!(
+        reopened
+            .search_index()
+            .document("memory:m1")
+            .unwrap()
+            .content,
+        "at-E"
+    );
+    assert_eq!(
+        reopened
+            .search_index()
+            .document("memory:m2")
+            .unwrap()
+            .content,
+        "new-at-E"
+    );
+    assert_eq!(reopened.projection().receipt().source_epoch, final_epoch);
+}
