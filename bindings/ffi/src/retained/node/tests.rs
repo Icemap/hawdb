@@ -347,7 +347,13 @@ fn non_unique_index_refuses_without_publishing_a_foreign_owner() {
         HAWDB_RETAINED_UNSUPPORTED_PLAN
     );
     assert_eq!(
-        (out.abi_version, out.struct_size, out.owner_namespace, out.owner_id, out.column_count),
+        (
+            out.abi_version,
+            out.struct_size,
+            out.owner_namespace,
+            out.owner_id,
+            out.column_count
+        ),
         (0, 0, 0, 0, 0)
     );
     assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
