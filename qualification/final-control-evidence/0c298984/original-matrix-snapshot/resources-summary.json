@@ -8,7 +8,7 @@
   "status": "queued",
   "conclusion": null,
   "expected_groups": 110,
-  "observed_complete_groups": 62,
+  "observed_complete_groups": 65,
   "full_requested_matrix_observed": false,
   "missing_groups": [
     [
@@ -86,15 +86,6 @@
     [
       "ordinary",
       100000,
-      "file",
-      "default",
-      "true",
-      "wide",
-      "rust"
-    ],
-    [
-      "ordinary",
-      100000,
       "memory",
       "default",
       "true",
@@ -154,24 +145,6 @@
       "true",
       "wide",
       "go"
-    ],
-    [
-      "ordinary",
-      100000,
-      "memory",
-      "default",
-      "true",
-      "wide",
-      "python"
-    ],
-    [
-      "ordinary",
-      100000,
-      "memory",
-      "default",
-      "true",
-      "wide",
-      "rust"
     ],
     [
       "ordinary",
@@ -5604,6 +5577,216 @@
       },
       "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
       "artifact": 12161380525
+    },
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "memory",
+        "default",
+        "true",
+        "wide",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": false,
+          "adverse": [
+            {
+              "iteration": 0,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 1,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 2,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 3,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            }
+          ],
+          "observed_medians": {}
+        },
+        "candidate": {
+          "success": false,
+          "adverse": [
+            {
+              "iteration": 0,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 1,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 2,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 3,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            }
+          ],
+          "observed_medians": {}
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12161229269
+    },
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "file",
+        "default",
+        "true",
+        "wide",
+        "rust"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": false,
+          "adverse": [
+            {
+              "iteration": 0,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 1,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 2,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 3,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            }
+          ],
+          "observed_medians": {}
+        },
+        "candidate": {
+          "success": false,
+          "adverse": [
+            {
+              "iteration": 0,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 1,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 2,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 3,
+              "status": "error",
+              "error": "warmup: execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            }
+          ],
+          "observed_medians": {}
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12162425559
+    },
+    {
+      "group": [
+        "ordinary",
+        100000,
+        "memory",
+        "default",
+        "true",
+        "wide",
+        "python"
+      ],
+      "run": 39154779183,
+      "complete": true,
+      "verified_files": 12,
+      "sides": {
+        "baseline": {
+          "success": false,
+          "adverse": [
+            {
+              "iteration": 0,
+              "status": "error",
+              "error": "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 1,
+              "status": "error",
+              "error": "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 2,
+              "status": "error",
+              "error": "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 3,
+              "status": "error",
+              "error": "execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget"
+            }
+          ],
+          "observed_medians": {}
+        },
+        "candidate": {
+          "success": false,
+          "adverse": [
+            {
+              "iteration": 0,
+              "status": "error",
+              "error": "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 1,
+              "status": "error",
+              "error": "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 2,
+              "status": "error",
+              "error": "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            },
+            {
+              "iteration": 3,
+              "status": "error",
+              "error": "execution error: query memory account query result (result_materialization) would use 16780218 bytes, exceeding its 16777216-byte budget"
+            }
+          ],
+          "observed_medians": {}
+        }
+      },
+      "scope": "Instrumented allocation/conversion/RSS observations only; separate from ordinary latency qualification.",
+      "artifact": 12162247614
     }
   ],
   "collection_or_integrity_errors": [],
