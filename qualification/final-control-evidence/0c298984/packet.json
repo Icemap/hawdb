@@ -26,8 +26,8 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "b80156f606552a09c967c19ac65621749c93080d8433598ed341c00c80698f75",
-      "bytes": 6486,
+      "sha256": "b505de6ae50c27bc872139a0a30683c1bcd921ba12a6b0f3af2b009852fa42db",
+      "bytes": 7370,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-control-evidence-0c298984/qualification/final-control-evidence/0c298984/README.md"
     },
     {
@@ -137,6 +137,330 @@
       "sha256": "fa196fe81415800991d265840d264c506e86635b365a3e55e4ff728900da672b",
       "bytes": 738,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-ci-skein-supply-chain-check-output.txt"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-file-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-file-0.stderr"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-file-0.stdout",
+      "sha256": "8e7b68374b818f13a34fdef00b5e8f46012d3ceea655ce4c4c775fe9eec6b6ff",
+      "bytes": 1441,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-file-0.stdout"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-file-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-file-1.stderr"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-file-1.stdout",
+      "sha256": "96f0e4a6a6e1873b256edbd7680f5611cdb174e8e4d24ff9aca6ddace071e915",
+      "bytes": 1441,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-file-1.stdout"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-file-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-file-2.stderr"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-file-2.stdout",
+      "sha256": "1baa8bf4235b1eb9aa11f06dbf21f85f850fd8fa677d1432e3376f0383b0ab9e",
+      "bytes": 1441,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-file-2.stdout"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-file-3.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-file-3.stderr"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-file-3.stdout",
+      "sha256": "49e9e47e566581d18e06c10597ee0417f4394a1cdd676d2c0e1b3edb05c36f00",
+      "bytes": 1441,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-file-3.stdout"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-memory-0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-memory-0.stderr"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-memory-0.stdout",
+      "sha256": "de184f43cb83d7ec2e5df8255f7fb566debe10a5234c67d51dad2ade88670de0",
+      "bytes": 1437,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-memory-0.stdout"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-memory-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-memory-1.stderr"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-memory-1.stdout",
+      "sha256": "0438c06dc4106c0931c41f88bfcc104e4a5dd78d465b06e14b33a311517eb684",
+      "bytes": 1437,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-memory-1.stdout"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-memory-2.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-memory-2.stderr"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-memory-2.stdout",
+      "sha256": "58b231d3efb0ad02274bbebc104ec7ed7d76d3569373fd9d4d357fc891ea2b56",
+      "bytes": 1437,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-memory-2.stdout"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-memory-3.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-memory-3.stderr"
+    },
+    {
+      "path": "go-failure-heap/baseline-100k-bulk-memory-3.stdout",
+      "sha256": "061dc69ad6f2e3188ec58e3367ebaf82aa8d3cce7b55a811bee67d8afee2939d",
+      "bytes": 1437,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/baseline-100k-bulk-memory-3.stdout"
+    },
+    {
+      "path": "go-failure-heap/build-source-manifest.json",
+      "sha256": "d414540b9b979fb4e1d4a5998489734af480b6550d6551b99769ecd603656455",
+      "bytes": 2515,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/build-source-manifest.json"
+    },
+    {
+      "path": "go-failure-heap/first-launch-validation-failure/probe-success.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/first-launch-validation-failure/probe-success.stderr"
+    },
+    {
+      "path": "go-failure-heap/first-launch-validation-failure/probe-success.stdout",
+      "sha256": "93e290e64b227749e17a98a404ba4a30d142216fc10feece676ecf35a50d36e3",
+      "bytes": 1294,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/first-launch-validation-failure/probe-success.stdout"
+    },
+    {
+      "path": "go-failure-heap/first-launch-validation-failure/receipt.json",
+      "sha256": "e82e97418f70c29740b5662aa87c972ae1e3e5e069841fb2638fd2ddf5a511b8",
+      "bytes": 548,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/first-launch-validation-failure/receipt.json"
+    },
+    {
+      "path": "go-failure-heap/first-launch-validation-failure/run.log",
+      "sha256": "5ea42fdf2939b454ef2d010f56d5ef9d87000da470d7d1f4329650945b5977bd",
+      "bytes": 505,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/first-launch-validation-failure/run.log"
+    },
+    {
+      "path": "go-failure-heap/functional-qualified-audit.json",
+      "sha256": "0cc29d47054c94bd420d4d5d6cd784171c9bdf4dddf32a37f160e1c05569336b",
+      "bytes": 892,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/functional-qualified-audit.json"
+    },
+    {
+      "path": "go-failure-heap/module/BUILD.bazel",
+      "sha256": "14f54319a9f85bed4625e77d3af4ed46256c46a8085750adfa4540becc732751",
+      "bytes": 1045,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/BUILD.bazel"
+    },
+    {
+      "path": "go-failure-heap/module/README.md",
+      "sha256": "1c02f6faf8739299743a648120c86e0bc8fa537c02c1f7d85eb700dc0e251ba9",
+      "bytes": 559,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/README.md"
+    },
+    {
+      "path": "go-failure-heap/module/bazel_test.go",
+      "sha256": "1f77fdfe360a115a00af6d3f5171b99f9f0b19044c682394a732aac77e74afcf",
+      "bytes": 1199,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/bazel_test.go"
+    },
+    {
+      "path": "go-failure-heap/module/boundary_profile_disabled.go",
+      "sha256": "8937ea7c30d9cad846f2d84dbb5a626ddcfc41c77057cf2b42b5c5224a6c5380",
+      "bytes": 456,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/boundary_profile_disabled.go"
+    },
+    {
+      "path": "go-failure-heap/module/boundary_profile_enabled.go",
+      "sha256": "4f2c774033a60b915d7caf63e43f44e72485a26e827b68473a10c86723b0a959",
+      "bytes": 2853,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/boundary_profile_enabled.go"
+    },
+    {
+      "path": "go-failure-heap/module/boundary_profile_test.go",
+      "sha256": "4352e3c9a6dd9f733b8f96d75276d5e12c2cb623affe4f78b793c6a74357b1b1",
+      "bytes": 4298,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/boundary_profile_test.go"
+    },
+    {
+      "path": "go-failure-heap/module/cmd/boundary/BUILD.bazel",
+      "sha256": "39db0df5b810ba8972e40bca92623d6c3edf480db3133a2788eb065c172f28c1",
+      "bytes": 874,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/cmd/boundary/BUILD.bazel"
+    },
+    {
+      "path": "go-failure-heap/module/cmd/boundary/host_profile_disabled.go",
+      "sha256": "e38f0a829ddf10e49257a9997dac416dab6d42713a7d7250a177a0b38bea0c32",
+      "bytes": 271,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/cmd/boundary/host_profile_disabled.go"
+    },
+    {
+      "path": "go-failure-heap/module/cmd/boundary/host_profile_enabled.go",
+      "sha256": "083819ad8f6785ae19e6d4031e7959cee0a8a166eb6a2186e532a10301dc1a54",
+      "bytes": 527,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/cmd/boundary/host_profile_enabled.go"
+    },
+    {
+      "path": "go-failure-heap/module/cmd/boundary/main.go",
+      "sha256": "0461c8417f5a373e547467102cb8028dde45fd2d3b79a2f46c783ea8e4c7b6fd",
+      "bytes": 12419,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/cmd/boundary/main.go"
+    },
+    {
+      "path": "go-failure-heap/module/cmd/boundary/profile_unix.go",
+      "sha256": "43f81e712a5166ecfd6284bdb8a37f04abe757107c3daa6e7262e82c73e654ec",
+      "bytes": 373,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/cmd/boundary/profile_unix.go"
+    },
+    {
+      "path": "go-failure-heap/module/cmd/boundary/profile_windows.go",
+      "sha256": "987815e836424f5aa3d56805ae77e939cd59be899c672bc8afb9717168e56a71",
+      "bytes": 383,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/cmd/boundary/profile_windows.go"
+    },
+    {
+      "path": "go-failure-heap/module/ffi.go",
+      "sha256": "494e5534d33e4153f57b9c93770b4630cfbd536f8a23000eecfd97372f0ad3bf",
+      "bytes": 4786,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/ffi.go"
+    },
+    {
+      "path": "go-failure-heap/module/go.mod",
+      "sha256": "04828490a37f7d2a25512ccdc500c857fba4fb2e66dbf0f5579288bae2dd244b",
+      "bytes": 105,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/go.mod"
+    },
+    {
+      "path": "go-failure-heap/module/go.sum",
+      "sha256": "e61efba99d08cb90bba662f433bafe55580a6056320ab9f444b46a2e400a8799",
+      "bytes": 177,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/go.sum"
+    },
+    {
+      "path": "go-failure-heap/module/hawdb.go",
+      "sha256": "44ae0d60861a5e6077dd8ef92eb0e1031d8cf519eebe86574e1c5951304ebdff",
+      "bytes": 10072,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/hawdb.go"
+    },
+    {
+      "path": "go-failure-heap/module/hawdb_test.go",
+      "sha256": "f9e0a63adf6ae07e168f8548b78cf446158f8764cb03b355fb8f54bab326ed63",
+      "bytes": 6641,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/hawdb_test.go"
+    },
+    {
+      "path": "go-failure-heap/module/lib_unix.go",
+      "sha256": "11e022a5c0d1b8ab6650cf3c6cba1b039e4ee6d2382dca6459ae6171e9e4ab55",
+      "bytes": 1215,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/lib_unix.go"
+    },
+    {
+      "path": "go-failure-heap/module/lib_windows.go",
+      "sha256": "07810ba24ae862cd306959a34025d4773ceda99d604b6f9dff28cda658c035f5",
+      "bytes": 994,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/module/lib_windows.go"
+    },
+    {
+      "path": "go-failure-heap/observer.patch",
+      "sha256": "aa0d2f1a39ea46e5ee4c241397da51358ec38bd15d92ef67bd2acb08636bab17",
+      "bytes": 1546,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/observer.patch"
+    },
+    {
+      "path": "go-failure-heap/probe-execute_refusal.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/probe-execute_refusal.stderr"
+    },
+    {
+      "path": "go-failure-heap/probe-execute_refusal.stdout",
+      "sha256": "b5cbf763d0a8de754b18d0ad890d51ff90cab38e62c8c01996387e401c36e0d4",
+      "bytes": 1435,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/probe-execute_refusal.stdout"
+    },
+    {
+      "path": "go-failure-heap/probe-success.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/probe-success.stderr"
+    },
+    {
+      "path": "go-failure-heap/probe-success.stdout",
+      "sha256": "c211fe060caf57b123f5b2800c94046275c9bf09ee0a6cad1050703613c6aa46",
+      "bytes": 1294,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/probe-success.stdout"
+    },
+    {
+      "path": "go-failure-heap/probe-warmup_refusal.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/probe-warmup_refusal.stderr"
+    },
+    {
+      "path": "go-failure-heap/probe-warmup_refusal.stdout",
+      "sha256": "b4bc81c02697e3d919886c12388a99597d83a2e8bdce19af3da2b0bac42b66a0",
+      "bytes": 1435,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/probe-warmup_refusal.stdout"
+    },
+    {
+      "path": "go-failure-heap/receipt.json",
+      "sha256": "06bab689b5575e91372da3bf80a2201b57e553ded55b8a2517eb3360ff8a150d",
+      "bytes": 23596,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/receipt.json"
+    },
+    {
+      "path": "go-failure-heap/run.log",
+      "sha256": "d29f2edc0a7570d2bb6802b3525fcd3bf9147c93548d2e3b070f5dd67a2dab6c",
+      "bytes": 386,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/run.log"
+    },
+    {
+      "path": "go-failure-heap/sample-qualified-audit.json",
+      "sha256": "60ce40f5a9121c9dacf04418bb9ea2f2edb015bcf7a167df85f9dfc3dde23954",
+      "bytes": 1663,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/supplemental-go-failure-heap-0c298984/sample-qualified-audit.json"
+    },
+    {
+      "path": "go-failure-heap/scripts/audit-go-failure-heap-samples.py",
+      "sha256": "6b8f9f2611228b3f5a4a2079c617cbdac99ca2cb0c7a267de3b436e043b43fe4",
+      "bytes": 3188,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/audit-go-failure-heap-samples.py"
+    },
+    {
+      "path": "go-failure-heap/scripts/prepare-go-failure-heap.py",
+      "sha256": "ed996bcc5a2d1c01ea387462c6441c00910d2a7b88c4be42b5c2e1f459c3d4bf",
+      "bytes": 3844,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/prepare-go-failure-heap.py"
+    },
+    {
+      "path": "go-failure-heap/scripts/run-go-failure-heap.py",
+      "sha256": "285bbef0e86ce0148da5d7b0432e2625cf954924476decf09ded661336227691",
+      "bytes": 3553,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/run-go-failure-heap.py"
     },
     {
       "path": "held-write/audit.json",
@@ -464,14 +788,14 @@
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-pairs-audit.json",
-      "sha256": "c27041096210610fdfd646925438b69f59c17599f42dee2b2964e8e0bd74265f",
-      "bytes": 83613,
+      "sha256": "2ba9a8ef62cd43a9140fdb3da8d0c2427ac59e8945e33893aa9a9b7d2789bd98",
+      "bytes": 95030,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-pairs-audit.json"
     },
     {
       "path": "original-matrix-snapshot/audits/986-0c298984-original-ordinary-resource-refusals-audit.json",
-      "sha256": "9eba69a9bc8188b7b3174a9eebdc9f8414e9572bffdc584f43578f8998dc01ac",
-      "bytes": 19856,
+      "sha256": "138a7239b24a4079dcfa6f520768f61bf0ce9dfd2ffb9b138b0b0b8c35f6b109",
+      "bytes": 31275,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/986-0c298984-original-ordinary-resource-refusals-audit.json"
     },
     {
@@ -1147,9 +1471,33 @@
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12159087884.json"
     },
     {
+      "path": "original-matrix-snapshot/resources/artifact-12160081153.json",
+      "sha256": "2059847056b43638e20dc135e9ca0bb80928a19fb0699b30454633d24e0043d1",
+      "bytes": 31412,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12160081153.json"
+    },
+    {
+      "path": "original-matrix-snapshot/resources/artifact-12160215019.json",
+      "sha256": "d3b9f0a7d15b922124f2c5975f17729960eb2d744bceca50be951936116e3581",
+      "bytes": 31491,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12160215019.json"
+    },
+    {
+      "path": "original-matrix-snapshot/resources/artifact-12160227312.json",
+      "sha256": "c498294e65de2d1ff8fe73b02a5560d8dff7091019cb7812817353ad2a463ed7",
+      "bytes": 34080,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12160227312.json"
+    },
+    {
+      "path": "original-matrix-snapshot/resources/artifact-12160925235.json",
+      "sha256": "531a2f9dd65f0b1fe98a1201dd0572fa42708c49f36937a1af5c1a047bceb3b7",
+      "bytes": 34009,
+      "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/artifact-12160925235.json"
+    },
+    {
       "path": "original-matrix-snapshot/resources-summary.json",
-      "sha256": "66341caf746d3148d97b9e38283b3c34cccc5714081db8508545d9742741484f",
-      "bytes": 225784,
+      "sha256": "c098809139f7443f7ccc4e25ceed279252d4ee8e21a55718a9f96657436d7fe4",
+      "bytes": 234893,
       "source_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-0c298984/resources/summary.json"
     },
     {
@@ -2397,14 +2745,14 @@
       "summary_sha256": "305cab792fe59863da9e3f00456f6bbe2b8143d7a27d91828395a6df1871f81f"
     },
     "resources": {
-      "audited": 56,
+      "audited": 60,
       "expected": 110,
       "source": "bdb03c069fcba1b5c30dec654fa6052ef8c36d77",
       "run": 39154779183,
-      "summary_sha256": "66341caf746d3148d97b9e38283b3c34cccc5714081db8508545d9742741484f"
+      "summary_sha256": "c098809139f7443f7ccc4e25ceed279252d4ee8e21a55718a9f96657436d7fe4"
     }
   },
-  "updated_at": 1792378816.300141,
+  "updated_at": 1792379127.881919,
   "numeric20_original_controls": {
     "positive": 12,
     "default_memory_refusals": 4,
@@ -2444,5 +2792,14 @@
     "probes": 3,
     "terminal": true,
     "scope": "Supplemental local observer only; original 90/110 counts unchanged. Failure Python tracing begins after setup/warmup and ends before cleanup; native failure window includes full producer. No cross-scope performance ratio or leak claim."
+  },
+  "go_failure_heap_supplement": {
+    "baseline": "3cdb2610ba8b984676b80ba22df64821787886d3",
+    "groups": 2,
+    "attempts": 8,
+    "measured": 6,
+    "probes": 3,
+    "terminal": true,
+    "scope": "Supplemental Go profiling observer; error heap delta includes query execution, error return, deferred db.Close and failure-host snapshot, unlike original successful query-only heap fields. No cross-scope ratio."
   }
 }

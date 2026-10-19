@@ -1,0 +1,29 @@
+{
+  "baseline_head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+  "native_build_tree": "8c30cf48bc6ced6fef624c8333759892ff6b21a4",
+  "go_source_tree": "4a235b06362ae6306a300e45d5974495c1229c2b",
+  "go_version": "go version go1.27.2 darwin/arm64",
+  "native_library_sha256": "070987e0457f7e13ec30301f101bfd0821d664665ed59406536bf61368be1189",
+  "files": {
+    "module/lib_windows.go": "07810ba24ae862cd306959a34025d4773ceda99d604b6f9dff28cda658c035f5",
+    "module/boundary_profile_test.go": "4352e3c9a6dd9f733b8f96d75276d5e12c2cb623affe4f78b793c6a74357b1b1",
+    "module/go.mod": "04828490a37f7d2a25512ccdc500c857fba4fb2e66dbf0f5579288bae2dd244b",
+    "module/boundary_profile_enabled.go": "4f2c774033a60b915d7caf63e43f44e72485a26e827b68473a10c86723b0a959",
+    "module/hawdb_test.go": "f9e0a63adf6ae07e168f8548b78cf446158f8764cb03b355fb8f54bab326ed63",
+    "module/go.sum": "e61efba99d08cb90bba662f433bafe55580a6056320ab9f444b46a2e400a8799",
+    "module/README.md": "1c02f6faf8739299743a648120c86e0bc8fa537c02c1f7d85eb700dc0e251ba9",
+    "module/lib_unix.go": "11e022a5c0d1b8ab6650cf3c6cba1b039e4ee6d2382dca6459ae6171e9e4ab55",
+    "module/hawdb.go": "44ae0d60861a5e6077dd8ef92eb0e1031d8cf519eebe86574e1c5951304ebdff",
+    "module/bazel_test.go": "1f77fdfe360a115a00af6d3f5171b99f9f0b19044c682394a732aac77e74afcf",
+    "module/BUILD.bazel": "14f54319a9f85bed4625e77d3af4ed46256c46a8085750adfa4540becc732751",
+    "module/ffi.go": "494e5534d33e4153f57b9c93770b4630cfbd536f8a23000eecfd97372f0ad3bf",
+    "module/boundary_profile_disabled.go": "8937ea7c30d9cad846f2d84dbb5a626ddcfc41c77057cf2b42b5c5224a6c5380",
+    "module/cmd/boundary/profile_windows.go": "987815e836424f5aa3d56805ae77e939cd59be899c672bc8afb9717168e56a71",
+    "module/cmd/boundary/profile_unix.go": "43f81e712a5166ecfd6284bdb8a37f04abe757107c3daa6e7262e82c73e654ec",
+    "module/cmd/boundary/host_profile_enabled.go": "083819ad8f6785ae19e6d4031e7959cee0a8a166eb6a2186e532a10301dc1a54",
+    "module/cmd/boundary/BUILD.bazel": "39db0df5b810ba8972e40bca92623d6c3edf480db3133a2788eb065c172f28c1",
+    "module/cmd/boundary/host_profile_disabled.go": "e38f0a829ddf10e49257a9997dac416dab6d42713a7d7250a177a0b38bea0c32",
+    "module/cmd/boundary/main.go": "0461c8417f5a373e547467102cb8028dde45fd2d3b79a2f46c783ea8e4c7b6fd"
+  },
+  "scope": "Supplemental Go profiling observer; error heap delta includes query execution, error return, deferred db.Close and failure-host snapshot, unlike original successful query-only heap fields. No cross-scope ratio."
+}

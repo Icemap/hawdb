@@ -1,0 +1,50 @@
+--- original/main.go
++++ supplement/main.go
+@@ -197,6 +197,38 @@
+ 	if err != nil {
+ 		return nil, err
+ 	}
++	var failureHeapBefore runtime.MemStats
++	failureHeapStarted := false
++	if hostProfiling {
++		defer func() {
++			if runErr == nil {
++				return
++			}
++			if report == nil {
++				report = make(map[string]any)
++			}
++			heap := map[string]any{
++				"available": false,
++				"reason":    "query allocation window has not started",
++				"scope":     "query_allocation_window_after_error_cleanup",
++			}
++			if failureHeapStarted {
++				var failureHeapAfter runtime.MemStats
++				runtime.ReadMemStats(&failureHeapAfter)
++				if failureHeapAfter.Mallocs >= failureHeapBefore.Mallocs && failureHeapAfter.TotalAlloc >= failureHeapBefore.TotalAlloc {
++					heap = map[string]any{
++						"available":          true,
++						"go_allocations":     failureHeapAfter.Mallocs - failureHeapBefore.Mallocs,
++						"go_allocated_bytes": failureHeapAfter.TotalAlloc - failureHeapBefore.TotalAlloc,
++						"scope":              "query_allocation_window_after_error_cleanup",
++					}
++				} else {
++					heap["reason"] = "allocation counters regressed"
++				}
++			}
++			report["failure_go_heap_profile"] = heap
++		}()
++	}
+ 	var hostRead func() hostSnapshot
+ 	if hostProfiling {
+ 		hostRead = hostProfileReader(db)
+@@ -259,6 +291,8 @@
+ 		defer pprof.StopCPUProfile()
+ 	}
+ 	runtime.ReadMemStats(&before)
++	failureHeapBefore = before
++	failureHeapStarted = true
+ 	c := checksum(0xcbf29ce484222325)
+ 	c.bytes([]byte("HDBBOUND1"))
+ 	c.length(uint64(len(j.Columns)))

@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/private/tmp/hawdb-wip-ready-20261015/run-go-failure-heap.py", line 27, in <module>
+    data.update(backend='memory',path=str(O/(mode+'.db')));x=run(data,'probe-'+mode);d['probes'].append(x);save();assert x['result']['status']==('ok' if mode=='success' else 'error')
+  File "/private/tmp/hawdb-wip-ready-20261015/run-go-failure-heap.py", line 16, in run
+    assert driver.native_profile_valid(r,'go',True) and driver.go_host_profile_valid(r,True)
+AssertionError

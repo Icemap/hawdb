@@ -1,0 +1,10 @@
+{
+  "status": "functional_probes",
+  "terminal": false,
+  "build_source_manifest_sha256": "d414540b9b979fb4e1d4a5998489734af480b6550d6551b99769ecd603656455",
+  "binary_sha256": "a201b342c019c4e0008a7911ac54c4d13893b4037c2c0e6dd31507c9ba785d2c",
+  "probes": [],
+  "samples": [],
+  "scope": "Supplemental Go profiling observer; error heap delta includes query execution, error return, deferred db.Close and failure-host snapshot, unlike original successful query-only heap fields. No cross-scope ratio.",
+  "original_matrix_counts_unchanged": true
+}

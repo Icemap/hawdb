@@ -1,0 +1,14 @@
+{
+  "verified": true,
+  "build_source_manifest_sha256": "d414540b9b979fb4e1d4a5998489734af480b6550d6551b99769ecd603656455",
+  "binary_sha256": "a201b342c019c4e0008a7911ac54c4d13893b4037c2c0e6dd31507c9ba785d2c",
+  "observer_patch_sha256": "aa0d2f1a39ea46e5ee4c241397da51358ec38bd15d92ef67bd2acb08636bab17",
+  "sampler_sha256": "285bbef0e86ce0148da5d7b0432e2625cf954924476decf09ded661336227691",
+  "native_library_sha256": "070987e0457f7e13ec30301f101bfd0821d664665ed59406536bf61368be1189",
+  "probes": 3,
+  "go_build_passed": true,
+  "go_vet_passed": true,
+  "first_validation_failure_preserved": "first-launch-validation-failure",
+  "scope": "Supplemental Go profiling observer; error heap delta includes query execution, error return, deferred db.Close and failure-host snapshot, unlike original successful query-only heap fields. No cross-scope ratio.",
+  "performance_acceptance": false
+}

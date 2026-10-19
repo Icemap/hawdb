@@ -1,0 +1,523 @@
+{
+  "status": "completed",
+  "terminal": true,
+  "build_source_manifest_sha256": "d414540b9b979fb4e1d4a5998489734af480b6550d6551b99769ecd603656455",
+  "binary_sha256": "a201b342c019c4e0008a7911ac54c4d13893b4037c2c0e6dd31507c9ba785d2c",
+  "probes": [
+    {
+      "label": "probe-success",
+      "job_sha256": "695b97b68f9114a31f51b387c7679c22bee64d4499cd8d34b374505e0d400cff",
+      "process_seconds": 0.10466345799999999,
+      "result": {
+        "backend": "memory",
+        "case": "select",
+        "cgo_enabled": false,
+        "checksum": "ee38a8b2642c45d5",
+        "consumer_ns": 219541,
+        "cpu_profile": "",
+        "durability": "SyncOnEveryWrite",
+        "elapsed_ns": 5411459,
+        "go_allocated_bytes": 599104,
+        "go_allocations": 16799,
+        "go_host_profile": {
+          "ffi_call_ns": 3537458,
+          "ffi_calls": 1,
+          "parameter_conversion_calls": 1,
+          "parameter_conversion_ns": 2250,
+          "result_conversion_calls": 1,
+          "result_conversion_ns": 1650667,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "go_version": "go1.27.2",
+        "input_rows": 1000,
+        "layer": "go",
+        "native_profile": {
+          "allocated_bytes": 23421670,
+          "allocation_calls": 27552,
+          "deallocated_bytes": 23421670,
+          "deallocation_calls": 27552,
+          "engine_call_ns": 3009459,
+          "live_requested_bytes_after": 1348865,
+          "live_requested_bytes_before": 1348865,
+          "parameter_conversion_ns": 1083,
+          "process_peak_requested_bytes": 3462106,
+          "reallocation_calls": 2250,
+          "result_conversion_ns": 492250,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "output_rows": 1000,
+        "pointer_bits": 64,
+        "query_boundary_ns": 5191041,
+        "read_boundary_ns": 5191041,
+        "setup_ns": 29341875,
+        "status": "ok",
+        "values": 3000,
+        "write_boundary_ns": 0
+      }
+    },
+    {
+      "label": "probe-warmup_refusal",
+      "job_sha256": "f4fd49507eb514063e998e15c57bd41309e65d2046feb592371f98ef266ed3ae",
+      "process_seconds": 4.284211416,
+      "result": {
+        "error": "warmup: execution: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+        "failure_go_heap_profile": {
+          "available": false,
+          "reason": "query allocation window has not started",
+          "scope": "query_allocation_window_after_error_cleanup"
+        },
+        "failure_go_host_profile": {
+          "ffi_call_ns": 3816103584,
+          "ffi_calls": 22,
+          "parameter_conversion_calls": 22,
+          "parameter_conversion_ns": 108972586,
+          "result_conversion_calls": 22,
+          "result_conversion_ns": 6304080,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+        "failure_native_profile": {
+          "allocated_bytes": 2015972855,
+          "allocation_calls": 22822733,
+          "deallocated_bytes": 2015972855,
+          "deallocation_calls": 22822733,
+          "engine_call_ns": 3651552043,
+          "live_requested_bytes_after": 0,
+          "live_requested_bytes_before": 0,
+          "parameter_conversion_ns": 134912873,
+          "process_peak_requested_bytes": 141096022,
+          "reallocation_calls": 119448,
+          "result_conversion_ns": 1770957,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+        "go_version": "go1.27.2",
+        "layer": "go",
+        "pointer_bits": 64,
+        "status": "error"
+      }
+    },
+    {
+      "label": "probe-execute_refusal",
+      "job_sha256": "295895b52e0d6f0be049ab64a6321549aa39ed75acd73d88b966a12b4e3451d9",
+      "process_seconds": 3.277434917000001,
+      "result": {
+        "error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16780548 bytes, exceeding its 16777216-byte budget",
+        "failure_go_heap_profile": {
+          "available": true,
+          "go_allocated_bytes": 45021552,
+          "go_allocations": 539967,
+          "scope": "query_allocation_window_after_error_cleanup"
+        },
+        "failure_go_host_profile": {
+          "ffi_call_ns": 2792141041,
+          "ffi_calls": 3,
+          "parameter_conversion_calls": 3,
+          "parameter_conversion_ns": 141633500,
+          "result_conversion_calls": 3,
+          "result_conversion_ns": 4294710,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+        "failure_native_profile": {
+          "allocated_bytes": 1831746265,
+          "allocation_calls": 14045851,
+          "deallocated_bytes": 1831746265,
+          "deallocation_calls": 14045851,
+          "engine_call_ns": 2648194833,
+          "live_requested_bytes_after": 0,
+          "live_requested_bytes_before": 0,
+          "parameter_conversion_ns": 127361542,
+          "process_peak_requested_bytes": 401999275,
+          "reallocation_calls": 104180,
+          "result_conversion_ns": 1561625,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+        "go_version": "go1.27.2",
+        "layer": "go",
+        "pointer_bits": 64,
+        "status": "error"
+      }
+    }
+  ],
+  "samples": [
+    {
+      "label": "baseline-100k-bulk-memory-0",
+      "job_sha256": "9e6d425e19ea560d20e036a5ecf44477ba8a46400f0c57ddb992501d44cf7a8b",
+      "process_seconds": 93.35204454199999,
+      "result": {
+        "error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+        "failure_go_heap_profile": {
+          "available": true,
+          "go_allocated_bytes": 89963928,
+          "go_allocations": 1399946,
+          "scope": "query_allocation_window_after_error_cleanup"
+        },
+        "failure_go_host_profile": {
+          "ffi_call_ns": 93005406084,
+          "ffi_calls": 3,
+          "parameter_conversion_calls": 3,
+          "parameter_conversion_ns": 59923541,
+          "result_conversion_calls": 3,
+          "result_conversion_ns": 20887417,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+        "failure_native_profile": {
+          "allocated_bytes": 3403292572,
+          "allocation_calls": 15546257,
+          "deallocated_bytes": 3403292572,
+          "deallocation_calls": 15546257,
+          "engine_call_ns": 92939765375,
+          "live_requested_bytes_after": 0,
+          "live_requested_bytes_before": 0,
+          "parameter_conversion_ns": 53051376,
+          "process_peak_requested_bytes": 460596457,
+          "reallocation_calls": 125795,
+          "result_conversion_ns": 6838083,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+        "go_version": "go1.27.2",
+        "layer": "go",
+        "pointer_bits": 64,
+        "status": "error"
+      },
+      "discarded_warmup": true
+    },
+    {
+      "label": "baseline-100k-bulk-memory-1",
+      "job_sha256": "9e4f7d68ca7074f9a5ce292168bb1eb3eb65027f9903c42fec2c3108981246d5",
+      "process_seconds": 64.83199250000007,
+      "result": {
+        "error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+        "failure_go_heap_profile": {
+          "available": true,
+          "go_allocated_bytes": 89963536,
+          "go_allocations": 1399943,
+          "scope": "query_allocation_window_after_error_cleanup"
+        },
+        "failure_go_host_profile": {
+          "ffi_call_ns": 64547058167,
+          "ffi_calls": 3,
+          "parameter_conversion_calls": 3,
+          "parameter_conversion_ns": 61482042,
+          "result_conversion_calls": 3,
+          "result_conversion_ns": 19093208,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+        "failure_native_profile": {
+          "allocated_bytes": 3403292572,
+          "allocation_calls": 15546257,
+          "deallocated_bytes": 3403292572,
+          "deallocation_calls": 15546257,
+          "engine_call_ns": 64482556334,
+          "live_requested_bytes_after": 0,
+          "live_requested_bytes_before": 0,
+          "parameter_conversion_ns": 51501416,
+          "process_peak_requested_bytes": 460596457,
+          "reallocation_calls": 125795,
+          "result_conversion_ns": 7132874,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+        "go_version": "go1.27.2",
+        "layer": "go",
+        "pointer_bits": 64,
+        "status": "error"
+      },
+      "discarded_warmup": false
+    },
+    {
+      "label": "baseline-100k-bulk-memory-2",
+      "job_sha256": "0ed5bc6f18a042627f3494ae43c609006463c48c8acaa40fa6d238e55e4ccf11",
+      "process_seconds": 67.86739058299997,
+      "result": {
+        "error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+        "failure_go_heap_profile": {
+          "available": true,
+          "go_allocated_bytes": 90004584,
+          "go_allocations": 1399992,
+          "scope": "query_allocation_window_after_error_cleanup"
+        },
+        "failure_go_host_profile": {
+          "ffi_call_ns": 67587570457,
+          "ffi_calls": 3,
+          "parameter_conversion_calls": 3,
+          "parameter_conversion_ns": 62073583,
+          "result_conversion_calls": 3,
+          "result_conversion_ns": 20576708,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+        "failure_native_profile": {
+          "allocated_bytes": 3403292572,
+          "allocation_calls": 15546257,
+          "deallocated_bytes": 3403292572,
+          "deallocation_calls": 15546257,
+          "engine_call_ns": 67518218125,
+          "live_requested_bytes_after": 0,
+          "live_requested_bytes_before": 0,
+          "parameter_conversion_ns": 56661209,
+          "process_peak_requested_bytes": 460596457,
+          "reallocation_calls": 125795,
+          "result_conversion_ns": 6943708,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+        "go_version": "go1.27.2",
+        "layer": "go",
+        "pointer_bits": 64,
+        "status": "error"
+      },
+      "discarded_warmup": false
+    },
+    {
+      "label": "baseline-100k-bulk-memory-3",
+      "job_sha256": "175989bb85a43c652492491a95bbf57a42490a2f91f3b57218f33518ad4ccbff",
+      "process_seconds": 62.54151249999995,
+      "result": {
+        "error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+        "failure_go_heap_profile": {
+          "available": true,
+          "go_allocated_bytes": 89964224,
+          "go_allocations": 1399945,
+          "scope": "query_allocation_window_after_error_cleanup"
+        },
+        "failure_go_host_profile": {
+          "ffi_call_ns": 62263319750,
+          "ffi_calls": 3,
+          "parameter_conversion_calls": 3,
+          "parameter_conversion_ns": 61401250,
+          "result_conversion_calls": 3,
+          "result_conversion_ns": 18967375,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+        "failure_native_profile": {
+          "allocated_bytes": 3403292572,
+          "allocation_calls": 15546257,
+          "deallocated_bytes": 3403292572,
+          "deallocation_calls": 15546257,
+          "engine_call_ns": 62200148916,
+          "live_requested_bytes_after": 0,
+          "live_requested_bytes_before": 0,
+          "parameter_conversion_ns": 50244833,
+          "process_peak_requested_bytes": 460596457,
+          "reallocation_calls": 125795,
+          "result_conversion_ns": 7107209,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+        "go_version": "go1.27.2",
+        "layer": "go",
+        "pointer_bits": 64,
+        "status": "error"
+      },
+      "discarded_warmup": false
+    },
+    {
+      "label": "baseline-100k-bulk-file-0",
+      "job_sha256": "0d9a743ac8c43fea38106ea05bc58b474b62d40fe97d78bd48de3c99d8cd6f2e",
+      "process_seconds": 67.83892283399996,
+      "result": {
+        "error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+        "failure_go_heap_profile": {
+          "available": true,
+          "go_allocated_bytes": 89970872,
+          "go_allocations": 1399948,
+          "scope": "query_allocation_window_after_error_cleanup"
+        },
+        "failure_go_host_profile": {
+          "ffi_call_ns": 66628255126,
+          "ffi_calls": 3,
+          "parameter_conversion_calls": 3,
+          "parameter_conversion_ns": 59115418,
+          "result_conversion_calls": 3,
+          "result_conversion_ns": 19916958,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+        "failure_native_profile": {
+          "allocated_bytes": 3609904488,
+          "allocation_calls": 17952304,
+          "deallocated_bytes": 3609903444,
+          "deallocation_calls": 17952296,
+          "engine_call_ns": 66563627500,
+          "live_requested_bytes_after": 1044,
+          "live_requested_bytes_before": 0,
+          "parameter_conversion_ns": 52009542,
+          "process_peak_requested_bytes": 501536060,
+          "reallocation_calls": 1227477,
+          "result_conversion_ns": 6849042,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+        "go_version": "go1.27.2",
+        "layer": "go",
+        "pointer_bits": 64,
+        "status": "error"
+      },
+      "discarded_warmup": true
+    },
+    {
+      "label": "baseline-100k-bulk-file-1",
+      "job_sha256": "d0f85cbb16c8b698099ae8ee2e26062c9318fd211a241b7929ff0ae0ffd385e0",
+      "process_seconds": 70.25098416700007,
+      "result": {
+        "error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+        "failure_go_heap_profile": {
+          "available": true,
+          "go_allocated_bytes": 89963936,
+          "go_allocations": 1399948,
+          "scope": "query_allocation_window_after_error_cleanup"
+        },
+        "failure_go_host_profile": {
+          "ffi_call_ns": 68810175250,
+          "ffi_calls": 3,
+          "parameter_conversion_calls": 3,
+          "parameter_conversion_ns": 62983793,
+          "result_conversion_calls": 3,
+          "result_conversion_ns": 20693875,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+        "failure_native_profile": {
+          "allocated_bytes": 3609904488,
+          "allocation_calls": 17952304,
+          "deallocated_bytes": 3609903444,
+          "deallocation_calls": 17952296,
+          "engine_call_ns": 68741106459,
+          "live_requested_bytes_after": 1044,
+          "live_requested_bytes_before": 0,
+          "parameter_conversion_ns": 54326791,
+          "process_peak_requested_bytes": 501536060,
+          "reallocation_calls": 1227477,
+          "result_conversion_ns": 6825000,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+        "go_version": "go1.27.2",
+        "layer": "go",
+        "pointer_bits": 64,
+        "status": "error"
+      },
+      "discarded_warmup": false
+    },
+    {
+      "label": "baseline-100k-bulk-file-2",
+      "job_sha256": "053ad5b22077a94e07476d205504b0693e904469ef98861016e79398c8755ea7",
+      "process_seconds": 67.05269904199997,
+      "result": {
+        "error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+        "failure_go_heap_profile": {
+          "available": true,
+          "go_allocated_bytes": 89963456,
+          "go_allocations": 1399942,
+          "scope": "query_allocation_window_after_error_cleanup"
+        },
+        "failure_go_host_profile": {
+          "ffi_call_ns": 61846094499,
+          "ffi_calls": 3,
+          "parameter_conversion_calls": 3,
+          "parameter_conversion_ns": 64473459,
+          "result_conversion_calls": 3,
+          "result_conversion_ns": 19501749,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+        "failure_native_profile": {
+          "allocated_bytes": 3609904488,
+          "allocation_calls": 17952304,
+          "deallocated_bytes": 3609903444,
+          "deallocation_calls": 17952296,
+          "engine_call_ns": 61781926250,
+          "live_requested_bytes_after": 1044,
+          "live_requested_bytes_before": 0,
+          "parameter_conversion_ns": 51877417,
+          "process_peak_requested_bytes": 501536060,
+          "reallocation_calls": 1227477,
+          "result_conversion_ns": 6576958,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+        "go_version": "go1.27.2",
+        "layer": "go",
+        "pointer_bits": 64,
+        "status": "error"
+      },
+      "discarded_warmup": false
+    },
+    {
+      "label": "baseline-100k-bulk-file-3",
+      "job_sha256": "0551dd749453718fbb6532d682e478b22f71b4e2add6dbe7b6bcc011c029c1df",
+      "process_seconds": 77.09596012500003,
+      "result": {
+        "error": "execute: execution: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+        "failure_go_heap_profile": {
+          "available": true,
+          "go_allocated_bytes": 89963544,
+          "go_allocations": 1399944,
+          "scope": "query_allocation_window_after_error_cleanup"
+        },
+        "failure_go_host_profile": {
+          "ffi_call_ns": 76023432959,
+          "ffi_calls": 3,
+          "parameter_conversion_calls": 3,
+          "parameter_conversion_ns": 60985041,
+          "result_conversion_calls": 3,
+          "result_conversion_ns": 21400124,
+          "scope": "go_query_parameter_native_call_result_phases",
+          "scope_detail": "Go parameter preparation/JSON encoding; complete native call; native buffer copy/free/JSON decoding/normalization; native phases nest inside ffi_call_ns",
+          "valid": true
+        },
+        "failure_go_host_profile_scope": "db_query_calls_including_setup_warmup_and_cleanup",
+        "failure_native_profile": {
+          "allocated_bytes": 3609904488,
+          "allocation_calls": 17952304,
+          "deallocated_bytes": 3609903444,
+          "deallocation_calls": 17952296,
+          "engine_call_ns": 75959282415,
+          "live_requested_bytes_after": 1044,
+          "live_requested_bytes_before": 0,
+          "parameter_conversion_ns": 51120999,
+          "process_peak_requested_bytes": 501536060,
+          "reallocation_calls": 1227477,
+          "result_conversion_ns": 7159417,
+          "scope": "Rust allocator requests; Go heap/rounding/non-Rust workspace excluded"
+        },
+        "failure_profile_scope": "producer_run_including_setup_warmup_and_cleanup",
+        "go_version": "go1.27.2",
+        "layer": "go",
+        "pointer_bits": 64,
+        "status": "error"
+      },
+      "discarded_warmup": false
+    }
+  ],
+  "scope": "Supplemental Go profiling observer; error heap delta includes query execution, error return, deferred db.Close and failure-host snapshot, unlike original successful query-only heap fields. No cross-scope ratio.",
+  "original_matrix_counts_unchanged": true,
+  "source_and_artifacts_unchanged": true
+}
