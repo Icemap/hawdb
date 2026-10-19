@@ -1,0 +1,44 @@
+{
+  "head": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "tested_checkout": "c1de19172d447e4c0ffc71f2289d6f1e85a5fda5",
+  "tested_tree": "387183f0819d1ffb8f45312a3f64b5bb6cee1b90",
+  "jobs": [
+    {
+      "job": 118020882385,
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "conclusion": "success",
+      "log_sha256": "81e274c5ae4fcc50b18241a25b33584d6b9301b5def802d2fb100315d879a47b",
+      "tested_checkout": "c1de19172d447e4c0ffc71f2289d6f1e85a5fda5",
+      "passed_target_lines": [
+        "2026-10-19T11:00:00.8386643Z //bindings/python:hawdb_python_pydantic_tests                            PASSED in 8.1s",
+        "2026-10-19T11:00:00.8397269Z //bindings/python:hawdb_python_tests                                     PASSED in 53.6s",
+        "2026-10-19T11:00:00.8403716Z //bindings/python:requirements.test                                      PASSED in 2.7s"
+      ]
+    },
+    {
+      "job": 118020882406,
+      "name": "Bazel native bindings (macos-latest)",
+      "conclusion": "success",
+      "log_sha256": "c46d9022616117d9bd0f0c21f184e703dcdd462f853b419cc020c022316c96bf",
+      "tested_checkout": "c1de19172d447e4c0ffc71f2289d6f1e85a5fda5",
+      "passed_target_lines": [
+        "2026-10-19T11:01:59.1468910Z //bindings/go:hawdb_go_tests                                             PASSED in 1.9s",
+        "2026-10-19T11:02:02.7574520Z //bindings/ffi:hawdb_ffi_tests                                           PASSED in 0.2s"
+      ]
+    },
+    {
+      "job": 118020882186,
+      "name": "Build and test",
+      "conclusion": "success",
+      "log_sha256": "5695478b5a8e18d73a25a31e5053ed70cdfd65e64a91229c570ddb75165bb20f",
+      "tested_checkout": "c1de19172d447e4c0ffc71f2289d6f1e85a5fda5",
+      "passed_target_lines": [
+        "2026-10-19T11:00:38.5340264Z ======================= 357 passed, 7 skipped in 12.21s ========================",
+        "2026-10-19T11:00:41.9555267Z ======================== 43 passed, 1 skipped in 1.59s =========================",
+        "2026-10-19T11:00:44.5874283Z ============================== 8 passed in 0.39s ==============================="
+      ]
+    }
+  ],
+  "observed_at": 1792407795.196061,
+  "scope": "Three additional platform jobs only, all actual synthetic source verified; Windows and Prow are separate."
+}

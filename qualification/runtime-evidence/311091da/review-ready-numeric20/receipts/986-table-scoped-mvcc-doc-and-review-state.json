@@ -1,0 +1,30 @@
+{
+  "status": "published_ready_for_review",
+  "head": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "tree": "3b3b47e04c3b7258e89b93ec450c8a5cd7e89496",
+  "parent": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+  "changed_files": [
+    "docs/MVCC_COMMIT_VALIDATION_PROTOCOL.md"
+  ],
+  "runtime_source_unchanged": true,
+  "no_new_runtime_test_claim": true,
+  "checks_passed": [
+    "cargo fmt --all -- --check",
+    "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+    "prek run --all-files",
+    "pre-commit formatting and strict Clippy hooks",
+    "git diff --check"
+  ],
+  "draft": false,
+  "wip_label": false,
+  "genuine_approval": false,
+  "merge_claim": false,
+  "owner_performance_acceptance": "Full ordinary90/resource110 and gap control are background supplemental verification.",
+  "remaining_gates": [
+    "Independent disposition of earlier failures and review of adverse evidence",
+    "Required current-head CI/Prow",
+    "Genuine maintainer approval and normal Tide",
+    "Squash-only integration and final actual-main30blob exclusion audit"
+  ],
+  "updated": 1792407345.833612
+}

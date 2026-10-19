@@ -1,0 +1,278 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "observed_at": 1792407725.2105339,
+  "run": 39221994638,
+  "expected_groups": 20,
+  "observed_groups": 20,
+  "positive_groups": 12,
+  "negative_groups": 8,
+  "positive_measured_mode_samples": 1116,
+  "negative_measured_mode_attempts": 744,
+  "missing_groups": [],
+  "duplicates": [],
+  "source_positive_sha256": "252413cd285993ffaf3a78b5b2f9cdb5028d48c0739c3d2bf43737fdc2dad57c",
+  "source_negative_sha256": "902fdc590a1e04eb881382e29e1106c343f94d5445f17c830051dee0c22da9f1",
+  "groups": [
+    {
+      "group": [
+        "numeric",
+        1000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12171933496,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12172338365,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12172978063,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        1000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12173029282,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12174411190,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12175320108,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12175675420,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        100000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12176205827,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12177016810,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12178009353,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12177799799,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12179289023,
+      "classification": "successful_full_parity"
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12176011787,
+      "classification": "independent_memory_refusal"
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "memory",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12175383304,
+      "classification": "independent_memory_refusal"
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "default",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12175984797,
+      "classification": "independent_memory_refusal"
+    },
+    {
+      "group": [
+        "numeric",
+        1000000,
+        "file",
+        "default",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12177890182,
+      "classification": "independent_memory_refusal"
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "memory",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12179561635,
+      "classification": "explicit_row_refusal"
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "memory",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12180560806,
+      "classification": "explicit_row_refusal"
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "file",
+        "large",
+        "false",
+        "select",
+        "python"
+      ],
+      "artifact": 12181465247,
+      "classification": "explicit_row_refusal"
+    },
+    {
+      "group": [
+        "numeric",
+        1000001,
+        "file",
+        "large",
+        "true",
+        "select",
+        "python"
+      ],
+      "artifact": 12180853644,
+      "classification": "explicit_row_refusal"
+    }
+  ],
+  "scope": "Complete original20numeric slice of110resource campaign, engine311 native source, not relabeled0b13/current-main885f. Original31 measured samples per mode plus discarded warmups. Four default1M groups prove independent memory refusal with unlimited row policy; four explicit1M+1 groups prove row rejection. Global native live windows remain preserved in underlying audits. Counter arithmetic/owner/pool checks do not establish global RSS bound or leak absence. Generic retained/Arrow conversion zeros are unavailable attribution. No full110 completion, review, approval or causal performance claim."
+}

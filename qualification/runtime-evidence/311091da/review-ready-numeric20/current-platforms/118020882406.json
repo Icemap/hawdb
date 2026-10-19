@@ -1,0 +1,124 @@
+{
+  "id": 118020882406,
+  "run_id": 39240811830,
+  "workflow_name": "Native Bindings",
+  "head_branch": "feat/978-boundary-baseline",
+  "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39240811830",
+  "run_attempt": 1,
+  "node_id": "CR_kwDOTX6JAc8AAAAbepe_5g",
+  "head_sha": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/118020882406",
+  "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39240811830/job/118020882406",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-10-19T10:54:36Z",
+  "started_at": "2026-10-19T10:54:44Z",
+  "completed_at": "2026-10-19T11:02:34Z",
+  "name": "Bazel native bindings (macos-latest)",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-10-19T10:54:45Z",
+      "completed_at": "2026-10-19T10:54:47Z"
+    },
+    {
+      "name": "Checkout",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-10-19T10:54:47Z",
+      "completed_at": "2026-10-19T10:54:52Z"
+    },
+    {
+      "name": "Install Bazel",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-10-19T10:54:52Z",
+      "completed_at": "2026-10-19T10:55:39Z"
+    },
+    {
+      "name": "Build the C ABI libraries and Go package",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-10-19T10:55:39Z",
+      "completed_at": "2026-10-19T11:01:27Z"
+    },
+    {
+      "name": "Test Go against the Bazel-built C ABI",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-10-19T11:01:27Z",
+      "completed_at": "2026-10-19T11:01:59Z"
+    },
+    {
+      "name": "Test the retained C ABI contract",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-10-19T11:01:59Z",
+      "completed_at": "2026-10-19T11:02:02Z"
+    },
+    {
+      "name": "Install Go for the race detector",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-10-19T11:02:02Z",
+      "completed_at": "2026-10-19T11:02:24Z"
+    },
+    {
+      "name": "Check retained read and close concurrency with the race detector",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-10-19T11:02:24Z",
+      "completed_at": "2026-10-19T11:02:28Z"
+    },
+    {
+      "name": "Post Install Go for the race detector",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 14,
+      "started_at": "2026-10-19T11:02:28Z",
+      "completed_at": "2026-10-19T11:02:28Z"
+    },
+    {
+      "name": "Post Install Bazel",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-10-19T11:02:28Z",
+      "completed_at": "2026-10-19T11:02:28Z"
+    },
+    {
+      "name": "Post Checkout",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-10-19T11:02:28Z",
+      "completed_at": "2026-10-19T11:02:29Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-10-19T11:02:29Z",
+      "completed_at": "2026-10-19T11:02:31Z"
+    }
+  ],
+  "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/118020882406",
+  "labels": [
+    "macos-latest"
+  ],
+  "runner_id": 1000085575,
+  "runner_name": "GitHub Actions 1000085575",
+  "runner_group_id": 0,
+  "runner_group_name": "GitHub Actions"
+}

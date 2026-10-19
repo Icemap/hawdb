@@ -1,0 +1,10 @@
+{
+  "job": 118020882311,
+  "conclusion": "success",
+  "head": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "tested_checkout": "c1de19172d447e4c0ffc71f2289d6f1e85a5fda5",
+  "tested_tree": "387183f0819d1ffb8f45312a3f64b5bb6cee1b90",
+  "log_sha256": "9f72d11c23a11bfc4942fd0923477c368e4833c01b771f92bc9916a1d26f0a35",
+  "observed_at": 1792407613.397486,
+  "scope": "Linux native-binding job only; exact tested synthetic source matches archived commit-parent receipt. Other lanes/Prow/approval not inferred."
+}

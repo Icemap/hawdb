@@ -1,0 +1,112 @@
+{
+  "head": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "observed_at": 1792407762.624398,
+  "github_check_run": {
+    "id": 118021628834,
+    "name": "ci/skein-storage-crash-recovery",
+    "node_id": "CR_kwDOTX6JAc8AAAAbeqMjog",
+    "head_sha": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+    "external_id": "sti-prow-569e86c983a0faa971e3406fae845a93eae3fa8bed0101eefa6375d716608efb",
+    "url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/118021628834",
+    "html_url": "https://github.com/nowledge-co/hawdb/runs/118021628834",
+    "details_url": "https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-storage-crash-recovery/2112135526239703040",
+    "status": "completed",
+    "conclusion": "success",
+    "started_at": "2026-10-19T10:55:25Z",
+    "completed_at": "2026-10-19T10:59:17Z",
+    "output": {
+      "title": "ci/skein-storage-crash-recovery",
+      "summary": "Job succeeded.\n\n[Open Spyglass logs](https://prow.nowledge.co/view/gs/ci-cd-503413-prow-public/artifacts/native/pr-logs/pull/nowledge-co_hawdb/986/pull-skein-storage-crash-recovery/2112135526239703040)",
+      "text": "### Build log\n\n```text\nExtracting Bazel installation...\nStarting local Bazel server (9.3.0) and connecting to it...\nINFO: Invocation ID: a3c4a0d0-03f5-4e2b-b164-b44ba7968212\nINFO: Reading 'startup' options from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc: --host_jvm_args=-Xmx2g, --unlimit_coredumps\nINFO: Options provided by the client:\n  Inherited 'common' options: --isatty=0 --terminal_columns=80\nINFO: Reading rc options for 'test' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  Inherited 'build' options: --announce_rc --java_runtime_version=remotejdk_21 --tool_java_runtime_version=remotejdk_21 --enable_platform_specific_config\nINFO: Reading rc options for 'test' from /home/prow/go/src/github.com/nowledge-co/hawdb/.bazelrc:\n  'test' options: --local_test_jobs=HOST_CPUS*0.5\nComputing main repo mapping: \nComputing main repo mapping: \nLoading: \nLoading: 0 packages loaded\nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nLoading: 0 packages loaded\n    currently loading: \nAnalyzing: target //:hawdb_storage_crash_recovery_tests (1 packages loaded)\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (5 packages loaded, 6 targets configured)\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (5 packages loaded, 6 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (18 packages loaded, 20 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (169 packages loaded, 4132 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nAnalyzing: target //:hawdb_storage_crash_recovery_tests (317 packages loaded, 10065 targets configured)\n\nINFO: Analyzed target //:hawdb_storage_crash_recovery_tests (323 packages loaded, 10717 targets configured).\n[217 / 650] [Prepa] Creating symlink external/rules_rust++rust+rust_linux_x86_64__x86_64-unknown-linux-gnu__stable_tools/rust_toolchain/lib/rustlib/x86_64-unknown-linux-gnu/lib/libobject-f810d9e1ec7b3602.rmeta ... (4 actions, 0 running)\n[302 / 747] [Prepa] Creating symlink external/rules_rust++rust+rust_linux_x86_64__x86_64-unknown-linux-gnu__stable_tools/rust_toolchain/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.22.1-rust-1.97.1-stable ... (4 actions, 0 running)\n[372 / 747] Compiling Rust proc-macro zerofrom_derive v0.1.5 (3 files) [for tool]; 0s remote-cache ... (3 actions, 0 running)\n[511 / 747] Compiling Rust bin _bs_ (22 files) [for tool]; 0s remote-cache ... (23 actions, 0 running)\n[729 / 747] Compiling Rust proc-macro include_flate_codegen v0.3.4 (1 file) [for tool]; 0s remote-cache ... (2 actions, 0 running)\n[732 / 747] Compiling Rust rlib hawdb_storage (499 files); 1s remote-cache, processwrapper-sandbox\n[732 / 747] Compiling Rust rlib hawdb_storage (499 files); 10s remote-cache, processwrapper-sandbox\n[732 / 747] Compiling Rust rlib hawdb_storage (499 files); 40s remote-cache, processwrapper-sandbox\n[741 / 747] [Sched] Compiling Rust rlib hawdb_search_acl (216 files); Downloading crates/evidence/libhawdb_evidence-3744749857.rlib, 1003.3 KiB / 4.4 MiB\n[741 / 747] Compiling Rust rlib hawdb_search_acl (216 files); 0s remote-cache, processwrapper-sandbox\n[741 / 747] Compiling Rust rlib hawdb_search_acl (216 files); 1s remote-cache, processwrapper-sandbox\n[741 / 747] Compiling Rust rlib hawdb_search_acl (216 files); 10s remote-cache, processwrapper-sandbox\n[742 / 747] [Prepa] Compiling Rust rlib hawdb_bootstrap_acl (7 files) ... (2 actions, 0 running)\n[742 / 747] Compiling Rust rlib hawdb_bootstrap_acl (7 files); 1s remote-cache, processwrapper-sandbox ... (2 actions running)\n[744 / 747] Compiling Rust rlib hawdb_readiness_acl (35 files); 0s remote-cache, processwrapper-sandbox\n[745 / 747] [Prepa] Compiling Rust bin hawdb_storage_crash_recovery_tests (278 files)\n[745 / 747] Compiling Rust bin hawdb_storage_crash_recovery_tests (278 files); 1s remote-cache, processwrapper-sandbox\n[745 / 747] Compiling Rust bin hawdb_storage_crash_recovery_tests (278 files); 10s remote-cache, processwrapper-sandbox\n[745 / 747] Compiling Rust bin hawdb_storage_crash_recovery_tests (278 files); 40s remote-cache, processwrapper-sandbox\n[746 / 747] [Prepa] runfiles for //:hawdb_storage_crash_recovery_tests\n[747 / 748] Testing //:hawdb_storage_crash_recovery_tests; 1s remote-cache, processwrapper-sandbox\n[747 / 748] Testing //:hawdb_storage_crash_recovery_tests; 3s remote-cache, processwrapper-sandbox\n[747 / 748] Testing //:hawdb_storage_crash_recovery_tests; 11s remote-cache, processwrapper-sandbox\n[747 / 748] Testing //:hawdb_storage_crash_recovery_tests; 16s remote-cache, processwrapper-sandbox\nINFO: From Testing //:hawdb_storage_crash_recovery_tests:\n==================== Test output for //:hawdb_storage_crash_recovery_tests:\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\n\nrunning 1 test\nstorage_crash_recovery_evidence_json {\"blocker_codes\":[],\"case_count\":10,\"cases\":[{\"artifact_generation_valid\":true,\"commit_epoch\":2,\"point\":\"before_wal_append\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":false,\"recovered_commit_epoch\":2,\"relationship_endpoints_valid\":true,\"repetition\":0,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_wal_append\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":0,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_wal_sync\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":0,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"during_checkpoint_publication\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":0,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_manifest_publication\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":0,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":2,\"point\":\"before_wal_append\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":false,\"recovered_commit_epoch\":2,\"relationship_endpoints_valid\":true,\"repetition\":1,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_wal_append\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":1,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_wal_sync\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":1,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"during_checkpoint_publication\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":1,\"replay_lsn_present\":true,\"whole_batch_recovered\":true},{\"artifact_generation_valid\":true,\"commit_epoch\":3,\"point\":\"after_manifest_publication\",\"process_terminated\":true,\"projection_watermark_valid\":true,\"ready\":true,\"recovered_batch_present\":true,\"recovered_commit_epoch\":3,\"relationship_endpoints_valid\":true,\"repetition\":1,\"replay_lsn_present\":true,\"whole_batch_recovered\":true}],\"evidence_binding\":{\"generated_at_unix_seconds\":1792407553,\"identity\":{\"canonical_graph_commit_epoch\":1,\"configuration_digest\":\"storage-crash-out-of-core-1m-cache-v1\",\"dataset_fingerprint\":\"storage-crash-matrix-v1\",\"deployment_profile\":\"storage-crash-recovery-ci\",\"durable_format_version\":2,\"enabled_features\":[\"acl\",\"background-maintenance\",\"full-text-search\",\"graph-analytics\",\"vector-search\"],\"policy_version\":1,\"rust_toolchain\":\"1.97.1\",\"schema_version\":1,\"source_revision\":\"77ba941dff89ba70561bb47d559d09753f57dcdd\",\"target_arch\":\"x86_64\",\"target_os\":\"linux\"}},\"expected_identity\":{\"canonical_graph_commit_epoch\":1,\"configuration_digest\":\"storage-crash-out-of-core-1m-cache-v1\",\"dataset_fingerprint\":\"storage-crash-matrix-v1\",\"deployment_profile\":\"storage-crash-recovery-ci\",\"durable_format_version\":2,\"enabled_features\":[\"acl\",\"background-maintenance\",\"full-text-search\",\"graph-analytics\",\"vector-search\"],\"policy_version\":1,\"rust_toolchain\":\"1.97.1\",\"schema_version\":1,\"source_revision\":\"77ba941dff89ba70561bb47d559d09753f57dcdd\",\"target_arch\":\"x86_64\",\"target_os\":\"linux\"},\"protocol\":\"hawdb-storage-crash-recovery-evidence-v1\",\"protocol_version\":1,\"ready\":true,\"required_repetitions\":2}\ntest api::tests::storage_recovery::subprocess_crash_matrix_recovers_whole_batches_and_artifact_generations ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2107 filtered out; finished in 15.91s\n\n================================================================================\nINFO: Found 1 test target...\nTarget //:hawdb_storage_crash_recovery_tests up-to-date:\n  /tmp/bazel-links/bin/hawdb_storage_crash_recovery_tests\nINFO: Elapsed time: 211.642s, Critical Path: 124.20s\nINFO: 748 processes: 400 remote cache hit, 341 internal, 8 processwrapper-sandbox.\nINFO: Build completed successfully, 748 total actions\nINFO: \n//:hawdb_storage_crash_recovery_tests                                    PASSED in 16.0s\n\nExecuted 1 out of 1 test: 1 test passes.\nThere were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.\nINFO: Build Event Protocol files produced successfully.\n```",
+      "annotations_count": 0,
+      "annotations_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/118021628834/annotations"
+    },
+    "check_suite": {
+      "id": 106330772569
+    },
+    "app": {
+      "id": 4525174,
+      "client_id": "Iv23li0c9vkEZUvc5zxO",
+      "slug": "nowledge-ci",
+      "node_id": "A_kwDOADRL_M4ARQx2",
+      "owner": {
+        "login": "hawkingrei",
+        "id": 3427324,
+        "node_id": "MDQ6VXNlcjM0MjczMjQ=",
+        "avatar_url": "https://avatars.githubusercontent.com/u/3427324?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/hawkingrei",
+        "html_url": "https://github.com/hawkingrei",
+        "followers_url": "https://api.github.com/users/hawkingrei/followers",
+        "following_url": "https://api.github.com/users/hawkingrei/following{/other_user}",
+        "gists_url": "https://api.github.com/users/hawkingrei/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/hawkingrei/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/hawkingrei/subscriptions",
+        "organizations_url": "https://api.github.com/users/hawkingrei/orgs",
+        "repos_url": "https://api.github.com/users/hawkingrei/repos",
+        "events_url": "https://api.github.com/users/hawkingrei/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/hawkingrei/received_events",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "name": "Nowledge CI",
+      "description": "",
+      "external_url": "https://www.nowledge.co/",
+      "html_url": "https://github.com/apps/nowledge-ci",
+      "created_at": "2026-08-08T08:18:57Z",
+      "updated_at": "2026-09-06T03:41:51Z",
+      "permissions": {
+        "actions": "write",
+        "checks": "write",
+        "contents": "write",
+        "issues": "write",
+        "members": "read",
+        "metadata": "read",
+        "pull_requests": "write",
+        "statuses": "write",
+        "workflows": "write"
+      },
+      "events": [
+        "issues",
+        "issue_comment",
+        "label",
+        "pull_request",
+        "pull_request_review",
+        "push",
+        "status"
+      ]
+    },
+    "pull_requests": [
+      {
+        "url": "https://api.github.com/repos/nowledge-co/hawdb/pulls/986",
+        "id": 4805158980,
+        "number": 986,
+        "head": {
+          "ref": "feat/978-boundary-baseline",
+          "sha": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+          "repo": {
+            "id": 1300138241,
+            "url": "https://api.github.com/repos/nowledge-co/hawdb",
+            "name": "hawdb"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "sha": "46bfde00131a6d711d51aad6e5e237279a287061",
+          "repo": {
+            "id": 1300138241,
+            "url": "https://api.github.com/repos/nowledge-co/hawdb",
+            "name": "hawdb"
+          }
+        }
+      }
+    ]
+  },
+  "artifact_observation": {
+    "status": "unavailable",
+    "http_status": 403,
+    "scope": "Anonymous GCS started/finished/build-log retrieval denied. No raw test-count, actual cloned-source, full-log or physical power-loss evidence claimed."
+  },
+  "scope": "Trusted nowledge-ci Check Run success on current PR head; review and other required checks remain separate."
+}

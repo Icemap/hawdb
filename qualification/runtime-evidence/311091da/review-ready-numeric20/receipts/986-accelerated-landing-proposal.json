@@ -1,0 +1,30 @@
+{
+  "status": "owner_accepted",
+  "created_at": "2026-10-19T10:48:13.550191+00:00",
+  "head": "c87fc09796a56daa4a55cc59b06633ca06a116a8",
+  "verified_scope": "Core retained numeric/Arrow, session policy and unique Node APIs already landed; PR986 carries composition tools, regressions, docs and evidence.",
+  "engineering_method": {
+    "model": "T = engine + boundary_calls + value_conversion + byte_copy + consumer",
+    "use": "Rank dominant terms and implementation priorities; report modeled bounds separately from measurements.",
+    "limitations": [
+      "Arrow admission/schema/batch metadata and unsupported types still cost work; do not assume all values are zero-copy.",
+      "Existing full matrices retain all original samples/scopes and negative observations.",
+      "Do not infer correctness, tails or maximum RSS from a linear average-time model."
+    ]
+  },
+  "proposed_merge_gates": [
+    "Exact-source formatting, strict lint, binding/platform CI and complete runtime regression suites",
+    "Session zero semantics, independent limits, large-result success and refusal, ABI/ownership/Arrow cleanup correctness",
+    "Independent disposition of prior checkpoint/timeouts and review of observed adverse data",
+    "Required Prow checks, genuine maintainer approval and normal Tide integration",
+    "Squash publication with final actual-main exclusion of the30 removed report blobs"
+  ],
+  "proposed_background_evidence": [
+    "Complete original ordinary90/resource110 campaigns without cancellation/retry/reduced scope",
+    "Same-runner100k host/Rust gap control and remaining performance/resource interpretation"
+  ],
+  "authorization_boundary": "Owner explicitly moved full ordinary90/resource110 and same-runner gap controls to background supplemental verification. Correctness, independent failure disposition, required CI and genuine approval remain merge gates. No permission to post GitHub comments is inferred.",
+  "owner_response": "后台补充验证",
+  "accepted_at": 1792407239.74507,
+  "table_scoped_mvcc": "Document future direction only; no implementation and no prerequisite for986."
+}

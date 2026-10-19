@@ -1,0 +1,92 @@
+{
+  "id": 118020882385,
+  "run_id": 39240811724,
+  "workflow_name": "Python Bindings",
+  "head_branch": "feat/978-boundary-baseline",
+  "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39240811724",
+  "run_attempt": 1,
+  "node_id": "CR_kwDOTX6JAc8AAAAbepe_0Q",
+  "head_sha": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/118020882385",
+  "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39240811724/job/118020882385",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-10-19T10:54:36Z",
+  "started_at": "2026-10-19T10:54:38Z",
+  "completed_at": "2026-10-19T11:00:03Z",
+  "name": "Bazel build and test (ubuntu-24.04)",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-10-19T10:54:40Z",
+      "completed_at": "2026-10-19T10:54:41Z"
+    },
+    {
+      "name": "Checkout",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-10-19T10:54:41Z",
+      "completed_at": "2026-10-19T10:54:44Z"
+    },
+    {
+      "name": "Install Bazel",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-10-19T10:54:44Z",
+      "completed_at": "2026-10-19T10:55:18Z"
+    },
+    {
+      "name": "Build the Python package and native extension",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-10-19T10:55:18Z",
+      "completed_at": "2026-10-19T10:59:03Z"
+    },
+    {
+      "name": "Test the Bazel extension and dependency lock",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-10-19T10:59:03Z",
+      "completed_at": "2026-10-19T11:00:00Z"
+    },
+    {
+      "name": "Post Install Bazel",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 9,
+      "started_at": "2026-10-19T11:00:00Z",
+      "completed_at": "2026-10-19T11:00:01Z"
+    },
+    {
+      "name": "Post Checkout",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 10,
+      "started_at": "2026-10-19T11:00:01Z",
+      "completed_at": "2026-10-19T11:00:01Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 11,
+      "started_at": "2026-10-19T11:00:01Z",
+      "completed_at": "2026-10-19T11:00:01Z"
+    }
+  ],
+  "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/118020882385",
+  "labels": [
+    "ubuntu-24.04"
+  ],
+  "runner_id": 1000085577,
+  "runner_name": "GitHub Actions 1000085577",
+  "runner_group_id": 0,
+  "runner_group_name": "GitHub Actions"
+}

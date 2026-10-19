@@ -1,0 +1,139 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "artifact": 12181005068,
+  "bundle_sha256": "607f6fef62c82a26aaa0f2a908827dae999a05f04421cc2e39c2d02b42cfa176",
+  "observed_at": 1792406675.306138,
+  "verified_producers_and_manifests": 12,
+  "selection": [
+    "fill_bulk",
+    "rust",
+    "memory",
+    100000
+  ],
+  "observations": {
+    "baseline": {
+      "source": {
+        "head": "3cdb2610ba8b984676b80ba22df64821787886d3",
+        "tree": "763e87c8f105b96b354ccaa75db687db8d5d1478"
+      },
+      "records": [
+        {
+          "iteration": 0,
+          "discarded": true,
+          "status": "error",
+          "error": "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+          "parity": null,
+          "output_rows": null,
+          "values": null,
+          "checksum": null,
+          "elapsed_ns": null,
+          "query_boundary_ns": null,
+          "process_peak_rss_bytes": 610971648
+        },
+        {
+          "iteration": 1,
+          "discarded": false,
+          "status": "error",
+          "error": "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+          "parity": null,
+          "output_rows": null,
+          "values": null,
+          "checksum": null,
+          "elapsed_ns": null,
+          "query_boundary_ns": null,
+          "process_peak_rss_bytes": 610725888
+        },
+        {
+          "iteration": 2,
+          "discarded": false,
+          "status": "error",
+          "error": "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+          "parity": null,
+          "output_rows": null,
+          "values": null,
+          "checksum": null,
+          "elapsed_ns": null,
+          "query_boundary_ns": null,
+          "process_peak_rss_bytes": 610947072
+        },
+        {
+          "iteration": 3,
+          "discarded": false,
+          "status": "error",
+          "error": "execute: execution error: query memory account query result (result_materialization) would use 16777860 bytes, exceeding its 16777216-byte budget",
+          "parity": null,
+          "output_rows": null,
+          "values": null,
+          "checksum": null,
+          "elapsed_ns": null,
+          "query_boundary_ns": null,
+          "process_peak_rss_bytes": 610979840
+        }
+      ]
+    },
+    "candidate": {
+      "source": {
+        "head": "671094db1557d3176465945cee9b5c31f01a1df2",
+        "tree": "d19549229d231d649b71fc0cc0a144f9a22977c9"
+      },
+      "records": [
+        {
+          "iteration": 0,
+          "discarded": true,
+          "status": "ok",
+          "error": null,
+          "parity": true,
+          "output_rows": 100000,
+          "values": 300000,
+          "checksum": "5f3c5c12795e362d",
+          "elapsed_ns": 2841202076,
+          "query_boundary_ns": 2756540439,
+          "process_peak_rss_bytes": 613359616
+        },
+        {
+          "iteration": 1,
+          "discarded": false,
+          "status": "ok",
+          "error": null,
+          "parity": true,
+          "output_rows": 100000,
+          "values": 300000,
+          "checksum": "5f3c5c12795e362d",
+          "elapsed_ns": 2954276275,
+          "query_boundary_ns": 2870088376,
+          "process_peak_rss_bytes": 613285888
+        },
+        {
+          "iteration": 2,
+          "discarded": false,
+          "status": "ok",
+          "error": null,
+          "parity": true,
+          "output_rows": 100000,
+          "values": 300000,
+          "checksum": "5f3c5c12795e362d",
+          "elapsed_ns": 2802581699,
+          "query_boundary_ns": 2720391908,
+          "process_peak_rss_bytes": 613466112
+        },
+        {
+          "iteration": 3,
+          "discarded": false,
+          "status": "ok",
+          "error": null,
+          "parity": true,
+          "output_rows": 100000,
+          "values": 300000,
+          "checksum": "5f3c5c12795e362d",
+          "elapsed_ns": 2802715385,
+          "query_boundary_ns": 2719559578,
+          "process_peak_rss_bytes": 613203968
+        }
+      ]
+    }
+  },
+  "classification": "baseline_query_result_memory_refusal_candidate_full_parity",
+  "comparable": false,
+  "speedup": null,
+  "scope": "Original ordinary90 observation, three measured and one discarded attempt per revision. Baseline failure is independent query-result memory admission (16MiB), not a row-policy refusal or successful partial result. Preserve fixed baseline/defaults and candidate full100k parity. Source311 candidate is not relabeled c87. No fabricated elapsed/query ratio, significance, cause, full-matrix acceptance, retry or reduction of scope."
+}

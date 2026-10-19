@@ -1,0 +1,63 @@
+{
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "engine_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "qualification_source": "671094db1557d3176465945cee9b5c31f01a1df2",
+  "source_audit_sha256": "b09ca4bf0e10584a9d68589263d99be27bcf14446d840b9ad8a7dee5fb6a38df",
+  "observed_at": 1792406278.676001,
+  "expected_groups": 30,
+  "observed_groups": 30,
+  "missing": [],
+  "duplicates": [],
+  "all_expected_groups_observed": true,
+  "adverse_write_stage_groups": [
+    {
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "file",
+        1000
+      ],
+      "artifact": 12172339510,
+      "metrics": {
+        "write_boundary_ns_median_speedup": 0.9728403043808037
+      }
+    },
+    {
+      "selection": [
+        "fill_bulk",
+        "python",
+        "file",
+        1000
+      ],
+      "artifact": 12173061437,
+      "metrics": {
+        "write_boundary_ns_median_speedup": 0.9968196756944975
+      }
+    },
+    {
+      "selection": [
+        "fill_bulk",
+        "rust",
+        "memory",
+        1000
+      ],
+      "artifact": 12173295666,
+      "metrics": {
+        "write_boundary_ns_median_speedup": 0.9824994826839495
+      }
+    },
+    {
+      "selection": [
+        "fill_bulk",
+        "python",
+        "memory",
+        1000
+      ],
+      "artifact": 12173465360,
+      "metrics": {
+        "write_boundary_ns_median_speedup": 0.9977363825776749
+      }
+    }
+  ],
+  "scope": "Complete original1k ordinary slice only. Each qualified report has three measured samples per revision plus discarded warmup. Complete100k/1M slices, original90/resource110, additional same-runner gaps and independent acceptance remain open. Ratios are baseline/candidate medians, not significance or causal evidence. Measured engine311 is not relabeled as currentc87; formatting equivalence remains separately scoped."
+}
