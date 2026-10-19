@@ -1,0 +1,74 @@
+{
+  "head": "7edc242728bc7febd55f964027f947fbbc8866b9",
+  "observed_at": 1792420860.3709881,
+  "passed_jobs": 5,
+  "jobs": [
+    {
+      "job": 118116445865,
+      "name": "Bazel native bindings (ubuntu-24.04)",
+      "checkout": "73711c6fbe97d1d895e6c911c9663bef546604f2",
+      "log_sha256": "36628bcdfc8693e2b35c7aa48dbe5f2ddc42ebac84c20e555ffc96742b520991",
+      "passed_lines": [
+        "2026-10-19T14:33:12.2641994Z //bindings/go:hawdb_go_tests                                             PASSED in 2.4s",
+        "2026-10-19T14:33:34.6467905Z //:hawdb_search_projection_consumer_minimal_tests                        PASSED in 1.1s",
+        "2026-10-19T14:33:34.6479936Z //:hawdb_search_projection_consumer_tests                                PASSED in 1.4s",
+        "2026-10-19T14:33:39.3373645Z //bindings/ffi:hawdb_ffi_tests                                           PASSED in 0.2s"
+      ]
+    },
+    {
+      "job": 118116445577,
+      "name": "Bazel native bindings (macos-latest)",
+      "checkout": "73711c6fbe97d1d895e6c911c9663bef546604f2",
+      "log_sha256": "5b24cfe5c0d439a5867e5dd1b4bec6af0c482a643df6f1a4afb30005933d5572",
+      "passed_lines": [
+        "2026-10-19T14:34:39.5640490Z //bindings/go:hawdb_go_tests                                             PASSED in 2.4s",
+        "2026-10-19T14:35:03.6151990Z //:hawdb_search_projection_consumer_minimal_tests                        PASSED in 1.1s",
+        "2026-10-19T14:35:03.6152950Z //:hawdb_search_projection_consumer_tests                                PASSED in 1.8s",
+        "2026-10-19T14:35:06.3680620Z //bindings/ffi:hawdb_ffi_tests                                           PASSED in 0.2s"
+      ]
+    },
+    {
+      "job": 118116440733,
+      "name": "Bazel build and test (macos-latest)",
+      "checkout": "73711c6fbe97d1d895e6c911c9663bef546604f2",
+      "log_sha256": "c442c5d18078a2958afb84fff79da1a7ad3d3de9d11473b14c6497f44402a2b1",
+      "passed_lines": [
+        "2026-10-19T14:36:00.5499920Z //bindings/python:hawdb_python_pydantic_tests                            PASSED in 16.1s",
+        "2026-10-19T14:36:00.5501170Z //bindings/python:hawdb_python_tests                                     PASSED in 72.4s",
+        "2026-10-19T14:36:00.5507820Z //bindings/python:requirements.test                                      PASSED in 4.4s"
+      ]
+    },
+    {
+      "job": 118116440694,
+      "name": "Bazel build and test (ubuntu-24.04)",
+      "checkout": "73711c6fbe97d1d895e6c911c9663bef546604f2",
+      "log_sha256": "fb9f5a983e9146e3befdacf3ffd02e973045e65bd229c45372946ef219ad46d8",
+      "passed_lines": [
+        "2026-10-19T14:32:39.4464532Z //bindings/python:hawdb_python_pydantic_tests                            PASSED in 8.1s",
+        "2026-10-19T14:32:39.4467449Z //bindings/python:hawdb_python_tests                                     PASSED in 55.0s",
+        "2026-10-19T14:32:39.4468334Z //bindings/python:requirements.test                                      PASSED in 2.5s"
+      ]
+    },
+    {
+      "job": 118116440223,
+      "name": "Build and test",
+      "checkout": "73711c6fbe97d1d895e6c911c9663bef546604f2",
+      "log_sha256": "65ffce6018801649ea85e668a2a5f54ee573bcb1b6ad033414e568f6f4fac5b1",
+      "passed_lines": [
+        "2026-10-19T14:34:41.5592019Z ======================== 357 passed, 7 skipped in 9.59s ========================",
+        "2026-10-19T14:34:45.4499185Z ======================== 43 passed, 1 skipped in 1.40s =========================",
+        "2026-10-19T14:34:48.4387750Z ============================== 8 passed in 0.34s ==============================="
+      ]
+    }
+  ],
+  "tested_checkouts": {
+    "73711c6fbe97d1d895e6c911c9663bef546604f2": {
+      "tree": "9210f4f839fee910aa98580ed2fb00ffdd3044e6",
+      "parents": [
+        "4a2a4c4d4a5d6c22d63589cafdbc4862efb93f10",
+        "7edc242728bc7febd55f964027f947fbbc8866b9"
+      ]
+    }
+  },
+  "scope": "Five current7edc platform logs source-qualified by actual checkout commit/tree/parents, not old0b13 logs relabeled. Windows and formal Prow are separate; no genuine approval or merge claim."
+}

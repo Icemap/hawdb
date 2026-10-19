@@ -1,0 +1,132 @@
+{
+  "id": 118116445865,
+  "run_id": 39269116642,
+  "workflow_name": "Native Bindings",
+  "head_branch": "feat/978-boundary-baseline",
+  "run_url": "https://api.github.com/repos/nowledge-co/hawdb/actions/runs/39269116642",
+  "run_attempt": 1,
+  "node_id": "CR_kwDOTX6JAc8AAAAbgEnuqQ",
+  "head_sha": "7edc242728bc7febd55f964027f947fbbc8866b9",
+  "url": "https://api.github.com/repos/nowledge-co/hawdb/actions/jobs/118116445865",
+  "html_url": "https://github.com/nowledge-co/hawdb/actions/runs/39269116642/job/118116445865",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-10-19T14:27:32Z",
+  "started_at": "2026-10-19T14:27:34Z",
+  "completed_at": "2026-10-19T14:33:53Z",
+  "name": "Bazel native bindings (ubuntu-24.04)",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-10-19T14:27:35Z",
+      "completed_at": "2026-10-19T14:27:36Z"
+    },
+    {
+      "name": "Checkout",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-10-19T14:27:36Z",
+      "completed_at": "2026-10-19T14:27:39Z"
+    },
+    {
+      "name": "Install Bazel",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-10-19T14:27:39Z",
+      "completed_at": "2026-10-19T14:28:06Z"
+    },
+    {
+      "name": "Build the C ABI libraries and Go package",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-10-19T14:28:06Z",
+      "completed_at": "2026-10-19T14:32:45Z"
+    },
+    {
+      "name": "Test Go against the Bazel-built C ABI",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-10-19T14:32:45Z",
+      "completed_at": "2026-10-19T14:33:12Z"
+    },
+    {
+      "name": "Test consumer publication and reopen on Unix",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-10-19T14:33:12Z",
+      "completed_at": "2026-10-19T14:33:34Z"
+    },
+    {
+      "name": "Test the retained C ABI contract",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-10-19T14:33:34Z",
+      "completed_at": "2026-10-19T14:33:39Z"
+    },
+    {
+      "name": "Install Go for the race detector",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-10-19T14:33:39Z",
+      "completed_at": "2026-10-19T14:33:48Z"
+    },
+    {
+      "name": "Check retained read and close concurrency with the race detector",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 9,
+      "started_at": "2026-10-19T14:33:48Z",
+      "completed_at": "2026-10-19T14:33:51Z"
+    },
+    {
+      "name": "Post Install Go for the race detector",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-10-19T14:33:51Z",
+      "completed_at": "2026-10-19T14:33:51Z"
+    },
+    {
+      "name": "Post Install Bazel",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-10-19T14:33:51Z",
+      "completed_at": "2026-10-19T14:33:51Z"
+    },
+    {
+      "name": "Post Checkout",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 18,
+      "started_at": "2026-10-19T14:33:51Z",
+      "completed_at": "2026-10-19T14:33:51Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 19,
+      "started_at": "2026-10-19T14:33:51Z",
+      "completed_at": "2026-10-19T14:33:51Z"
+    }
+  ],
+  "check_run_url": "https://api.github.com/repos/nowledge-co/hawdb/check-runs/118116445865",
+  "labels": [
+    "ubuntu-24.04"
+  ],
+  "runner_id": 1000085954,
+  "runner_name": "GitHub Actions 1000085954",
+  "runner_group_id": 0,
+  "runner_group_name": "GitHub Actions"
+}

@@ -1,0 +1,1719 @@
+{
+  "artifact": 12179561635,
+  "reports": {
+    "manifest.json": {
+      "source": {
+        "head": "ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+        "tree": "2de750bb8fa6c627a2e2b3517417090b4c005fe9"
+      },
+      "engine_source": "311091da6b23a292b7385b46362d3a12f6ec0064",
+      "engine_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+      "rows": 1000001,
+      "backend": "memory",
+      "configuration": "large",
+      "instrumented": false,
+      "samples": 31,
+      "producer_hashes": {
+        "/home/runner/work/_temp/resource-qualification/frozen/_hawdb.so": "a26058141b85587ba626d88ce31f15add2efcd715beb745963ffbccf5bab6fcd",
+        "/home/runner/work/_temp/resource-qualification/frozen/python-interpreter.bin": "a5230d8adbd26c2185d77fb003597c4ee9c44c2369fc179122ff7c3a3a58ae59",
+        "/home/runner/work/_temp/resource-qualification/frozen/retained_boundary.py": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+        "/home/runner/work/_temp/resource-qualification/frozen/numeric.py": "2e557b27a9527b0cfcd2af9459b16935a255a5c471326c1a836f7ff9063fa780",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/pydantic.py": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/magic.py": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/_hawdb.pyi": "6c84c802cae732f8446298f18d9901e111d20d9d573add30d10f04c2656cbaf2",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/_display.py": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/__init__.py": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+        "/home/runner/work/_temp/resource-qualification/frozen/hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6"
+      },
+      "interpreter": {
+        "path": "/opt/hostedtoolcache/Python/3.14.8/x64/bin/python3.14",
+        "sha256": "a5230d8adbd26c2185d77fb003597c4ee9c44c2369fc179122ff7c3a3a58ae59",
+        "archived": "frozen/python-interpreter.bin"
+      },
+      "overlay_files": [
+        ".github/workflows/native-bindings.yml",
+        "BUILD.bazel",
+        "Cargo.toml",
+        "bindings/python/BUILD.bazel",
+        "bindings/python/Cargo.toml",
+        "bindings/python/src/database.rs",
+        "bindings/python/src/lib.rs",
+        "qualification/phases/consume.py",
+        "qualification/resources/baseline-source.json",
+        "qualification/resources/campaign.json",
+        "qualification/resources/numeric.py",
+        "qualification/resources/numeric_driver.py",
+        "qualification/resources/run.py",
+        "qualification/retained/configured.py",
+        "qualification/retained/run.py",
+        "src/api/retained_query.rs",
+        "src/embedded.rs",
+        "src/lib.rs",
+        "src/retained_phase_profile.rs"
+      ],
+      "scope": "Per-mode process RSS, native/foreign observations and31-sample observed tails. Plain and instrumented results are separate; no owned reference can pollute retained/Arrow RSS.",
+      "phase_instrumented": false,
+      "driver_sha256": "6f9389c6d699a0203f2348718e7cbddbbddf976ba0816c89a04f1c6b01310142"
+    },
+    "outcomes.json": [
+      {
+        "mode": "owned",
+        "exit": 1
+      },
+      {
+        "mode": "retained",
+        "exit": 1
+      },
+      {
+        "mode": "arrow",
+        "exit": 1
+      }
+    ],
+    "owned.stdout": {
+      "rows": 1000001,
+      "backend": "memory",
+      "mode": "owned",
+      "configuration": "large",
+      "instrumented": false,
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 0,
+          "complete_attempt_ns": 1223608631,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 1,
+          "complete_attempt_ns": 1202225216,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 2,
+          "complete_attempt_ns": 1229232730,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 3,
+          "complete_attempt_ns": 1236836557,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 4,
+          "complete_attempt_ns": 1226865065,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 5,
+          "complete_attempt_ns": 1235840750,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 6,
+          "complete_attempt_ns": 1220401838,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 7,
+          "complete_attempt_ns": 1234584773,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 8,
+          "complete_attempt_ns": 1216346513,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 9,
+          "complete_attempt_ns": 1218541381,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 10,
+          "complete_attempt_ns": 1220169754,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 11,
+          "complete_attempt_ns": 1222413508,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 12,
+          "complete_attempt_ns": 1232787353,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 13,
+          "complete_attempt_ns": 1217652582,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 14,
+          "complete_attempt_ns": 1209672911,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 15,
+          "complete_attempt_ns": 1205100398,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 16,
+          "complete_attempt_ns": 1186239286,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 17,
+          "complete_attempt_ns": 1204581857,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 18,
+          "complete_attempt_ns": 1207296038,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 19,
+          "complete_attempt_ns": 1198504688,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 20,
+          "complete_attempt_ns": 1202525645,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 21,
+          "complete_attempt_ns": 1213273839,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 22,
+          "complete_attempt_ns": 1200593458,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 23,
+          "complete_attempt_ns": 1192475293,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 24,
+          "complete_attempt_ns": 1194164468,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 25,
+          "complete_attempt_ns": 1193811621,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 26,
+          "complete_attempt_ns": 1200679952,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 27,
+          "complete_attempt_ns": 1201790444,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 28,
+          "complete_attempt_ns": 1199766134,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 29,
+          "complete_attempt_ns": 1195772798,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ExecutionError",
+          "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+          "retained_snapshot": null,
+          "sample": 30,
+          "complete_attempt_ns": 1193500430,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        }
+      ],
+      "scope": "One mode per fresh process; RSS includes fixture/setup/own-mode warmup/all samples; independent oracle instead of an owned reference. Instrumented timing is separate from uninstrumented tails. No whole-memory bound.",
+      "actual_limits": [
+        1000000,
+        1073741824,
+        1073741824,
+        1073741824,
+        2147483648,
+        268435456,
+        67108864
+      ],
+      "setup_ns": 16703417973,
+      "fixture_reference": {
+        "rows": 1000001,
+        "checksum": "25f3e16559f54d37"
+      },
+      "warmup": {
+        "status": "error",
+        "error_type": "ExecutionError",
+        "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+        "retained_snapshot": null
+      },
+      "process_peak_rss_bytes": 1045880832,
+      "all_paths_succeeded": false
+    },
+    "retained.stdout": {
+      "rows": 1000001,
+      "backend": "memory",
+      "mode": "retained",
+      "configuration": "large",
+      "instrumented": false,
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 0,
+          "complete_attempt_ns": 895360933,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 1,
+          "complete_attempt_ns": 894915352,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 2,
+          "complete_attempt_ns": 893261796,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 3,
+          "complete_attempt_ns": 899579737,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 4,
+          "complete_attempt_ns": 898925466,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 5,
+          "complete_attempt_ns": 903455963,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 6,
+          "complete_attempt_ns": 895328836,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 7,
+          "complete_attempt_ns": 896478027,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 8,
+          "complete_attempt_ns": 897411309,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 9,
+          "complete_attempt_ns": 943388229,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 10,
+          "complete_attempt_ns": 918658569,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 11,
+          "complete_attempt_ns": 907029022,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 12,
+          "complete_attempt_ns": 901471598,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 13,
+          "complete_attempt_ns": 906201176,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 14,
+          "complete_attempt_ns": 903015310,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 15,
+          "complete_attempt_ns": 898399710,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 16,
+          "complete_attempt_ns": 903505628,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 17,
+          "complete_attempt_ns": 897605183,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 18,
+          "complete_attempt_ns": 903349256,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 19,
+          "complete_attempt_ns": 910646129,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 20,
+          "complete_attempt_ns": 904149310,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 21,
+          "complete_attempt_ns": 906102807,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 22,
+          "complete_attempt_ns": 906518924,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 23,
+          "complete_attempt_ns": 896219155,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 24,
+          "complete_attempt_ns": 897294259,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 25,
+          "complete_attempt_ns": 893276585,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 26,
+          "complete_attempt_ns": 893035445,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 27,
+          "complete_attempt_ns": 920044842,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 28,
+          "complete_attempt_ns": 889172547,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 29,
+          "complete_attempt_ns": 902353779,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "RetainedError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 18207,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 10,
+            "backpressure_events": 0
+          },
+          "sample": 30,
+          "complete_attempt_ns": 892145294,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        }
+      ],
+      "scope": "One mode per fresh process; RSS includes fixture/setup/own-mode warmup/all samples; independent oracle instead of an owned reference. Instrumented timing is separate from uninstrumented tails. No whole-memory bound.",
+      "actual_limits": [
+        1000000,
+        1073741824,
+        1073741824,
+        1073741824,
+        2147483648,
+        268435456,
+        67108864
+      ],
+      "setup_ns": 16335456223,
+      "fixture_reference": {
+        "rows": 1000001,
+        "checksum": "25f3e16559f54d37"
+      },
+      "warmup": {
+        "status": "error",
+        "error_type": "RetainedError",
+        "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+        "retained_snapshot": {
+          "budget_bytes": 1073741824,
+          "handle_limit": 1024,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 18207,
+          "buffer_owners": 0,
+          "view_handles": 0,
+          "peak_view_handles": 10,
+          "backpressure_events": 0
+        }
+      },
+      "process_peak_rss_bytes": 1044340736,
+      "all_paths_succeeded": false
+    },
+    "arrow.stdout": {
+      "rows": 1000001,
+      "backend": "memory",
+      "mode": "arrow",
+      "configuration": "large",
+      "instrumented": false,
+      "samples": 31,
+      "pyarrow": "26.0.0",
+      "records": [
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 0,
+          "complete_attempt_ns": 898920364,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 1,
+          "complete_attempt_ns": 904066019,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 2,
+          "complete_attempt_ns": 895899290,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 3,
+          "complete_attempt_ns": 899037507,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 4,
+          "complete_attempt_ns": 895668232,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 5,
+          "complete_attempt_ns": 900987342,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 6,
+          "complete_attempt_ns": 898408188,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 7,
+          "complete_attempt_ns": 896241856,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 8,
+          "complete_attempt_ns": 898339844,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 9,
+          "complete_attempt_ns": 897907557,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 10,
+          "complete_attempt_ns": 899058606,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 11,
+          "complete_attempt_ns": 896978943,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 12,
+          "complete_attempt_ns": 898536871,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 13,
+          "complete_attempt_ns": 903458562,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 14,
+          "complete_attempt_ns": 901349964,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 15,
+          "complete_attempt_ns": 909389105,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 16,
+          "complete_attempt_ns": 903525379,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 17,
+          "complete_attempt_ns": 902106059,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 18,
+          "complete_attempt_ns": 903402830,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 19,
+          "complete_attempt_ns": 911861632,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 20,
+          "complete_attempt_ns": 908731167,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 21,
+          "complete_attempt_ns": 906983324,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 22,
+          "complete_attempt_ns": 909861016,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 23,
+          "complete_attempt_ns": 906613884,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 24,
+          "complete_attempt_ns": 911634537,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 25,
+          "complete_attempt_ns": 909730480,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 26,
+          "complete_attempt_ns": 906580568,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 27,
+          "complete_attempt_ns": 908945834,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 28,
+          "complete_attempt_ns": 912859841,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 29,
+          "complete_attempt_ns": 912663464,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        },
+        {
+          "status": "error",
+          "error_type": "ArrowMemoryError",
+          "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+          "retained_snapshot": {
+            "budget_bytes": 1073741824,
+            "handle_limit": 1024,
+            "retained_bytes": 0,
+            "peak_retained_bytes": 20751,
+            "buffer_owners": 0,
+            "view_handles": 0,
+            "peak_view_handles": 7,
+            "backpressure_events": 0
+          },
+          "sample": 30,
+          "complete_attempt_ns": 912076700,
+          "arrow_pool_bytes_before": 0,
+          "arrow_pool_bytes_after": 0
+        }
+      ],
+      "scope": "One mode per fresh process; RSS includes fixture/setup/own-mode warmup/all samples; independent oracle instead of an owned reference. Instrumented timing is separate from uninstrumented tails. No whole-memory bound.",
+      "actual_limits": [
+        1000000,
+        1073741824,
+        1073741824,
+        1073741824,
+        2147483648,
+        268435456,
+        67108864
+      ],
+      "setup_ns": 16714578600,
+      "fixture_reference": {
+        "rows": 1000001,
+        "checksum": "25f3e16559f54d37"
+      },
+      "warmup": {
+        "status": "error",
+        "error_type": "ArrowMemoryError",
+        "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+        "retained_snapshot": {
+          "budget_bytes": 1073741824,
+          "handle_limit": 1024,
+          "retained_bytes": 0,
+          "peak_retained_bytes": 20751,
+          "buffer_owners": 0,
+          "view_handles": 0,
+          "peak_view_handles": 7,
+          "backpressure_events": 0
+        }
+      },
+      "process_peak_rss_bytes": 1044217856,
+      "all_paths_succeeded": false
+    }
+  },
+  "verified_files": [
+    "frozen/_hawdb.so",
+    "frozen/python-interpreter.bin",
+    "frozen/retained_boundary.py",
+    "frozen/numeric.py",
+    "frozen/hawdb/pydantic.py",
+    "frozen/hawdb/py.typed",
+    "frozen/hawdb/magic.py",
+    "frozen/hawdb/_hawdb.pyi",
+    "frozen/hawdb/_display.py",
+    "frozen/hawdb/__init__.py",
+    "frozen/hawdb/__init__.pyi"
+  ],
+  "group_selection": {
+    "group": [
+      "numeric",
+      1000001,
+      "memory",
+      "large",
+      "false",
+      "select",
+      "python"
+    ],
+    "run": 39221994638,
+    "inputs": {
+      "kind": "numeric",
+      "rows": "1000001",
+      "backend": "memory",
+      "configuration": "large",
+      "instrumented": "false",
+      "case": "select",
+      "layer": "python",
+      "samples": "31"
+    }
+  },
+  "artifact_name": "resources-numeric-1000001-memory-large-false-select-python-ebcc9b0549ace3f3c7bb93145a8077ee2b616eef",
+  "workflow_run": 39221994638
+}

@@ -1,0 +1,73 @@
+{
+  "status": "final_checks_and_hooks_passed_committed",
+  "source_head": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "steps": [
+    {
+      "name": "install",
+      "command": [
+        "prek",
+        "install"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-last-review-fixes-install.log",
+      "started": 1792419883.312881,
+      "exit": 0,
+      "ended": 1792419883.336782
+    },
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-last-review-fixes-fmt.log",
+      "started": 1792419883.336983,
+      "exit": 0,
+      "ended": 1792419888.364647
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-last-review-fixes-clippy.log",
+      "started": 1792419888.365025,
+      "exit": 0,
+      "ended": 1792419888.846633
+    },
+    {
+      "name": "prek",
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-last-review-fixes-prek.log",
+      "started": 1792419888.84692,
+      "exit": 0,
+      "ended": 1792419894.1106281
+    }
+  ],
+  "review_comments": [
+    6266740405,
+    6268057672
+  ],
+  "withdrawn_item2_kept_unchanged": true,
+  "ended": 1792419894.110871,
+  "head": "7edc242728bc7febd55f964027f947fbbc8866b9",
+  "final_header_validation_documents": 7,
+  "yaml_syntax_passed": true,
+  "final_required_checks_rerun_after_reflow": true,
+  "commit_hooks_passed": true,
+  "observed_at": 1792420178.2099671
+}

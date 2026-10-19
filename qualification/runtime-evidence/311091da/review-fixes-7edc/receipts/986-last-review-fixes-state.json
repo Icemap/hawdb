@@ -1,0 +1,22 @@
+{
+  "status": "pushed_and_pr_updated_verified",
+  "head": "7edc242728bc7febd55f964027f947fbbc8866b9",
+  "tree": "a10090590835b3d9ef1d4249294ac9f25bd14288",
+  "parent": "0b13ade5b401a40fea6b579fc6b178bcd4819570",
+  "review_comments": [
+    6266740405,
+    6268057672
+  ],
+  "addressed_items": [
+    1,
+    3,
+    4
+  ],
+  "withdrawn_item2_unchanged": true,
+  "runtime_production_source_unchanged": true,
+  "fresh_ci_required": true,
+  "notification_or_reply_sent": false,
+  "historical_archive_unchanged": true,
+  "body_bytes": 65391,
+  "observed_at": 1792420135.795765
+}

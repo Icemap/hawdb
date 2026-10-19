@@ -1,0 +1,52 @@
+{
+  "observed_at": 1792421317.9293902,
+  "comment": {
+    "url": "https://api.github.com/repos/nowledge-co/hawdb/issues/comments/6269971539",
+    "html_url": "https://github.com/nowledge-co/hawdb/pull/986#issuecomment-6269971539",
+    "issue_url": "https://api.github.com/repos/nowledge-co/hawdb/issues/986",
+    "id": 6269971539,
+    "node_id": "IC_kwDOTX6JAc8AAAABdbgsUw",
+    "user": {
+      "login": "hawkingrei",
+      "id": 3427324,
+      "node_id": "MDQ6VXNlcjM0MjczMjQ=",
+      "avatar_url": "https://avatars.githubusercontent.com/u/3427324?u=98aac80d510d9dc27619961ad502411f4f5abe49&v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/hawkingrei",
+      "html_url": "https://github.com/hawkingrei",
+      "followers_url": "https://api.github.com/users/hawkingrei/followers",
+      "following_url": "https://api.github.com/users/hawkingrei/following{/other_user}",
+      "gists_url": "https://api.github.com/users/hawkingrei/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/hawkingrei/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/hawkingrei/subscriptions",
+      "organizations_url": "https://api.github.com/users/hawkingrei/orgs",
+      "repos_url": "https://api.github.com/users/hawkingrei/repos",
+      "events_url": "https://api.github.com/users/hawkingrei/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/hawkingrei/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "created_at": "2026-10-19T14:44:01Z",
+    "updated_at": "2026-10-19T14:44:01Z",
+    "author_association": "MEMBER",
+    "body": "Checked `7edc2427`. All three remaining items are closed: `docs/PR986_REVIEW.md` is deleted; both `native-bindings.yml` call sites and the Python workflow now use `setup-bazel@0.19.1`, so the merge no longer reverts #1094; every results file and `RETAINED_NUMERIC_FOUNDATION.md` now opens with \"Historical ...\" plus the exact engine/tree hashes it measured and an explicit \"Regenerate with\" command, and the \"supports PR #986\" framing is gone. No further finding. Root, crates and Windows are still running on this head; approve follows once they are green.\n",
+    "reactions": {
+      "url": "https://api.github.com/repos/nowledge-co/hawdb/issues/comments/6269971539/reactions",
+      "total_count": 0,
+      "+1": 0,
+      "-1": 0,
+      "laugh": 0,
+      "hooray": 0,
+      "confused": 0,
+      "heart": 0,
+      "rocket": 0,
+      "eyes": 0
+    },
+    "performed_via_github_app": null,
+    "minimized": null,
+    "pin": null
+  },
+  "scope": "Author comment confirms review fixes at7edc2427 and no further finding. This is not a formal submitted APPROVED review, an approved label, or proof that outstanding CI completed.",
+  "notification_sent": false
+}

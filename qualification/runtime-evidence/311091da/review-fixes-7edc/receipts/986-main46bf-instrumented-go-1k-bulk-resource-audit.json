@@ -1,0 +1,100 @@
+{
+  "observed_at": 1792421383.560662,
+  "engine": "311091da6b23a292b7385b46362d3a12f6ec0064",
+  "engine_tree": "6ea7fb5da52df432df022ac29eab4a74baa6c27b",
+  "groups": [
+    {
+      "artifact": 12182319910,
+      "backend": "memory",
+      "bundle_sha256": "213c38747eb8b6e80417a5720ea4fe2b79125e155cecfe56dafee192899c7b91",
+      "checksum": "ee38a8b2642c45d5",
+      "sides": {
+        "baseline": {
+          "samples": 3,
+          "discarded_samples": 1,
+          "native_medians": {
+            "allocation_calls": 166483,
+            "allocated_bytes": 41549213,
+            "parameter_conversion_ns": 1638443,
+            "engine_call_ns": 29763014,
+            "result_conversion_ns": 801353,
+            "process_peak_requested_bytes": 4657809
+          },
+          "whole_child_peak_rss_median_bytes": 30404608,
+          "go_host_medians": {
+            "go_allocations": 30614,
+            "go_allocated_bytes": 1293296
+          }
+        },
+        "candidate": {
+          "samples": 3,
+          "discarded_samples": 1,
+          "native_medians": {
+            "allocation_calls": 147393,
+            "allocated_bytes": 39097136,
+            "parameter_conversion_ns": 1647951,
+            "engine_call_ns": 26578563,
+            "result_conversion_ns": 813787,
+            "process_peak_requested_bytes": 4752983
+          },
+          "whole_child_peak_rss_median_bytes": 31457280,
+          "go_host_medians": {
+            "go_allocations": 30615,
+            "go_allocated_bytes": 1293456
+          }
+        }
+      },
+      "candidate_over_baseline": {
+        "native_allocation_calls": 0.8853336376687109,
+        "whole_child_peak_rss": 1.0346221204364812
+      }
+    },
+    {
+      "artifact": 12182539736,
+      "backend": "file",
+      "bundle_sha256": "47297456a21e548703584f93ee228adb2b8a4067ee4fd09cbeeee6940f0a140e",
+      "checksum": "ee38a8b2642c45d5",
+      "sides": {
+        "baseline": {
+          "samples": 3,
+          "discarded_samples": 1,
+          "native_medians": {
+            "allocation_calls": 190446,
+            "allocated_bytes": 43119634,
+            "parameter_conversion_ns": 917458,
+            "engine_call_ns": 30671264,
+            "result_conversion_ns": 756797,
+            "process_peak_requested_bytes": 4986796
+          },
+          "whole_child_peak_rss_median_bytes": 37896192,
+          "go_host_medians": {
+            "go_allocations": 30615,
+            "go_allocated_bytes": 1293456
+          }
+        },
+        "candidate": {
+          "samples": 3,
+          "discarded_samples": 1,
+          "native_medians": {
+            "allocation_calls": 171361,
+            "allocated_bytes": 40668043,
+            "parameter_conversion_ns": 904393,
+            "engine_call_ns": 27221884,
+            "result_conversion_ns": 789969,
+            "process_peak_requested_bytes": 5090556
+          },
+          "whole_child_peak_rss_median_bytes": 40673280,
+          "go_host_medians": {
+            "go_allocations": 30614,
+            "go_allocated_bytes": 1293296
+          }
+        }
+      },
+      "candidate_over_baseline": {
+        "native_allocation_calls": 0.8997878663768207,
+        "whole_child_peak_rss": 1.0732814526588845
+      }
+    }
+  ],
+  "scope": "Two instrumented Go1k fill_bulk groups only. Source and producer hashes independently checked by original collector. RSS covers whole child including fixture/setup and Go/native heaps; allocator counters exclude Go heap. Three samples do not establish significance, cause, a leak, production tails or ordinary uninstrumented latency. Global native live-byte changes include retained database state. All samples and adverse RSS increases preserved."
+}

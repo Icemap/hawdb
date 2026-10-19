@@ -1,0 +1,187 @@
+{
+  "status": "observers_running_verified",
+  "observed_at": 1792420637.084461,
+  "backup": "/private/tmp/hawdb-wip-ready-20261015/986-observer-recovery-before-20261019T143716Z",
+  "previous_files": {
+    "986-main46bf-collectors-state.json": {
+      "sha256": "b998c4f2095a20253ea8e92b5791475be1b42acab8676f6965aa6f028b24335b",
+      "bytes": 895
+    },
+    "986-same-runner-gap-collector-state-v2.json": {
+      "sha256": "2f7a2892106e3e2cd9527b5533fb83bb13fefea796abffd56d6229bef17190a3",
+      "bytes": 225
+    },
+    "986-main46bf-311091da-matrices-collector.log": {
+      "sha256": "53917fd249824a6e47224458ca05a0a147ac348a80c8df94da7e96067a249250",
+      "bytes": 7382
+    },
+    "986-main46bf-collectors-driver.log": {
+      "sha256": "fb384e6b3aef3272d18be94726afa5b6ba1c77de3f59fbdee38907f4179fa497",
+      "bytes": 1044
+    },
+    "986-same-runner-gap-collector-driver-v2.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  },
+  "previous_pids_confirmed_missing": [
+    67351,
+    67755,
+    57044
+  ],
+  "matrix_exit_cause": "Traceback confirms ENOSPC while persisting summary; old fetch OSError/BadZipFile retained.",
+  "gap_exit_cause": "Process absent; prior state stale and driver log empty, cause not independently established.",
+  "current_available_bytes": 45189480448,
+  "validated_cached_ranges": 200,
+  "quarantined_invalid_ranges": [],
+  "children": [
+    {
+      "role": "matrices",
+      "pid": 54234,
+      "script": "collect-final-github-matrices-main46bf-311091da.py",
+      "log": "986-main46bf-matrices-recovered-collector.log"
+    },
+    {
+      "role": "same_runner_gap",
+      "pid": 54235,
+      "script": "collect-986-same-runner-gap-v3.py",
+      "log": "986-same-runner-gap-collector-driver-v3.log"
+    }
+  ],
+  "source_scope": "Same original ordinary/resource runs39221987077/39221994638 and gap39232726821. Gapv3 changes observer output/state/config names only; all audit assertions remain. Matrix observer uses existing verified report cache and hash-checked ranges. No workflow dispatch/retry/cancel, workload/sample/deadline/source change or data deletion.",
+  "verified_at": 1792420737.631705,
+  "recovered_original_failed_downloads": {
+    "observed_at": 1792421621.8365068,
+    "artifacts": [
+      {
+        "artifact": 12181704934,
+        "receipt_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-main46bf-311091da/ordinary/artifact-12181704934.json",
+        "receipt_sha256": "f043d7bf7a9c90fa6120579b9a8c9217ea0bc5f862e28e262bbf820f65e87b6d",
+        "verified_uploaded_producers_and_manifests": [
+          {
+            "path": "baseline-producer/hawdb_bench_host_boundary",
+            "sha256": "8e545c24d2105938f8e8ae01225a574d44d772215294e46caa8ca100a384c95b"
+          },
+          {
+            "path": "baseline-producer/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+          },
+          {
+            "path": "baseline-producer/libhawdb_ffi.so",
+            "sha256": "b58de72507b687a8bc416324268682a5038d18f5ca58131da9da17327cbbbdde"
+          },
+          {
+            "path": "baseline-producer/_hawdb.so",
+            "sha256": "3f23c60bd39d480e0ccfddd44068ecf2ff7598bc21be19ae1acf5ab7d1263d11"
+          },
+          {
+            "path": "baseline-producer/boundary",
+            "sha256": "3b186ee647e626999bfb39b98375d44dd5401fa9d4e55cc4ac3b8d30345fcbd2"
+          },
+          {
+            "path": "baseline-producer/python_boundary.runfiles_manifest",
+            "sha256": "93e295e0b37cede63621aa53e7f859e00d1f4994b6e088200a377e8615a6b437"
+          },
+          {
+            "path": "candidate-producer/hawdb_bench_host_boundary",
+            "sha256": "bae80ad793a3d0ba4b0c7d6d32449d4eb804eaa19753bfd26407e7a8afe14822"
+          },
+          {
+            "path": "candidate-producer/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+          },
+          {
+            "path": "candidate-producer/libhawdb_ffi.so",
+            "sha256": "4cfb378682d1eae581316e0f97ea90c5b19796c2dfe2632fa0687f2bc335bc40"
+          },
+          {
+            "path": "candidate-producer/_hawdb.so",
+            "sha256": "5b82074cfb548f4fe5facb4f1e9fac571e9736d13d3b7b48b8090bcba9d31bbe"
+          },
+          {
+            "path": "candidate-producer/boundary",
+            "sha256": "abdd8c6bd496c93dad87f286d5f804cc5e984a593d98e2a6db1fabf30a30f17d"
+          },
+          {
+            "path": "candidate-producer/python_boundary.runfiles_manifest",
+            "sha256": "78422c6faaae8f0d062728e2eeb17d98dbd414f054ffc901127c43a7843d2bfc"
+          }
+        ],
+        "keys": [
+          "artifact",
+          "reports",
+          "verified_uploaded_producers_and_manifests",
+          "scope",
+          "campaign_selection",
+          "artifact_name",
+          "workflow_run"
+        ]
+      },
+      {
+        "artifact": 12183075523,
+        "receipt_path": "/private/tmp/hawdb-wip-ready-20261015/final-github-matrix-collection-main46bf-311091da/ordinary/artifact-12183075523.json",
+        "receipt_sha256": "c6bee0a6b4e56aee2790e74267900ca7fef73b910236cc030a28a20acc3993b7",
+        "verified_uploaded_producers_and_manifests": [
+          {
+            "path": "baseline-producer/hawdb_bench_host_boundary",
+            "sha256": "8e545c24d2105938f8e8ae01225a574d44d772215294e46caa8ca100a384c95b"
+          },
+          {
+            "path": "baseline-producer/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+          },
+          {
+            "path": "baseline-producer/libhawdb_ffi.so",
+            "sha256": "b58de72507b687a8bc416324268682a5038d18f5ca58131da9da17327cbbbdde"
+          },
+          {
+            "path": "baseline-producer/_hawdb.so",
+            "sha256": "3f23c60bd39d480e0ccfddd44068ecf2ff7598bc21be19ae1acf5ab7d1263d11"
+          },
+          {
+            "path": "baseline-producer/boundary",
+            "sha256": "3b186ee647e626999bfb39b98375d44dd5401fa9d4e55cc4ac3b8d30345fcbd2"
+          },
+          {
+            "path": "baseline-producer/python_boundary.runfiles_manifest",
+            "sha256": "93e295e0b37cede63621aa53e7f859e00d1f4994b6e088200a377e8615a6b437"
+          },
+          {
+            "path": "candidate-producer/hawdb_bench_host_boundary",
+            "sha256": "bae80ad793a3d0ba4b0c7d6d32449d4eb804eaa19753bfd26407e7a8afe14822"
+          },
+          {
+            "path": "candidate-producer/python_boundary",
+            "sha256": "92c803f72c8947eab9276d37add9b31d5d3eda3069e10404c00111bae2d41883"
+          },
+          {
+            "path": "candidate-producer/libhawdb_ffi.so",
+            "sha256": "4cfb378682d1eae581316e0f97ea90c5b19796c2dfe2632fa0687f2bc335bc40"
+          },
+          {
+            "path": "candidate-producer/_hawdb.so",
+            "sha256": "5b82074cfb548f4fe5facb4f1e9fac571e9736d13d3b7b48b8090bcba9d31bbe"
+          },
+          {
+            "path": "candidate-producer/boundary",
+            "sha256": "abdd8c6bd496c93dad87f286d5f804cc5e984a593d98e2a6db1fabf30a30f17d"
+          },
+          {
+            "path": "candidate-producer/python_boundary.runfiles_manifest",
+            "sha256": "78422c6faaae8f0d062728e2eeb17d98dbd414f054ffc901127c43a7843d2bfc"
+          }
+        ],
+        "keys": [
+          "artifact",
+          "reports",
+          "verified_uploaded_producers_and_manifests",
+          "scope",
+          "campaign_selection",
+          "artifact_name",
+          "workflow_run"
+        ]
+      }
+    ],
+    "scope": "Original artifact downloads now verified by unchanged observer using cached hash-checked ranges. No measurement rerun, workload alteration or historical failure removal."
+  }
+}
