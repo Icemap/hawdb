@@ -2155,10 +2155,8 @@ impl SearchOutOfCoreReader {
                     .max_matched_spans
                     .get()
                     .saturating_sub(matched_span_count),
-                self.config
-                    .max_matched_span_bytes
-                    .get()
-                    .saturating_sub(matched_span_bytes),
+                self.config.max_matched_span_bytes.get(),
+                matched_span_bytes,
             )?;
             matched_span_count = matched_span_count.saturating_add(matched_spans.len());
             matched_span_bytes = matched_span_bytes.saturating_add(
@@ -4164,6 +4162,8 @@ fn read_search_range(file: &File, offset: u64, bytes: &mut [u8]) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "full-text-search")]
+    mod span_budget;
     #[cfg(feature = "full-text-search")]
     mod text_seed;
 

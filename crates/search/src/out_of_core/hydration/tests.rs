@@ -454,6 +454,7 @@ fn public_hydration_rejects_damaged_tail_without_writing_artifacts() {
 }
 
 fn differential_cases(cases: usize) {
+    let analyzer = SearchAnalyzerLexicon::default();
     let mut state = 0x392_409_u64;
     let mut next = || {
         state ^= state << 13;
@@ -520,6 +521,46 @@ fn differential_cases(cases: usize) {
                 "case {case}"
             );
         }
+        let query_terms = crate::document_tokens(&documents[0], &analyzer)
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        let spans = crate::matched_query_spans(&query_terms, &documents[0], &analyzer);
+        let span_bytes = spans.iter().map(matched_span_bytes_for).sum::<u64>();
+        let previous_hits = case as u64 * 17;
+        assert_eq!(
+            crate::matched_query_spans_bounded(
+                &query_terms,
+                &documents[0],
+                &analyzer,
+                usize::MAX,
+                previous_hits + span_bytes,
+                previous_hits,
+            )
+            .unwrap(),
+            spans,
+        );
+        let requested = matched_span_bytes_for(spans.last().expect("the title must match"));
+        let limit = previous_hits + span_bytes - 1;
+        let error = crate::matched_query_spans_bounded(
+            &query_terms,
+            &documents[0],
+            &analyzer,
+            usize::MAX,
+            limit,
+            previous_hits,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(
+                error,
+                HawDBError::ResourceBudgetExceeded(details)
+                    if details.requested == requested
+                        && details.used == previous_hits + span_bytes - requested
+                        && details.budget == limit
+                        && details.budget_option == "SearchOutOfCoreConfig.max_matched_span_bytes"
+            ),
+            "span case {case}"
+        );
         let mut damaged = text.into_bytes();
         damaged.push(0xff);
         let bytes = envelope(
