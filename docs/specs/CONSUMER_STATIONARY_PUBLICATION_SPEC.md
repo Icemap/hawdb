@@ -111,6 +111,15 @@ See [the bootstrap/reservation refinement and its limits](../tla/CONSUMER_ALLOCA
 
 ## Authorities and identity domains
 
+The kernel now also has a separate native birth path, described in
+[the birth/debt refinement](../tla/CONSUMER_NATIVE_BIRTH_PROOF.md). It captures the
+original parent, persists intent, exclusively creates and synchronizes the
+bound marker/directory, and records the receipt before exposing a producer
+directory. It retains debt on errors and close. The legacy relocating facade
+does not use that path yet; target lease integration, recovery resolution,
+settlement and stationary serving/selection remain unfinished. Allocation ledger
+V2 replaces the earlier development-only envelope without a compatibility migration.
+
 The source project's durable allocation ledger is authoritative for reservations,
 pending native effects and unresolved publications. The existing consumer
 registry remains a verification/retention cache and may lag an actual selected

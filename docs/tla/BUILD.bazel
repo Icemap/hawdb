@@ -1116,3 +1116,16 @@ tla_check(
     )
     for control in ["SkipHostFence", "SkipGraphFence", "ForbidPinnedWitness"]
 ]
+
+[
+    tla_check(
+        name = "HawDBConsumerNativeBirth" + control + "_check",
+        module = "HawDBConsumerNativeBirth.tla",
+        config = "mutants/HawDBConsumerNativeBirth" + control + ".cfg",
+        expect = "invariant_violation",
+        tags = ["manual"],
+        timeout_seconds = 1800,
+        tlc_args = ["-cleanup", "-workers", "auto"],
+    )
+    for control in ["SkipParentBarrier", "AdoptMarkerOnRecovery", "ForgetDebtOnClose"]
+]

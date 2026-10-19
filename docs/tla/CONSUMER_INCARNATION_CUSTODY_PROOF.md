@@ -1,7 +1,10 @@
 # Conditional Consumer incarnation and debt ordering model
 
-Status: checked bounded design model; no runtime allocation ledger or stationary
-Consumer activation is delivered. See the full
+Status: checked bounded design model. Initial runtime reservations and a separate
+native birth operation now have their own refinements in
+[allocation bootstrap](CONSUMER_ALLOCATION_BOOTSTRAP_PROOF.md) and
+[native birth](CONSUMER_NATIVE_BIRTH_PROOF.md). Stationary Consumer activation and
+debt settlement remain unfinished. See the full
 [stationary publication contract](../specs/CONSUMER_STATIONARY_PUBLICATION_SPEC.md)
 and [original acceptance scope](../specs/MVCC_VERSIONED_PUBLICATION_SPEC.md).
 

@@ -27,6 +27,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 mod automatic_checkpoint;
 mod branch_abandonment;
 mod consumer_allocation;
+mod consumer_native_birth;
 mod runtime_roots;
 mod search_projection;
 

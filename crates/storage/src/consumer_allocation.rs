@@ -19,7 +19,10 @@ use std::sync::Arc;
 pub(crate) const LEDGER_FILE: &str = "consumer-allocations.hawdb";
 const MAX_BYTES: usize = 1024 * 1024;
 const MAX_PENDING: usize = 256;
-const HEADER: &[u8] = b"HAWDB_CONSUMER_ALLOCATIONS_V1\n";
+const HEADER: &[u8] = b"HAWDB_CONSUMER_ALLOCATIONS_V2\n";
+
+mod native_birth;
+pub use native_birth::PendingConsumerGeneration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -43,6 +46,21 @@ struct Reservation {
     registration_uuid: String,
     projection_uuid: String,
     checkpoint_uuid: String,
+    native_birth: NativeBirth,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", deny_unknown_fields)]
+enum NativeBirth {
+    Reserved,
+    Pending {
+        generation_name: String,
+        parent_locator: String,
+    },
+    Recorded {
+        generation_name: String,
+        parent_locator: String,
+    },
 }
 
 #[derive(Debug)]
@@ -131,6 +149,10 @@ pub struct ReservedConsumerAllocation {
     registration: Uuid,
     projection: Uuid,
     checkpoint: Uuid,
+    source_branch: BranchId,
+    database: Uuid,
+    consumer_id: String,
+    target_locator: String,
     _project: CapturedProject,
     _source: Arc<DatabaseDirectoryLease>,
 }
@@ -239,6 +261,26 @@ fn validate(ledger: &Ledger) -> Result<()> {
             || row.target_locator.len() > 16 * 1024
         {
             return Err(invalid("invalid consumer or target locator"));
+        }
+        if let NativeBirth::Pending {
+            generation_name,
+            parent_locator,
+        }
+        | NativeBirth::Recorded {
+            generation_name,
+            parent_locator,
+        } = &row.native_birth
+            && (parent_locator.is_empty()
+                || parent_locator.len() > 16 * 1024
+                || *generation_name
+                    != generation_name_for(
+                        project,
+                        row.target_incarnation,
+                        row.generation,
+                        row.operation,
+                    ))
+        {
+            return Err(invalid("birth generation differs from reservation"));
         }
         previous = row.operation;
     }
@@ -365,6 +407,7 @@ pub(crate) fn reserve(
             registration_uuid: registration.to_string(),
             projection_uuid: projection.to_string(),
             checkpoint_uuid: checkpoint.to_string(),
+            native_birth: NativeBirth::Reserved,
         });
         ledger.high_water = operation;
         validate(&ledger)?;
@@ -384,7 +427,23 @@ pub(crate) fn reserve(
         registration,
         projection,
         checkpoint,
+        source_branch: branch,
+        database,
+        consumer_id: consumer.into(),
+        target_locator: locator.into(),
         _project: project.clone(),
         _source: owner,
     })
+}
+
+fn generation_name_for(
+    project: BranchId,
+    incarnation: u64,
+    generation: u64,
+    operation: u64,
+) -> String {
+    format!(
+        "hawdb-generation-{}-{incarnation}-{generation}-{operation}",
+        project.as_uuid()
+    )
 }

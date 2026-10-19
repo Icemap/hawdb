@@ -1,0 +1,222 @@
+// Copyright 2026 Nowledge
+// Licensed under the Apache License, Version 2.0.
+
+//! Original-handle birth evidence. This does not select a serving generation.
+
+use super::*;
+use crate::file_io::CapturedDirectoryCandidate;
+
+const BIRTH_FILE: &str = "consumer-birth.hawdb";
+const BIRTH_HEADER: &[u8] = b"HAWDB_CONSUMER_BIRTH_V1\n";
+
+/// A single native attempt and its durable debt. Drop never removes a name or
+/// refunds identities. The caller must exclude mutation of its private name;
+/// serving publication additionally requires the target publication lease.
+/// Neither an installed marker nor decoded ledger bytes can construct this.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct PendingConsumerGeneration {
+    allocation: ReservedConsumerAllocation,
+    parent: SourceDirectory,
+    candidate: CapturedDirectoryCandidate,
+    directory: Option<SourceDirectory>,
+    marker: Option<File>,
+    marker_bytes: Vec<u8>,
+    parent_locator: String,
+    attempted: bool,
+    recorded: bool,
+}
+
+impl ReservedConsumerAllocation {
+    /// Capture the original target parent once, using the existing source FD
+    /// domain, and persist birth intent before any native directory effect.
+    /// This is for stationary producers; the legacy relocating stage is not
+    /// promoted to a stationary generation by this method.
+    pub fn prepare_stationary_generation(
+        self,
+        original_parent: &Path,
+    ) -> Result<PendingConsumerGeneration> {
+        let parent_locator = original_parent
+            .to_str()
+            .filter(|value| !value.is_empty() && value.len() <= 16 * 1024)
+            .ok_or_else(|| invalid("birth parent locator must be bounded UTF-8"))?
+            .to_owned();
+        let context = self._source.captured_directory().operation_context();
+        let parent = SourceDirectory::capture(original_parent, &context)?;
+        let name = generation_name_for(
+            self.domain,
+            self.incarnation.0,
+            self.generation.0,
+            self.operation.0,
+        );
+        let candidate = parent.prepare_directory_candidate(&name)?;
+        // Prepare all bytes before installing intent. An uncertain intent
+        // publication must not be followed by mkdir through a returned token.
+        let marker_bytes = self.with_row(|row| {
+            if row.native_birth != NativeBirth::Reserved {
+                return Err(invalid("reservation already has a native attempt"));
+            }
+            let mut bytes = BoundedBytes(Vec::new());
+            bytes.write_all(BIRTH_HEADER)?;
+            let mut marker_row = row.clone();
+            marker_row.native_birth = NativeBirth::Pending {
+                generation_name: name.clone(),
+                parent_locator: parent_locator.clone(),
+            };
+            serde_json::to_writer(&mut bytes, &(self.domain.as_uuid().to_string(), marker_row))
+                .map_err(|_| invalid("birth marker exceeds byte limit"))?;
+            let checksum = hawdb_integrity::crc32c(&bytes.0);
+            bytes.0.extend_from_slice(&checksum.get().to_le_bytes());
+            Ok(bytes.0)
+        })?;
+        self.transition_birth(
+            NativeBirth::Reserved,
+            NativeBirth::Pending {
+                generation_name: name,
+                parent_locator: parent_locator.clone(),
+            },
+        )?;
+        Ok(PendingConsumerGeneration {
+            allocation: self,
+            parent,
+            candidate,
+            directory: None,
+            marker: None,
+            marker_bytes,
+            parent_locator,
+            attempted: false,
+            recorded: false,
+        })
+    }
+
+    fn require_row(&self, row: &Reservation) -> Result<()> {
+        if row.operation != self.operation.0
+            || row.target_incarnation != self.incarnation.0
+            || row.generation != self.generation.0
+            || row.branch_id != self.source_branch.as_uuid().to_string()
+            || row.database_uuid != self.database.to_string()
+            || row.consumer_id != self.consumer_id
+            || row.target_locator != self.target_locator
+            || row.registration_uuid != self.registration.to_string()
+            || row.projection_uuid != self.projection.to_string()
+            || row.checkpoint_uuid != self.checkpoint.to_string()
+        {
+            return Err(invalid("native attempt reservation binding differs"));
+        }
+        Ok(())
+    }
+
+    fn with_row<T>(&self, action: impl FnOnce(&Reservation) -> Result<T>) -> Result<T> {
+        self._project.with_locked_catalog(|root, context, catalog| {
+            let ledger = check_source(
+                &self._project,
+                &self._source,
+                self.source_branch,
+                root,
+                context,
+                &catalog,
+            )?;
+            let row = ledger
+                .pending
+                .iter()
+                .find(|row| row.operation == self.operation.0)
+                .ok_or_else(|| invalid("native attempt reservation is missing"))?;
+            self.require_row(row)?;
+            action(row)
+        })
+    }
+
+    fn transition_birth(&self, expected: NativeBirth, next: NativeBirth) -> Result<()> {
+        self._project.with_locked_catalog(|root, context, catalog| {
+            let mut ledger = check_source(
+                &self._project,
+                &self._source,
+                self.source_branch,
+                root,
+                context,
+                &catalog,
+            )?;
+            let row = ledger
+                .pending
+                .iter_mut()
+                .find(|row| row.operation == self.operation.0)
+                .ok_or_else(|| invalid("native attempt reservation is missing"))?;
+            self.require_row(row)?;
+            if row.native_birth != expected {
+                return Err(invalid(
+                    "native attempt state differs; retain original debt",
+                ));
+            }
+            row.native_birth = next;
+            validate(&ledger)?;
+            let bytes = encode(&ledger)?;
+            let name = format!(
+                "consumer-birth-ledger-{}.tmp",
+                hawdb_core::generate_uuidv7()?
+            );
+            let mut candidate = root.create_control_candidate(context, &name)?;
+            candidate.write_all(&bytes)?;
+            candidate.seal()?;
+            candidate.replace_head(context, LEDGER_FILE)?;
+            Ok(())
+        })
+    }
+}
+
+impl PendingConsumerGeneration {
+    pub fn generation_name(&self) -> &str {
+        self.candidate.name()
+    }
+
+    /// One exclusive native attempt. Any error retains intent and all acquired
+    /// handles in this owner; retry/recovery must resolve the original attempt.
+    /// No producer receives the directory until both target and ledger barriers
+    /// have completed. A birth receipt is not source freshness or activation.
+    pub fn create(&mut self) -> Result<()> {
+        if self.attempted {
+            return Err(invalid(
+                "native birth already attempted; resolve original debt",
+            ));
+        }
+        self.attempted = true;
+        let context = self.parent.operation_context();
+        self.parent
+            .create_directory_candidate(&context, &mut self.candidate)?;
+        self.directory = Some(
+            self.parent
+                .open_created_directory(&context, &self.candidate)?,
+        );
+        let directory = self.directory.as_ref().expect("opened created directory");
+        self.marker = Some(directory.create_child_new(&context, BIRTH_FILE)?);
+        let marker = self.marker.as_mut().expect("created marker");
+        marker.write_all(&self.marker_bytes)?;
+        marker.sync_all()?;
+        directory.sync(&context)?;
+        self.parent.sync(&context)?;
+        let generation_name = self.generation_name().to_owned();
+        self.allocation.transition_birth(
+            NativeBirth::Pending {
+                generation_name: generation_name.clone(),
+                parent_locator: self.parent_locator.clone(),
+            },
+            NativeBirth::Recorded {
+                generation_name,
+                parent_locator: self.parent_locator.clone(),
+            },
+        )?;
+        self.recorded = true;
+        Ok(())
+    }
+
+    /// Original captured directory for a producer, never reconstructed by name.
+    /// Preparing/selecting a complete serving view remains a separate protocol.
+    pub fn born_directory(&self) -> Result<&SourceDirectory> {
+        if !self.recorded {
+            return Err(invalid("native birth has no completed durable receipt"));
+        }
+        Ok(self
+            .directory
+            .as_ref()
+            .expect("recorded birth retains directory"))
+    }
+}

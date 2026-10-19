@@ -1257,6 +1257,187 @@ fn allocation_evidence(fixture: &Fixture) -> (Vec<u8>, serde_json::Value) {
     (bytes, value)
 }
 
+fn reserve_native_generation(
+    db: &mut Database,
+    fixture: &Fixture,
+) -> hawdb_storage::consumer_allocation::ReservedConsumerAllocation {
+    if db
+        .runtime
+        .get()
+        .unwrap()
+        .store
+        .search_projection_database_identity()
+        .is_none()
+    {
+        db.runtime
+            .get_mut()
+            .unwrap()
+            .store
+            .set_search_projection_database_identity(generate_uuidv7().unwrap());
+        db.checkpoint().unwrap();
+    }
+    db.runtime
+        .get()
+        .unwrap()
+        .store
+        .reserve_search_consumer_allocation("stationary", &fixture.0.join("target"))
+        .unwrap()
+}
+
+#[test]
+fn consumer_native_birth_requires_original_creation_and_retains_receipt_across_close() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    let name = pending.generation_name().to_owned();
+    assert!(!fixture.0.join(&name).exists());
+    assert!(pending.born_directory().is_err());
+    let evidence = allocation_evidence(&fixture).1;
+    assert_eq!(evidence["pending"][0]["native_birth"]["state"], "Pending");
+    assert_eq!(
+        evidence["pending"][0]["native_birth"]["generation_name"],
+        name
+    );
+    pending.create().unwrap();
+    let directory = pending.born_directory().unwrap();
+    let context = directory.operation_context();
+    let marker = directory
+        .open_child(&context, "consumer-birth.hawdb")
+        .unwrap();
+    let mut bytes = Vec::new();
+    std::io::Read::read_to_end(&mut &marker, &mut bytes).unwrap();
+    assert!(bytes.starts_with(b"HAWDB_CONSUMER_BIRTH_V1\n"));
+    let checksum_at = bytes.len() - 4;
+    assert_eq!(
+        hawdb_integrity::crc32c(&bytes[..checksum_at]).get(),
+        u32::from_le_bytes(bytes[checksum_at..].try_into().unwrap())
+    );
+    assert_eq!(
+        allocation_evidence(&fixture).1["pending"][0]["native_birth"]["state"],
+        "Recorded"
+    );
+    // A duplicate call must not re-run mkdir or overwrite the marker.
+    assert!(pending.create().is_err());
+    drop(marker);
+    drop(pending);
+    drop(db);
+    let mut db = fixture.database();
+    assert_eq!(allocation_evidence(&fixture).1["high_water"], 3);
+    assert!(fixture.0.join(&name).join("consumer-birth.hawdb").exists());
+    let next = reserve_native_generation(&mut db, &fixture);
+    assert_eq!(allocation_evidence(&fixture).1["high_water"], 6);
+    let next = next.prepare_stationary_generation(&fixture.0).unwrap();
+    assert_ne!(next.generation_name(), name);
+    assert!(next.born_directory().is_err());
+    // Registry/readiness has not been granted by recording a private birth.
+    assert!(db
+        .runtime
+        .get()
+        .unwrap()
+        .projection_consumers
+        .records
+        .is_empty());
+}
+
+#[test]
+fn consumer_native_birth_collision_never_adopts_matching_marker_or_forgets_debt() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    let path = fixture.0.join(pending.generation_name());
+    std::fs::create_dir(&path).unwrap();
+    std::fs::write(path.join("consumer-birth.hawdb"), b"foreign marker").unwrap();
+    assert!(pending.create().is_err());
+    assert!(pending.born_directory().is_err());
+    assert!(pending.create().is_err());
+    drop(pending);
+    assert_eq!(
+        std::fs::read(path.join("consumer-birth.hawdb")).unwrap(),
+        b"foreign marker"
+    );
+    drop(db);
+    let _db = fixture.database();
+    let evidence = allocation_evidence(&fixture).1;
+    assert_eq!(evidence["high_water"], 3);
+    assert_eq!(evidence["pending"][0]["native_birth"]["state"], "Pending");
+}
+
+#[cfg(unix)]
+#[test]
+fn consumer_native_birth_uses_captured_parent_after_target_label_replacement() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let parent = fixture.0.join("parent");
+    let moved = fixture.0.join("retained-parent");
+    std::fs::create_dir(&parent).unwrap();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation.prepare_stationary_generation(&parent).unwrap();
+    let name = pending.generation_name().to_owned();
+    std::fs::rename(&parent, &moved).unwrap();
+    std::fs::create_dir_all(parent.join(&name)).unwrap();
+    std::fs::write(parent.join(&name).join("foreign"), b"retain").unwrap();
+    pending.create().unwrap();
+    assert!(moved.join(&name).join("consumer-birth.hawdb").exists());
+    assert!(!parent.join(&name).join("consumer-birth.hawdb").exists());
+    assert_eq!(
+        std::fs::read(parent.join(&name).join("foreign")).unwrap(),
+        b"retain"
+    );
+    assert!(pending
+        .born_directory()
+        .unwrap()
+        .matches_namespace(&moved.join(name))
+        .unwrap());
+}
+
+#[test]
+fn consumer_native_birth_fd_refusal_precedes_mkdir_and_retains_original_pending_record() {
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    let name = pending.generation_name().to_owned();
+    let before = allocation_evidence(&fixture).0;
+    let context = db
+        .runtime
+        .get()
+        .unwrap()
+        .store
+        .file_descriptor_context()
+        .unwrap();
+    let capture = hawdb_storage::file_io::SourceDirectory::capture(&fixture.0, &context).unwrap();
+    let mut blockers = Vec::new();
+    loop {
+        match capture.duplicate(&context) {
+            Ok(blocker) => blockers.push(blocker),
+            Err(error) => {
+                assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+                break;
+            }
+        }
+    }
+    let error = pending.create().unwrap_err();
+    assert!(hawdb_core::error::file_descriptor_error(&error).is_some());
+    assert!(!fixture.0.join(name).exists());
+    assert!(pending.born_directory().is_err());
+    assert_eq!(allocation_evidence(&fixture).0, before);
+    drop(blockers);
+    // A fresh call must resolve the original attempt, not guess that an error
+    // proves no effect and run another exclusive creation.
+    assert!(pending.create().is_err());
+    drop((capture, pending));
+    assert_eq!(db.file_descriptor_metrics().unwrap().reserved, 0);
+}
+
 #[test]
 fn consumer_allocation_precedes_callback_survives_failure_registry_loss_and_reopen() {
     let fixture = Fixture::new();
