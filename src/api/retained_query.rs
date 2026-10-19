@@ -52,6 +52,8 @@ pub use node::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RetainedQueryError {
     UnsupportedPlan,
+    /// An eligible indexed node lookup returned more than one row.
+    MultipleMatches,
     UnsupportedLayout,
     UnsupportedType,
     CopyRequired,

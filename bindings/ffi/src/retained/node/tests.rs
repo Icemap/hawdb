@@ -313,6 +313,36 @@ fn failed_root_registration_never_becomes_successful_eof() {
 }
 
 #[test]
+fn multiple_matches_refuse_without_publishing_a_foreign_owner() {
+    let (db, governor) = fixture(16);
+    unsafe { &*db }
+        .inner
+        .lock()
+        .unwrap()
+        .database_mut()
+        .query("CREATE (:Item {id: 1})")
+        .unwrap();
+    let request = request(QUERY, r#"{"id":1}"#);
+    let mut out = HawdbRetainedCursorV1::default();
+    assert_eq!(
+        unsafe {
+            hawdb_retained_node_query(
+                db,
+                &request,
+                size::<HawdbRetainedQueryV1>(),
+                &mut out,
+                size::<HawdbRetainedCursorV1>(),
+            )
+        },
+        HAWDB_RETAINED_MULTIPLE_MATCHES
+    );
+    assert_eq!(out.owner_id, 0);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    unsafe { super::super::super::hawdb_close(db) };
+}
+
+#[test]
 fn empty_foreign_cursor_control_is_charged_after_eof_until_release() {
     let (db, governor) = fixture(16);
     let cursor = cursor(db, 999);

@@ -11,6 +11,9 @@ zero-offset limit. An index existing in the catalog is insufficient: a tiny
 label can cost-select a scan. Unsupported plans, nonunique multi-match seeks,
 hydrated/out-of-core rows, open user transactions, and writable requests refuse
 explicitly. There is no JSON result fallback or copied Arrow packing.
+A supported lookup with multiple matches returns `HAWDB_RETAINED_MULTIPLE_MATCHES`
+(19), exposed as `RetainedMultipleMatches` in Go. This nonretryable data condition
+is distinct from `UnsupportedPlan`; no cursor or partial row is published.
 
 The node remains row-oriented. Its immutable native row owns properties and
 nested containers; immutable catalog owners supply label text. Point/full-row

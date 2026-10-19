@@ -37,6 +37,7 @@ const (
 	RetainedSizeOverflow
 	RetainedStopped
 	RetainedAdmissionError
+	RetainedMultipleMatches
 )
 
 // RetainedError preserves the native outcome. Only Backpressure is retryable;
@@ -44,7 +45,7 @@ const (
 type RetainedError struct{ Code RetainedCode }
 
 func (e *RetainedError) Error() string {
-	names := [...]string{"ok", "eof", "backpressure", "invalid_handle", "invalid_argument", "panic", "closed", "working_unit_too_large", "execution_error", "result_budget", "unsupported_plan", "unsupported_layout", "unsupported_type", "copy_required", "selection_requires_materialization", "invalid_column", "size_overflow", "stopped", "admission_error"}
+	names := [...]string{"ok", "eof", "backpressure", "invalid_handle", "invalid_argument", "panic", "closed", "working_unit_too_large", "execution_error", "result_budget", "unsupported_plan", "unsupported_layout", "unsupported_type", "copy_required", "selection_requires_materialization", "invalid_column", "size_overflow", "stopped", "admission_error", "multiple_matches"}
 	if uint32(e.Code) < uint32(len(names)) {
 		return "hawdb: retained " + names[e.Code]
 	}

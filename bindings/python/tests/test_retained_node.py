@@ -133,6 +133,16 @@ def test_missing_seek_and_explicit_refusals_do_not_materialize(db):
     assert_empty(db)
 
 
+def test_multiple_matches_have_a_distinct_nonretryable_error(db):
+    seed(db)
+    db.execute("CREATE (:Item {id: 1})")
+    with pytest.raises(hawdb.exceptions.RetainedError) as failure:
+        db.execute_retained_node(QUERY, {"id": 1})
+    assert failure.value.kind == "multiple_matches"
+    assert not failure.value.retryable
+    assert_empty(db)
+
+
 def test_node_admission_rolls_back_before_python_delivery(db):
     seed(db)
     with pytest.raises(hawdb.exceptions.RetainedError) as failure:

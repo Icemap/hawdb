@@ -775,7 +775,7 @@ impl RetainedNodeCursor {
                 None => None,
                 Some(row) => {
                     if found.next().is_some() {
-                        return Err(RetainedQueryError::UnsupportedPlan);
+                        return Err(RetainedQueryError::MultipleMatches);
                     }
                     Some(admit_node(
                         store,
@@ -1588,11 +1588,22 @@ mod tests {
         ));
         assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
         db.query("CREATE (:Item {score: 37})").unwrap();
-        assert!(matches!(
-            db.query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default()),
-            Err(RetainedQueryError::UnsupportedPlan)
-        ));
+        let error = db
+            .query_with_params_retained_node(QUERY, &params(), RetainedQueryOptions::default())
+            .unwrap_err();
+        assert_eq!(error, RetainedQueryError::MultipleMatches);
+        assert!(!error.is_retryable());
         assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        assert_eq!(
+            db.begin_read_transaction()
+                .unwrap()
+                .into_retained_node_query(QUERY, &params(), RetainedQueryOptions::default())
+                .unwrap_err(),
+            RetainedQueryError::MultipleMatches
+        );
+        assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     }
 
     #[test]

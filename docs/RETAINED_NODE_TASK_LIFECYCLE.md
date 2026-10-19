@@ -15,6 +15,11 @@ An already stopped task preserves its exact stop cause even for malformed
 Cypher. Planning remains synchronous and is not interruptible inside each
 parser/optimizer operation.
 
+An eligible indexed lookup with multiple matches returns the nonretryable
+`RetainedQueryError::MultipleMatches`, without publishing a cursor or partial
+node. `UnsupportedPlan` identifies unsupported plan shapes. The same distinction
+applies to direct database queries and consumed read snapshots.
+
 The cursor does not clone the context, cancellation ancestry or I/O controller.
 Its Rust borrow requires the host to keep the context alive through cursor use.
 There is no background worker, prefetch or reserved foreground task held during

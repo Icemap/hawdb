@@ -8,6 +8,9 @@ materialize an owned fallback. Missing
 matches complete with no row owner. Multi-match seeks, scans, computed node
 projections, and layouts requiring hydration refuse explicitly. An open user
 transaction is rejected by the embedded facade, as for numeric retained queries.
+Multiple matches raise a nonretryable `RetainedError` with `kind="multiple_matches"`;
+unsupported plan shapes retain `kind="unsupported_plan"`. Neither publishes a
+cursor or a partial row.
 
 ```python
 cursor = db.execute_retained_node(

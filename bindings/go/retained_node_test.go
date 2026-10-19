@@ -222,6 +222,25 @@ func TestRetainedNodeRefusalsAndEmptySeek(t *testing.T) {
 		t.Fatalf("unfinished close: %+v %v", state, err)
 	}
 }
+func TestRetainedNodeMultipleMatches(t *testing.T) {
+	db := nodeFixture(t, false)
+	if err := db.Exec("CREATE (:Item {id: 1})", nil); err != nil {
+		t.Fatal(err)
+	}
+	cursor, err := db.QueryRetainedNode(retainedNodeQuery, map[string]any{"id": 1}, RetainedOptions{})
+	if cursor != nil {
+		cursor.Close()
+		t.Fatal("multi-match query published a cursor")
+	}
+	assertRetainedCode(t, err, RetainedMultipleMatches)
+	if err.(*RetainedError).Retryable() {
+		t.Fatal("multi-match refusal is retryable")
+	}
+	if err.Error() != "hawdb: retained multiple_matches" {
+		t.Fatalf("unexpected multi-match message: %v", err)
+	}
+}
+
 func TestRetainedNodeReadAndCloseConcurrent(t *testing.T) {
 	db := nodeFixture(t, false)
 	cursor := nodeCursor(t, db, 1)
