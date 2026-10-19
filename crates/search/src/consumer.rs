@@ -198,7 +198,9 @@ impl ConsumerProjection {
         // A child publication lock prevents moving its directory on Windows.
         // Releasing that lock would break the owner's exclusion contract.
         if cfg!(windows) {
-            return Err(HawDBError::SearchProjectionPublicationUnsupported);
+            return Err(HawDBError::CapabilityUnavailable {
+                capability: hawdb_core::RuntimeCapability::SearchProjectionPublication,
+            });
         }
         fs::create_dir(destination)?;
         let source = self.index.path.as_ref().expect("persistent consumer");
@@ -572,7 +574,9 @@ mod tests {
             for _ in 0..2 {
                 assert!(matches!(
                     owner.publish_directory(&destination),
-                    Err(HawDBError::SearchProjectionPublicationUnsupported)
+                    Err(HawDBError::CapabilityUnavailable {
+                        capability: hawdb_core::RuntimeCapability::SearchProjectionPublication
+                    })
                 ));
                 assert_eq!(owner.receipt(), receipt);
                 assert_eq!(owner.index.path.as_deref(), Some(source.as_path()));

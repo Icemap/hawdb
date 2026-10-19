@@ -1213,8 +1213,7 @@ fn error_class(error: &HawDBError) -> &'static str {
         | HawDBError::GraphExpansionPayloadLimitExceeded { .. }
         | HawDBError::TransactionConflict { .. }
         | HawDBError::BranchCommandUnsupported { .. } => "execution",
-        HawDBError::CapabilityUnavailable { .. }
-        | HawDBError::SearchProjectionPublicationUnsupported => "capability_unavailable",
+        HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",
     }
 }
 

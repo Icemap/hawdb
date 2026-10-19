@@ -535,9 +535,6 @@ fn json_error_from_hawdb(error: HawDBError) -> serde_json::Value {
             response
         }
         error @ HawDBError::BranchCommandUnsupported { .. } => json_error("execution", error),
-        error @ HawDBError::SearchProjectionPublicationUnsupported => {
-            json_error("capability_unavailable", error)
-        }
         HawDBError::CapabilityUnavailable { capability } => {
             json_error("capability_unavailable", capability.as_str())
         }

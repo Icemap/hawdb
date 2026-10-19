@@ -141,8 +141,7 @@ pub fn format_hawdb_error(error: &HawDBError) -> PyErr {
         HawDBError::TransactionConflict { .. } | HawDBError::AppendSequenceExhausted { .. } => {
             ConflictError::new_err(message)
         }
-        HawDBError::CapabilityUnavailable { .. }
-        | HawDBError::SearchProjectionPublicationUnsupported => CapabilityError::new_err(message),
+        HawDBError::CapabilityUnavailable { .. } => CapabilityError::new_err(message),
         HawDBError::BranchCommandUnsupported { .. }
         | HawDBError::BranchBusy { .. }
         | HawDBError::BranchReclamationBlocked { .. } => BranchError::new_err(message),

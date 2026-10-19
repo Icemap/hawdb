@@ -704,8 +704,7 @@ fn error_class(error: &crate::HawDBError) -> String {
         | crate::HawDBError::AppendSequenceExhausted { .. }
         | crate::HawDBError::BranchBusy { .. }
         | crate::HawDBError::BranchReclamationBlocked { .. } => "storage",
-        crate::HawDBError::CapabilityUnavailable { .. }
-        | crate::HawDBError::SearchProjectionPublicationUnsupported => "capability_unavailable",
+        crate::HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",
     }
     .to_string()
 }

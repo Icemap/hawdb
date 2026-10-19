@@ -1122,7 +1122,27 @@ fn initializer_descriptor_rejection_preserves_typed_cause_and_source() {
 #[test]
 fn windows_consumer_creation_refuses_before_callback_or_publication() {
     let fixture = Fixture::new();
-    let mut db = fixture.database();
+    assert_consumer_publication_refusal(&fixture, fixture.database());
+}
+
+#[test]
+fn disabled_consumer_publication_refuses_before_callback_or_publication() {
+    let fixture = Fixture::new();
+    let db = Database::open_with_config(
+        fixture.0.join("database"),
+        crate::DatabaseConfig {
+            runtime_capabilities: hawdb_core::RuntimeCapabilities::shared_host().with(
+                hawdb_core::RuntimeCapability::SearchProjectionPublication,
+                false,
+            ),
+            ..crate::DatabaseConfig::default()
+        },
+    )
+    .unwrap();
+    assert_consumer_publication_refusal(&fixture, db);
+}
+
+fn assert_consumer_publication_refusal(fixture: &Fixture, mut db: Database) {
     append(&mut db, 1);
     let epoch = db.commit_epoch().unwrap();
     let identity = db
@@ -1151,14 +1171,14 @@ fn windows_consumer_creation_refuses_before_callback_or_publication() {
         for _ in 0..2 {
             assert!(matches!(
                 db.create_search_projection_consumer(
-                    id("windows-refusal"),
+                    id("publication-refusal"),
                     &destination,
                     options(100),
                     |_, _| panic!("unsupported publication must refuse before initialization"),
                 ),
-                Err(Error::Database(
-                    HawDBError::SearchProjectionPublicationUnsupported
-                ))
+                Err(Error::Database(HawDBError::CapabilityUnavailable {
+                    capability: hawdb_core::RuntimeCapability::SearchProjectionPublication
+                }))
             ));
             assert_eq!(names(), before);
             assert_eq!(db.commit_epoch().unwrap(), epoch);

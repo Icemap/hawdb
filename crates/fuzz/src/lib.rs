@@ -2193,8 +2193,7 @@ fn error_class(error: &HawDBError) -> &'static str {
         | HawDBError::BranchBusy { .. }
         | HawDBError::BranchReclamationBlocked { .. } => "storage",
         HawDBError::BranchEvidenceBudgetExceeded { .. } => "execution",
-        HawDBError::CapabilityUnavailable { .. }
-        | HawDBError::SearchProjectionPublicationUnsupported => "capability_unavailable",
+        HawDBError::CapabilityUnavailable { .. } => "capability_unavailable",
     }
 }
 
