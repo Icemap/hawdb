@@ -1,0 +1,6 @@
+{
+  "observed_at": 1792425007.2406578,
+  "exit": 1,
+  "stderr": "the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway\n",
+  "scope": "Observation only, not test failure or reason to rerun."
+}

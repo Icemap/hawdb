@@ -7538,6 +7538,125 @@
       "sha256": "b400b1162ca66bde519fda3030669fc2da881db19b5a5a9ba7ec9a52665ce1de",
       "original_bytes": 39011,
       "original_sha256": "b400b1162ca66bde519fda3030669fc2da881db19b5a5a9ba7ec9a52665ce1de"
+    },
+    {
+      "path": "windows-proof-7edc/receipts/986-7edc-current-ci-state.json",
+      "bytes": 4135,
+      "sha256": "af6317e479d9dc8e3bdb450a42a43dd4a14e3942efe51fb3eaff2c06cc75c74a",
+      "original_bytes": 4135,
+      "original_sha256": "af6317e479d9dc8e3bdb450a42a43dd4a14e3942efe51fb3eaff2c06cc75c74a"
+    },
+    {
+      "path": "windows-proof-7edc/receipts/986-7edc-external-approval-gate-observation.json",
+      "bytes": 82324,
+      "sha256": "923511f60f5ee433a64895a2c8c5e53d16aa44ec0ac621635242a4979e3200f5",
+      "original_bytes": 82324,
+      "original_sha256": "923511f60f5ee433a64895a2c8c5e53d16aa44ec0ac621635242a4979e3200f5"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact/abandonment.txt.json",
+      "bytes": 1790,
+      "sha256": "52de19670698a7c0d2d7b6ba281205a9363d905e0bef1cee68f6e0887b88d1e6",
+      "original_bytes": 1790,
+      "original_sha256": "52de19670698a7c0d2d7b6ba281205a9363d905e0bef1cee68f6e0887b88d1e6"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact/clippy.txt.json",
+      "bytes": 20030,
+      "sha256": "ad949df11c0a08793ce3462fd3f54bf1211532580e53c1d8de415fe57f4c1cec",
+      "original_bytes": 20030,
+      "original_sha256": "ad949df11c0a08793ce3462fd3f54bf1211532580e53c1d8de415fe57f4c1cec"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact/consumer-creation-refusal.txt.json",
+      "bytes": 4480,
+      "sha256": "3c615a1bf1911fdcda72aa378238b34963d18371df917fa4aba4c1660aafc603",
+      "original_bytes": 4480,
+      "original_sha256": "3c615a1bf1911fdcda72aa378238b34963d18371df917fa4aba4c1660aafc603"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact/consumer-publication-refusal.txt.json",
+      "bytes": 6984,
+      "sha256": "560ba3af23a4931d2ea3232e093103d516fe6bcedd39bc657cbc268d8b5082a9",
+      "original_bytes": 6984,
+      "original_sha256": "560ba3af23a4931d2ea3232e093103d516fe6bcedd39bc657cbc268d8b5082a9"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact/go.txt.json",
+      "bytes": 2957,
+      "sha256": "184ee90f8dd2d9571c4f626d385714fbac24d09315c8094e2fba191df2651e8a",
+      "original_bytes": 2957,
+      "original_sha256": "184ee90f8dd2d9571c4f626d385714fbac24d09315c8094e2fba191df2651e8a"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact/retained-arrow.txt.json",
+      "bytes": 5624,
+      "sha256": "7cc132c0dd5faabd5a2b4b7f3393b8a05b0fc1db3b6d4a24739c7f91e9d759f7",
+      "original_bytes": 5624,
+      "original_sha256": "7cc132c0dd5faabd5a2b4b7f3393b8a05b0fc1db3b6d4a24739c7f91e9d759f7"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact/retained-ffi.txt.json",
+      "bytes": 2907,
+      "sha256": "2bec3e8dfa62477e4cda0063314392a93b541276b757cd9462b5456f3eaf0aa0",
+      "original_bytes": 2907,
+      "original_sha256": "2bec3e8dfa62477e4cda0063314392a93b541276b757cd9462b5456f3eaf0aa0"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact/retained-node.txt.json",
+      "bytes": 5348,
+      "sha256": "480672dd2c5693f3098cab8f69d033bf91df32855c4098fcd7525765819e3222",
+      "original_bytes": 5348,
+      "original_sha256": "480672dd2c5693f3098cab8f69d033bf91df32855c4098fcd7525765819e3222"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact/source.txt.json",
+      "bytes": 302,
+      "sha256": "221afc1cd955e123c5ecba4e8558755b431afef9f06ee8627d2ef70e6f9754b1",
+      "original_bytes": 302,
+      "original_sha256": "221afc1cd955e123c5ecba4e8558755b431afef9f06ee8627d2ef70e6f9754b1"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact/toolchain.txt.json",
+      "bytes": 336,
+      "sha256": "bb3dd32a84323a64c96b313e73e4fc7f15307e28845c9138e1ef52a5b3b1cd27",
+      "original_bytes": 336,
+      "original_sha256": "bb3dd32a84323a64c96b313e73e4fc7f15307e28845c9138e1ef52a5b3b1cd27"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact-metadata.json",
+      "bytes": 831,
+      "sha256": "c8cc281d2a9c7e20b3bbd84ad24d26347b98cff92f725d29526d01b49a6c2c64",
+      "original_bytes": 831,
+      "original_sha256": "c8cc281d2a9c7e20b3bbd84ad24d26347b98cff92f725d29526d01b49a6c2c64"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/artifact-qualified-audit.json",
+      "bytes": 3724,
+      "sha256": "cc27b355353dd9b41777c57be8c20ef2c89d73ddaf4d3039be8482f750ec6c3b",
+      "original_bytes": 3724,
+      "original_sha256": "cc27b355353dd9b41777c57be8c20ef2c89d73ddaf4d3039be8482f750ec6c3b"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/job.log.json",
+      "bytes": 143925,
+      "sha256": "f7037112d2d4e5e7b41ff508879f5345d55028191c74ff2eefa4a184e2ecfa1d",
+      "original_bytes": 143925,
+      "original_sha256": "f7037112d2d4e5e7b41ff508879f5345d55028191c74ff2eefa4a184e2ecfa1d"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/log-observation-pending.json",
+      "bytes": 238,
+      "sha256": "de22afea88cbeb914c473fd1edd49a5c903b2397eeab74183874f9b83fa1527b",
+      "original_bytes": 238,
+      "original_sha256": "de22afea88cbeb914c473fd1edd49a5c903b2397eeab74183874f9b83fa1527b"
+    },
+    {
+      "path": "windows-proof-7edc/current-platforms/986-7edc-windows-ci/tested-commit.json",
+      "bytes": 2811,
+      "sha256": "cc440886361e3bc0d48137e6708f8dd8ea2848c07ffaae13c41df800670efb2e",
+      "original_bytes": 2811,
+      "original_sha256": "cc440886361e3bc0d48137e6708f8dd8ea2848c07ffaae13c41df800670efb2e"
     }
   ],
   "format_followup_at": 1792401166.492586,

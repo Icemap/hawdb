@@ -1,0 +1,83 @@
+{
+  "head": "7edc242728bc7febd55f964027f947fbbc8866b9",
+  "checkout": "73711c6fbe97d1d895e6c911c9663bef546604f2",
+  "tested_tree": "9210f4f839fee910aa98580ed2fb00ffdd3044e6",
+  "parents": [
+    "4a2a4c4d4a5d6c22d63589cafdbc4862efb93f10",
+    "7edc242728bc7febd55f964027f947fbbc8866b9"
+  ],
+  "artifact": 12197834261,
+  "run": 39269116642,
+  "job": 118116445137,
+  "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "results": {
+    "retained-ffi.txt": "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.26s",
+    "retained-node.txt": "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 2087 filtered out; finished in 1.30s",
+    "retained-arrow.txt": "test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 2137 filtered out; finished in 0.11s",
+    "abandonment.txt": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2168 filtered out; finished in 3285.79s"
+  },
+  "modeled_schedules": 922,
+  "members": {
+    "artifact/abandonment.txt": {
+      "bytes": 1555,
+      "sha256": "16326a82e250ae819c38a3c78f304879436db7f95da0dc5cb82003776b1833ff"
+    },
+    "artifact/clippy.txt": {
+      "bytes": 14965,
+      "sha256": "0a51fd5a4062b8e7b4aa83b6b9450742bec970fbc227477e3f68bbfbfb9adea4"
+    },
+    "artifact/consumer-creation-refusal.txt": {
+      "bytes": 3481,
+      "sha256": "920e3a5af896d5685a00b3bd03787da0554776a2a12904784784d53f5369c5ea"
+    },
+    "artifact/consumer-publication-refusal.txt": {
+      "bytes": 5239,
+      "sha256": "2c035edd851ceda94be7db9f602f7b3e7688e275ae639f04ca412f95810fb15f"
+    },
+    "artifact/go.txt": {
+      "bytes": 2760,
+      "sha256": "659def17994681795f8b6e815f9ea3d12a4711d9d012310354cd06c04692e47c"
+    },
+    "artifact/retained-arrow.txt": {
+      "bytes": 5327,
+      "sha256": "f749c1489a43056ede9d8b76f1407dbedd3793b52c684e5cb9d60c7a808c2727"
+    },
+    "artifact/retained-ffi.txt": {
+      "bytes": 2675,
+      "sha256": "acac5a38edb82f6c0c88be926ce79a85965c3f5a435efcd2cacafe8e19a012fc"
+    },
+    "artifact/retained-node.txt": {
+      "bytes": 4804,
+      "sha256": "e37a1561d09f056e0047a7e7ae7ca2dd129bb6fb9d3efa9f7d6354af19b0bd51"
+    },
+    "artifact/source.txt": {
+      "bytes": 164,
+      "sha256": "04a999a9c37b4fb9f40009bd2c4763661b331bb675fc6f5e7c3542d852a54bd5"
+    },
+    "artifact/toolchain.txt": {
+      "bytes": 194,
+      "sha256": "7fad09dd8c16d49de37932475436003b5b1763c1015c5ce081ad7692db368ca3"
+    },
+    "artifact-metadata.json": {
+      "bytes": 831,
+      "sha256": "c8cc281d2a9c7e20b3bbd84ad24d26347b98cff92f725d29526d01b49a6c2c64"
+    },
+    "artifact.zip": {
+      "bytes": 11109,
+      "sha256": "71c2118780022b0c8d3dfcf55ae3b1a6532d40b9ce827312a907a6c74553d911"
+    },
+    "tested-commit.json": {
+      "bytes": 2811,
+      "sha256": "cc440886361e3bc0d48137e6708f8dd8ea2848c07ffaae13c41df800670efb2e"
+    },
+    "job.log": {
+      "bytes": 127721,
+      "sha256": "59e63846087598df28d448cab14af91c92bfcef51ce0d5e85dd9759c24ff6403"
+    }
+  },
+  "observed_at": 1792425203.529856,
+  "job_status_at_last_check": "in_progress",
+  "scope": "Original Windows artifact verifies actual synthetic source, Rust1.97.1/MSVC, strict Clippy, FFI18/Node26/Arrow32/Go and922 modeled GC schedules. Whole job still lacks final CheckRun success, so this artifact is not counted as12/12 CI. Modeled faults do not prove physical synchronization. No test retry or workload reduction.",
+  "whole_job_status": "REST and GraphQL still in_progress after raw logs reach orphan-process cleanup",
+  "whole_job_ci_success_claim": false
+}
