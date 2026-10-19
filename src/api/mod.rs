@@ -109,8 +109,10 @@ mod retained_query;
 pub use retained_query::{
     ArrowArray, ArrowArrayStream, ArrowSchema, RetainedArrowCodeOwner, RetainedArrowExport,
     RetainedArrowSchema, RetainedArrowStream, RetainedColumnRole, RetainedColumnSchema,
-    RetainedColumnType, RetainedColumnValues, RetainedQueryBatch, RetainedQueryCursor,
-    RetainedQueryError, RetainedQueryOptions, RetainedQueryProfile, RetainedQueryStatus,
+    RetainedColumnType, RetainedColumnValues, RetainedNodeCursor, RetainedNodeField,
+    RetainedNodeLabels, RetainedNodeSnapshotCursor, RetainedNodeTaskCursor, RetainedNodeView,
+    RetainedQueryBatch, RetainedQueryCursor, RetainedQueryError, RetainedQueryOptions,
+    RetainedQueryProfile, RetainedQueryStatus,
 };
 mod resource_profile;
 mod runtime_cell;
@@ -826,6 +828,7 @@ impl ProjectionRelationalReadBinding {
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct StatementExecutionContext<'a> {
     execution_profile: Option<&'a executor::ReadExecutionProfile>,
+    retained_profile: Option<&'a RetainedQueryProfile>,
     access_control: Option<&'a QueryAccessControlContext>,
     parse_nanos: u64,
 }
@@ -21696,6 +21699,7 @@ impl DatabaseSession<'_> {
     }
 
     /// Opens a retained numeric cursor using this session's row ceiling.
+    /// Arrow streams derived from it inherit the same terminal-error contract.
     pub fn query_with_params_retained(
         &self,
         cypher: &str,

@@ -137,7 +137,10 @@ consumers may stop after any stream error.
 
 Cursor pull, close and Arrow adoption are serialized. `close()` waits for an
 in-flight pull while releasing the GIL; it is idempotent. Batches already
-delivered by that pull remain independently readable. Indexed complete-node views remain a separate delivery.
+delivered by that pull remain independently readable. Indexed complete-node views use
+`Database.retained_node()` and preserve independent node/field/label owners; see
+[the indexed-node API](../../docs/PYTHON_RETAINED_NODE_VIEWS.md) and
+[its ownership contract](../../docs/PYTHON_RETAINED_NODE_OWNERSHIP.md).
 
 With optional PyArrow installed, use its public protocol APIs:
 
