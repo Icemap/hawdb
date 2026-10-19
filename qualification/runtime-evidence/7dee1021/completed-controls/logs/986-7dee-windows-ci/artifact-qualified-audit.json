@@ -1,0 +1,61 @@
+{
+  "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "artifact": 12167253180,
+  "run": 39206648210,
+  "checkout": "cef818b090dd4b1f46d21a2192fb51b776d5321e",
+  "tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-pc-windows-msvc\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "members": {
+    "abandonment.txt": {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-windows-ci/artifact/abandonment.txt",
+      "bytes": 1555,
+      "sha256": "ef927e3f8eabd03fb33397488ec68ff3d446db5d59668dfdd50f10cc2b09a123"
+    },
+    "clippy.txt": {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-windows-ci/artifact/clippy.txt",
+      "bytes": 14965,
+      "sha256": "6e095ba691b6002c6bb14580da89eefceadf26491d1ef0e9db64edd5eb961efb"
+    },
+    "go.txt": {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-windows-ci/artifact/go.txt",
+      "bytes": 2812,
+      "sha256": "377badb3ebf2600e9ee3765368e7ed2de6ca8f9bc49332ba450da6aa104b0617"
+    },
+    "retained-arrow.txt": {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-windows-ci/artifact/retained-arrow.txt",
+      "bytes": 6761,
+      "sha256": "c9f9426fbb2de357d10acc869321237e1a0acbdc699c3c3d7688b8996abef513"
+    },
+    "retained-ffi.txt": {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-windows-ci/artifact/retained-ffi.txt",
+      "bytes": 2675,
+      "sha256": "c1d391578584cde9ae5c063e41d69b3653c598f3b019f55cbbcf1cc6b7cd2d69"
+    },
+    "retained-node.txt": {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-windows-ci/artifact/retained-node.txt",
+      "bytes": 10609,
+      "sha256": "6279a0f6917bc6eb6692ad4193692d6b2ff704aca2acbd44a58292ab30992e54"
+    },
+    "source.txt": {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-windows-ci/artifact/source.txt",
+      "bytes": 164,
+      "sha256": "6e317c3387dc3c2431d302bd631f4622c49c84a4facb35772fe9a0b44a1f79b9"
+    },
+    "toolchain.txt": {
+      "path": "/private/tmp/hawdb-wip-ready-20261015/986-7dee-windows-ci/artifact/toolchain.txt",
+      "bytes": 194,
+      "sha256": "7fad09dd8c16d49de37932475436003b5b1763c1015c5ce081ad7692db368ca3"
+    }
+  },
+  "native_test_counts": {
+    "retained-ffi.txt": 18,
+    "retained-node.txt": 26,
+    "retained-arrow.txt": 32,
+    "abandonment.txt": 1
+  },
+  "go_package_passed": true,
+  "gc_modeled_schedules": 922,
+  "archive_sha256": "468570e1113f5f0eea7fe52896e43daf37423ea1aeff8cf7ce23d636847b01e0",
+  "captured_at": 1792392589.3661509,
+  "scope": "Windows source/toolchain artifacts and complete native result files verified, including18 retained FFI (2 excluded by retained filter),26 Node,32 Arrow and922 modeled abandonment GC schedules. This does not qualify full root/crates Prow, physical power-loss safety, local failures, complete performance or independent approval."
+}

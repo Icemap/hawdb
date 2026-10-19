@@ -1,0 +1,2834 @@
+{
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "source": "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+  "production_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "source_summary_sha256": "bac32dd0220176d4f820355f767ed7fb5b76a68e05cdeb60bce6a97657c79eb5",
+  "observed_at": 1792395563.643475,
+  "groups": [
+    {
+      "group": [
+        "default",
+        1000,
+        "memory"
+      ],
+      "classification": "successful_phase_costs",
+      "modes": {
+        "owned": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1825688,
+              "nearest_rank_p95": 1982694,
+              "maximum": 2104734
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2510779,
+              "nearest_rank_p95": 2668746,
+              "maximum": 2826964
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1462044,
+              "nearest_rank_p95": 1587941,
+              "maximum": 1692177
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 367061,
+              "nearest_rank_p95": 406656,
+              "maximum": 412557
+            }
+          },
+          "whole_child_peak_rss_bytes": 102322176,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "retained": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 254868,
+              "nearest_rank_p95": 365509,
+              "maximum": 366017
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 981028,
+              "nearest_rank_p95": 1101875,
+              "maximum": 1135508
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 183566,
+              "nearest_rank_p95": 270238,
+              "maximum": 273176
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 64372,
+              "nearest_rank_p95": 95779,
+              "maximum": 103216
+            }
+          },
+          "whole_child_peak_rss_bytes": 102658048,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "arrow": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 264067,
+              "nearest_rank_p95": 434048,
+              "maximum": 1112574
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 991447,
+              "nearest_rank_p95": 1362125,
+              "maximum": 2783332
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 130183,
+              "nearest_rank_p95": 235914,
+              "maximum": 855781
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 132815,
+              "nearest_rank_p95": 198134,
+              "maximum": 256793
+            }
+          },
+          "whole_child_peak_rss_bytes": 102653952,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000,
+        "file"
+      ],
+      "classification": "successful_phase_costs",
+      "modes": {
+        "owned": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1588838,
+              "nearest_rank_p95": 1657696,
+              "maximum": 1661254
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2272433,
+              "nearest_rank_p95": 2339489,
+              "maximum": 2360909
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1248678,
+              "nearest_rank_p95": 1284876,
+              "maximum": 1294704
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 338495,
+              "nearest_rank_p95": 377439,
+              "maximum": 380746
+            }
+          },
+          "whole_child_peak_rss_bytes": 102666240,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "retained": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 176241,
+              "nearest_rank_p95": 213192,
+              "maximum": 219103
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 912616,
+              "nearest_rank_p95": 1012394,
+              "maximum": 1321505
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 113283,
+              "nearest_rank_p95": 141275,
+              "maximum": 146105
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 55915,
+              "nearest_rank_p95": 80972,
+              "maximum": 86174
+            }
+          },
+          "whole_child_peak_rss_bytes": 102539264,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "arrow": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 238649,
+              "nearest_rank_p95": 284164,
+              "maximum": 331203
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 970565,
+              "nearest_rank_p95": 1004750,
+              "maximum": 1038372
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 108836,
+              "nearest_rank_p95": 142967,
+              "maximum": 156316
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 127036,
+              "nearest_rank_p95": 151562,
+              "maximum": 188236
+            }
+          },
+          "whole_child_peak_rss_bytes": 102424576,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "file"
+      ],
+      "classification": "successful_phase_costs",
+      "modes": {
+        "owned": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 170911323,
+              "nearest_rank_p95": 176947937,
+              "maximum": 178680213
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 237900284,
+              "nearest_rank_p95": 245424495,
+              "maximum": 292507292
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 116285640,
+              "nearest_rank_p95": 119542242,
+              "maximum": 119976590
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 54162296,
+              "nearest_rank_p95": 60386850,
+              "maximum": 61429929
+            }
+          },
+          "whole_child_peak_rss_bytes": 243466240,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "retained": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 11060278,
+              "nearest_rank_p95": 11816065,
+              "maximum": 11843120
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 85146388,
+              "nearest_rank_p95": 86516112,
+              "maximum": 86590282
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 8158365,
+              "nearest_rank_p95": 8934810,
+              "maximum": 8936217
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2904228,
+              "nearest_rank_p95": 2942509,
+              "maximum": 2969655
+            }
+          },
+          "whole_child_peak_rss_bytes": 194912256,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "arrow": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 14848824,
+              "nearest_rank_p95": 15606340,
+              "maximum": 15763371
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 88092654,
+              "nearest_rank_p95": 90343795,
+              "maximum": 91752343
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 8483977,
+              "nearest_rank_p95": 8930762,
+              "maximum": 9174095
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 6403433,
+              "nearest_rank_p95": 6610130,
+              "maximum": 6938918
+            }
+          },
+          "whole_child_peak_rss_bytes": 194985984,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "memory"
+      ],
+      "classification": "successful_phase_costs",
+      "modes": {
+        "owned": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 171564962,
+              "nearest_rank_p95": 180662370,
+              "maximum": 181381895
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 238019562,
+              "nearest_rank_p95": 247867426,
+              "maximum": 250488277
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 118000325,
+              "nearest_rank_p95": 119820124,
+              "maximum": 120045625
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 54865014,
+              "nearest_rank_p95": 61414076,
+              "maximum": 62494702
+            }
+          },
+          "whole_child_peak_rss_bytes": 218509312,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "retained": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 11815864,
+              "nearest_rank_p95": 12322338,
+              "maximum": 12351907
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 84941467,
+              "nearest_rank_p95": 86574694,
+              "maximum": 86740374
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 8907377,
+              "nearest_rank_p95": 9256659,
+              "maximum": 9446539
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2910688,
+              "nearest_rank_p95": 2998499,
+              "maximum": 3065679
+            }
+          },
+          "whole_child_peak_rss_bytes": 169930752,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "arrow": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 14890301,
+              "nearest_rank_p95": 15574773,
+              "maximum": 15985641
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 87735316,
+              "nearest_rank_p95": 89084110,
+              "maximum": 89913675
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 8525291,
+              "nearest_rank_p95": 9108939,
+              "maximum": 9228078
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 6370374,
+              "nearest_rank_p95": 6459234,
+              "maximum": 7078107
+            }
+          },
+          "whole_child_peak_rss_bytes": 169943040,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "memory"
+      ],
+      "classification": "independent_memory_refusal",
+      "modes": {
+        "owned": {
+          "query_success": false,
+          "row_boundary_proven": false,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3646065664,
+            16777216,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 0,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 1,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 2,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 3,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 4,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 5,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 6,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 7,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 8,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 9,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 10,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 11,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 12,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 13,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 14,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 15,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 16,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 17,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 18,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 19,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 20,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 21,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 22,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 23,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 24,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 25,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 26,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 27,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 28,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 29,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 30,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            }
+          ],
+          "stage": "query"
+        },
+        "retained": {
+          "query_success": false,
+          "row_boundary_proven": false,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3672809472,
+            16777216,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 0,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 1,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 2,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 3,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 4,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 5,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 6,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 7,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 8,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 9,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 10,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 11,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 12,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 13,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 14,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 15,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 16,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 17,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 18,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 19,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 20,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 21,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 22,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 23,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 24,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 25,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 26,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 27,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 28,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 29,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 30,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            }
+          ],
+          "stage": "query"
+        },
+        "arrow": {
+          "query_success": false,
+          "row_boundary_proven": false,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3678979072,
+            16777216,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 0,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 1,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 2,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 3,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 4,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 5,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 6,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 7,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 8,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 9,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 10,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 11,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 12,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 13,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 14,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 15,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 16,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 17,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 18,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 19,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 20,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 21,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 22,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 23,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 24,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 25,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 26,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 27,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 28,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 29,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 30,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            }
+          ],
+          "stage": "query"
+        }
+      }
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "file"
+      ],
+      "classification": "independent_memory_refusal",
+      "modes": {
+        "owned": {
+          "query_success": false,
+          "row_boundary_proven": false,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3636361216,
+            16777216,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 0,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 1,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 2,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 3,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 4,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 5,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 6,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 7,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 8,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 9,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 10,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 11,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 12,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 13,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 14,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 15,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 16,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 17,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 18,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 19,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 20,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 21,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 22,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 23,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 24,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 25,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 26,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 27,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 28,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 29,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            },
+            {
+              "sample": 30,
+              "error": "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget",
+              "error_type": "ResourceBudgetError"
+            }
+          ],
+          "stage": "query"
+        },
+        "retained": {
+          "query_success": false,
+          "row_boundary_proven": false,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3727195136,
+            16777216,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 0,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 1,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 2,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 3,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 4,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 5,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 6,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 7,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 8,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 9,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 10,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 11,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 12,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 13,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 14,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 15,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 16,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 17,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 18,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 19,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 20,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 21,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 22,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 23,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 24,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 25,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 26,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 27,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 28,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 29,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 30,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018352 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            }
+          ],
+          "stage": "query"
+        },
+        "arrow": {
+          "query_success": false,
+          "row_boundary_proven": false,
+          "actual_limits": [
+            0,
+            67108864,
+            268435456,
+            16777216,
+            3714938880,
+            16777216,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 0,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 1,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 2,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 3,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 4,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 5,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 6,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 7,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 8,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 9,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 10,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 11,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 12,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 13,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 14,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 15,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 16,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 17,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 18,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 19,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 20,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 21,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 22,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 23,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 24,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 25,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 26,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 27,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 28,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 29,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 30,
+              "error": "execution error: query memory account retained_source (external_read) would use 1071018704 bytes, exceeding its 268435456-byte budget",
+              "error_type": "RetainedError"
+            }
+          ],
+          "stage": "query"
+        }
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000000,
+        "memory"
+      ],
+      "classification": "successful_phase_costs",
+      "modes": {
+        "owned": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1530100649,
+              "nearest_rank_p95": 1543896128,
+              "maximum": 1548308425
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2037358792,
+              "nearest_rank_p95": 2053188022,
+              "maximum": 2076783206
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 970928349,
+              "nearest_rank_p95": 978256731,
+              "maximum": 980112011
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 559400448,
+              "nearest_rank_p95": 568327717,
+              "maximum": 571056698
+            }
+          },
+          "whole_child_peak_rss_bytes": 1509478400,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "retained": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 108276613,
+              "nearest_rank_p95": 109288075,
+              "maximum": 109812490
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 662651845,
+              "nearest_rank_p95": 674243145,
+              "maximum": 678721467
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 85599955,
+              "nearest_rank_p95": 86407956,
+              "maximum": 87219245
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 22698872,
+              "nearest_rank_p95": 23100980,
+              "maximum": 23163612
+            }
+          },
+          "whole_child_peak_rss_bytes": 1048244224,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "arrow": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 128741072,
+              "nearest_rank_p95": 130088209,
+              "maximum": 130655423
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 673795774,
+              "nearest_rank_p95": 684167678,
+              "maximum": 684720874
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 84976216,
+              "nearest_rank_p95": 85854317,
+              "maximum": 85868867
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 43695394,
+              "nearest_rank_p95": 45025439,
+              "maximum": 45040046
+            }
+          },
+          "whole_child_peak_rss_bytes": 1048064000,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        }
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "memory"
+      ],
+      "classification": "explicit_row_ceiling_refusal",
+      "modes": {
+        "owned": {
+          "query_success": false,
+          "row_boundary_proven": true,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 0,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 1,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 2,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 3,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 4,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 5,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 6,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 7,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 8,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 9,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 10,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 11,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 12,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 13,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 14,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 15,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 16,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 17,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 18,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 19,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 20,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 21,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 22,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 23,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 24,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 25,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 26,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 27,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 28,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 29,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 30,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            }
+          ],
+          "stage": "query"
+        },
+        "retained": {
+          "query_success": false,
+          "row_boundary_proven": true,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 0,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 1,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 2,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 3,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 4,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 5,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 6,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 7,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 8,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 9,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 10,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 11,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 12,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 13,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 14,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 15,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 16,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 17,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 18,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 19,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 20,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 21,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 22,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 23,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 24,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 25,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 26,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 27,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 28,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 29,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 30,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            }
+          ],
+          "stage": "query"
+        },
+        "arrow": {
+          "query_success": false,
+          "row_boundary_proven": true,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 0,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 1,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 2,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 3,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 4,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 5,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 6,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 7,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 8,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 9,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 10,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 11,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 12,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 13,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 14,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 15,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 16,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 17,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 18,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 19,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 20,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 21,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 22,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 23,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 24,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 25,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 26,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 27,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 28,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 29,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 30,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            }
+          ],
+          "stage": "query"
+        }
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000000,
+        "file"
+      ],
+      "classification": "successful_phase_costs",
+      "modes": {
+        "owned": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1630530465,
+              "nearest_rank_p95": 1731108057,
+              "maximum": 1807141568
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 2128459748,
+              "nearest_rank_p95": 2239883341,
+              "maximum": 2312145065
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 1063655928,
+              "nearest_rank_p95": 1176742957,
+              "maximum": 1227271133
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 564592790,
+              "nearest_rank_p95": 579870435,
+              "maximum": 596368305
+            }
+          },
+          "whole_child_peak_rss_bytes": 1639559168,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "retained": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 115328191,
+              "nearest_rank_p95": 119438116,
+              "maximum": 171557752
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 672046105,
+              "nearest_rank_p95": 686836802,
+              "maximum": 721673685
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 92683331,
+              "nearest_rank_p95": 96501846,
+              "maximum": 149258123
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 22489702,
+              "nearest_rank_p95": 23736167,
+              "maximum": 23736254
+            }
+          },
+          "whole_child_peak_rss_bytes": 1171034112,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        },
+        "arrow": {
+          "costs": {
+            "query_boundary_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 141069535,
+              "nearest_rank_p95": 149430441,
+              "maximum": 197034222
+            },
+            "elapsed_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 690195280,
+              "nearest_rank_p95": 707663325,
+              "maximum": 746543212
+            },
+            "native_work_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 97212371,
+              "nearest_rank_p95": 105368172,
+              "maximum": 152802210
+            },
+            "handoff_boundary_residual_ns": {
+              "unit": "ns",
+              "samples": 31,
+              "median": 44044314,
+              "nearest_rank_p95": 45097044,
+              "maximum": 45440249
+            }
+          },
+          "whole_child_peak_rss_bytes": 1173409792,
+          "phase_scope": "Owned Rust facade or retained prepare/pull; residual includes host/handoff/teardown, not pure conversion. Separate medians are not additive."
+        }
+      }
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "file"
+      ],
+      "classification": "explicit_row_ceiling_refusal",
+      "modes": {
+        "owned": {
+          "query_success": false,
+          "row_boundary_proven": true,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 0,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 1,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 2,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 3,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 4,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 5,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 6,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 7,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 8,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 9,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 10,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 11,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 12,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 13,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 14,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 15,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 16,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 17,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 18,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 19,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 20,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 21,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 22,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 23,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 24,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 25,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 26,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 27,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 28,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 29,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            },
+            {
+              "sample": 30,
+              "error": "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000",
+              "error_type": "ExecutionError"
+            }
+          ],
+          "stage": "query"
+        },
+        "retained": {
+          "query_success": false,
+          "row_boundary_proven": true,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 0,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 1,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 2,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 3,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 4,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 5,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 6,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 7,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 8,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 9,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 10,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 11,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 12,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 13,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 14,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 15,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 16,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 17,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 18,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 19,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 20,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 21,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 22,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 23,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 24,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 25,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 26,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 27,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 28,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 29,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            },
+            {
+              "sample": 30,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "RetainedError"
+            }
+          ],
+          "stage": "query"
+        },
+        "arrow": {
+          "query_success": false,
+          "row_boundary_proven": true,
+          "actual_limits": [
+            1000000,
+            1073741824,
+            1073741824,
+            1073741824,
+            2147483648,
+            268435456,
+            67108864
+          ],
+          "errors": [
+            {
+              "sample": -1,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 0,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 1,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 2,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 3,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 4,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 5,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 6,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 7,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 8,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 9,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 10,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 11,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 12,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 13,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 14,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 15,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 16,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 17,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 18,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 19,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 20,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 21,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 22,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 23,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 24,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 25,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 26,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 27,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 28,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 29,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            },
+            {
+              "sample": 30,
+              "error": "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }",
+              "error_type": "ArrowMemoryError"
+            }
+          ],
+          "stage": "query"
+        }
+      }
+    }
+  ],
+  "scope": "Complete original phase10 observations:6 successful mode-cost groups and4 correctly classified refusals.31 measured samples per mode; native profiling and ordinary latency are separate. No pure conversion, production-tail, whole-memory, full90/110 or approval claim."
+}

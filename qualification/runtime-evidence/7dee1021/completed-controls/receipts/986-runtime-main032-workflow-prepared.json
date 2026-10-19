@@ -1,0 +1,14 @@
+{
+  "status": "prepared_uncommitted",
+  "worktree": "/private/tmp/hawdb-wip-ready-20261015/qualify-runtime-main03229633",
+  "published_pr_head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "main": "032296335928261a17d7c98088cee7e1c869957c",
+  "production_tree": "38e8da6f496f7c982be84f15f5ae4cf62f0fbe25",
+  "qualification_tree": "beb53ddbf624cd2d51e3c6253cb5e1cebf5128d3",
+  "changed_paths": [
+    ".github/workflows/native-bindings.yml",
+    "bindings/python/requirements.in",
+    "bindings/python/requirements.txt"
+  ],
+  "scope": "Full root58 plus current root suites, complete presubmit crate suite covering original95 and Python3 targets. Only qualification workflow overlay beyond current-main composition. No fuzz CI, timeout/thread override or producer/consumer change."
+}

@@ -1,0 +1,5 @@
+{
+  "original_bytes": 16,
+  "original_sha256": "c62c677e9e1498bf07c495540db8461e55e2f4e72577b3252bebd1a6d8ec76f7",
+  "raw_utf8": "pyarrow==26.0.0\n"
+}

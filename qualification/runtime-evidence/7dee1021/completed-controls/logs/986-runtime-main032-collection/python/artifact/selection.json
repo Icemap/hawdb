@@ -1,0 +1,22 @@
+{
+  "lane": "python",
+  "recorded_scope": [
+    "//bindings/python:hawdb_python_tests",
+    "//bindings/python:hawdb_python_pydantic_tests",
+    "//bindings/python:requirements.test"
+  ],
+  "selected_tests": [
+    "//bindings/python:hawdb_python_pydantic_tests",
+    "//bindings/python:hawdb_python_tests",
+    "//bindings/python:requirements.test"
+  ],
+  "command": [
+    "bazel",
+    "test",
+    "//bindings/python:hawdb_python_pydantic_tests",
+    "//bindings/python:hawdb_python_tests",
+    "//bindings/python:requirements.test",
+    "--test_output=errors",
+    "--build_event_json_file=runtime-qualification-results/tests.bep.json"
+  ]
+}

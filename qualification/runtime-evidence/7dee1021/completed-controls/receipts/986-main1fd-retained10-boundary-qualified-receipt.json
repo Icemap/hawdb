@@ -1,0 +1,220 @@
+{
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "source": "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+  "tree": "1ecec01f43efaa89e91af922cc54f8639c507ca5",
+  "observed_at": 1792392160.579527,
+  "groups": [
+    {
+      "group": [
+        "default",
+        1000,
+        "file"
+      ],
+      "classification": "successful_full_delivery",
+      "config_row_limit": 0,
+      "verified_delivery_records": 25,
+      "measured_mode_samples": 21,
+      "rows": 1000,
+      "owner_release": true,
+      "error_messages": {},
+      "source_report_sha256": "06e948f0b30d780514f6137a9c59aeee58e76e43d0dffc576a42dcd0b240f2b3",
+      "source_report": "/private/tmp/hawdb-wip-ready-20261015/final-retained-main1fd-7dee1021-artifacts/session-retained-default-1000-file-b7b9862de3e0321100a9070a91cf92cd8b225a55/0.stdout"
+    },
+    {
+      "group": [
+        "default",
+        1000,
+        "memory"
+      ],
+      "classification": "successful_full_delivery",
+      "config_row_limit": 0,
+      "verified_delivery_records": 25,
+      "measured_mode_samples": 21,
+      "rows": 1000,
+      "owner_release": true,
+      "error_messages": {},
+      "source_report_sha256": "4ee78d70c11e341afde00e876d2d173ab13d6194cd10a15e762e44ac2687f7ec",
+      "source_report": "/private/tmp/hawdb-wip-ready-20261015/final-retained-main1fd-7dee1021-artifacts/session-retained-default-1000-memory-b7b9862de3e0321100a9070a91cf92cd8b225a55/0.stdout"
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "file"
+      ],
+      "classification": "successful_full_delivery",
+      "config_row_limit": 0,
+      "verified_delivery_records": 25,
+      "measured_mode_samples": 21,
+      "rows": 100000,
+      "owner_release": true,
+      "error_messages": {},
+      "source_report_sha256": "aa808ecfdabdc5e6c7317083f74d0165303d1899b7538587a6555d00cfef584e",
+      "source_report": "/private/tmp/hawdb-wip-ready-20261015/final-retained-main1fd-7dee1021-artifacts/session-retained-default-100000-file-b7b9862de3e0321100a9070a91cf92cd8b225a55/0.stdout"
+    },
+    {
+      "group": [
+        "default",
+        100000,
+        "memory"
+      ],
+      "classification": "successful_full_delivery",
+      "config_row_limit": 0,
+      "verified_delivery_records": 25,
+      "measured_mode_samples": 21,
+      "rows": 100000,
+      "owner_release": true,
+      "error_messages": {},
+      "source_report_sha256": "afcbf4280b3656604228b5aec658fd84128f6176627a1b0117d54d5c5f0ea4eb",
+      "source_report": "/private/tmp/hawdb-wip-ready-20261015/final-retained-main1fd-7dee1021-artifacts/session-retained-default-100000-memory-b7b9862de3e0321100a9070a91cf92cd8b225a55/0.stdout"
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "file"
+      ],
+      "classification": "independent_memory_refusal",
+      "config_row_limit": 0,
+      "verified_delivery_records": 25,
+      "measured_mode_samples": 21,
+      "rows": 1000000,
+      "owner_release": true,
+      "error_messages": {
+        "owned": [
+          "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+        ],
+        "retained": [
+          "execution error: query memory account retained_source (external_read) would use 1071030672 bytes, exceeding its 268435456-byte budget"
+        ],
+        "arrow": [
+          "execution error: query memory account retained_source (external_read) would use 1071030672 bytes, exceeding its 268435456-byte budget"
+        ]
+      },
+      "source_report_sha256": "300610b94dc9421177dc66d481456fa18a52f5acbe3755c10c20bb9f51fb8220",
+      "source_report": "/private/tmp/hawdb-wip-ready-20261015/final-retained-main1fd-7dee1021-artifacts/session-retained-default-1000000-file-b7b9862de3e0321100a9070a91cf92cd8b225a55/0.stdout"
+    },
+    {
+      "group": [
+        "default",
+        1000000,
+        "memory"
+      ],
+      "classification": "independent_memory_refusal",
+      "config_row_limit": 0,
+      "verified_delivery_records": 25,
+      "measured_mode_samples": 21,
+      "rows": 1000000,
+      "owner_release": true,
+      "error_messages": {
+        "owned": [
+          "execution error: query memory account query result (result_materialization) would use 16780212 bytes, exceeding its 16777216-byte budget"
+        ],
+        "retained": [
+          "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+        ],
+        "arrow": [
+          "execution error: query memory account retained_source (external_read) would use 1071001344 bytes, exceeding its 268435456-byte budget"
+        ]
+      },
+      "source_report_sha256": "00b044a8d92f60d111c3cd457fe16a4ecc04a0cbc25ff4ef1d45db9ee3668a13",
+      "source_report": "/private/tmp/hawdb-wip-ready-20261015/final-retained-main1fd-7dee1021-artifacts/session-retained-default-1000000-memory-b7b9862de3e0321100a9070a91cf92cd8b225a55/0.stdout"
+    },
+    {
+      "group": [
+        "large",
+        1000000,
+        "file"
+      ],
+      "classification": "successful_full_delivery",
+      "config_row_limit": 1000000,
+      "verified_delivery_records": 25,
+      "measured_mode_samples": 21,
+      "rows": 1000000,
+      "owner_release": true,
+      "error_messages": {},
+      "source_report_sha256": "798d9ef52198e512f0b72d48fc1c34039ccffb3e882b798049d210c9aeca063b",
+      "source_report": "/private/tmp/hawdb-wip-ready-20261015/final-retained-main1fd-7dee1021-artifacts/session-retained-large-1000000-file-b7b9862de3e0321100a9070a91cf92cd8b225a55/0.stdout"
+    },
+    {
+      "group": [
+        "large",
+        1000000,
+        "memory"
+      ],
+      "classification": "successful_full_delivery",
+      "config_row_limit": 1000000,
+      "verified_delivery_records": 25,
+      "measured_mode_samples": 21,
+      "rows": 1000000,
+      "owner_release": true,
+      "error_messages": {},
+      "source_report_sha256": "dff222458abe931e649e2843f2095a9285719dc12da1603a481cdde15203e0e0",
+      "source_report": "/private/tmp/hawdb-wip-ready-20261015/final-retained-main1fd-7dee1021-artifacts/session-retained-large-1000000-memory-b7b9862de3e0321100a9070a91cf92cd8b225a55/0.stdout"
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "file"
+      ],
+      "classification": "explicit_row_ceiling_refusal",
+      "config_row_limit": 1000000,
+      "verified_delivery_records": 25,
+      "measured_mode_samples": 21,
+      "rows": 1000001,
+      "owner_release": true,
+      "error_messages": {
+        "owned": [
+          "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000"
+        ],
+        "retained": [
+          "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+        ],
+        "arrow": [
+          "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+        ]
+      },
+      "source_report_sha256": "72e07bb8f3fe0cca45db9f9572c981a442cc786786314299b0663fbb077220e7",
+      "source_report": "/private/tmp/hawdb-wip-ready-20261015/final-retained-main1fd-7dee1021-artifacts/session-retained-large-1000001-file-b7b9862de3e0321100a9070a91cf92cd8b225a55/0.stdout"
+    },
+    {
+      "group": [
+        "large",
+        1000001,
+        "memory"
+      ],
+      "classification": "explicit_row_ceiling_refusal",
+      "config_row_limit": 1000000,
+      "verified_delivery_records": 25,
+      "measured_mode_samples": 21,
+      "rows": 1000001,
+      "owner_release": true,
+      "error_messages": {
+        "owned": [
+          "execution error: read query returned more than 1000000 rows, exceeding max_read_result_rows 1000000"
+        ],
+        "retained": [
+          "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+        ],
+        "arrow": [
+          "retained query ResultBudget { rows: 1000001, payload_bytes: 24000024 }"
+        ]
+      },
+      "source_report_sha256": "cc5b10592267b1b190bab75b949db56dad30cec856cdedcb207614344e179c0e",
+      "source_report": "/private/tmp/hawdb-wip-ready-20261015/final-retained-main1fd-7dee1021-artifacts/session-retained-large-1000001-memory-b7b9862de3e0321100a9070a91cf92cd8b225a55/0.stdout"
+    }
+  ],
+  "measured_mode_samples": 210,
+  "verified_delivery_records": 250,
+  "default_1m_refusals": 2,
+  "explicit_1m_successes": 2,
+  "explicit_1m_plus1_row_refusals": 2,
+  "scope": "Full retained10 source-bound boundary/delivery observations; frozen producers already verified by collector. Default0 means no row ceiling; independent memory refusals preserved. Explicit1M permits1M and surfaces an error at1M+1. Earlier legal stream batches may already have been delivered; the violating batch is not returned. End-of-operation zero owners proves cleanup, not absence of prior streamed owners. No full90/110, universal memory bound, pure conversion, independent review or approval claim.",
+  "stream_semantics_source_review": {
+    "src/api/retained_query.rs": "3bee9aef41f68caec2b6ddd0e18c5312d9ed2cbe22ebf1490da5fa7057273da5",
+    "src/api/retained_query/tests.rs": "31e1c2811f565c6068360c1c3c5b8519c20ba0f5cfeed3d9f28cc3430f5820eb",
+    "bindings/benchmarks/retained_boundary.py": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1"
+  },
+  "stream_semantics_observation": "Native cumulative emitted-row check precedes returning the current batch, after earlier batches may have succeeded. Existing tighter-library-budget tests explicitly receive a prior batch then ResultBudget. Full benchmark consumer propagates the error and closes batch/view/reader/cursor handles in finally blocks; refused operation has no qualified latency or successful partial report."
+}

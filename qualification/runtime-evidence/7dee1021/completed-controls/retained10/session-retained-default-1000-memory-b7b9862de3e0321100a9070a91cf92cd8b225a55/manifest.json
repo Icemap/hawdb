@@ -1,0 +1,71 @@
+{
+  "source": [
+    "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+    "1ecec01f43efaa89e91af922cc54f8639c507ca5",
+    "7dee10212db9d7f465853bb7d46173c188893d06"
+  ],
+  "engine_source": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "overlay_files": [
+    ".github/workflows/native-bindings.yml",
+    "BUILD.bazel",
+    "Cargo.toml",
+    "bindings/python/BUILD.bazel",
+    "bindings/python/Cargo.toml",
+    "bindings/python/src/database.rs",
+    "bindings/python/src/lib.rs",
+    "qualification/phases/consume.py",
+    "qualification/resources/baseline-source.json",
+    "qualification/resources/campaign.json",
+    "qualification/resources/numeric.py",
+    "qualification/resources/numeric_driver.py",
+    "qualification/resources/run.py",
+    "qualification/retained/configured.py",
+    "qualification/retained/run.py",
+    "src/api/retained_query.rs",
+    "src/embedded.rs",
+    "src/lib.rs",
+    "src/retained_phase_profile.rs"
+  ],
+  "producer_hashes": {
+    "/home/runner/work/_temp/retained-evidence/frozen/retained_write_control.py": "4b83e1e954e79f6b7a5d987c0961bddc08fa2ed49cfd56107eaca878f7633de8",
+    "/home/runner/work/_temp/retained-evidence/frozen/retained_boundary.py": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+    "/home/runner/work/_temp/retained-evidence/frozen/configured.py": "371ff7ded3312a45ec4deb4413fd83a751fded0bc6791d9fd6c8785fe3a6c4ac",
+    "/home/runner/work/_temp/retained-evidence/frozen/hawdb/_hawdb.so": "472de631921f8a4bea3b098f27d8cdb2a7656ce87e5fb4eeaee116cbd550dba1",
+    "/home/runner/work/_temp/retained-evidence/frozen/hawdb/pydantic.py": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+    "/home/runner/work/_temp/retained-evidence/frozen/hawdb/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/runner/work/_temp/retained-evidence/frozen/hawdb/magic.py": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+    "/home/runner/work/_temp/retained-evidence/frozen/hawdb/_hawdb.pyi": "6c84c802cae732f8446298f18d9901e111d20d9d573add30d10f04c2656cbaf2",
+    "/home/runner/work/_temp/retained-evidence/frozen/hawdb/_display.py": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+    "/home/runner/work/_temp/retained-evidence/frozen/hawdb/__init__.py": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+    "/home/runner/work/_temp/retained-evidence/frozen/hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6",
+    "/opt/hostedtoolcache/Python/3.14.8/x64/bin/python3.14": "a5230d8adbd26c2185d77fb003597c4ee9c44c2369fc179122ff7c3a3a58ae59"
+  },
+  "rows": 1000,
+  "backend": "memory",
+  "configured_limits": {
+    "rows": 0,
+    "logical_payload_bytes": 67108864,
+    "query_memory_bytes": 268435456,
+    "result_budget_bytes": 16777216,
+    "runtime_memory_bytes": null,
+    "batch_payload_bytes": 16777216,
+    "blocking_operator_bytes": 67108864
+  },
+  "defaults_changed": false,
+  "timed_consumers_changed": false,
+  "configuration": "default",
+  "engine_default_result_rows": 0,
+  "python": "3.14.8 (main, Oct  1 2026, 02:38:33) [GCC 13.3.0]",
+  "build": "default Bazel configuration, -c opt",
+  "scope": [
+    "Actual default constructors and zero/unlimited row policy; finite byte budgets remain active.",
+    "Python: seven rotating rounds plus original warmup/reference.",
+    "No configured Go measurement is claimed.",
+    "Batch rows stay at 256. The typed batch byte allowance also raises plan-derived admission; actual batches remain row-limited.",
+    "The earlier d56bb8cf campaign retains its 64 MiB owned-admission refusal and missing teardown receipt.",
+    "The 6c1779a1 attempt records Linux clamping a requested 4 GiB governor to available memory; no measurements from that failed assertion qualify.",
+    "Refused owned references prevent numeric speedup claims.",
+    "Process RSS includes setup/runtime; no foreign-heap bound.",
+    "The complete ordinary matrix is separate."
+  ]
+}

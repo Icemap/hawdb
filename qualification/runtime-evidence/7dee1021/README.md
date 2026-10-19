@@ -69,3 +69,42 @@ Original general/Python failures still require disposition.
 Counters and controls here are frozen snapshots. Full original performance
 matrices, complete resource/error qualification, exact-head Prow and genuine
 independent review/approval remain open. No held-write result waives them.
+
+## Full boundary, phase and Windows observations
+
+The completed retained10 and phase10 controls each classify6 successful groups,
+2 default1M independent-memory refusals and2 explicit1M+1 row refusals across
+memory/file. Session0 is unlimited rows; independent memory/payload budgets stay
+active. Explicit1M succeeds at1M and errors at1M+1. Numeric streaming can already
+have delivered earlier legal batches: the violating batch is not returned, and
+final zero owners proves cleanup rather than atomic whole-result delivery.
+The frozen full consumer propagates errors; no failed latency ratio is qualified.
+
+Supplemental checkpoint-file controls complete6 allocation/error and6 phase
+groups using the unchanged consumer,512-row setup batches,31measured samples and
+explicit65536-row setup checkpoints. Three1M+1 failure modes each have one
+nonzero process-global native allocation window with no counter disagreements;
+retain these observations without asserting per-query leakage or leak absence.
+All numeric and Arrow owners and pool observations are preserved. Native work,
+handoff residual and checksum-consumer time remain separate; residual is not
+pure conversion and separately computed medians are not additive.
+
+Windows source/toolchain files verify retainedFFI18,Node26,Arrow32,Go and922
+modeled abandonment GC schedules on the exact7dee tree. Modeled writes/torn
+writes and reordering are not physical-storage synchronization proof.
+
+Actual main032 updates only optional Pydantic test requirements relative to1fd.
+The standalone qualification34988952 fixes production integration tree38e8da6f
+and a single workflow overlay. Its source-verified Python3 targets pass with
+357/7skip and43/1skip plus lock validation. Root58+ and crate95+ were still live
+when this snapshot was prepared; inspect later CI evidence before claiming a
+pass. Standalone results are not Prow/Tide status, local failure disposition or
+independent approval. The uncommitted temporary-directory proposal was not
+adopted as a timeout fix.
+
+Indexed original matrix snapshots are partial; failed or refused groups retain
+their actual outcomes and source. Frozen native producer binaries remain in the
+referenced GitHub artifacts rather than this repository packet; the original
+collectors verified their hashes before auditing the reports. Full ordinary90,
+resource110, foreign-heap/error closure, genuine review/approval and actual final
+Tide merge/history exclusion audit remain required.

@@ -1,0 +1,28 @@
+{
+  "observed_at": 1792392906.942101,
+  "published_head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "tested_base": "1fd242eb70de5044740ab67a8beb4037d7ace325",
+  "actual_main": "032296335928261a17d7c98088cee7e1c869957c",
+  "changed_files": [
+    "bindings/python/requirements.in",
+    "bindings/python/requirements.txt"
+  ],
+  "requirements_input_diff": "diff --git a/bindings/python/requirements.in b/bindings/python/requirements.in\nindex eadc093c..054716f2 100644\n--- a/bindings/python/requirements.in\n+++ b/bindings/python/requirements.in\n@@ -3,4 +3,4 @@ pytest==9.1.1\n # pytest's Windows dependency, included so the same lock works on every host.\n colorama==0.4.6\n # The optional `hawdb[pydantic]` extra, for its own test target.\n-pydantic==2.14.0\n+pydantic==2.14.1",
+  "tracked_native_library_and_benchmark_source_identical": true,
+  "benchmark_workflow_audit": {
+    "7dee10212db9d7f465853bb7d46173c188893d06": {
+      "sha256": "132d27e0f467ffe439d7a667c66eb24ccfb75d33d6bffeeb5ca15af89641250b",
+      "pip_install_lines": [],
+      "requirements_or_pydantic_mentions": []
+    },
+    "b7b9862de3e0321100a9070a91cf92cd8b225a55": {
+      "sha256": "8f998fb793caca931fab9c4d37cf13d95a621fb5cab97af29350a6d717a4431b",
+      "pip_install_lines": [
+        "run: python -m pip install pyarrow==26.0.0",
+        "run: python -m pip install pyarrow==26.0.0"
+      ],
+      "requirements_or_pydantic_mentions": []
+    }
+  },
+  "scope": "Main advanced only optional Pydantic test dependency2.14.0\u21922.14.1 and its lock. No current PR conflict; existing7dee measurements retain their actual source. This is tracked-source/workflow scope evidence, not action-key equality, new-main Python-extra qualification, updated Prow or approval. Current merged-tree tests still need qualification before final integration."
+}

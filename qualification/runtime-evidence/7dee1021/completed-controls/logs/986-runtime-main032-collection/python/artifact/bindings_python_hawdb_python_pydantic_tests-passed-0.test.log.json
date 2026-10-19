@@ -1,0 +1,5 @@
+{
+  "original_bytes": 838,
+  "original_sha256": "b71d18e03755c003a2e07e74e9cd626a7d0389903733845122070c308dfdd14f",
+  "raw_utf8": "exec ${PAGER:-/usr/bin/less} \"$0\" || exit 1\nExecuting tests from //bindings/python:hawdb_python_pydantic_tests\n-----------------------------------------------------------------------------\n============================= test session starts ==============================\nplatform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0\nrootdir: /home/runner/.bazel/sandbox/processwrapper-sandbox/457/execroot/_main/bazel-out/k8-fastbuild/bin/bindings/python/hawdb_python_pydantic_tests.runfiles/_main\ncollected 44 items\n\nbindings/python/tests/test_pydantic.py ................................. [ 75%]\n........                                                                 [ 93%]\nbindings/python/tests/test_pydantic_extra.py ..s                         [100%]\n\n======================== 43 passed, 1 skipped in 7.48s =========================\n"
+}

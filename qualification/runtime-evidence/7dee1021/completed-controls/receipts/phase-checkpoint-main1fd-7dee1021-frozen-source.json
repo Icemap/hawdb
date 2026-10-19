@@ -1,0 +1,26 @@
+{
+  "engine": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "engine_tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "qualification_base": "b7b9862de3e0321100a9070a91cf92cd8b225a55",
+  "qualification_tree": "1ecec01f43efaa89e91af922cc54f8639c507ca5",
+  "observer_source": "899ccd44c8bec91e39a013c0c58edc38e321603a",
+  "observer_tree": "de4f0d677e39c43ab9eafa1060225640d94f76f0",
+  "file_sha256": {
+    "retained_boundary.py": "a9275fa36bd57feddc463a53b60f386d37bebba4337b4fee87040ba35ae3a9d1",
+    "consume.py": "1fa8de3575a4476487baf81a4753ddadd3bee450f989cae5960283c4ed426032",
+    "hawdb/magic.py": "8403d5c1df7533920dd4b148546ec322085b9399ba1b738ba0567faddc721516",
+    "hawdb/__init__.pyi": "32c8b186d221c9450258b4fd31a73448caf7374e8c974bbd0c551be8955965f6",
+    "hawdb/__init__.py": "fa0a2195879170b969b6615027e4635937b5c061639e378cd4cf50e1d0ad2137",
+    "hawdb/_display.py": "dff44f8fac60af4b44e59737efd4c8a637928a67386b2380af36b43fdac94e52",
+    "hawdb/_hawdb.so": "a6d80036d05a527226cd85892f70712889cee6897b99ef10927c251cc62c55af",
+    "hawdb/pydantic.py": "9971e91a09f01ec3ff5a37cc595eb751a1021ada380ae6701603ebbc0756e6c7",
+    "hawdb/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hawdb/_hawdb.pyi": "6c84c802cae732f8446298f18d9901e111d20d9d573add30d10f04c2656cbaf2"
+  },
+  "interpreter": {
+    "path": "/Users/hawkingrei/tmp/bazel/repositories/contents/d4b81707e7f8b2ed947ecb016b57a66d8641030b72497b0e47896b5b625fbc87/6f7abe37-f074-4ee6-a52b-40b52f563b9e/bin/python3.11",
+    "sha256": "bb713af5187134b02839a3ef0bef2aa95457e4c1c6c17f1db16f49e798c41a8b"
+  },
+  "setup_checkpoint_rows": 65536,
+  "scope": "Opt-in supplemental fixture maintenance. Native inputs identical between native source and3 Python observer files; original defaults, complete consumers,512row write batches,31samples and all original matrices unchanged."
+}

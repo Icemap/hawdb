@@ -1,0 +1,19 @@
+{
+  "role": "python",
+  "job": 117935573659,
+  "head": "34988952ebae65768950a269d9ddab5a0870bf1e",
+  "job_conclusion": "success",
+  "source_verified": true,
+  "indexed_files_verified": 11,
+  "zip_sha256": "56017d65af44b5af204a2b345ca9820e8cf3425dced292af0349f22223c2fff2",
+  "log_sha256": "c65f84810b0d781b00a04119f7bbb86c8e5501c164a2e1025e4227aaf9f39d2b",
+  "command_exit": 0,
+  "selected_test_count": 3,
+  "observed_test_summaries": 3,
+  "missing_summaries": [],
+  "statuses": {
+    "PASSED": 3
+  },
+  "all_selected_passed": true,
+  "scope": "Standalone current-main runtime evidence, preserving all outcomes. Not Prow/Tide status, local failure disposition, complete performance acceptance or genuine approval."
+}

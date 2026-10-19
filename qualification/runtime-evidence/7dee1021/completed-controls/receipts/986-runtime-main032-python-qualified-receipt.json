@@ -1,0 +1,21 @@
+{
+  "qualification_source": "34988952ebae65768950a269d9ddab5a0870bf1e",
+  "published_pr_head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "main": "032296335928261a17d7c98088cee7e1c869957c",
+  "production_tree": "38e8da6f496f7c982be84f15f5ae4cf62f0fbe25",
+  "job": 117935573659,
+  "targets": 3,
+  "summary_lines": [
+    {
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-runtime-main032-collection/python/artifact/bindings_python_hawdb_python_pydantic_tests-passed-0.test.log",
+      "line": "======================== 43 passed, 1 skipped in 7.48s ========================="
+    },
+    {
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-runtime-main032-collection/python/artifact/bindings_python_hawdb_python_tests-passed-0.test.log",
+      "line": "======================= 357 passed, 7 skipped in 53.60s ========================"
+    }
+  ],
+  "artifact_audit": "/private/tmp/hawdb-wip-ready-20261015/986-runtime-main032-collection/python/qualified-audit.json",
+  "artifact_audit_sha256": "c7e80ab1caa85c409404ecd7bf23a2433a23993286549374768d4ba484695f17",
+  "scope": "Fresh standalone current-main composition Python targets pass with original deadlines/assertions. Same source/library plus optional Pydantic test dependency update and declared workflow overlay. No root/crates/Prow pass, local-cause or approval claim."
+}

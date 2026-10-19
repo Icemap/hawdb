@@ -1,0 +1,31 @@
+{
+  "status": "complete_supplemental_only",
+  "pid": 91701,
+  "steps": [
+    {
+      "role": "resource_audit",
+      "script": "audit-resource-checkpoint-main1fd-7dee1021.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-supplemental-resource_audit.log",
+      "started": 1792393609.536447,
+      "exit": 0,
+      "ended": 1792393609.967477
+    },
+    {
+      "role": "phase_controls",
+      "script": "run-phase-checkpoint-main1fd-7dee1021.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-supplemental-phase_controls.log",
+      "started": 1792393609.9679282,
+      "exit": 0,
+      "ended": 1792394333.910861
+    },
+    {
+      "role": "phase_audit",
+      "script": "audit-phase-checkpoint-main1fd-7dee1021.py",
+      "log": "/private/tmp/hawdb-wip-ready-20261015/986-main1fd-supplemental-phase_audit.log",
+      "started": 1792394333.9492621,
+      "exit": 0,
+      "ended": 1792394335.425452
+    }
+  ],
+  "ended": 1792394335.470634
+}

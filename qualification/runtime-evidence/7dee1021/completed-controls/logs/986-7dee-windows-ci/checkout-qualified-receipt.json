@@ -1,0 +1,19 @@
+{
+  "head": "7dee10212db9d7f465853bb7d46173c188893d06",
+  "job": 117910837848,
+  "conclusion": "success",
+  "checkout": "cef818b090dd4b1f46d21a2192fb51b776d5321e",
+  "tree": "562442cf50a13aac579903847ee6ba295d5d5e4e",
+  "checkout_tree_verified": true,
+  "raw_log_bytes": 123286,
+  "raw_log_sha256": "b8e22d480d40ed30b9b70503fe9d0d7bacdccc3145fd1f67e728e82b8acba976",
+  "summary_lines": [
+    "2026-10-19T05:57:44.0787379Z test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.25s",
+    "2026-10-19T06:01:23.4087620Z test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 2083 filtered out; finished in 1.62s",
+    "2026-10-19T06:03:31.6285733Z test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 2133 filtered out; finished in 0.13s",
+    "2026-10-19T06:41:41.6936577Z branch-abandonment-gc-power-v1 schedules=922",
+    "2026-10-19T06:41:41.6938660Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2164 filtered out; finished in 2289.26s"
+  ],
+  "captured_at": 1792392509.5624971,
+  "scope": "Full Windows job log and exact synthetic checkout tree verified. Detailed native test/artifact coverage still requires audit; modeled schedules do not establish physical power-loss safety, and no general/Python failure disposition or approval is claimed."
+}
