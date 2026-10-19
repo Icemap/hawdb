@@ -288,12 +288,13 @@ impl SpillBindingRecord {
         };
         let bytes = memory_bytes(&item);
         if bytes > max_item_bytes {
+            let error = tracker.limit_error(bytes, 0, max_item_bytes, format!(
+                "{operator} spill merge item uses {bytes} bytes, exceeding its {max_item_bytes}-byte allowance"
+            ));
             drop(item);
             drop(key_allocation);
             tracker.release(decoded_binding_bytes);
-            return Err(HawDBError::Execution(format!(
-                "{operator} spill merge item uses {bytes} bytes, exceeding its {max_item_bytes}-byte allowance"
-            )));
+            return Err(error);
         }
         if let Err(error) = ensure_operator_item_fits(operator, bytes, tracker) {
             drop(item);
@@ -303,13 +304,17 @@ impl SpillBindingRecord {
         }
         let additional_bytes = bytes.saturating_sub(decoded_binding_bytes);
         if tracker.would_exceed(additional_bytes) {
+            let error = tracker.state_error(
+                additional_bytes,
+                format!(
+                    "{operator} spill merge fan-in uses more than blocking_operator_bytes {}",
+                    tracker.budget_bytes
+                ),
+            );
             drop(item);
             drop(key_allocation);
             tracker.release(decoded_binding_bytes);
-            return Err(HawDBError::Execution(format!(
-                "{operator} spill merge fan-in uses more than blocking_operator_bytes {}",
-                tracker.budget_bytes
-            )));
+            return Err(error);
         }
         let admission = match key_allocation.as_mut() {
             Some(allocation) => tracker.try_charge_from(allocation, additional_bytes),
@@ -1072,6 +1077,73 @@ mod tests {
         drop(retained);
         assert_eq!(ledger.snapshot().used_bytes, 0);
         std::fs::remove_dir_all(&memory.spill_directory).unwrap();
+    }
+
+    #[test]
+    fn spill_merge_refusals_report_effective_limits_before_releasing_decode_charge() {
+        use hawdb_core::{ResourceBudgetKind, ResourceBudgetScope};
+
+        let binding = empty_binding();
+        let decoded = binding_memory_bytes(&binding);
+        let mut memory = test_memory("merge-refusal-metadata");
+        memory.blocking_operator_bytes = NonZeroUsize::new(decoded * 3).unwrap();
+        let ledger = QueryMemoryLedger::new(memory.query_memory_bytes);
+        let spill_budget = SpillBudgetTracker::with_ledger("MergeTest", &memory, &ledger);
+        let (run, mut writer) = spill_budget.create_run("merge-refusal").unwrap();
+        writer.write(0, &binding, &spill_budget).unwrap();
+        writer.finish().unwrap();
+        let account = ledger.account(
+            QueryMemoryClass::BlockingState,
+            "MergeTest",
+            memory.blocking_operator_bytes,
+        );
+        let mut tracker =
+            OperatorMemoryTracker::with_blocking_account(memory.blocking_operator_bytes, account);
+        tracker.try_charge(decoded).unwrap();
+
+        for item_limit in [decoded * 2, decoded * 4] {
+            let mut reader = run.reader().unwrap();
+            let record = reader
+                .read_binding_record(memory.blocking_operator_bytes.get(), &spill_budget)
+                .unwrap()
+                .unwrap();
+            let error = record
+                .try_map(
+                    "MergeTest",
+                    item_limit,
+                    &mut tracker,
+                    |_, binding| Ok((binding, vec![0u8; decoded * 2])),
+                    |(binding, extra)| binding_memory_bytes(binding) + extra.capacity(),
+                )
+                .unwrap_err();
+            let HawDBError::ResourceBudgetExceeded(cause) = error else {
+                panic!("expected typed merge refusal, got {error}");
+            };
+            assert_eq!(cause.resource, ResourceBudgetKind::MemoryBytes);
+            assert_eq!(cause.scope, ResourceBudgetScope::Operator);
+            assert_eq!(cause.owner, "MergeTest");
+            assert_eq!(cause.memory_class, Some("blocking_state"));
+            assert_eq!(
+                cause.budget_option,
+                "ExecutionMemoryConfig.blocking_operator_bytes"
+            );
+            let expected = if item_limit == decoded * 2 {
+                (decoded * 3, 0, item_limit)
+            } else {
+                (decoded * 2, decoded * 2, decoded * 3)
+            };
+            assert_eq!(
+                (cause.requested, cause.used, cause.budget),
+                (expected.0 as u64, expected.1 as u64, expected.2 as u64)
+            );
+            assert_eq!(tracker.used_bytes, decoded);
+            assert_eq!(ledger.snapshot().used_bytes, decoded);
+        }
+        drop(tracker);
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+        drop(run);
+        assert_eq!(memory.spill_pool_snapshot().unwrap().active_bytes, 0);
+        std::fs::remove_dir(&memory.spill_directory).unwrap();
     }
 
     fn empty_binding() -> Binding {

@@ -674,6 +674,83 @@ fn legacy_merge_entrypoint_keeps_pipeline_accounting_and_signature() {
 }
 
 #[test]
+fn legacy_merge_refusal_preserves_explicit_budget_origin_and_releases_state() {
+    let directory = Directory::new();
+    let memory = ExecutionMemoryConfig {
+        blocking_operator_bytes: NonZeroUsize::new(4096).unwrap(),
+        min_spill_free_bytes: NonZeroU64::MIN,
+        spill_directory: directory.0.clone(),
+        ..ExecutionMemoryConfig::default()
+    };
+    let ledger = QueryMemoryLedger::new(NonZeroUsize::new(8192).unwrap());
+    let account = ledger.account(
+        QueryMemoryClass::BlockingState,
+        "legacy merge",
+        memory.blocking_operator_bytes,
+    );
+    let mut spill = SpillBudgetTracker::with_ledger("legacy merge", &memory, &ledger);
+    let rows: Vec<_> = (0..2)
+        .map(|value| SortRunRow {
+            sort_values: Vec::new(),
+            ordinal: value as u64,
+            binding: Binding::scalar("value", Value::Int(value)),
+        })
+        .collect();
+    let item_bytes = rows[0].memory_bytes();
+    let decoded_bytes = binding_memory_bytes(&rows[0].binding);
+    let mut runs = Vec::new();
+    for row in rows {
+        runs.push(spill_sort_run(&mut vec![row], &mut spill, None).unwrap());
+    }
+    for (budget, should_pass) in [(item_bytes, false), (item_bytes * 2, true)] {
+        let mut output = Vec::new();
+        let result = merge_sort_runs(
+            &runs,
+            &[],
+            &Catalog::default(),
+            NonZeroUsize::new(budget).unwrap(),
+            &spill,
+            &account,
+            1,
+            0,
+            2,
+            None,
+            &mut |batch| {
+                output.extend(batch);
+                Ok(BatchControl::Continue)
+            },
+        );
+        if should_pass {
+            result.unwrap();
+            assert_eq!(
+                output,
+                (0..2)
+                    .map(|value| Binding::scalar("value", Value::Int(value)))
+                    .collect::<Vec<_>>()
+            );
+        } else {
+            let error = result.unwrap_err();
+            let HawDBError::ResourceBudgetExceeded(cause) = error else {
+                panic!("expected a typed merge-state refusal: {error}");
+            };
+            assert_eq!(cause.resource, hawdb_core::ResourceBudgetKind::MemoryBytes);
+            assert_eq!(cause.scope, hawdb_core::ResourceBudgetScope::Operator);
+            assert_eq!(cause.owner, "legacy merge");
+            assert_eq!(cause.memory_class, Some("blocking_state"));
+            assert_eq!(cause.budget, budget as u64);
+            assert_eq!(cause.used, item_bytes as u64);
+            assert_eq!(cause.requested, decoded_bytes as u64);
+            assert_eq!(
+                cause.budget_option,
+                "OperatorMemoryTracker::with_account(budget_bytes)"
+            );
+            assert!(output.is_empty());
+        }
+        assert_eq!(ledger.snapshot().used_bytes, 0);
+    }
+}
+
+#[test]
 fn spilled_json_sort_keys_use_query_working_memory_during_merge_and_compaction() {
     use hawdb_core::ResourceBudgetScope;
     use hawdb_plan_cypher::ProjectionExpression;
@@ -765,9 +842,11 @@ fn spilled_json_sort_keys_use_query_working_memory_during_merge_and_compaction()
                     &runs,
                     &items,
                     &catalog,
-                    memory.blocking_operator_bytes,
+                    OperatorMemoryTracker::with_blocking_account(
+                        memory.blocking_operator_bytes,
+                        account.clone(),
+                    ),
                     &spill,
-                    &account,
                     &key_memory,
                     AccountedBindingBatch::with_ledger(
                         "sort merge",

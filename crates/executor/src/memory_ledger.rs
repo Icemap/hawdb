@@ -607,6 +607,25 @@ pub struct QueryMemoryLease {
 }
 
 impl QueryMemoryLease {
+    pub(crate) fn operator_budget_error(
+        &self,
+        requested: usize,
+        used: usize,
+        budget: usize,
+        budget_option: &'static str,
+        message: String,
+    ) -> HawDBError {
+        let state = lock_recover(&self.account.ledger.inner.state);
+        state.accounts[&self.account.account_id].budget_error(
+            ResourceBudgetScope::Operator,
+            requested,
+            used,
+            budget,
+            budget_option,
+            message,
+        )
+    }
+
     pub(crate) fn belongs_to(&self, account: &QueryMemoryAccount) -> bool {
         self.account.account_id == account.account_id
             && Arc::ptr_eq(&self.account.ledger.inner, &account.ledger.inner)
