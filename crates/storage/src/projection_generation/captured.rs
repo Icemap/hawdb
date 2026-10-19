@@ -95,6 +95,7 @@ impl ProjectionGenerationStore {
         limits: ProjectionGenerationGcLimits,
         shared: &ProjectionGenerationShared,
         report: &mut ProjectionGenerationGcReport,
+        stabilized_heads: &mut BTreeSet<PathBuf>,
     ) -> Result<bool, ProjectionGenerationError> {
         if !self.file_exists(path)? {
             return Ok(true);
@@ -133,7 +134,7 @@ impl ProjectionGenerationStore {
                         "active generation has no immutable manifest".into(),
                     ));
                 }
-                self.stabilize_selected_head(&head_path, &head)?;
+                self.stabilize_reclamation_head(&head_path, &head, stabilized_heads)?;
             }
             if !admit_reclamation(bytes, limits, report) {
                 return Ok(false);
@@ -184,7 +185,7 @@ impl ProjectionGenerationStore {
         // loss. Persist its complete closure/head before deleting any old root
         // that the durable namespace could otherwise select again.
         if let Some(head) = &head {
-            self.stabilize_selected_head(&head_path, head)?;
+            self.stabilize_reclamation_head(&head_path, head, stabilized_heads)?;
         }
         let data_path = self.data_path(&manifest.begin.identity);
         let data_bytes = match self.file_metadata(&data_path) {
@@ -211,6 +212,21 @@ impl ProjectionGenerationStore {
         report.generations_reclaimed += 1;
         report.bytes_reclaimed += bytes;
         Ok(true)
+    }
+
+    fn stabilize_reclamation_head(
+        &self,
+        path: &Path,
+        head: &ProjectionGenerationHead,
+        stabilized_heads: &mut BTreeSet<PathBuf>,
+    ) -> Result<(), ProjectionGenerationError> {
+        if !stabilized_heads.contains(path) {
+            self.stabilize_selected_head(path, head)?;
+            // Only successful barriers can authorize another retirement. The
+            // set is bounded by the scan limit and never outlives its lock.
+            stabilized_heads.insert(path.to_path_buf());
+        }
+        Ok(())
     }
 
     fn directory_for<'name>(

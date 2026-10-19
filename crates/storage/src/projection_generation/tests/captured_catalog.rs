@@ -3,7 +3,9 @@
 
 use super::*;
 use crate::file_descriptors::ProjectFileDescriptors;
-use crate::power_loss::{image::ImageLimits, PowerLossModel};
+use crate::power_loss::{
+    image::ImageLimits, IoEvent, ObservationBoundary, ObservationPoint, PowerLossModel,
+};
 
 mod constructor_boundary;
 
@@ -370,6 +372,89 @@ fn lost_selection_requires_a_head_barrier_before_receipt_retry_or_gc_retirement(
         // generation must be complete even if old roots were actually removed.
         let after = model.capture().unwrap().crash(&Default::default()).unwrap();
         recover_catalog_image(&after, "g2", &rows);
+    }
+}
+
+#[test]
+fn gc_stabilizes_each_selected_head_once_per_batch() {
+    let owners = [b"session-1".as_slice(), b"other".as_slice()];
+    for observed_owner in owners {
+        let fixture = Fixture::new();
+        let project = ProjectFileDescriptors::acquire(&fixture.0, 32).unwrap();
+        let model = PowerLossModel::attach(&project, ImageLimits::default()).unwrap();
+        let store = ProjectionGenerationStore::open(fixture.0.join("catalog")).unwrap();
+        let rows = members(&[("a", "selected durable data")]);
+        for owner in owners {
+            let active = stage(&store, begin_for(owner, "active", None, 1), &rows);
+            store.publish(&active).unwrap();
+        }
+        let head = store.head_path("session_spans", observed_owner);
+        let relative_head = Path::new("catalog/heads").join(head.file_name().unwrap());
+        for batch in 0..2 {
+            for owner in owners {
+                for candidate in 0..2 {
+                    drop(stage(
+                        &store,
+                        begin_for(
+                            owner,
+                            &format!("abandoned-{batch}-{candidate}"),
+                            Some("active"),
+                            2,
+                        ),
+                        &rows,
+                    ));
+                }
+                // Exercise both sealed-manifest and unsealed-data retirement.
+                drop(
+                    store
+                        .begin_candidate(
+                            begin_for(owner, &format!("unsealed-{batch}"), Some("active"), 2),
+                            ProjectionGenerationBatchLimits::default(),
+                        )
+                        .unwrap(),
+                );
+            }
+            model
+                .observe(ObservationPoint {
+                    event: IoEvent::FileSync,
+                    relative_path: relative_head.clone(),
+                    boundary: ObservationBoundary::After,
+                    skip_matches: 1,
+                    include_descendants: false,
+                    keep_last: false,
+                })
+                .unwrap();
+            let report = store
+                .reclaim(ProjectionGenerationGcLimits::default())
+                .unwrap();
+            assert_eq!(report.generations_reclaimed, 6);
+            assert!(
+                model.take_observation().unwrap().is_none(),
+                "the same selected head was synchronized more than once in a batch"
+            );
+            let image = model.capture().unwrap().crash(&Default::default()).unwrap();
+            let replay_fixture = Fixture::new();
+            let replay_root = replay_fixture.0.join("replay");
+            image.materialize(&replay_root).unwrap();
+            let recovered =
+                ProjectionGenerationStore::open_existing(replay_root.join("catalog")).unwrap();
+            for owner in owners {
+                let reader = recovered.open_active("session_spans", owner).unwrap();
+                reader.scrub().unwrap();
+                assert_eq!(
+                    reader
+                        .read_page(None, ProjectionGenerationReadLimits::default())
+                        .unwrap()
+                        .members,
+                    rows
+                );
+            }
+            // The extra real sync must be the second observed event. Together
+            // with the earlier absence this proves exactly one, not zero, and
+            // the next batch must establish its own barrier for this same head.
+            store.sync_file_and_parent(&head).unwrap();
+            assert!(model.take_observation().unwrap().is_some());
+        }
     }
 }
 

@@ -59,6 +59,16 @@ then materializes/reopens physical crash images with every remaining
 unsynchronized write lost, both before and after receipt resolution, idempotent
 retry or GC. A visible head alone never authorizes old-root retirement.
 
+One reclamation call retains the catalog mutex for its complete bounded scan.
+Within that call, a successful selected-head stabilization covers subsequent
+retirements for the same head, including abandoned unsealed data. The temporary
+head set contains only completed barriers, is bounded by the file scan limit,
+and is discarded before releasing the mutex. A later reclamation call must
+establish the barriers again. This relies on the same host publication exclusion
+and immutable-generation contract as the uncached path; it does not add an
+interprocess lock. Active, pinned and unresolved publication roots still retain
+their existing per-entry checks.
+
 The synchronous catalog entry point still
 performs preparation and barriers under its catalog mutex; this is not yet the
 SourceOwner-free prepared/selection/pending-durability API required for Consumer
