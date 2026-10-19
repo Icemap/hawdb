@@ -77,6 +77,27 @@ impl OperatorMemoryTracker {
         Ok(())
     }
 
+    pub(crate) fn try_charge_from(
+        &mut self,
+        source: &mut QueryMemoryLease,
+        bytes: usize,
+    ) -> Result<()> {
+        if self.would_exceed(bytes) {
+            return Err(HawDBError::Execution(format!(
+                "operator state would use {} bytes, exceeding its {}-byte budget",
+                self.used_bytes.saturating_add(bytes),
+                self.budget_bytes
+            )));
+        }
+        let target = self.lease.as_mut().ok_or_else(|| {
+            HawDBError::Execution("key admission requires an accounted operator".into())
+        })?;
+        source.transfer_to(source.bytes(), target, bytes)?;
+        self.used_bytes = self.used_bytes.saturating_add(bytes);
+        self.peak_bytes = self.peak_bytes.max(self.used_bytes);
+        Ok(())
+    }
+
     pub fn release(&mut self, bytes: usize) {
         let released = bytes.min(self.used_bytes);
         if let Some(lease) = self.lease.as_mut() {

@@ -1353,7 +1353,8 @@ pub(super) fn collect_scalar_expression_variables(
                 collect_scalar_expression_variables(expression, variables);
             }
         }
-        ScalarExpressionKind::Left { expression, .. } => {
+        ScalarExpressionKind::Left { expression, .. }
+        | ScalarExpressionKind::JsonValue { expression, .. } => {
             collect_scalar_expression_variables(expression, variables);
         }
         ScalarExpressionKind::Lower(expression) => {

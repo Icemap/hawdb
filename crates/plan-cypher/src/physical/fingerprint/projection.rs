@@ -154,6 +154,13 @@ pub fn write_projection_expression(output: &mut String, expression: &ProjectionE
             }
             output.push(')');
         }
+        ProjectionExpression::JsonValue { expression, path } => {
+            output.push_str("json_value(");
+            write_projection_expression(output, expression);
+            output.push(',');
+            write_identifier(output, path);
+            output.push(')');
+        }
         ProjectionExpression::Left { expression, length } => {
             output.push_str("left(");
             write_projection_expression(output, expression);

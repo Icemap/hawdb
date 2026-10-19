@@ -419,7 +419,9 @@ fn collect_projection_columns(
         ProjectionExpression::Coalesce(expressions) => expressions
             .iter()
             .all(|expression| collect_projection_columns(expression, columns)),
-        ProjectionExpression::Left { expression, .. } | ProjectionExpression::Lower(expression) => {
+        ProjectionExpression::Left { expression, .. }
+        | ProjectionExpression::Lower(expression)
+        | ProjectionExpression::JsonValue { expression, .. } => {
             collect_projection_columns(expression, columns)
         }
         ProjectionExpression::ColumnDefaultIfNullOrEq { column, .. }
@@ -467,7 +469,9 @@ fn projection_expression_references_column(expression: &ProjectionExpression) ->
         ProjectionExpression::Coalesce(expressions) => expressions
             .iter()
             .any(projection_expression_references_column),
-        ProjectionExpression::Left { expression, .. } | ProjectionExpression::Lower(expression) => {
+        ProjectionExpression::Left { expression, .. }
+        | ProjectionExpression::Lower(expression)
+        | ProjectionExpression::JsonValue { expression, .. } => {
             projection_expression_references_column(expression)
         }
         ProjectionExpression::Variable { .. }

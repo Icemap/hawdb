@@ -29,7 +29,8 @@ mod compaction;
 mod pool;
 
 pub(crate) use compaction::{
-    compact_runs_with_memory, default_compaction_worker_limit, CompactionMemory,
+    compact_runs_serial, compact_runs_with_memory, default_compaction_worker_limit,
+    CompactionMemory,
 };
 pub use pool::SpillPoolSnapshot;
 pub(crate) use pool::{spill_pool_snapshot, SpillPool, SpillWriteReservation};
@@ -254,15 +255,32 @@ impl SpillBindingRecord {
         map: impl FnOnce(u64, Binding) -> Result<T>,
         memory_bytes: impl FnOnce(&T) -> usize,
     ) -> Result<T> {
+        self.try_map_with_key_memory(
+            operator,
+            max_item_bytes,
+            tracker,
+            |ordinal, binding| map(ordinal, binding).map(|item| (item, None)),
+            memory_bytes,
+        )
+    }
+
+    pub(crate) fn try_map_with_key_memory<T>(
+        self,
+        operator: &str,
+        max_item_bytes: usize,
+        tracker: &mut OperatorMemoryTracker,
+        map: impl FnOnce(u64, Binding) -> Result<(T, Option<crate::QueryMemoryLease>)>,
+        memory_bytes: impl FnOnce(&T) -> usize,
+    ) -> Result<T> {
         let Self {
             payload,
             decoded_binding_bytes,
         } = self;
         tracker.try_charge(decoded_binding_bytes)?;
-        let item = match decode_binding_record(payload.as_slice())
+        let (mut key_allocation, item) = match decode_binding_record(payload.as_slice())
             .and_then(|(ordinal, binding)| map(ordinal, binding))
         {
-            Ok(item) => item,
+            Ok((item, allocation)) => (allocation, item),
             Err(error) => {
                 tracker.release(decoded_binding_bytes);
                 return Err(error);
@@ -270,29 +288,40 @@ impl SpillBindingRecord {
         };
         let bytes = memory_bytes(&item);
         if bytes > max_item_bytes {
+            drop(item);
+            drop(key_allocation);
             tracker.release(decoded_binding_bytes);
             return Err(HawDBError::Execution(format!(
                 "{operator} spill merge item uses {bytes} bytes, exceeding its {max_item_bytes}-byte allowance"
             )));
         }
         if let Err(error) = ensure_operator_item_fits(operator, bytes, tracker) {
+            drop(item);
+            drop(key_allocation);
             tracker.release(decoded_binding_bytes);
             return Err(error);
         }
-        if bytes > decoded_binding_bytes {
-            let additional_bytes = bytes - decoded_binding_bytes;
-            if tracker.would_exceed(additional_bytes) {
-                tracker.release(decoded_binding_bytes);
-                return Err(HawDBError::Execution(format!(
-                    "{operator} spill merge fan-in uses more than blocking_operator_bytes {}",
-                    tracker.budget_bytes
-                )));
-            }
-            if let Err(error) = tracker.try_charge(additional_bytes) {
-                tracker.release(decoded_binding_bytes);
-                return Err(error);
-            }
-        } else {
+        let additional_bytes = bytes.saturating_sub(decoded_binding_bytes);
+        if tracker.would_exceed(additional_bytes) {
+            drop(item);
+            drop(key_allocation);
+            tracker.release(decoded_binding_bytes);
+            return Err(HawDBError::Execution(format!(
+                "{operator} spill merge fan-in uses more than blocking_operator_bytes {}",
+                tracker.budget_bytes
+            )));
+        }
+        let admission = match key_allocation.as_mut() {
+            Some(allocation) => tracker.try_charge_from(allocation, additional_bytes),
+            None => tracker.try_charge(additional_bytes),
+        };
+        if let Err(error) = admission {
+            drop(item);
+            drop(key_allocation);
+            tracker.release(decoded_binding_bytes);
+            return Err(error);
+        }
+        if bytes < decoded_binding_bytes {
             tracker.release(decoded_binding_bytes - bytes);
         }
         Ok(item)

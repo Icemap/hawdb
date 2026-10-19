@@ -114,6 +114,7 @@ origins:
 | `RuntimeTaskContext.memory_reservation.memory_bytes` | Runtime-admitted query root; increasing configuration does not widen this grant. |
 | `RuntimeTaskContext.memory_reservation.result_bytes` | Runtime-admitted result-memory limit when it is no larger than the configured query-memory limit. |
 | `ExecutionMemoryConfig.blocking_operator_bytes` | Configured blocking-state account limit. |
+| `ExecutionMemoryConfig.batch_payload_bytes` | Output batch allowance; a single expansion row exceeding it is an operator-local per-row refusal. |
 | `QueryMemoryLedger::new(budget_bytes)` | Explicit query-root constructor argument. |
 | `QueryMemoryLedger::account(budget_bytes)` | Explicit account constructor argument, including derived limits. |
 | `KnowledgeRetrievalPipelineBudget::new(query_memory_budget)` | Explicit retrieval pipeline root and account allowance. |
@@ -140,6 +141,13 @@ unchecked sum to interpret the refusal.
 Existing descriptor errors retain their separate type. Operator-local checks
 that have not been converted may still return `Execution`; this metadata contract
 does not claim that every execution limit uses the new variant.
+
+An expansion row that cannot fit an empty output batch reports `scope: Operator`,
+`requested` equal to that row's retained bytes, and `used: 0`. The boundary is the
+row itself, independent of any rows already buffered. There is no separate
+per-item scope; the message identifies this per-row ceiling explicitly. Releasing
+other account ownership or retrying the unchanged row cannot satisfy it. Raising
+`batch_payload_bytes` still does not widen a smaller query or runtime grant.
 
 ## Model and evidence boundaries
 

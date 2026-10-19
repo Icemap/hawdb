@@ -78,6 +78,7 @@ fn scalar_is_deterministic(expression: &cypher::ScalarExpression) -> bool {
     use cypher::ScalarExpressionKind as Scalar;
     let values_are_deterministic = match &expression.kind {
         Scalar::Value(value) => value_is_deterministic(value),
+        Scalar::JsonValue { path, .. } => value_is_deterministic(path),
         Scalar::Left { length, .. } => value_is_deterministic(length),
         Scalar::DefaultIfNullOrEq { empty, default, .. } => {
             value_is_deterministic(empty) && value_is_deterministic(default)

@@ -515,7 +515,7 @@ pub(super) fn choose_join_access(
                 true,
                 &bound,
                 row_count,
-                table,
+                schema,
                 index_read_mode,
             ) {
                 candidates.push(candidate);
@@ -537,7 +537,7 @@ pub(super) fn choose_join_access(
                 index.unique,
                 &bound,
                 row_count,
-                table,
+                schema,
                 index_read_mode,
             ) {
                 candidates.push(candidate);
@@ -584,7 +584,7 @@ pub(super) fn join_index_access_candidate(
     unique: bool,
     bound: &BTreeMap<String, SqlColumnRef>,
     row_count: usize,
-    table: &str,
+    schema: &RelationalTableSchema,
     index_read_mode: RelationalIndexReadMode<
         '_,
         impl crate::index_runtime::RelationalIndexStoreReader,
@@ -603,12 +603,15 @@ pub(super) fn join_index_access_candidate(
         return None;
     }
     let equality_prefix_len = access_columns.len();
+    if !schema.index_prefix_covers_matches(columns, equality_prefix_len, unique) {
+        return None;
+    }
     let unique_point = unique && equality_prefix_len == columns.len();
     let estimated_rows = if unique_point {
         usize::from(row_count != 0)
     } else {
         index_read_mode
-            .probe_statistics(table, &name, equality_prefix_len)
+            .probe_statistics(&schema.name, &name, equality_prefix_len)
             .map(|statistics| {
                 debug_assert!(statistics.distinct_non_null_values <= statistics.non_null_rows);
                 debug_assert!(statistics.fanout <= statistics.non_null_rows);

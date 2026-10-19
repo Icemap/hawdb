@@ -33,6 +33,19 @@ impl<'a> ProjectedValue<'a> {
     pub(crate) fn into_owned(self) -> Value {
         self.value.into_owned()
     }
+
+    /// The destination owns its value slot before this payload is moved or copied.
+    /// Computed values and prepared keys use distinct accounts on the same ledger.
+    pub(crate) fn into_owned_accounted(mut self, target: &mut QueryMemoryLease) -> Result<Value> {
+        let payload = crate::binding::value_memory_bytes(&self.value)
+            .saturating_sub(std::mem::size_of::<Value>());
+        if let Some(allocation) = self._allocation.as_mut() {
+            allocation.transfer_to(allocation.bytes(), target, payload)?;
+        } else {
+            target.grow(payload)?;
+        }
+        Ok(self.value.into_owned())
+    }
 }
 
 impl AsRef<Value> for ProjectedValue<'_> {
@@ -291,6 +304,65 @@ pub(crate) fn evaluate_projection_borrowed<'a>(
                 }
             }
             Ok(ProjectedValue::scalar(Value::Null))
+        }
+        ProjectionExpression::JsonValue { expression, path } => {
+            let input = evaluate(expression)?;
+            let json = match input.as_ref() {
+                Value::Null => return Ok(ProjectedValue::scalar(Value::Null)),
+                Value::String(json) => json,
+                value => {
+                    return Err(HawDBError::Execution(format!(
+                        "JSON_VALUE requires a string document, got {:?}",
+                        description(value, account)
+                    )));
+                }
+            };
+            const MAX_JSON_VALUE_INPUT_BYTES: usize = 1024 * 1024;
+            if json.len() > MAX_JSON_VALUE_INPUT_BYTES {
+                return Err(HawDBError::Execution(
+                    "JSON_VALUE document exceeds its 1 MiB input limit".into(),
+                ));
+            }
+            // Small JSON fields can expand far beyond their source bytes in the DOM.
+            let _parse_memory = account
+                .map(|account| account.reserve(json.len().saturating_mul(64)))
+                .transpose()?;
+            let document: serde_json::Value = serde_json::from_str(json).map_err(|error| {
+                HawDBError::Execution(format!("JSON_VALUE document is invalid JSON: {error}"))
+            })?;
+            let selected = path
+                .trim_start_matches("$.")
+                .split('.')
+                .try_fold(&document, |value, field| value.as_object()?.get(field));
+            match selected {
+                None | Some(serde_json::Value::Null) => Ok(ProjectedValue::scalar(Value::Null)),
+                Some(serde_json::Value::Bool(value)) => {
+                    Ok(ProjectedValue::scalar(Value::Bool(*value)))
+                }
+                Some(serde_json::Value::Number(value)) => {
+                    if let Some(integer) = value.as_i64() {
+                        Ok(ProjectedValue::scalar(Value::Int(integer)))
+                    } else if value.as_u64().is_some() {
+                        Err(HawDBError::Execution(
+                            "JSON_VALUE integer exceeds signed 64-bit range".into(),
+                        ))
+                    } else if let Some(float) = value.as_f64() {
+                        Ok(ProjectedValue::scalar(Value::Float(float)))
+                    } else {
+                        Err(HawDBError::Execution(
+                            "JSON_VALUE number cannot be represented".into(),
+                        ))
+                    }
+                }
+                Some(serde_json::Value::String(value)) => allocated(
+                    std::mem::size_of::<Value>().saturating_add(value.len()),
+                    account,
+                    || Value::String(value.clone()),
+                ),
+                Some(_) => Err(HawDBError::Execution(
+                    "JSON_VALUE selected value is not scalar".into(),
+                )),
+            }
         }
         ProjectionExpression::Left { expression, length } => {
             let value = evaluate(expression)?;

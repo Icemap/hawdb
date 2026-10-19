@@ -875,6 +875,7 @@ rust_test(
     crate_root = "tests/execution_request_contract.rs",
     srcs = ["tests/execution_request_contract.rs"],
     edition = "2024",
+    timeout = "long",
     deps = [":hawdb"],
 )
 

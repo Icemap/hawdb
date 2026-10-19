@@ -516,7 +516,9 @@ fn marker_use_in_projection_expression(
                     marker_use.combine(marker_use_in_projection_expression(expression, name, safe))
                 })
         }
-        ProjectionExpression::Left { expression, .. } | ProjectionExpression::Lower(expression) => {
+        ProjectionExpression::Left { expression, .. }
+        | ProjectionExpression::Lower(expression)
+        | ProjectionExpression::JsonValue { expression, .. } => {
             marker_use_in_projection_expression(expression, name, safe)
         }
         ProjectionExpression::DefaultIfNullOrEq { empty, default, .. }
@@ -994,7 +996,9 @@ fn bind_projection_expression(
                 bind_projection_expression(expression, parameters)?;
             }
         }
-        ProjectionExpression::Left { expression, .. } | ProjectionExpression::Lower(expression) => {
+        ProjectionExpression::Left { expression, .. }
+        | ProjectionExpression::Lower(expression)
+        | ProjectionExpression::JsonValue { expression, .. } => {
             bind_projection_expression(expression, parameters)?;
         }
         ProjectionExpression::DefaultIfNullOrEq { empty, default, .. }

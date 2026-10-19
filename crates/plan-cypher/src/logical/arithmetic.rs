@@ -147,7 +147,9 @@ pub(super) fn scalar_expression_is_scoped(
         ScalarExpressionKind::Coalesce(expressions) => expressions
             .iter()
             .all(|expression| scalar_expression_is_scoped(expression, scope, column_names)),
-        ScalarExpressionKind::Left { expression, .. } | ScalarExpressionKind::Lower(expression) => {
+        ScalarExpressionKind::Left { expression, .. }
+        | ScalarExpressionKind::Lower(expression)
+        | ScalarExpressionKind::JsonValue { expression, .. } => {
             scalar_expression_is_scoped(expression, scope, column_names)
         }
         ScalarExpressionKind::Id(_)
