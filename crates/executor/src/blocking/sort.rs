@@ -145,7 +145,7 @@ impl<'plan, 'runtime> SortOperator<'plan, 'runtime> {
             "SortExec expressions",
             "SortExec keys",
         );
-        let tracker = OperatorMemoryTracker::with_account(
+        let tracker = OperatorMemoryTracker::with_blocking_account(
             context.memory.blocking_operator_bytes,
             blocking_account.clone(),
         );
@@ -339,7 +339,7 @@ impl<'plan, 'runtime> TopNOperator<'plan, 'runtime> {
             "TopNExec expressions",
             "TopNExec keys",
         );
-        let tracker = OperatorMemoryTracker::with_account(
+        let tracker = OperatorMemoryTracker::with_blocking_account(
             context.memory.blocking_operator_bytes,
             blocking_account.clone(),
         );
@@ -642,7 +642,7 @@ fn merge_sort_run_pair(
 ) -> Result<spill::SpillRun> {
     runtime_checkpoint(task_context)?;
     let mut readers = [left.reader()?, right.reader()?];
-    let mut tracker = OperatorMemoryTracker::with_account(
+    let mut tracker = OperatorMemoryTracker::with_blocking_account(
         memory.blocking_operator_bytes,
         blocking_account.clone(),
     );
@@ -769,7 +769,8 @@ fn merge_sort_runs_with_output(
         .iter()
         .map(spill::SpillRun::reader)
         .collect::<Result<Vec<_>>>()?;
-    let mut tracker = OperatorMemoryTracker::with_account(memory_budget, blocking_account.clone());
+    let mut tracker =
+        OperatorMemoryTracker::with_blocking_account(memory_budget, blocking_account.clone());
     let mut heap = BinaryHeap::new();
     for (run_index, reader) in readers.iter_mut().enumerate() {
         runtime_checkpoint(task_context)?;

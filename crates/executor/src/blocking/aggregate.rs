@@ -597,8 +597,10 @@ pub fn stream_aggregate_batches(
     runtime_checkpoint(task_context)?;
     if group_keys.is_empty() {
         let mut accumulator = GroupAccumulator::new(Vec::new(), group_keys, items);
-        let mut tracker =
-            OperatorMemoryTracker::with_account(memory.blocking_operator_bytes, primary_account);
+        let mut tracker = OperatorMemoryTracker::with_blocking_account(
+            memory.blocking_operator_bytes,
+            primary_account,
+        );
         let base_bytes = accumulator.base_memory_bytes();
         ensure_operator_item_fits("AggregateExec", base_bytes, &tracker)?;
         tracker.try_charge(base_bytes)?;
@@ -655,7 +657,7 @@ pub fn stream_aggregate_batches(
         );
     }
 
-    let mut tracker = OperatorMemoryTracker::with_account(
+    let mut tracker = OperatorMemoryTracker::with_blocking_account(
         memory.blocking_operator_bytes,
         primary_account.clone(),
     );
@@ -856,7 +858,7 @@ fn merge_group_run_pair(
     runtime_checkpoint(task_context)?;
     let mut readers = [left.reader()?, right.reader()?];
     let mut heap = BinaryHeap::new();
-    let mut tracker = OperatorMemoryTracker::with_account(
+    let mut tracker = OperatorMemoryTracker::with_blocking_account(
         memory.blocking_operator_bytes,
         blocking_account.clone(),
     );
@@ -917,7 +919,7 @@ fn aggregate_buffered_groups(
         task_context,
     } = context;
     runtime_checkpoint(task_context)?;
-    let mut tracker = OperatorMemoryTracker::with_account(
+    let mut tracker = OperatorMemoryTracker::with_blocking_account(
         memory_budget,
         memory_ledger.account(
             QueryMemoryClass::BlockingState,
@@ -988,7 +990,7 @@ fn merge_group_runs(
         task_context,
     } = context;
     runtime_checkpoint(task_context)?;
-    let mut accumulator_tracker = OperatorMemoryTracker::with_account(
+    let mut accumulator_tracker = OperatorMemoryTracker::with_blocking_account(
         memory_budget,
         memory_ledger.account(
             QueryMemoryClass::BlockingState,
@@ -1001,7 +1003,7 @@ fn merge_group_runs(
         .map(spill::SpillRun::reader)
         .collect::<Result<Vec<_>>>()?;
     let mut heap = BinaryHeap::new();
-    let mut merge_tracker = OperatorMemoryTracker::with_account(
+    let mut merge_tracker = OperatorMemoryTracker::with_blocking_account(
         memory_budget,
         memory_ledger.account(
             QueryMemoryClass::BlockingState,
@@ -1137,10 +1139,13 @@ fn update_group_accumulator(
     let delta = accumulator.update(catalog, binding);
     tracker.release(delta.released_bytes);
     if tracker.would_exceed(delta.added_bytes) {
-        return Err(HawDBError::Execution(format!(
-            "AggregateExec state exceeds blocking_operator_bytes {}",
-            tracker.budget_bytes
-        )));
+        return Err(tracker.state_error(
+            delta.added_bytes,
+            format!(
+                "AggregateExec state exceeds blocking_operator_bytes {}",
+                tracker.budget_bytes
+            ),
+        ));
     }
     tracker.try_charge(delta.added_bytes)?;
     Ok(())
@@ -1154,10 +1159,13 @@ fn update_group_accumulator_inputs(
     let delta = accumulator.update_inputs(inputs)?;
     tracker.release(delta.released_bytes);
     if tracker.would_exceed(delta.added_bytes) {
-        return Err(HawDBError::Execution(format!(
-            "AggregateExec state exceeds blocking_operator_bytes {}",
-            tracker.budget_bytes
-        )));
+        return Err(tracker.state_error(
+            delta.added_bytes,
+            format!(
+                "AggregateExec state exceeds blocking_operator_bytes {}",
+                tracker.budget_bytes
+            ),
+        ));
     }
     tracker.try_charge(delta.added_bytes)?;
     Ok(())

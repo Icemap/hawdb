@@ -51,6 +51,22 @@ Callbacks without checkpoints still cannot be interrupted while executing.
 | [Pipeline batches](../crates/executor/src/pipeline.rs), [morsels](../crates/executor/src/morsel.rs), [concurrent work](../crates/executor/src/concurrent.rs) | D + C | Contextual morsel schedulers signal resource exhaustion before joining in-flight workers and preserve the originating typed refusal. The numeric parallel pipeline uses a child context to isolate a reusable parent. | Cancellation is cooperative. Handled reservation refusals do not cancel; generic result-agnostic maps and ordinary callback errors retain their existing behavior. |
 | [Relational runtime](../crates/relational/src/query.rs) and [execution](../crates/relational/src/row_runtime.rs) | A + C | SQL semantic limits are separate from result/working allowances and shared blocking operators. | Preserve structured result-limit causes and spill semantics at the SQL facade. |
 
+The blocking-memory follow-up converts shared tracker growth/transfer, oversized
+items, partial-aggregate state and spill-merge item/fan-in refusals to structured
+`ResourceBudgetExceeded`. The existing refusal messages and spill choices are
+preserved. The effective per-item allowance is reported separately from current
+tracker usage. Counter overflow fails before accounting changes. Ledger/account
+failures retain their own scope and budget origin; malformed spill framing and
+invalid transfers are not reclassified as memory exhaustion.
+
+The embedded regression
+`blocking_memory_refusals_expose_effective_limits_and_preserve_complete_results`
+covers Sort, TopN, partial aggregation and buffered aggregation at a 64-byte
+blocking limit, with complete-result controls at 8192 bytes. Tracker and spill
+regressions cover exact limits, overflow, failed transfers, temporary decode
+cleanup and provenance. These source guards require CI execution; they do not
+establish that every remaining resource failure in this inventory is structured.
+
 ## Search and retrieval
 
 | Stage / source | Class | Boundary and current outcome | Remaining obligation |
