@@ -1,6 +1,7 @@
 """Authoritative storage model set shared by Bazel and retained evidence."""
 
 STORAGE_MODELS = [
+    "HawDBHeldGenerationSpool",
     "HawDBCapturedPublicationLease",
     "HawDBConsumerPrivateBirthRetirement",
     "HawDBConsumerNoEffectSettlement",

@@ -147,6 +147,15 @@ jobs:
             --nocapture --test-threads=1 \
             2>&1 | tee captured-search-results/projection-source-epoch.txt
 
+      - name: Test original generation input ownership
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/cargo-test-required.sh --locked -p hawdb-search --all-features --lib \
+            -- held_generation_spool_ --nocapture --test-threads=1 \
+            2>&1 | tee captured-search-results/held-generation-spool.txt
+
       - name: Test captured publication lock binding
         if: ${{ !cancelled() }}
         shell: bash

@@ -399,6 +399,7 @@ impl Reader {
         control.read(spool::SPOOL_HEADER.len() as u64)?;
         let memory = control.memory.spool.reserve(std::mem::size_of::<Self>())?;
         let cursor = spool::SpoolSource {
+            held: None,
             path: &run.path,
             document_count: 0,
             max_record_bytes: writer.options.max_record_bytes.get(),

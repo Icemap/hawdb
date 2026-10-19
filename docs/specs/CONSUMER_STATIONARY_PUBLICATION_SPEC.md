@@ -277,3 +277,5 @@ The bounded [allocation custody model](../tla/CONSUMER_INCARNATION_CUSTODY_PROOF
 checks an ordering contract for fresh installation identities and debt. It does
 not implement any step above or certify collectors, birth markers, codecs,
 resource limits, serving semantics, complete C..E mapping, liveness or MVCC.
+
+The primary generation input now has an [actual-file handoff refinement](../tla/HELD_GENERATION_SPOOL_PROOF.md). It preserves original input through single/partitioned preparation; auxiliary temporary sources and stationary artifact/serving integration remain open.

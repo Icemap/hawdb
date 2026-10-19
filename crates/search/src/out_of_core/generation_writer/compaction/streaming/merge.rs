@@ -219,6 +219,7 @@ pub(super) fn copy(
         capture.output.flush()?;
         drop(capture);
         let mut cursor = SpoolSource {
+            held: None,
             path: &path,
             document_count,
             max_record_bytes: writer.options.max_record_bytes.get(),

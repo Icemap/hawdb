@@ -299,10 +299,7 @@ mod tests {
             writer.push(document(1)).unwrap();
             // Exercise the internal install boundary after closing the captured
             // spool, without adding a public bypass for registered consumers.
-            let mut spool = writer.spool.take().unwrap();
-            spool.flush().unwrap();
-            spool.get_ref().sync_all().unwrap();
-            drop(spool);
+            writer.seal_input_spool().unwrap();
             let mut report = super::super::prepare(&writer, baseline.generation + 1).unwrap();
             let mut lease =
                 Some(crate::out_of_core::SearchProjectionPublishLease::acquire(&root).unwrap());
