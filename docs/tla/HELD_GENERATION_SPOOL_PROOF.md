@@ -13,6 +13,8 @@ failed before the fix: the single build returned success and its normal immutabl
 reader hydrated foreign bodies while retaining source epoch 7; the partitioned
 build refused a digest mismatch. Original source, tests, executable and terminal
 logs are retained separately. See issue #1103.
+Main's independent #1105 repair adapts this producer transfer to the legacy
+direct-publication path without importing the Draft prepared-candidate API.
 
 The writer now creates its spool read/write, flushes and synchronizes that actual
 file, consumes the BufWriter, and transfers the same File into an opaque HeldSpool.
@@ -28,6 +30,13 @@ normal frame checksum, syntax, ordering and bounded-header validation. Test-only
 owned-document scanning also reads through a positioned range when custody is
 present. Byte-identical labels or self-consistent replacement frames cannot
 replace the original producer file.
+
+The threat boundary is namespace replacement, including rename or
+unlink-and-recreate. An independent writer that overwrites the same underlying
+file in place is outside private-stage ownership. Length and frame CRC checks
+detect ordinary corruption, but cannot authenticate such an in-place rewrite
+when it preserves the length and recomputes checksums. The retained handle does
+not make the original file immutable or establish cryptographic provenance.
 
 After all artifact builders/partition cursors finish, the writer releases input
 custody before returning a prepared candidate. Shared record/body references

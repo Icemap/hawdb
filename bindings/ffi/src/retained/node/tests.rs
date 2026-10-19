@@ -327,7 +327,13 @@ fn failed_root_registration_never_becomes_successful_eof() {
 fn non_unique_index_refuses_without_publishing_a_foreign_owner() {
     let (db, governor) = indexed_fixture(16);
     let request = request(QUERY, r#"{"id":1}"#);
-    let mut out = HawdbRetainedCursorV1::default();
+    let mut out = HawdbRetainedCursorV1 {
+        abi_version: 7,
+        struct_size: 11,
+        column_count: 29,
+        owner_namespace: 17,
+        owner_id: 23,
+    };
     assert_eq!(
         unsafe {
             hawdb_retained_node_query(
@@ -340,7 +346,16 @@ fn non_unique_index_refuses_without_publishing_a_foreign_owner() {
         },
         HAWDB_RETAINED_UNSUPPORTED_PLAN
     );
-    assert_eq!(out.owner_id, 0);
+    assert_eq!(
+        (
+            out.abi_version,
+            out.struct_size,
+            out.owner_namespace,
+            out.owner_id,
+            out.column_count
+        ),
+        (0, 0, 0, 0, 0)
+    );
     assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     unsafe { super::super::super::hawdb_close(db) };
