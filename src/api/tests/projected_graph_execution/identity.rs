@@ -207,3 +207,52 @@ fn identity_898_mem_consumer_preserves_identity_and_rejects_ambiguous_labels() {
     ]);
     assert!(mem_identity(&row).is_ok());
 }
+
+#[test]
+fn identity_898_extended_spellings_preserve_legacy_values() {
+    let mut db = Database::new();
+    db.query("CREATE (:Memory {id: 'memory-a'})").unwrap();
+    db.query("CREATE (:Entity {id: 42})").unwrap();
+    db.query("CREATE (:Memory {title: 'missing-id'})").unwrap();
+    db.query("CALL project_graph('identity', ['Entity', 'Memory'], [])")
+        .unwrap();
+    for (procedure, score) in [("page_rank", "pagerank_score"), ("louvain", "louvain_id")] {
+        let legacy = db
+            .query(&format!(
+                "CALL {procedure}('identity') RETURN node, node_id, node_label, {score}"
+            ))
+            .unwrap()
+            .rows
+            .into_rows();
+        for (clause, columns) in [
+            (format!("YIELD node, node_id, node_label, {score} RETURN node, node_id AS id, node_label AS label, {score} AS score"), vec![("node", "node"), ("node_id", "id"), ("node_label", "label"), (score, "score")]),
+            (format!("RETURN node AS node, node_id AS id, node_label AS label, {score} AS score"), vec![("node", "node"), ("node_id", "id"), ("node_label", "label"), (score, "score")]),
+            (format!("WITH node, node_id AS id, node_label AS label, {score} AS score RETURN node, id, label, score"), vec![("node", "node"), ("node_id", "id"), ("node_label", "label"), (score, "score")]),
+            ("RETURN node, node_id".into(), vec![("node", "node"), ("node_id", "node_id")]),
+            ("RETURN node_label".into(), vec![("node_label", "node_label")]),
+            ("RETURN node_labels AS labels".into(), vec![("node_labels", "labels")]),
+            (format!("RETURN node, {score} ORDER BY node LIMIT 2"), vec![("node", "node"), (score, score)]),
+        ] {
+            let mut source = legacy.clone();
+            if clause.contains("LIMIT 2") {
+                source.sort_by(|a, b| a["node"].cmp(&b["node"]));
+                source.truncate(2);
+            }
+            let mut expected: Vec<BTreeMap<String, Value>> = source.iter().map(|row| {
+                columns.iter().map(|(from, to)| {
+                    let value = if *from == "node_labels" {
+                        Value::List(vec![row["node_label"].clone()])
+                    } else {
+                        row[*from].clone()
+                    };
+                    ((*to).to_string(), value)
+                }).collect()
+            }).collect();
+            let query = format!("CALL {procedure}('identity') {clause}");
+            let mut actual = db.query(&query).unwrap().rows.into_rows();
+            actual.sort();
+            expected.sort();
+            assert_eq!(actual, expected, "{query}");
+        }
+    }
+}

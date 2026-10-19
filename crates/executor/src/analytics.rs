@@ -26,7 +26,10 @@ use hawdb_analytics::{
     LouvainProcedureOptions, PageRankProcedureOptions, ProjectedGraph, ProjectionLayout,
     ProjectionMemoryBudget,
 };
-use hawdb_core::{Catalog, HawDBError, Result, RuntimeTaskContext, Value};
+use hawdb_core::{
+    Catalog, HawDBError, ResourceBudgetError, ResourceBudgetKind, ResourceBudgetScope, Result,
+    RuntimeTaskContext, Value,
+};
 use hawdb_plan_cypher::{GraphAlgorithmIdentity, GraphAlgorithmKind, Predicate};
 use hawdb_storage::{NodeId, NodeRecord, RelRecord};
 use std::collections::{BTreeMap, BTreeSet};
@@ -381,17 +384,33 @@ impl GraphAlgorithmSpec<'_> {
         if !identity.is_empty() {
             for binding in &bindings {
                 runtime_checkpoint(context.task_context)?;
-                if crate::binding::binding_memory_bytes(binding)
-                    > context.memory.batch_payload_bytes.get()
-                {
-                    return Err(HawDBError::Execution(
-                        "GraphAlgorithm result row exceeds batch_payload_bytes".into(),
-                    ));
-                }
+                check_algorithm_row_payload(
+                    crate::binding::binding_memory_bytes(binding),
+                    context.memory.batch_payload_bytes.get(),
+                )?;
             }
         }
         emit_owned_binding_batches(bindings, context.memory.batch_rows.get(), emit)
     }
+}
+
+fn check_algorithm_row_payload(bytes: usize, budget: usize) -> Result<()> {
+    if bytes > budget {
+        return Err(ResourceBudgetError {
+            resource: ResourceBudgetKind::MemoryBytes,
+            scope: ResourceBudgetScope::Operator,
+            owner: "GraphAlgorithm output".into(),
+            memory_class: Some(QueryMemoryClass::ResultMaterialization.as_str()),
+            requested: bytes as u64,
+            used: 0,
+            budget: budget as u64,
+            budget_option: "ExecutionMemoryConfig.batch_payload_bytes",
+            message: format!(
+                "graph algorithm result row uses {bytes} bytes, exceeding the per-row batch_payload_bytes ceiling {budget}; releasing buffered rows cannot make this row fit"
+            ),
+        }.into());
+    }
+    Ok(())
 }
 
 fn append_node_identity(
@@ -479,10 +498,7 @@ fn append_node_identity(
                 .expect("labels validated before admission");
             labels.push(Value::String(name.to_string()));
         }
-        labels.sort_unstable_by(|left, right| match (left, right) {
-            (Value::String(left), Value::String(right)) => left.cmp(right),
-            _ => unreachable!("label values are strings"),
-        });
+        labels.sort_unstable();
         values.insert("node_labels".to_string(), Value::List(labels));
     }
     Ok(hydration)

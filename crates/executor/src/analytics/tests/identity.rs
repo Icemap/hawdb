@@ -131,11 +131,23 @@ fn identity_898_late_label_payload_and_admission_fail_before_output() {
         run(&fixture, &options, None),
         streaming::run_external(&fixture, &options, None),
     ] {
-        assert!(output
-            .result
-            .unwrap_err()
-            .to_string()
-            .contains("batch_payload_bytes"));
+        let HawDBError::ResourceBudgetExceeded(error) = output.result.unwrap_err() else {
+            panic!("expected a typed per-row payload refusal")
+        };
+        assert_eq!(error.resource, ResourceBudgetKind::MemoryBytes);
+        assert_eq!(error.scope, ResourceBudgetScope::Operator);
+        assert_eq!(error.used, 0);
+        assert_eq!(error.budget, 1024);
+        assert!(error.requested > error.budget);
+        assert_eq!(
+            error.budget_option,
+            "ExecutionMemoryConfig.batch_payload_bytes"
+        );
+        assert_eq!(
+            error.memory_class,
+            Some(QueryMemoryClass::ResultMaterialization.as_str())
+        );
+        assert!(error.message.contains("per-row"));
         assert!(output.batches.is_empty());
     }
     options.memory.batch_payload_bytes = nz(64 * 1024);

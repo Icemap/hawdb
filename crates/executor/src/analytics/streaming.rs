@@ -336,11 +336,10 @@ impl GraphAlgorithmSpec<'_> {
                         runtime_checkpoint(context.task_context)?;
                     }
                     let row_bytes = rows.binding_bytes(self.score_column, &identities[&node]);
-                    if row_bytes > context.memory.batch_payload_bytes.get() {
-                        return Err(HawDBError::Execution(
-                            "GraphAlgorithm result row exceeds batch_payload_bytes".into(),
-                        ));
-                    }
+                    check_algorithm_row_payload(
+                        row_bytes,
+                        context.memory.batch_payload_bytes.get(),
+                    )?;
                     if count == context.memory.batch_rows.get()
                         || bytes.saturating_add(row_bytes)
                             > context.memory.batch_payload_bytes.get()
@@ -379,11 +378,7 @@ impl GraphAlgorithmSpec<'_> {
                         .map(|(name, value)| (name.as_str(), value))
                         .chain(identity.into_iter().flat_map(identity_entries)),
                 );
-                if bytes > context.memory.batch_payload_bytes.get() {
-                    return Err(HawDBError::Execution(
-                        "GraphAlgorithm result row exceeds batch_payload_bytes".into(),
-                    ));
-                }
+                check_algorithm_row_payload(bytes, context.memory.batch_payload_bytes.get())?;
                 if !batch.is_empty()
                     && (batch.len() == context.memory.batch_rows.get()
                         || batch_bytes.saturating_add(bytes)
