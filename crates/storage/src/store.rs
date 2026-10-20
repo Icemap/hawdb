@@ -820,6 +820,7 @@ pub struct GraphStore {
     version_snapshot_pin: Option<hawdb_storage::version::VersionSnapshotPin>,
     read_dependency_readers: Arc<AtomicUsize>,
     read_dependency_validation_failures: Arc<read_dependencies::ValidationFailureCounters>,
+    read_summary_collapses: Arc<AtomicU64>,
     nodes: crate::cow::CowNodeMap,
     relationships: CowSegmentedMap<RelId, RelRecord>,
     basic_statistics: BasicStatisticsState,
@@ -1763,6 +1764,7 @@ impl GraphStore {
             version_snapshot_pin: None,
             read_dependency_readers: Arc::new(AtomicUsize::new(0)),
             read_dependency_validation_failures: Arc::new(Default::default()),
+            read_summary_collapses: Arc::new(AtomicU64::new(0)),
             nodes: crate::cow::CowNodeMap::default(),
             relationships: CowSegmentedMap::default(),
             basic_statistics: BasicStatisticsState::default(),
@@ -2233,6 +2235,7 @@ impl GraphStore {
             read_dependency_validation_failures: Arc::clone(
                 &self.read_dependency_validation_failures,
             ),
+            read_summary_collapses: Arc::clone(&self.read_summary_collapses),
             nodes: self.nodes.clone(),
             relationships: self.relationships.clone(),
             basic_statistics: self.basic_statistics.clone(),

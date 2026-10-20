@@ -595,6 +595,8 @@ test_suite(
         ":hawdb_in_memory_portable_tests",
         ":hawdb_mvcc_projection_publication_tests",
         ":hawdb_mvcc_projection_publication_minimal_tests",
+        ":hawdb_mvcc_joined_reads_tests",
+        ":hawdb_mvcc_joined_reads_minimal_tests",
         ":hawdb_branch_project_open_tests",
         ":hawdb_branch_project_open_minimal_tests",
         ":hawdb_default_consumer_tests",
@@ -729,6 +731,23 @@ rust_test(
         name = "hawdb_mvcc_projection_publication" + suffix + "_tests",
         crate_root = "tests/mvcc_projection_publication.rs",
         srcs = ["tests/mvcc_projection_publication.rs"],
+        edition = "2024",
+        deps = [library],
+    )
+    for suffix, library in [
+        ("", ":hawdb"),
+        ("_minimal", ":hawdb_minimal"),
+    ]
+]
+
+[
+    rust_test(
+        name = "hawdb_mvcc_joined_reads" + suffix + "_tests",
+        crate_root = "tests/mvcc_joined_reads.rs",
+        srcs = [
+            "tests/mvcc_joined_reads.rs",
+            "tests/support/mvcc_fixture.rs",
+        ],
         edition = "2024",
         deps = [library],
     )

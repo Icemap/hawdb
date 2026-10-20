@@ -1802,8 +1802,16 @@ impl GraphStore {
                 self.validate_version_writes(&version_writes, read_epoch)?;
             }
             let authoritative_index = self.authoritative_relational_constraint_index()?;
-            let index_limits = self.relational_index_live_capture_limits();
-            let row_limits = self.relational_row_live_capture_limits();
+            // Old index membership and new row values supply read-only prefix
+            // invalidation, including payload-only updates.
+            let tracking = self.tracks_read_dependencies()
+                && !version_writes.contains_key(&VersionKey::Database);
+            let index_limits = self
+                .relational_index_live_capture_limits()
+                .or_else(|| tracking.then(Default::default));
+            let row_limits = self
+                .relational_row_live_capture_limits()
+                .or_else(|| tracking.then(Default::default));
             let staged = if self.relational_state.canonical_row_metadata_only() {
                 let index = authoritative_index.as_ref().ok_or_else(|| {
                     HawDBError::StorageIntegrity(
@@ -1910,6 +1918,16 @@ impl GraphStore {
         if let Some(read_epoch) = mvcc_read_epoch {
             self.validate_version_writes(&version_writes, read_epoch)?;
         }
+        // Read-only summaries enter only after final writer validation.
+        let mut with_read_summaries = version_writes.clone();
+        let relational_summaries_fit = self
+            .extend_relational_read_invalidation_stamps(
+                staged_relational_state.as_ref(),
+                staged_relational_index_capture.as_ref(),
+                staged_relational_row_capture.as_ref(),
+                &mut with_read_summaries,
+            )
+            .is_ok();
         let staged_relational_index_publication = self.stage_relational_index_live_publication(
             next_commit_epoch,
             staged_relational_index_capture,
@@ -1933,10 +1951,10 @@ impl GraphStore {
         // fail. If their bounded write set or retained history does not fit,
         // publish the permanently reserved ReadBarrier instead. The writer's
         // destination keys still require normal pre-WAL admission.
-        let mut with_read_summaries = version_writes.clone();
-        let fine_summaries_fit = self
-            .extend_read_invalidation_stamps(&working_catalog, &ops, &mut with_read_summaries)
-            .is_ok();
+        let fine_summaries_fit = relational_summaries_fit
+            && self
+                .extend_read_invalidation_stamps(&working_catalog, &ops, &mut with_read_summaries)
+                .is_ok();
         let mut staged_versions = fine_summaries_fit
             .then(|| {
                 self.stage_version_index(&with_read_summaries, next_commit_epoch, false)
@@ -1951,9 +1969,12 @@ impl GraphStore {
                     .ok();
             }
         }
-        let staged_versions = match staged_versions {
-            Some(versions) => versions,
-            None => self.stage_version_index(&version_writes, next_commit_epoch, true)?,
+        let (staged_versions, collapsed_read_summaries) = match staged_versions {
+            Some(versions) => (versions, false),
+            None => (
+                self.stage_version_index(&version_writes, next_commit_epoch, true)?,
+                true,
+            ),
         };
         let wal_result =
             if preserve_single_create_wal && let [op @ WalOp::CreateNode { .. }] = ops.as_slice() {
@@ -1985,6 +2006,13 @@ impl GraphStore {
         }
         self.commit_epoch = next_commit_epoch;
         self.version_index = staged_versions;
+        if collapsed_read_summaries {
+            let _ = self.read_summary_collapses.fetch_update(
+                AtomicOrdering::Relaxed,
+                AtomicOrdering::Relaxed,
+                |value| Some(value.saturating_add(1)),
+            );
+        }
         self.publish_relational_index_live_view(staged_relational_index_publication);
         self.publish_relational_row_live_view(staged_relational_row_publication);
         Ok(MutationSummary {
@@ -2484,6 +2512,10 @@ fn version_key_kind(key: &VersionKey) -> &'static str {
         VersionKey::Schema => "schema",
         VersionKey::ReadBarrier => "read_barrier",
         VersionKey::ReadNodeDomain(_) => "read_node_domain",
+        VersionKey::ReadRelationshipDomain(_) => "read_relationship_domain",
+        VersionKey::ReadRelationalTableDomain(_) => "read_relational_table_domain",
+        VersionKey::ReadNodeProperty { .. } => "read_node_property",
+        VersionKey::ReadRelationalIndexPrefix { .. } => "read_relational_index_prefix",
         VersionKey::GraphNode(_) => "graph_node",
         VersionKey::GraphRelationship(_) => "graph_relationship",
         VersionKey::GraphAdjacency { .. } => "graph_adjacency",

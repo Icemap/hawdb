@@ -23,6 +23,11 @@ use hawdb_storage::store::{GraphReadDependencies, GraphReadDependencyError};
 use hawdb_storage::version::VersionKey;
 use std::fmt;
 
+#[path = "dependency_read/graph_match.rs"]
+mod graph_match;
+#[path = "dependency_read/relational.rs"]
+mod relational;
+
 /// Limits for one preparation. Output limits apply to each statement; callers
 /// must additionally bound cross-statement work and the artifact builder.
 #[derive(Debug, Clone, Copy)]
@@ -50,6 +55,14 @@ pub struct PreparedReadDependencies {
 }
 
 impl PreparedReadDependencies {
+    pub fn relationship_domain_count(&self) -> usize {
+        self.graph.relationship_domain_count()
+    }
+    /// Complete SQL table scopes, including rows outside a query's output page.
+    pub fn relational_table_domain_count(&self) -> usize {
+        self.graph.relational_table_domain_count()
+    }
+
     pub fn source_epoch(&self) -> u64 {
         self.graph.source_epoch()
     }
@@ -58,6 +71,22 @@ impl PreparedReadDependencies {
     /// Qualified label domains instead admit commits outside those domains.
     pub fn requires_unchanged_database_epoch(&self) -> bool {
         self.graph.requires_unchanged_database_epoch()
+    }
+
+    pub fn exact_node_property_count(&self) -> usize {
+        self.graph.exact_node_property_count()
+    }
+
+    pub fn exact_relational_row_count(&self) -> usize {
+        self.graph.exact_relational_row_count()
+    }
+
+    pub fn relational_index_prefix_count(&self) -> usize {
+        self.graph.relational_index_prefix_count()
+    }
+
+    pub fn node_domain_count(&self) -> usize {
+        self.graph.node_domain_count()
     }
 }
 
@@ -96,7 +125,12 @@ impl PreparedRead {
             parameters,
             None,
         )?;
-        collect_node_dependencies(&optimized.physical_plan, &mut self.dependencies.graph)?;
+        collect_node_dependencies(
+            &optimized.physical_plan,
+            &self.read.catalog,
+            &self.read.store,
+            &mut self.dependencies.graph,
+        )?;
         prepared.optimized = Some(optimized);
         self.read
             .query_with_params_bounded_profile_prepared_internal(
@@ -123,6 +157,8 @@ impl PreparedRead {
 
 fn collect_node_dependencies(
     plan: &PhysicalPlan,
+    catalog: &Catalog,
+    store: &GraphStore,
     dependencies: &mut GraphReadDependencies,
 ) -> Result<()> {
     use PhysicalPlan as P;
@@ -138,23 +174,63 @@ fn collect_node_dependencies(
             "prepared source read requires an adjacency predicate collector".into(),
         ));
     }
+    if let P::FilterExec { predicate, input } = plan {
+        if let Some((variable, label)) = complete_node_source(input)
+            && let Some(values) = graph_match::ids(predicate, variable)
+        {
+            return graph_match::record_ids(values, label, dependencies);
+        }
+        if let P::GraphMatchExec {
+            program,
+            input: None,
+        } = input.as_ref()
+        {
+            return graph_match::collect(program, Some(predicate), catalog, store, dependencies);
+        }
+    }
+    if let P::FilterExec { predicate, input } = plan
+        && let Some((variable, label)) = complete_node_source(input)
+        && let Some((property, values)) =
+            necessary_scalar_bound(predicate, variable, label, catalog)
+    {
+        return collect_scalar_read_keys(catalog, label, property, values, dependencies);
+    }
     let key = match plan {
         P::SeqNodeScan { label, .. }
-        | P::NodeProjectionScanExec { label, .. }
-        | P::IndexNodeSeek { label, .. }
-        | P::IndexNodeMultiSeek { label, .. }
-        | P::IndexNodeUnionSeek { label, .. }
+        | P::NodeCountExec { label, .. } => VersionKey::ReadNodeDomain((!label.is_empty()).then(|| label.clone())),
+        P::IndexNodeSeek { label, property, value, .. } => {
+            return collect_scalar_read_keys(catalog, label, property, std::slice::from_ref(value), dependencies);
+        }
+        P::IndexNodeMultiSeek { label, property, values, .. } => {
+            return collect_scalar_read_keys(catalog, label, property, values, dependencies);
+        }
+        P::NodeProjectionScanExec { variable, label, access, predicate, .. } => {
+            if !matches!(access, hawdb_plan_cypher::NodeProjectionAccess::FullText { .. })
+                && let Some(values) = predicate.as_ref().and_then(|predicate| graph_match::ids(predicate, variable)) {
+                return graph_match::record_ids(values, label, dependencies);
+            }
+            if !matches!(access, hawdb_plan_cypher::NodeProjectionAccess::FullText { .. })
+                && let Some((property, values)) = predicate.as_ref().and_then(|predicate| necessary_scalar_bound(predicate, variable, label, catalog)) {
+                return collect_scalar_read_keys(catalog, label, property, values, dependencies);
+            }
+            if let hawdb_plan_cypher::NodeProjectionAccess::PropertyValues { property, values } = access {
+                return collect_scalar_read_keys(catalog, label, property, values, dependencies);
+            }
+            VersionKey::ReadNodeDomain((!label.is_empty()).then(|| label.clone()))
+        }
+        P::IndexNodeUnionSeek { label, .. }
         | P::IndexNodeCompositeSeek { label, .. }
         | P::IndexNodeCompositeRangeSeek { label, .. }
-        | P::IndexNodeRangeSeek { label, .. }
-        | P::NodeCountExec { label, .. } => VersionKey::ReadNodeDomain((!label.is_empty()).then(|| label.clone())),
+        | P::IndexNodeRangeSeek { label, .. } => VersionKey::ReadNodeDomain((!label.is_empty()).then(|| label.clone())),
+        P::GraphMatchExec { program, input: None } => return graph_match::collect(program, None, catalog, store, dependencies),
+        P::AdjacencyExpandExec { .. } => return graph_match::collect_expand(plan, catalog, store, dependencies),
         P::FilterExec { input, .. }
         | P::ProjectExec { input, .. }
         | P::AggregateExec { input, .. }
         | P::DistinctExec { input }
         | P::SortExec { input, .. }
         | P::TopNExec { input, .. }
-        | P::LimitExec { input, .. } => return collect_node_dependencies(input, dependencies),
+        | P::LimitExec { input, .. } => return collect_node_dependencies(input, catalog, store, dependencies),
         // An optimizer-folded empty result can depend on absent catalog/data.
         // Retain the conservative epoch dependency instead of losing it.
         P::EmptyExec => VersionKey::Database,
@@ -162,6 +238,127 @@ fn collect_node_dependencies(
     };
     dependencies
         .record(key)
+        .map_err(|error| HawDBError::Execution(error.to_string()))
+}
+
+// Bounds may move through local filters, but never through projections,
+// LIMIT/TopN/aggregation or other selection boundaries. An outer predicate
+// after a bounded candidate phase can depend on otherwise unrelated rows.
+fn complete_node_source(plan: &PhysicalPlan) -> Option<(&str, &str)> {
+    use PhysicalPlan as P;
+    match plan {
+        P::SeqNodeScan { variable, label }
+        | P::IndexNodeSeek {
+            variable, label, ..
+        }
+        | P::IndexNodeMultiSeek {
+            variable, label, ..
+        }
+        | P::IndexNodeUnionSeek {
+            variable, label, ..
+        }
+        | P::IndexNodeCompositeSeek {
+            variable, label, ..
+        }
+        | P::IndexNodeCompositeRangeSeek {
+            variable, label, ..
+        }
+        | P::IndexNodeRangeSeek {
+            variable, label, ..
+        } => Some((variable, label)),
+        P::NodeProjectionScanExec {
+            variable,
+            label,
+            access,
+            predicate,
+            items,
+            ..
+        } if items.is_empty()
+            && !matches!(
+                access,
+                hawdb_plan_cypher::NodeProjectionAccess::FullText { .. }
+            )
+            && !predicate
+                .as_ref()
+                .is_some_and(predicate_reads_relationships) =>
+        {
+            Some((variable, label))
+        }
+        P::FilterExec { predicate, input } if !predicate_reads_relationships(predicate) => {
+            complete_node_source(input)
+        }
+        _ => None,
+    }
+}
+
+fn necessary_scalar_bound<'a>(
+    predicate: &'a crate::planner::Predicate,
+    variable: &str,
+    label: &str,
+    catalog: &Catalog,
+) -> Option<(&'a str, &'a [Value])> {
+    use crate::planner::Predicate as P;
+    let (bound_variable, property, values) = match predicate {
+        P::And(parts) => {
+            return parts
+                .iter()
+                .find_map(|part| necessary_scalar_bound(part, variable, label, catalog))
+        }
+        P::PropertyEq {
+            variable,
+            property,
+            value,
+        } => (variable, property, std::slice::from_ref(value)),
+        P::PropertyIn {
+            variable,
+            property,
+            values,
+        } => (variable, property, values.as_slice()),
+        // Never extract a necessary key through OR, NOT or a different binding.
+        _ => return None,
+    };
+    (bound_variable == variable
+        && catalog
+            .label_id(label)
+            .is_some_and(|label| catalog.has_scalar_property_index(label, property)))
+    .then_some((property, values))
+}
+
+fn collect_scalar_read_keys(
+    catalog: &Catalog,
+    label: &str,
+    property: &str,
+    values: &[Value],
+    dependencies: &mut GraphReadDependencies,
+) -> Result<()> {
+    let qualified = catalog
+        .label_id(label)
+        .is_some_and(|id| catalog.has_scalar_property_index(id, property));
+    if qualified {
+        for value in values {
+            if let Some(key) =
+                hawdb_storage::version::node_property_read_key(label, property, value)
+            {
+                dependencies
+                    .record(key)
+                    .map_err(|error| HawDBError::Execution(error.to_string()))?;
+            } else {
+                // The writer uses the same representability bound, retaining
+                // its label-domain summary for unsupported/oversized values.
+                return record_node_domain(label, dependencies);
+            }
+        }
+        Ok(())
+    } else {
+        record_node_domain(label, dependencies)
+    }
+}
+
+fn record_node_domain(label: &str, dependencies: &mut GraphReadDependencies) -> Result<()> {
+    dependencies
+        .record(VersionKey::ReadNodeDomain(
+            (!label.is_empty()).then(|| label.into()),
+        ))
         .map_err(|error| HawDBError::Execution(error.to_string()))
 }
 
@@ -235,6 +432,12 @@ impl Database {
             .get()?
             .store
             .read_dependency_validation_failures())
+    }
+
+    /// Successful commits that collapsed fine read summaries to ReadBarrier.
+    /// The count resets when this database instance is reopened.
+    pub fn read_summary_collapse_count(&self) -> Result<u64> {
+        Ok(self.runtime.get()?.store.read_summary_collapse_count())
     }
 
     pub fn begin_prepared_read(&self, limits: PreparedReadLimits) -> Result<PreparedRead> {
@@ -312,6 +515,7 @@ mod tests {
             db.read_dependency_validation_failures().unwrap(),
             ReadDependencyValidationFailures::default()
         );
+        assert_eq!(db.read_summary_collapse_count().unwrap(), 0);
     }
 
     struct Random(u64);
@@ -447,17 +651,20 @@ mod tests {
                             .unwrap()
                             .store
                             .validate_read_dependencies(&dependencies.graph);
+                        let conflicts = same_label
+                            && match name {
+                                "seek" => mutation != "insert",
+                                "empty" => mutation == "insert",
+                                _ => true,
+                            };
                         match validation {
                             Ok(()) => {
                                 assert_eq!(before, after, "{case}: accepted stale query result");
-                                assert!(!same_label, "{case}: missed label-domain invalidation");
+                                assert!(!conflicts, "{case}: missed captured dependency");
                                 accepted[shape] += 1;
                             }
                             Err(GraphReadDependencyError::Conflict(_)) => {
-                                assert!(
-                                    same_label || dependencies.requires_unchanged_database_epoch(),
-                                    "{case}: rejected disjoint write"
-                                );
+                                assert!(conflicts, "{case}: rejected disjoint write");
                                 rejected[shape] += 1;
                             }
                             Err(error) => panic!("{case}: unexpected validation error: {error}"),
@@ -469,7 +676,9 @@ mod tests {
         }
         // An always-rejecting validator cannot satisfy the differential property
         // vacuously; an always-accepting validator must also fail this campaign.
-        assert_eq!(accepted, [12; 4]);
-        assert_eq!(rejected, [12; 4]);
+        // Exact seeks permit inserts at other keys; an absent key permits
+        // updates/deletes of existing keys. Scans and counts retain domains.
+        assert_eq!(accepted, [12, 16, 12, 20]);
+        assert_eq!(rejected, [12, 8, 12, 4]);
     }
 }

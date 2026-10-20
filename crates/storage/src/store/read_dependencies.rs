@@ -18,12 +18,23 @@
 //! not publication authorization: a facade must retain its source/target fence
 //! through durable activation and separately check source durability.
 
+#[path = "read_dependencies/adjacency.rs"]
+mod adjacency;
+
 use super::*;
 use crate::version::{
     VersionConflict, VersionKey, VersionSnapshotPin, VersionWriteSet, VersionWriteSetError,
 };
 use crate::wal::WalOp;
 use std::fmt;
+
+#[path = "read_dependencies/indexed_nodes.rs"]
+mod indexed_nodes;
+#[path = "read_dependencies/relational_indexes.rs"]
+mod relational_indexes;
+#[path = "read_dependencies/relationship_domains.rs"]
+mod relationship_domains;
+use indexed_nodes::{record_stamp, IndexedNodeReadInvalidations};
 
 /// Opaque, bounded dependencies captured from the canonical source. Not Clone:
 /// one registration owns its source-history pin and summary-tracking lease.
@@ -49,9 +60,108 @@ impl GraphReadDependencies {
         self.keys.contains_key(&VersionKey::Database)
     }
 
+    /// Trusted query collectors may omit physical identities only after proving
+    /// that their complete query source is restricted to this label domain.
+    #[doc(hidden)]
+    pub fn covers_node_domain(&self, label: &str) -> bool {
+        !self.refused
+            && (self.keys.contains_key(&VersionKey::Database)
+                || self
+                    .keys
+                    .keys_from(&VersionKey::ReadNodeDomain(None))
+                    .take_while(|key| matches!(key, VersionKey::ReadNodeDomain(_)))
+                    .any(|key| {
+                        matches!(key, VersionKey::ReadNodeDomain(name)
+                        if name.as_deref().is_none_or(|name| !label.is_empty() && name == label))
+                    }))
+    }
+
+    /// An empty type requires the all-relationship scope. This only reports
+    /// protection already held; it does not register or qualify a query.
+    #[doc(hidden)]
+    pub fn covers_relationship_domain(&self, kind: &str) -> bool {
+        !self.refused
+            && (self.keys.contains_key(&VersionKey::Database)
+                || self
+                    .keys
+                    .keys_from(&VersionKey::ReadRelationshipDomain(None))
+                    .take_while(|key| matches!(key, VersionKey::ReadRelationshipDomain(_)))
+                    .any(|key| {
+                        matches!(key, VersionKey::ReadRelationshipDomain(name)
+                        if name.as_deref().is_none_or(|name| !kind.is_empty() && name == kind))
+                    }))
+    }
+
+    pub fn exact_node_property_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::ReadNodeProperty { .. }))
+            .count()
+    }
+
+    pub fn exact_relational_row_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::RelationalRow { .. }))
+            .count()
+    }
+
+    pub fn relational_index_prefix_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::ReadRelationalIndexPrefix { .. }))
+            .count()
+    }
+
+    pub fn node_domain_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::ReadNodeDomain(_)))
+            .count()
+    }
+
+    pub fn relational_table_domain_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::ReadRelationalTableDomain(_)))
+            .count()
+    }
+
+    pub fn relationship_domain_count(&self) -> usize {
+        self.keys
+            .iter()
+            .filter(|(key, _)| matches!(key, VersionKey::ReadRelationshipDomain(_)))
+            .count()
+    }
+
     /// Used by trusted query collectors, including absence/domain dependencies.
     /// An ignored budget error permanently invalidates this capture.
     pub fn record(&mut self, key: VersionKey) -> std::result::Result<(), VersionWriteSetError> {
+        // Whole-epoch equality already implies every precise identity is
+        // unchanged. In full-source scans this keeps retained metadata constant
+        // rather than adding one redundant key per enumerated row. A refused
+        // capture stays refused; it cannot regain validity through this path.
+        if !self.refused && self.keys.contains_key(&VersionKey::Database) {
+            return Ok(());
+        }
+        // Eager table/label scopes already protect their row/prefix/property
+        // keys. Preserve sticky refusal and the shared barriers; this does not
+        // subsume arbitrary physical node or adjacency reads.
+        if !self.refused {
+            let covering_scope = match &key {
+                VersionKey::RelationalRow { table, .. }
+                | VersionKey::ReadRelationalIndexPrefix { table, .. } => {
+                    Some(VersionKey::ReadRelationalTableDomain(table.clone()))
+                }
+                VersionKey::ReadNodeProperty { label, .. } => {
+                    Some(VersionKey::ReadNodeDomain(Some(label.clone())))
+                }
+                _ => None,
+            };
+            if covering_scope.is_some_and(|scope| self.keys.contains_key(&scope)) {
+                return Ok(());
+            }
+        }
         let result = self.keys.record_live(key);
         self.refused |= result.is_err();
         result
@@ -139,7 +249,11 @@ impl ValidationFailureCounters {
             GraphReadDependencyError::Conflict(VersionConflict { key, .. }) => match key {
                 VersionKey::ReadBarrier => &self.read_barrier,
                 VersionKey::Database => &self.database,
-                VersionKey::ReadNodeDomain(_) => &self.domain,
+                VersionKey::ReadNodeDomain(_)
+                | VersionKey::ReadRelationshipDomain(_)
+                | VersionKey::ReadRelationalTableDomain(_)
+                | VersionKey::ReadNodeProperty { .. }
+                | VersionKey::ReadRelationalIndexPrefix { .. } => &self.domain,
                 VersionKey::Schema => &self.schema,
                 VersionKey::GraphNode(_)
                 | VersionKey::GraphRelationship(_)
@@ -160,6 +274,12 @@ impl ValidationFailureCounters {
 }
 
 impl GraphStore {
+    /// Successful commits that replaced fine read summaries with ReadBarrier.
+    /// This process-lifetime count is shared with read snapshots and resets on reopen.
+    pub fn read_summary_collapse_count(&self) -> u64 {
+        self.read_summary_collapses.load(AtomicOrdering::Relaxed)
+    }
+
     /// Returns process-lifetime validation failures for this store instance.
     /// The counters reset on reopen and are shared with its read snapshots.
     pub fn read_dependency_validation_failures(&self) -> ReadDependencyValidationFailures {
@@ -235,17 +355,23 @@ impl GraphStore {
                 committed_epoch: self.commit_epoch,
             }));
         }
-        let has_node_domain = captured
-            .keys
-            .iter()
-            .any(|(key, _)| matches!(key, VersionKey::ReadNodeDomain(_)));
+        let has_read_summary = captured.keys.iter().any(|(key, _)| {
+            matches!(
+                key,
+                VersionKey::ReadNodeDomain(_)
+                    | VersionKey::ReadRelationshipDomain(_)
+                    | VersionKey::ReadRelationalTableDomain(_)
+                    | VersionKey::ReadNodeProperty { .. }
+                    | VersionKey::ReadRelationalIndexPrefix { .. }
+            )
+        });
         let barrier_keys = [VersionKey::Database, VersionKey::Schema];
         let keys = captured
             .keys
             .iter()
             .map(|(key, _)| key)
             .chain(barrier_keys.iter())
-            .chain(has_node_domain.then_some(&VersionKey::ReadBarrier));
+            .chain(has_read_summary.then_some(&VersionKey::ReadBarrier));
         for key in keys {
             if let Some(stamp) = self.version_index.stamp(key)
                 && stamp.commit_epoch > captured.source_epoch
@@ -257,6 +383,11 @@ impl GraphStore {
             }
         }
         Ok(())
+    }
+
+    pub(super) fn tracks_read_dependencies(&self) -> bool {
+        self.version_snapshot_pin.is_none()
+            && self.read_dependency_readers.load(AtomicOrdering::Acquire) > 0
     }
 
     pub(super) fn extend_read_invalidation_stamps(
@@ -271,48 +402,51 @@ impl GraphStore {
             return Ok(());
         }
         let mut created = BTreeMap::new();
-        self.collect_node_read_invalidations(catalog, ops, stamps, &mut created)
+        let indexes = IndexedNodeReadInvalidations::new(catalog);
+        self.collect_node_read_invalidations(&indexes, ops, stamps, &mut created)?;
+        self.extend_relationship_read_invalidations(catalog, ops, stamps)
     }
 
     fn collect_node_read_invalidations(
         &self,
-        catalog: &Catalog,
+        indexes: &IndexedNodeReadInvalidations<'_>,
         ops: &[WalOp],
         stamps: &mut VersionWriteSet,
         created: &mut BTreeMap<NodeId, String>,
     ) -> Result<()> {
-        let record = |stamps: &mut VersionWriteSet, key| {
-            stamps
-                .record_live(key)
-                .map_err(|error| HawDBError::Execution(error.to_string()))
-        };
         for op in ops {
             match op {
-                WalOp::CreateNode { id, label, .. } => {
+                WalOp::CreateNode {
+                    id,
+                    label,
+                    properties,
+                } => {
                     created.insert(*id, label.clone());
-                    record(stamps, VersionKey::ReadNodeDomain(None))?;
-                    record(stamps, VersionKey::ReadNodeDomain(Some(label.clone())))?;
+                    record_stamp(stamps, VersionKey::ReadNodeDomain(None))?;
+                    indexes.record_label(label, Some(properties), None, stamps)?;
                 }
                 WalOp::SetNodeProperty { id, .. } | WalOp::DeleteNode { id } => {
-                    record(stamps, VersionKey::ReadNodeDomain(None))?;
+                    record_stamp(stamps, VersionKey::ReadNodeDomain(None))?;
+                    let changed = match op {
+                        WalOp::SetNodeProperty {
+                            property, value, ..
+                        } => Some((property.as_str(), value)),
+                        _ => None,
+                    };
                     if let Some(label) = created.get(id) {
-                        record(stamps, VersionKey::ReadNodeDomain(Some(label.clone())))?;
+                        // Create already stamped its initial keys. Each later
+                        // indexed assignment adds its new key, including ABA.
+                        indexes.record_label(label, None, changed, stamps)?;
                     } else if let Some(node) = self.nodes.get(id) {
-                        for label in &node.labels {
-                            if let Some(label) = catalog.label_name(*label) {
-                                record(stamps, VersionKey::ReadNodeDomain(Some(label.into())))?;
-                            } else {
-                                record(stamps, VersionKey::ReadBarrier)?;
-                            }
-                        }
+                        indexes.record_node(&node.labels, &node.properties, changed, stamps)?;
+                    } else if let Some(node) = indexes.projected_before(self, *id)? {
+                        indexes.record_node(&node.labels, &node.properties, changed, stamps)?;
                     } else {
-                        // Unknown cold/absent identity: invalidate read domains
-                        // without introducing a false writer Database barrier.
-                        record(stamps, VersionKey::ReadBarrier)?;
+                        record_stamp(stamps, VersionKey::ReadBarrier)?;
                     }
                 }
                 WalOp::Batch(ops) => {
-                    self.collect_node_read_invalidations(catalog, ops, stamps, created)?
+                    self.collect_node_read_invalidations(indexes, ops, stamps, created)?
                 }
                 // Other data families are not narrowed by this collector.
                 // Their readers must use Database until separately qualified.
@@ -609,6 +743,38 @@ mod tests {
     }
 
     #[test]
+    fn database_scope_subsumes_precise_history_without_resetting_refusal() {
+        let mut store = GraphStore::default();
+        let mut catalog = Catalog::default();
+        let mut broad = store.capture_read_dependencies(1, 4096).unwrap();
+        broad.record(VersionKey::Database).unwrap();
+        let bytes = broad.estimated_bytes();
+        for id in 0..1000 {
+            broad.record(VersionKey::GraphNode(NodeId(id))).unwrap();
+        }
+        assert_eq!(broad.estimated_bytes(), bytes);
+        store.validate_read_dependencies(&broad).unwrap();
+        store
+            .commit_mutations(&mut catalog, vec![create("Other")])
+            .unwrap();
+        assert!(matches!(
+            store.validate_read_dependencies(&broad),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::Database,
+                ..
+            }))
+        ));
+        let mut refused = store.capture_read_dependencies(1, 4096).unwrap();
+        refused.record(VersionKey::GraphNode(NodeId(0))).unwrap();
+        assert!(refused.record(VersionKey::GraphNode(NodeId(1))).is_err());
+        assert!(refused.record(VersionKey::Database).is_err());
+        assert!(matches!(
+            store.validate_read_dependencies(&refused),
+            Err(GraphReadDependencyError::CaptureRefused)
+        ));
+    }
+
+    #[test]
     fn opaque_and_legacy_paths_retain_conservative_invalidation() {
         let mut store = GraphStore::default();
         let mut catalog = Catalog::default();
@@ -653,9 +819,11 @@ mod tests {
         let wal_path = store.durable.as_ref().unwrap().wal_path.clone();
         let wal = std::fs::read(&wal_path).unwrap();
         let epoch = store.commit_epoch();
+        assert_eq!(store.read_summary_collapse_count(), 0);
         store
             .commit_mutations(&mut catalog, vec![create("Memory")])
             .unwrap();
+        assert_eq!(store.read_summary_collapse_count(), 1);
         assert_eq!(store.commit_epoch(), epoch + 1);
         assert_eq!(store.node_count_for_label(None), 2);
         assert!(catalog.label_id("Memory").is_some());
@@ -670,6 +838,7 @@ mod tests {
         drop(store);
         let mut recovered_catalog = Catalog::default();
         let recovered = GraphStore::open(&path, &mut recovered_catalog).unwrap();
+        assert_eq!(recovered.read_summary_collapse_count(), 0);
         assert_eq!(recovered.commit_epoch(), epoch + 1);
         assert_eq!(recovered.node_count_for_label(None), 2);
         assert!(matches!(
@@ -696,6 +865,7 @@ mod tests {
         store
             .commit_mutations(&mut catalog, vec![create("Memory")])
             .unwrap();
+        assert_eq!(store.read_summary_collapse_count(), 0);
         store.validate_read_dependencies(&captured).unwrap();
         assert!(store
             .version_index
@@ -705,6 +875,7 @@ mod tests {
         store
             .commit_mutations(&mut catalog, vec![create("Other")])
             .unwrap();
+        assert_eq!(store.read_summary_collapse_count(), 1);
         assert_eq!(store.node_count_for_label(None), 2);
         assert!(store
             .version_index

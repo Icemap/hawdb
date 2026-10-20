@@ -2020,6 +2020,22 @@ impl CanonicalSegmentReader {
         result
     }
 
+    /// Validates encoded relationship metadata without constructing properties.
+    #[doc(hidden)]
+    pub fn relationship_identity(
+        &self,
+        id: RelId,
+    ) -> Result<Option<(NodeId, NodeId, RelTypeId)>, CanonicalSegmentError> {
+        self.with_point_record(CanonicalSegmentKind::Relationships, id.0, |payload| {
+            let layout = relationship_payload_layout(
+                payload,
+                Some(self.property_keys()),
+                self.property_spills.as_ref(),
+            )?;
+            Ok((layout.source, layout.target, layout.rel_type))
+        })
+    }
+
     pub fn get_relationship(&self, id: RelId) -> Result<Option<RelRecord>, CanonicalSegmentError> {
         self.get_relationship_with_report(id)
             .map(|(relationship, _)| relationship)

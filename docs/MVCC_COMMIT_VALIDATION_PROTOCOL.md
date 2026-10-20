@@ -146,6 +146,19 @@ and checkpoint before retrying. There is no automatic transaction cancellation.
 The 64 MiB default is a fixed admission policy, not a measured global memory
 requirement or an allocator guarantee.
 
+While a prepared read is registered, commits also stage read invalidation
+summaries in this same 64 MiB current-index estimate and the shared 256 MiB
+retained-root estimate. These are overlapping admission views, not two
+additional RSS reservations. If only the optional read summaries exceed either
+admission, the commit keeps its mandatory write-intent stamps and installs the
+fixed-size `ReadBarrier` instead. The writer can commit; registered reads then
+fail validation and must prepare again. An oversized mandatory write set can
+still be refused before WAL. `GraphStore::read_summary_collapse_count` and the
+embedded `Database` API count successful fallback commits for one open instance;
+`read_dependency_validation_failures` separates barrier, database, domain,
+exact, and schema conflicts. These counts reset on reopen and do not measure
+allocator RSS or guarantee that a particular workload will make progress.
+
 ## Current-epoch candidate baseline
 
 Before preparing the next index, the store checks its shared snapshot pins. If
