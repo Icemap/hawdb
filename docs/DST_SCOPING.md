@@ -66,7 +66,7 @@ some combinations. DST is not the first storage or concurrency verification laye
   handle when the outcome is uncertain. The
   [`wal_tail` tests](../src/api/tests/storage_recovery/wal_tail.rs) already cover
   partial writes, failed rollback/sync, grouped-prefix preservation, and process
-  interruption. [`wal_tail_oracle.rs`](../crates/fuzz/src/wal_tail_oracle.rs)
+  interruption. [`wal_tail_oracle.rs`](../tools/shiro/src/wal_tail_oracle.rs)
   varies fragment boundaries and residency modes. DST could combine varying
   short-write offsets with group followers, barrier failures, and restart, beyond
   the fixed partial-write position and authored schedules.
@@ -162,7 +162,7 @@ logic to compute expected results.
 ## 4. Seed, replay, ownership, and fuzz integration
 
 Reuse the **campaign conventions and local orchestration**, not a new parallel
-testing ecosystem. [`append_main.rs`](../crates/fuzz/src/append_main.rs) provides
+testing ecosystem. [`append_main.rs`](../tools/shiro/src/append_main.rs) provides
 stable campaign/case seeds, `case_index % shard_count` selection, a direct replay
 command, current reports, and validation of the exact completed prefix on resume.
 It does not replace OS scheduling or record every I/O decision. The append test
@@ -207,7 +207,7 @@ prove that the read seam is injectable or that current write regressions exist:
 bazel test //crates/storage:hawdb_storage_tests \
   //crates/runtime-tokio:hawdb_runtime_tokio_tests \
   //:hawdb_unit_tests //:hawdb_storage_crash_recovery_tests \
-  //crates/fuzz:hawdb_fuzz_tests //crates/fuzz:hawdb_fuzz_cli_tests \
+  //tools/shiro:shiro_tests //tools/shiro:shiro_cli_tests \
   //:hawdb_linux_ci_fuzz_smoke_test --nocache_test_results
 ```
 

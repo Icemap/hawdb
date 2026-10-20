@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use hawdb_fuzz::{
+use serde_json::{json, Value as JsonValue};
+use shiro_core::{
     emit_fuzz_report, fuzz_current_report_path, read_fuzz_current_report,
     run_append_state_machine_case, write_fuzz_current_report, CampaignExecutionOptions,
     CampaignOptions, APPEND_STATE_MACHINE_PROTOCOL, DEFAULT_FUZZ_LOG_DIRECTORY,
     DEFAULT_FUZZ_PROGRESS_INTERVAL,
 };
-use serde_json::{json, Value as JsonValue};
 use std::io::{self, Write};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const CAMPAIGN_NAME: &str = "hawdb-append-fuzz";
+const CAMPAIGN_NAME: &str = "shiro-append";
 const DEFAULT_CASES: usize = 64;
 const DEFAULT_STEPS: usize = 128;
 const MAX_CASES: usize = 10_000;
@@ -138,7 +138,7 @@ fn run_append_case(options: &Options, index: usize) -> JsonValue {
         "case_seed": case_seed,
         "report": report,
         "reproduction_command": format!(
-            "bazel run //crates/fuzz:hawdb_append_fuzz -- --seed {} --cases {} --steps {} --case-index {index}",
+            "bazel run //tools/shiro:shiro_append -- --seed {} --cases {} --steps {} --case-index {index}",
             options.seed, options.cases, options.steps
         ),
     })
@@ -335,7 +335,7 @@ fn parse_value<T: std::str::FromStr>(
 }
 
 fn usage() -> &'static str {
-    "usage: hawdb-append-fuzz [--seed <u64>] [--cases <usize>] [--steps <usize>] [--case-index <usize>] [--shard-index <usize>] [--shard-count <usize>] [--progress-interval <usize>] [--resume] [--log-directory <path>] [--print-report]"
+    "usage: shiro-append [--seed <u64>] [--cases <usize>] [--steps <usize>] [--case-index <usize>] [--shard-index <usize>] [--shard-count <usize>] [--progress-interval <usize>] [--resume] [--log-directory <path>] [--print-report]"
 }
 
 fn run_id(options: &Options) -> String {
@@ -479,8 +479,7 @@ mod tests {
 
         assert!(run_with_args(args.into_iter(), &mut stdout).unwrap());
         assert!(stdout.is_empty());
-        let current =
-            directory.join("hawdb-append-fuzz-seed-7-cases-4-steps-1-shard-1-of-2-cur.json");
+        let current = directory.join("shiro-append-seed-7-cases-4-steps-1-shard-1-of-2-cur.json");
         let report = read_fuzz_current_report(&current).unwrap().unwrap();
         assert_eq!(report["complete"], true);
         assert_eq!(report["success"], true);
@@ -544,7 +543,7 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!(
-            "hawdb-append-fuzz-{name}-{}-{timestamp}",
+            "shiro-append-{name}-{}-{timestamp}",
             std::process::id()
         ))
     }

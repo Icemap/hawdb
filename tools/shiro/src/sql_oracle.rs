@@ -26,7 +26,16 @@ use hawdb::{
 use serde_json::{json, Value as JsonValue};
 use std::collections::BTreeMap;
 
+mod extended;
 mod generator;
+
+pub(crate) fn extended_coverage(cases: &[JsonValue]) -> JsonValue {
+    extended::coverage(cases)
+}
+
+pub(crate) const fn extended_protocol() -> &'static str {
+    extended::PROTOCOL
+}
 
 use generator::generate_sql_case;
 
@@ -34,7 +43,7 @@ pub const SQL_TLP_PROTOCOL: &str = "hawdb-sql-tlp-fuzz-v1";
 pub const SQL_TLP_AGGREGATE_PROTOCOL: &str = "hawdb-sql-tlp-aggregate-fuzz-v1";
 pub const SQL_PREDICATE_REWRITE_PROTOCOL: &str = "hawdb-sql-predicate-rewrite-fuzz-v1";
 pub const SQL_JOIN_REWRITE_PROTOCOL: &str = "hawdb-sql-join-rewrite-fuzz-v1";
-pub const SQL_REPLAY_PROTOCOL: &str = "hawdb-sql-fuzz-replay-v1";
+pub const SQL_REPLAY_PROTOCOL: &str = "shiro-sql-fuzz-replay-v2";
 
 const MAX_SQL_REDUCTION_ATTEMPTS: usize = 64;
 pub(crate) const SQL_QUERY_SHAPES: [&str; 8] = [
@@ -218,6 +227,7 @@ struct SqlFuzzCase {
     aggregate_tlp: SqlTlpCase,
     predicate_rewrite: SqlPredicateRewriteCase,
     join_rewrite: SqlJoinRewriteCase,
+    norec: SqlPredicateRewriteCase,
     index_enabled: bool,
 }
 
@@ -230,6 +240,7 @@ pub struct SqlReplayBundle {
     pub aggregate_tlp: SqlTlpCase,
     pub predicate_rewrite: SqlPredicateRewriteCase,
     pub join_rewrite: SqlJoinRewriteCase,
+    pub norec: SqlPredicateRewriteCase,
     pub index_enabled: bool,
 }
 
@@ -243,6 +254,7 @@ impl SqlReplayBundle {
             aggregate_tlp: case.aggregate_tlp.clone(),
             predicate_rewrite: case.predicate_rewrite.clone(),
             join_rewrite: case.join_rewrite.clone(),
+            norec: case.norec.clone(),
             index_enabled: case.index_enabled,
         }
     }
@@ -258,6 +270,7 @@ impl SqlReplayBundle {
             "aggregate_tlp": self.aggregate_tlp.json(),
             "predicate_rewrite": self.predicate_rewrite.json(),
             "join_rewrite": self.join_rewrite.json(),
+            "norec": self.norec.json(),
         })
     }
 }
@@ -441,6 +454,7 @@ pub struct SqlCaseReport {
     pub aggregate_tlp_failure: Option<SqlFailureReport>,
     pub predicate_rewrite_failure: Option<SqlPredicateRewriteFailureReport>,
     pub join_rewrite_failure: Option<SqlJoinRewriteFailureReport>,
+    pub extended: JsonValue,
 }
 
 pub(crate) fn sql_capability_profile_json(aggregate: bool) -> JsonValue {
@@ -492,6 +506,7 @@ pub(crate) fn sql_join_rewrite_capability_profile_json() -> JsonValue {
 impl SqlCaseReport {
     pub(crate) fn json(&self) -> JsonValue {
         json!({
+            "extended": self.extended,
             "shape": self.shape,
             "predicate_rewrite_shape": self.predicate_rewrite_shape,
             "join_rewrite_shape": self.join_rewrite_shape,
@@ -608,7 +623,9 @@ pub(crate) fn evaluate_sql_case(seed: u64, index: usize, index_enabled: bool) ->
         .map(sql_plan_signature);
     let join_rewrite_planning = join_rewrite_evidence.optimized.join_planning.clone();
 
+    let extended = extended::evaluate(&case);
     SqlCaseReport {
+        extended: extended.clone(),
         shape: case.shape.clone(),
         predicate_rewrite_shape: case.predicate_rewrite.name.clone(),
         join_rewrite_shape: case.join_rewrite.name.clone(),
@@ -616,7 +633,8 @@ pub(crate) fn evaluate_sql_case(seed: u64, index: usize, index_enabled: bool) ->
         success: row_tlp_success
             && aggregate_tlp_success
             && predicate_rewrite_success
-            && join_rewrite_success,
+            && join_rewrite_success
+            && extended["success"] == true,
         row_tlp_success,
         aggregate_tlp_success,
         predicate_rewrite_success,

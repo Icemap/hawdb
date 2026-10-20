@@ -194,11 +194,11 @@ Routine local code verification includes the repository's fuzz regression
 command, also available as `make fuzz-test`:
 
 ```console
-bazel test //crates/fuzz:hawdb_fuzz_tests //crates/fuzz:hawdb_fuzz_cli_tests //:hawdb_linux_ci_fuzz_smoke_test
+bazel test //tools/shiro:shiro_tests //tools/shiro:shiro_cli_tests //:hawdb_linux_ci_fuzz_smoke_test
 ```
 
 Fuzz remains local-only; do not add default, dedicated, or scheduled CI fuzz
-jobs. Use [the fuzz guide](crates/fuzz/README.md) for targeted campaigns and
+jobs. Use [the fuzz guide](tools/shiro/README.md) for targeted campaigns and
 reproduction artifacts. If a required check cannot run, record it as not run,
 with the blocker and remaining risk, for the maintainer to assess. For a
 documentation-only change, record documentation validation instead of claiming

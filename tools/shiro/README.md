@@ -1,6 +1,6 @@
-# hawdb-fuzz
+# Shiro
 
-`hawdb-fuzz` is a development-only correctness harness over HawDB's public embedded API. The
+`shiro` is a development-only correctness harness over HawDB's public embedded API. The
 production `hawdb` crate does not depend on it.
 
 The local process-memory state-machine campaign exercises 32 seeds with 512
@@ -11,10 +11,10 @@ resources, and observed-growth accounting. Lifetime peak RSS is deliberately
 above the limit so accidental peak-based admission fails the oracle.
 
 ```console
-cargo test --locked -p hawdb-fuzz --lib process_memory_state_machine_matches_interval_oracle -- --nocapture
+cargo test --locked --manifest-path tools/shiro/Cargo.toml --lib process_memory_state_machine_matches_interval_oracle -- --nocapture
 ```
 
-The campaign is included in `//crates/fuzz:hawdb_fuzz_tests` and remains local-only.
+The campaign is included in `//tools/shiro:shiro_tests` and remains local-only.
 Native OS metrics and embedded query recovery are qualified separately by
 `tests/process_memory_policy_contract.rs`; the deterministic oracle does not
 claim platform RSS or allocator evidence.
@@ -26,7 +26,7 @@ or replace these campaigns.
 
 The generator first creates a deterministic graph state, then chooses query shapes and typed
 predicate and query AST nodes that are validated against the generated schema before rendering. A
-campaign runs nine complementary oracles:
+campaign runs the original nine complementary oracles plus the operator relations below:
 
 - The plan-differential oracle applies mutations once, pins one read snapshot, and executes the
   same parameterized Cypher query through memo child resolution and deterministic direct child
@@ -69,7 +69,7 @@ campaign runs nine complementary oracles:
   generated PostgreSQL-style predicates. Positional parameters in the unknown partition are
   deterministically rebased before composition. Both variants retain their `EXPLAIN` rows and run
   against the same relational snapshot.
-- The SQL join-rewrite oracle generates three- and four-relation INNER/LEFT trees over duplicate
+- The SQL join-rewrite oracle generates three- through six-relation INNER/LEFT trees over duplicate
   and nullable values. It compares an optimizer-eligible ordered query with the same query without
   ordering, executed through an explicit syntax-order planning directive, on one pinned snapshot
   under bag semantics. Planning evidence must prove memo selection for the optimized variant and
@@ -101,16 +101,86 @@ The differential reducer first minimizes graph mutations and then typed query AS
 a candidate only when the same failure signature still triggers, so a setup, parse, or execution
 error cannot replace a semantic mismatch during reduction.
 
-NoREC is intentionally deferred until the supported Cypher or SQL subset can express a general
-row-wise `SUM(CASE WHEN predicate THEN 1 ELSE 0 END)` relation without adding a fuzz-only executor
-path.
+## Extended SQL operator relations
+
+Shiro now additionally runs these relations against one pinned relational snapshot:
+
+| Oracle | Relation and operator coverage |
+| --- | --- |
+| NoREC-style count | COUNT with WHERE versus COALESCE(SUM(1) FILTER (WHERE p), 0), including nullable predicates and joins; require aggregate FILTER plan evidence |
+| DQP | Identical SQL and parameters under selected Auto memo and explicit SyntaxOrder; record normalized physical-plan diversity separately from result agreement |
+| HAVING TLP | Partition completed GROUP BY results using SUM predicates and SQL UNKNOWN; project COUNT, COUNT DISTINCT, SUM, MIN and MAX |
+| DISTINCT TLP | Compare DISTINCT output against a deduplicated union of all predicate partitions, preserving set versus bag semantics |
+| SUM TLP | Recombine nullable SUM partitions with checked integer addition; preserve NULL for empty/all-NULL inputs |
+| COUNT DISTINCT | Compare the SQL aggregate with independently deduplicated non-NULL raw values |
+| CROSS/comma JOIN | Compare CROSS JOIN plus WHERE, comma FROM plus WHERE and INNER JOIN ON under bag semantics |
+| Ordered pagination | Compare LIMIT/OFFSET against the corresponding slice of a full result with total ordering and explicit NULL placement |
+
+CASE WHEN and boolean predicate projections remain unsupported by the engine.
+The NoREC-style reference deliberately uses supported aggregate FILTER and SUM;
+it does not claim the classic SUM(CASE WHEN ...) construction. No production
+SQL support or executor path was added for fuzzing. Auto/SyntaxOrder comparison
+is limited to supported join-planning alternatives; same-plan pairs do not count
+as diverse DQP coverage. Shared expression/execution defects can escape these
+relations, so independent references and complementary oracles remain necessary.
+
+`sql_operator_coverage` reports attempted/passed/failed cases and distinct/same
+DQP plan pairs. Successful cases keep compact deterministic plan/row fingerprints
+and operator identities; failures retain complete plans, typed results, exact
+setup/query parameters and signature-preserving reduced replay bundles. Query
+campaign and SQL replay protocols are versioned for the new report contract;
+old progress cannot be silently resumed as the stronger campaign.
+
+## Tool and build boundaries
+
+Shiro is an unpublished independent workspace, excluded from the root Cargo
+workspace and published library archive. Its supporting `shiro_core` library
+serves only its four command-line binaries. Existing public readiness smoke
+contracts in `hawdb-fuzz-contracts` retain their own API and are not Shiro.
+Historical `//crates/fuzz:*` executable/test labels are local compatibility
+aliases; no Cargo crate or implementation remains at that path.
+
+```sh
+make shiro-fuzz
+make mvcc-fuzz
+make shiro-fuzz SHIRO_SEED=42 SHIRO_SECONDS=300
+make mvcc-fuzz MVCC_SEED=42 MVCC_SECONDS=10
+bazel run //tools/shiro:shiro -- --seed 7 --cases 32 --print-report
+bazel run //tools/mvcc-fuzz:hawdb_mvcc_fuzz -- run --seconds 30 --explain
+cargo run --locked --manifest-path tools/shiro/Cargo.toml --bin shiro -- --seed 7 --cases 32
+cargo fmt --manifest-path tools/shiro/Cargo.toml -- --check
+cargo clippy --locked --manifest-path tools/shiro/Cargo.toml --all-targets --all-features -- -D warnings
+```
+
+The default query runner continuously generates fresh fixtures until Ctrl+C or
+an oracle failure. `--timeout-seconds 30` (or `make shiro-fuzz SHIRO_SECONDS=30`)
+stops after the in-flight case finishes. Progress prints every five seconds; `--print-report` additionally prints the full
+JSON evidence at termination. Make uses concise progress by default.
+The legacy `make fuzz` aggregate keeps finite batches so it can also reach its
+storage, append and parser campaigns.
+Each bounded generation batch uses a new deterministic seed; only the current
+batch (at most 128 cases) is retained in the rolling JSON report. Session counters
+cover the whole run; detailed coverage describes the retained batch. Ctrl+C uses
+the operating system's normal termination behavior; the last atomic progress
+checkpoint remains available. A failure stops the run and saves exact seed/index
+reproduction commands and reduced SQL evidence.
+
+Unlike SQLancer's many queries per generated database, Shiro currently constructs
+a fresh fixture per case and evaluates its oracle bundle. Explicit `--cases` and
+`--case-index` select finite verification or replay; they are not the default
+fuzzing stop condition. `--resume` applies only to finite `--cases` campaigns.
+
+The companion executables are `shiro-storage`, `shiro-append`, and `shiro-parser`
+(Cargo), or `shiro_storage`, `shiro_append`, and `shiro_parser` (Bazel). Targets
+are manual/local only. Neither tool belongs in CI or scheduled workflows; the
+normal CI smoke dependency graph excludes the local fuzz executables.
 
 The parser byte campaign uses a corpus derived from the Cypher, relational SQL, and SQL/PGQ test
 suites. It keeps the non-ASCII keyword-probe and excessive-nesting regressions as exact seeds, then
 alternates arbitrary byte strings with deterministic byte mutations of the corpus. Every input is
 bounded and runs all four frontend entry points on an explicitly bounded worker stack. Parser
 acceptance and rejection are both valid; a panic or stack overflow fails the campaign. The stable
-seed and case index reproduce the exact bytes under `hawdb-parser-fuzz-v1`:
+seed and case index reproduce the exact bytes under `shiro-parser-v1`:
 
 ```console
 make fuzz-parser FUZZ_SEED=7 FUZZ_CASES=256

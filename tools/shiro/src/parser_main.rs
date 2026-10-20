@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use hawdb_fuzz::{
+use serde_json::json;
+use shiro_core::{
     emit_fuzz_report, generate_parser_fuzz_case, parser_input_fingerprint, run_parser_fuzz_case,
     DEFAULT_FUZZ_LOG_DIRECTORY, PARSER_FUZZ_PROTOCOL,
 };
-use serde_json::json;
 use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -29,7 +29,7 @@ fn main() -> ExitCode {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::FAILURE,
         Err(error) => {
-            eprintln!("hawdb-parser-fuzz: {error}");
+            eprintln!("shiro-parser: {error}");
             ExitCode::from(2)
         }
     }
@@ -48,7 +48,7 @@ fn run() -> Result<bool, String> {
         let fingerprint = parser_input_fingerprint(&case.input);
         let input_bytes = case.input.len();
         let reproduction_command = format!(
-            "bazel run //crates/fuzz:hawdb_parser_fuzz -- --seed {} --case-index {index}",
+            "bazel run //tools/shiro:shiro_parser -- --seed {} --case-index {index}",
             options.seed
         );
         match run_parser_fuzz_case(&case) {
@@ -98,7 +98,7 @@ fn run() -> Result<bool, String> {
     });
     let paths = emit_fuzz_report(
         &options.log_directory,
-        "hawdb-parser-fuzz",
+        "shiro-parser",
         &run_id(&options),
         &report,
         success,
@@ -107,7 +107,7 @@ fn run() -> Result<bool, String> {
     )?;
     if let Some(path) = paths.failure {
         eprintln!(
-            "hawdb-parser-fuzz: parser panic detected; reproduction report: {}",
+            "shiro-parser: parser panic detected; reproduction report: {}",
             path.display()
         );
     }
@@ -179,7 +179,7 @@ fn next_value(args: &mut impl Iterator<Item = String>, option: &str) -> Result<S
 }
 
 fn usage() -> &'static str {
-    "usage: hawdb-parser-fuzz [--seed <u64>] [--cases <usize>] [--case-index <usize>] [--log-directory <path>] [--print-report]"
+    "usage: shiro-parser [--seed <u64>] [--cases <usize>] [--case-index <usize>] [--log-directory <path>] [--print-report]"
 }
 
 fn run_id(options: &Options) -> String {

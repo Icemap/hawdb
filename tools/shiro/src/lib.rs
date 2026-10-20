@@ -113,13 +113,13 @@ mod capability_parity_tests {
     }
 }
 
-pub const CAMPAIGN_PROTOCOL: &str = "hawdb-multi-oracle-fuzz-v1";
+pub const CAMPAIGN_PROTOCOL: &str = "shiro-multi-oracle-fuzz-v2";
 pub const GRAPH_PREDICATE_REWRITE_PROTOCOL: &str = "hawdb-graph-predicate-rewrite-fuzz-v1";
 pub const GRAPH_TLP_AGGREGATE_PROTOCOL: &str = "hawdb-graph-tlp-aggregate-fuzz-v1";
 pub const GRAPH_TLP_PROTOCOL: &str = "hawdb-graph-tlp-fuzz-v1";
 pub const METAMORPHIC_PROTOCOL: &str = "hawdb-graph-metamorphic-fuzz-v1";
 pub const PLAN_DIFFERENTIAL_PROTOCOL: &str = "hawdb-plan-differential-fuzz-v1";
-pub const REPLAY_BUNDLE_PROTOCOL: &str = "hawdb-multi-oracle-replay-v1";
+pub const REPLAY_BUNDLE_PROTOCOL: &str = "shiro-multi-oracle-replay-v2";
 pub(crate) const QUERY_SHAPE_COUNT: usize = 12;
 const DEFAULT_CASE_COUNT: usize = 128;
 const MAX_CASE_COUNT: usize = 10_000;
@@ -1810,7 +1810,7 @@ impl CampaignReport {
             "failed_case_count": self.failed_case_count,
             "complete_shape_coverage": self.complete_shape_coverage,
             "plan_coverage": self.plan_coverage.json(),
-            "oracles": ["plan_differential", "graph_tlp", "graph_tlp_aggregate", "graph_predicate_rewrite", "graph_metamorphic", "sql_tlp", "sql_tlp_aggregate", "sql_predicate_rewrite", "sql_join_rewrite"],
+            "oracles": ["plan_differential", "graph_tlp", "graph_tlp_aggregate", "graph_predicate_rewrite", "graph_metamorphic", "sql_tlp", "sql_tlp_aggregate", "sql_predicate_rewrite", "sql_join_rewrite", "sql_operator_relations"],
             "oracle_protocols": {
                 "plan_differential": PLAN_DIFFERENTIAL_PROTOCOL,
                 "graph_tlp": GRAPH_TLP_PROTOCOL,
@@ -1821,6 +1821,7 @@ impl CampaignReport {
                 "sql_tlp_aggregate": SQL_TLP_AGGREGATE_PROTOCOL,
                 "sql_predicate_rewrite": SQL_PREDICATE_REWRITE_PROTOCOL,
                 "sql_join_rewrite": SQL_JOIN_REWRITE_PROTOCOL,
+                "sql_operator_relations": sql_oracle::extended_protocol(),
             },
             "capability_profiles": {
                 "plan_differential": capability_profile_json(&plan_profile),
@@ -1832,7 +1833,9 @@ impl CampaignReport {
                 "sql_tlp_aggregate": sql_oracle::sql_capability_profile_json(true),
                 "sql_predicate_rewrite": sql_oracle::sql_predicate_rewrite_capability_profile_json(),
                 "sql_join_rewrite": sql_oracle::sql_join_rewrite_capability_profile_json(),
+                "sql_operator_relations": { "oracles": ["norec_filter", "dqp", "having_tlp", "distinct_tlp", "sum_tlp", "distinct_count", "cross_join", "ordered_limit"], "norec_reference": "sum_filter_not_case_when", "dqp_same_sql": true, "dqp_distinct_plan_reported_separately": true },
             },
+            "sql_operator_coverage": sql_oracle::extended_coverage(&self.cases.iter().map(CampaignCaseReport::json).collect::<Vec<_>>()),
             "cases": self.cases.iter().map(CampaignCaseReport::json).collect::<Vec<_>>(),
         })
     }
@@ -1845,7 +1848,17 @@ pub fn run_campaign(options: CampaignOptions) -> Result<CampaignReport, FuzzErro
 pub fn run_campaign_with_case_observer(
     options: CampaignOptions,
     execution: CampaignExecutionOptions,
+    observer: impl FnMut(&CampaignCaseReport) -> Result<(), FuzzError>,
+) -> Result<CampaignReport, FuzzError> {
+    run_campaign_until(options, execution, observer, || false)
+}
+
+/// Check the stop condition between cases; an in-flight oracle always finishes.
+pub fn run_campaign_until(
+    options: CampaignOptions,
+    execution: CampaignExecutionOptions,
     mut observer: impl FnMut(&CampaignCaseReport) -> Result<(), FuzzError>,
+    mut should_stop: impl FnMut() -> bool,
 ) -> Result<CampaignReport, FuzzError> {
     if options.case_index.is_none() && options.case_count == 0 {
         return Err(FuzzError::new("case_count must be greater than zero"));
@@ -1883,6 +1896,9 @@ pub fn run_campaign_with_case_observer(
     let mut cases = Vec::with_capacity(requested_case_count);
     let mut plan_coverage = PlanCoverageTracker::default();
     for index in 0..generation_case_count {
+        if should_stop() {
+            break;
+        }
         let case = generator.case(index);
         if options.case_index.is_some_and(|target| target != index) {
             continue;
@@ -1968,7 +1984,7 @@ pub fn run_campaign_with_case_observer(
             direction_reversal_applicable,
             reproduction_command: (!success).then(|| {
                 format!(
-                    "bazel run //crates/fuzz:hawdb_optimizer_fuzz -- --seed {} --case-index {index}",
+                    "bazel run //tools/shiro:shiro -- --seed {} --case-index {index}",
                     options.seed
                 )
             }),
@@ -2082,6 +2098,7 @@ pub fn merge_campaign_report_json(
         complete && campaign.case_index.is_none() && has_complete_shape_coverage_json(&cases),
     );
     json["plan_coverage"] = plan_coverage.report().json();
+    json["sql_operator_coverage"] = sql_oracle::extended_coverage(&cases);
     json["cases"] = JsonValue::Array(cases);
     json
 }

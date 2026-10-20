@@ -85,9 +85,9 @@ run_fuzz_smokes() {
     test ! -s "$stream"
   done
   python3 - \
-    "$root/hawdb-append-fuzz-seed-7-cases-8-steps-64-cur.json" \
-    "$root/hawdb-storage-fuzz-seed-7-cases-32-cur.json" \
-    "$root/hawdb-optimizer-fuzz-seed-7-cases-12-cur.json" <<'PY'
+    "$root/shiro-append-seed-7-cases-8-steps-64-cur.json" \
+    "$root/shiro-storage-seed-7-cases-32-cur.json" \
+    "$root/shiro-query-seed-7-cases-12-cur.json" <<'PY'
 import json
 import sys
 
@@ -108,7 +108,7 @@ assert storage["seed"] == 7
 assert storage["requested_case_count"] == 32
 assert storage["failed_case_count"] == 0
 assert storage["success"] is True
-assert optimizer["protocol"] == "hawdb-multi-oracle-fuzz-v1"
+assert optimizer["protocol"] == "shiro-multi-oracle-fuzz-v2"
 assert optimizer["seed"] == 7
 assert optimizer["requested_case_count"] == 12
 assert optimizer["failed_case_count"] == 0

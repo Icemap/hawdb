@@ -1,19 +1,24 @@
 [package]
-name = "hawdb-fuzz"
-default-run = "hawdb-fuzz"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-description.workspace = true
-repository.workspace = true
-homepage.workspace = true
+name = "shiro"
+default-run = "shiro"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "Apache-2.0"
+description = "Local SQL and Cypher correctness fuzzing for HawDB"
+repository = "https://github.com/nowledge-co/hawdb"
+homepage = "https://hawdb.ai"
 publish = false
+
+[workspace]
+
+[lib]
+name = "shiro_core"
 
 [dependencies]
 serde_json = "1"
 hawdb = { path = "../..", version = "0.11.0", default-features = false }
-hawdb-fuzz-contracts = { path = "../fuzz-contracts", version = "0.11.0" }
+hawdb-fuzz-contracts = { path = "../../crates/fuzz-contracts", version = "0.11.0" }
 
 [features]
 default = [
@@ -30,17 +35,23 @@ qualification = ["hawdb/qualification"]
 vector-search = ["hawdb/vector-search"]
 
 [[bin]]
-name = "hawdb-fuzz"
+name = "shiro"
 path = "src/main.rs"
 
 [[bin]]
-name = "hawdb-storage-fuzz"
+name = "shiro-storage"
 path = "src/storage_main.rs"
 
 [[bin]]
-name = "hawdb-append-fuzz"
+name = "shiro-append"
 path = "src/append_main.rs"
 
 [[bin]]
-name = "hawdb-parser-fuzz"
+name = "shiro-parser"
 path = "src/parser_main.rs"
+
+[profile.dev]
+debug = 0
+
+[profile.test]
+debug = 0

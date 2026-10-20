@@ -79,7 +79,7 @@
 ## Local Fuzz Verification
 
 - Keep fuzz targets available through Bazel, but do not add them to default or dedicated CI jobs.
-- Routine local verification must run `bazel test //crates/fuzz:hawdb_fuzz_tests //crates/fuzz:hawdb_fuzz_cli_tests //:hawdb_linux_ci_fuzz_smoke_test`.
+- Routine local verification must run `bazel test //tools/shiro:shiro_tests //tools/shiro:shiro_cli_tests //:hawdb_linux_ci_fuzz_smoke_test`.
 - The standalone MVCC campaign lives in `tools/mvcc-fuzz/` as a binary-only,
   unpublished, independent Cargo workspace. Do not move it into `crates/`, add
   it to the library workspace/dependency graph, bundle it in published library
@@ -95,3 +95,27 @@
 - Format and lint this independent tool explicitly when changing it:
   `cargo fmt --manifest-path tools/mvcc-fuzz/Cargo.toml -- --check` and
   `cargo clippy --locked --manifest-path tools/mvcc-fuzz/Cargo.toml --all-targets -- -D warnings`.
+
+## Shiro developer tool
+
+- The SQL/Cypher multi-oracle campaign is named Shiro and lives in
+  `tools/shiro/`, an independent unpublished Cargo workspace. Its supporting
+  library is private to the tool; production HawDB must not depend on Shiro.
+- Prefer `make mvcc-fuzz` (30 seconds) and `make shiro-fuzz` (until Ctrl+C) for
+  routine local runs. Override `MVCC_SECONDS`, `MVCC_SEED`, `SHIRO_SECONDS`,
+  `SHIRO_SEED` and the corresponding log-directory variables as needed.
+- Use `bazel run //tools/shiro:shiro -- --seed 7 --cases 32 --print-report` for a
+  short local campaign, or `cargo run --locked --manifest-path tools/shiro/Cargo.toml --bin shiro -- --seed 7 --cases 32 --print-report`.
+  The MVCC tool remains available through `bazel run //tools/mvcc-fuzz:hawdb_mvcc_fuzz -- run --seconds 30 --explain`.
+- Keep both tools out of CI, scheduled jobs, production dependencies and library
+  package archives. Shiro's test targets are explicit local verification only;
+  do not add them to crate presubmits or the ordinary CI smoke dependency graph.
+- Preserve typed rows, duplicate multiplicities, NULL/empty-input semantics,
+  pinned snapshots, exact replay statements/parameters and failure signatures.
+  NoREC currently uses `COALESCE(SUM(1) FILTER (WHERE p), 0)` as its reference
+  because CASE WHEN is unsupported; do not claim the classic CASE oracle.
+  DQP must compare identical SQL/parameters and distinguish actual different
+  plans from same-plan agreement in coverage reports.
+- Run independent tool formatting and strict Clippy explicitly when changing it:
+  `cargo fmt --manifest-path tools/shiro/Cargo.toml -- --check` and
+  `cargo clippy --locked --manifest-path tools/shiro/Cargo.toml --all-targets --all-features -- -D warnings`.

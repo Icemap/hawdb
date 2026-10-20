@@ -202,6 +202,7 @@ pub(super) fn generate_sql_case(seed: u64, index: usize, index_enabled: bool) ->
         aggregate_tlp: specification.build(true),
         predicate_rewrite: specification.build_predicate_rewrite(rewrite_kind),
         join_rewrite,
+        norec: specification.build_norec(),
         index_enabled,
     }
 }
@@ -576,6 +577,25 @@ impl SqlQuerySpec {
                 projection,
                 Some(&self.null_predicate),
                 self.null_parameters.clone(),
+            ),
+        }
+    }
+
+    fn build_norec(&self) -> SqlPredicateRewriteCase {
+        SqlPredicateRewriteCase {
+            name: "sum_filter_reference".into(),
+            original: self.query(
+                "COUNT(*) AS count",
+                Some(&self.predicate),
+                self.predicate_parameters.clone(),
+            ),
+            rewritten: self.query(
+                &format!(
+                    "COALESCE(SUM(1) FILTER (WHERE {}), 0) AS count",
+                    self.predicate
+                ),
+                None,
+                self.predicate_parameters.clone(),
             ),
         }
     }

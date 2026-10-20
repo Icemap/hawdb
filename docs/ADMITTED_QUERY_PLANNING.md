@@ -110,10 +110,10 @@ missing RSS rise or recovery still fails qualification rather than being skipped
 ```sh
 cargo test --locked -p hawdb --test process_memory_policy_contract -- --nocapture
 cargo test --locked -p hawdb --no-default-features --test process_memory_policy_contract
-cargo test --locked -p hawdb-fuzz --lib process_memory_state_machine_matches_interval_oracle -- --nocapture
+cargo test --locked --manifest-path tools/shiro/Cargo.toml --lib process_memory_state_machine_matches_interval_oracle -- --nocapture
 bazel test //:hawdb_process_memory_policy_contract_tests \
   //:hawdb_process_memory_policy_contract_minimal_tests \
-  //crates/fuzz:hawdb_fuzz_tests //crates/fuzz:hawdb_fuzz_cli_tests \
+  //tools/shiro:shiro_tests //tools/shiro:shiro_cli_tests \
   //:hawdb_linux_ci_fuzz_smoke_test
 ```
 
@@ -167,7 +167,7 @@ cargo check -p hawdb --no-default-features
 bazel test //:hawdb_unit_tests //:hawdb_system_sql_loom_tests \
   //crates/qos:hawdb_qos_tests //crates/qos:hawdb_qos_loom_tests \
   //crates/runtime-tokio:hawdb_runtime_tokio_tests \
-  //crates/fuzz:hawdb_fuzz_tests //crates/fuzz:hawdb_fuzz_cli_tests \
+  //tools/shiro:shiro_tests //tools/shiro:shiro_cli_tests \
   //:hawdb_linux_ci_fuzz_smoke_test --nocache_test_results
 ```
 
