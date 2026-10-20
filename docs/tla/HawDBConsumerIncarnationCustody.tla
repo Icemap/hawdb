@@ -101,6 +101,7 @@ IncarnationsNeverReuse == ~s.reused
 NativeCustodyRetained == s.quarantined \/
     s.dirs \subseteq (s.pending \cup s.durablePending \cup s.retired \cup
                       Root(s.selected) \cup Root(s.durableSelected))
+IncarnationAndCustodyPreserved == IncarnationsNeverReuse /\ NativeCustodyRetained
 AdoptionHasActualBirth == s.adopted \subseteq s.births
 SelectedClosureComplete == Root(s.selected) \subseteq (s.dirs \cap s.births \cap s.complete)
 DurableSelectorUsable == Root(s.durableSelected) \subseteq (s.dirs \cap s.births \cap s.complete)
