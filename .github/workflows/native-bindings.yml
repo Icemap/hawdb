@@ -243,18 +243,22 @@ jobs:
               feature_args=(--no-default-features)
             fi
             for target in in_memory_portable branch_project_open; do
+              expected=1
+              if [[ "$target" == branch_project_open ]]; then
+                expected=2
+              fi
               output="windows-native-results/instance-identity-$profile-$target.txt"
               bash scripts/cargo-test-required.sh --locked -p hawdb "${feature_args[@]}" \
                 --test "$target" -- database_instance_identity_ --nocapture \
                 2>&1 | tee "$output"
-              grep -Eq '^test result: ok\. 1 passed; 0 failed; 0 ignored;' "$output"
+              grep -Eq "^test result: ok\\. $expected passed; 0 failed; 0 ignored;" "$output"
             done
             output="windows-native-results/instance-identity-$profile-views.txt"
             bash scripts/cargo-test-required.sh --locked -p hawdb "${feature_args[@]}" \
               --lib -- database_instance_identity_ --nocapture \
               2>&1 | tee "$output"
-            # Both ordinary writes and replacement must preserve view binding.
-            grep -Eq '^test result: ok\. 2 passed; 0 failed; 0 ignored;' "$output"
+            # Reject poisoned handles and preserve view binding across writes and replacement.
+            grep -Eq '^test result: ok\. 3 passed; 0 failed; 0 ignored;' "$output"
           done
 
       - name: Test retained Arrow array and stream contracts
