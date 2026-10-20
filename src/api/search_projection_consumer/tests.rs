@@ -1977,6 +1977,86 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
                     Some(7)
                 );
             }
+            let detached = lease.detach_candidate().unwrap();
+            assert_eq!(governor.snapshot().active_background_tasks, 0);
+            let mut wrong_birth = reserve_native_generation(&mut db, &fixture)
+                .prepare_stationary_generation(&fixture.0)
+                .unwrap();
+            wrong_birth.create().unwrap();
+            let (error, detached, wrong_birth) =
+                (*detached.attach_birth(wrong_birth).unwrap_err()).into_parts();
+            assert!(error
+                .to_string()
+                .contains("differs from its recorded native birth"));
+            assert!(wrong_birth.born_directory().is_ok());
+            let prepared = detached.attach_birth(pending).unwrap();
+            assert_eq!(prepared.report(), view);
+            #[cfg(feature = "full-text-search")]
+            {
+                let foreign_governor = RuntimeGovernor::detect(
+                    RuntimeGovernorConfig {
+                        memory_budget_bytes: Some(64 * 1024 * 1024),
+                        ..RuntimeGovernorConfig::shared_host()
+                    },
+                    IoConcurrencyBudget::new(2, 1),
+                );
+                let foreign_permit = foreign_governor
+                    .try_admit(
+                        RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                            .with_io_wave_slots(1),
+                    )
+                    .unwrap();
+                assert!(prepared
+                    .probe_candidate_query(
+                        &foreign_permit,
+                        hawdb_core::RuntimeTaskContext::default(),
+                        "out of core",
+                        None,
+                        hawdb_search::SearchMode::Text,
+                        hawdb_search::SearchQueryOptions {
+                            limit: 1,
+                            offset: 0,
+                            rank_window: None,
+                            fusion_weights: Default::default(),
+                            metadata_filters: Default::default(),
+                            policy_epoch: None,
+                        },
+                    )
+                    .unwrap_err()
+                    .to_string()
+                    .contains("another governor"));
+                let query_permit = governor
+                    .try_admit(
+                        RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                            .with_io_wave_slots(1),
+                    )
+                    .unwrap();
+                assert_eq!(
+                    prepared
+                        .probe_candidate_query(
+                            &query_permit,
+                            hawdb_core::RuntimeTaskContext::default(),
+                            "out of core",
+                            None,
+                            hawdb_search::SearchMode::Text,
+                            hawdb_search::SearchQueryOptions {
+                                limit: 1,
+                                offset: 0,
+                                rank_window: None,
+                                fusion_weights: Default::default(),
+                                metadata_filters: Default::default(),
+                                policy_epoch: None,
+                            },
+                        )
+                        .unwrap()
+                        .result
+                        .hits[0]
+                        .id,
+                    "memory:m1"
+                );
+            }
+            let original_birth = prepared.abandon();
+            assert!(original_birth.born_directory().is_ok());
         }
     }
 }

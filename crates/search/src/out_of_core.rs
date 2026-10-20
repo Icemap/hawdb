@@ -70,6 +70,10 @@ impl std::fmt::Debug for CandidateView {
 }
 
 impl CandidateView {
+    pub(crate) fn shares_governor_with(&self, permit: &hawdb_qos::RuntimePermit) -> bool {
+        self.0.shares_governor_with(permit)
+    }
+
     pub(crate) fn probe_query(
         &self,
         query_text: &str,

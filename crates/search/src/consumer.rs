@@ -154,7 +154,211 @@ pub struct ConsumerCandidateViewReport {
     pub metadata_reference: ObjectReference,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ConsumerCandidateReservation {
+    source_branch: Uuid,
+    database_uuid: Uuid,
+    consumer_id_hash: hawdb_integrity::Sha256Digest,
+    target_locator_hash: hawdb_integrity::Sha256Digest,
+    target_incarnation: std::num::NonZeroU64,
+    generation: std::num::NonZeroU64,
+    operation: std::num::NonZeroU64,
+    registration_uuid: Uuid,
+    projection_uuid: Uuid,
+    checkpoint_uuid: Uuid,
+}
+
+impl ConsumerCandidateReservation {
+    fn capture(
+        binding: hawdb_storage::consumer_allocation::ConsumerReservationBinding<'_>,
+    ) -> Self {
+        Self {
+            source_branch: binding.source_branch.as_uuid(),
+            database_uuid: binding.database_uuid,
+            consumer_id_hash: digest_reservation_text(binding.consumer_id),
+            target_locator_hash: digest_reservation_text(binding.target_locator),
+            target_incarnation: binding.target_incarnation,
+            generation: binding.generation,
+            operation: binding.operation,
+            registration_uuid: binding.registration_uuid,
+            projection_uuid: binding.projection_uuid,
+            checkpoint_uuid: binding.checkpoint_uuid,
+        }
+    }
+}
+
+fn digest_reservation_text(value: &str) -> hawdb_integrity::Sha256Digest {
+    let mut hasher = IntegrityHasher::new();
+    hasher.update(&(value.len() as u64).to_le_bytes());
+    hasher.update(value.as_bytes());
+    hasher.finish().sha256
+}
+
+/// An unselected reader and its original target custody, detached from the
+/// preparation borrow. Attach the matching recorded birth before retaining it.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct ConsumerDetachedCandidate {
+    lease: SearchProjectionPublishLease,
+    reservation: ConsumerCandidateReservation,
+    metadata: ConsumerCandidateMetadata,
+    _manifest: ObjectReference,
+    source_epoch: u64,
+    view: crate::out_of_core::CandidateView,
+}
+
+/// An unselected candidate that owns the original recorded birth, complete
+/// pinned reader and target exclusion together. Reader memory stays funded,
+/// while the preparation execution permit is released. Queries need fresh
+/// runtime admission. This grants no serving or selector authority.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct ConsumerPreparedCandidate {
+    birth: PendingConsumerGeneration,
+    detached: ConsumerDetachedCandidate,
+}
+
+/// A failed birth attachment returns both owners so the caller can resolve
+/// the original durable debt without adopting a directory by its path.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct ConsumerCandidateAttachError {
+    error: HawDBError,
+    detached: ConsumerDetachedCandidate,
+    birth: PendingConsumerGeneration,
+}
+
+impl ConsumerCandidateAttachError {
+    pub fn into_parts(
+        self,
+    ) -> (
+        HawDBError,
+        ConsumerDetachedCandidate,
+        PendingConsumerGeneration,
+    ) {
+        (self.error, self.detached, self.birth)
+    }
+}
+
+impl ConsumerDetachedCandidate {
+    pub fn attach_birth(
+        self,
+        birth: PendingConsumerGeneration,
+    ) -> std::result::Result<ConsumerPreparedCandidate, Box<ConsumerCandidateAttachError>> {
+        let matches = birth.born_directory().and_then(|born| {
+            let binding = birth.reservation_binding()?;
+            Ok(self
+                .lease
+                .with_captured_directory(|target| target.same_directory(born))
+                && self.reservation == ConsumerCandidateReservation::capture(binding))
+        });
+        if !matches.unwrap_or(false) {
+            return Err(Box::new(ConsumerCandidateAttachError {
+                error: HawDBError::StorageIntegrity(
+                    "consumer candidate differs from its recorded native birth".into(),
+                ),
+                detached: self,
+                birth,
+            }));
+        }
+        Ok(ConsumerPreparedCandidate {
+            birth,
+            detached: self,
+        })
+    }
+}
+
+impl ConsumerPreparedCandidate {
+    pub fn report(&self) -> ConsumerCandidateViewReport {
+        ConsumerCandidateViewReport {
+            source_epoch: self.detached.source_epoch,
+            generation: self.detached.view.generation(),
+            document_count: self.detached.view.document_count(),
+            metadata_reference: self.detached.metadata.reference,
+        }
+    }
+
+    /// Return the original birth for explicit failed-candidate resolution.
+    /// Reader pins and target exclusion close before the birth is returned.
+    pub fn abandon(self) -> PendingConsumerGeneration {
+        let Self { birth, detached } = self;
+        drop(detached);
+        birth
+    }
+
+    /// Probe with a fresh admitted task. The candidate retains no preparation
+    /// execution slot while waiting for source validation or a selector.
+    pub fn probe_candidate_query(
+        &self,
+        permit: &hawdb_qos::RuntimePermit,
+        task: RuntimeTaskContext,
+        query_text: &str,
+        query_embedding: Option<&[f32]>,
+        mode: crate::SearchMode,
+        options: crate::SearchQueryOptions,
+    ) -> Result<crate::SearchOutOfCoreOutput> {
+        if !self.detached.view.shares_governor_with(permit) {
+            return Err(HawDBError::Execution(
+                "consumer candidate query permit belongs to another governor".into(),
+            ));
+        }
+        if task.has_resource_controllers() {
+            return Err(invalid(
+                "consumer candidate query task already has a resource controller",
+            ));
+        }
+        let task = permit.bind_task_context(task);
+        let _io = task
+            .acquire_io_wave(std::num::NonZeroUsize::MIN)
+            .map_err(|error| HawDBError::Execution(error.to_string()))?
+            .ok_or_else(|| {
+                HawDBError::Execution("consumer candidate query requires I/O admission".into())
+            })?;
+        self.detached
+            .view
+            .probe_query(query_text, query_embedding, mode, options, &task)
+    }
+
+    pub fn reservation_binding(
+        &self,
+    ) -> Result<hawdb_storage::consumer_allocation::ConsumerReservationBinding<'_>> {
+        self.birth.reservation_binding()
+    }
+}
+
 impl<'birth> ConsumerStationaryTargetLease<'birth> {
+    /// Transfer a sealed reader and target custody out of the preparation
+    /// borrow. The caller must attach the same recorded birth before any later
+    /// selection; this transfer alone is never a serving acknowledgement.
+    pub fn detach_candidate(self) -> Result<ConsumerDetachedCandidate> {
+        let reservation = ConsumerCandidateReservation::capture(self._birth.reservation_binding()?);
+        let metadata = self
+            .sealed_metadata
+            .ok_or_else(|| invalid("consumer candidate metadata is not sealed"))?;
+        let manifest = self
+            .sealed_manifest
+            .ok_or_else(|| invalid("consumer candidate manifest is not sealed"))?;
+        let source_epoch = self
+            .sealed_source_epoch
+            .ok_or_else(|| invalid("consumer candidate source epoch is not sealed"))?;
+        let view = self
+            .candidate_view
+            .ok_or_else(|| invalid("consumer candidate view is not prepared"))?;
+        if self.host_admission.is_none() {
+            return Err(HawDBError::Execution(
+                "consumer candidate requires runtime admission".into(),
+            ));
+        }
+        Ok(ConsumerDetachedCandidate {
+            lease: self.lease,
+            reservation,
+            metadata,
+            _manifest: manifest,
+            source_epoch,
+            view,
+        })
+    }
+
     /// Probe the sealed candidate's pinned files under this lease's runtime
     /// admission. Results are validation evidence only: the source-E fence and
     /// durable selector must still complete before any serving acknowledgement.

@@ -58,6 +58,30 @@ pub(super) struct OpenedRoot {
     _collections_memory: Option<ReaderMemory>,
 }
 impl OpenedRoot {
+    pub(super) fn shares_governor_with(&self, permit: &hawdb_qos::RuntimePermit) -> bool {
+        self._root_memory
+            .as_ref()
+            .is_some_and(|memory| memory.shares_governor_with(permit))
+            && self
+                ._manifest_memory
+                .as_ref()
+                .is_some_and(|memory| memory.shares_governor_with(permit))
+            && self
+                ._collections_memory
+                .as_ref()
+                .is_some_and(|memory| memory.shares_governor_with(permit))
+            && self.reader.segments.iter().all(|segment| {
+                segment
+                    ._layout_memory
+                    .as_ref()
+                    .is_some_and(|memory| memory.shares_governor_with(permit))
+                    && segment
+                        ._reader_memory
+                        .as_ref()
+                        .is_some_and(|memory| memory.shares_governor_with(permit))
+            })
+    }
+
     pub(super) fn probe_query(
         &self,
         query_text: &str,
