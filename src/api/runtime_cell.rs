@@ -452,7 +452,7 @@ fn recover_default_branch(
     pending: &DeferredBranchAdmission,
     project: &CapturedProject,
 ) -> Result<AdmittedBranchRuntime> {
-    let _resources =
+    let resources =
         GraphStore::reserve_project_branch_admission_resources(project.file_descriptors())?;
     project.require_original_namespace()?;
     let metadata = project.metadata()?;
@@ -470,6 +470,10 @@ fn recover_default_branch(
         })
         .map_err(|error| HawDBError::from(BranchLifecycleError::Admission(error)))?;
     let (mut store, schema) = admitted.into_parts();
+    // Branch admission has finished and its native owners are retained by the
+    // store. Release the admission IO wave before recovery can require its own
+    // checkpoint publication reservation.
+    drop(resources);
     configure_search_projection_changefeed(&mut store, &pending.config);
     configure_relational_fast_paths(&mut store, &pending.config);
     let mut candidate = Database::new_with_config(pending.config.clone());
