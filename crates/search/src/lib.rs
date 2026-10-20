@@ -1540,7 +1540,7 @@ impl SearchIndex {
         }
         #[cfg(feature = "vector-search")]
         if registered {
-            index.load_registered_rabitq_projection()?;
+            index.load_registered_rabitq_projection(publication)?;
         } else {
             index.load_rabitq_projection()?;
         }
@@ -4300,6 +4300,28 @@ fn rabitq_artifacts_descending(path: &Path) -> Result<Vec<(u64, PathBuf)>> {
             artifacts.push((generation, entry.path()));
         }
     }
+    artifacts.sort_unstable_by_key(|(generation, _)| std::cmp::Reverse(*generation));
+    Ok(artifacts)
+}
+
+#[cfg(feature = "vector-search")]
+fn rabitq_artifacts_descending_under_publication(
+    publication: &out_of_core::SearchProjectionPublishLease,
+) -> Result<Vec<(u64, String)>> {
+    const MAX_REGISTERED_ARTIFACT_NAMES: usize = 4096;
+    let mut artifacts = Vec::new();
+    publication.with_captured_directory(|directory| {
+        directory.visit_children(
+            &directory.operation_context(),
+            MAX_REGISTERED_ARTIFACT_NAMES,
+            |name| {
+                if let Some(generation) = rabitq_artifact_generation(name) {
+                    artifacts.push((generation, name.to_owned()));
+                }
+                Ok(())
+            },
+        )
+    })?;
     artifacts.sort_unstable_by_key(|(generation, _)| std::cmp::Reverse(*generation));
     Ok(artifacts)
 }

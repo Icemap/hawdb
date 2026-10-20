@@ -15,6 +15,7 @@
 use super::SearchDocument;
 use crate::error::{HawDBError, Result};
 use hawdb_core::RuntimeTaskContext;
+use hawdb_storage::file_io::File;
 use hawdb_vector_projection::{
     FileProjection, InMemoryProjection, KernelPreference, ProjectionBuildConfig,
     ProjectionBuildReport, ProjectionBuilder, ProjectionError, ProjectionIdentity,
@@ -211,6 +212,25 @@ impl RaBitQCandidateProjection {
         expected_identity: &ProjectionIdentity,
     ) -> std::result::Result<Self, RaBitQCandidateProjectionLoadError> {
         let projection = FileProjection::open(artifact_path).map_err(classify_load_error)?;
+        Self::load_projection_classified(projection, documents, expected_identity)
+    }
+
+    pub(crate) fn load_from_file_classified(
+        file: File,
+        identity_path: &Path,
+        documents: &BTreeMap<String, SearchDocument>,
+        expected_identity: &ProjectionIdentity,
+    ) -> std::result::Result<Self, RaBitQCandidateProjectionLoadError> {
+        let projection =
+            FileProjection::open_file(file, identity_path).map_err(classify_load_error)?;
+        Self::load_projection_classified(projection, documents, expected_identity)
+    }
+
+    fn load_projection_classified(
+        projection: FileProjection,
+        documents: &BTreeMap<String, SearchDocument>,
+        expected_identity: &ProjectionIdentity,
+    ) -> std::result::Result<Self, RaBitQCandidateProjectionLoadError> {
         let Some(RaBitQDocumentIdMap {
             dimension,
             ordinal_to_document_id,

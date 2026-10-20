@@ -759,7 +759,8 @@ impl ConsumerProjection {
         self.index
             .validate_registered_artifacts(operation.publication())?;
         #[cfg(feature = "vector-search")]
-        self.index.load_registered_rabitq_projection()?;
+        self.index
+            .load_registered_rabitq_projection(operation.publication())?;
         self.index.consumer_binding_valid = true;
         self.pending_mutation = pending_mutation;
         Ok(())
@@ -900,7 +901,10 @@ impl SearchIndex {
     }
 
     #[cfg(feature = "vector-search")]
-    pub(super) fn load_registered_rabitq_projection(&self) -> Result<()> {
+    pub(super) fn load_registered_rabitq_projection(
+        &self,
+        publication: &SearchProjectionPublishLease,
+    ) -> Result<()> {
         if self
             .documents
             .values()
@@ -909,13 +913,12 @@ impl SearchIndex {
             self.invalidate_rabitq_projection();
             return Ok(());
         }
-        let root = self
-            .path
-            .as_deref()
-            .expect("persistent registered projection");
-        for (generation, path) in super::rabitq_artifacts_descending(root)? {
-            match super::RaBitQCandidateProjection::load_from_path_classified(
-                &path,
+        for (generation, name) in super::rabitq_artifacts_descending_under_publication(publication)?
+        {
+            let file = publication.open_captured_child(&name)?;
+            match super::RaBitQCandidateProjection::load_from_file_classified(
+                file,
+                Path::new(&name),
                 &self.documents,
                 &self.rabitq_projection_identity(generation),
             ) {
@@ -1443,6 +1446,57 @@ mod tests {
         assert_eq!(index.documents["memory:original"].content, "original");
         assert!(index.consumer_binding.is_some());
 
+        drop(lease);
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(moved).unwrap();
+    }
+
+    #[cfg(all(unix, feature = "vector-search"))]
+    #[test]
+    fn registered_vector_load_uses_captured_directory_after_path_replacement() {
+        let root = directory();
+        let moved = root.with_extension("moved");
+        let embedding = vec![1.0, 0.5, 0.25, 0.0];
+        let owner = ConsumerProjection::initialize(&root, binding(), 0, |index| {
+            index.upsert(crate::SearchDocument {
+                id: "memory:original".into(),
+                title: String::new(),
+                content: "vector document".into(),
+                embedding: Some(embedding.clone()),
+                metadata: Default::default(),
+            })
+        })
+        .unwrap();
+        drop(owner);
+        let artifact_name = crate::rabitq_artifacts_descending(&root)
+            .unwrap()
+            .first()
+            .unwrap()
+            .1
+            .file_name()
+            .unwrap()
+            .to_owned();
+
+        let lease = SearchProjectionPublishLease::acquire_for_consumer(&root).unwrap();
+        fs::rename(&root, &moved).unwrap();
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join(artifact_name), b"foreign vector artifact").unwrap();
+
+        let mut index = SearchIndex {
+            path: Some(root.clone()),
+            ..SearchIndex::default()
+        };
+        index.load_snapshot_from_publication(&lease).unwrap();
+        index.load_registered_rabitq_projection(&lease).unwrap();
+        let candidates = index
+            .rabitq_projection()
+            .unwrap()
+            .search(&embedding, 1, None)
+            .unwrap()
+            .candidates;
+        assert_eq!(candidates[0].id, "memory:original");
+
+        drop(index);
         drop(lease);
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(moved).unwrap();
