@@ -6,6 +6,11 @@ fn critical_preparation_wait_returns_busy_without_resetting_its_deadline() {
 }
 
 #[test]
+fn critical_discard_wait_returns_busy_without_resetting_its_deadline() {
+    assert_critical_wait_returns_busy(Phase::Discarding);
+}
+
+#[test]
 fn critical_release_wait_returns_busy_without_resetting_its_deadline() {
     assert_critical_wait_returns_busy(Phase::Releasing);
 }
@@ -129,11 +134,11 @@ fn parked_preparation_rejects_no_data_and_a_busy_writer_can_retry_after_checkpoi
     );
 }
 
-fn releasing_control(delta_bytes: u64) -> Arc<Control> {
+fn cleanup_control(phase: Phase, delta_bytes: u64) -> Arc<Control> {
     let control = Arc::new(Control::default());
     {
         let mut state = control.lock().unwrap();
-        state.phase = Phase::Releasing;
+        state.phase = phase;
         state.debt = Some(CheckpointDebtSnapshot {
             commit_epoch: 1,
             checkpoint_commit_epoch: 0,
@@ -153,17 +158,35 @@ fn releasing_control(delta_bytes: u64) -> Arc<Control> {
 
 #[test]
 fn releasing_old_owners_preserves_available_write_capacity() {
+    assert_cleanup_preserves_available_write_capacity(Phase::Releasing);
+}
+
+#[test]
+fn discarding_preparation_preserves_available_write_capacity() {
+    assert_cleanup_preserves_available_write_capacity(Phase::Discarding);
+}
+
+fn assert_cleanup_preserves_available_write_capacity(phase: Phase) {
     let boundary = capacity_boundary(16 * 1024);
     assert!(boundary > 0);
-    let control = releasing_control(boundary - 1);
+    let control = cleanup_control(phase, boundary - 1);
     assert!(!preparation_needs_capacity(&control.lock().unwrap()));
     let state = control.lock_frontend().unwrap();
-    assert_eq!(state.phase, Phase::Releasing);
+    assert_eq!(state.phase, phase);
 }
 
 #[test]
 fn releasing_old_owners_fences_capacity_growth_until_cleanup_finishes() {
-    let control = releasing_control(capacity_boundary(16 * 1024));
+    assert_cleanup_fences_capacity_growth(Phase::Releasing);
+}
+
+#[test]
+fn discarding_preparation_fences_capacity_growth_until_cleanup_finishes() {
+    assert_cleanup_fences_capacity_growth(Phase::Discarding);
+}
+
+fn assert_cleanup_fences_capacity_growth(phase: Phase) {
+    let control = cleanup_control(phase, capacity_boundary(16 * 1024));
     assert!(preparation_needs_capacity(&control.lock().unwrap()));
     let (waiting, observed) = mpsc::channel();
     control.lock().unwrap().frontend_wait_probe = Some(waiting);
@@ -173,7 +196,7 @@ fn releasing_old_owners_fences_capacity_growth_until_cleanup_finishes() {
         let phase = writer_control.lock_frontend().unwrap().phase;
         finished.send(phase).unwrap();
     });
-    let phase = observed.recv_timeout(Duration::from_secs(1));
+    let observed_phase = observed.recv_timeout(Duration::from_secs(1));
     let early = completion.try_recv();
     {
         let mut state = control.lock().unwrap();
@@ -181,7 +204,7 @@ fn releasing_old_owners_fences_capacity_growth_until_cleanup_finishes() {
         control.notify_all();
     }
     writer.join().unwrap();
-    assert_eq!(phase.unwrap(), Phase::Releasing);
+    assert_eq!(observed_phase.unwrap(), phase);
     assert!(matches!(early, Err(mpsc::TryRecvError::Empty)));
     assert_eq!(completion.recv().unwrap(), Phase::Idle);
 }
