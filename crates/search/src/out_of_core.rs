@@ -54,7 +54,11 @@ use std::sync::{Arc, Mutex};
 mod admitted_root;
 mod candidate_set;
 mod query_memory;
+mod query_ranking;
+mod score_collector;
+mod vector_query;
 use candidate_set::CandidateSet;
+use score_collector::BoundedScoreCollector;
 
 pub(crate) struct CandidateQuery<'a> {
     pub(crate) text: &'a str,
@@ -377,6 +381,7 @@ pub(super) struct SegmentReaderContents {
     metadata_payload: File,
     metadata_payload_length: u64,
     vector_payload: File,
+    vector_payload_length: u64,
     layout: SearchOutOfCoreLayoutBody,
     lexical_projection: LexicalProjectionReader,
     #[cfg(feature = "vector-search")]
@@ -1683,6 +1688,7 @@ impl SearchOutOfCoreSegmentReader {
                 metadata_payload,
                 metadata_payload_length: manifest.metadata_payload_len,
                 vector_payload,
+                vector_payload_length: manifest.vector_payload_len,
                 layout,
                 lexical_projection,
                 #[cfg(feature = "vector-search")]
@@ -2566,8 +2572,11 @@ impl SearchOutOfCoreReader {
                 query_embedding.expect("vector availability requires an embedding"),
                 &candidate_set,
                 retained_vector_limit,
-                compressed_vector_search_mode,
-                vector_execution_options,
+                vector_serving::ScanOptions {
+                    compressed: compressed_vector_search_mode,
+                    execution: vector_execution_options,
+                    query,
+                },
                 &mut metrics,
             )?
         } else {
@@ -2577,10 +2586,10 @@ impl SearchOutOfCoreReader {
         vector_fallback_reasons.extend(vector_scan.fallback_reasons.iter().cloned());
         let vector_scores = &vector_scan.scores;
 
-        let vector_ranks = ranked_scores(vector_scores);
-        let text_ranks = ranked_scores(text_scores);
-        let vector_window_ranks = window_ranks(&vector_ranks, options.rank_window);
-        let text_window_ranks = window_ranks(&text_ranks, options.rank_window);
+        let vector_ranks = query_ranking::Ranks::new(vector_scores, query)?;
+        let text_ranks = query_ranking::Ranks::new(text_scores, query)?;
+        let vector_window_ranks = vector_ranks.window(options.rank_window, query)?;
+        let text_window_ranks = text_ranks.window(options.rank_window, query)?;
         let mut fallback_reason_codes = vector_fallback_reason_codes.clone();
         fallback_reason_codes.extend(text_fallback_reason_codes.iter().copied());
         let mut fallback_reasons = vector_fallback_reasons.clone();
@@ -2731,64 +2740,28 @@ impl SearchOutOfCoreReader {
             },
         ];
 
-        let mut scored_candidates = vector_scores
-            .keys()
-            .chain(text_scores.keys())
-            .cloned()
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .filter_map(|id| {
-                let vector_score = vector_scores.get(&id).copied().unwrap_or(0.0);
-                let text_score = text_scores.get(&id).copied().unwrap_or(0.0);
-                let vector_rank = match mode {
-                    SearchMode::Hybrid => vector_window_ranks.get(&id).copied(),
-                    SearchMode::Vector | SearchMode::Text => vector_ranks.get(&id).copied(),
-                };
-                let text_rank = match mode {
-                    SearchMode::Hybrid => text_window_ranks.get(&id).copied(),
-                    SearchMode::Vector | SearchMode::Text => text_ranks.get(&id).copied(),
-                };
-                let vector_rrf_score = rrf_child_score(vector_rank);
-                let text_rrf_score = rrf_child_score(text_rank);
-                let rrf_score =
-                    weighted_rrf_score(vector_rrf_score, text_rrf_score, options.fusion_weights);
-                let score = match mode {
-                    SearchMode::Hybrid => rrf_score,
-                    SearchMode::Vector => vector_score,
-                    SearchMode::Text => text_score,
-                };
-                (score > 0.0).then_some(SearchScoredCandidate {
-                    id,
-                    score,
-                    vector_score,
-                    text_score,
-                    rrf_score,
-                    vector_rrf_score,
-                    text_rrf_score,
-                    vector_rank,
-                    text_rank,
-                })
-            })
-            .collect::<Vec<_>>();
-        scored_candidates.sort_by(|left, right| {
-            right
-                .score
-                .partial_cmp(&left.score)
-                .unwrap_or(CmpOrdering::Equal)
-                .then_with(|| left.id.cmp(&right.id))
-        });
+        let mut scored_candidates = query_ranking::Candidates::new(
+            query_ranking::Inputs {
+                vector_scores,
+                text_scores,
+                vector_ranks: &vector_ranks,
+                text_ranks: &text_ranks,
+                vector_window: &vector_window_ranks,
+                text_window: &text_window_ranks,
+                mode,
+                weights: options.fusion_weights,
+            },
+            query,
+        )?;
         let total_hits = match mode {
             SearchMode::Text => text_matching_count,
             SearchMode::Vector => vector_scan.matching_count,
-            SearchMode::Hybrid => scored_candidates.len(),
+            SearchMode::Hybrid => scored_candidates.values.len(),
         };
         let page_end = options.offset.saturating_add(options.limit);
         let truncated = total_hits > page_end;
-        let page_candidates = scored_candidates
-            .into_iter()
-            .skip(options.offset)
-            .take(options.limit)
-            .collect::<Vec<_>>();
+        scored_candidates.page(options.offset, options.limit)?;
+        let page_candidates = &scored_candidates.values;
         let projection_freshness = if immutable_freshness {
             // Born construction checked the actual native directory. Saved
             // paths and later unrelated marker files cannot redirect this view.
@@ -2804,7 +2777,7 @@ impl SearchOutOfCoreReader {
             fallback_reasons: &fallback_reasons,
             projection_freshness: &projection_freshness,
         };
-        let hits = materialize(&page_candidates, hydration, &mut metrics)?;
+        let hits = materialize(page_candidates, hydration, &mut metrics)?;
 
         let truncation_reasons = if truncated && options.offset > 0 {
             vec![format!(
@@ -2842,6 +2815,9 @@ impl SearchOutOfCoreReader {
             filtered_document_count,
             total_hits,
         );
+        if let Some(query) = query {
+            query.checkpoint()?;
+        }
         Ok(SearchOutOfCoreOutput {
             result: SearchResultSet {
                 hits,
@@ -4526,110 +4502,6 @@ struct HitHydrationContext<'a> {
     fallback_reason_codes: &'a [SearchFallbackReasonCode],
     fallback_reasons: &'a [String],
     projection_freshness: &'a SearchProjectionFreshness,
-}
-
-#[derive(Debug, Clone)]
-struct RankedScore {
-    id: String,
-    score: f64,
-}
-
-impl PartialEq for RankedScore {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id && self.score.to_bits() == other.score.to_bits()
-    }
-}
-
-impl Eq for RankedScore {}
-
-impl PartialOrd for RankedScore {
-    fn partial_cmp(&self, other: &Self) -> Option<CmpOrdering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for RankedScore {
-    fn cmp(&self, other: &Self) -> CmpOrdering {
-        self.score
-            .total_cmp(&other.score)
-            .then_with(|| other.id.cmp(&self.id))
-    }
-}
-
-enum BoundedScoreStorage {
-    Full(BTreeMap<String, f64>),
-    TopK {
-        limit: usize,
-        heap: BinaryHeap<Reverse<RankedScore>>,
-    },
-}
-
-struct BoundedScoreCollector {
-    storage: BoundedScoreStorage,
-    matching_count: usize,
-    max_entries: usize,
-}
-
-impl BoundedScoreCollector {
-    fn new(retained_limit: Option<usize>, max_entries: usize) -> Result<Self> {
-        if retained_limit.is_some_and(|limit| limit > max_entries) {
-            return Err(HawDBError::Storage(format!(
-                "search rank window exceeds the admitted {max_entries} score entries"
-            )));
-        }
-        Ok(Self {
-            storage: match retained_limit {
-                Some(limit) => BoundedScoreStorage::TopK {
-                    limit,
-                    heap: BinaryHeap::with_capacity(limit.saturating_add(1)),
-                },
-                None => BoundedScoreStorage::Full(BTreeMap::new()),
-            },
-            matching_count: 0,
-            max_entries,
-        })
-    }
-
-    fn push(&mut self, id: String, score: f64) -> Result<()> {
-        self.matching_count = self.matching_count.saturating_add(1);
-        match &mut self.storage {
-            BoundedScoreStorage::Full(scores) => {
-                if scores.len() >= self.max_entries {
-                    return Err(HawDBError::Storage(format!(
-                        "vector query matched more than {} documents; provide a rank window or narrow the candidate set",
-                        self.max_entries
-                    )));
-                }
-                scores.insert(id, score);
-            }
-            BoundedScoreStorage::TopK { limit, heap } => {
-                if *limit == 0 {
-                    return Ok(());
-                }
-                let candidate = RankedScore { id, score };
-                if heap.len() < *limit {
-                    heap.push(Reverse(candidate));
-                } else if heap
-                    .peek()
-                    .is_some_and(|Reverse(worst)| candidate.cmp(worst).is_gt())
-                {
-                    heap.pop();
-                    heap.push(Reverse(candidate));
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn finish(self) -> BTreeMap<String, f64> {
-        match self.storage {
-            BoundedScoreStorage::Full(scores) => scores,
-            BoundedScoreStorage::TopK { heap, .. } => heap
-                .into_iter()
-                .map(|Reverse(candidate)| (candidate.id, candidate.score))
-                .collect(),
-        }
-    }
 }
 
 struct CandidateFileGuard {

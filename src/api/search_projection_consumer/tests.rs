@@ -2984,6 +2984,43 @@ fn consumer_native_candidate_view_probes_real_vector_and_hybrid_with_one_io_slot
         assert_eq!(governor.snapshot().active_background_tasks, 0);
         assert_eq!(governor.snapshot().active_background_io_slots, 0);
     }
+    // With no metadata filters or text work, the tiny refusal comes from the
+    // vector read/decode path, rather than an earlier candidate-filter stage.
+    let before = governor.snapshot().admitted_memory_bytes;
+    for budget in [64 * 1024, 16 * 1024 * 1024] {
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(budget).with_io_wave_slots(1))
+            .unwrap();
+        let result = candidate.probe_candidate_query(
+            &permit,
+            hawdb_core::RuntimeTaskContext::with_timeout(std::time::Duration::from_secs(10)),
+            "",
+            Some(&[1.0, 0.0]),
+            hawdb_search::SearchMode::Vector,
+            hawdb_search::SearchQueryOptions {
+                limit: 1,
+                offset: 0,
+                rank_window: None,
+                fusion_weights: Default::default(),
+                metadata_filters: Default::default(),
+                policy_epoch: None,
+            },
+        );
+        if budget == 64 * 1024 {
+            assert!(
+                matches!(result, Err(HawDBError::ResourceBudgetExceeded(_))),
+                "{result:?}"
+            );
+        } else {
+            assert_eq!(result.unwrap().result.total_hits, 1);
+        }
+        drop(permit);
+        assert_eq!(governor.snapshot().active_background_tasks, 0);
+        assert_eq!(governor.snapshot().active_background_io_slots, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, before);
+    }
+    drop(candidate.abandon());
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
 
 #[test]

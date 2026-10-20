@@ -172,6 +172,15 @@ projection scans. Candidate block bounds, encoded staging, block reads, decoded
 caches and vector ordinal buffers use that same query account. A failed cache
 replacement preserves the previous cache and its funding. Ordinal buffers keep
 their charge until their payload closes, independently of the spill file.
+The native scalar vector path also streams one sidecar row at a time through
+the complete envelope integrity fence and the original query I/O scope. Decoded
+IDs/vectors, the live-ID uniqueness set, bounded score heap and final score map
+share the query account. Heap-to-map conversion admits node capacity before
+moving IDs and keeps both representations funded until the heap is freed.
+Working rank maps, rank windows, sort buffers and fused candidates retain their
+own capacity leases. Fusion moves IDs within one owner without duplicating the
+payload charge, and pagination compacts that buffer while keeping its capacity
+funded. ID tie-breaking preserves deterministic ordering with an in-place sort.
 Filtered native probes create a private stage through the original root and
 descriptor domain before acquiring the query I/O wave. File create/write/read
 and synchronization borrow that exact wave. Files close and the query wave is
@@ -184,9 +193,10 @@ captured root; a registered read-only serving contract remains unqualified.
 Born immutable readers check the captured native directory for operational
 repair/reindex markers before opening a view and refuse any such entry. Their
 query freshness comes from the complete immutable generation, without reopening
-a saved pathname. Shared filesystem spill admission, remaining vector/decode/
-ranking/report and retained-result accounting, restart scratch adoption and
-registered serving semantics remain unfinished.
+a saved pathname. Shared filesystem spill admission, compressed-vector search
+and rerank admission, late hydration/matched-span/report and retained-result
+accounting, restart scratch adoption and registered serving semantics remain
+unfinished.
 This lower-level path does not install the registered Consumer read view or
 replace the legacy facade's directory move. Post-restart adoption and composed
 power-loss qualification remain separate work.
