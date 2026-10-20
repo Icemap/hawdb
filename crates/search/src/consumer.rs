@@ -269,6 +269,14 @@ impl ConsumerDetachedCandidate {
 }
 
 impl ConsumerPreparedCandidate {
+    /// Persist this already sealed candidate's source epoch and metadata
+    /// reference in its original birth ledger. This is recovery debt, not a
+    /// selector, receipt, or serving acknowledgement.
+    pub fn record_durable_seal(&mut self) -> Result<()> {
+        self.birth
+            .record_candidate_seal(self.detached.source_epoch, self.detached.metadata.reference)
+    }
+
     pub fn report(&self) -> ConsumerCandidateViewReport {
         ConsumerCandidateViewReport {
             source_epoch: self.detached.source_epoch,

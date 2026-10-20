@@ -9,6 +9,7 @@ use crate::branch_catalog::BranchId;
 use crate::branch_project::{CapturedProject, ProjectSelector};
 use crate::file_descriptors::FileOpenContext;
 use crate::file_io::{File, SourceDirectory};
+use crate::immutable_object::ObjectReference;
 use crate::ownership::DatabaseDirectoryLease;
 use hawdb_core::{HawDBError, Result, Uuid};
 use serde::{Deserialize, Serialize};
@@ -48,6 +49,17 @@ struct Reservation {
     projection_uuid: String,
     checkpoint_uuid: String,
     native_birth: NativeBirth,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    candidate_seal: Option<CandidateSeal>,
+}
+
+/// Durable candidate debt, not a selector or a completed publication receipt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CandidateSeal {
+    source_epoch: u64,
+    metadata_length: u64,
+    metadata_sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +103,51 @@ pub(crate) struct ConsumerAllocationSource {
 impl ConsumerAllocationSource {
     pub(crate) fn matches_branch(&self, branch: BranchId) -> bool {
         self.branch == branch
+    }
+
+    pub(crate) fn verify_candidate_seal(
+        &self,
+        binding: ConsumerReservationBinding<'_>,
+        source_epoch: u64,
+        metadata: ObjectReference,
+    ) -> Result<()> {
+        if !self.matches_branch(binding.source_branch) {
+            return Err(invalid("candidate source branch differs"));
+        }
+        self.project.with_locked_catalog(|root, context, catalog| {
+            let ledger = check_source(
+                &self.project,
+                &self.owner,
+                self.branch,
+                root,
+                context,
+                &catalog,
+            )?;
+            let row = ledger
+                .pending
+                .iter()
+                .find(|row| row.operation == binding.operation.get())
+                .ok_or_else(|| invalid("candidate reservation is missing"))?;
+            if row.branch_id != binding.source_branch.as_uuid().to_string()
+                || row.database_uuid != binding.database_uuid.to_string()
+                || row.consumer_id != binding.consumer_id
+                || row.target_locator != binding.target_locator
+                || row.target_incarnation != binding.target_incarnation.get()
+                || row.generation != binding.generation.get()
+                || row.registration_uuid != binding.registration_uuid.to_string()
+                || row.projection_uuid != binding.projection_uuid.to_string()
+                || row.checkpoint_uuid != binding.checkpoint_uuid.to_string()
+                || row.candidate_seal
+                    != Some(CandidateSeal {
+                        source_epoch,
+                        metadata_length: metadata.byte_length,
+                        metadata_sha256: metadata.sha256.to_string(),
+                    })
+            {
+                return Err(invalid("candidate seal differs from durable reservation"));
+            }
+            Ok(())
+        })
     }
 
     pub(crate) fn reserve(
@@ -320,6 +377,17 @@ fn validate(ledger: &Ledger) -> Result<()> {
         {
             return Err(invalid("birth generation differs from reservation"));
         }
+        if let Some(seal) = &row.candidate_seal
+            && (!matches!(row.native_birth, NativeBirth::Recorded { .. })
+                || seal.metadata_length == 0
+                || seal.metadata_length > MAX_BYTES as u64
+                || seal
+                    .metadata_sha256
+                    .parse::<hawdb_integrity::Sha256Digest>()
+                    .is_err())
+        {
+            return Err(invalid("invalid candidate seal"));
+        }
         previous = row.operation;
     }
     Ok(())
@@ -446,6 +514,7 @@ pub(crate) fn reserve(
             projection_uuid: projection.to_string(),
             checkpoint_uuid: checkpoint.to_string(),
             native_birth: NativeBirth::Reserved,
+            candidate_seal: None,
         });
         ledger.high_water = operation;
         validate(&ledger)?;

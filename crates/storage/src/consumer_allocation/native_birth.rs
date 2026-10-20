@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::file_io::CapturedDirectoryCandidate;
+use crate::immutable_object::{ObjectKind, ObjectReference};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 mod retirement;
@@ -40,6 +41,7 @@ pub struct PendingConsumerGeneration {
     parent_locator: String,
     phase: Phase,
     settlement_publication_attempted: bool,
+    candidate_seal_attempted: bool,
     producer_exposed: AtomicBool,
     retirement_step: RetirementStep,
 }
@@ -103,6 +105,7 @@ impl ReservedConsumerAllocation {
             parent_locator,
             phase: Phase::Prepared,
             settlement_publication_attempted: false,
+            candidate_seal_attempted: false,
             producer_exposed: AtomicBool::new(false),
             retirement_step: RetirementStep::Intent,
         })
@@ -277,6 +280,87 @@ impl PendingConsumerGeneration {
             projection_uuid: allocation.projection,
             checkpoint_uuid: allocation.checkpoint,
         })
+    }
+
+    /// Persist the sealed candidate's reference against its original birth.
+    /// This retains candidate debt across a lost response, but does not select
+    /// a serving generation or authorize source freshness. A repeated call
+    /// only completes barriers for the same attempted seal.
+    pub fn record_candidate_seal(
+        &mut self,
+        source_epoch: u64,
+        metadata: ObjectReference,
+    ) -> Result<()> {
+        self.born_directory()?;
+        if metadata.kind != ObjectKind::CheckpointArtifact
+            || metadata.format_version != 1
+            || metadata.byte_length == 0
+            || metadata.byte_length > MAX_BYTES as u64
+        {
+            return Err(invalid("unsupported candidate metadata reference"));
+        }
+        let seal = CandidateSeal {
+            source_epoch,
+            metadata_length: metadata.byte_length,
+            metadata_sha256: metadata.sha256.to_string(),
+        };
+        let expected_birth = NativeBirth::Recorded {
+            generation_name: self.generation_name().to_owned(),
+            parent_locator: self.parent_locator.clone(),
+        };
+        let attempted = &mut self.candidate_seal_attempted;
+        let allocation = self
+            .allocation
+            .as_ref()
+            .ok_or_else(|| invalid("candidate seal lost its reservation"))?;
+        allocation
+            ._project
+            .with_locked_catalog(|root, context, catalog| {
+                let mut ledger = check_source(
+                    &allocation._project,
+                    &allocation._source,
+                    allocation.source_branch,
+                    root,
+                    context,
+                    &catalog,
+                )?;
+                let row = ledger
+                    .pending
+                    .iter_mut()
+                    .find(|row| row.operation == allocation.operation.0)
+                    .ok_or_else(|| invalid("candidate seal reservation is missing"))?;
+                allocation.require_row(row)?;
+                if row.native_birth != expected_birth {
+                    return Err(invalid("candidate seal birth state differs"));
+                }
+                if *attempted {
+                    if row.candidate_seal.as_ref() != Some(&seal) {
+                        return Err(invalid("candidate seal outcome is unresolved"));
+                    }
+                    let file = root.open_mutable_child(context, LEDGER_FILE, false)?;
+                    file.sync_all()?;
+                    root.sync(context)?;
+                    return Ok(());
+                }
+                if row.candidate_seal.is_some() {
+                    return Err(invalid("candidate seal already belongs to an operation"));
+                }
+                row.candidate_seal = Some(seal.clone());
+                validate(&ledger)?;
+                let bytes = encode(&ledger)?;
+                let name = format!(
+                    "consumer-seal-ledger-{}.tmp",
+                    hawdb_core::generate_uuidv7()?
+                );
+                // A failed or lost native response never starts a fresh seal
+                // attempt for this owner. Resolve the original ledger effect.
+                *attempted = true;
+                let mut candidate = root.create_control_candidate(context, &name)?;
+                candidate.write_all(&bytes)?;
+                candidate.seal()?;
+                candidate.replace_head(context, LEDGER_FILE)?;
+                Ok(())
+            })
     }
 
     /// One exclusive native attempt. Any error retains intent and all acquired

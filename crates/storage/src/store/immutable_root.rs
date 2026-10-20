@@ -487,6 +487,8 @@ impl GraphStore {
     pub fn verify_search_consumer_candidate_source(
         &self,
         binding: crate::consumer_allocation::ConsumerReservationBinding<'_>,
+        source_epoch: u64,
+        metadata: crate::immutable_object::ObjectReference,
     ) -> Result<()> {
         let source = self.consumer_allocation_source_inner()?;
         if !source.matches_branch(binding.source_branch)
@@ -496,7 +498,7 @@ impl GraphStore {
                 "consumer candidate belongs to a different source".into(),
             ));
         }
-        Ok(())
+        source.verify_candidate_seal(binding, source_epoch, metadata)
     }
 
     fn consumer_allocation_source_inner(

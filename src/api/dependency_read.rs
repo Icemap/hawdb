@@ -494,15 +494,20 @@ impl Database {
         use ProjectionPublicationError as E;
         self.ensure_writable().map_err(E::Storage)?;
         let binding = candidate.reservation_binding().map_err(E::Storage)?;
+        let report = candidate.report();
         self.runtime
             .get()
             .map_err(E::Storage)?
             .store
-            .verify_search_consumer_candidate_source(binding)
+            .verify_search_consumer_candidate_source(
+                binding,
+                report.source_epoch,
+                report.metadata_reference,
+            )
             .map_err(E::Storage)?;
         self.validate_prepared_projection_source(
             dependencies,
-            candidate.report().source_epoch,
+            report.source_epoch,
             source_durability,
         )
     }

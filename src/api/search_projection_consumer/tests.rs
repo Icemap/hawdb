@@ -2001,8 +2001,29 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
                 .to_string()
                 .contains("differs from its recorded native birth"));
             assert!(wrong_birth.born_directory().is_ok());
-            let prepared = detached.attach_birth(pending).unwrap();
+            let mut prepared = detached.attach_birth(pending).unwrap();
             assert_eq!(prepared.report(), view);
+            let error = db
+                .validate_prepared_consumer_candidate_source(
+                    &source,
+                    &prepared,
+                    crate::ProjectionSourceDurability::Synchronize,
+                )
+                .unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("candidate seal differs from durable reservation"));
+            prepared.record_durable_seal().unwrap();
+            prepared.record_durable_seal().unwrap();
+            let evidence = allocation_evidence(&fixture).1;
+            assert_eq!(
+                evidence["pending"][0]["candidate_seal"]["source_epoch"],
+                source_epoch
+            );
+            assert_eq!(
+                evidence["pending"][0]["candidate_seal"]["metadata_sha256"],
+                view.metadata_reference.sha256.to_string()
+            );
             db.validate_prepared_consumer_candidate_source(
                 &source,
                 &prepared,
@@ -2100,6 +2121,15 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
                 .contains("does not match captured source epoch"));
             let original_birth = prepared.abandon();
             assert!(original_birth.born_directory().is_ok());
+            drop(original_birth);
+            drop(wrong_birth);
+            drop(db);
+            let reopened = fixture.database();
+            assert_eq!(
+                allocation_evidence(&fixture).1["pending"][0]["candidate_seal"]["source_epoch"],
+                source_epoch
+            );
+            drop(reopened);
         }
     }
 }
