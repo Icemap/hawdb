@@ -400,6 +400,9 @@ impl Control {
             // Releasing old COW owners and discarding abandoned preparations
             // run off the writer gate while still retaining admission. Only
             // writers with room may bypass that resource cleanup.
+            // Handoff lets the frontend adopt the published generation before
+            // mutation. Retiring has its own pressure gate below, including
+            // the denial escape for callers holding admission needed by cleanup.
             let waits_for_capacity = matches!(
                 state.phase,
                 Phase::Preparing | Phase::Discarding | Phase::Releasing
