@@ -132,6 +132,11 @@ origins:
 | `RuntimeTaskContext.memory_reservation.result_bytes` | Runtime-admitted result-memory limit when it is no larger than the configured query-memory limit. |
 | `ExecutionMemoryConfig.blocking_operator_bytes` | Configured blocking-state limit or a derived operator/merge-item allowance; `budget` reports the effective limit. |
 | `ExecutionMemoryConfig.batch_payload_bytes` | Output batch allowance; a single expansion row exceeding it is an operator-local per-row refusal. |
+| `LexicalProjectionConfig.query_memory_bytes` | Private per-projection allowance for lexical query source text, retained terms, statistics blocks and scoring streams; independent of the configured query root. |
+| `SearchOutOfCoreConfig.max_candidate_block_bytes` | Encoded payload of one candidate block; `requested` is the full block size and `used` is zero. |
+| `SearchOutOfCoreConfig.max_candidate_spill_bytes` | Cumulative encoded candidate payload in one spill file; `requested` is the next block and `used` excludes the file header. |
+| `SearchOutOfCoreConfig.max_hydrated_bytes` | Complete document-hydration operation across segments; `requested` is the next document and `used` includes all previously admitted selected documents. |
+| `SearchOutOfCoreConfig.max_matched_span_bytes` | Complete matched-span hydration across the requested hit page; `requested` is the next span and `used` includes earlier hits and the current hit's admitted prefix. |
 | `OperatorMemoryTracker::new(budget_bytes)` | Explicit unaccounted operator limit. |
 | `OperatorMemoryTracker::with_account(budget_bytes)` | Explicit tracker limit, independent of its backing account limit. |
 | `QueryMemoryLedger::new(budget_bytes)` | Explicit query-root constructor argument. |
@@ -144,6 +149,12 @@ origins:
 | `ExecutionMemoryConfig.max_total_spill_bytes` | Shared live spill bytes, including pending reservations. |
 | `ExecutionMemoryConfig.max_total_spill_runs` | Shared live spill runs. |
 | `ExecutionMemoryConfig.min_spill_free_bytes` | Filesystem reserve to preserve; `budget` reports probed available space minus this reserve. |
+
+The lexical projection allowance is private internal configuration. Increasing
+`ExecutionMemoryConfig.query_memory_bytes` does not raise it. Each Search origin
+above reports its own effective boundary; these checks do not establish a
+whole-allocator or process-RSS bound. Document and matched-span `budget` values
+remain the full configured cap, not a remaining segment or hit allowance.
 
 Result memory uses the smaller of the configured query-memory limit and the
 runtime result grant. Equal limits report the runtime grant: raising only the
