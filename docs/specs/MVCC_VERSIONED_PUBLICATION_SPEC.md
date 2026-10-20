@@ -261,15 +261,18 @@ index; the union is admitted before WAL and installed with canonical commit.
 When no prepared source exists, ordinary commits do not build those summaries.
 
 Read-summary growth must not turn a long-lived preparation into a writer outage.
-If per-value or relational-prefix summaries do not fit the version-index or
-history allowance, they must collapse to the fixed-size `ReadBarrier`, let an
-otherwise admissible write commit, and invalidate affected captures. Writer
-destination keys retain their existing admission and conflict checks. The
-fallback itself must be reserved/admitted before WAL, with tests proving that
-the write commits while capture validation conflicts and accounting for its
-retention cost. The fine-grained collectors below retain their existing
-metadata-bound fallbacks; version-index/history-pressure collapse remains a
-qualification requirement, not an implemented guarantee.
+The version index permanently reserves an inline `ReadBarrier`. If node,
+relationship, property-value or relational-prefix summary collection or
+staging exceeds its bounded write set, current-index estimate or retained-history
+allowance, commit admission drops old read-only summaries and stages the writer
+destinations with that barrier before WAL. Captures from an earlier epoch then
+conflict, while disjoint writer conflict checks remain scoped to destinations.
+A writer whose own destination keys cannot be admitted still fails before WAL.
+The 64 MiB current-index and 256 MiB shared retained-root limits count estimated
+key/stamp payloads, including the fixed inline reservation; they exclude B-tree
+and allocator overhead. The fallback is covered by bounded index, canonical
+commit, conflict and durable reopen tests. Churn, long-pin RSS and cleanup-latency
+qualification remain open for the complete collector set.
 
 The collector regression
 `randomized_node_dependency_validation_preserves_query_results` exercises a

@@ -443,6 +443,9 @@ pub struct VersionIndex {
     // Database publication occurs after WAL on legacy paths. Keep this fixed
     // identity inline so publishing it never detaches a shared COW page.
     database_barrier: Option<VersionStamp>,
+    // Read invalidation must remain publishable when retained COW history is
+    // full. It never participates in writer conflict validation.
+    read_barrier: Option<VersionStamp>,
     stamps: CowSegmentedMap<VersionKey, VersionStamp>,
     estimated_bytes: usize,
     max_estimated_bytes: usize,
@@ -468,10 +471,11 @@ impl VersionIndex {
     pub(crate) fn with_history_limit(max_estimated_bytes: usize, max_history_bytes: usize) -> Self {
         // Reserve the legacy barrier even before it exists, so legacy commit
         // publication cannot encounter a new admission failure after WAL.
-        let reserved = version_stamp_bytes(&VersionKey::Database);
+        let reserved = inline_barrier_bytes();
         assert!(max_estimated_bytes >= reserved);
         Self {
             database_barrier: None,
+            read_barrier: None,
             stamps: CowSegmentedMap::default(),
             estimated_bytes: reserved,
             max_estimated_bytes,
@@ -480,7 +484,7 @@ impl VersionIndex {
         }
     }
 
-    /// Includes a permanent reservation for the Database barrier, not allocator
+    /// Includes permanent reservations for both inline barriers, not allocator
     /// overhead, spare capacity, or pages retained by other snapshot roots.
     pub fn estimated_bytes(&self) -> usize {
         self.estimated_bytes
@@ -489,8 +493,9 @@ impl VersionIndex {
     pub(crate) fn read_baseline(&self, epoch: u64) -> Self {
         let mut baseline = Self {
             database_barrier: None,
+            read_barrier: None,
             stamps: CowSegmentedMap::default(),
-            estimated_bytes: version_stamp_bytes(&VersionKey::Database),
+            estimated_bytes: inline_barrier_bytes(),
             max_estimated_bytes: self.max_estimated_bytes,
             history_budget: self.history_budget.clone(),
             history_lease: None,
@@ -504,7 +509,9 @@ impl VersionIndex {
     pub(crate) fn admits(&self, writes: &VersionWriteSet) -> bool {
         let mut bytes = self.estimated_bytes;
         for (key, _) in writes.iter() {
-            if *key != VersionKey::Database && !self.stamps.contains_key(key) {
+            if !matches!(key, VersionKey::Database | VersionKey::ReadBarrier)
+                && !self.stamps.contains_key(key)
+            {
                 let Some(next) = bytes.checked_add(version_stamp_bytes(key)) else {
                     return false;
                 };
@@ -528,10 +535,10 @@ impl VersionIndex {
         if !self.admits(writes) {
             return None;
         }
-        let mut bytes = self.estimated_bytes - version_stamp_bytes(&VersionKey::Database);
+        let mut bytes = self.estimated_bytes - inline_barrier_bytes();
         let mut changes_map = false;
         for (key, _) in writes.iter() {
-            if *key != VersionKey::Database {
+            if !matches!(key, VersionKey::Database | VersionKey::ReadBarrier) {
                 changes_map = true;
                 if !self.stamps.contains_key(key) {
                     bytes = bytes.checked_add(version_stamp_bytes(key))?;
@@ -551,10 +558,88 @@ impl VersionIndex {
         Some(staged)
     }
 
+    /// A failed fine-grained read-summary admission must not reject an
+    /// otherwise admissible writer. This fixed-size stamp invalidates all
+    /// older captured read summaries without broadening writer conflicts.
+    pub(crate) fn stage_with_read_barrier(
+        &self,
+        writes: &VersionWriteSet,
+        epoch: u64,
+    ) -> Option<Self> {
+        debug_assert!(writes.iter().all(|(key, _)| !is_read_summary_key(key)));
+        // A full index can be full *because of old read summaries*. Replacing
+        // only the current commit's summaries would leave that pressure in
+        // place and still reject the writer. The barrier at this commit epoch
+        // supersedes all earlier read summaries for every live capture.
+        let (retained_bytes, bytes) = self.collapsed_write_bytes(writes)?;
+        let history_bytes = bytes - inline_barrier_bytes();
+        let lease = (history_bytes > 0)
+            .then(|| self.history_budget.reserve(history_bytes))
+            .flatten();
+        if history_bytes > 0 && lease.is_none() {
+            return None;
+        }
+        let retained = self
+            .stamps
+            .iter()
+            .filter(|(key, _)| !is_read_summary_key(key))
+            .map(|(key, stamp)| (key.clone(), *stamp))
+            .collect::<BTreeMap<_, _>>();
+        let mut staged = Self {
+            database_barrier: self.database_barrier,
+            read_barrier: self.read_barrier,
+            stamps: retained.into(),
+            estimated_bytes: retained_bytes,
+            max_estimated_bytes: self.max_estimated_bytes,
+            history_budget: self.history_budget.clone(),
+            history_lease: lease,
+        };
+        staged.apply_prepared(writes, epoch);
+        staged.insert_stamp(
+            VersionKey::ReadBarrier,
+            VersionStamp {
+                commit_epoch: epoch,
+                disposition: VersionDisposition::Live,
+            },
+        );
+        Some(staged)
+    }
+
+    pub(crate) fn admits_after_read_summary_collapse(&self, writes: &VersionWriteSet) -> bool {
+        self.collapsed_write_bytes(writes).is_some()
+    }
+
+    fn collapsed_write_bytes(&self, writes: &VersionWriteSet) -> Option<(usize, usize)> {
+        let mut bytes = inline_barrier_bytes();
+        for (key, _) in self
+            .stamps
+            .iter()
+            .filter(|(key, _)| !is_read_summary_key(key))
+        {
+            bytes = bytes.checked_add(version_stamp_bytes(key))?;
+        }
+        let retained_bytes = bytes;
+        for (key, _) in writes.iter() {
+            if !matches!(key, VersionKey::Database | VersionKey::ReadBarrier)
+                && !self.stamps.contains_key(key)
+            {
+                bytes = bytes.checked_add(version_stamp_bytes(key))?;
+            }
+        }
+        (bytes <= self.max_estimated_bytes).then_some((retained_bytes, bytes))
+    }
+
     fn insert_stamp(&mut self, key: VersionKey, stamp: VersionStamp) {
-        if key == VersionKey::Database {
-            self.database_barrier = Some(stamp);
-            return;
+        match key {
+            VersionKey::Database => {
+                self.database_barrier = Some(stamp);
+                return;
+            }
+            VersionKey::ReadBarrier => {
+                self.read_barrier = Some(stamp);
+                return;
+            }
+            _ => {}
         }
         if !self.stamps.contains_key(&key) {
             self.estimated_bytes = self
@@ -565,10 +650,12 @@ impl VersionIndex {
     }
 
     fn recount_bytes(&mut self) {
-        self.estimated_bytes = self.stamps.iter().fold(
-            version_stamp_bytes(&VersionKey::Database),
-            |bytes, (key, _)| bytes.saturating_add(version_stamp_bytes(key)),
-        );
+        self.estimated_bytes = self
+            .stamps
+            .iter()
+            .fold(inline_barrier_bytes(), |bytes, (key, _)| {
+                bytes.saturating_add(version_stamp_bytes(key))
+            });
     }
 
     /// Creates a conservative baseline for all live identities present in a
@@ -591,6 +678,7 @@ impl VersionIndex {
             .collect::<BTreeMap<_, _>>();
         let mut index = Self {
             database_barrier: stamps.remove(&VersionKey::Database),
+            read_barrier: stamps.remove(&VersionKey::ReadBarrier),
             stamps: stamps.into(),
             ..Self::default()
         };
@@ -599,18 +687,20 @@ impl VersionIndex {
     }
 
     pub fn len(&self) -> usize {
-        self.stamps.len() + usize::from(self.database_barrier.is_some())
+        self.stamps.len()
+            + usize::from(self.database_barrier.is_some())
+            + usize::from(self.read_barrier.is_some())
     }
 
     pub fn is_empty(&self) -> bool {
-        self.stamps.is_empty() && self.database_barrier.is_none()
+        self.stamps.is_empty() && self.database_barrier.is_none() && self.read_barrier.is_none()
     }
 
     pub fn stamp(&self, key: &VersionKey) -> Option<VersionStamp> {
-        if *key == VersionKey::Database {
-            self.database_barrier
-        } else {
-            self.stamps.get(key).copied()
+        match key {
+            VersionKey::Database => self.database_barrier,
+            VersionKey::ReadBarrier => self.read_barrier,
+            _ => self.stamps.get(key).copied(),
         }
     }
 
@@ -677,6 +767,12 @@ impl VersionIndex {
         }) {
             self.database_barrier = None;
         }
+        if self.read_barrier.is_some_and(|stamp| {
+            stamp.disposition == VersionDisposition::Tombstone
+                && stamp.commit_epoch < oldest_reader_epoch
+        }) {
+            self.read_barrier = None;
+        }
         self.prune_map(|stamp| {
             stamp.disposition != VersionDisposition::Tombstone
                 || stamp.commit_epoch >= oldest_reader_epoch
@@ -692,6 +788,12 @@ impl VersionIndex {
             .is_some_and(|stamp| stamp.commit_epoch < oldest_reader_epoch)
         {
             self.database_barrier = None;
+        }
+        if self
+            .read_barrier
+            .is_some_and(|stamp| stamp.commit_epoch < oldest_reader_epoch)
+        {
+            self.read_barrier = None;
         }
         self.prune_map(|stamp| stamp.commit_epoch >= oldest_reader_epoch);
     }
@@ -711,7 +813,7 @@ impl VersionIndex {
         {
             // retain can copy all input pages before discarding entries, so
             // reserve the old root's full payload, then refund the removed part.
-            let bytes = self.estimated_bytes - version_stamp_bytes(&VersionKey::Database);
+            let bytes = self.estimated_bytes - inline_barrier_bytes();
             let Some(replacement) = self.history_budget.reserve(bytes) else {
                 return; // Retaining extra conflict history is safe under pressure.
             };
@@ -722,7 +824,7 @@ impl VersionIndex {
         if let Some(lease) = self.history_lease.as_mut() {
             Arc::get_mut(lease)
                 .expect("pruned root owns its history charge")
-                .shrink(self.estimated_bytes - version_stamp_bytes(&VersionKey::Database));
+                .shrink(self.estimated_bytes - inline_barrier_bytes());
         }
     }
 
@@ -738,6 +840,21 @@ fn version_stamp_bytes(key: &VersionKey) -> usize {
         .saturating_add(std::mem::size_of::<VersionStamp>())
 }
 
+fn inline_barrier_bytes() -> usize {
+    version_stamp_bytes(&VersionKey::Database) + version_stamp_bytes(&VersionKey::ReadBarrier)
+}
+
+fn is_read_summary_key(key: &VersionKey) -> bool {
+    matches!(
+        key,
+        VersionKey::ReadNodeDomain(_)
+            | VersionKey::ReadRelationshipDomain(_)
+            | VersionKey::ReadRelationalTableDomain(_)
+            | VersionKey::ReadNodeProperty { .. }
+            | VersionKey::ReadRelationalIndexPrefix { .. }
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -748,7 +865,7 @@ mod tests {
 
     #[test]
     fn retained_history_leases_share_refund_and_bound_partial_pruning() {
-        let reserve = super::version_stamp_bytes(&VersionKey::Database);
+        let reserve = super::inline_barrier_bytes();
         let key1 = VersionKey::GraphNode(NodeId(1));
         let key2 = VersionKey::GraphNode(NodeId(2));
         let weight = super::version_stamp_bytes(&key1);
@@ -812,7 +929,7 @@ mod tests {
         let key1 = VersionKey::GraphNode(NodeId(1));
         let key2 = VersionKey::GraphNode(NodeId(2));
         let weight = super::version_stamp_bytes(&key1);
-        let reserve = super::version_stamp_bytes(&VersionKey::Database);
+        let reserve = super::inline_barrier_bytes();
         let mut writes = VersionWriteSet::default();
         writes.record_live(key1).unwrap();
         let index = VersionIndex::with_history_limit(reserve + 3 * weight, 3 * weight)
@@ -843,6 +960,89 @@ mod tests {
         assert_eq!(budget.used(), weight);
         drop(index);
         assert_eq!(budget.used(), 0);
+    }
+
+    #[test]
+    fn read_summary_collapse_keeps_writer_stamp_and_old_snapshot() {
+        let summary = VersionKey::ReadNodeDomain(Some("Memory".into()));
+        let writer = VersionKey::GraphNode(NodeId(7));
+        let summary_bytes = super::version_stamp_bytes(&summary);
+        let writer_bytes = super::version_stamp_bytes(&writer);
+        let limit = super::inline_barrier_bytes() + summary_bytes.max(writer_bytes);
+        let mut index = VersionIndex::with_history_limit(limit, summary_bytes + writer_bytes);
+        let mut summary_write = VersionWriteSet::default();
+        summary_write.record_live(summary.clone()).unwrap();
+        index = index.stage(&summary_write, 1).unwrap();
+        let old = index.clone();
+        let mut writer_write = VersionWriteSet::default();
+        writer_write.record_live(writer.clone()).unwrap();
+        assert!(index.stage(&writer_write, 2).is_none());
+        index = index.stage_with_read_barrier(&writer_write, 2).unwrap();
+        assert!(index.stamp(&summary).is_none());
+        assert_eq!(index.stamp(&writer).unwrap().commit_epoch, 2);
+        assert_eq!(
+            index.stamp(&VersionKey::ReadBarrier).unwrap().commit_epoch,
+            2
+        );
+        assert!(index.first_conflict(&writer_write, 1).is_some());
+        let mut disjoint = VersionWriteSet::default();
+        disjoint
+            .record_live(VersionKey::GraphNode(NodeId(8)))
+            .unwrap();
+        assert!(index.first_conflict(&disjoint, 1).is_none());
+        assert_eq!(old.stamp(&summary).unwrap().commit_epoch, 1);
+        assert!(old.stamp(&VersionKey::ReadBarrier).is_none());
+        drop(old);
+        assert_eq!(index.retained_history_bytes(), writer_bytes);
+    }
+
+    #[test]
+    fn read_summary_collapse_discards_every_qualified_summary_family() {
+        use crate::relational::RelationalKey;
+
+        let summaries = [
+            VersionKey::ReadNodeDomain(Some("Memory".into())),
+            VersionKey::ReadRelationshipDomain(Some("CITES".into())),
+            VersionKey::ReadRelationalTableDomain("rows".into()),
+            VersionKey::ReadNodeProperty {
+                label: "Memory".into(),
+                property: "name".into(),
+                value: Box::new(crate::Value::String("a".into())),
+            },
+            VersionKey::ReadRelationalIndexPrefix {
+                table: "rows".into(),
+                index: "by_name".into(),
+                prefix: RelationalKey(Vec::new()),
+            },
+        ];
+        let writer = VersionKey::GraphNode(NodeId(7));
+        let mut writes = VersionWriteSet::default();
+        let summary_bytes = summaries
+            .iter()
+            .map(|key| {
+                writes.record_live(key.clone()).unwrap();
+                super::version_stamp_bytes(key)
+            })
+            .sum::<usize>();
+        let writer_bytes = super::version_stamp_bytes(&writer);
+        let mut index = VersionIndex::with_history_limit(
+            super::inline_barrier_bytes() + summary_bytes + writer_bytes,
+            summary_bytes * 2 + writer_bytes,
+        );
+        index = index.stage(&writes, 1).unwrap();
+        let old = index.clone();
+        let mut destination = VersionWriteSet::default();
+        destination.record_live(writer.clone()).unwrap();
+        index = index.stage_with_read_barrier(&destination, 2).unwrap();
+        for key in &summaries {
+            assert!(index.stamp(key).is_none(), "retained summary: {key:?}");
+            assert_eq!(old.stamp(key).unwrap().commit_epoch, 1);
+        }
+        assert_eq!(index.stamp(&writer).unwrap().commit_epoch, 2);
+        assert_eq!(
+            index.stamp(&VersionKey::ReadBarrier).unwrap().commit_epoch,
+            2
+        );
     }
 
     #[test]
@@ -937,7 +1137,7 @@ mod tests {
                     .sum();
                 assert_eq!(
                     index.estimated_bytes(),
-                    super::version_stamp_bytes(&VersionKey::Database) + resident
+                    super::inline_barrier_bytes() + resident
                 );
             }
         }
@@ -946,7 +1146,7 @@ mod tests {
     #[test]
     fn version_history_budget_tracks_replacement_pruning_and_reserved_barrier() {
         use super::version_stamp_bytes;
-        let reserve = version_stamp_bytes(&VersionKey::Database);
+        let reserve = super::inline_barrier_bytes();
         let key = VersionKey::AppendTable("events".into());
         let limit = reserve + version_stamp_bytes(&key);
         let mut index = VersionIndex::with_byte_limit(limit);
