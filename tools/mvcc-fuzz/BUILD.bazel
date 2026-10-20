@@ -1,0 +1,15 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+
+rust_binary(
+    name = "hawdb_mvcc_fuzz",
+    srcs = glob(["src/**/*.rs"]),
+    crate_root = "src/main.rs",
+    edition = "2024",
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:hawdb_minimal",
+        "@crate_index//:serde",
+        "@crate_index//:serde_json",
+    ],
+)
