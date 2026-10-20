@@ -23,7 +23,9 @@ use crate::build_memory::reserved::{native_path, Grant};
 use crate::build_memory::{checked_add, BuildMemory, MAP_ENTRY_BYTES};
 use crate::build_term::Term;
 use crate::error::{HawDBError, Result};
-use hawdb_core::RuntimeTaskContext;
+use hawdb_core::{
+    ResourceBudgetError, ResourceBudgetKind, ResourceBudgetScope, RuntimeTaskContext,
+};
 use hawdb_executor::QueryMemoryLease;
 use hawdb_integrity::Crc32cHasher as Digest;
 use hawdb_storage::file_io::{self as fs, File};
@@ -1324,8 +1326,11 @@ impl LexicalProjectionReader {
         max_term_bytes: NonZeroU64,
     ) -> Result<BTreeSet<String>> {
         if text.len() as u64 > self.config.query_memory_bytes.get() {
-            return Err(HawDBError::Storage(
-                "lexical query source exceeds its memory budget".into(),
+            return Err(self.query_memory_error(
+                "lexical query source",
+                text.len() as u64,
+                0,
+                "lexical query source exceeds its memory budget",
             ));
         }
         let mut terms = BTreeSet::new();
@@ -1339,19 +1344,43 @@ impl LexicalProjectionReader {
                         self.config.max_query_terms
                     )));
                 }
-                retained_bytes = retained_bytes
-                    .saturating_add(term.len() as u64)
-                    .saturating_add(32);
-                if retained_bytes > self.config.query_memory_bytes.get() {
-                    return Err(HawDBError::Storage(
-                        "lexical query terms exceed their memory budget".into(),
+                let requested = (term.len() as u64).saturating_add(32);
+                let next_bytes = retained_bytes.saturating_add(requested);
+                if next_bytes > self.config.query_memory_bytes.get() {
+                    return Err(self.query_memory_error(
+                        "lexical query terms",
+                        requested,
+                        retained_bytes,
+                        "lexical query terms exceed their memory budget",
                     ));
                 }
+                retained_bytes = next_bytes;
                 terms.insert(term);
             }
             Ok(())
         })?;
         Ok(terms)
+    }
+
+    fn query_memory_error(
+        &self,
+        owner: &str,
+        requested: u64,
+        used: u64,
+        message: impl Into<String>,
+    ) -> HawDBError {
+        ResourceBudgetError {
+            resource: ResourceBudgetKind::MemoryBytes,
+            scope: ResourceBudgetScope::Operator,
+            owner: owner.into(),
+            memory_class: None,
+            requested,
+            used,
+            budget: self.config.query_memory_bytes.get(),
+            budget_option: "LexicalProjectionConfig.query_memory_bytes",
+            message: message.into(),
+        }
+        .into()
     }
 
     pub(super) fn query_statistics(
@@ -1391,10 +1420,15 @@ impl LexicalProjectionReader {
         }
         let relevant_block_bytes = self.statistics_block_bytes(query_terms);
         if relevant_block_bytes > self.config.query_memory_bytes.get() {
-            return Err(HawDBError::Storage(format!(
-                "lexical query statistics require {relevant_block_bytes} bytes, exceeding {}",
-                self.config.query_memory_bytes
-            )));
+            return Err(self.query_memory_error(
+                "lexical query statistics",
+                relevant_block_bytes,
+                0,
+                format!(
+                    "lexical query statistics require {relevant_block_bytes} bytes, exceeding {}",
+                    self.config.query_memory_bytes
+                ),
+            ));
         }
         let mut document_frequencies = query_terms
             .iter()
@@ -1619,10 +1653,15 @@ impl LexicalProjectionReader {
                 },
             ));
         if admitted_stream_bytes > self.config.query_memory_bytes.get() {
-            return Err(HawDBError::Storage(format!(
-                "lexical query streams require {admitted_stream_bytes} bytes, exceeding {}",
-                self.config.query_memory_bytes
-            )));
+            return Err(self.query_memory_error(
+                "lexical query streams",
+                admitted_stream_bytes,
+                0,
+                format!(
+                    "lexical query streams require {admitted_stream_bytes} bytes, exceeding {}",
+                    self.config.query_memory_bytes
+                ),
+            ));
         }
         let _working = context
             .map(|context| {

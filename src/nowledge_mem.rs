@@ -9594,9 +9594,11 @@ mod tests {
         graph
             .query("CREATE (:Memory {id: 'm1', title: 'First'})")
             .unwrap();
+        let prefix_epoch = graph.database().commit_epoch().unwrap();
         graph
             .query("CREATE (:Memory {id: 'm2', title: 'Second'})")
             .unwrap();
+        let source_epoch = graph.database().commit_epoch().unwrap();
         let projection =
             NowledgeMemSearchProjection::from_index(SearchIndex::open(&search_path).unwrap());
         let handle = NowledgeMemEmbeddedStoreHandle::new(NowledgeMemEmbeddedStore::new(
@@ -9606,11 +9608,13 @@ mod tests {
         .unwrap();
 
         let error = handle.catch_up_search_projection(1, 4).unwrap_err();
-        assert!(matches!(
+        assert_eq!(
             error,
-            HawDBError::Execution(message)
-                if message.contains("differs from source snapshot epoch")
-        ));
+            HawDBError::ProjectionSourceEpochMismatch {
+                expected: prefix_epoch,
+                actual: source_epoch,
+            }
+        );
         {
             let store = handle.read_store().unwrap();
             let index = store.search_projection().unwrap().index();

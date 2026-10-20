@@ -33,8 +33,11 @@ impl LexicalProjectionReader {
     ) -> Result<NormalizedQuery> {
         context.checkpoint()?;
         if text.len() as u64 > self.config.query_memory_bytes.get() {
-            return Err(HawDBError::Storage(
-                "lexical query source exceeds its memory budget".into(),
+            return Err(self.query_memory_error(
+                "lexical query source",
+                text.len() as u64,
+                0,
+                "lexical query source exceeds its memory budget",
             ));
         }
         let mut needs_worker = false;
@@ -72,14 +75,17 @@ impl LexicalProjectionReader {
                                 self.config.max_query_terms
                             )));
                         }
-                        logical_bytes = logical_bytes
-                            .saturating_add(term.len() as u64)
-                            .saturating_add(32);
-                        if logical_bytes > self.config.query_memory_bytes.get() {
-                            return Err(HawDBError::Storage(
-                                "lexical query terms exceed their memory budget".into(),
+                        let requested = (term.len() as u64).saturating_add(32);
+                        let next_bytes = logical_bytes.saturating_add(requested);
+                        if next_bytes > self.config.query_memory_bytes.get() {
+                            return Err(self.query_memory_error(
+                                "lexical query terms",
+                                requested,
+                                logical_bytes,
+                                "lexical query terms exceed their memory budget",
                             ));
                         }
+                        logical_bytes = next_bytes;
                         output._nodes.grow(SET_ENTRY_BYTES)?;
                         output.terms.insert(term);
                     }

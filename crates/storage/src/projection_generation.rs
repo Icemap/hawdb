@@ -761,6 +761,9 @@ impl ProjectionGenerationStore {
         self.ensure_writable()?;
         let shared = self.lock_shared()?;
         let mut report = ProjectionGenerationGcReport::default();
+        // Publication is excluded for this entire scan. A completed head
+        // barrier covers every obsolete generation of that owner in this call.
+        let mut stabilized_heads = BTreeSet::new();
         let directory = &self.captured.generations;
         let context = directory.operation_context();
         let mut stopped = false;
@@ -776,7 +779,8 @@ impl ProjectionGenerationStore {
                 }
                 report.files_scanned += 1;
                 let path = self.root.join("generations").join(name);
-                match self.reclaim_entry(&path, limits, &shared, &mut report) {
+                match self.reclaim_entry(&path, limits, &shared, &mut report, &mut stabilized_heads)
+                {
                     Ok(true) => Ok(()),
                     Ok(false) => {
                         stopped = true;

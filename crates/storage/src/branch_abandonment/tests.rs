@@ -172,6 +172,8 @@ fn abandonment_retries_each_publication_boundary_and_freezes_recovery() {
     for destination in ["intent.json", "file-0", "catalog.hawdb", "committed"] {
         let fixture = Fixture::new();
         let metadata = fixture.initialize();
+        let retained_descriptors = fixture.files.metrics().open;
+        assert_eq!(retained_descriptors, 1);
         let plan = metadata
             .inspect_pending_branch_abandonment(fixture.child.as_uuid(), Default::default())
             .unwrap();
@@ -222,6 +224,8 @@ fn abandonment_retries_each_publication_boundary_and_freezes_recovery() {
         let catalog =
             branch_catalog::read_catalog(&fixture.directory().join("catalog.hawdb")).unwrap();
         reclamation_evidence(&fixture.directory(), &catalog, Default::default()).unwrap();
+        assert_eq!(fixture.files.metrics().open, retained_descriptors);
+        drop(metadata);
         assert_eq!(fixture.files.metrics().open, 0);
     }
 }
