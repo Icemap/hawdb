@@ -86,7 +86,7 @@ impl OpenedRoot {
     pub(super) fn probe_query(
         &self,
         query: super::CandidateQuery<'_>,
-    ) -> Result<super::SearchOutOfCoreOutput> {
+    ) -> super::SearchQueryResult<super::SearchRetainedOutput> {
         let budget = query.permit.request().memory_bytes;
         let metadata_bytes = crate::build_memory::ACCOUNT_METADATA_BYTES as u64;
         if budget < metadata_bytes {
@@ -107,10 +107,18 @@ impl OpenedRoot {
         let _metadata = memory
             .spool
             .reserve(crate::build_memory::ACCOUNT_METADATA_BYTES)?;
+        let preflight = crate::lexical_projection::QueryContext {
+            memory: &memory.spool,
+            task: query.task,
+            execution: Some(query.permit),
+            io_scope: None,
+        };
+        let input = super::query_output::Input::new(query.options, preflight)?;
+        let output = super::query_output::Frame::new(preflight, query.permit)?;
         // Private native scratch is created before borrowing the query's one
         // I/O wave. Declaration order releases that wave before cleanup can
         // request fresh I/O, including error and unwind paths.
-        let stage = if !query.options.metadata_filters.is_empty()
+        let stage = if !input.options.metadata_filters.is_empty()
             || !self.reader.visibility.is_empty()
         {
             let disk_bytes = self
@@ -147,11 +155,11 @@ impl OpenedRoot {
             execution: Some(query.permit),
             io_scope: Some(&io),
         };
-        self.reader.search_with_options_internal(
+        let result = self.reader.search_with_options_internal(
             query.text,
             query.embedding,
             query.mode,
-            query.options,
+            input.options,
             super::query_memory::Execution {
                 base: super::SearchOutOfCoreExecutionContext {
                     access_control: None,
@@ -172,8 +180,10 @@ impl OpenedRoot {
                 query: Some(context),
                 immutable_freshness: self.born_immutable,
                 scratch: scratch.as_deref(),
+                output: Some(&output),
             },
-        )
+        )?;
+        output.finish(result).map_err(Into::into)
     }
 
     pub(super) fn document_count(&self) -> usize {

@@ -225,8 +225,9 @@ pub use out_of_core::{
     SearchOutOfCoreSegmentCompactionPolicy, SearchOutOfCoreSegmentCompactionReport,
     SearchOutOfCoreSegmentCompactionStopReason, SearchOutOfCoreUnorderedMutationWriter,
     SearchOutOfCoreUnorderedReplacementWriter, SearchOwnerOverlayLimits, SearchOwnerOverlayReport,
-    SearchStagingCleanupReport, SearchTextSeedOutput, SearchTextSeedReport,
-    SearchUnorderedMutationLimits, SearchUnorderedMutationReport, SearchVerifiedBody,
+    SearchQueryError, SearchQueryResult, SearchRetainedOutput, SearchStagingCleanupReport,
+    SearchTextSeedOutput, SearchTextSeedReport, SearchUnorderedMutationLimits,
+    SearchUnorderedMutationReport, SearchVerifiedBody,
 };
 pub use resident_text_seed::SearchResidentTextSeedOutput;
 // These are internal ownership seams. Hosts continue to use the embedded facade.

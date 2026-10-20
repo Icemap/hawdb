@@ -2007,7 +2007,9 @@ fn sealed_native_candidate_delta_lease<'birth>(
     let permit = std::sync::Arc::new(
         governor
             .try_admit(
-                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1),
+                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                    .with_result_bytes(1024 * 1024)
+                    .with_io_wave_slots(1),
             )
             .unwrap(),
     );
@@ -2152,20 +2154,20 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                         },
                     )
                     .unwrap();
-                assert_eq!(result.result.total_hits, 1);
-                assert_eq!(result.result.hits[0].id, "memory:m1");
+                assert_eq!(result.result().total_hits, 1);
+                assert_eq!(result.result().hits[0].id, "memory:m1");
                 assert!(
-                    !result.result.hits[0]
+                    !result.result().hits[0]
                         .projection_freshness
                         .full_reindex_needed
                 );
                 assert!(
-                    !result.result.hits[0]
+                    !result.result().hits[0]
                         .projection_freshness
                         .metadata_repair_needed
                 );
                 assert_eq!(
-                    result.result.hits[0]
+                    result.result().hits[0]
                         .projection_freshness
                         .source_graph_commit_epoch,
                     Some(source_epoch)
@@ -2221,6 +2223,7 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
             let preparation_permit = governor
                 .try_admit(
                     RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                        .with_result_bytes(1024 * 1024)
                         .with_io_wave_slots(1),
                 )
                 .unwrap();
@@ -2267,6 +2270,7 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                 governor
                     .try_admit(
                         RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                            .with_result_bytes(1024 * 1024)
                             .with_io_wave_slots(1),
                     )
                     .unwrap(),
@@ -2305,6 +2309,7 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                         governor
                             .try_admit(
                                 RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                                    .with_result_bytes(1024 * 1024)
                                     .with_io_wave_slots(1),
                             )
                             .unwrap(),
@@ -2416,6 +2421,7 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                 let foreign_permit = foreign_governor
                     .try_admit(
                         RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                            .with_result_bytes(1024 * 1024)
                             .with_io_wave_slots(1),
                     )
                     .unwrap();
@@ -2446,6 +2452,7 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                 let query_permit = governor
                     .try_admit(
                         RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                            .with_result_bytes(1024 * 1024)
                             .with_io_wave_slots(1),
                     )
                     .unwrap();
@@ -2467,7 +2474,7 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                             },
                         )
                         .unwrap()
-                        .result
+                        .result()
                         .hits[0]
                         .id,
                     "memory:m1"
@@ -2581,6 +2588,7 @@ fn consumer_native_candidate_view_keeps_old_pins_across_successor_and_failed_sel
             governor
                 .try_admit(
                     RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                        .with_result_bytes(1024 * 1024)
                         .with_io_wave_slots(1),
                 )
                 .unwrap(),
@@ -2609,7 +2617,7 @@ fn consumer_native_candidate_view_keeps_old_pins_across_successor_and_failed_sel
             },
         )
         .unwrap()
-        .result
+        .result()
         .total_hits
     }
 
@@ -2665,7 +2673,10 @@ fn consumer_native_candidate_view_keeps_old_pins_across_successor_and_failed_sel
             )
             .unwrap_err();
         assert!(
-            matches!(error, HawDBError::ResourceBudgetExceeded(_)),
+            matches!(
+                error,
+                crate::SearchQueryError::Query(HawDBError::ResourceBudgetExceeded(_))
+            ),
             "{error}"
         );
         drop(tiny);
@@ -2851,6 +2862,7 @@ fn consumer_native_candidate_view_queries_incremental_retractions_with_fresh_adm
             let permit = governor
                 .try_admit(
                     RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                        .with_result_bytes(1024 * 1024)
                         .with_io_wave_slots(1),
                 )
                 .unwrap();
@@ -2876,9 +2888,9 @@ fn consumer_native_candidate_view_queries_incremental_retractions_with_fresh_adm
                     },
                 )
                 .unwrap();
-            assert_eq!(output.result.total_hits, expected);
+            assert_eq!(output.result().total_hits, expected);
             if expected != 0 {
-                assert_eq!(output.result.hits[0].id, "memory:m1");
+                assert_eq!(output.result().hits[0].id, "memory:m1");
             }
             drop(permit);
             assert_eq!(governor.snapshot().active_background_tasks, 0);
@@ -2945,7 +2957,9 @@ fn consumer_native_candidate_view_probes_real_vector_and_hybrid_with_one_io_slot
     ] {
         let permit = governor
             .try_admit(
-                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1),
+                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                    .with_result_bytes(1024 * 1024)
+                    .with_io_wave_slots(1),
             )
             .unwrap();
         let output = candidate
@@ -2968,15 +2982,15 @@ fn consumer_native_candidate_view_probes_real_vector_and_hybrid_with_one_io_slot
                 },
             )
             .unwrap();
-        assert_eq!(output.result.total_hits, 1);
-        assert_eq!(output.result.hits[0].id, "memory:m1");
+        assert_eq!(output.result().total_hits, 1);
+        assert_eq!(output.result().hits[0].id, "memory:m1");
         assert!(
-            !output.result.hits[0]
+            !output.result().hits[0]
                 .projection_freshness
                 .full_reindex_needed
         );
         assert!(
-            !output.result.hits[0]
+            !output.result().hits[0]
                 .projection_freshness
                 .metadata_repair_needed
         );
@@ -2989,7 +3003,11 @@ fn consumer_native_candidate_view_probes_real_vector_and_hybrid_with_one_io_slot
     let before = governor.snapshot().admitted_memory_bytes;
     for budget in [64 * 1024, 3 * 1024 * 1024, 16 * 1024 * 1024] {
         let permit = governor
-            .try_admit(RuntimeWorkRequest::background_maintenance(budget).with_io_wave_slots(1))
+            .try_admit(
+                RuntimeWorkRequest::background_maintenance(budget)
+                    .with_result_bytes(1024 * 1024)
+                    .with_io_wave_slots(1),
+            )
             .unwrap();
         let result = candidate.probe_candidate_query(
             &permit,
@@ -3008,11 +3026,16 @@ fn consumer_native_candidate_view_probes_real_vector_and_hybrid_with_one_io_slot
         );
         if budget == 64 * 1024 {
             assert!(
-                matches!(result, Err(HawDBError::ResourceBudgetExceeded(_))),
+                matches!(
+                    result,
+                    Err(crate::SearchQueryError::Query(
+                        HawDBError::ResourceBudgetExceeded(_)
+                    ))
+                ),
                 "{result:?}"
             );
         } else {
-            assert_eq!(result.unwrap().result.total_hits, 1);
+            assert_eq!(result.unwrap().result().total_hits, 1);
         }
         drop(permit);
         assert_eq!(governor.snapshot().active_background_tasks, 0);
@@ -3078,7 +3101,11 @@ fn consumer_native_candidate_view_hydration_refuses_then_retries_on_original_roo
     // whose encoded record exceeds this operation's small working grant.
     for budget in [3 * 1024 * 1024, 16 * 1024 * 1024] {
         let permit = governor
-            .try_admit(RuntimeWorkRequest::background_maintenance(budget).with_io_wave_slots(1))
+            .try_admit(
+                RuntimeWorkRequest::background_maintenance(budget)
+                    .with_result_bytes(1024 * 1024)
+                    .with_io_wave_slots(1),
+            )
             .unwrap();
         let result = candidate.probe_candidate_query(
             &permit,
@@ -3097,15 +3124,20 @@ fn consumer_native_candidate_view_hydration_refuses_then_retries_on_original_roo
         );
         if budget == 3 * 1024 * 1024 {
             assert!(
-                matches!(result, Err(HawDBError::ResourceBudgetExceeded(_))),
+                matches!(
+                    result,
+                    Err(crate::SearchQueryError::Query(
+                        HawDBError::ResourceBudgetExceeded(_)
+                    ))
+                ),
                 "{result:?}"
             );
         } else {
             let output = result.unwrap();
-            assert_eq!(output.result.total_hits, 1);
-            assert_eq!(output.result.hits[0].id, "memory:m1");
-            assert!(output.metrics.hydrated_bytes > 2 * 1024 * 1024);
-            assert!(output.metrics.hydration_segment_bytes_read > 0);
+            assert_eq!(output.result().total_hits, 1);
+            assert_eq!(output.result().hits[0].id, "memory:m1");
+            assert!(output.metrics().hydrated_bytes > 2 * 1024 * 1024);
+            assert!(output.metrics().hydration_segment_bytes_read > 0);
         }
         drop(permit);
         assert_eq!(governor.snapshot().active_background_tasks, 0);
@@ -3122,6 +3154,221 @@ fn consumer_native_candidate_view_hydration_refuses_then_retries_on_original_roo
         );
         assert_eq!(std::fs::read_dir(target_path).unwrap().count(), 1);
     }
+}
+
+#[test]
+#[cfg(feature = "full-text-search")]
+fn consumer_native_candidate_view_retains_results_after_handles_close() {
+    use crate::SearchQueryError;
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeRetainedResultError,
+        RuntimeWorkRequest,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let mut birth = reserve_native_generation(&mut db, &fixture)
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    birth.create().unwrap();
+    let epoch = db.begin_read_transaction().unwrap().commit_epoch();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(64 * 1024 * 1024),
+            retained_result_handle_limit: std::num::NonZeroUsize::new(1).unwrap(),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    let mut lease = sealed_native_candidate_document_lease(
+        &mut birth,
+        &fixture,
+        epoch,
+        &governor,
+        hawdb_search::SearchDocument {
+            id: "memory:m1".into(),
+            title: "GraphStream".into(),
+            content: "graph_stream Graph graph".into(),
+            embedding: None,
+            metadata: std::collections::BTreeMap::from([
+                ("kind".into(), "Memory".into()),
+                ("space_id".into(), "team".into()),
+                ("external_id".into(), "m1 ".repeat(4096)),
+                ("source_id".into(), "s1".into()),
+            ]),
+        },
+    );
+    lease
+        .prepare_candidate_view(NonZeroU64::new(32 * 1024 * 1024).unwrap())
+        .unwrap();
+    let candidate = lease
+        .detach_candidate()
+        .unwrap()
+        .attach_birth(birth)
+        .unwrap();
+    let baseline = governor.snapshot().admitted_memory_bytes;
+    let options = || hawdb_search::SearchQueryOptions {
+        limit: 1,
+        offset: 0,
+        rank_window: None,
+        fusion_weights: Default::default(),
+        metadata_filters: std::collections::BTreeMap::from([("space_id".into(), "team".into())]),
+        policy_epoch: None,
+    };
+    let query = |permit: &hawdb_qos::RuntimePermit| {
+        candidate.probe_candidate_query(
+            permit,
+            hawdb_core::RuntimeTaskContext::with_timeout(std::time::Duration::from_secs(10)),
+            "graph",
+            None,
+            hawdb_search::SearchMode::Text,
+            options(),
+        )
+    };
+    let no_result = governor
+        .try_admit(
+            RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(0),
+        )
+        .unwrap();
+    assert!(matches!(
+        query(&no_result),
+        Err(SearchQueryError::Retention(
+            RuntimeRetainedResultError::Capacity {
+                retryable: false,
+                ..
+            }
+        ))
+    ));
+    drop(no_result);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, baseline);
+    let small = governor
+        .try_admit(
+            RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                .with_result_bytes(8192)
+                .with_io_wave_slots(1),
+        )
+        .unwrap();
+    assert!(matches!(
+        query(&small),
+        Err(SearchQueryError::Query(HawDBError::ResourceBudgetExceeded(
+            _
+        )))
+    ));
+    drop(small);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, baseline);
+    let admit = || {
+        governor
+            .try_admit(
+                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                    .with_result_bytes(1024 * 1024)
+                    .with_io_wave_slots(1),
+            )
+            .unwrap()
+    };
+    for (limit, offset) in [(0, 0), (1, 10)] {
+        let permit = admit();
+        let mut page_options = options();
+        page_options.limit = limit;
+        page_options.offset = offset;
+        let page = candidate
+            .probe_candidate_query(
+                &permit,
+                hawdb_core::RuntimeTaskContext::with_timeout(std::time::Duration::from_secs(10)),
+                "graph",
+                None,
+                hawdb_search::SearchMode::Text,
+                page_options,
+            )
+            .unwrap();
+        drop(permit);
+        assert!(page.result().hits.is_empty());
+        assert_eq!(page.result().total_hits, 1);
+        assert_eq!(
+            page.result().empty_reason_codes,
+            [crate::SearchEmptyReasonCode::LimitExcludedAllHits]
+        );
+        if offset == 0 {
+            assert!(page.result().truncated);
+            assert_eq!(page.result().truncation_reason_codes.len(), 1);
+            assert_eq!(
+                page.result().truncation_reasons,
+                ["limit 0 returned from 1 matching hits"]
+            );
+            assert_eq!(
+                page.result().empty_reasons,
+                page.result().truncation_reasons
+            );
+        } else {
+            assert!(!page.result().truncated);
+            assert_eq!(
+                page.result().empty_reasons,
+                ["offset 10 limit 1 returned no hits from 1 matching hits"]
+            );
+        }
+        assert_eq!(governor.snapshot().active_background_tasks, 0);
+        assert_eq!(governor.snapshot().active_background_io_slots, 0);
+        drop(page);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, baseline);
+    }
+    let permit = admit();
+    let retained = query(&permit).unwrap();
+    drop(permit);
+    assert_eq!(retained.result().hits[0].id, "memory:m1");
+    assert_eq!(retained.result().hits[0].matched_terms, ["graph"]);
+    assert!(retained.result().hits[0]
+        .matched_spans
+        .iter()
+        .any(|span| span.text == "GraphStream"));
+    assert_eq!(
+        retained
+            .result()
+            .candidate_set
+            .metadata_predicate_pushdown
+            .field_summaries[0]
+            .field,
+        "space_id"
+    );
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
+    let held = governor.retained_result_snapshot();
+    assert_eq!(held.view_handles, 1);
+    let second = admit();
+    let error = query(&second).unwrap_err();
+    assert!(error.is_retryable());
+    assert!(matches!(error, SearchQueryError::Retention(_)));
+    drop(second);
+    assert_eq!(
+        governor.retained_result_snapshot().retained_bytes,
+        held.retained_bytes
+    );
+    assert_eq!(retained.result().hits[0].source_id.as_deref(), Some("s1"));
+    drop(retained);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    let permit = admit();
+    let retained = query(&permit).unwrap();
+    drop(permit);
+    drop(candidate.abandon());
+    drop(db);
+    assert_eq!(
+        retained.result().hits[0]
+            .external_id
+            .as_ref()
+            .unwrap()
+            .len(),
+        3 * 4096
+    );
+    assert!(retained.retained_capacity_bytes() > 0);
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
+    assert_eq!(
+        governor.snapshot().admitted_memory_bytes,
+        governor.retained_result_snapshot().retained_bytes
+    );
+    drop(retained);
+    assert_eq!(governor.retained_result_snapshot().retained_bytes, 0);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
 }
 
 #[test]

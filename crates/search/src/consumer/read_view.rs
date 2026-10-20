@@ -143,9 +143,10 @@ impl ConsumerReadPin {
         self.version.report
     }
 
-    /// Validation probe only. Fresh same-governor execution and I/O admission
-    /// are required; query temporaries/results are not yet fully accounted, so
-    /// this is not the registered Consumer's production serving API.
+    /// Validation probe with fresh same-governor working, result and I/O grants.
+    /// `result_bytes` must explicitly cover the returned immutable owner, whose
+    /// reservation survives query/permit/pin closure. Registered Consumer serving
+    /// and complete working-pipeline qualification remain separate contracts.
     pub fn probe_query(
         &self,
         permit: &RuntimePermit,
@@ -154,7 +155,7 @@ impl ConsumerReadPin {
         query_embedding: Option<&[f32]>,
         mode: crate::SearchMode,
         options: crate::SearchQueryOptions,
-    ) -> Result<crate::SearchOutOfCoreOutput> {
+    ) -> crate::SearchQueryResult<crate::SearchRetainedOutput> {
         probe_view(
             &self.version.reader,
             permit,

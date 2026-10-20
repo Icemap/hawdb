@@ -320,6 +320,8 @@ impl ConsumerPreparedCandidate {
 
     /// Probe with a fresh admitted task. The candidate retains no preparation
     /// execution slot while waiting for source validation or a selector.
+    /// The permit must include explicit result capacity; the returned immutable
+    /// owner keeps that reservation independently of the permit and candidate.
     pub fn probe_candidate_query(
         &self,
         permit: &hawdb_qos::RuntimePermit,
@@ -328,7 +330,7 @@ impl ConsumerPreparedCandidate {
         query_embedding: Option<&[f32]>,
         mode: crate::SearchMode,
         options: crate::SearchQueryOptions,
-    ) -> Result<crate::SearchOutOfCoreOutput> {
+    ) -> crate::SearchQueryResult<crate::SearchRetainedOutput> {
         probe_view(
             &self.detached.view,
             permit,
@@ -355,16 +357,17 @@ fn probe_view(
     query_embedding: Option<&[f32]>,
     mode: crate::SearchMode,
     options: crate::SearchQueryOptions,
-) -> Result<crate::SearchOutOfCoreOutput> {
+) -> crate::SearchQueryResult<crate::SearchRetainedOutput> {
     if !view.shares_governor_with(permit) {
         return Err(HawDBError::Execution(
             "consumer candidate query permit belongs to another governor".into(),
-        ));
+        )
+        .into());
     }
     if task.has_resource_controllers() {
-        return Err(invalid(
-            "consumer candidate query task already has a resource controller",
-        ));
+        return Err(
+            invalid("consumer candidate query task already has a resource controller").into(),
+        );
     }
     let task = permit.bind_task_context(task);
     view.probe_query(crate::out_of_core::CandidateQuery {
@@ -413,13 +416,14 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
     /// Probe the sealed candidate's pinned files under this lease's runtime
     /// admission. Results are validation evidence only: the source-E fence and
     /// durable selector must still complete before any serving acknowledgement.
+    /// The lease's host permit must include explicit retained-result capacity.
     pub fn probe_candidate_query(
         &self,
         query_text: &str,
         query_embedding: Option<&[f32]>,
         mode: crate::SearchMode,
         options: crate::SearchQueryOptions,
-    ) -> Result<crate::SearchOutOfCoreOutput> {
+    ) -> crate::SearchQueryResult<crate::SearchRetainedOutput> {
         let view = self
             .candidate_view
             .as_ref()
@@ -427,7 +431,8 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
         if self.host_admission.is_none() {
             return Err(HawDBError::Execution(
                 "consumer candidate query requires runtime admission".into(),
-            ));
+            )
+            .into());
         }
         view.probe_query(crate::out_of_core::CandidateQuery {
             text: query_text,

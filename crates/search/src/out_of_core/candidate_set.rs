@@ -24,6 +24,7 @@ impl SearchOutOfCoreReader {
         metrics: &mut SearchOutOfCoreMetrics,
         context: Option<QueryContext<'a>>,
         scratch: Option<&'a ScratchDirectory>,
+        output: super::query_output::Memory<'_>,
     ) -> Result<CandidateSet<'a>> {
         report.segment_count = self
             .segments
@@ -32,10 +33,10 @@ impl SearchOutOfCoreReader {
             .sum();
         report.segment_pruning_candidate_document_count = self.manifest.document_count;
         report.persisted_segment_descriptor_used = true;
-        let mut field_pruning = SearchFieldPruningAccumulator::new(predicates);
+        let mut field_pruning = super::query_output::report::Fields::new(predicates, context)?;
 
         if predicates.is_empty() && self.visibility.is_empty() {
-            report.field_summaries = field_pruning.into_reports();
+            report.field_summaries = field_pruning.into_reports(output)?;
             return Ok(CandidateSet::All(self.manifest.document_count));
         }
 
@@ -72,10 +73,13 @@ impl SearchOutOfCoreReader {
 
         for (layer, artifact) in self.segments.iter().enumerate() {
             for segment in &artifact.descriptor.segments {
+                if let Some(context) = context {
+                    context.checkpoint()?;
+                }
                 let visible_count = self
                     .visibility
                     .visible_count(artifact.content_segment_id, segment)?;
-                field_pruning.observe_persisted_segment(segment, predicates);
+                field_pruning.observe(segment, predicates);
                 if !segment.may_match_predicates(predicates) {
                     report.pruned_segment_count = report.pruned_segment_count.saturating_add(1);
                     report.segment_pruned_document_count = report
@@ -193,7 +197,7 @@ impl SearchOutOfCoreReader {
         report.physical_range_read_count =
             usize::try_from(metrics.segment_range_reads).unwrap_or(usize::MAX);
         report.physical_bytes_read = metrics.segment_bytes_read;
-        report.field_summaries = field_pruning.into_reports();
+        report.field_summaries = field_pruning.into_reports(output)?;
         let box_memory = context
             .map(|context| context.memory.reserve(size_of::<SpilledCandidateSet<'_>>()))
             .transpose()?;

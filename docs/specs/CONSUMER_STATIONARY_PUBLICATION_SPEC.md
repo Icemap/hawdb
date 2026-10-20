@@ -188,9 +188,29 @@ metadata, route trees and selected-document caches use the same query account.
 Each decoded row retains its own lease through cache insertion and removal,
 then drops its payload before refunding admission. Segment selection stays
 private through complete envelope integrity; the operation-wide hydrated-byte
-ceiling and validation of unselected records remain in force. These working
-owners do not yet fund copied hit/matched-term/matched-span/report payloads or
-independently retained query outputs.
+ceiling and validation of unselected records remain in force.
+Native probes now require an explicit `RuntimePermit.request().result_bytes`
+grant and return `SearchRetainedOutput`, with borrowed `result()` and `metrics()`
+access. Result capacity is reserved through `RuntimeRetainedResult` before
+result allocation, including native owner/view and retained account metadata.
+The original query account also admits each result vector, string, map node and
+replacement overlap before allocation. Copied hit fields, freshness/candidate/
+retriever reports, top IDs/candidates, fallback and empty/truncation reasons,
+matched terms and matched spans remain funded through the independent owner.
+Its payload is destroyed before query credit and runtime retained capacity are
+refunded. It keeps no execution, I/O or reader handle alive and has no implicit
+Clone, Deref or owned extraction. The explicit result ceiling is conservatively
+reserved until destruction, rather than presented as a measured payload size.
+Structured `SearchQueryError` preserves retained-result admission/backpressure
+separately from query failures. Missing result admission refuses before I/O;
+partial output refusal/cancellation returns no result and refunds its owner.
+Matching streams admitted analyzer tokens through the original query account,
+uses its shared CJK workspace and preserves legacy term/span semantics. Report
+ranking sorts borrowed IDs in query-funded scratch; pruning summaries borrow
+predicate names and admit their output strings/vectors. These result contracts
+do not complete working metadata predicate parsing/normalization and pushdown
+construction, compressed query/rerank,
+shared-filesystem/restart scratch or registered Consumer serving qualification.
 Filtered native probes create a private stage through the original root and
 descriptor domain before acquiring the query I/O wave. File create/write/read
 and synchronization borrow that exact wave. Files close and the query wave is
@@ -204,8 +224,8 @@ Born immutable readers check the captured native directory for operational
 repair/reindex markers before opening a view and refuse any such entry. Their
 query freshness comes from the complete immutable generation, without reopening
 a saved pathname. Shared filesystem spill admission, compressed-vector search
-and rerank admission, hit/matched-term/matched-span/report and retained-result
-accounting, restart scratch adoption and registered serving semantics remain
+and rerank admission, remaining working metadata predicate construction accounting,
+restart scratch adoption and registered serving semantics remain
 unfinished.
 This lower-level path does not install the registered Consumer read view or
 replace the legacy facade's directory move. Post-restart adoption and composed

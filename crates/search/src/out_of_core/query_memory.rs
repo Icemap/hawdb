@@ -1,8 +1,8 @@
 // Copyright 2026 Nowledge
 // Licensed under the Apache License, Version 2.0.
 
-//! Query stage ownership shares one working-memory account. This does not yet
-//! account the entire ordinary query pipeline or grant a retained serving result.
+//! Query stages share one working account. Native result ownership is coordinated
+//! separately; ordinary APIs and complete registered serving remain distinct.
 
 use super::*;
 use crate::build_memory::{checked_add, MAP_ENTRY_BYTES, SET_ENTRY_BYTES};
@@ -15,6 +15,7 @@ pub(super) struct Execution<'a> {
     pub(super) query: Option<QueryContext<'a>>,
     pub(super) immutable_freshness: bool,
     pub(super) scratch: Option<&'a ScratchDirectory>,
+    pub(super) output: Option<&'a super::query_output::Frame<'a>>,
 }
 
 impl<'a> From<SearchOutOfCoreExecutionContext<'a>> for Execution<'a> {
@@ -24,6 +25,7 @@ impl<'a> From<SearchOutOfCoreExecutionContext<'a>> for Execution<'a> {
             query: None,
             immutable_freshness: false,
             scratch: None,
+            output: None,
         }
     }
 }

@@ -20,8 +20,7 @@ use super::{
     checksum_bytes, cosine_similarity, decode_embedding, decode_metadata,
     decode_search_snapshot_text_bounded, decode_string, encode_embedding, encode_metadata,
     encode_search_snapshot_text, encode_string, lexical_analyzer_digest, lexical_documents_digest,
-    matched_query_spans_bounded, matched_query_terms, ranked_scores,
-    retriever_candidate_set_report, rrf_child_score, search_empty_reason_codes,
+    matched_query_spans_bounded, matched_query_terms, ranked_scores, rrf_child_score,
     search_empty_reasons, search_metadata_predicate_pushdown, top_ranked_candidates,
     top_ranked_ids, weighted_rrf_score, window_ranks, CompressedVectorSearchMode,
     SearchAccessControlContext, SearchAnalyzerLexicon, SearchCandidateSetReport, SearchDocument,
@@ -54,6 +53,8 @@ use std::sync::{Arc, Mutex};
 mod admitted_root;
 mod candidate_set;
 mod query_memory;
+mod query_output;
+pub use query_output::{SearchQueryError, SearchQueryResult, SearchRetainedOutput};
 mod query_ranking;
 mod score_collector;
 mod vector_query;
@@ -96,7 +97,10 @@ impl CandidateView {
         self.0._memory.shares_governor_with(permit) && self.0.opened.shares_governor_with(permit)
     }
 
-    pub(crate) fn probe_query(&self, query: CandidateQuery<'_>) -> Result<SearchOutOfCoreOutput> {
+    pub(crate) fn probe_query(
+        &self,
+        query: CandidateQuery<'_>,
+    ) -> SearchQueryResult<SearchRetainedOutput> {
         self.0.opened.probe_query(query)
     }
 
@@ -2407,7 +2411,14 @@ impl SearchOutOfCoreReader {
             query,
             immutable_freshness,
             scratch,
+            output,
         } = execution.into();
+        let output_memory = query_output::Memory(output);
+        if output.is_some() != query.is_some() {
+            return Err(HawDBError::Execution(
+                "native query requires paired working and result admission".into(),
+            ));
+        }
         let SearchOutOfCoreExecutionContext {
             access_control,
             compressed_vector_search_mode,
@@ -2456,7 +2467,7 @@ impl SearchOutOfCoreReader {
                 }
                 access_control.effective_metadata_filters(&options.metadata_filters)?
             }
-            None => options.metadata_filters.clone(),
+            None => output_memory.map(&options.metadata_filters)?,
         };
         let policy_epoch = access_control
             .map(|access_control| access_control.policy_epoch)
@@ -2464,6 +2475,8 @@ impl SearchOutOfCoreReader {
         let normalized_terms = self.query_terms(query_text, query)?;
         let query_terms = &normalized_terms.values;
         let mut predicate_pushdown = search_metadata_predicate_pushdown(&metadata_filters);
+        predicate_pushdown.report.parse_error =
+            output_memory.optional(predicate_pushdown.report.parse_error.as_deref())?;
         let mut metrics = SearchOutOfCoreMetrics::default();
         let candidate_set = self.build_candidate_set(
             &predicate_pushdown.predicates,
@@ -2471,11 +2484,12 @@ impl SearchOutOfCoreReader {
             &mut metrics,
             query,
             scratch,
+            output_memory,
         )?;
         let filtered_document_count = candidate_set.cardinality();
         let candidate_report = SearchCandidateSetReport {
-            id_space: "search_projection_document_id".to_string(),
-            representation: candidate_set.representation().to_string(),
+            id_space: output_memory.text("search_projection_document_id")?,
+            representation: output_memory.text(candidate_set.representation())?,
             cardinality: filtered_document_count,
             exact: true,
             snapshot_source_graph_commit_epoch: self.manifest.source_graph_commit_epoch,
@@ -2484,7 +2498,7 @@ impl SearchOutOfCoreReader {
                 .manifest
                 .document_count
                 .saturating_sub(filtered_document_count),
-            metadata_filters: options.metadata_filters.clone(),
+            metadata_filters: output_memory.map(&options.metadata_filters)?,
             metadata_predicate_pushdown: predicate_pushdown.report,
         };
 
@@ -2492,8 +2506,8 @@ impl SearchOutOfCoreReader {
         let (text_fallback_reason_codes, text_fallback_reasons) =
             if !text_available && mode != SearchMode::Vector {
                 (
-                    vec![SearchFallbackReasonCode::TextQueryEmpty],
-                    vec!["query text produced no searchable terms".to_string()],
+                    output_memory.codes(&[SearchFallbackReasonCode::TextQueryEmpty])?,
+                    output_memory.one_text("query text produced no searchable terms")?,
                 )
             } else {
                 (Vec::new(), Vec::new())
@@ -2504,24 +2518,34 @@ impl SearchOutOfCoreReader {
         let vector_available = match (query_embedding, self.manifest.embedding_dimension) {
             (Some(vector), Some(dimension)) if vector.len() == dimension => true,
             (Some(vector), Some(dimension)) => {
-                vector_fallback_reason_codes
-                    .push(SearchFallbackReasonCode::VectorDimensionMismatch);
-                vector_fallback_reasons.push(format!(
+                output_memory.push(
+                    &mut vector_fallback_reason_codes,
+                    SearchFallbackReasonCode::VectorDimensionMismatch,
+                )?;
+                let reason = output_memory.format(format_args!(
                     "query embedding dimension {} does not match index dimension {dimension}",
                     vector.len()
-                ));
+                ))?;
+                output_memory.push(&mut vector_fallback_reasons, reason)?;
                 false
             }
             (Some(_), None) => {
-                vector_fallback_reason_codes.push(SearchFallbackReasonCode::VectorIndexEmpty);
-                vector_fallback_reasons.push("index has no vector rows".to_string());
+                output_memory.push(
+                    &mut vector_fallback_reason_codes,
+                    SearchFallbackReasonCode::VectorIndexEmpty,
+                )?;
+                let reason = output_memory.text("index has no vector rows")?;
+                output_memory.push(&mut vector_fallback_reasons, reason)?;
                 false
             }
             (None, _) => {
                 if mode != SearchMode::Text {
-                    vector_fallback_reason_codes
-                        .push(SearchFallbackReasonCode::QueryEmbeddingMissing);
-                    vector_fallback_reasons.push("query embedding not provided".to_string());
+                    output_memory.push(
+                        &mut vector_fallback_reason_codes,
+                        SearchFallbackReasonCode::QueryEmbeddingMissing,
+                    )?;
+                    let reason = output_memory.text("query embedding not provided")?;
+                    output_memory.push(&mut vector_fallback_reasons, reason)?;
                 }
                 false
             }
@@ -2582,163 +2606,167 @@ impl SearchOutOfCoreReader {
         } else {
             VectorScoreScan::default()
         };
-        vector_fallback_reason_codes.extend(vector_scan.fallback_reason_codes.iter().copied());
-        vector_fallback_reasons.extend(vector_scan.fallback_reasons.iter().cloned());
+        let vector_fallback_reason_codes = output_memory.combine(
+            &vector_fallback_reason_codes,
+            &vector_scan.fallback_reason_codes,
+        )?;
+        let vector_fallback_reasons = output_memory
+            .combine_strings(&vector_fallback_reasons, &vector_scan.fallback_reasons)?;
         let vector_scores = &vector_scan.scores;
 
         let vector_ranks = query_ranking::Ranks::new(vector_scores, query)?;
         let text_ranks = query_ranking::Ranks::new(text_scores, query)?;
         let vector_window_ranks = vector_ranks.window(options.rank_window, query)?;
         let text_window_ranks = text_ranks.window(options.rank_window, query)?;
-        let mut fallback_reason_codes = vector_fallback_reason_codes.clone();
-        fallback_reason_codes.extend(text_fallback_reason_codes.iter().copied());
-        let mut fallback_reasons = vector_fallback_reasons.clone();
-        fallback_reasons.extend(text_fallback_reasons.iter().cloned());
+        let fallback_reason_codes =
+            output_memory.combine(&vector_fallback_reason_codes, &text_fallback_reason_codes)?;
+        let fallback_reasons =
+            output_memory.combine_strings(&vector_fallback_reasons, &text_fallback_reasons)?;
 
-        let retrievers = vec![
-            SearchRetrieverReport {
-                name: "vector".to_string(),
-                backend: vector_scan.backend.clone(),
-                backend_selection_reason: None,
-                estimated_raw_vector_bytes: self.manifest.embedding_dimension.map(|dimension| {
-                    (dimension as u64)
-                        .saturating_mul(std::mem::size_of::<f32>() as u64)
-                        .saturating_mul(filtered_document_count as u64)
-                }),
-                filter_selectivity_per_million: None,
-                available: vector_available && mode != SearchMode::Text,
-                input_candidate_set: candidate_report.clone(),
-                candidate_score_source: if vector_available && mode != SearchMode::Text {
+        let mut retrievers = output_memory.vec(2)?;
+        retrievers.push(SearchRetrieverReport {
+            name: output_memory.text("vector")?,
+            backend: output_memory.text(&vector_scan.backend)?,
+            backend_selection_reason: None,
+            estimated_raw_vector_bytes: self.manifest.embedding_dimension.map(|dimension| {
+                (dimension as u64)
+                    .saturating_mul(std::mem::size_of::<f32>() as u64)
+                    .saturating_mul(filtered_document_count as u64)
+            }),
+            filter_selectivity_per_million: None,
+            available: vector_available && mode != SearchMode::Text,
+            input_candidate_set: output_memory.candidate(&candidate_report)?,
+            candidate_score_source: output_memory.text(
+                if vector_available && mode != SearchMode::Text {
                     vector_scan.candidate_score_source.as_str()
                 } else {
                     "none"
-                }
-                .to_string(),
-                final_score_source: if vector_available && mode != SearchMode::Text {
+                },
+            )?,
+            final_score_source: output_memory.text(
+                if vector_available && mode != SearchMode::Text {
                     "raw_vector"
                 } else {
                     "none"
-                }
-                .to_string(),
-                generated_candidate_count: vector_scan.generated_candidate_count,
-                candidate_scan_rounds: vector_scan.segment_scan_count,
-                descriptor_pruned_count: candidate_report
+                },
+            )?,
+            generated_candidate_count: vector_scan.generated_candidate_count,
+            candidate_scan_rounds: vector_scan.segment_scan_count,
+            descriptor_pruned_count: candidate_report
+                .metadata_predicate_pushdown
+                .segment_pruned_document_count,
+            scalar_filtered_count: candidate_report.filtered_out_count.saturating_sub(
+                candidate_report
                     .metadata_predicate_pushdown
                     .segment_pruned_document_count,
-                scalar_filtered_count: candidate_report.filtered_out_count.saturating_sub(
-                    candidate_report
-                        .metadata_predicate_pushdown
-                        .segment_pruned_document_count,
-                ),
-                residual_filtered_count: 0,
-                reranked_candidate_count: vector_scan.reranked_candidate_count,
-                raw_vector_bytes_read: metrics.vector_bytes_read,
-                candidate_scan_kernel: vector_scan.candidate_scan_kernel.clone(),
-                candidate_scan_worker_count: vector_scan.candidate_scan_worker_count,
-                candidate_scan_segment_count: vector_scan.candidate_scan_segment_count,
-                candidate_scan_scanned_segment_count: vector_scan
-                    .candidate_scan_scanned_segment_count,
-                candidate_scan_scored_document_count: vector_scan
-                    .candidate_scan_scored_document_count,
-                candidate_scan_filtered_document_count: vector_scan
-                    .candidate_scan_filtered_document_count,
-                candidate_scan_scanned_block_count: vector_scan.candidate_scan_scanned_block_count,
-                candidate_scan_skipped_block_count: vector_scan.candidate_scan_skipped_block_count,
-                candidate_scan_payload_bytes_read: vector_scan.candidate_scan_payload_bytes_read,
-                candidate_scan_admitted_working_bytes: vector_scan
-                    .candidate_scan_admitted_working_bytes,
-                posting_bytes_read: 0,
-                candidate_postings_visited: 0,
-                candidate_blocks_skipped: 0,
-                segmented_lexical_projection_used: false,
-                index_covered_document_count: vector_scan.vector_document_count,
-                index_candidate_document_count: vector_scan.vector_document_count,
-                index_coverage_complete: true,
-                candidate_count: vector_scan.matching_count,
-                candidate_set: retriever_candidate_set_report(
-                    vector_window_ranks.len(),
-                    self.manifest.source_graph_commit_epoch,
-                    policy_epoch,
-                    true,
-                ),
-                fallback_reason_codes: vector_fallback_reason_codes.clone(),
-                fallback_reasons: vector_fallback_reasons.clone(),
-                candidate_top_ids: Vec::new(),
-                top_hit_ids: top_ranked_ids(&vector_window_ranks, options.limit),
-                top_candidates: top_ranked_candidates(
-                    &vector_window_ranks,
-                    vector_scores,
-                    options.limit,
-                ),
-            },
-            SearchRetrieverReport {
-                name: "text".to_string(),
-                backend: "segmented_bm25_text".to_string(),
-                backend_selection_reason: None,
-                estimated_raw_vector_bytes: None,
-                filter_selectivity_per_million: None,
-                available: text_available && mode != SearchMode::Vector,
-                input_candidate_set: candidate_report.clone(),
-                candidate_score_source: if text_available && mode != SearchMode::Vector {
+            ),
+            residual_filtered_count: 0,
+            reranked_candidate_count: vector_scan.reranked_candidate_count,
+            raw_vector_bytes_read: metrics.vector_bytes_read,
+            candidate_scan_kernel: output_memory
+                .optional(vector_scan.candidate_scan_kernel.as_deref())?,
+            candidate_scan_worker_count: vector_scan.candidate_scan_worker_count,
+            candidate_scan_segment_count: vector_scan.candidate_scan_segment_count,
+            candidate_scan_scanned_segment_count: vector_scan.candidate_scan_scanned_segment_count,
+            candidate_scan_scored_document_count: vector_scan.candidate_scan_scored_document_count,
+            candidate_scan_filtered_document_count: vector_scan
+                .candidate_scan_filtered_document_count,
+            candidate_scan_scanned_block_count: vector_scan.candidate_scan_scanned_block_count,
+            candidate_scan_skipped_block_count: vector_scan.candidate_scan_skipped_block_count,
+            candidate_scan_payload_bytes_read: vector_scan.candidate_scan_payload_bytes_read,
+            candidate_scan_admitted_working_bytes: vector_scan
+                .candidate_scan_admitted_working_bytes,
+            posting_bytes_read: 0,
+            candidate_postings_visited: 0,
+            candidate_blocks_skipped: 0,
+            segmented_lexical_projection_used: false,
+            index_covered_document_count: vector_scan.vector_document_count,
+            index_candidate_document_count: vector_scan.vector_document_count,
+            index_coverage_complete: true,
+            candidate_count: vector_scan.matching_count,
+            candidate_set: output_memory.retriever_set(
+                vector_window_ranks.len(),
+                self.manifest.source_graph_commit_epoch,
+                policy_epoch,
+            )?,
+            fallback_reason_codes: output_memory.codes(&vector_fallback_reason_codes)?,
+            fallback_reasons: output_memory.strings(&vector_fallback_reasons)?,
+            candidate_top_ids: Vec::new(),
+            top_hit_ids: output_memory.top_ids(&vector_window_ranks, options.limit)?,
+            top_candidates: output_memory.top_candidates(
+                &vector_window_ranks,
+                vector_scores,
+                options.limit,
+            )?,
+        });
+        retrievers.push(SearchRetrieverReport {
+            name: output_memory.text("text")?,
+            backend: output_memory.text("segmented_bm25_text")?,
+            backend_selection_reason: None,
+            estimated_raw_vector_bytes: None,
+            filter_selectivity_per_million: None,
+            available: text_available && mode != SearchMode::Vector,
+            input_candidate_set: output_memory.candidate(&candidate_report)?,
+            candidate_score_source: output_memory.text(
+                if text_available && mode != SearchMode::Vector {
                     "segmented_bm25"
                 } else {
                     "none"
-                }
-                .to_string(),
-                final_score_source: if text_available && mode != SearchMode::Vector {
+                },
+            )?,
+            final_score_source: output_memory.text(
+                if text_available && mode != SearchMode::Vector {
                     "segmented_bm25"
                 } else {
                     "none"
-                }
-                .to_string(),
-                generated_candidate_count: text_matching_count,
-                candidate_scan_rounds: 0,
-                descriptor_pruned_count: candidate_report
+                },
+            )?,
+            generated_candidate_count: text_matching_count,
+            candidate_scan_rounds: 0,
+            descriptor_pruned_count: candidate_report
+                .metadata_predicate_pushdown
+                .segment_pruned_document_count,
+            scalar_filtered_count: candidate_report.filtered_out_count.saturating_sub(
+                candidate_report
                     .metadata_predicate_pushdown
                     .segment_pruned_document_count,
-                scalar_filtered_count: candidate_report.filtered_out_count.saturating_sub(
-                    candidate_report
-                        .metadata_predicate_pushdown
-                        .segment_pruned_document_count,
-                ),
-                residual_filtered_count: 0,
-                reranked_candidate_count: 0,
-                raw_vector_bytes_read: 0,
-                candidate_scan_kernel: None,
-                candidate_scan_worker_count: 0,
-                candidate_scan_segment_count: 0,
-                candidate_scan_scanned_segment_count: 0,
-                candidate_scan_scored_document_count: 0,
-                candidate_scan_filtered_document_count: 0,
-                candidate_scan_scanned_block_count: 0,
-                candidate_scan_skipped_block_count: 0,
-                candidate_scan_payload_bytes_read: 0,
-                candidate_scan_admitted_working_bytes: 0,
-                posting_bytes_read: lexical_bytes_read,
-                candidate_postings_visited: lexical_postings_visited,
-                candidate_blocks_skipped: lexical_blocks_skipped,
-                segmented_lexical_projection_used: true,
-                index_covered_document_count: 0,
-                index_candidate_document_count: 0,
-                index_coverage_complete: true,
-                candidate_count: text_matching_count,
-                candidate_set: retriever_candidate_set_report(
-                    text_window_ranks.len(),
-                    self.manifest.source_graph_commit_epoch,
-                    policy_epoch,
-                    true,
-                ),
-                fallback_reason_codes: text_fallback_reason_codes,
-                fallback_reasons: text_fallback_reasons,
-                candidate_top_ids: Vec::new(),
-                top_hit_ids: top_ranked_ids(&text_window_ranks, options.limit),
-                top_candidates: top_ranked_candidates(
-                    &text_window_ranks,
-                    text_scores,
-                    options.limit,
-                ),
-            },
-        ];
+            ),
+            residual_filtered_count: 0,
+            reranked_candidate_count: 0,
+            raw_vector_bytes_read: 0,
+            candidate_scan_kernel: None,
+            candidate_scan_worker_count: 0,
+            candidate_scan_segment_count: 0,
+            candidate_scan_scanned_segment_count: 0,
+            candidate_scan_scored_document_count: 0,
+            candidate_scan_filtered_document_count: 0,
+            candidate_scan_scanned_block_count: 0,
+            candidate_scan_skipped_block_count: 0,
+            candidate_scan_payload_bytes_read: 0,
+            candidate_scan_admitted_working_bytes: 0,
+            posting_bytes_read: lexical_bytes_read,
+            candidate_postings_visited: lexical_postings_visited,
+            candidate_blocks_skipped: lexical_blocks_skipped,
+            segmented_lexical_projection_used: true,
+            index_covered_document_count: 0,
+            index_candidate_document_count: 0,
+            index_coverage_complete: true,
+            candidate_count: text_matching_count,
+            candidate_set: output_memory.retriever_set(
+                text_window_ranks.len(),
+                self.manifest.source_graph_commit_epoch,
+                policy_epoch,
+            )?,
+            fallback_reason_codes: text_fallback_reason_codes,
+            fallback_reasons: text_fallback_reasons,
+            candidate_top_ids: Vec::new(),
+            top_hit_ids: output_memory.top_ids(&text_window_ranks, options.limit)?,
+            top_candidates: output_memory.top_candidates(
+                &text_window_ranks,
+                text_scores,
+                options.limit,
+            )?,
+        });
 
         let mut scored_candidates = query_ranking::Candidates::new(
             query_ranking::Inputs {
@@ -2765,7 +2793,9 @@ impl SearchOutOfCoreReader {
         let projection_freshness = if immutable_freshness {
             // Born construction checked the actual native directory. Saved
             // paths and later unrelated marker files cannot redirect this view.
-            self.freshness_with_markers(Vec::new(), Vec::new())
+            output_memory.immutable_freshness(self)?
+        } else if output.is_some() {
+            output_memory.freshness(&self.projection_freshness())?
         } else {
             self.projection_freshness()
         };
@@ -2777,45 +2807,43 @@ impl SearchOutOfCoreReader {
             fallback_reasons: &fallback_reasons,
             projection_freshness: &projection_freshness,
             query,
+            output_memory,
         };
         let hits = materialize(page_candidates, hydration, &mut metrics)?;
 
         let truncation_reasons = if truncated && options.offset > 0 {
-            vec![format!(
+            let reason = output_memory.format(format_args!(
                 "offset {} limit {} returned from {total_hits} matching hits",
                 options.offset, options.limit
-            )]
+            ))?;
+            output_memory.one_owned(reason)?
         } else if truncated {
-            vec![format!(
+            let reason = output_memory.format(format_args!(
                 "limit {} returned from {total_hits} matching hits",
                 options.limit
-            )]
+            ))?;
+            output_memory.one_owned(reason)?
         } else {
             Vec::new()
         };
         let truncation_reason_codes = if truncated {
-            vec![SearchTruncationReasonCode::LimitExceeded]
+            output_memory.codes(&[SearchTruncationReasonCode::LimitExceeded])?
         } else {
             Vec::new()
         };
-        let empty_reasons = search_empty_reasons(
-            hits.is_empty(),
-            self.manifest.document_count,
-            filtered_document_count,
-            total_hits,
-            SearchPageWindow {
+        let empty_state = query_output::report::Empty {
+            empty: hits.is_empty(),
+            documents: self.manifest.document_count,
+            filtered: filtered_document_count,
+            total: total_hits,
+            page: SearchPageWindow {
                 offset: options.offset,
                 limit: options.limit,
             },
-            &truncation_reasons,
-            &fallback_reasons,
-        );
-        let empty_reason_codes = search_empty_reason_codes(
-            hits.is_empty(),
-            self.manifest.document_count,
-            filtered_document_count,
-            total_hits,
-        );
+        };
+        let empty_reasons =
+            output_memory.empty_reasons(empty_state, &truncation_reasons, &fallback_reasons)?;
+        let empty_reason_codes = output_memory.empty_codes(empty_state)?;
         if let Some(query) = query {
             query.checkpoint()?;
         }
@@ -2858,7 +2886,7 @@ impl SearchOutOfCoreReader {
             )));
         }
         let mut hydrated = hydration::query::Loaded::new(self, candidates, metrics, context.query)?;
-        let mut hits = Vec::with_capacity(candidates.len());
+        let mut hits = context.output_memory.vec(candidates.len())?;
         let mut matched_span_count = 0usize;
         let mut matched_span_bytes = 0u64;
         for candidate in candidates {
@@ -2881,17 +2909,21 @@ impl SearchOutOfCoreReader {
             } else {
                 0.0
             };
-            let matched_spans = matched_query_spans_bounded(
+            let matched = context.output_memory.matches(
                 context.query_terms,
                 &document,
                 &self.analyzer_lexicon,
-                self.config
-                    .max_matched_spans
-                    .get()
-                    .saturating_sub(matched_span_count),
-                self.config.max_matched_span_bytes.get(),
-                matched_span_bytes,
+                query_output::matches::Limits {
+                    count: self
+                        .config
+                        .max_matched_spans
+                        .get()
+                        .saturating_sub(matched_span_count),
+                    bytes: self.config.max_matched_span_bytes.get(),
+                    used: matched_span_bytes,
+                },
             )?;
+            let matched_spans = matched.spans;
             matched_span_count = matched_span_count.saturating_add(matched_spans.len());
             matched_span_bytes = matched_span_bytes.saturating_add(
                 matched_spans
@@ -2900,7 +2932,7 @@ impl SearchOutOfCoreReader {
                     .sum::<u64>(),
             );
             hits.push(SearchHit {
-                id: candidate.id.clone(),
+                id: context.output_memory.text(&candidate.id)?,
                 score: candidate.score,
                 vector_score,
                 text_score: candidate.text_score,
@@ -2909,18 +2941,24 @@ impl SearchOutOfCoreReader {
                 text_rrf_score: candidate.text_rrf_score,
                 vector_rank: candidate.vector_rank,
                 text_rank: candidate.text_rank,
-                kind: document.metadata.get("kind").cloned(),
-                external_id: document.metadata.get("external_id").cloned(),
-                source_id: document.metadata.get("source_id").cloned(),
-                matched_terms: matched_query_terms(
-                    context.query_terms,
-                    &document,
-                    &self.analyzer_lexicon,
-                ),
+                kind: context
+                    .output_memory
+                    .optional(document.metadata.get("kind").map(String::as_str))?,
+                external_id: context
+                    .output_memory
+                    .optional(document.metadata.get("external_id").map(String::as_str))?,
+                source_id: context
+                    .output_memory
+                    .optional(document.metadata.get("source_id").map(String::as_str))?,
+                matched_terms: matched.terms,
                 matched_spans,
-                fallback_reason_codes: context.fallback_reason_codes.to_vec(),
-                fallback_reasons: context.fallback_reasons.to_vec(),
-                projection_freshness: context.projection_freshness.clone(),
+                fallback_reason_codes: context
+                    .output_memory
+                    .codes(context.fallback_reason_codes)?,
+                fallback_reasons: context.output_memory.strings(context.fallback_reasons)?,
+                projection_freshness: context
+                    .output_memory
+                    .freshness(context.projection_freshness)?,
             });
         }
         metrics.hydrated_documents = hits.len();
@@ -4522,6 +4560,7 @@ struct HitHydrationContext<'a> {
     fallback_reasons: &'a [String],
     projection_freshness: &'a SearchProjectionFreshness,
     query: Option<crate::lexical_projection::QueryContext<'a>>,
+    output_memory: query_output::Memory<'a>,
 }
 
 struct CandidateFileGuard {
