@@ -240,7 +240,7 @@ impl SearchOutOfCoreReader {
     pub(super) fn scan_vector_scores(
         &self,
         query_embedding: &[f32],
-        candidate_set: &CandidateSet,
+        candidate_set: &CandidateSet<'_>,
         retained_limit: Option<usize>,
         compressed_vector_search_mode: CompressedVectorSearchMode,
         vector_execution_options: super::VectorSearchExecutionOptions<'_>,
@@ -338,7 +338,7 @@ impl SearchOutOfCoreReader {
     fn scan_scalar_vector_scores(
         &self,
         query_embedding: &[f32],
-        candidate_set: &CandidateSet,
+        candidate_set: &CandidateSet<'_>,
         retained_limit: Option<usize>,
         vector_execution_options: super::VectorSearchExecutionOptions<'_>,
         metrics: &mut SearchOutOfCoreMetrics,
@@ -419,7 +419,7 @@ impl SearchOutOfCoreReader {
     fn scan_rabitq_vector_scores(
         &self,
         query_embedding: &[f32],
-        candidate_set: &CandidateSet,
+        candidate_set: &CandidateSet<'_>,
         retained_limit: Option<usize>,
         vector_execution_options: super::VectorSearchExecutionOptions<'_>,
         metrics: &mut SearchOutOfCoreMetrics,
@@ -536,7 +536,7 @@ impl SearchOutOfCoreReader {
             vector_document_count = vector_document_count.saturating_add(
                 allowlist
                     .as_ref()
-                    .map_or(projection.manifest().document_count, Vec::len),
+                    .map_or(projection.manifest().document_count, |ids| ids.len()),
             );
             generated_candidate_count =
                 generated_candidate_count.saturating_add(projection_report.candidate_count);

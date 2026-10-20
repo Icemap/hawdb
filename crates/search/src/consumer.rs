@@ -367,7 +367,6 @@ fn probe_view(
         ));
     }
     let task = permit.bind_task_context(task);
-    let io = crate::build_memory::read::QueryIoScope::acquire(&task)?;
     view.probe_query(crate::out_of_core::CandidateQuery {
         text: query_text,
         embedding: query_embedding,
@@ -375,7 +374,6 @@ fn probe_view(
         options,
         task: &task,
         permit,
-        io: &io,
     })
 }
 
@@ -431,7 +429,6 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
                 "consumer candidate query requires runtime admission".into(),
             ));
         }
-        let io = crate::build_memory::read::QueryIoScope::acquire(&self.task)?;
         view.probe_query(crate::out_of_core::CandidateQuery {
             text: query_text,
             embedding: query_embedding,
@@ -442,7 +439,6 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
                 .host_admission
                 .as_deref()
                 .expect("admitted candidate probe"),
-            io: &io,
         })
     }
 

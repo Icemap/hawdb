@@ -2645,7 +2645,7 @@ fn consumer_native_candidate_view_keeps_old_pins_across_successor_and_failed_sel
     {
         let before = governor.snapshot().admitted_memory_bytes;
         let tiny = governor
-            .try_admit(RuntimeWorkRequest::background_maintenance(1024).with_io_wave_slots(1))
+            .try_admit(RuntimeWorkRequest::background_maintenance(1024).with_io_wave_slots(0))
             .unwrap();
         let error = old
             .probe_query(

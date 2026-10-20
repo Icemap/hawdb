@@ -31,6 +31,19 @@ pub(crate) struct QueryIoScope<'a> {
 }
 
 impl<'a> QueryIoScope<'a> {
+    pub(crate) fn with_io<T>(
+        &self,
+        task: &hawdb_core::RuntimeTaskContext,
+        action: impl FnOnce() -> std::io::Result<T>,
+    ) -> Result<T> {
+        crate::query_control::checkpoint(task)?;
+        let _io = self.lock(task)?;
+        crate::query_control::checkpoint(task)?;
+        let output = action().map_err(io_error)?;
+        crate::query_control::checkpoint(task)?;
+        Ok(output)
+    }
+
     pub(crate) fn acquire(task: &'a hawdb_core::RuntimeTaskContext) -> Result<Self> {
         crate::query_control::checkpoint(task)?;
         let permit = task

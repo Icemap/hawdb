@@ -87,15 +87,65 @@ impl OpenedRoot {
         &self,
         query: super::CandidateQuery<'_>,
     ) -> Result<super::SearchOutOfCoreOutput> {
+        let budget = query.permit.request().memory_bytes;
+        let metadata_bytes = crate::build_memory::ACCOUNT_METADATA_BYTES as u64;
+        if budget < metadata_bytes {
+            return Err(hawdb_core::ResourceBudgetError {
+                resource: hawdb_core::ResourceBudgetKind::MemoryBytes,
+                scope: hawdb_core::ResourceBudgetScope::Query,
+                owner: "search query metadata".into(),
+                memory_class: None,
+                requested: metadata_bytes,
+                used: 0,
+                budget,
+                budget_option: "RuntimePermit.request.memory_bytes",
+                message: "search query metadata exceeds working admission".into(),
+            }
+            .into());
+        }
         let memory = crate::build_memory::BuildMemory::new(query.task)?;
         let _metadata = memory
             .spool
             .reserve(crate::build_memory::ACCOUNT_METADATA_BYTES)?;
+        // Private native scratch is created before borrowing the query's one
+        // I/O wave. Declaration order releases that wave before cleanup can
+        // request fresh I/O, including error and unwind paths.
+        let stage = if !query.options.metadata_filters.is_empty()
+            || !self.reader.visibility.is_empty()
+        {
+            let disk_bytes = self
+                .reader
+                .config
+                .max_candidate_spill_bytes
+                .get()
+                .checked_add(super::CANDIDATE_FILE_HEADER.len() as u64)
+                .ok_or_else(|| {
+                    HawDBError::Execution("candidate spill reservation overflow".into())
+                })?;
+            let admission = ReadAdmission {
+                memory: &memory,
+                task: query.task,
+                permit: crate::build_memory::read::ReadPermit::Governed(query.permit),
+            };
+            let mut stage = self
+                ._native_custody
+                .as_ref()
+                .ok_or_else(|| {
+                    HawDBError::Execution("candidate query lacks original native custody".into())
+                })?
+                .validation_stage(&self.reader.root, &admission)?;
+            stage.reserve_disk(disk_bytes);
+            Some(stage)
+        } else {
+            None
+        };
+        let scratch = stage.as_ref().and_then(|stage| stage.scratch_directory());
+        let io = crate::build_memory::read::QueryIoScope::acquire(query.task)?;
         let context = crate::lexical_projection::QueryContext {
             memory: &memory.spool,
             task: query.task,
             execution: Some(query.permit),
-            io_scope: Some(query.io),
+            io_scope: Some(&io),
         };
         self.reader.search_with_options_internal(
             query.text,
@@ -121,6 +171,7 @@ impl OpenedRoot {
                 },
                 query: Some(context),
                 immutable_freshness: self.born_immutable,
+                scratch: scratch.as_deref(),
             },
         )
     }

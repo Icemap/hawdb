@@ -14,6 +14,7 @@ pub(super) struct Execution<'a> {
     pub(super) base: SearchOutOfCoreExecutionContext<'a>,
     pub(super) query: Option<QueryContext<'a>>,
     pub(super) immutable_freshness: bool,
+    pub(super) scratch: Option<&'a ScratchDirectory>,
 }
 
 impl<'a> From<SearchOutOfCoreExecutionContext<'a>> for Execution<'a> {
@@ -22,6 +23,7 @@ impl<'a> From<SearchOutOfCoreExecutionContext<'a>> for Execution<'a> {
             base,
             query: None,
             immutable_freshness: false,
+            scratch: None,
         }
     }
 }
@@ -92,7 +94,7 @@ impl SearchOutOfCoreReader {
         terms: &BTreeSet<String>,
         retained_limit: Option<usize>,
         prune: bool,
-        candidates: &CandidateSet,
+        candidates: &CandidateSet<'_>,
         metrics: &mut SearchOutOfCoreMetrics,
         context: Option<QueryContext<'_>>,
     ) -> Result<TextScores> {

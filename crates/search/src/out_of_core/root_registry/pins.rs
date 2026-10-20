@@ -105,27 +105,7 @@ impl PendingCapture<'_, '_> {
         &self,
         label: &Path,
     ) -> Result<crate::out_of_core::generation_writer::StageDirectory> {
-        let parent = {
-            let native = self
-                .root
-                .state()
-                .native
-                .read()
-                .unwrap_or_else(|p| p.into_inner());
-            Arc::clone(
-                &native
-                    .as_ref()
-                    .expect("live root owns native resources")
-                    .directory,
-            )
-        };
-        crate::out_of_core::generation_writer::StageDirectory::create_captured(
-            label,
-            &parent,
-            self.admission.memory,
-            self.admission.task,
-            Some(self.admission),
-        )
+        self.root.validation_stage(label, self.admission)
     }
 
     /// Every lazy child owns an exact pin and retained memory, while cache keys

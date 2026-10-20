@@ -358,6 +358,42 @@ struct State {
 pub(super) struct RootRef(Option<Shared<State>>);
 
 impl RootRef {
+    pub(super) fn validation_stage(
+        &self,
+        label: &Path,
+        admission: &ReadAdmission<'_>,
+    ) -> Result<super::generation_writer::StageDirectory> {
+        if !self
+            .state()
+            ._memory
+            .shares_governor_with(admission.require_governor()?)
+        {
+            return Err(HawDBError::Execution(
+                "private scratch belongs to another governor".into(),
+            ));
+        }
+        let parent = {
+            let native = self
+                .state()
+                .native
+                .read()
+                .unwrap_or_else(|p| p.into_inner());
+            Arc::clone(
+                &native
+                    .as_ref()
+                    .expect("live root owns its directory")
+                    .directory,
+            )
+        };
+        super::generation_writer::StageDirectory::create_captured(
+            label,
+            &parent,
+            admission.memory,
+            admission.task,
+            Some(admission),
+        )
+    }
+
     /// A born immutable generation cannot carry mutable repair/reindex state.
     /// Preserve native lookup errors; only NotFound proves absence.
     pub(super) fn require_absent_control_child(

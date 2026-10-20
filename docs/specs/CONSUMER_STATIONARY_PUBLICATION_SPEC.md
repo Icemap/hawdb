@@ -167,11 +167,26 @@ admission are required. Normalization, corpus statistics, local lexical scores
 and cross-segment score ownership now share the actual task's working account.
 Range reads borrow the query's original I/O wave, without self-waiting for a
 second slot; the scope is tied to that exact task and serializes its range I/O.
+Native metadata filtering shares the admitted record/envelope decoder with
+projection scans. Candidate block bounds, encoded staging, block reads, decoded
+caches and vector ordinal buffers use that same query account. A failed cache
+replacement preserves the previous cache and its funding. Ordinal buffers keep
+their charge until their payload closes, independently of the spill file.
+Filtered native probes create a private stage through the original root and
+descriptor domain before acquiring the query I/O wave. File create/write/read
+and synchronization borrow that exact wave. Files close and the query wave is
+released before stage cleanup requests fresh I/O; canceled cleanup retains
+funded native custody and conservative disk debt until a freshly admitted retry.
+The recorded spill bound includes the header. This is cleanup bookkeeping and
+the per-query output ceiling, not shared filesystem capacity or free-space
+admission. These validation probes currently require writable scratch in their
+captured root; a registered read-only serving contract remains unqualified.
 Born immutable readers check the captured native directory for operational
 repair/reindex markers before opening a view and refuse any such entry. Their
 query freshness comes from the complete immutable generation, without reopening
-a saved pathname. Complete filter/vector/decode/ranking and retained-result
-memory accounting and registered serving semantics remain unfinished.
+a saved pathname. Shared filesystem spill admission, remaining vector/decode/
+ranking/report and retained-result accounting, restart scratch adoption and
+registered serving semantics remain unfinished.
 This lower-level path does not install the registered Consumer read view or
 replace the legacy facade's directory move. Post-restart adoption and composed
 power-loss qualification remain separate work.
