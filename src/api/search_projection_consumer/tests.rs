@@ -2987,7 +2987,7 @@ fn consumer_native_candidate_view_probes_real_vector_and_hybrid_with_one_io_slot
     // With no metadata filters or text work, the tiny refusal comes from the
     // vector read/decode path, rather than an earlier candidate-filter stage.
     let before = governor.snapshot().admitted_memory_bytes;
-    for budget in [64 * 1024, 16 * 1024 * 1024] {
+    for budget in [64 * 1024, 3 * 1024 * 1024, 16 * 1024 * 1024] {
         let permit = governor
             .try_admit(RuntimeWorkRequest::background_maintenance(budget).with_io_wave_slots(1))
             .unwrap();
@@ -3021,6 +3021,107 @@ fn consumer_native_candidate_view_probes_real_vector_and_hybrid_with_one_io_slot
     }
     drop(candidate.abandon());
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+}
+
+#[test]
+#[cfg(feature = "vector-search")]
+fn consumer_native_candidate_view_hydration_refuses_then_retries_on_original_root() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let mut birth = reserve_native_generation(&mut db, &fixture)
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    birth.create().unwrap();
+    #[cfg(unix)]
+    let target_path = fixture.0.join(birth.generation_name());
+    let epoch = db.begin_read_transaction().unwrap().commit_epoch();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(64 * 1024 * 1024),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    let mut lease = sealed_native_candidate_document_lease(
+        &mut birth,
+        &fixture,
+        epoch,
+        &governor,
+        hawdb_search::SearchDocument {
+            id: "memory:m1".into(),
+            title: "candidate".into(),
+            content: "amber ".repeat(384 * 1024),
+            embedding: Some(vec![1.0, 0.0]),
+            metadata: Default::default(),
+        },
+    );
+    lease
+        .prepare_candidate_view(NonZeroU64::new(32 * 1024 * 1024).unwrap())
+        .unwrap();
+    let candidate = lease
+        .detach_candidate()
+        .unwrap()
+        .attach_birth(birth)
+        .unwrap();
+    #[cfg(unix)]
+    {
+        std::fs::rename(&target_path, target_path.with_extension("original")).unwrap();
+        std::fs::create_dir(&target_path).unwrap();
+        std::fs::write(target_path.join("foreign"), b"untouched").unwrap();
+    }
+    let before = governor.snapshot().admitted_memory_bytes;
+    // The vector payload is tiny. Only late hydration must decode a document
+    // whose encoded record exceeds this operation's small working grant.
+    for budget in [3 * 1024 * 1024, 16 * 1024 * 1024] {
+        let permit = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(budget).with_io_wave_slots(1))
+            .unwrap();
+        let result = candidate.probe_candidate_query(
+            &permit,
+            hawdb_core::RuntimeTaskContext::with_timeout(std::time::Duration::from_secs(30)),
+            "",
+            Some(&[1.0, 0.0]),
+            hawdb_search::SearchMode::Vector,
+            hawdb_search::SearchQueryOptions {
+                limit: 1,
+                offset: 0,
+                rank_window: None,
+                fusion_weights: Default::default(),
+                metadata_filters: Default::default(),
+                policy_epoch: None,
+            },
+        );
+        if budget == 3 * 1024 * 1024 {
+            assert!(
+                matches!(result, Err(HawDBError::ResourceBudgetExceeded(_))),
+                "{result:?}"
+            );
+        } else {
+            let output = result.unwrap();
+            assert_eq!(output.result.total_hits, 1);
+            assert_eq!(output.result.hits[0].id, "memory:m1");
+            assert!(output.metrics.hydrated_bytes > 2 * 1024 * 1024);
+            assert!(output.metrics.hydration_segment_bytes_read > 0);
+        }
+        drop(permit);
+        assert_eq!(governor.snapshot().active_background_tasks, 0);
+        assert_eq!(governor.snapshot().active_background_io_slots, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, before);
+    }
+    drop(candidate.abandon());
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    #[cfg(unix)]
+    {
+        assert_eq!(
+            std::fs::read(target_path.join("foreign")).unwrap(),
+            b"untouched"
+        );
+        assert_eq!(std::fs::read_dir(target_path).unwrap().count(), 1);
+    }
 }
 
 #[test]

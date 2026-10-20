@@ -3492,13 +3492,17 @@ impl<'a> SliceCursor<'a> {
     }
 
     fn string(&mut self, max: u64) -> Result<String> {
+        self.borrowed_string(max).map(str::to_owned)
+    }
+
+    fn borrowed_string(&mut self, max: u64) -> Result<&'a str> {
         let length = self.u32()? as usize;
         if length as u64 > max {
             return Err(HawDBError::Storage(format!(
                 "lexical string uses {length} bytes, exceeding {max}"
             )));
         }
-        String::from_utf8(self.bytes(length)?.to_vec())
+        std::str::from_utf8(self.bytes(length)?)
             .map_err(|error| HawDBError::Storage(format!("invalid lexical UTF-8: {error}")))
     }
 

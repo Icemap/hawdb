@@ -181,6 +181,16 @@ Working rank maps, rank windows, sort buffers and fused candidates retain their
 own capacity leases. Fusion moves IDs within one owner without duplicating the
 payload charge, and pagination compacts that buffer while keeping its capacity
 funded. ID tie-breaking preserves deterministic ordering with an in-place sort.
+Native late hydration resolves document membership through a query-funded
+mapping block, borrowing its IDs without transient copies and retaining the
+original task/I/O scope. Encoded record scratch, decoded row strings/vectors/
+metadata, route trees and selected-document caches use the same query account.
+Each decoded row retains its own lease through cache insertion and removal,
+then drops its payload before refunding admission. Segment selection stays
+private through complete envelope integrity; the operation-wide hydrated-byte
+ceiling and validation of unselected records remain in force. These working
+owners do not yet fund copied hit/matched-term/matched-span/report payloads or
+independently retained query outputs.
 Filtered native probes create a private stage through the original root and
 descriptor domain before acquiring the query I/O wave. File create/write/read
 and synchronization borrow that exact wave. Files close and the query wave is
@@ -194,7 +204,7 @@ Born immutable readers check the captured native directory for operational
 repair/reindex markers before opening a view and refuse any such entry. Their
 query freshness comes from the complete immutable generation, without reopening
 a saved pathname. Shared filesystem spill admission, compressed-vector search
-and rerank admission, late hydration/matched-span/report and retained-result
+and rerank admission, hit/matched-term/matched-span/report and retained-result
 accounting, restart scratch adoption and registered serving semantics remain
 unfinished.
 This lower-level path does not install the registered Consumer read view or

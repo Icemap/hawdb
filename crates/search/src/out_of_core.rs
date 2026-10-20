@@ -2776,6 +2776,7 @@ impl SearchOutOfCoreReader {
             fallback_reason_codes: &fallback_reason_codes,
             fallback_reasons: &fallback_reasons,
             projection_freshness: &projection_freshness,
+            query,
         };
         let hits = materialize(page_candidates, hydration, &mut metrics)?;
 
@@ -2856,11 +2857,7 @@ impl SearchOutOfCoreReader {
                 self.config.max_hydrated_documents
             )));
         }
-        let ids = candidates
-            .iter()
-            .map(|candidate| candidate.id.clone())
-            .collect::<BTreeSet<_>>();
-        let mut hydrated = self.load_documents(&ids, metrics)?;
+        let mut hydrated = hydration::query::Loaded::new(self, candidates, metrics, context.query)?;
         let mut hits = Vec::with_capacity(candidates.len());
         let mut matched_span_count = 0usize;
         let mut matched_span_bytes = 0u64;
@@ -3052,9 +3049,23 @@ impl SearchOutOfCoreReader {
     }
 
     fn segment_for_document(&self, id: &str) -> Result<Option<SearchDocumentSegmentRoute<'_>>> {
+        self.segment_for_document_with_context(id, None)
+    }
+
+    fn segment_for_document_with_context(
+        &self,
+        id: &str,
+        context: Option<crate::lexical_projection::QueryContext<'_>>,
+    ) -> Result<Option<SearchDocumentSegmentRoute<'_>>> {
+        if let Some(context) = context {
+            context.checkpoint()?;
+        }
         let mut route = None;
         let mut lexical_document_bytes_read = 0u64;
         for (artifact_index, artifact) in self.segments.iter().enumerate() {
+            if let Some(context) = context {
+                context.checkpoint()?;
+            }
             if !self.visibility.is_visible(artifact.content_segment_id, id) {
                 continue;
             }
@@ -3074,7 +3085,12 @@ impl SearchOutOfCoreReader {
                 .segments
                 .get(index)
                 .expect("binary search returned an existing descriptor segment");
-            let probe = artifact.lexical_projection.probe_document_id(id)?;
+            let probe = match context {
+                Some(context) => artifact
+                    .lexical_projection
+                    .probe_document_id_with_query(id, context)?,
+                None => artifact.lexical_projection.probe_document_id(id)?,
+            };
             lexical_document_bytes_read =
                 lexical_document_bytes_read.saturating_add(probe.bytes_read);
             if !probe.present {
@@ -3085,6 +3101,9 @@ impl SearchOutOfCoreReader {
                     "search out-of-core segment set has duplicate document {id}"
                 )));
             }
+        }
+        if let Some(context) = context {
+            context.checkpoint()?;
         }
         Ok(
             route.map(|(artifact_index, segment)| SearchDocumentSegmentRoute {
@@ -4502,6 +4521,7 @@ struct HitHydrationContext<'a> {
     fallback_reason_codes: &'a [SearchFallbackReasonCode],
     fallback_reasons: &'a [String],
     projection_freshness: &'a SearchProjectionFreshness,
+    query: Option<crate::lexical_projection::QueryContext<'a>>,
 }
 
 struct CandidateFileGuard {

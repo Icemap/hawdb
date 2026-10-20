@@ -18,6 +18,7 @@ use hawdb_core::{ResourceBudgetError, ResourceBudgetKind, ResourceBudgetScope};
 use hawdb_integrity::Crc32cHasher;
 use std::io::{self, BufRead, BufReader};
 
+pub(super) mod query;
 mod record;
 pub(super) use record::read_record;
 
