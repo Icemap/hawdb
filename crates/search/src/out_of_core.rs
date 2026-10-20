@@ -3870,6 +3870,54 @@ pub(super) fn validate_captured_resident_snapshot_identity(
     validate_resident_snapshot_manifest(index, &bytes)
 }
 
+pub(super) fn validate_registered_artifact_closure(
+    index: &SearchIndex,
+    publication: &SearchProjectionPublishLease,
+) -> Result<()> {
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let source = captured_cleanup::Source::new(
+        publication,
+        &task,
+        captured_cleanup::Limits {
+            artifact_bytes: u64::MAX,
+            total_bytes: u64::MAX,
+            files: usize::MAX,
+        },
+    );
+    let bytes = source.head()?.ok_or_else(|| {
+        HawDBError::StorageIntegrity("missing registered out-of-core manifest".into())
+    })?;
+    let manifest = SearchOutOfCoreManifestBody::decode(&bytes)?;
+    let config = SearchOutOfCoreConfig::default();
+    let closure = load_artifact_closure_with_context(
+        ClosureLoadContext {
+            cleanup_source: Some(&source),
+            validation_source: Some(&source),
+            capture: None,
+            root: index
+                .path
+                .as_deref()
+                .expect("persistent registered projection"),
+            config: &config,
+            analyzer_lexicon: &index.analyzer_lexicon,
+            lexical_term_policy: Default::default(),
+            lexical_source_policy: Default::default(),
+            previous: None,
+            admission: None,
+            max_artifact_read_bytes: u64::MAX,
+        },
+        manifest,
+    )?;
+    if closure.manifest.source_graph_commit_epoch != index.source_graph_commit_epoch
+        || closure.manifest.document_count != index.documents.len()
+    {
+        return Err(HawDBError::StorageIntegrity(
+            "registered generation does not match its snapshot".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_resident_snapshot_manifest(index: &SearchIndex, bytes: &[u8]) -> Result<()> {
     let manifest = SearchOutOfCoreManifestBody::decode(bytes)?;
     let embedding = index.embedding_manifest.as_ref();

@@ -942,10 +942,6 @@ impl SearchIndex {
         &mut self,
         publication: &SearchProjectionPublishLease,
     ) -> Result<()> {
-        let root = self
-            .path
-            .as_deref()
-            .expect("persistent registered projection");
         let descriptor = super::read_captured_search_segment_descriptor(publication)?
             .ok_or_else(|| invalid("missing registered descriptor"))?;
         if !descriptor.matches_documents(&self.documents)
@@ -967,16 +963,7 @@ impl SearchIndex {
                 "missing or inconsistent registered lexical projection",
             ));
         }
-        let reader = super::out_of_core::SearchOutOfCoreReader::open_with_config_and_analyzer(
-            root,
-            super::out_of_core::SearchOutOfCoreConfig::default(),
-            self.analyzer_lexicon.clone(),
-        )?;
-        if reader.source_graph_commit_epoch() != self.source_graph_commit_epoch
-            || reader.document_count() != self.documents.len()
-        {
-            return Err(invalid("registered generation does not match its snapshot"));
-        }
+        super::out_of_core::validate_registered_artifact_closure(self, publication)?;
         Ok(())
     }
 
@@ -1452,6 +1439,7 @@ mod tests {
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .is_some());
+        crate::out_of_core::validate_registered_artifact_closure(&index, &lease).unwrap();
         assert_eq!(index.documents["memory:original"].content, "original");
         assert!(index.consumer_binding.is_some());
 
