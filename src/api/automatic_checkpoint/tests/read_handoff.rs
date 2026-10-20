@@ -71,14 +71,17 @@ impl ExternalReadOperator for PublicationRead {
 }
 
 fn wait_control(control: &Control, predicate: impl Fn(&State) -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(15);
+    let initial_progress = control.work_progress.load(Ordering::Relaxed);
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(15);
     let mut state = control.lock().unwrap();
     while !predicate(&state) {
         let remaining = deadline.saturating_duration_since(Instant::now());
         assert!(
             !remaining.is_zero(),
-            "checkpoint owner did not progress: {:?}",
-            state.report
+            "checkpoint owner did not progress: {:?}; {}",
+            state.report,
+            wait_diagnostics(control, Some(&state), started, initial_progress)
         );
         state = control.changed.wait_timeout(state, remaining).unwrap().0;
     }
