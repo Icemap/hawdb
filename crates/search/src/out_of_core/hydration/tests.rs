@@ -16,6 +16,13 @@ use super::super::*;
 use super::*;
 use std::io::Cursor;
 
+mod budgets;
+
+const UNLIMITED_HYDRATION: HydrationBudget = HydrationBudget {
+    limit: u64::MAX,
+    used: 0,
+};
+
 thread_local! {
     static INFLATED_BYTES: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
 }
@@ -158,7 +165,10 @@ fn streamed(
         segment,
         ids,
         max_bytes,
-        output_bytes,
+        HydrationBudget {
+            limit: output_bytes,
+            used: 0,
+        },
     );
     assert_eq!(
         reader.position,
@@ -283,7 +293,7 @@ fn complete_integrity_covers_frames_lengths_and_every_fault_prefix() {
             &segment,
             &ids,
             u64::MAX,
-            u64::MAX,
+            UNLIMITED_HYDRATION,
         );
         assert!(result.is_err(), "read failure at {offset}");
         assert!(read_selected(
@@ -293,7 +303,7 @@ fn complete_integrity_covers_frames_lengths_and_every_fault_prefix() {
             &segment,
             &ids,
             u64::MAX,
-            u64::MAX
+            UNLIMITED_HYDRATION
         )
         .is_err());
     }
@@ -310,7 +320,7 @@ fn complete_integrity_covers_frames_lengths_and_every_fault_prefix() {
         &segment,
         &ids,
         u64::MAX,
-        u64::MAX
+        UNLIMITED_HYDRATION
     )
     .is_err());
     let mut bad = bytes.clone();
@@ -444,6 +454,7 @@ fn public_hydration_rejects_damaged_tail_without_writing_artifacts() {
 }
 
 fn differential_cases(cases: usize) {
+    let analyzer = SearchAnalyzerLexicon::default();
     let mut state = 0x392_409_u64;
     let mut next = || {
         state ^= state << 13;
@@ -495,8 +506,61 @@ fn differential_cases(cases: usize) {
         assert_eq!(selected.documents, expected, "case {case}");
         assert_eq!(selected.bytes, required);
         if required != 0 {
-            assert!(streamed(&bytes, &segment, &ids, text.len() as u64, required - 1, 31).is_err());
+            let error =
+                streamed(&bytes, &segment, &ids, text.len() as u64, required - 1, 31).unwrap_err();
+            let requested = search_document_bytes(expected.last().unwrap());
+            assert!(
+                matches!(
+                    error,
+                    HawDBError::ResourceBudgetExceeded(details)
+                        if details.requested == requested
+                            && details.used == required - requested
+                            && details.budget == required - 1
+                            && details.budget_option == "SearchOutOfCoreConfig.max_hydrated_bytes"
+                ),
+                "case {case}"
+            );
         }
+        let query_terms = crate::document_tokens(&documents[0], &analyzer)
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        let spans = crate::matched_query_spans(&query_terms, &documents[0], &analyzer);
+        let span_bytes = spans.iter().map(matched_span_bytes_for).sum::<u64>();
+        let previous_hits = case as u64 * 17;
+        assert_eq!(
+            crate::matched_query_spans_bounded(
+                &query_terms,
+                &documents[0],
+                &analyzer,
+                usize::MAX,
+                previous_hits + span_bytes,
+                previous_hits,
+            )
+            .unwrap(),
+            spans,
+        );
+        let requested = matched_span_bytes_for(spans.last().expect("the title must match"));
+        let limit = previous_hits + span_bytes - 1;
+        let error = crate::matched_query_spans_bounded(
+            &query_terms,
+            &documents[0],
+            &analyzer,
+            usize::MAX,
+            limit,
+            previous_hits,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(
+                error,
+                HawDBError::ResourceBudgetExceeded(details)
+                    if details.requested == requested
+                        && details.used == previous_hits + span_bytes - requested
+                        && details.budget == limit
+                        && details.budget_option == "SearchOutOfCoreConfig.max_matched_span_bytes"
+            ),
+            "span case {case}"
+        );
         let mut damaged = text.into_bytes();
         damaged.push(0xff);
         let bytes = envelope(

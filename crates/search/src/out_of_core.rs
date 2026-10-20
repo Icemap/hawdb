@@ -40,6 +40,7 @@ use crate::{decode_search_segment_documents_bounded, validate_search_segment_doc
 use crate::{
     RuntimeCapabilities, RuntimeCapability, SearchLexicalSourcePolicy, SearchLexicalTermPolicy,
 };
+use hawdb_core::{ResourceBudgetError, ResourceBudgetKind, ResourceBudgetScope};
 use hawdb_storage::durability::durable_replace_file;
 use hawdb_storage::file_io::{self as fs, File, OpenOptions};
 use serde::{Deserialize, Serialize};
@@ -2817,10 +2818,8 @@ impl SearchOutOfCoreReader {
                     .max_matched_spans
                     .get()
                     .saturating_sub(matched_span_count),
-                self.config
-                    .max_matched_span_bytes
-                    .get()
-                    .saturating_sub(matched_span_bytes),
+                self.config.max_matched_span_bytes.get(),
+                matched_span_bytes,
             )?;
             matched_span_count = matched_span_count.saturating_add(matched_spans.len());
             matched_span_bytes = matched_span_bytes.saturating_add(
@@ -2934,7 +2933,7 @@ impl SearchOutOfCoreReader {
                 &self.config,
                 segment,
                 &ids,
-                self.config.max_hydrated_bytes.get() - hydrated_bytes,
+                hydrated_bytes,
                 metrics,
             )? {
                 hydrated_bytes = hydrated_bytes
@@ -2942,6 +2941,8 @@ impl SearchOutOfCoreReader {
                     .ok_or_else(|| {
                         HawDBError::Storage(format!("search {operation} byte count overflow"))
                     })?;
+                // Selected decoding already enforces this cap; retain the
+                // aggregate check as a consistency guard for that accounting.
                 if hydrated_bytes > self.config.max_hydrated_bytes.get() {
                     return Err(HawDBError::Storage(format!(
                         "search {operation} requires {hydrated_bytes} bytes, exceeding {}",
@@ -3295,21 +3296,43 @@ impl SearchOutOfCoreReader {
                     block_cardinality = block_cardinality.saturating_add(1);
                 }
                 if encoded.len() as u64 > self.config.max_candidate_block_bytes.get() {
-                    return Err(HawDBError::Storage(format!(
-                        "search candidate block for layer {layer} segment {} requires {} bytes, exceeding {}",
-                        segment.segment_id,
-                        encoded.len(),
-                        self.config.max_candidate_block_bytes
-                    )));
+                    return Err(ResourceBudgetError {
+                        resource: ResourceBudgetKind::MemoryBytes,
+                        scope: ResourceBudgetScope::Operator,
+                        owner: "search candidate block".to_string(),
+                        memory_class: None,
+                        requested: encoded.len() as u64,
+                        used: 0,
+                        budget: self.config.max_candidate_block_bytes.get(),
+                        budget_option: "SearchOutOfCoreConfig.max_candidate_block_bytes",
+                        message: format!(
+                            "search candidate block for layer {layer} segment {} requires {} bytes, exceeding {}",
+                            segment.segment_id,
+                            encoded.len(),
+                            self.config.max_candidate_block_bytes
+                        ),
+                    }
+                    .into());
                 }
                 let next_spill_bytes = offset
                     .saturating_add(encoded.len() as u64)
                     .saturating_sub(CANDIDATE_FILE_HEADER.len() as u64);
                 if next_spill_bytes > self.config.max_candidate_spill_bytes.get() {
-                    return Err(HawDBError::Storage(format!(
-                        "search candidate spill requires {next_spill_bytes} bytes, exceeding {}",
-                        self.config.max_candidate_spill_bytes
-                    )));
+                    return Err(ResourceBudgetError {
+                        resource: ResourceBudgetKind::SpillBytes,
+                        scope: ResourceBudgetScope::Operator,
+                        owner: "search candidate spill".to_string(),
+                        memory_class: None,
+                        requested: encoded.len() as u64,
+                        used: offset.saturating_sub(CANDIDATE_FILE_HEADER.len() as u64),
+                        budget: self.config.max_candidate_spill_bytes.get(),
+                        budget_option: "SearchOutOfCoreConfig.max_candidate_spill_bytes",
+                        message: format!(
+                            "search candidate spill requires {next_spill_bytes} bytes, exceeding {}",
+                            self.config.max_candidate_spill_bytes
+                        ),
+                    }
+                    .into());
                 }
                 file.write_all(&encoded)?;
                 blocks.push(CandidateBlock {
@@ -5377,7 +5400,11 @@ fn read_search_range(file: &File, offset: u64, bytes: &mut [u8]) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "full-text-search")]
+    mod candidate_budget;
     mod reader_admission;
+    #[cfg(feature = "full-text-search")]
+    mod span_budget;
     mod target_admission;
     #[cfg(feature = "full-text-search")]
     mod text_seed;
@@ -5901,6 +5928,11 @@ mod tests {
             .search_with_options("graph", None, SearchMode::Text, options(1, None))
             .unwrap_err();
         assert!(error.to_string().contains("search hydration requires"));
+        assert!(matches!(
+            error,
+            HawDBError::ResourceBudgetExceeded(details)
+                if details.budget_option == "SearchOutOfCoreConfig.max_hydrated_bytes"
+        ));
 
         let span_config = SearchOutOfCoreConfig {
             max_matched_spans: NonZeroUsize::new(1).unwrap(),

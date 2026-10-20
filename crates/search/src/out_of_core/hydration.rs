@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::{decode_search_document_line, parse_snapshot_header};
+use hawdb_core::{ResourceBudgetError, ResourceBudgetKind, ResourceBudgetScope};
 use hawdb_integrity::Crc32cHasher;
 use std::io::{self, BufRead, BufReader};
 
@@ -83,13 +84,19 @@ struct Selection {
     peak_document_bytes: u64,
 }
 
+#[derive(Clone, Copy)]
+struct HydrationBudget {
+    limit: u64,
+    used: u64,
+}
+
 impl SearchOutOfCoreSegmentReader {
     pub(super) fn read_selected_hydration_segment(
         &self,
         config: &SearchOutOfCoreConfig,
         segment: &SearchSegmentDescriptorEntry,
         ids: &BTreeSet<String>,
-        remaining_bytes: u64,
+        hydrated_bytes: u64,
         metrics: &mut SearchOutOfCoreMetrics,
     ) -> Result<Vec<SearchDocument>> {
         let range = segment
@@ -107,7 +114,10 @@ impl SearchOutOfCoreSegmentReader {
             segment,
             ids,
             config.max_uncompressed_segment_bytes.get(),
-            remaining_bytes,
+            HydrationBudget {
+                limit: config.max_hydrated_bytes.get(),
+                used: hydrated_bytes,
+            },
         )?;
         metrics.segment_range_reads = metrics.segment_range_reads.saturating_add(1);
         metrics.segment_bytes_read = metrics.segment_bytes_read.saturating_add(range.length);
@@ -128,7 +138,7 @@ fn read_selected(
     segment: &SearchSegmentDescriptorEntry,
     ids: &BTreeSet<String>,
     max_uncompressed_bytes: u64,
-    remaining_bytes: u64,
+    budget: HydrationBudget,
 ) -> Result<Selection> {
     read_validated(
         input,
@@ -136,7 +146,7 @@ fn read_selected(
         checksum,
         max_uncompressed_bytes,
         None,
-        |text| select_documents(text, segment, ids, remaining_bytes),
+        |text| select_documents(text, segment, ids, budget),
     )
 }
 
@@ -329,8 +339,9 @@ fn select_documents(
     text: &mut dyn BufRead,
     segment: &SearchSegmentDescriptorEntry,
     ids: &BTreeSet<String>,
-    remaining_bytes: u64,
+    budget: HydrationBudget,
 ) -> Result<Selection> {
+    let remaining_bytes = budget.limit - budget.used;
     let mut selected = Selection {
         documents: Vec::new(),
         bytes: 0,
@@ -374,15 +385,28 @@ fn select_documents(
             .peak_document_bytes
             .max(selected.bytes.saturating_add(bytes));
         if ids.contains(&document.id) {
+            let previous_bytes = selected.bytes;
             selected.bytes = selected
                 .bytes
                 .checked_add(bytes)
                 .ok_or_else(|| invalid("byte count overflow"))?;
             if selected.bytes > remaining_bytes {
-                return Err(invalid(format_args!(
-                    "requires {} bytes, exceeding {remaining_bytes}",
-                    selected.bytes
-                )));
+                return Err(ResourceBudgetError {
+                    resource: ResourceBudgetKind::MemoryBytes,
+                    scope: ResourceBudgetScope::Operator,
+                    owner: "search hydration".to_string(),
+                    memory_class: None,
+                    requested: bytes,
+                    // Preserve the full operation boundary across physical segments.
+                    used: budget.used + previous_bytes,
+                    budget: budget.limit,
+                    budget_option: "SearchOutOfCoreConfig.max_hydrated_bytes",
+                    message: format!(
+                        "search hydration requires {} bytes, exceeding {remaining_bytes}",
+                        selected.bytes
+                    ),
+                }
+                .into());
             }
             selected.documents.push(document);
         }

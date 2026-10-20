@@ -19,7 +19,10 @@ pub use projection_scan::{SearchProjectionScanBudget, SearchProjectionScanReport
 pub mod candidate_evidence;
 #[doc(hidden)]
 pub mod candidate_evidence_cli;
-use hawdb_core::{Catalog, HawDBError, Result, RuntimeCapabilities, RuntimeCapability, Value};
+use hawdb_core::{
+    Catalog, HawDBError, ResourceBudgetError, ResourceBudgetKind, ResourceBudgetScope, Result,
+    RuntimeCapabilities, RuntimeCapability, Value,
+};
 pub use hawdb_core::{RuntimeCancellationToken, RuntimeTaskContext};
 pub use hawdb_evidence::{
     ProductionEvidenceBinding, ProductionQualificationIdentity,
@@ -6676,6 +6679,7 @@ fn matched_query_spans(
         analyzer_lexicon,
         usize::MAX,
         u64::MAX,
+        0,
     )
     .expect("unbounded matched-span collection cannot exhaust its admission limit")
 }
@@ -6686,6 +6690,7 @@ fn matched_query_spans_bounded(
     analyzer_lexicon: &SearchAnalyzerLexicon,
     max_spans: usize,
     max_bytes: u64,
+    used_bytes: u64,
 ) -> Result<Vec<SearchMatchedSpan>> {
     if query_terms.is_empty() {
         return Ok(Vec::new());
@@ -6697,6 +6702,7 @@ fn matched_query_spans_bounded(
         span_bytes: 0,
         max_spans,
         max_bytes,
+        used_bytes,
     };
     collector.collect("title", &document.title)?;
     collector.collect("content", &document.content)?;
@@ -6710,6 +6716,7 @@ struct MatchedSpanCollector<'a> {
     span_bytes: u64,
     max_spans: usize,
     max_bytes: u64,
+    used_bytes: u64,
 }
 
 impl MatchedSpanCollector<'_> {
@@ -6745,12 +6752,25 @@ impl MatchedSpanCollector<'_> {
                 .saturating_add(raw.len() as u64)
                 .saturating_add(term.len() as u64)
                 .saturating_add(std::mem::size_of::<SearchMatchedSpan>() as u64);
+            let previous_bytes = self.span_bytes;
             self.span_bytes = self.span_bytes.saturating_add(required);
-            if self.span_bytes > self.max_bytes {
-                return Err(HawDBError::Storage(format!(
-                    "search matched-span hydration requires {} bytes, exceeding {}",
-                    self.span_bytes, self.max_bytes
-                )));
+            let remaining_bytes = self.max_bytes.saturating_sub(self.used_bytes);
+            if self.span_bytes > remaining_bytes {
+                return Err(ResourceBudgetError {
+                    resource: ResourceBudgetKind::MemoryBytes,
+                    scope: ResourceBudgetScope::Operator,
+                    owner: "search matched-span hydration".to_string(),
+                    memory_class: None,
+                    requested: required,
+                    used: self.used_bytes.saturating_add(previous_bytes),
+                    budget: self.max_bytes,
+                    budget_option: "SearchOutOfCoreConfig.max_matched_span_bytes",
+                    message: format!(
+                        "search matched-span hydration requires {} bytes, exceeding {remaining_bytes}",
+                        self.span_bytes
+                    ),
+                }
+                .into());
             }
             self.spans.push(SearchMatchedSpan {
                 field: field.to_string(),

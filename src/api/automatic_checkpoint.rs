@@ -2024,8 +2024,36 @@ mod tests {
         }
     }
 
+    fn wait_diagnostics(
+        control: &Control,
+        state: Option<&State>,
+        started: Instant,
+        initial_progress: u64,
+    ) -> String {
+        // Preparation statistics reach the public report after the attempt;
+        // this counter also observes work inside an unfinished attempt.
+        format!(
+            "elapsed={:?}, phase={:?}, attempts_started={:?}, suspensions={:?}, \
+             stopping={:?}, work_progress={initial_progress}->{}, failed={}, \
+             handoff_ready={}, publication_requested={}, wake_epoch={}",
+            started.elapsed(),
+            state.map(|state| state.phase),
+            state.map(|state| state.attempts_started),
+            state.map(|state| state.suspensions),
+            state.map(|state| state.stopping),
+            control.work_progress.load(Ordering::Relaxed),
+            control.failed.load(Ordering::Acquire),
+            control.handoff_ready.load(Ordering::Acquire),
+            control.publication_requested.load(Ordering::Acquire),
+            control.handoff_wake_epoch.load(Ordering::Acquire),
+        )
+    }
+
     fn wait_for(db: &Database, predicate: impl Fn(AutomaticCheckpointReport) -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(15);
+        let control = db.runtime.checkpoint_control_for_test();
+        let initial_progress = control.work_progress.load(Ordering::Relaxed);
+        let started = Instant::now();
+        let deadline = started + Duration::from_secs(15);
         loop {
             let report = db
                 .automatic_checkpoint_report()
@@ -2036,7 +2064,12 @@ mod tests {
             }
             assert!(
                 Instant::now() < deadline,
-                "checkpoint owner did not progress: {report:?}"
+                "checkpoint owner did not progress: {report:?}; {}",
+                {
+                    // Release the diagnostic borrow before the assertion panics.
+                    let state = control.state.try_lock().ok();
+                    wait_diagnostics(&control, state.as_deref(), started, initial_progress)
+                }
             );
             std::thread::sleep(Duration::from_millis(5));
         }

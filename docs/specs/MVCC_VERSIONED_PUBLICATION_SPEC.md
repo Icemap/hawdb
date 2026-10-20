@@ -260,6 +260,31 @@ Destination writes are validated before these summaries are added to the staged
 index; the union is admitted before WAL and installed with canonical commit.
 When no prepared source exists, ordinary commits do not build those summaries.
 
+Read-summary growth must not turn a long-lived preparation into a writer outage.
+If per-value or relational-prefix summaries do not fit the version-index or
+history allowance, they must collapse to the fixed-size `ReadBarrier`, let an
+otherwise admissible write commit, and invalidate affected captures. Writer
+destination keys retain their existing admission and conflict checks. The
+fallback itself must be reserved/admitted before WAL, with tests proving that
+the write commits while capture validation conflicts and accounting for its
+retention cost. The fine-grained collectors below retain their existing
+metadata-bound fallbacks; version-index/history-pressure collapse remains a
+qualification requirement, not an implemented guarantee.
+
+The collector regression
+`randomized_node_dependency_validation_preserves_query_results` exercises a
+fixed-seed matrix of label scans, indexed seeks, counts and empty results against
+same-label and other-label inserts, updates and deletes. Exact indexed captures
+admit writes to other keys within the same label; scans and counts retain their
+label-domain invalidation. It compares the retained
+query output with an independent canonical re-execution whenever the real kernel
+validator accepts. Plan assertions and accepted/rejected counts prevent an
+unexercised access path or an always-refusing validator from passing vacuously.
+The existing publication tests separately cover validation under the facade's
+publication ownership; this in-memory matrix is not durability or concurrency
+performance qualification.
+
+
 Qualified scalar equality/membership reads now collect exact declared index
 keys, including necessary EQ/IN conditions under AND in node scan predicates.
 The footprint follows semantics rather than the optimizer's scan/seek cost choice.
