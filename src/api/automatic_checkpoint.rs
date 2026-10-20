@@ -397,9 +397,12 @@ impl Control {
                 capacity_work_progress = work_progress;
                 capacity_deadline = None;
             }
-            // Releasing old COW owners runs off the writer gate. Discarding
-            // an abandoned preparation can also overlap incoming writes;
-            // only writers with room may bypass either resource cleanup.
+            // Releasing old COW owners and discarding abandoned preparations
+            // run off the writer gate while still retaining admission. Only
+            // writers with room may bypass that resource cleanup.
+            // Handoff lets the frontend adopt the published generation before
+            // mutation. Retiring has its own pressure gate below, including
+            // the denial escape for callers holding admission needed by cleanup.
             let waits_for_capacity = matches!(
                 state.phase,
                 Phase::Preparing | Phase::Discarding | Phase::Releasing
