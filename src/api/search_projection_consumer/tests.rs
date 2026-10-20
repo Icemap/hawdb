@@ -1810,6 +1810,18 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
         let fixture = Fixture::new();
         let mut db = fixture.database();
         let allocation = reserve_native_generation(&mut db, &fixture);
+        let source_limits = crate::PreparedReadLimits {
+            dependency_entries: std::num::NonZeroUsize::new(8).unwrap(),
+            dependency_bytes: std::num::NonZeroUsize::new(4096).unwrap(),
+            statement_rows: std::num::NonZeroUsize::new(8).unwrap(),
+            statement_payload_bytes: std::num::NonZeroUsize::new(4096).unwrap(),
+        };
+        let source = db
+            .begin_prepared_read(source_limits)
+            .unwrap()
+            .finish()
+            .unwrap();
+        let source_epoch = source.source_epoch();
         let mut pending = allocation
             .prepare_stationary_generation(&fixture.0)
             .unwrap();
@@ -1820,7 +1832,7 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
         let mut writer = hawdb_search::SearchOutOfCoreGenerationWriter::create(
             &stage_path,
             hawdb_search::SearchOutOfCoreGenerationBuildOptions {
-                source_graph_commit_epoch: Some(7),
+                source_graph_commit_epoch: Some(source_epoch),
                 ..Default::default()
             },
         )
@@ -1861,7 +1873,7 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
             candidate_metadata_identity(&pending);
         let input = MetadataInput {
             binding: &binding,
-            source_epoch: 7,
+            source_epoch,
             target_incarnation,
             generation,
             operation,
@@ -1949,7 +1961,7 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
             let view = lease
                 .prepare_candidate_view(std::num::NonZeroU64::new(32 * 1024 * 1024).unwrap())
                 .unwrap();
-            assert_eq!(view.source_epoch, 7);
+            assert_eq!(view.source_epoch, source_epoch);
             assert_eq!(view.document_count, 1);
             #[cfg(feature = "full-text-search")]
             {
@@ -1974,7 +1986,7 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
                     result.result.hits[0]
                         .projection_freshness
                         .source_graph_commit_epoch,
-                    Some(7)
+                    Some(source_epoch)
                 );
             }
             let detached = lease.detach_candidate().unwrap();
@@ -1991,6 +2003,21 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
             assert!(wrong_birth.born_directory().is_ok());
             let prepared = detached.attach_birth(pending).unwrap();
             assert_eq!(prepared.report(), view);
+            db.validate_prepared_consumer_candidate_source(
+                &source,
+                &prepared,
+                crate::ProjectionSourceDurability::Synchronize,
+            )
+            .unwrap();
+            let foreign = Fixture::new();
+            let mut foreign_db = foreign.database();
+            assert!(foreign_db
+                .validate_prepared_consumer_candidate_source(
+                    &source,
+                    &prepared,
+                    crate::ProjectionSourceDurability::Synchronize,
+                )
+                .is_err());
             #[cfg(feature = "full-text-search")]
             {
                 let foreign_governor = RuntimeGovernor::detect(
@@ -2055,6 +2082,22 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
                     "memory:m1"
                 );
             }
+            append(&mut db, 2);
+            let later = db
+                .begin_prepared_read(source_limits)
+                .unwrap()
+                .finish()
+                .unwrap();
+            let error = db
+                .validate_prepared_consumer_candidate_source(
+                    &later,
+                    &prepared,
+                    crate::ProjectionSourceDurability::Synchronize,
+                )
+                .unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("does not match captured source epoch"));
             let original_birth = prepared.abandon();
             assert!(original_birth.born_directory().is_ok());
         }

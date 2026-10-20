@@ -481,6 +481,32 @@ impl fmt::Display for ProjectionPublicationError {
 impl std::error::Error for ProjectionPublicationError {}
 
 impl Database {
+    /// Validate a pinned Consumer candidate against this source under an
+    /// exclusive database borrow. The eventual selector must repeat this
+    /// check within its own E fence; this standalone check cannot reserve
+    /// source freshness. Success grants no selector or serving authority.
+    pub fn validate_prepared_consumer_candidate_source(
+        &mut self,
+        dependencies: &PreparedReadDependencies,
+        candidate: &hawdb_search::consumer::ConsumerPreparedCandidate,
+        source_durability: ProjectionSourceDurability,
+    ) -> std::result::Result<(), ProjectionPublicationError> {
+        use ProjectionPublicationError as E;
+        self.ensure_writable().map_err(E::Storage)?;
+        let binding = candidate.reservation_binding().map_err(E::Storage)?;
+        self.runtime
+            .get()
+            .map_err(E::Storage)?
+            .store
+            .verify_search_consumer_candidate_source(binding)
+            .map_err(E::Storage)?;
+        self.validate_prepared_projection_source(
+            dependencies,
+            candidate.report().source_epoch,
+            source_durability,
+        )
+    }
+
     /// Select an already prepared catalog publication under the exclusive
     /// database borrow. Preparation and pending durability run outside this
     /// borrow; the pending lifetime is tied only to the prepared owner.

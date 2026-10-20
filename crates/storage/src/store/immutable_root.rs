@@ -480,6 +480,25 @@ impl GraphStore {
         self.consumer_allocation_source_inner().map(|_| ())
     }
 
+    /// Verify that a recorded candidate still belongs to this admitted source.
+    /// The candidate itself verifies its original marker and ledger row before
+    /// supplying this binding; this check does not select or settle it.
+    #[doc(hidden)]
+    pub fn verify_search_consumer_candidate_source(
+        &self,
+        binding: crate::consumer_allocation::ConsumerReservationBinding<'_>,
+    ) -> Result<()> {
+        let source = self.consumer_allocation_source_inner()?;
+        if !source.matches_branch(binding.source_branch)
+            || self.search_projection_database_identity() != Some(binding.database_uuid)
+        {
+            return Err(HawDBError::StorageIntegrity(
+                "consumer candidate belongs to a different source".into(),
+            ));
+        }
+        Ok(())
+    }
+
     fn consumer_allocation_source_inner(
         &self,
     ) -> Result<crate::consumer_allocation::ConsumerAllocationSource> {

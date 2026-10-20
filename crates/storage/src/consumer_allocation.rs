@@ -89,6 +89,10 @@ pub(crate) struct ConsumerAllocationSource {
     branch: BranchId,
 }
 impl ConsumerAllocationSource {
+    pub(crate) fn matches_branch(&self, branch: BranchId) -> bool {
+        self.branch == branch
+    }
+
     pub(crate) fn reserve(
         &self,
         database: Uuid,
