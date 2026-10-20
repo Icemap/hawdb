@@ -80,3 +80,18 @@
 
 - Keep fuzz targets available through Bazel, but do not add them to default or dedicated CI jobs.
 - Routine local verification must run `bazel test //crates/fuzz:hawdb_fuzz_tests //crates/fuzz:hawdb_fuzz_cli_tests //:hawdb_linux_ci_fuzz_smoke_test`.
+- The standalone MVCC campaign lives in `tools/mvcc-fuzz/` as a binary-only,
+  unpublished, independent Cargo workspace. Do not move it into `crates/`, add
+  it to the library workspace/dependency graph, bundle it in published library
+  archives, or register it in CI, scheduled workflows or test suites.
+- During routine local development, run a short campaign from the repository
+  root: `cargo run --locked --manifest-path tools/mvcc-fuzz/Cargo.toml -- run --seconds 30 --explain`.
+  The time budget starts after compilation and stops between complete cases;
+  this is a manual local habit, not an automated scheduled task.
+- Use `generate --seed 42 --index 5` to print an editable `.mvcc` case, and
+  `replay path/to/case.mvcc --explain` for SQL, parameters and expected/actual
+  results. Preserve failure artifacts, replay them, and use `shrink` before
+  turning a confirmed bug into an ordinary focused regression test.
+- Format and lint this independent tool explicitly when changing it:
+  `cargo fmt --manifest-path tools/mvcc-fuzz/Cargo.toml -- --check` and
+  `cargo clippy --locked --manifest-path tools/mvcc-fuzz/Cargo.toml --all-targets -- -D warnings`.

@@ -1,0 +1,9 @@
+# Both writers commit and preserve each other's changes.
+ROW 1 10
+ROW 2 20
+
+T1 UPDATE 1 11
+T2 UPDATE 2 22
+T2 COMMIT
+T1 READ
+T1 COMMIT

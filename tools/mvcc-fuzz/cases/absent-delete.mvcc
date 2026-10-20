@@ -1,0 +1,8 @@
+# Deleting an absent key still conflicts with a stale insert.
+ROW 1 10
+
+T1 DELETE 9
+T2 INSERT 9 90
+T1 COMMIT
+T2 READ
+T2 COMMIT
