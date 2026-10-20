@@ -1612,6 +1612,21 @@ impl SearchIndex {
         Ok(())
     }
 
+    fn load_lexical_projection_under_publication(
+        &self,
+        publication: &out_of_core::SearchProjectionPublishLease,
+    ) -> Result<()> {
+        let projection = LexicalProjectionReader::load_under_publication(
+            publication,
+            self.source_graph_commit_epoch,
+            lexical_analyzer_digest(&self.analyzer_lexicon),
+            lexical_documents_digest(&self.documents),
+            self.lexical_config,
+        )?;
+        self.replace_lexical_projection(projection);
+        Ok(())
+    }
+
     #[cfg(feature = "vector-search")]
     pub fn set_rabitq_projection_build_options(
         &mut self,

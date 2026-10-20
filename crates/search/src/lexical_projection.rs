@@ -1135,6 +1135,37 @@ impl LexicalProjectionReader {
         )
     }
 
+    pub(super) fn load_under_publication(
+        publication: &crate::out_of_core::SearchProjectionPublishLease,
+        expected_source_epoch: Option<u64>,
+        expected_analyzer_digest: u64,
+        expected_documents_digest: u64,
+        config: LexicalProjectionConfig,
+    ) -> Result<Option<Arc<Self>>> {
+        let file = match publication.open_captured_child(MANIFEST_FILE) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let bytes = crate::bounded_file::read_bounded_open_file(
+            file,
+            MANIFEST_FILE,
+            config.max_manifest_bytes.get(),
+        )?;
+        let manifest = ManifestBody::decode(&bytes)?;
+        let artifact = publication.open_captured_child(&manifest.artifact_file)?;
+        Self::load_decoded_manifest(
+            ManifestFile::Held(artifact),
+            manifest,
+            expected_source_epoch,
+            expected_analyzer_digest,
+            expected_documents_digest,
+            config,
+            None,
+            None,
+        )
+    }
+
     fn load_named(
         root: &Path,
         manifest_file: &str,

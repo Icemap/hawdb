@@ -956,7 +956,7 @@ impl SearchIndex {
             ));
         }
         self.segment_descriptor = Some(descriptor);
-        self.load_lexical_projection()?;
+        self.load_lexical_projection_under_publication(publication)?;
         if self
             .lexical_projection
             .lock()
@@ -1409,6 +1409,7 @@ mod tests {
         assert!(root
             .join(crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE)
             .exists());
+        assert!(root.join(crate::lexical_projection::MANIFEST_FILE).exists());
 
         let lease = SearchProjectionPublishLease::acquire_for_consumer(&root).unwrap();
         fs::rename(&root, &moved).unwrap();
@@ -1422,6 +1423,11 @@ mod tests {
         fs::write(
             root.join(crate::SEARCH_SEGMENT_DESCRIPTOR_FILE),
             b"foreign descriptor",
+        )
+        .unwrap();
+        fs::write(
+            root.join(crate::lexical_projection::MANIFEST_FILE),
+            b"foreign lexical manifest",
         )
         .unwrap();
 
@@ -1438,6 +1444,14 @@ mod tests {
         assert!(descriptor
             .payload_artifact_is_available_under_publication(&lease)
             .unwrap());
+        index
+            .load_lexical_projection_under_publication(&lease)
+            .unwrap();
+        assert!(index
+            .lexical_projection
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .is_some());
         assert_eq!(index.documents["memory:original"].content, "original");
         assert!(index.consumer_binding.is_some());
 
