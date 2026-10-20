@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use super::*;
+use hawdb_executor::{QueryMemoryClass, QueryMemoryLedger};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 struct Fixture(PathBuf);
@@ -138,23 +139,71 @@ fn term_policy_query_and_delta_exact_memory_boundaries() {
         + blocks.len() as u64 * 2 * std::mem::size_of::<&BlockDescriptor>() as u64
         + 5202 * 3
         + 32;
-    Arc::get_mut(&mut reader).unwrap().config.query_memory_bytes =
-        NonZeroU64::new(query_bytes).unwrap();
-    assert_eq!(
-        reader
-            .score(&query, &Default::default(), None, |_| Ok(true))
-            .unwrap()
-            .scores
-            .len(),
-        1
-    );
-    Arc::get_mut(&mut reader).unwrap().config.query_memory_bytes =
-        NonZeroU64::new(query_bytes - 1).unwrap();
-    assert!(reader
+    let expected = reader
         .score(&query, &Default::default(), None, |_| Ok(true))
-        .unwrap_err()
-        .to_string()
-        .contains("streams require"));
+        .unwrap();
+    assert_eq!(expected.scores.len(), 1);
+    let task = RuntimeTaskContext::default();
+    let grant = NonZeroUsize::new(1024 * 1024).unwrap();
+    let ledger = QueryMemoryLedger::new(grant);
+    let account = ledger.account(QueryMemoryClass::ExternalRead, "lexical scorer", grant);
+    let delta = LexicalMiniDelta::default();
+    for context in [
+        None,
+        Some(QueryContext {
+            memory: &account,
+            task: &task,
+            execution: None,
+        }),
+    ] {
+        for limit in [query_bytes - 1, query_bytes] {
+            Arc::get_mut(&mut reader).unwrap().config.query_memory_bytes =
+                NonZeroU64::new(limit).unwrap();
+            let mut visited = 0;
+            let result = reader.score_terms_accounted(
+                &query,
+                ScoringInputs {
+                    delta: &delta,
+                    max_term_bytes: reader.config.max_term_bytes,
+                    retained_score_limit: None,
+                    global_statistics: None,
+                    prune_blocks: false,
+                    context,
+                },
+                |_| {
+                    visited += 1;
+                    Ok(true)
+                },
+            );
+            if limit == query_bytes {
+                assert_eq!(result.unwrap().report, expected);
+                assert_eq!(visited, 1);
+            } else {
+                let error = result.err().unwrap();
+                let HawDBError::ResourceBudgetExceeded(cause) = error else {
+                    panic!("expected a typed stream memory refusal, got {error:?}");
+                };
+                assert_eq!(
+                    *cause,
+                    ResourceBudgetError {
+                        resource: ResourceBudgetKind::MemoryBytes,
+                        scope: ResourceBudgetScope::Operator,
+                        owner: "lexical query streams".into(),
+                        memory_class: None,
+                        requested: query_bytes,
+                        used: 0,
+                        budget: limit,
+                        budget_option: "LexicalProjectionConfig.query_memory_bytes",
+                        message: format!(
+                            "lexical query streams require {query_bytes} bytes, exceeding {limit}"
+                        ),
+                    }
+                );
+                assert_eq!(visited, 0);
+            }
+            assert_eq!(ledger.snapshot().used_bytes, 0);
+        }
+    }
 
     let source = document();
     let analyzed = analyze_delta_document(&source, &Default::default(), config()).unwrap();
