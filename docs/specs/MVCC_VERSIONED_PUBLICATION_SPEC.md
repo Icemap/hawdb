@@ -274,6 +274,20 @@ and allocator overhead. The fallback is covered by bounded index, canonical
 commit, conflict and durable reopen tests. Churn, long-pin RSS and cleanup-latency
 qualification remain open for the complete collector set.
 
+`Database::read_dependency_validation_failures` exposes process-lifetime,
+per-instance counts of rejected validation calls. Conflict counters distinguish
+`ReadBarrier`, `Database`, node, relationship, property-value and relational
+domain summaries, exact identity and `Schema` keys;
+source-change, refused-capture and unavailable-source errors have separate
+counters. Successful validations do not increment them. Counts reset on reopen,
+and concurrent field reads need not represent one atomic instant. Hosts can
+compare consecutive reports to detect repeated fallback invalidation before
+depending on long-running preparation for liveness.
+`Database::read_summary_collapse_count` separately counts successful commits
+that replaced fine summaries with `ReadBarrier`. It is process-lifetime,
+resets on reopen and increments only after the commit is installed; it is not
+a persisted recovery total or a count of failed validation calls.
+
 The collector regression
 `randomized_node_dependency_validation_preserves_query_results` exercises a
 fixed-seed matrix of label scans, indexed seeks, counts and empty results against

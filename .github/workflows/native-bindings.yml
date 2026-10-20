@@ -543,6 +543,9 @@ jobs:
             2>&1 | tee windows-native-results/retained-arrow.txt
 
       - name: Test abandonment GC power-loss cuts
+        # Run the full fault-cut matrix after a change reaches main; PRs still
+        # execute the native Windows contracts above.
+        if: github.ref == 'refs/heads/main'
         shell: bash
         env:
           POWER_LOSS_TEST_THREADS: ${{ inputs.windows_power_loss_test_threads != 'repository' && inputs.windows_power_loss_test_threads || vars.HAWDB_WINDOWS_POWER_LOSS_TEST_THREADS || '4' }}

@@ -106,6 +106,7 @@ pub use dependency_read::{
     ProjectionOwnerId, ProjectionPreparedFullRebuild, ProjectionPublicationError,
     ProjectionReadScopes, ProjectionSourceDurability, ProjectionStagedInputs,
     ProjectionStagingSession, ProjectionStagingSessionConfig, ProjectionStagingSessionStep,
+    ReadDependencyValidationFailures,
 };
 mod explain;
 mod graph_analytics;

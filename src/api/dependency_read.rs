@@ -19,6 +19,7 @@ use hawdb_storage::projection_generation::{
     PendingProjectionPublication, PreparedProjectionPublication, ProjectionGenerationError,
     ProjectionGenerationPublishReport, SealedProjectionGeneration,
 };
+pub use hawdb_storage::store::ReadDependencyValidationFailures;
 use hawdb_storage::store::{GraphReadDependencies, GraphReadDependencyError};
 use hawdb_storage::version::VersionKey;
 use std::fmt;
@@ -503,6 +504,22 @@ impl Database {
         prepared.select().map_err(E::Generation)
     }
 
+    /// Process-lifetime dependency validation failures by key class. This
+    /// report resets when the database is reopened.
+    pub fn read_dependency_validation_failures(&self) -> Result<ReadDependencyValidationFailures> {
+        Ok(self
+            .runtime
+            .get()?
+            .store
+            .read_dependency_validation_failures())
+    }
+
+    /// Successful commits that collapsed fine read summaries to ReadBarrier.
+    /// The count resets when this database instance is reopened.
+    pub fn read_summary_collapse_count(&self) -> Result<u64> {
+        Ok(self.runtime.get()?.store.read_summary_collapse_count())
+    }
+
     pub fn begin_prepared_read(&self, limits: PreparedReadLimits) -> Result<PreparedRead> {
         let graph = self.runtime.get()?.store.capture_read_dependencies(
             limits.dependency_entries.get(),
@@ -659,6 +676,16 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validation_failure_report_is_available_from_embedded_database() {
+        let db = Database::new();
+        assert_eq!(
+            db.read_dependency_validation_failures().unwrap(),
+            ReadDependencyValidationFailures::default()
+        );
+        assert_eq!(db.read_summary_collapse_count().unwrap(), 0);
+    }
 
     struct Random(u64);
 

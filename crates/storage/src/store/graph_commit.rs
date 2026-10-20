@@ -1970,9 +1970,12 @@ impl GraphStore {
                     .ok();
             }
         }
-        let staged_versions = match staged_versions {
-            Some(versions) => versions,
-            None => self.stage_version_index(&version_writes, next_commit_epoch, true)?,
+        let (staged_versions, collapsed_read_summaries) = match staged_versions {
+            Some(versions) => (versions, false),
+            None => (
+                self.stage_version_index(&version_writes, next_commit_epoch, true)?,
+                true,
+            ),
         };
         let staged_projection_change = self.prepare_search_projection_changes_for_ops(
             catalog,
@@ -2005,6 +2008,13 @@ impl GraphStore {
         }
         self.commit_epoch = next_commit_epoch;
         self.version_index = staged_versions;
+        if collapsed_read_summaries {
+            let _ = self.read_summary_collapses.fetch_update(
+                AtomicOrdering::Relaxed,
+                AtomicOrdering::Relaxed,
+                |value| Some(value.saturating_add(1)),
+            );
+        }
         self.publish_relational_index_live_view(staged_relational_index_publication);
         self.publish_relational_row_live_view(staged_relational_row_publication);
         Ok(MutationSummary {
