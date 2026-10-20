@@ -6029,6 +6029,9 @@ mod tests {
         }
         initial.finish().unwrap();
 
+        // The next full replacement may reclaim unpinned vector artifacts.
+        // Keep the first closure alive until the combined manifest selects it.
+        let initial_reader = SearchOutOfCoreReader::open(path).unwrap();
         let manifest_path = path.join(OUT_OF_CORE_MANIFEST_FILE);
         let initial_manifest: SearchOutOfCoreManifestEnvelope =
             serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
@@ -6067,6 +6070,7 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
+        drop(initial_reader);
     }
 
     fn install_delete_mutation_run(
