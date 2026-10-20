@@ -209,6 +209,80 @@ fn admitted_mutation_terms_keep_capacity_and_require_fresh_execution_after_produ
 }
 
 #[test]
+fn synchronous_mutation_terms_use_original_context_without_governor_execution() {
+    use crate::build_memory::read::ReadPermit;
+    use crate::out_of_core::captured_cleanup::{Limits, Source};
+    use crate::out_of_core::SearchProjectionPublishLease;
+    use hawdb_core::RuntimeMemoryReservation;
+
+    for count in [0, 1, 512] {
+        let fixture = Fixture::new(count, true);
+        let task = RuntimeTaskContext::default()
+            .with_memory_reservation(RuntimeMemoryReservation::new(8 << 20, 0));
+        let memory = BuildMemory::new(&task).unwrap();
+        let publication = SearchProjectionPublishLease::acquire_for_cleanup(&fixture.root).unwrap();
+        let admission = ReadAdmission {
+            memory: &memory,
+            task: &task,
+            permit: ReadPermit::Synchronous(&publication),
+        };
+        let source = Source::new(
+            &publication,
+            &task,
+            Limits {
+                artifact_bytes: 32 << 20,
+                total_bytes: 32 << 20,
+                files: 1,
+            },
+        );
+        let file = source
+            .open_admitted(&fixture.manifest.file, fixture.manifest.object, &admission)
+            .unwrap();
+        let mut budget = MutationRunBudget::new(16 << 20, 1, 1).unwrap();
+        let run = SearchMutationRun::open_admitted(
+            OpenContext {
+                captured_file: Some(file),
+                source_pin: None,
+                root: &fixture.root,
+                admission: &admission,
+                maximum_encoded_bytes: 32 << 20,
+                maximum_artifact_bytes: 32 << 20,
+                analyzer_digest: 5,
+                budget: &mut budget,
+            },
+            &fixture.manifest,
+        )
+        .unwrap();
+        let terms = &run.entries()[0].retraction.unique_terms;
+        let context = QueryContext::from_read_admission(&admission);
+        assert!(context.execution.is_none());
+        assert!(matches!(terms.cursor(), Err(HawDBError::Execution(_))));
+        assert_eq!(terms.len(), count);
+        let retained = memory.ledger.snapshot().used_bytes;
+        assert!(retained > 0);
+        let mut visited = 0;
+        terms
+            .visit_with_query_context(Some(context), |term| {
+                assert_eq!(term, format!("t{visited:06}\"\\\u{96ea}"));
+                visited += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(visited, count);
+        assert_eq!(memory.ledger.snapshot().used_bytes, retained);
+        if count != 0 {
+            let mut cursor = terms.cursor_with_query_context(Some(context)).unwrap();
+            assert!(cursor.next().unwrap().is_some());
+            task.cancellation().cancel();
+            assert!(matches!(cursor.next(), Err(HawDBError::Execution(_))));
+        }
+        assert_eq!(memory.ledger.snapshot().used_bytes, retained);
+        drop(run);
+        assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+    }
+}
+
+#[test]
 fn streamed_term_range_digests_match_independent_file_traversal() {
     for pretty in [false, true] {
         for counts in [vec![0], vec![1], vec![512], vec![0, 1, 512]] {

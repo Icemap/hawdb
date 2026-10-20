@@ -134,8 +134,11 @@ impl Terms {
                 checksum,
                 memory,
             } => {
-                if file.requires_context()
-                    && context.is_none_or(|context| context.execution.is_none())
+                // Synchronous cleanup borrows publication and its original budget;
+                // only retained serving state also requires fresh execution.
+                if (file.requires_context() && context.is_none())
+                    || (file.requires_execution()
+                        && context.is_none_or(|context| context.execution.is_none()))
                 {
                     return Err(HawDBError::Execution(
                         "admitted mutation terms require a fresh query context".into(),
