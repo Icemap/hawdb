@@ -1648,6 +1648,9 @@ fn consumer_native_candidate_output_uses_the_original_stage_after_label_replacem
 
 #[test]
 fn consumer_native_candidate_metadata_seals_verified_files_in_the_born_target() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
     use hawdb_search::consumer::generation_metadata::{
         ArtifactReference, MetadataInput, MetadataView,
     };
@@ -1725,9 +1728,26 @@ fn consumer_native_candidate_metadata_seals_verified_files_in_the_born_target() 
             .map(|bytes| bytes.len() as u64)
             .sum::<u64>()
         + metadata_len;
-    let mut lease =
-        hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
-            .unwrap();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(64 * 1024 * 1024),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    let permit = std::sync::Arc::new(
+        governor
+            .try_admit(
+                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1),
+            )
+            .unwrap(),
+    );
+    let mut lease = hawdb_search::consumer::ConsumerStationaryTargetLease::acquire_governed(
+        &mut pending,
+        permit,
+        task.clone(),
+    )
+    .unwrap();
     let mut output = lease.begin_candidate_output(total).unwrap();
     output
         .install_artifact(&stage, MANIFEST, MANIFEST, input.search_manifest)
@@ -1758,6 +1778,165 @@ fn consumer_native_candidate_metadata_seals_verified_files_in_the_born_target() 
         )
         .is_err());
     assert!(output.seal_generation_metadata(&input, limits).is_err());
+    drop(output);
+
+    #[cfg(unix)]
+    {
+        let original = target_path.with_extension("original");
+        std::fs::rename(&target_path, &original).unwrap();
+        std::fs::create_dir(&target_path).unwrap();
+        std::fs::write(target_path.join(MANIFEST), b"foreign manifest").unwrap();
+    }
+    let view = lease
+        .prepare_candidate_view(std::num::NonZeroU64::new(32 * 1024 * 1024).unwrap())
+        .unwrap();
+    assert_eq!(view.source_epoch, 7);
+    assert_eq!(view.document_count, 1);
+    assert_eq!(view.metadata_reference, receipt.reference);
+    assert!(lease
+        .prepare_candidate_view(std::num::NonZeroU64::new(32 * 1024 * 1024).unwrap())
+        .is_err());
+}
+
+#[test]
+fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapshot() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    use hawdb_search::consumer::generation_metadata::{ArtifactReference, MetadataInput};
+
+    const MANIFEST: &str = "search_projection.out_of_core.manifest.hawdb";
+    for tamper_after_seal in [false, true] {
+        let fixture = Fixture::new();
+        let mut db = fixture.database();
+        let allocation = reserve_native_generation(&mut db, &fixture);
+        let mut pending = allocation
+            .prepare_stationary_generation(&fixture.0)
+            .unwrap();
+        pending.create().unwrap();
+        let target_path = fixture.0.join(pending.generation_name());
+        let context = pending.born_directory().unwrap().operation_context();
+        let stage_path = fixture.0.join("out-of-core-candidate-stage");
+        let mut writer = hawdb_search::SearchOutOfCoreGenerationWriter::create(
+            &stage_path,
+            hawdb_search::SearchOutOfCoreGenerationBuildOptions {
+                source_graph_commit_epoch: Some(7),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        writer
+            .push(hawdb_search::SearchDocument {
+                id: "memory:m1".into(),
+                title: "candidate".into(),
+                content: "out of core search document".into(),
+                embedding: None,
+                metadata: Default::default(),
+            })
+            .unwrap();
+        writer.finish().unwrap();
+        assert!(!stage_path.join("search_projection.hawdb").exists());
+        let stage =
+            hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
+        let manifest_bytes = std::fs::read(stage_path.join(MANIFEST)).unwrap();
+        let mut names = std::fs::read_dir(&stage_path)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .filter(|name| name.ends_with(".1.hawdb"))
+            .collect::<Vec<_>>();
+        names.sort();
+        let bytes = names
+            .iter()
+            .map(|name| std::fs::read(stage_path.join(name)).unwrap())
+            .collect::<Vec<_>>();
+        let artifacts = names
+            .iter()
+            .zip(&bytes)
+            .map(|(name, bytes)| ArtifactReference {
+                name,
+                reference: candidate_reference(bytes),
+            })
+            .collect::<Vec<_>>();
+        let (binding, target_incarnation, generation, operation) =
+            candidate_metadata_identity(&pending);
+        let input = MetadataInput {
+            binding: &binding,
+            source_epoch: 7,
+            target_incarnation,
+            generation,
+            operation,
+            component_uuid: hawdb_core::Uuid::from_bytes([5; 16]),
+            search_manifest: candidate_reference(&manifest_bytes),
+            artifacts: &artifacts,
+        };
+        let limits = candidate_metadata_limits();
+        let task = hawdb_core::RuntimeTaskContext::default();
+        let total = manifest_bytes.len() as u64
+            + bytes.iter().map(|bytes| bytes.len() as u64).sum::<u64>()
+            + input.encoded_len(limits, &task).unwrap() as u64;
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(64 * 1024 * 1024),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        let permit = std::sync::Arc::new(
+            governor
+                .try_admit(
+                    RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                        .with_io_wave_slots(1),
+                )
+                .unwrap(),
+        );
+        let mut lease = hawdb_search::consumer::ConsumerStationaryTargetLease::acquire_governed(
+            &mut pending,
+            permit,
+            task,
+        )
+        .unwrap();
+        let mut output = lease.begin_candidate_output(total).unwrap();
+        output
+            .install_artifact(&stage, MANIFEST, MANIFEST, input.search_manifest)
+            .unwrap();
+        for artifact in &artifacts {
+            output
+                .install_artifact(&stage, artifact.name, artifact.name, artifact.reference)
+                .unwrap();
+        }
+        output.seal_generation_metadata(&input, limits).unwrap();
+        drop(output);
+        assert!(!target_path.join("search_projection.hawdb").exists());
+
+        #[cfg(unix)]
+        let captured_path = {
+            let original = target_path.with_extension("original");
+            std::fs::rename(&target_path, &original).unwrap();
+            std::fs::create_dir(&target_path).unwrap();
+            std::fs::write(target_path.join(MANIFEST), b"foreign manifest").unwrap();
+            original
+        };
+        #[cfg(not(unix))]
+        let captured_path = target_path;
+        if tamper_after_seal {
+            std::fs::write(captured_path.join(MANIFEST), b"changed after seal").unwrap();
+            let error = lease
+                .prepare_candidate_view(std::num::NonZeroU64::new(32 * 1024 * 1024).unwrap())
+                .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("differs from producer reference"),
+                "{error}"
+            );
+        } else {
+            let view = lease
+                .prepare_candidate_view(std::num::NonZeroU64::new(32 * 1024 * 1024).unwrap())
+                .unwrap();
+            assert_eq!(view.source_epoch, 7);
+            assert_eq!(view.document_count, 1);
+        }
+    }
 }
 
 #[test]

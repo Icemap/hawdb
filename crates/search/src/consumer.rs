@@ -103,7 +103,12 @@ pub struct ConsumerStationaryTargetLease<'birth> {
     lease: SearchProjectionPublishLease,
     memory: BuildMemory,
     task: RuntimeTaskContext,
+    host_admission: Option<std::sync::Arc<hawdb_qos::RuntimePermit>>,
     candidate_output_begun: bool,
+    sealed_metadata: Option<ConsumerCandidateMetadata>,
+    sealed_manifest: Option<ObjectReference>,
+    sealed_source_epoch: Option<u64>,
+    candidate_view: Option<crate::out_of_core::CandidateView>,
 }
 
 /// One bounded native output operation within a born Consumer generation.
@@ -138,6 +143,17 @@ pub struct ConsumerCandidateMetadata {
     pub reference: ObjectReference,
 }
 
+/// A prepared private reader, bound to the sealed candidate but not selected
+/// for serving. The born target and its reader pins remain owned by the lease.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConsumerCandidateViewReport {
+    pub source_epoch: u64,
+    pub generation: u64,
+    pub document_count: usize,
+    pub metadata_reference: ObjectReference,
+}
+
 impl<'birth> ConsumerStationaryTargetLease<'birth> {
     /// Acquire against the original native generation, never its saved path.
     /// A failed acquisition leaves the caller's birth token available for
@@ -155,8 +171,114 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
             lease,
             memory,
             task: task.clone(),
+            host_admission: None,
             candidate_output_begun: false,
+            sealed_metadata: None,
+            sealed_manifest: None,
+            sealed_source_epoch: None,
+            candidate_view: None,
         })
+    }
+
+    /// Preserve the caller's actual runtime admission through native output
+    /// and retained candidate reader construction.
+    pub fn acquire_governed(
+        birth: &'birth mut PendingConsumerGeneration,
+        permit: std::sync::Arc<hawdb_qos::RuntimePermit>,
+        task: RuntimeTaskContext,
+    ) -> Result<Self> {
+        if task.has_resource_controllers() {
+            return Err(invalid(
+                "consumer target task already has a resource controller",
+            ));
+        }
+        let task = permit.bind_task_context(task);
+        let mut target = Self::acquire(birth, &task)?;
+        target.memory.host_admission = Some(std::sync::Arc::clone(&permit));
+        target.host_admission = Some(permit);
+        Ok(target)
+    }
+
+    /// Build and retain a complete out-of-core reader under the original born
+    /// directory. This remains private: only a later source-E/selector protocol
+    /// may publish a serving view or acknowledge readiness.
+    pub fn prepare_candidate_view(
+        &mut self,
+        max_artifact_read_bytes: std::num::NonZeroU64,
+    ) -> Result<ConsumerCandidateViewReport> {
+        let metadata = self
+            .sealed_metadata
+            .ok_or_else(|| invalid("consumer candidate metadata is not sealed"))?;
+        let source_epoch = self
+            .sealed_source_epoch
+            .expect("sealed metadata retains source epoch");
+        let manifest = self
+            .sealed_manifest
+            .expect("sealed metadata retains manifest reference");
+        if self.candidate_view.is_some() {
+            return Err(invalid("consumer candidate view was already prepared"));
+        }
+        let permit = self.host_admission.as_deref().ok_or_else(|| {
+            HawDBError::Execution("consumer candidate reader requires runtime admission".into())
+        })?;
+        let mut scratch = [0u8; crate::build_memory::SPOOL_BUFFER_BYTES];
+        {
+            let io = self
+                .task
+                .acquire_io_wave(std::num::NonZeroUsize::MIN)
+                .map_err(|error| HawDBError::Execution(error.to_string()))?
+                .ok_or_else(|| {
+                    HawDBError::Execution(
+                        "consumer candidate metadata check requires I/O admission".into(),
+                    )
+                })?;
+            self.lease.with_captured_directory(|target| {
+                verify_candidate_child(
+                    target,
+                    &target.operation_context(),
+                    GENERATION_METADATA_FILE,
+                    metadata.reference,
+                    &self.task,
+                    &mut scratch,
+                    None,
+                )?;
+                verify_candidate_child(
+                    target,
+                    &target.operation_context(),
+                    crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE,
+                    manifest,
+                    &self.task,
+                    &mut scratch,
+                    None,
+                )
+            })?;
+            drop(io);
+        }
+        let view = crate::out_of_core::open_born_candidate(
+            crate::out_of_core::BornCandidateOpenContext {
+                born: self._birth,
+                publication: &mut self.lease,
+                memory: &self.memory,
+                task: &self.task,
+                permit,
+                expected_manifest: manifest,
+                config: crate::SearchOutOfCoreConfig::default(),
+                max_artifact_read_bytes,
+            },
+        )?;
+        if view.source_epoch() != Some(source_epoch) {
+            return Err(HawDBError::StorageIntegrity(
+                "consumer candidate view differs from sealed source epoch".into(),
+            ));
+        }
+        let report = ConsumerCandidateViewReport {
+            source_epoch,
+            generation: view.generation(),
+            document_count: view.document_count(),
+            metadata_reference: metadata.reference,
+        };
+        self.candidate_view = Some(view);
+        Ok(report)
     }
 
     /// Physical target identity, useful for later selector/birth binding.
@@ -386,7 +508,7 @@ impl ConsumerCandidateOutput<'_, '_> {
         }
         let reference = ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, &bytes);
         self.metadata_seal_attempted = true;
-        self.target.lease.with_captured_directory(|target| {
+        let metadata = self.target.lease.with_captured_directory(|target| {
             let context = target.operation_context();
             let mut buffer = [0u8; SPOOL_BUFFER_BYTES];
             let manifest_len =
@@ -469,7 +591,11 @@ impl ConsumerCandidateOutput<'_, '_> {
                 encoded_len: length_u64,
                 reference,
             })
-        })
+        })?;
+        self.target.sealed_metadata = Some(metadata);
+        self.target.sealed_manifest = Some(input.search_manifest);
+        self.target.sealed_source_epoch = Some(input.source_epoch);
+        Ok(metadata)
     }
 }
 

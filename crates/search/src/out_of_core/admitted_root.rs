@@ -20,7 +20,9 @@ use crate::build_memory::{
     read::{ReadAdmission, ReadBytes, ReaderMemory},
     SET_ENTRY_BYTES,
 };
+use hawdb_storage::consumer_allocation::PendingConsumerGeneration;
 use hawdb_storage::file_descriptors::ProjectFileDescriptors;
+use hawdb_storage::immutable_object::{ObjectKind, ObjectReference};
 use std::mem::size_of;
 
 pub(super) struct OpenContext<'a, 'execution> {
@@ -39,6 +41,10 @@ pub(super) struct OpenContext<'a, 'execution> {
     // Exclusive construction-time borrow; the returned view never retains the
     // publication lease. Exact artifact/GC authority remains required separately.
     pub(super) publication: Option<&'a mut SearchProjectionPublishLease>,
+    /// Native birth is the authority for an original stationary target whose
+    /// diagnostic path may no longer name the captured directory.
+    pub(super) born: Option<&'a PendingConsumerGeneration>,
+    pub(super) expected_born_manifest: Option<ObjectReference>,
 }
 
 // Deliberately no Deref or public serving/refresh conversion for admitted roots.
@@ -52,6 +58,18 @@ pub(super) struct OpenedRoot {
     _collections_memory: Option<ReaderMemory>,
 }
 impl OpenedRoot {
+    pub(super) fn document_count(&self) -> usize {
+        self.reader.document_count()
+    }
+
+    pub(super) fn source_epoch(&self) -> Option<u64> {
+        self.reader.source_graph_commit_epoch()
+    }
+
+    pub(super) fn generation(&self) -> u64 {
+        self.reader.generation()
+    }
+
     pub(super) fn into_ordinary(self) -> Result<SearchOutOfCoreReader> {
         if self._root_memory.is_some() {
             return Err(HawDBError::Execution(
@@ -73,7 +91,16 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
         project,
         max_artifact_read_bytes,
         publication,
+        born,
+        expected_born_manifest,
     } = context;
+    if born.is_some() != expected_born_manifest.is_some()
+        || born.is_some() && (admission.is_none() || publication.is_none())
+    {
+        return Err(HawDBError::Execution(
+            "born target requires captured publication and reader admission".into(),
+        ));
+    }
     if publication.is_some() && admission.is_none() {
         return Err(HawDBError::Execution(
             "publication custody transfer requires reader admission".into(),
@@ -95,14 +122,30 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
             let project = project.ok_or_else(|| {
                 HawDBError::Execution("admitted root requires an existing project authority".into())
             })?;
-            let _io = admission
-                .io()
-                .map_err(|error| HawDBError::Execution(error.to_string()))?;
-            let canonical = OwnedPath::canonicalize(&root, admission.memory, admission.task)?;
-            if !canonical.starts_with(project.root()) {
-                return Err(HawDBError::StorageIntegrity(
-                    "reader root is outside its supplied project".into(),
-                ));
+            if let Some(born) = born {
+                let original = born.born_directory()?;
+                let publication = publication
+                    .as_deref()
+                    .expect("born target retains publication");
+                if !publication.with_captured_directory(|directory| {
+                    directory.same_directory(original)
+                        && directory.shares_project_context(&project.io_context())
+                }) {
+                    return Err(HawDBError::StorageIntegrity(
+                        "born reader does not match its captured target and descriptor domain"
+                            .into(),
+                    ));
+                }
+            } else {
+                let _io = admission
+                    .io()
+                    .map_err(|error| HawDBError::Execution(error.to_string()))?;
+                let canonical = OwnedPath::canonicalize(&root, admission.memory, admission.task)?;
+                if !canonical.starts_with(project.root()) {
+                    return Err(HawDBError::StorageIntegrity(
+                        "reader root is outside its supplied project".into(),
+                    ));
+                }
             }
             // Containment is not a complete incarnation/binding proof.
             project.clone()
@@ -137,7 +180,9 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
                 let _io = admission
                     .io()
                     .map_err(|e| HawDBError::Execution(e.to_string()))?;
-                publication.require_source_root(&root, &project_files.io_context())?;
+                if born.is_none() {
+                    publication.require_source_root(&root, &project_files.io_context())?;
+                }
             }
             Some(match initial_custody.take() {
                 Some(root) => root.begin_capture(publication, admission)?,
@@ -169,6 +214,13 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
             MAX_OUT_OF_CORE_MANIFEST_BYTES,
         )?),
     };
+    if let Some(expected) = expected_born_manifest
+        && ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, &bytes) != expected
+    {
+        return Err(HawDBError::StorageIntegrity(
+            "born reader head differs from sealed manifest reference".into(),
+        ));
+    }
     drop(head);
     let manifest_memory = admission
         .map(|admission| {

@@ -53,6 +53,84 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 mod admitted_root;
+
+/// A complete native candidate reader retained privately until a separate
+/// source-E fence and durable selector can grant serving authority.
+pub(crate) struct CandidateView(admitted_root::OpenedRoot);
+
+impl std::fmt::Debug for CandidateView {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CandidateView")
+            .field("document_count", &self.document_count())
+            .field("source_epoch", &self.source_epoch())
+            .field("generation", &self.generation())
+            .finish_non_exhaustive()
+    }
+}
+
+impl CandidateView {
+    pub(crate) fn document_count(&self) -> usize {
+        self.0.document_count()
+    }
+
+    pub(crate) fn source_epoch(&self) -> Option<u64> {
+        self.0.source_epoch()
+    }
+
+    pub(crate) fn generation(&self) -> u64 {
+        self.0.generation()
+    }
+}
+
+pub(crate) struct BornCandidateOpenContext<'a> {
+    pub(crate) born: &'a hawdb_storage::consumer_allocation::PendingConsumerGeneration,
+    pub(crate) publication: &'a mut SearchProjectionPublishLease,
+    pub(crate) memory: &'a crate::build_memory::BuildMemory,
+    pub(crate) task: &'a hawdb_core::RuntimeTaskContext,
+    pub(crate) permit: &'a hawdb_qos::RuntimePermit,
+    pub(crate) expected_manifest: hawdb_storage::immutable_object::ObjectReference,
+    pub(crate) config: SearchOutOfCoreConfig,
+    pub(crate) max_artifact_read_bytes: NonZeroU64,
+}
+
+pub(crate) fn open_born_candidate(context: BornCandidateOpenContext<'_>) -> Result<CandidateView> {
+    let BornCandidateOpenContext {
+        born,
+        publication,
+        memory,
+        task,
+        permit,
+        expected_manifest,
+        config,
+        max_artifact_read_bytes,
+    } = context;
+    let project = publication.with_captured_directory(|directory| {
+        hawdb_storage::file_descriptors::ProjectFileDescriptors::from_open_context(
+            &directory.operation_context(),
+        )
+    });
+    let admission = crate::build_memory::read::ReadAdmission {
+        memory,
+        task,
+        permit: crate::build_memory::read::ReadPermit::Governed(permit),
+    };
+    let root = Path::new(born.generation_name());
+    let opened = admitted_root::open(admitted_root::OpenContext {
+        root,
+        publication: Some(publication),
+        born: Some(born),
+        expected_born_manifest: Some(expected_manifest),
+        config,
+        analyzer_lexicon: SearchAnalyzerLexicon::default(),
+        lexical_term_policy: SearchLexicalTermPolicy::default(),
+        lexical_source_policy: SearchLexicalSourcePolicy::default(),
+        admission: Some(&admission),
+        project: Some(&project),
+        max_artifact_read_bytes: max_artifact_read_bytes.get(),
+    })?;
+    Ok(CandidateView(opened))
+}
 pub(crate) mod artifact_key;
 mod generation_writer;
 mod hydration;
@@ -1653,6 +1731,8 @@ impl SearchOutOfCoreReader {
         admitted_root::open(admitted_root::OpenContext {
             root: path.as_ref(),
             publication: None,
+            born: None,
+            expected_born_manifest: None,
             config,
             analyzer_lexicon,
             lexical_term_policy,
@@ -6230,6 +6310,8 @@ mod tests {
                 project: Some(&reader._project_files),
                 max_artifact_read_bytes: 32 << 20,
                 publication: None,
+                born: None,
+                expected_born_manifest: None,
             })
             .unwrap()
         };
