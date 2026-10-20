@@ -27,6 +27,9 @@ use std::fmt;
 mod graph_match;
 #[path = "dependency_read/relational.rs"]
 mod relational;
+#[cfg(test)]
+#[path = "dependency_read/soundness_tests.rs"]
+mod soundness_tests;
 
 /// Limits for one preparation. Output limits apply to each statement; callers
 /// must additionally bound cross-statement work and the artifact builder.

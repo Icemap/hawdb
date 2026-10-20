@@ -23,7 +23,8 @@ mod adjacency;
 
 use super::*;
 use crate::version::{
-    VersionConflict, VersionKey, VersionSnapshotPin, VersionWriteSet, VersionWriteSetError,
+    is_read_summary_key, VersionConflict, VersionKey, VersionSnapshotPin, VersionWriteSet,
+    VersionWriteSetError,
 };
 use crate::wal::WalOp;
 use std::fmt;
@@ -355,16 +356,10 @@ impl GraphStore {
                 committed_epoch: self.commit_epoch,
             }));
         }
-        let has_read_summary = captured.keys.iter().any(|(key, _)| {
-            matches!(
-                key,
-                VersionKey::ReadNodeDomain(_)
-                    | VersionKey::ReadRelationshipDomain(_)
-                    | VersionKey::ReadRelationalTableDomain(_)
-                    | VersionKey::ReadNodeProperty { .. }
-                    | VersionKey::ReadRelationalIndexPrefix { .. }
-            )
-        });
+        let has_read_summary = captured
+            .keys
+            .iter()
+            .any(|(key, _)| is_read_summary_key(key));
         let barrier_keys = [VersionKey::Database, VersionKey::Schema];
         let keys = captured
             .keys
@@ -577,6 +572,54 @@ mod tests {
         ));
         store.reclaim_version_history();
         assert!(store.validate_read_dependencies(&captured).is_err());
+    }
+
+    #[test]
+    fn multilabel_memory_writes_invalidate_document_reads() {
+        let mut accepted = 0;
+        let mut rejected = 0;
+        for value in [7, 11, 29, 47] {
+            for related in [false, true] {
+                let mut store = GraphStore::default();
+                let mut catalog = Catalog::default();
+                let memory = catalog.get_or_create_label("Memory");
+                let document = catalog.get_or_create_label("Document");
+                store.apply_create_node_with_labels(
+                    &catalog,
+                    NodeId(0),
+                    BTreeSet::from([memory, document]),
+                    BTreeMap::from([("value".into(), Value::Int(value))]),
+                );
+                store.apply_create_node_with_labels(
+                    &catalog,
+                    NodeId(1),
+                    BTreeSet::from([memory]),
+                    BTreeMap::from([("value".into(), Value::Int(value))]),
+                );
+                let captured = capture(&store, VersionKey::ReadNodeDomain(Some("Document".into())));
+                let snapshot = store.snapshot_for_read();
+                let before = snapshot.nodes.get(&NodeId(0)).unwrap().properties["value"].clone();
+                let target = u64::from(!related);
+                store
+                    .commit_mutations(&mut catalog, vec![update(target, value + 1)])
+                    .unwrap();
+                assert_eq!(
+                    snapshot.nodes.get(&NodeId(0)).unwrap().properties["value"],
+                    before
+                );
+                let after = &store.nodes.get(&NodeId(0)).unwrap().properties["value"];
+                match store.validate_read_dependencies(&captured) {
+                    Ok(()) => {
+                        assert_eq!(&before, after, "accepted changed Document row");
+                        accepted += 1;
+                    }
+                    Err(GraphReadDependencyError::Conflict(_)) => rejected += 1,
+                    Err(error) => panic!("unexpected validation error: {error}"),
+                }
+            }
+        }
+        assert_eq!(accepted, 4);
+        assert_eq!(rejected, 4);
     }
 
     #[test]
