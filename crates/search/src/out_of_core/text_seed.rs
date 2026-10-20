@@ -69,6 +69,7 @@ impl SearchOutOfCoreReader {
         mut allowed: impl FnMut(&str) -> Result<bool>,
     ) -> Result<SearchTextSeedOutput> {
         let context = QueryContext {
+            io_scope: None,
             execution: None,
             memory,
             task,

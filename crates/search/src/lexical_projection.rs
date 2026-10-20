@@ -52,7 +52,7 @@ pub(crate) use source::DocumentSource;
 mod documents;
 use documents::DocumentLookup;
 mod query_context;
-use query_context::AccountedQueryReport;
+pub(super) use query_context::AccountedQueryReport;
 pub(super) use query_context::{QueryContext, ScoringInputs};
 mod corpus_query;
 pub(super) use corpus_query::AccountedCorpusStatistics;

@@ -158,6 +158,7 @@ fn admitted_mutation_terms_keep_capacity_and_require_fresh_execution_after_produ
         std::num::NonZeroUsize::MIN,
     );
     let task_only = QueryContext {
+        io_scope: None,
         memory: &task_only_memory,
         task: &producer_task,
         execution: None,
@@ -346,6 +347,7 @@ fn canonical_mutation_checksum_preserves_budget_refusal_type() {
         std::num::NonZeroUsize::MIN,
     );
     let context = QueryContext {
+        io_scope: None,
         memory: &tiny,
         task: &task,
         execution: Some(&permit),

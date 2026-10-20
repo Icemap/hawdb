@@ -367,13 +367,16 @@ fn probe_view(
         ));
     }
     let task = permit.bind_task_context(task);
-    let _io = task
-        .acquire_io_wave(std::num::NonZeroUsize::MIN)
-        .map_err(|error| HawDBError::Execution(error.to_string()))?
-        .ok_or_else(|| {
-            HawDBError::Execution("consumer candidate query requires I/O admission".into())
-        })?;
-    view.probe_query(query_text, query_embedding, mode, options, &task)
+    let io = crate::build_memory::read::QueryIoScope::acquire(&task)?;
+    view.probe_query(crate::out_of_core::CandidateQuery {
+        text: query_text,
+        embedding: query_embedding,
+        mode,
+        options,
+        task: &task,
+        permit,
+        io: &io,
+    })
 }
 
 impl<'birth> ConsumerStationaryTargetLease<'birth> {
@@ -428,14 +431,19 @@ impl<'birth> ConsumerStationaryTargetLease<'birth> {
                 "consumer candidate query requires runtime admission".into(),
             ));
         }
-        let _io = self
-            .task
-            .acquire_io_wave(std::num::NonZeroUsize::MIN)
-            .map_err(|error| HawDBError::Execution(error.to_string()))?
-            .ok_or_else(|| {
-                HawDBError::Execution("consumer candidate query requires I/O admission".into())
-            })?;
-        view.probe_query(query_text, query_embedding, mode, options, &self.task)
+        let io = crate::build_memory::read::QueryIoScope::acquire(&self.task)?;
+        view.probe_query(crate::out_of_core::CandidateQuery {
+            text: query_text,
+            embedding: query_embedding,
+            mode,
+            options,
+            task: &self.task,
+            permit: self
+                .host_admission
+                .as_deref()
+                .expect("admitted candidate probe"),
+            io: &io,
+        })
     }
 
     /// Acquire against the original native generation, never its saved path.

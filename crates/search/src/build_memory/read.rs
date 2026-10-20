@@ -79,7 +79,7 @@ pub(crate) struct ReadAdmission<'a> {
 
 mod query;
 mod unbound;
-pub(crate) use query::{io_error, QueryFileRange};
+pub(crate) use query::{io_error, QueryFileRange, QueryIoScope};
 
 /// A bounded positioned range inside an already admitted, held native scope.
 pub(crate) struct ScopedRange<'a, 'scope> {

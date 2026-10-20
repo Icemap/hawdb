@@ -53,6 +53,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 mod admitted_root;
+mod query_memory;
+
+pub(crate) struct CandidateQuery<'a> {
+    pub(crate) text: &'a str,
+    pub(crate) embedding: Option<&'a [f32]>,
+    pub(crate) mode: SearchMode,
+    pub(crate) options: SearchQueryOptions,
+    pub(crate) task: &'a hawdb_core::RuntimeTaskContext,
+    pub(crate) permit: &'a hawdb_qos::RuntimePermit,
+    pub(crate) io: &'a crate::build_memory::read::QueryIoScope<'a>,
+}
 
 /// A complete native candidate reader retained privately until a separate
 /// source-E fence and durable selector can grant serving authority.
@@ -81,17 +92,8 @@ impl CandidateView {
         self.0._memory.shares_governor_with(permit) && self.0.opened.shares_governor_with(permit)
     }
 
-    pub(crate) fn probe_query(
-        &self,
-        query_text: &str,
-        query_embedding: Option<&[f32]>,
-        mode: SearchMode,
-        options: SearchQueryOptions,
-        task: &hawdb_core::RuntimeTaskContext,
-    ) -> Result<SearchOutOfCoreOutput> {
-        self.0
-            .opened
-            .probe_query(query_text, query_embedding, mode, options, task)
+    pub(crate) fn probe_query(&self, query: CandidateQuery<'_>) -> Result<SearchOutOfCoreOutput> {
+        self.0.opened.probe_query(query)
     }
 
     pub(crate) fn document_count(&self) -> usize {
@@ -2079,6 +2081,14 @@ impl SearchOutOfCoreReader {
         };
         let full_reindex_reasons = read_marker(FULL_REINDEX_MARKER);
         let metadata_repair_reasons = read_marker(METADATA_REPAIR_MARKER);
+        self.freshness_with_markers(full_reindex_reasons, metadata_repair_reasons)
+    }
+
+    fn freshness_with_markers(
+        &self,
+        full_reindex_reasons: Vec<String>,
+        metadata_repair_reasons: Vec<String>,
+    ) -> SearchProjectionFreshness {
         SearchProjectionFreshness {
             document_count: self.manifest.document_count,
             import_source_graph_commit_epoch: self.manifest.import_source_graph_commit_epoch,
@@ -2346,13 +2356,13 @@ impl SearchOutOfCoreReader {
         )
     }
 
-    fn search_with_options_internal(
+    fn search_with_options_internal<'execution>(
         &self,
         query_text: &str,
         query_embedding: Option<&[f32]>,
         mode: SearchMode,
         options: SearchQueryOptions,
-        execution: SearchOutOfCoreExecutionContext<'_>,
+        execution: impl Into<query_memory::Execution<'execution>>,
     ) -> Result<SearchOutOfCoreOutput> {
         if options.limit > self.config.max_hydrated_documents.get() {
             return Err(HawDBError::Storage(format!(
@@ -2370,19 +2380,24 @@ impl SearchOutOfCoreReader {
         )
     }
 
-    fn search_with_materializer<H>(
+    fn search_with_materializer<'execution, H>(
         &self,
         query_text: &str,
         query_embedding: Option<&[f32]>,
         mode: SearchMode,
         options: SearchQueryOptions,
-        execution: SearchOutOfCoreExecutionContext<'_>,
+        execution: impl Into<query_memory::Execution<'execution>>,
         materialize: impl FnOnce(
             &[SearchScoredCandidate],
             HitHydrationContext<'_>,
             &mut SearchOutOfCoreMetrics,
         ) -> Result<Vec<H>>,
     ) -> Result<SearchOutOfCoreOutput<H>> {
+        let query_memory::Execution {
+            base: execution,
+            query,
+            immutable_freshness,
+        } = execution.into();
         let SearchOutOfCoreExecutionContext {
             access_control,
             compressed_vector_search_mode,
@@ -2436,11 +2451,8 @@ impl SearchOutOfCoreReader {
         let policy_epoch = access_control
             .map(|access_control| access_control.policy_epoch)
             .or(options.policy_epoch);
-        let query_terms = self.primary_segment().lexical_projection.tokenize_query(
-            query_text,
-            &self.analyzer_lexicon,
-            self.lexical_term_policy.max_term_bytes(),
-        )?;
+        let normalized_terms = self.query_terms(query_text, query)?;
+        let query_terms = &normalized_terms.values;
         let mut predicate_pushdown = search_metadata_predicate_pushdown(&metadata_filters);
         let mut metrics = SearchOutOfCoreMetrics::default();
         let candidate_set = self.build_candidate_set(
@@ -2508,74 +2520,35 @@ impl SearchOutOfCoreReader {
             SearchMode::Hybrid => options.rank_window,
             SearchMode::Vector => Some(0),
         };
-        let mut lexical_blocks_skipped = 0u64;
-        let (text_scores, text_matching_count, lexical_postings_visited, lexical_bytes_read) =
-            if text_available && mode != SearchMode::Vector {
-                let mut lexical_statistics = LexicalCorpusStatistics::aggregate(
-                    self.segments
-                        .iter()
-                        .map(|segment| &segment.lexical_projection),
-                    &query_terms,
-                    self.lexical_term_policy.max_term_bytes(),
-                )?;
-                if !self.visibility.is_empty() {
-                    lexical_statistics.retract_streamed(self.visibility.retractions().map(
-                        |entry| {
-                            (
-                                entry.retraction.lexical_document_len,
-                                &entry.retraction.unique_terms,
-                            )
-                        },
-                    ))?;
-                }
-                let mut scores = BTreeMap::new();
-                let mut matching_document_count = 0usize;
-                let mut postings_visited = 0u64;
-                let mut bytes_read = lexical_statistics.bytes_read();
-                for segment in &self.segments {
-                    // Hybrid fusion consumes the retained window only, so a
-                    // pruned pass is invisible there. Text mode reports
-                    // `matching_count` as its total hit count, which skipping
-                    // would change, so it keeps the exhaustive pass.
-                    let report = segment
-                        .lexical_projection
-                        .score_with_global_statistics_and_pruning(
-                            &query_terms,
-                            self.lexical_term_policy.max_term_bytes(),
-                            retained_text_limit,
-                            &lexical_statistics,
-                            mode == SearchMode::Hybrid,
-                            |id| {
-                                Ok(self.visibility.is_visible(segment.content_segment_id, id)
-                                    && candidate_set.contains(id, &mut metrics)?)
-                            },
-                        )?;
-                    matching_document_count = matching_document_count
-                        .checked_add(report.matching_document_count)
-                        .ok_or_else(|| {
-                            HawDBError::Storage("search text match count overflow".to_string())
-                        })?;
-                    postings_visited = postings_visited.saturating_add(report.postings_visited);
-                    lexical_blocks_skipped =
-                        lexical_blocks_skipped.saturating_add(report.blocks_skipped);
-                    bytes_read = bytes_read.saturating_add(report.bytes_read);
-                    for (id, score) in report.scores {
-                        if scores.insert(id.clone(), score).is_some() {
-                            return Err(HawDBError::Storage(format!(
-                                "search out-of-core segment set has duplicate document {id}"
-                            )));
-                        }
-                    }
-                }
-                (
-                    scores,
-                    matching_document_count,
-                    postings_visited,
-                    bytes_read,
-                )
-            } else {
-                Default::default()
-            };
+        let text = if text_available && mode != SearchMode::Vector {
+            Some(self.query_text_scores(
+                query_terms,
+                retained_text_limit,
+                mode == SearchMode::Hybrid,
+                &candidate_set,
+                &mut metrics,
+                query,
+            )?)
+        } else {
+            None
+        };
+        let empty_scores = BTreeMap::new();
+        let (
+            text_scores,
+            text_matching_count,
+            lexical_postings_visited,
+            lexical_bytes_read,
+            lexical_blocks_skipped,
+        ) = match &text {
+            Some(scores) => (
+                &scores.values,
+                scores.matching_count,
+                scores.postings_visited,
+                scores.bytes_read,
+                scores.blocks_skipped,
+            ),
+            None => (&empty_scores, 0, 0, 0, 0),
+        };
 
         let retained_vector_limit = match mode {
             SearchMode::Vector => Some(page_score_limit),
@@ -2599,7 +2572,7 @@ impl SearchOutOfCoreReader {
         let vector_scores = &vector_scan.scores;
 
         let vector_ranks = ranked_scores(vector_scores);
-        let text_ranks = ranked_scores(&text_scores);
+        let text_ranks = ranked_scores(text_scores);
         let vector_window_ranks = window_ranks(&vector_ranks, options.rank_window);
         let text_window_ranks = window_ranks(&text_ranks, options.rank_window);
         let mut fallback_reason_codes = vector_fallback_reason_codes.clone();
@@ -2746,7 +2719,7 @@ impl SearchOutOfCoreReader {
                 top_hit_ids: top_ranked_ids(&text_window_ranks, options.limit),
                 top_candidates: top_ranked_candidates(
                     &text_window_ranks,
-                    &text_scores,
+                    text_scores,
                     options.limit,
                 ),
             },
@@ -2810,9 +2783,15 @@ impl SearchOutOfCoreReader {
             .skip(options.offset)
             .take(options.limit)
             .collect::<Vec<_>>();
-        let projection_freshness = self.projection_freshness();
+        let projection_freshness = if immutable_freshness {
+            // Born construction checked the actual native directory. Saved
+            // paths and later unrelated marker files cannot redirect this view.
+            self.freshness_with_markers(Vec::new(), Vec::new())
+        } else {
+            self.projection_freshness()
+        };
         let hydration = HitHydrationContext {
-            query_terms: &query_terms,
+            query_terms,
             query_embedding,
             mode,
             fallback_reason_codes: &fallback_reason_codes,

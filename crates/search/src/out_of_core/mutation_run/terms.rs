@@ -112,7 +112,10 @@ impl Terms {
     pub(crate) fn workspace_bytes(&self) -> Result<u64> {
         match self {
             Self::Owned(terms) => Ok(terms.iter().map(String::len).max().unwrap_or(0) as u64),
-            Self::Stored { scalar_bytes, .. } => add(8192, multiply(*scalar_bytes as u64, 8)?),
+            Self::Stored { scalar_bytes, .. } => add(
+                add(8192, std::mem::size_of::<StoredReader<'_>>() as u64)?,
+                multiply(*scalar_bytes as u64, 8)?,
+            ),
         }
     }
     pub(in crate::out_of_core) fn cursor(&self) -> Result<Cursor<'_>> {
@@ -160,7 +163,7 @@ impl Terms {
                         })
                         .transpose()?,
                 };
-                let mut reader = BufReader::with_capacity(
+                let mut reader = Box::new(BufReader::with_capacity(
                     8192,
                     super::super::hydration::CheckedReader::new(super::read::Range {
                         file,
@@ -168,7 +171,7 @@ impl Terms {
                         remaining: *bytes,
                         context,
                     }),
-                );
+                ));
                 expect(&mut reader, b'[')?;
                 Ok(Cursor::Stored {
                     reader,
@@ -232,10 +235,12 @@ impl Terms {
     }
 }
 
+type StoredReader<'a> = BufReader<super::super::hydration::CheckedReader<super::read::Range<'a>>>;
+
 pub(in crate::out_of_core) enum Cursor<'a> {
     Owned(std::slice::Iter<'a, String>),
     Stored {
-        reader: BufReader<super::super::hydration::CheckedReader<super::read::Range<'a>>>,
+        reader: Box<StoredReader<'a>>,
         remaining: usize,
         scalar_bytes: usize,
         checksum: u64,

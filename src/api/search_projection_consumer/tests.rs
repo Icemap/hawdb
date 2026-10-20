@@ -1897,6 +1897,28 @@ fn sealed_native_candidate_lease<'birth>(
     governor: &hawdb_qos::RuntimeGovernor,
     content: &str,
 ) -> hawdb_search::consumer::ConsumerStationaryTargetLease<'birth> {
+    sealed_native_candidate_document_lease(
+        pending,
+        fixture,
+        source_epoch,
+        governor,
+        hawdb_search::SearchDocument {
+            id: "memory:m1".into(),
+            title: "candidate".into(),
+            content: content.into(),
+            embedding: None,
+            metadata: Default::default(),
+        },
+    )
+}
+
+fn sealed_native_candidate_document_lease<'birth>(
+    pending: &'birth mut hawdb_storage::consumer_allocation::PendingConsumerGeneration,
+    fixture: &Fixture,
+    source_epoch: u64,
+    governor: &hawdb_qos::RuntimeGovernor,
+    document: hawdb_search::SearchDocument,
+) -> hawdb_search::consumer::ConsumerStationaryTargetLease<'birth> {
     use hawdb_qos::RuntimeWorkRequest;
     use hawdb_search::consumer::generation_metadata::{ArtifactReference, MetadataInput};
     const MANIFEST: &str = "search_projection.out_of_core.manifest.hawdb";
@@ -1912,15 +1934,7 @@ fn sealed_native_candidate_lease<'birth>(
         },
     )
     .unwrap();
-    writer
-        .push(hawdb_search::SearchDocument {
-            id: "memory:m1".into(),
-            title: "candidate".into(),
-            content: content.into(),
-            embedding: None,
-            metadata: Default::default(),
-        })
-        .unwrap();
+    writer.push(document).unwrap();
     writer.finish().unwrap();
     assert!(!stage_path.join("search_projection.hawdb").exists());
     let stage = hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
@@ -2109,6 +2123,16 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                     .unwrap();
                 assert_eq!(result.result.total_hits, 1);
                 assert_eq!(result.result.hits[0].id, "memory:m1");
+                assert!(
+                    !result.result.hits[0]
+                        .projection_freshness
+                        .full_reindex_needed
+                );
+                assert!(
+                    !result.result.hits[0]
+                        .projection_freshness
+                        .metadata_repair_needed
+                );
                 assert_eq!(
                     result.result.hits[0]
                         .projection_freshness
@@ -2586,6 +2610,40 @@ fn consumer_native_candidate_view_keeps_old_pins_across_successor_and_failed_sel
     drop(permit);
     assert_eq!(governor.snapshot().active_background_tasks, 0);
 
+    #[cfg(feature = "full-text-search")]
+    {
+        let before = governor.snapshot().admitted_memory_bytes;
+        let tiny = governor
+            .try_admit(RuntimeWorkRequest::background_maintenance(1024).with_io_wave_slots(1))
+            .unwrap();
+        let error = old
+            .probe_query(
+                &tiny,
+                Default::default(),
+                "amber",
+                None,
+                hawdb_search::SearchMode::Text,
+                hawdb_search::SearchQueryOptions {
+                    limit: 1,
+                    offset: 0,
+                    rank_window: None,
+                    fusion_weights: Default::default(),
+                    metadata_filters: Default::default(),
+                    policy_epoch: None,
+                },
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, HawDBError::ResourceBudgetExceeded(_)),
+            "{error}"
+        );
+        drop(tiny);
+        assert_eq!(slot.report().unwrap(), old.report());
+        assert_eq!(governor.snapshot().active_background_tasks, 0);
+        assert_eq!(governor.snapshot().admitted_memory_bytes, before);
+        assert_eq!(hits(&old, &governor, "amber"), 1);
+    }
+
     append(&mut db, 2);
     let (mut second, source) = candidate(&mut db, &fixture, &governor, "violet");
     let permit = admit(&governor);
@@ -2677,6 +2735,144 @@ fn consumer_native_candidate_view_keeps_old_pins_across_successor_and_failed_sel
     assert_eq!(governor.snapshot().active_background_tasks, 0);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     drop(reopened);
+}
+
+#[test]
+#[cfg(feature = "vector-search")]
+fn consumer_native_candidate_view_probes_real_vector_and_hybrid_with_one_io_slot() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let mut birth = reserve_native_generation(&mut db, &fixture)
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    birth.create().unwrap();
+    let epoch = db.begin_read_transaction().unwrap().commit_epoch();
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(64 * 1024 * 1024),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    let mut lease = sealed_native_candidate_document_lease(
+        &mut birth,
+        &fixture,
+        epoch,
+        &governor,
+        hawdb_search::SearchDocument {
+            id: "memory:m1".into(),
+            title: "candidate".into(),
+            content: "amber".into(),
+            embedding: Some(vec![1.0, 0.0]),
+            metadata: std::collections::BTreeMap::from([("space_id".into(), "team".into())]),
+        },
+    );
+    lease
+        .prepare_candidate_view(NonZeroU64::new(32 * 1024 * 1024).unwrap())
+        .unwrap();
+    let detached = lease.detach_candidate().unwrap();
+    let candidate = detached.attach_birth(birth).unwrap();
+    for mode in [
+        hawdb_search::SearchMode::Vector,
+        #[cfg(feature = "full-text-search")]
+        hawdb_search::SearchMode::Hybrid,
+        #[cfg(feature = "full-text-search")]
+        hawdb_search::SearchMode::Text,
+    ] {
+        let permit = governor
+            .try_admit(
+                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1),
+            )
+            .unwrap();
+        let output = candidate
+            .probe_candidate_query(
+                &permit,
+                hawdb_core::RuntimeTaskContext::with_timeout(std::time::Duration::from_secs(10)),
+                "amber",
+                Some(&[1.0, 0.0]),
+                mode,
+                hawdb_search::SearchQueryOptions {
+                    limit: 1,
+                    offset: 0,
+                    rank_window: None,
+                    fusion_weights: Default::default(),
+                    metadata_filters: std::collections::BTreeMap::from([(
+                        "space_id".into(),
+                        "team".into(),
+                    )]),
+                    policy_epoch: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(output.result.total_hits, 1);
+        assert_eq!(output.result.hits[0].id, "memory:m1");
+        assert!(
+            !output.result.hits[0]
+                .projection_freshness
+                .full_reindex_needed
+        );
+        assert!(
+            !output.result.hits[0]
+                .projection_freshness
+                .metadata_repair_needed
+        );
+        drop(permit);
+        assert_eq!(governor.snapshot().active_background_tasks, 0);
+        assert_eq!(governor.snapshot().active_background_io_slots, 0);
+    }
+}
+
+#[test]
+fn consumer_native_candidate_view_refuses_native_operational_markers() {
+    use hawdb_qos::{IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig};
+    for marker in [
+        hawdb_search::FULL_REINDEX_MARKER,
+        hawdb_search::METADATA_REPAIR_MARKER,
+    ] {
+        let fixture = Fixture::new();
+        let mut db = fixture.database();
+        append(&mut db, 1);
+        let mut birth = reserve_native_generation(&mut db, &fixture)
+            .prepare_stationary_generation(&fixture.0)
+            .unwrap();
+        birth.create().unwrap();
+        let epoch = db.begin_read_transaction().unwrap().commit_epoch();
+        let path = fixture.0.join(birth.generation_name());
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(64 * 1024 * 1024),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        let mut lease =
+            sealed_native_candidate_lease(&mut birth, &fixture, epoch, &governor, "amber");
+        #[cfg(unix)]
+        let path = {
+            let captured = path.with_extension("captured");
+            std::fs::rename(&path, &captured).unwrap();
+            std::fs::create_dir(&path).unwrap();
+            captured
+        };
+        std::fs::write(path.join(marker), b"rebuild required").unwrap();
+        let error = lease
+            .prepare_candidate_view(NonZeroU64::new(32 * 1024 * 1024).unwrap())
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("contains operational marker"),
+            "{error}"
+        );
+        std::fs::remove_file(path.join(marker)).unwrap();
+        let report = lease
+            .prepare_candidate_view(NonZeroU64::new(32 * 1024 * 1024).unwrap())
+            .unwrap();
+        assert_eq!(report.source_epoch, epoch);
+        assert_eq!(report.document_count, 1);
+    }
 }
 
 #[test]

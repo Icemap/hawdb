@@ -358,6 +358,38 @@ struct State {
 pub(super) struct RootRef(Option<Shared<State>>);
 
 impl RootRef {
+    /// A born immutable generation cannot carry mutable repair/reindex state.
+    /// Preserve native lookup errors; only NotFound proves absence.
+    pub(super) fn require_absent_control_child(
+        &self,
+        context: &FileOpenContext,
+        name: &str,
+        admission: &ReadAdmission<'_>,
+    ) -> Result<()> {
+        let _io = admission
+            .io()
+            .map_err(|error| HawDBError::Execution(error.to_string()))?;
+        let file = {
+            let native = self
+                .state()
+                .native
+                .read()
+                .unwrap_or_else(|p| p.into_inner());
+            native
+                .as_ref()
+                .expect("live root owns its directory")
+                .directory
+                .open_child(context, name)
+        };
+        match file {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
+            Ok(_) => Err(HawDBError::StorageIntegrity(format!(
+                "immutable Consumer candidate contains operational marker {name}"
+            ))),
+        }
+    }
+
     /// Open relative to the retained directory, then return the opening wave
     /// before admitting the held-file read. A pathname replacement cannot
     /// redirect the selected head, and a one-slot operation cannot self-wait.

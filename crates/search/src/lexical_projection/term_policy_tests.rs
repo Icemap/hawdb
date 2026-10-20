@@ -151,6 +151,7 @@ fn term_policy_query_and_delta_exact_memory_boundaries() {
     for context in [
         None,
         Some(QueryContext {
+            io_scope: None,
             memory: &account,
             task: &task,
             execution: None,

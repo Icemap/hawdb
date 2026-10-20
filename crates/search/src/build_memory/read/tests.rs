@@ -64,6 +64,57 @@ fn warm(memory: &BuildMemory) {
 }
 
 #[test]
+fn query_range_borrows_original_single_io_slot_and_rejects_another_task() {
+    use std::io::Read;
+    let directory = Directory::new();
+    let path = directory.0.join("query-artifact");
+    let bytes = b"original admitted query range";
+    std::fs::write(&path, bytes).unwrap();
+    let file = File::open(&path).unwrap();
+    let governor = governor();
+    let permit = governor
+        .try_admit(RuntimeWorkRequest::background_maintenance(2 << 20).with_io_wave_slots(1))
+        .unwrap();
+    let task = permit.bind_task_context(Default::default());
+    let memory = BuildMemory::new(&task).unwrap();
+    let scope = QueryIoScope::acquire(&task).unwrap();
+    assert_eq!(governor.snapshot().active_background_io_slots, 1);
+    assert!(matches!(
+        task.try_acquire_io_wave(NonZeroUsize::MIN).unwrap(),
+        hawdb_core::RuntimeIoWaveTryAcquire::Pending,
+    ));
+    let baseline = memory.ledger.snapshot().used_bytes;
+    let foreign = task.clone();
+    for (context_task, succeeds) in [(&foreign, false), (&task, true)] {
+        let mut range = QueryFileRange {
+            file: &file,
+            expected_length: Some(bytes.len() as u64),
+            offset: 0,
+            remaining: bytes.len() as u64,
+            context: crate::lexical_projection::QueryContext {
+                memory: &memory.spool,
+                task: context_task,
+                execution: Some(&permit),
+                io_scope: Some(&scope),
+            },
+            require_execution: true,
+        };
+        let mut output = [0; 29];
+        let result = range.read_exact(&mut output);
+        if succeeds {
+            result.unwrap();
+            assert_eq!(&output, bytes);
+        } else {
+            assert!(result.unwrap_err().to_string().contains("another task"));
+        }
+        assert_eq!(governor.snapshot().active_background_io_slots, 1);
+        assert_eq!(memory.ledger.snapshot().used_bytes, baseline);
+    }
+    drop(scope);
+    assert_eq!(governor.snapshot().active_background_io_slots, 0);
+}
+
+#[test]
 fn bounded_input_keeps_the_opened_file_after_path_replacement() {
     let directory = Directory::new();
     let path = directory.0.join("artifact");

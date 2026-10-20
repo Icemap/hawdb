@@ -47,6 +47,7 @@ impl SearchIndex {
         task: &RuntimeTaskContext,
     ) -> Result<SearchResidentTextSeedOutput> {
         let context = QueryContext {
+            io_scope: None,
             memory,
             task,
             execution: None,

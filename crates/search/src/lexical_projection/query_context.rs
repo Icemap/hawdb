@@ -24,6 +24,7 @@ pub(crate) struct QueryContext<'a> {
     pub task: &'a RuntimeTaskContext,
     // Borrowed execution is for active serving cursors, never retained views.
     pub execution: Option<&'a hawdb_qos::RuntimePermit>,
+    pub io_scope: Option<&'a crate::build_memory::read::QueryIoScope<'a>>,
 }
 
 impl<'a> QueryContext<'a> {
@@ -34,6 +35,7 @@ impl<'a> QueryContext<'a> {
             memory: &admission.memory.spool,
             task: admission.task,
             execution: admission.runtime_permit(),
+            io_scope: None,
         }
     }
 }

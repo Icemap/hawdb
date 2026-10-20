@@ -163,8 +163,15 @@ released outside SourceOwner and the read-slot mutex. A selector that never
 entered native selection can explicitly persist no-selection before restoring
 its slot; arbitrary native failures cannot roll it back.
 The pin's query method remains a validation probe: fresh execution and I/O
-admission are required, but complete temporary/result memory accounting and
-registered lexical/vector/document serving semantics remain unfinished.
+admission are required. Normalization, corpus statistics, local lexical scores
+and cross-segment score ownership now share the actual task's working account.
+Range reads borrow the query's original I/O wave, without self-waiting for a
+second slot; the scope is tied to that exact task and serializes its range I/O.
+Born immutable readers check the captured native directory for operational
+repair/reindex markers before opening a view and refuse any such entry. Their
+query freshness comes from the complete immutable generation, without reopening
+a saved pathname. Complete filter/vector/decode/ranking and retained-result
+memory accounting and registered serving semantics remain unfinished.
 This lower-level path does not install the registered Consumer read view or
 replace the legacy facade's directory move. Post-restart adoption and composed
 power-loss qualification remain separate work.

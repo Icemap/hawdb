@@ -52,6 +52,7 @@ pub(super) struct OpenContext<'a, 'execution> {
 // construction evidence must not become an ungoverned public reader capability.
 pub(super) struct OpenedRoot {
     reader: SearchOutOfCoreReader,
+    born_immutable: bool,
     _native_custody: Option<super::root_registry::RootRef>,
     _root_memory: Option<ReaderMemory>,
     _manifest_memory: Option<ReaderMemory>,
@@ -84,21 +85,44 @@ impl OpenedRoot {
 
     pub(super) fn probe_query(
         &self,
-        query_text: &str,
-        query_embedding: Option<&[f32]>,
-        mode: super::SearchMode,
-        options: super::SearchQueryOptions,
-        task: &hawdb_core::RuntimeTaskContext,
+        query: super::CandidateQuery<'_>,
     ) -> Result<super::SearchOutOfCoreOutput> {
-        self.reader
-            .search_with_options_compressed_vector_projection_context(
-                query_text,
-                query_embedding,
-                mode,
-                options,
-                super::CompressedVectorSearchMode::Disabled,
-                task,
-            )
+        let memory = crate::build_memory::BuildMemory::new(query.task)?;
+        let _metadata = memory
+            .spool
+            .reserve(crate::build_memory::ACCOUNT_METADATA_BYTES)?;
+        let context = crate::lexical_projection::QueryContext {
+            memory: &memory.spool,
+            task: query.task,
+            execution: Some(query.permit),
+            io_scope: Some(query.io),
+        };
+        self.reader.search_with_options_internal(
+            query.text,
+            query.embedding,
+            query.mode,
+            query.options,
+            super::query_memory::Execution {
+                base: super::SearchOutOfCoreExecutionContext {
+                    access_control: None,
+                    compressed_vector_search_mode: super::CompressedVectorSearchMode::Disabled,
+                    vector_execution_options: super::VectorSearchExecutionOptions::bounded(
+                        std::num::NonZeroUsize::new(
+                            self.reader
+                                .config
+                                .max_vector_search_parallelism
+                                .get()
+                                .min(query.task.admitted_parallelism().get()),
+                        )
+                        .expect("nonzero vector parallelism"),
+                        self.reader.config.max_vector_search_working_bytes.get(),
+                        Some(query.task),
+                    ),
+                },
+                query: Some(context),
+                immutable_freshness: self.born_immutable,
+            },
+        )
     }
 
     pub(super) fn document_count(&self) -> usize {
@@ -236,6 +260,13 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
         _ => unreachable!("admitted construction owns publication capture"),
     };
     let native_custody = capture.as_ref().map(|capture| capture.root().clone());
+    if born.is_some() {
+        let admission = admission.expect("born reader admission");
+        let native = native_custody.as_ref().expect("born native custody");
+        for marker in [FULL_REINDEX_MARKER, METADATA_REPAIR_MARKER] {
+            native.require_absent_control_child(&project_files.io_context(), marker, admission)?;
+        }
+    }
     let head = match (admission, native_custody.as_ref()) {
         (Some(admission), Some(root)) => Some(root.open_head(
             &project_files.io_context(),
@@ -296,6 +327,7 @@ pub(super) fn open(context: OpenContext<'_, '_>) -> Result<OpenedRoot> {
     )?;
     drop(capture);
     Ok(OpenedRoot {
+        born_immutable: born.is_some(),
         _native_custody: native_custody,
         reader: SearchOutOfCoreReader {
             root,

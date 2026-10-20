@@ -40,6 +40,7 @@ fn lexical_token_memory_refusals_preserve_exact_boundaries_and_release_ownership
     let ledger = QueryMemoryLedger::new(grant);
     let account = ledger.account(QueryMemoryClass::ExternalRead, "raw text", grant);
     let context = QueryContext {
+        io_scope: None,
         memory: &account,
         task: &task,
         execution: None,
@@ -148,6 +149,7 @@ fn lexical_statistics_memory_refusal_preserves_complete_retry_with_context() {
     for context in [
         None,
         Some(QueryContext {
+            io_scope: None,
             memory: &account,
             task: &task,
             execution: None,
@@ -196,6 +198,7 @@ fn lexical_private_memory_refusals_keep_cancellation_precedence() {
     let ledger = QueryMemoryLedger::new(grant);
     let account = ledger.account(QueryMemoryClass::ExternalRead, "cancelled query", grant);
     let context = QueryContext {
+        io_scope: None,
         memory: &account,
         task: &task,
         execution: None,

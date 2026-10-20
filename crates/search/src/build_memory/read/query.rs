@@ -19,6 +19,44 @@ use hawdb_executor::QueryMemoryLease;
 use hawdb_storage::file_io::{File, ReadAdmissionControl};
 use std::io::{self, Read};
 use std::num::NonZeroUsize;
+use std::sync::{Mutex, MutexGuard};
+
+/// Actual I/O capacity held by one synchronous query. Range readers can
+/// borrow it without acquiring a second slot from a one-slot operation.
+/// The mutex serializes native reads if a scoped worker borrows the context.
+#[derive(Debug)]
+pub(crate) struct QueryIoScope<'a> {
+    task: &'a hawdb_core::RuntimeTaskContext,
+    permit: Mutex<Box<dyn hawdb_core::RuntimeIoWavePermit>>,
+}
+
+impl<'a> QueryIoScope<'a> {
+    pub(crate) fn acquire(task: &'a hawdb_core::RuntimeTaskContext) -> Result<Self> {
+        crate::query_control::checkpoint(task)?;
+        let permit = task
+            .acquire_io_wave(NonZeroUsize::MIN)
+            .map_err(|error| HawDBError::Execution(error.to_string()))?
+            .ok_or_else(|| HawDBError::Execution("query requires I/O admission".into()))?;
+        Ok(Self {
+            task,
+            permit: Mutex::new(permit),
+        })
+    }
+
+    fn lock(
+        &self,
+        task: &hawdb_core::RuntimeTaskContext,
+    ) -> Result<MutexGuard<'_, Box<dyn hawdb_core::RuntimeIoWavePermit>>> {
+        if !std::ptr::eq(self.task, task) {
+            return Err(HawDBError::Execution(
+                "query I/O scope belongs to another task".into(),
+            ));
+        }
+        self.permit
+            .lock()
+            .map_err(|_| HawDBError::Execution("query I/O scope is poisoned".into()))
+    }
+}
 
 pub(crate) struct QueryFileRange<'a> {
     pub(crate) file: &'a File,
@@ -57,15 +95,24 @@ fn read_at(
             "admitted file range require borrowed query execution".into(),
         ));
     }
-    let _io = context
-        .task
-        .acquire_io_wave(NonZeroUsize::MIN)
-        .map_err(|error| HawDBError::Execution(error.to_string()))?;
-    if range.require_execution && _io.is_none() {
+    let _scope = context
+        .io_scope
+        .map(|scope| scope.lock(context.task))
+        .transpose()?;
+    let _io = if _scope.is_some() {
+        None
+    } else {
+        context
+            .task
+            .acquire_io_wave(NonZeroUsize::MIN)
+            .map_err(|error| HawDBError::Execution(error.to_string()))?
+    };
+    if range.require_execution && _io.is_none() && _scope.is_none() {
         return Err(HawDBError::Execution(
             "admitted file range require query I/O admission".into(),
         ));
     }
+    context.checkpoint()?;
     let mut control = Control {
         expected_length: range.expected_length,
         context,
