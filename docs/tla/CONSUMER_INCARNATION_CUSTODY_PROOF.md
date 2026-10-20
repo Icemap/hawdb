@@ -29,7 +29,9 @@ Before selection, the old root is already retained in retirement/intent custody.
 Pending native effects survive caller closure; unknown birth cannot be adopted.
 After ledger loss, the whole domain is quarantined rather than reset. The model
 has no GC action: retaining known debt forever is safe here and explicitly does
-not discharge the real eventual-reclamation acceptance requirement.
+not discharge the real eventual-reclamation acceptance requirement. It checks
+one crash; a second crash during recovery adoption is outside the explored
+state space.
 
 The single identity counter represents the fresh-install reservation boundary.
 Production target incarnations, candidate generations and operation identities

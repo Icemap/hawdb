@@ -2155,7 +2155,8 @@ complete admitted results and callback unwind.
 [`HawDBConsumerIncarnationCustody`](CONSUMER_INCARNATION_CUSTODY_PROOF.md)
 checks non-reused installation identities, native birth evidence, retained
 pending debt, complete selected closure and durable acknowledgement in a bounded
-design model. Its seven negative controls are generated from the base config
-and run through `//docs/tla:consumer_incarnation_custody_controls`. The model
+design model. Its seven single-fault configs are registered with expected
+invariants in `mutants/mutants.txt` and run through
+`//docs/tla:consumer_incarnation_custody_controls` and `--check-mutants`. The model
 adds no runtime publication authority; the stationary Consumer implementation
 remains open under #1092 and draft #1039.

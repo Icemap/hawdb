@@ -175,7 +175,7 @@ tla_check(
     for control in ["ReopenLabel", "ForgeMissingOwner", "SharedOffset", "CloseBeforeReaders", "RefundBeforeClose", "FreshAccount", "HoldAfterBuild"]
 ]
 
-# Generate one negative control at a time from the checked base configuration.
+# Each control is registered with its expected invariant in mutants/mutants.txt.
 _CONSUMER_CUSTODY_CONTROLS = [
     "CreateBeforeReservationBarrier",
     "ReuseCancelledIncarnation",
@@ -187,21 +187,10 @@ _CONSUMER_CUSTODY_CONTROLS = [
 ]
 
 [
-    genrule(
-        name = "HawDBConsumerIncarnationCustody" + control + "_config",
-        srcs = ["HawDBConsumerIncarnationCustody.cfg"],
-        outs = ["generated/HawDBConsumerIncarnationCustody" + control + ".cfg"],
-        cmd = "sed 's/" + control + " = FALSE/" + control + " = TRUE/' $(location HawDBConsumerIncarnationCustody.cfg) > $@",
-        tags = ["manual"],
-    )
-    for control in _CONSUMER_CUSTODY_CONTROLS
-]
-
-[
     tla_check(
         name = "HawDBConsumerIncarnationCustody" + control + "_check",
         module = "HawDBConsumerIncarnationCustody.tla",
-        config = ":HawDBConsumerIncarnationCustody" + control + "_config",
+        config = "mutants/HawDBConsumerIncarnationCustody" + control + ".cfg",
         expect = "invariant_violation",
         tags = ["manual"],
         timeout_seconds = 1800,
