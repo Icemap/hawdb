@@ -20,7 +20,7 @@ use crate::out_of_core::SearchProjectionPublishLease;
 use hawdb_core::{RuntimeTaskContext, Uuid};
 use hawdb_integrity::IntegrityHasher;
 use hawdb_storage::consumer_allocation::PendingConsumerGeneration;
-use hawdb_storage::file_io::{self as fs, File};
+use hawdb_storage::file_io as fs;
 use hawdb_storage::immutable_object::{ObjectKind, ObjectReference, ObjectReferenceWriter};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -756,7 +756,8 @@ impl ConsumerProjection {
         }
         // Readers hold paths into their generation. Reload those readers while
         // retaining the lease, receipt, and initializer's runtime configuration.
-        self.index.validate_registered_artifacts()?;
+        self.index
+            .validate_registered_artifacts(operation.publication())?;
         #[cfg(feature = "vector-search")]
         self.index.load_registered_rabitq_projection()?;
         self.index.consumer_binding_valid = true;
@@ -765,13 +766,10 @@ impl ConsumerProjection {
     }
 
     fn read_receipt(&self) -> Result<CheckpointReceipt> {
-        let path = self
-            .index
-            .path
-            .as_ref()
-            .expect("persistent consumer")
-            .join(SEARCH_SNAPSHOT_FILE);
-        let mut file = File::open(path)?;
+        let mut file = self
+            .authority
+            .publication()
+            .open_captured_child(SEARCH_SNAPSHOT_FILE)?;
         let mut hasher = IntegrityHasher::new();
         let mut buffer = [0u8; 8192];
         let mut encoded_len = 0u64;
@@ -940,15 +938,18 @@ impl SearchIndex {
         ))
     }
 
-    pub(super) fn validate_registered_artifacts(&mut self) -> Result<()> {
+    pub(super) fn validate_registered_artifacts(
+        &mut self,
+        publication: &SearchProjectionPublishLease,
+    ) -> Result<()> {
         let root = self
             .path
             .as_deref()
             .expect("persistent registered projection");
-        let descriptor = super::read_search_segment_descriptor(root)?
+        let descriptor = super::read_captured_search_segment_descriptor(publication)?
             .ok_or_else(|| invalid("missing registered descriptor"))?;
         if !descriptor.matches_documents(&self.documents)
-            || !descriptor.payload_artifact_is_available(root)?
+            || !descriptor.payload_artifact_is_available_under_publication(publication)?
         {
             return Err(invalid(
                 "registered descriptor does not match its snapshot or payload",
@@ -1405,21 +1406,69 @@ mod tests {
         })
         .unwrap();
         drop(owner);
+        assert!(root
+            .join(crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE)
+            .exists());
 
         let lease = SearchProjectionPublishLease::acquire_for_consumer(&root).unwrap();
         fs::rename(&root, &moved).unwrap();
         fs::create_dir(&root).unwrap();
         fs::write(root.join(SEARCH_SNAPSHOT_FILE), b"foreign snapshot").unwrap();
+        fs::write(
+            root.join(crate::out_of_core::OUT_OF_CORE_MANIFEST_FILE),
+            b"foreign manifest",
+        )
+        .unwrap();
+        fs::write(
+            root.join(crate::SEARCH_SEGMENT_DESCRIPTOR_FILE),
+            b"foreign descriptor",
+        )
+        .unwrap();
 
         let mut index = SearchIndex {
             path: Some(root.clone()),
             ..SearchIndex::default()
         };
         index.load_snapshot_from_publication(&lease).unwrap();
+        crate::out_of_core::validate_captured_resident_snapshot_identity(&index, &lease).unwrap();
+        let descriptor = crate::read_captured_search_segment_descriptor(&lease)
+            .unwrap()
+            .unwrap();
+        assert!(descriptor.matches_documents(&index.documents));
+        assert!(descriptor
+            .payload_artifact_is_available_under_publication(&lease)
+            .unwrap());
         assert_eq!(index.documents["memory:original"].content, "original");
         assert!(index.consumer_binding.is_some());
 
         drop(lease);
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(moved).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn registered_receipt_uses_captured_directory_after_path_replacement() {
+        let root = directory();
+        let moved = root.with_extension("moved");
+        let owner = ConsumerProjection::initialize(&root, binding(), 0, |index| {
+            index.upsert(crate::SearchDocument {
+                id: "memory:original".into(),
+                title: String::new(),
+                content: "original".into(),
+                embedding: None,
+                metadata: Default::default(),
+            })
+        })
+        .unwrap();
+        let before = owner.read_receipt().unwrap();
+
+        fs::rename(&root, &moved).unwrap();
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join(SEARCH_SNAPSHOT_FILE), b"foreign snapshot").unwrap();
+        assert_eq!(owner.read_receipt().unwrap(), before);
+
+        drop(owner);
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(moved).unwrap();
     }

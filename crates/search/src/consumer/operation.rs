@@ -20,6 +20,10 @@ pub(crate) struct Authority {
 }
 
 impl Authority {
+    pub(super) fn publication(&self) -> &SearchProjectionPublishLease {
+        &self._lease
+    }
+
     pub(super) fn new(lease: SearchProjectionPublishLease) -> Arc<Self> {
         Arc::new(Self {
             _lease: lease,

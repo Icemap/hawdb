@@ -3850,7 +3850,28 @@ pub(super) fn validate_resident_snapshot_identity(index: &SearchIndex, root: &Pa
         return Ok(());
     }
     let bytes = read_bounded_file(&path, MAX_OUT_OF_CORE_MANIFEST_BYTES)?;
-    let manifest = SearchOutOfCoreManifestBody::decode(&bytes)?;
+    validate_resident_snapshot_manifest(index, &bytes)
+}
+
+pub(super) fn validate_captured_resident_snapshot_identity(
+    index: &SearchIndex,
+    publication: &SearchProjectionPublishLease,
+) -> Result<()> {
+    let file = match publication.open_captured_child(OUT_OF_CORE_MANIFEST_FILE) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    let bytes = crate::bounded_file::read_bounded_open_file(
+        file,
+        OUT_OF_CORE_MANIFEST_FILE,
+        MAX_OUT_OF_CORE_MANIFEST_BYTES,
+    )?;
+    validate_resident_snapshot_manifest(index, &bytes)
+}
+
+fn validate_resident_snapshot_manifest(index: &SearchIndex, bytes: &[u8]) -> Result<()> {
+    let manifest = SearchOutOfCoreManifestBody::decode(bytes)?;
     let embedding = index.embedding_manifest.as_ref();
     if manifest.document_count != index.documents.len()
         || manifest.documents_digest != lexical_documents_digest(&index.documents)

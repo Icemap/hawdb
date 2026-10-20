@@ -1517,7 +1517,11 @@ impl SearchIndex {
                 error
             }
         })?;
-        out_of_core::validate_resident_snapshot_identity(&index, path)?;
+        if registered {
+            out_of_core::validate_captured_resident_snapshot_identity(&index, publication)?;
+        } else {
+            out_of_core::validate_resident_snapshot_identity(&index, path)?;
+        }
         if index.consumer_binding.is_some() != registered {
             return Err(HawDBError::Storage(
                 "projection consumer lifecycle does not match snapshot binding".into(),
@@ -1525,7 +1529,7 @@ impl SearchIndex {
         }
         if registered {
             index
-                .validate_registered_artifacts()
+                .validate_registered_artifacts(publication)
                 .map_err(|error| match error {
                     HawDBError::FileDescriptors(_) => error,
                     _ => HawDBError::StorageIntegrity(error.to_string()),
@@ -6078,6 +6082,27 @@ impl SearchSegmentDescriptor {
         }
     }
 
+    fn payload_artifact_is_available_under_publication(
+        &self,
+        publication: &out_of_core::SearchProjectionPublishLease,
+    ) -> Result<bool> {
+        let Some(last_range) = self
+            .segments
+            .iter()
+            .filter_map(|segment| segment.payload_range)
+            .next_back()
+        else {
+            return Ok(true);
+        };
+        match publication.open_captured_child(SEARCH_SEGMENT_PAYLOAD_FILE) {
+            Ok(file) => {
+                Ok(file.metadata()?.len() >= last_range.offset.saturating_add(last_range.length))
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
+
     fn physical_read_ranges(&self) -> Vec<SegmentReadRange> {
         self.segments
             .iter()
@@ -7281,6 +7306,19 @@ fn read_search_segment_descriptor(path: &Path) -> Result<Option<SearchSegmentDes
         return Ok(None);
     }
     let text = fs::read_to_string(&descriptor_path)?;
+    decode_search_segment_descriptor_text(&text).map(Some)
+}
+
+fn read_captured_search_segment_descriptor(
+    publication: &out_of_core::SearchProjectionPublishLease,
+) -> Result<Option<SearchSegmentDescriptor>> {
+    let mut file = match publication.open_captured_child(SEARCH_SEGMENT_DESCRIPTOR_FILE) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let mut text = String::new();
+    file.read_to_string(&mut text)?;
     decode_search_segment_descriptor_text(&text).map(Some)
 }
 
