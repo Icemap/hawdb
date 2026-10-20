@@ -164,7 +164,8 @@ pub(super) fn install_generation(
     let vector_source = io.path(input.stage, Path::new(STAGE_VECTOR_FILE))?;
     let lexical_artifact_source = io.path(input.stage, Path::new(input.lexical_artifact_name))?;
     let lexical_manifest_source = io.path(input.stage, Path::new(LEXICAL_MANIFEST_FILE))?;
-    let (descriptor_len, descriptor_checksum) = io.checksum(&descriptor_source)?;
+    let (descriptor_seal, descriptor_checksum) = io.seal_with_checksum(&descriptor_source)?;
+    let descriptor_len = descriptor_seal.length;
     let payload_seal = io.seal(&payload_source)?;
     let payload_len = payload_seal.length;
     let metadata_seal = io.seal(&metadata_source)?;
@@ -186,8 +187,9 @@ pub(super) fn install_generation(
             )));
         }
     }
-    let (lexical_manifest_len, lexical_manifest_checksum) =
-        io.checksum(&lexical_manifest_source)?;
+    let (lexical_manifest_seal, lexical_manifest_checksum) =
+        io.seal_with_checksum(&lexical_manifest_source)?;
+    let lexical_manifest_len = lexical_manifest_seal.length;
     let lexical_artifact_seal = io.seal(&lexical_artifact_source)?;
     let lexical_artifact_len = lexical_artifact_seal.length;
     let layout = json::prepare(
@@ -487,15 +489,13 @@ pub(super) fn install_generation(
                     ))
                 }
             },
-            descriptor: super::super::ArtifactObject::from_reference(
-                io.seal(&descriptor_source)?.reference,
-            )?,
+            descriptor: super::super::ArtifactObject::from_reference(descriptor_seal.reference)?,
             payload: super::super::ArtifactObject::from_reference(payload_seal.reference)?,
             metadata: super::super::ArtifactObject::from_reference(metadata_seal.reference)?,
             vector: super::super::ArtifactObject::from_reference(vector_seal.reference)?,
             layout: super::super::ArtifactObject::from_reference(layout.artifact_reference(task)?)?,
             lexical_manifest: super::super::ArtifactObject::from_reference(
-                io.seal(&lexical_manifest_source)?.reference,
+                lexical_manifest_seal.reference,
             )?,
             lexical_payload: super::super::ArtifactObject::from_reference(
                 lexical_artifact_seal.reference,

@@ -189,6 +189,16 @@ impl<'a> GenerationIo<'a> {
         self.seal_file_admitted(&mut file)
     }
 
+    /// Capture the staged checksum and producer reference from the same read.
+    pub(super) fn seal_with_checksum(&self, path: &Path) -> Result<(ArtifactSeal, u64)> {
+        let _buffer = self.memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
+        let mut file = self.native(&[path], || File::open(path))??;
+        let expected = file.metadata()?.len();
+        let mut checksum = Crc32cHasher::new();
+        let seal = seal_reader(&mut file, expected, self.task, Some(&mut checksum))?;
+        Ok((seal, checksum.finish()))
+    }
+
     /// Seal the producer's still-held candidate, before namespace installation.
     /// The caller retains exclusive write custody; the cursor finishes at EOF.
     pub(in crate::out_of_core) fn seal_file(&self, file: &mut File) -> Result<ArtifactSeal> {

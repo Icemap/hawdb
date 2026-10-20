@@ -270,6 +270,26 @@ fn combined_seal_reads_once_and_matches_separate_crc_and_object_scans() {
 }
 
 #[test]
+fn staged_checksum_and_seal_match_independent_artifact_identities() {
+    let root = Directory::new();
+    let source = root.0.join("source");
+    let (memory, task) = context(256 * 1024);
+    let io = GenerationIo::new(&memory, &task);
+    for length in [0, SPOOL_BUFFER_BYTES - 1, 3 * SPOOL_BUFFER_BYTES + 11] {
+        let bytes = vec![37; length];
+        fs::write(&source, &bytes).unwrap();
+        let (seal, checksum) = io.seal_with_checksum(&source).unwrap();
+        assert_eq!(seal.length, length as u64);
+        assert_eq!(
+            seal.reference,
+            ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, &bytes)
+        );
+        assert_eq!(checksum, crate::checksum_bytes(&bytes));
+        assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+    }
+}
+
+#[test]
 fn combined_verification_rejects_independent_checksum_reference_and_length_mismatches() {
     let root = Directory::new();
     let source = root.0.join("source");
@@ -323,7 +343,7 @@ fn combined_verification_rejects_independent_checksum_reference_and_length_misma
 }
 
 #[test]
-fn combined_verification_admits_one_buffer_and_refunds_denial_and_cancellation() {
+fn staged_and_installed_verification_admit_one_buffer_and_refund_failures() {
     let root = Directory::new();
     let source = root.0.join("source");
     let bytes = vec![37; SPOOL_BUFFER_BYTES + 11];
@@ -336,6 +356,15 @@ fn combined_verification_admits_one_buffer_and_refunds_denial_and_cancellation()
         let (memory, task) = context(exact - short);
         let other = memory.input.reserve(held).unwrap();
         let io = GenerationIo::new(&memory, &task);
+        let staged = io.seal_with_checksum(&source);
+        if short == 1 {
+            assert!(staged.unwrap_err().to_string().contains("query memory"));
+        } else {
+            let (seal, actual_checksum) = staged.unwrap();
+            assert_eq!(seal.reference, object.reference());
+            assert_eq!(actual_checksum, checksum);
+        }
+        assert_eq!(memory.ledger.snapshot().used_bytes, held);
         let result = io.verify_artifact(
             &source,
             bytes.len() as u64,
@@ -348,6 +377,11 @@ fn combined_verification_admits_one_buffer_and_refunds_denial_and_cancellation()
         } else {
             result.unwrap();
             task.cancellation().cancel();
+            assert!(io
+                .seal_with_checksum(&source)
+                .unwrap_err()
+                .to_string()
+                .contains("cancel"));
             assert!(io
                 .verify_artifact(
                     &source,
