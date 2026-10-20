@@ -151,6 +151,20 @@ selection instead of overwriting new reservations. Pending file/directory
 barriers and the durable completed receipt run after releasing the database
 borrow. Lost native responses resolve the same operation from its retained
 previous/next roots; later source writes do not reverse a completed selection.
+The candidate path now requires a governor-funded runtime read slot bound to
+the exact previous selected receipt. Source E validation precedes a fixed-size
+exchange to the prebuilt next version in Pending state and the native attempt.
+New pins return typed Busy until durable completion or same-operation resolution opens admission;
+proven no-selection restores the previous version. Historical receipt retries
+cannot replace a successor. Old pins share the immutable native reader and
+remain usable after candidate/slot closure. Shared metadata and pins retain
+memory admission without idle execution slots; heavy previous custody is
+released outside SourceOwner and the read-slot mutex. A selector that never
+entered native selection can explicitly persist no-selection before restoring
+its slot; arbitrary native failures cannot roll it back.
+The pin's query method remains a validation probe: fresh execution and I/O
+admission are required, but complete temporary/result memory accounting and
+registered lexical/vector/document serving semantics remain unfinished.
 This lower-level path does not install the registered Consumer read view or
 replace the legacy facade's directory move. Post-restart adoption and composed
 power-loss qualification remain separate work.

@@ -72,6 +72,13 @@ enum Phase {
     NotSelected,
 }
 
+#[derive(Clone, Copy)]
+enum ExpectedOutcome {
+    Either,
+    Published,
+    NotSelected,
+}
+
 /// Retains the original ledger file to prevent native identity reuse, a sealed
 /// replacement. Fresh descriptor admission precedes each attempt. The host retains the actual born
 /// target, reader and publication exclusion and validates source E before select.
@@ -178,6 +185,33 @@ pub(super) fn prepare(
 }
 
 impl PreparedConsumerSelection {
+    pub fn previous_receipt(&self) -> Option<ConsumerSelectionReceipt> {
+        self.previous
+            .as_ref()
+            .map(|selected| ConsumerSelectionReceipt {
+                selected: selected.clone(),
+            })
+    }
+
+    /// Settle a prepared selector that never entered native selection. This
+    /// cannot turn a visible selected operation into a cancellation.
+    pub fn cancel_unattempted(&mut self) -> Result<()> {
+        if self.phase != Phase::Prepared {
+            return Err(invalid("Consumer selector is no longer unattempted"));
+        }
+        let outcome = complete_outcome(
+            &self.project,
+            &self.next,
+            &self.previous,
+            ExpectedOutcome::NotSelected,
+        )?;
+        if !matches!(outcome, ConsumerSelectionResolution::NotSelected) {
+            return Err(invalid("unattempted Consumer selector became selected"));
+        }
+        self.phase = Phase::NotSelected;
+        Ok(())
+    }
+
     pub fn reserve_attempt_descriptors(&self) -> Result<DescriptorReservation> {
         self.project
             .file_descriptors()
@@ -235,7 +269,12 @@ impl PreparedConsumerSelection {
             }
             Phase::Attempted | Phase::Rejected => {}
         }
-        let outcome = complete_outcome(&self.project, &self.next, &self.previous, false)?;
+        let outcome = complete_outcome(
+            &self.project,
+            &self.next,
+            &self.previous,
+            ExpectedOutcome::Either,
+        )?;
         self.phase = match outcome {
             ConsumerSelectionResolution::Published(_) => Phase::Published,
             ConsumerSelectionResolution::NotSelected => Phase::NotSelected,
@@ -248,7 +287,12 @@ impl PendingConsumerSelection<'_> {
     pub fn finish(self) -> Result<ConsumerSelectionReceipt> {
         self.control
             .finish(&self.project.file_descriptors().io_context())?;
-        let outcome = complete_outcome(self.project, self.next, self.previous, true)?;
+        let outcome = complete_outcome(
+            self.project,
+            self.next,
+            self.previous,
+            ExpectedOutcome::Published,
+        )?;
         match outcome {
             ConsumerSelectionResolution::Published(receipt) => {
                 *self.phase = Phase::Published;
@@ -265,7 +309,7 @@ fn complete_outcome(
     project: &CapturedProject,
     next: &SelectedRoot,
     previous: &Option<SelectedRoot>,
-    require_selected: bool,
+    expected: ExpectedOutcome,
 ) -> Result<ConsumerSelectionResolution> {
     project.with_locked_catalog(|root, context, _catalog| {
         let mut ledger = read(root, context)?;
@@ -298,13 +342,16 @@ fn complete_outcome(
             false
         } else if active == Some(next) {
             true
-        } else if !require_selected && active == previous.as_ref() {
+        } else if !matches!(expected, ExpectedOutcome::Published) && active == previous.as_ref() {
             false
         } else {
             return Err(invalid("Consumer selector outcome is uncertain"));
         };
-        if require_selected && !published {
+        if matches!(expected, ExpectedOutcome::Published) && !published {
             return Err(invalid("Consumer selector was not selected"));
+        }
+        if matches!(expected, ExpectedOutcome::NotSelected) && published {
+            return Err(invalid("unattempted Consumer selector became selected"));
         }
         if intent.pending() {
             let intent = ledger.pending[index]

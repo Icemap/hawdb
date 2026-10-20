@@ -31,9 +31,13 @@ mod control;
 #[doc(hidden)]
 pub mod generation_metadata;
 mod operation;
+mod read_view;
+mod selection;
 pub(crate) use control::require_unregistered_directory;
 pub use operation::ConsumerPreparationLease;
 pub(crate) use operation::{Authority as MutationOwner, MutationPermit};
+pub use read_view::{ConsumerReadPin, ConsumerReadSlot};
+pub use selection::{ConsumerSelectionAttempt, PendingConsumerPublication};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerBinding {
@@ -222,19 +226,8 @@ pub struct ConsumerPreparedCandidate {
 #[derive(Debug)]
 struct ConsumerCandidateSelection {
     selection: hawdb_storage::consumer_allocation::PreparedConsumerSelection,
+    read: Option<read_view::SlotPreparation>,
     _memory: hawdb_qos::RuntimeRetainedMemory,
-}
-
-/// Fresh execution and I/O admission for a prepared selector. Acquire before
-/// entering the source fence; the borrow retains the born target and reader.
-#[doc(hidden)]
-#[derive(Debug)]
-pub struct ConsumerSelectionAttempt<'a> {
-    candidate: &'a mut ConsumerPreparedCandidate,
-    task: RuntimeTaskContext,
-    _io: Box<dyn hawdb_core::RuntimeIoWavePermit>,
-    _permit: std::sync::Arc<hawdb_qos::RuntimePermit>,
-    _descriptors: hawdb_storage::file_descriptors::DescriptorReservation,
 }
 
 /// A failed birth attachment returns both owners so the caller can resolve
@@ -289,84 +282,6 @@ impl ConsumerDetachedCandidate {
 }
 
 impl ConsumerPreparedCandidate {
-    /// Precompute and synchronize the selector outside SourceOwner. Metadata
-    /// remains funded after this preparation releases its execution permit.
-    pub fn prepare_selection(
-        &mut self,
-        permit: &hawdb_qos::RuntimePermit,
-        task: RuntimeTaskContext,
-    ) -> Result<()> {
-        if self.selection.is_some() {
-            return Err(invalid("consumer selector is already prepared"));
-        }
-        let task = self.selection_task(permit, task)?;
-        let _io = task
-            .acquire_io_wave(std::num::NonZeroUsize::MIN)
-            .map_err(|error| HawDBError::Execution(error.to_string()))?
-            .ok_or_else(|| {
-                HawDBError::Execution("consumer selection requires I/O admission".into())
-            })?;
-        let memory = permit
-            .reserve_retained_memory(
-                hawdb_storage::consumer_allocation::CONSUMER_SELECTION_MEMORY_BOUND,
-            )
-            .map_err(|error| HawDBError::Execution(error.to_string()))?;
-        let selection = self.birth.prepare_selection()?;
-        self.selection = Some(ConsumerCandidateSelection {
-            selection,
-            _memory: memory,
-        });
-        Ok(())
-    }
-
-    pub fn admit_selection(
-        &mut self,
-        permit: std::sync::Arc<hawdb_qos::RuntimePermit>,
-        task: RuntimeTaskContext,
-    ) -> Result<ConsumerSelectionAttempt<'_>> {
-        if self.selection.is_none() {
-            return Err(invalid("consumer selector is not prepared"));
-        }
-        let task = self.selection_task(&permit, task)?;
-        let descriptors = self
-            .selection
-            .as_ref()
-            .expect("prepared selector")
-            .selection
-            .reserve_attempt_descriptors()?;
-        let io = task
-            .acquire_io_wave(std::num::NonZeroUsize::MIN)
-            .map_err(|error| HawDBError::Execution(error.to_string()))?
-            .ok_or_else(|| {
-                HawDBError::Execution("consumer selection requires I/O admission".into())
-            })?;
-        Ok(ConsumerSelectionAttempt {
-            candidate: self,
-            task,
-            _io: io,
-            _permit: permit,
-            _descriptors: descriptors,
-        })
-    }
-
-    fn selection_task(
-        &self,
-        permit: &hawdb_qos::RuntimePermit,
-        task: RuntimeTaskContext,
-    ) -> Result<RuntimeTaskContext> {
-        if !self.detached.view.shares_governor_with(permit) {
-            return Err(HawDBError::Execution(
-                "consumer selection permit belongs to another governor".into(),
-            ));
-        }
-        if task.has_resource_controllers() {
-            return Err(invalid(
-                "consumer selection task already has a resource controller",
-            ));
-        }
-        Ok(permit.bind_task_context(task))
-    }
-
     /// Persist this already sealed candidate's source epoch and metadata
     /// reference in its original birth ledger. This is recovery debt, not a
     /// selector, receipt, or serving acknowledgement.
@@ -414,26 +329,15 @@ impl ConsumerPreparedCandidate {
         mode: crate::SearchMode,
         options: crate::SearchQueryOptions,
     ) -> Result<crate::SearchOutOfCoreOutput> {
-        if !self.detached.view.shares_governor_with(permit) {
-            return Err(HawDBError::Execution(
-                "consumer candidate query permit belongs to another governor".into(),
-            ));
-        }
-        if task.has_resource_controllers() {
-            return Err(invalid(
-                "consumer candidate query task already has a resource controller",
-            ));
-        }
-        let task = permit.bind_task_context(task);
-        let _io = task
-            .acquire_io_wave(std::num::NonZeroUsize::MIN)
-            .map_err(|error| HawDBError::Execution(error.to_string()))?
-            .ok_or_else(|| {
-                HawDBError::Execution("consumer candidate query requires I/O admission".into())
-            })?;
-        self.detached
-            .view
-            .probe_query(query_text, query_embedding, mode, options, &task)
+        probe_view(
+            &self.detached.view,
+            permit,
+            task,
+            query_text,
+            query_embedding,
+            mode,
+            options,
+        )
     }
 
     pub fn reservation_binding(
@@ -443,37 +347,33 @@ impl ConsumerPreparedCandidate {
     }
 }
 
-impl ConsumerSelectionAttempt<'_> {
-    pub fn candidate(&self) -> &ConsumerPreparedCandidate {
-        self.candidate
+fn probe_view(
+    view: &crate::out_of_core::CandidateView,
+    permit: &hawdb_qos::RuntimePermit,
+    task: RuntimeTaskContext,
+    query_text: &str,
+    query_embedding: Option<&[f32]>,
+    mode: crate::SearchMode,
+    options: crate::SearchQueryOptions,
+) -> Result<crate::SearchOutOfCoreOutput> {
+    if !view.shares_governor_with(permit) {
+        return Err(HawDBError::Execution(
+            "consumer candidate query permit belongs to another governor".into(),
+        ));
     }
-
-    /// Called only after the source-E check while the host retains SourceOwner.
-    pub fn select(
-        &mut self,
-    ) -> Result<hawdb_storage::consumer_allocation::PendingConsumerSelection<'_>> {
-        crate::build_control::checkpoint(&self.task)?;
-        self.candidate
-            .selection
-            .as_mut()
-            .expect("admitted prepared selector")
-            .selection
-            .select()
+    if task.has_resource_controllers() {
+        return Err(invalid(
+            "consumer candidate query task already has a resource controller",
+        ));
     }
-
-    /// Resolve with fresh admission after a failed or lost selection response.
-    /// Resolution uses the original operation rather than a later source epoch.
-    pub fn resolve(
-        &mut self,
-    ) -> Result<hawdb_storage::consumer_allocation::ConsumerSelectionResolution> {
-        crate::build_control::checkpoint(&self.task)?;
-        self.candidate
-            .selection
-            .as_mut()
-            .expect("admitted prepared selector")
-            .selection
-            .resolve()
-    }
+    let task = permit.bind_task_context(task);
+    let _io = task
+        .acquire_io_wave(std::num::NonZeroUsize::MIN)
+        .map_err(|error| HawDBError::Execution(error.to_string()))?
+        .ok_or_else(|| {
+            HawDBError::Execution("consumer candidate query requires I/O admission".into())
+        })?;
+    view.probe_query(query_text, query_embedding, mode, options, &task)
 }
 
 impl<'birth> ConsumerStationaryTargetLease<'birth> {

@@ -1890,12 +1890,105 @@ fn consumer_native_candidate_metadata_seals_verified_files_in_the_born_target() 
         .is_err());
 }
 
+fn sealed_native_candidate_lease<'birth>(
+    pending: &'birth mut hawdb_storage::consumer_allocation::PendingConsumerGeneration,
+    fixture: &Fixture,
+    source_epoch: u64,
+    governor: &hawdb_qos::RuntimeGovernor,
+    content: &str,
+) -> hawdb_search::consumer::ConsumerStationaryTargetLease<'birth> {
+    use hawdb_qos::RuntimeWorkRequest;
+    use hawdb_search::consumer::generation_metadata::{ArtifactReference, MetadataInput};
+    const MANIFEST: &str = "search_projection.out_of_core.manifest.hawdb";
+    let context = pending.born_directory().unwrap().operation_context();
+    let stage_path = fixture
+        .0
+        .join(format!("{}.producer", pending.generation_name()));
+    let mut writer = hawdb_search::SearchOutOfCoreGenerationWriter::create(
+        &stage_path,
+        hawdb_search::SearchOutOfCoreGenerationBuildOptions {
+            source_graph_commit_epoch: Some(source_epoch),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    writer
+        .push(hawdb_search::SearchDocument {
+            id: "memory:m1".into(),
+            title: "candidate".into(),
+            content: content.into(),
+            embedding: None,
+            metadata: Default::default(),
+        })
+        .unwrap();
+    writer.finish().unwrap();
+    assert!(!stage_path.join("search_projection.hawdb").exists());
+    let stage = hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
+    let manifest_bytes = std::fs::read(stage_path.join(MANIFEST)).unwrap();
+    let mut names = std::fs::read_dir(&stage_path)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .filter(|name| name.ends_with(".1.hawdb"))
+        .collect::<Vec<_>>();
+    names.sort();
+    let bytes = names
+        .iter()
+        .map(|name| std::fs::read(stage_path.join(name)).unwrap())
+        .collect::<Vec<_>>();
+    let artifacts = names
+        .iter()
+        .zip(&bytes)
+        .map(|(name, bytes)| ArtifactReference {
+            name,
+            reference: candidate_reference(bytes),
+        })
+        .collect::<Vec<_>>();
+    let (binding, target_incarnation, generation, operation) = candidate_metadata_identity(pending);
+    let input = MetadataInput {
+        binding: &binding,
+        source_epoch,
+        target_incarnation,
+        generation,
+        operation,
+        component_uuid: hawdb_core::Uuid::from_bytes([5; 16]),
+        search_manifest: candidate_reference(&manifest_bytes),
+        artifacts: &artifacts,
+    };
+    let limits = candidate_metadata_limits();
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let total = manifest_bytes.len() as u64
+        + bytes.iter().map(|bytes| bytes.len() as u64).sum::<u64>()
+        + input.encoded_len(limits, &task).unwrap() as u64;
+    let permit = std::sync::Arc::new(
+        governor
+            .try_admit(
+                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024).with_io_wave_slots(1),
+            )
+            .unwrap(),
+    );
+    let mut lease = hawdb_search::consumer::ConsumerStationaryTargetLease::acquire_governed(
+        pending, permit, task,
+    )
+    .unwrap();
+    let mut output = lease.begin_candidate_output(total).unwrap();
+    output
+        .install_artifact(&stage, MANIFEST, MANIFEST, input.search_manifest)
+        .unwrap();
+    for artifact in &artifacts {
+        output
+            .install_artifact(&stage, artifact.name, artifact.name, artifact.reference)
+            .unwrap();
+    }
+    output.seal_generation_metadata(&input, limits).unwrap();
+    drop(output);
+    lease
+}
+
 #[test]
 fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
     use hawdb_qos::{
         IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
     };
-    use hawdb_search::consumer::generation_metadata::{ArtifactReference, MetadataInput};
 
     const MANIFEST: &str = "search_projection.out_of_core.manifest.hawdb";
     #[derive(Clone, Copy)]
@@ -1937,65 +2030,6 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
             .unwrap();
         pending.create().unwrap();
         let target_path = fixture.0.join(pending.generation_name());
-        let context = pending.born_directory().unwrap().operation_context();
-        let stage_path = fixture.0.join("out-of-core-candidate-stage");
-        let mut writer = hawdb_search::SearchOutOfCoreGenerationWriter::create(
-            &stage_path,
-            hawdb_search::SearchOutOfCoreGenerationBuildOptions {
-                source_graph_commit_epoch: Some(source_epoch),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        writer
-            .push(hawdb_search::SearchDocument {
-                id: "memory:m1".into(),
-                title: "candidate".into(),
-                content: "out of core search document".into(),
-                embedding: None,
-                metadata: Default::default(),
-            })
-            .unwrap();
-        writer.finish().unwrap();
-        assert!(!stage_path.join("search_projection.hawdb").exists());
-        let stage =
-            hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
-        let manifest_bytes = std::fs::read(stage_path.join(MANIFEST)).unwrap();
-        let mut names = std::fs::read_dir(&stage_path)
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-            .filter(|name| name.ends_with(".1.hawdb"))
-            .collect::<Vec<_>>();
-        names.sort();
-        let bytes = names
-            .iter()
-            .map(|name| std::fs::read(stage_path.join(name)).unwrap())
-            .collect::<Vec<_>>();
-        let artifacts = names
-            .iter()
-            .zip(&bytes)
-            .map(|(name, bytes)| ArtifactReference {
-                name,
-                reference: candidate_reference(bytes),
-            })
-            .collect::<Vec<_>>();
-        let (binding, target_incarnation, generation, operation) =
-            candidate_metadata_identity(&pending);
-        let input = MetadataInput {
-            binding: &binding,
-            source_epoch,
-            target_incarnation,
-            generation,
-            operation,
-            component_uuid: hawdb_core::Uuid::from_bytes([5; 16]),
-            search_manifest: candidate_reference(&manifest_bytes),
-            artifacts: &artifacts,
-        };
-        let limits = candidate_metadata_limits();
-        let task = hawdb_core::RuntimeTaskContext::default();
-        let total = manifest_bytes.len() as u64
-            + bytes.iter().map(|bytes| bytes.len() as u64).sum::<u64>()
-            + input.encoded_len(limits, &task).unwrap() as u64;
         let governor = RuntimeGovernor::detect(
             RuntimeGovernorConfig {
                 memory_budget_bytes: Some(64 * 1024 * 1024),
@@ -2003,31 +2037,14 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
             },
             IoConcurrencyBudget::new(2, 1),
         );
-        let permit = std::sync::Arc::new(
-            governor
-                .try_admit(
-                    RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
-                        .with_io_wave_slots(1),
-                )
-                .unwrap(),
-        );
-        let mut lease = hawdb_search::consumer::ConsumerStationaryTargetLease::acquire_governed(
+        let operation = pending.reservation_binding().unwrap().operation;
+        let mut lease = sealed_native_candidate_lease(
             &mut pending,
-            permit,
-            task,
-        )
-        .unwrap();
-        let mut output = lease.begin_candidate_output(total).unwrap();
-        output
-            .install_artifact(&stage, MANIFEST, MANIFEST, input.search_manifest)
-            .unwrap();
-        for artifact in &artifacts {
-            output
-                .install_artifact(&stage, artifact.name, artifact.name, artifact.reference)
-                .unwrap();
-        }
-        output.seal_generation_metadata(&input, limits).unwrap();
-        drop(output);
+            &fixture,
+            source_epoch,
+            &governor,
+            "out of core search document",
+        );
         assert!(!target_path.join("search_projection.hawdb").exists());
         #[cfg(feature = "full-text-search")]
         assert!(lease
@@ -2158,6 +2175,14 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                     hawdb_core::RuntimeTaskContext::default(),
                 )
                 .unwrap();
+            let read_slot = prepared.create_read_slot(&preparation_permit).unwrap();
+            assert!(matches!(
+                read_slot.report(),
+                Err(HawDBError::ProjectionBusy)
+            ));
+            prepared
+                .bind_read_slot(&read_slot, &preparation_permit)
+                .unwrap();
             drop(preparation_permit);
             assert_eq!(governor.snapshot().active_background_tasks, 0);
             if matches!(selection_case, SelectionCase::Stale) {
@@ -2199,6 +2224,10 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                     let pending = db
                         .select_prepared_consumer_candidate(&source, &mut attempt)
                         .unwrap();
+                    assert!(matches!(
+                        read_slot.report(),
+                        Err(HawDBError::ProjectionBusy)
+                    ));
                     append(&mut db, 2);
                     let receipt = pending.finish().unwrap();
                     assert_eq!(receipt.source_epoch(), source_epoch);
@@ -2211,6 +2240,10 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                         .unwrap();
                     drop(pending);
                     drop(attempt);
+                    assert!(matches!(
+                        read_slot.report(),
+                        Err(HawDBError::ProjectionBusy)
+                    ));
                     assert_eq!(governor.snapshot().active_background_tasks, 0);
                     append(&mut db, 2);
                     let retry_permit = std::sync::Arc::new(
@@ -2259,6 +2292,12 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                         error,
                         crate::ProjectionPublicationError::Dependency(_)
                     ));
+                    attempt.cancel_unattempted().unwrap();
+                    assert_eq!(
+                        allocation_evidence(&fixture).1["pending"][0]["publication_intent"]
+                            ["not_selected"],
+                        true
+                    );
                     append(&mut db, 2);
                 }
                 #[cfg(unix)]
@@ -2289,7 +2328,12 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
             };
             if !selected {
                 assert!(evidence.get("selected").is_none());
+                assert!(matches!(
+                    read_slot.report(),
+                    Err(HawDBError::ProjectionBusy)
+                ));
             } else {
+                assert_eq!(read_slot.report().unwrap(), view);
                 assert_eq!(evidence["selected"][0]["operation"], operation.get());
                 assert_eq!(
                     evidence["pending"][0]["publication_intent"]["receipt_complete"],
@@ -2320,6 +2364,11 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
                             .with_io_wave_slots(1),
                     )
                     .unwrap();
+                assert!(read_slot
+                    .pin(&foreign_permit)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("another governor"));
                 assert!(prepared
                     .probe_candidate_query(
                         &foreign_permit,
@@ -2412,6 +2461,222 @@ fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
             drop(reopened);
         }
     }
+}
+
+#[test]
+fn consumer_native_candidate_view_keeps_old_pins_across_successor_and_failed_selection() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    use hawdb_search::consumer::ConsumerPreparedCandidate;
+    use hawdb_storage::consumer_allocation::ConsumerSelectionResolution;
+    use std::num::NonZeroUsize;
+
+    fn candidate(
+        db: &mut Database,
+        fixture: &Fixture,
+        governor: &RuntimeGovernor,
+        content: &str,
+    ) -> (ConsumerPreparedCandidate, crate::PreparedReadDependencies) {
+        let allocation = reserve_native_generation(db, fixture);
+        let mut read = db
+            .begin_prepared_read(crate::PreparedReadLimits {
+                dependency_entries: NonZeroUsize::new(8).unwrap(),
+                dependency_bytes: NonZeroUsize::new(4096).unwrap(),
+                statement_rows: NonZeroUsize::new(8).unwrap(),
+                statement_payload_bytes: NonZeroUsize::new(4096).unwrap(),
+            })
+            .unwrap();
+        read.query_with_params("MATCH (n:Memory) RETURN n.content", &Default::default())
+            .unwrap();
+        let source = read.finish().unwrap();
+        let mut birth = allocation
+            .prepare_stationary_generation(&fixture.0)
+            .unwrap();
+        birth.create().unwrap();
+        let mut lease = sealed_native_candidate_lease(
+            &mut birth,
+            fixture,
+            source.source_epoch(),
+            governor,
+            content,
+        );
+        lease
+            .prepare_candidate_view(NonZeroU64::new(32 * 1024 * 1024).unwrap())
+            .unwrap();
+        let detached = lease.detach_candidate().unwrap();
+        let mut candidate = detached.attach_birth(birth).unwrap();
+        candidate.record_durable_seal().unwrap();
+        db.validate_prepared_consumer_candidate_source(
+            &source,
+            &candidate,
+            crate::ProjectionSourceDurability::Synchronize,
+        )
+        .unwrap();
+        candidate.record_publication_intent().unwrap();
+        let permit = admit(governor);
+        candidate
+            .prepare_selection(&permit, Default::default())
+            .unwrap();
+        (candidate, source)
+    }
+
+    fn admit(governor: &RuntimeGovernor) -> std::sync::Arc<hawdb_qos::RuntimePermit> {
+        std::sync::Arc::new(
+            governor
+                .try_admit(
+                    RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                        .with_io_wave_slots(1),
+                )
+                .unwrap(),
+        )
+    }
+
+    #[cfg(feature = "full-text-search")]
+    fn hits(
+        pin: &hawdb_search::consumer::ConsumerReadPin,
+        governor: &RuntimeGovernor,
+        term: &str,
+    ) -> usize {
+        pin.probe_query(
+            &admit(governor),
+            Default::default(),
+            term,
+            None,
+            hawdb_search::SearchMode::Text,
+            hawdb_search::SearchQueryOptions {
+                limit: 1,
+                offset: 0,
+                rank_window: None,
+                fusion_weights: Default::default(),
+                metadata_filters: Default::default(),
+                policy_epoch: None,
+            },
+        )
+        .unwrap()
+        .result
+        .total_hits
+    }
+
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let governor = RuntimeGovernor::detect(
+        RuntimeGovernorConfig {
+            memory_budget_bytes: Some(64 * 1024 * 1024),
+            ..RuntimeGovernorConfig::shared_host()
+        },
+        IoConcurrencyBudget::new(2, 1),
+    );
+    let (mut first, source) = candidate(&mut db, &fixture, &governor, "amber");
+    let permit = admit(&governor);
+    let slot = first.create_read_slot(&permit).unwrap();
+    first.bind_read_slot(&slot, &permit).unwrap();
+    let mut attempt = first
+        .admit_selection(permit.clone(), Default::default())
+        .unwrap();
+    let receipt = db
+        .select_prepared_consumer_candidate(&source, &mut attempt)
+        .unwrap()
+        .finish()
+        .unwrap();
+    drop(attempt);
+    let old = slot.pin(&permit).unwrap();
+    assert_eq!(old.report(), first.report());
+    drop(permit);
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
+
+    append(&mut db, 2);
+    let (mut second, source) = candidate(&mut db, &fixture, &governor, "violet");
+    let permit = admit(&governor);
+    let empty = second.create_read_slot(&permit).unwrap();
+    assert!(second.bind_read_slot(&empty, &permit).is_err());
+    drop(empty);
+    second.bind_read_slot(&slot, &permit).unwrap();
+    let mut attempt = second
+        .admit_selection(permit.clone(), Default::default())
+        .unwrap();
+    let pending = db
+        .select_prepared_consumer_candidate(&source, &mut attempt)
+        .unwrap();
+    assert!(matches!(slot.report(), Err(HawDBError::ProjectionBusy)));
+    assert!(matches!(slot.pin(&permit), Err(HawDBError::ProjectionBusy)));
+    drop(pending);
+    drop(attempt);
+    drop(permit);
+    // The source can advance and old readers continue while the lost response
+    // keeps new reader admission closed.
+    append(&mut db, 3);
+    #[cfg(feature = "full-text-search")]
+    std::thread::scope(|scope| {
+        assert_eq!(
+            scope
+                .spawn(|| hits(&old, &governor, "amber"))
+                .join()
+                .unwrap(),
+            1
+        );
+    });
+    let permit = admit(&governor);
+    let mut attempt = second
+        .admit_selection(permit.clone(), Default::default())
+        .unwrap();
+    assert!(matches!(
+        attempt.resolve().unwrap(),
+        ConsumerSelectionResolution::Published(_)
+    ));
+    drop(attempt);
+    let new = slot.pin(&permit).unwrap();
+    assert_eq!(new.report(), second.report());
+    assert!(new.report().source_epoch > old.report().source_epoch);
+    // Repeating an old receipt must not revert the successor's runtime slot.
+    let mut historical = first
+        .admit_selection(permit.clone(), Default::default())
+        .unwrap();
+    assert_eq!(
+        historical.resolve().unwrap(),
+        ConsumerSelectionResolution::Published(Box::new(receipt))
+    );
+    drop(historical);
+    assert_eq!(slot.report().unwrap(), new.report());
+    drop(permit);
+
+    let (mut rejected, source) = candidate(&mut db, &fixture, &governor, "discarded");
+    let permit = admit(&governor);
+    rejected.bind_read_slot(&slot, &permit).unwrap();
+    drop(reserve_native_generation(&mut db, &fixture));
+    let mut attempt = rejected
+        .admit_selection(permit.clone(), Default::default())
+        .unwrap();
+    assert!(db
+        .select_prepared_consumer_candidate(&source, &mut attempt)
+        .is_err());
+    assert!(matches!(slot.report(), Err(HawDBError::ProjectionBusy)));
+    assert_eq!(
+        attempt.resolve().unwrap(),
+        ConsumerSelectionResolution::NotSelected
+    );
+    drop(attempt);
+    assert_eq!(slot.report().unwrap(), new.report());
+    drop(permit);
+    drop(rejected.abandon());
+    drop(first.abandon());
+    drop(second.abandon());
+    drop(slot);
+    drop(db);
+    let reopened = fixture.database();
+    #[cfg(feature = "full-text-search")]
+    {
+        assert_eq!(hits(&old, &governor, "amber"), 1);
+        assert_eq!(hits(&old, &governor, "violet"), 0);
+        assert_eq!(hits(&new, &governor, "violet"), 1);
+        assert_eq!(hits(&new, &governor, "amber"), 0);
+    }
+    drop(old);
+    drop(new);
+    assert_eq!(governor.snapshot().active_background_tasks, 0);
+    assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+    drop(reopened);
 }
 
 #[test]

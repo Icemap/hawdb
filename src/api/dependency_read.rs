@@ -483,14 +483,15 @@ impl std::error::Error for ProjectionPublicationError {}
 impl Database {
     /// Validate source E and attempt the precomputed Consumer selector under
     /// this exclusive borrow. The returned barriers borrow only the admitted
-    /// candidate operation and finish after SourceOwner is released. Registered
-    /// Consumer read-view installation remains a separate integration boundary.
+    /// candidate operation and finish after SourceOwner is released. New pins
+    /// in its runtime slot remain blocked until completion or resolution.
+    /// Registered Consumer integration remains a separate boundary.
     pub fn select_prepared_consumer_candidate<'a>(
         &mut self,
         dependencies: &PreparedReadDependencies,
         attempt: &'a mut hawdb_search::consumer::ConsumerSelectionAttempt<'_>,
     ) -> std::result::Result<
-        hawdb_storage::consumer_allocation::PendingConsumerSelection<'a>,
+        hawdb_search::consumer::PendingConsumerPublication<'a>,
         ProjectionPublicationError,
     > {
         self.validate_prepared_consumer_candidate_source(

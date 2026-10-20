@@ -56,7 +56,14 @@ mod admitted_root;
 
 /// A complete native candidate reader retained privately until a separate
 /// source-E fence and durable selector can grant serving authority.
-pub(crate) struct CandidateView(admitted_root::OpenedRoot);
+#[derive(Clone)]
+pub(crate) struct CandidateView(Arc<SharedCandidateView>);
+
+struct SharedCandidateView {
+    opened: admitted_root::OpenedRoot,
+    // Close the reader and native pins before refunding the shared allocation.
+    _memory: hawdb_qos::RuntimeRetainedMemory,
+}
 
 impl std::fmt::Debug for CandidateView {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -71,7 +78,7 @@ impl std::fmt::Debug for CandidateView {
 
 impl CandidateView {
     pub(crate) fn shares_governor_with(&self, permit: &hawdb_qos::RuntimePermit) -> bool {
-        self.0.shares_governor_with(permit)
+        self.0._memory.shares_governor_with(permit) && self.0.opened.shares_governor_with(permit)
     }
 
     pub(crate) fn probe_query(
@@ -83,19 +90,20 @@ impl CandidateView {
         task: &hawdb_core::RuntimeTaskContext,
     ) -> Result<SearchOutOfCoreOutput> {
         self.0
+            .opened
             .probe_query(query_text, query_embedding, mode, options, task)
     }
 
     pub(crate) fn document_count(&self) -> usize {
-        self.0.document_count()
+        self.0.opened.document_count()
     }
 
     pub(crate) fn source_epoch(&self) -> Option<u64> {
-        self.0.source_epoch()
+        self.0.opened.source_epoch()
     }
 
     pub(crate) fn generation(&self) -> u64 {
-        self.0.generation()
+        self.0.opened.generation()
     }
 }
 
@@ -145,7 +153,16 @@ pub(crate) fn open_born_candidate(context: BornCandidateOpenContext<'_>) -> Resu
         project: Some(&project),
         max_artifact_read_bytes: max_artifact_read_bytes.get(),
     })?;
-    Ok(CandidateView(opened))
+    let shared_bytes = std::mem::size_of::<SharedCandidateView>()
+        .checked_add(2 * std::mem::size_of::<usize>())
+        .ok_or_else(|| HawDBError::Execution("shared candidate allocation overflows".into()))?;
+    let memory = permit
+        .reserve_retained_memory(shared_bytes as u64)
+        .map_err(|error| HawDBError::Execution(error.to_string()))?;
+    Ok(CandidateView(Arc::new(SharedCandidateView {
+        opened,
+        _memory: memory,
+    })))
 }
 pub(crate) mod artifact_key;
 mod generation_writer;
