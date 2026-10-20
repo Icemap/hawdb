@@ -81,6 +81,7 @@ impl Fixture {
             mutation_run::TargetValidationContext {
                 admission: Some((admission, 32 << 20)),
                 source: None,
+                capture: None,
             },
         )
     }
@@ -121,6 +122,7 @@ fn target_validation_uses_one_admission_for_probe_hydration_and_stored_terms() {
         mutation_run::TargetValidationContext {
             admission: None,
             source: None,
+            capture: None,
         },
     )
     .unwrap_err();

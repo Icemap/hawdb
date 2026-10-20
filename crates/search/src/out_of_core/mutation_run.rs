@@ -675,6 +675,7 @@ pub(super) struct TargetValidationContext<'a, 'execution> {
         u64,
     )>,
     pub(super) source: Option<&'a super::captured_cleanup::Source<'a>>,
+    pub(super) capture: Option<&'a super::root_registry::PendingCapture<'a, 'execution>>,
 }
 
 pub(super) fn validate_targets_with_admission<'a>(
@@ -689,10 +690,18 @@ pub(super) fn validate_targets_with_admission<'a>(
     let TargetValidationContext {
         admission,
         source: cleanup_source,
+        capture,
     } = context;
     let mut runs = runs.peekable();
     if runs.peek().is_none() {
         return Ok(());
+    }
+    if let Some(capture) = capture
+        && admission.is_none_or(|(admission, _)| !std::ptr::eq(admission, capture.admission()))
+    {
+        return Err(HawDBError::Execution(
+            "mutation validation admission differs from its capture".into(),
+        ));
     }
     if admission.is_none() && runs.peek().is_some_and(|run| run._reader_memory.is_some()) {
         return Err(HawDBError::Execution(
@@ -725,7 +734,10 @@ pub(super) fn validate_targets_with_admission<'a>(
             task,
             admission.map(|(admission, _)| admission),
         )?,
-        None => super::generation_writer::StageDirectory::create(root, memory, task)?,
+        None => match capture {
+            Some(capture) => capture.validation_stage(root)?,
+            None => super::generation_writer::StageDirectory::create(root, memory, task)?,
+        },
     };
     stage.reserve_disk(
         config

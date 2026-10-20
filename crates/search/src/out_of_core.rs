@@ -21,17 +21,16 @@ use super::{
     decode_search_snapshot_text_bounded, decode_string, encode_embedding, encode_metadata,
     encode_search_snapshot_text, encode_string, lexical_analyzer_digest, lexical_documents_digest,
     matched_query_spans_bounded, matched_query_terms, ranked_scores,
-    retriever_candidate_set_report, rrf_child_score, search_document_matches_predicates,
-    search_empty_reason_codes, search_empty_reasons, search_metadata_predicate_pushdown,
-    top_ranked_candidates, top_ranked_ids, weighted_rrf_score, window_ranks,
-    CompressedVectorSearchMode, SearchAccessControlContext, SearchAnalyzerLexicon,
-    SearchCandidateSetReport, SearchDocument, SearchEmbeddingManifest, SearchFallbackReasonCode,
-    SearchFieldPruningAccumulator, SearchHit, SearchIndex, SearchMode, SearchPageWindow,
-    SearchPredicatePushdownReport, SearchProjectionFreshness, SearchQueryOptions, SearchResultSet,
-    SearchRetrieverReport, SearchScoredCandidate, SearchSegmentDescriptor,
-    SearchSegmentDescriptorEntry, SearchTruncationReasonCode, VectorSearchExecutionOptions,
-    FULL_REINDEX_MARKER, METADATA_REPAIR_MARKER, SEARCH_SEGMENT_DESCRIPTOR_FILE,
-    SEARCH_SEGMENT_PAYLOAD_FILE,
+    retriever_candidate_set_report, rrf_child_score, search_empty_reason_codes,
+    search_empty_reasons, search_metadata_predicate_pushdown, top_ranked_candidates,
+    top_ranked_ids, weighted_rrf_score, window_ranks, CompressedVectorSearchMode,
+    SearchAccessControlContext, SearchAnalyzerLexicon, SearchCandidateSetReport, SearchDocument,
+    SearchEmbeddingManifest, SearchFallbackReasonCode, SearchFieldPruningAccumulator, SearchHit,
+    SearchIndex, SearchMode, SearchPageWindow, SearchPredicatePushdownReport,
+    SearchProjectionFreshness, SearchQueryOptions, SearchResultSet, SearchRetrieverReport,
+    SearchScoredCandidate, SearchSegmentDescriptor, SearchSegmentDescriptorEntry,
+    SearchTruncationReasonCode, VectorSearchExecutionOptions, FULL_REINDEX_MARKER,
+    METADATA_REPAIR_MARKER, SEARCH_SEGMENT_DESCRIPTOR_FILE, SEARCH_SEGMENT_PAYLOAD_FILE,
 };
 use crate::bounded_file::{read_bound_file, read_bounded_file};
 use crate::error::{HawDBError, Result};
@@ -169,6 +168,7 @@ pub(crate) fn open_born_candidate(context: BornCandidateOpenContext<'_>) -> Resu
 pub(crate) mod artifact_key;
 mod generation_writer;
 mod hydration;
+mod metadata_query;
 mod projection_scan;
 mod verified_body;
 pub use verified_body::{SearchBodyReadOptions, SearchVerifiedBody};
@@ -374,6 +374,7 @@ pub(super) struct SegmentReaderContents {
     payload: File,
     payload_length: u64,
     metadata_payload: File,
+    metadata_payload_length: u64,
     vector_payload: File,
     layout: SearchOutOfCoreLayoutBody,
     lexical_projection: LexicalProjectionReader,
@@ -1679,6 +1680,7 @@ impl SearchOutOfCoreSegmentReader {
                 payload,
                 payload_length: manifest.payload_len,
                 metadata_payload,
+                metadata_payload_length: manifest.metadata_payload_len,
                 vector_payload,
                 layout,
                 lexical_projection,
@@ -2459,6 +2461,7 @@ impl SearchOutOfCoreReader {
             &predicate_pushdown.predicates,
             &mut predicate_pushdown.report,
             &mut metrics,
+            query,
         )?;
         let filtered_document_count = candidate_set.cardinality();
         let candidate_report = SearchCandidateSetReport {
@@ -3303,6 +3306,7 @@ impl SearchOutOfCoreReader {
         predicates: &hawdb_optimizer_predicate::SearchPredicateSet,
         report: &mut SearchPredicatePushdownReport,
         metrics: &mut SearchOutOfCoreMetrics,
+        context: Option<crate::lexical_projection::QueryContext<'_>>,
     ) -> Result<CandidateSet> {
         report.segment_count = self
             .segments
@@ -3354,38 +3358,56 @@ impl SearchOutOfCoreReader {
                 report.segment_scanned_document_count = report
                     .segment_scanned_document_count
                     .saturating_add(visible_count);
-                let documents = self.read_metadata_segment(artifact, segment, metrics)?;
+                let mut encoded_memory = context
+                    .map(|context| context.memory.reserve(0))
+                    .transpose()?;
                 let mut encoded = Vec::new();
                 let mut block_cardinality = 0usize;
-                for document in documents {
+                let mut append = |document: &SearchMetadataDocument| {
                     if !self
                         .visibility
                         .is_visible(artifact.content_segment_id, &document.id)
                     {
-                        continue;
+                        return Ok(());
                     }
-                    let candidate = SearchDocument {
-                        id: document.id,
-                        title: String::new(),
-                        content: String::new(),
-                        embedding: None,
-                        metadata: document.metadata,
-                    };
-                    if !search_document_matches_predicates(&candidate, predicates) {
-                        continue;
+                    if !crate::search_metadata_matches_predicates(
+                        &document.id,
+                        &document.metadata,
+                        predicates,
+                    ) {
+                        return Ok(());
                     }
-                    let id_len = u32::try_from(candidate.id.len()).map_err(|_| {
+                    let id_len = u32::try_from(document.id.len()).map_err(|_| {
                         HawDBError::Storage(format!(
                             "search candidate id {} exceeds the supported length",
-                            candidate.id
+                            document.id
                         ))
                     })?;
+                    if let Some(memory) = &mut encoded_memory {
+                        let required = crate::build_memory::checked_add(
+                            encoded.len(),
+                            crate::build_memory::checked_add(document.id.len(), 12)?,
+                        )?;
+                        let limit = usize::try_from(self.config.max_candidate_block_bytes.get())
+                            .unwrap_or(usize::MAX);
+                        let capacity =
+                            required.max(encoded.capacity().saturating_mul(2).min(limit));
+                        crate::build_memory::reserve_capacity(&mut encoded, capacity, memory)?;
+                    }
                     encoded.extend_from_slice(&id_len.to_le_bytes());
-                    encoded.extend_from_slice(candidate.id.as_bytes());
+                    encoded.extend_from_slice(document.id.as_bytes());
                     encoded.extend_from_slice(
                         &document.vector_ordinal.unwrap_or(u64::MAX).to_le_bytes(),
                     );
                     block_cardinality = block_cardinality.saturating_add(1);
+                    Ok(())
+                };
+                if let Some(context) = context {
+                    self.visit_query_metadata_segment(artifact, segment, metrics, context, append)?;
+                } else {
+                    for document in self.read_metadata_segment(artifact, segment, metrics)? {
+                        append(&document)?;
+                    }
                 }
                 if encoded.len() as u64 > self.config.max_candidate_block_bytes.get() {
                     return Err(ResourceBudgetError {
@@ -3917,6 +3939,7 @@ fn load_artifact_closure_with_context(
         mutation_run::TargetValidationContext {
             admission: admission.map(|admission| (admission, max_artifact_read_bytes)),
             source: validation_source.or(cleanup_source),
+            capture,
         },
     )?;
     checkpoint()?;

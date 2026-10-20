@@ -99,6 +99,35 @@ impl hawdb_core::RuntimeMemoryPermit for FileCustody {
 }
 
 impl PendingCapture<'_, '_> {
+    /// Validation scratch belongs to the original captured directory. Labels
+    /// are diagnostic and cannot select a parent or create a new FD domain.
+    pub(in crate::out_of_core) fn validation_stage(
+        &self,
+        label: &Path,
+    ) -> Result<crate::out_of_core::generation_writer::StageDirectory> {
+        let parent = {
+            let native = self
+                .root
+                .state()
+                .native
+                .read()
+                .unwrap_or_else(|p| p.into_inner());
+            Arc::clone(
+                &native
+                    .as_ref()
+                    .expect("live root owns native resources")
+                    .directory,
+            )
+        };
+        crate::out_of_core::generation_writer::StageDirectory::create_captured(
+            label,
+            &parent,
+            self.admission.memory,
+            self.admission.task,
+            Some(self.admission),
+        )
+    }
+
     /// Every lazy child owns an exact pin and retained memory, while cache keys
     /// own memory only. No execution/publication permit escapes this borrow.
     pub(in crate::out_of_core) fn open_artifact(

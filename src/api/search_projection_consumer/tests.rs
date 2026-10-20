@@ -1919,6 +1919,17 @@ fn sealed_native_candidate_document_lease<'birth>(
     governor: &hawdb_qos::RuntimeGovernor,
     document: hawdb_search::SearchDocument,
 ) -> hawdb_search::consumer::ConsumerStationaryTargetLease<'birth> {
+    sealed_native_candidate_delta_lease(pending, fixture, source_epoch, governor, document, None)
+}
+
+fn sealed_native_candidate_delta_lease<'birth>(
+    pending: &'birth mut hawdb_storage::consumer_allocation::PendingConsumerGeneration,
+    fixture: &Fixture,
+    source_epoch: u64,
+    governor: &hawdb_qos::RuntimeGovernor,
+    document: hawdb_search::SearchDocument,
+    delta: Option<hawdb_search::SearchProjectionDelta>,
+) -> hawdb_search::consumer::ConsumerStationaryTargetLease<'birth> {
     use hawdb_qos::RuntimeWorkRequest;
     use hawdb_search::consumer::generation_metadata::{ArtifactReference, MetadataInput};
     const MANIFEST: &str = "search_projection.out_of_core.manifest.hawdb";
@@ -1929,20 +1940,40 @@ fn sealed_native_candidate_document_lease<'birth>(
     let mut writer = hawdb_search::SearchOutOfCoreGenerationWriter::create(
         &stage_path,
         hawdb_search::SearchOutOfCoreGenerationBuildOptions {
-            source_graph_commit_epoch: Some(source_epoch),
+            source_graph_commit_epoch: Some(if delta.is_some() {
+                source_epoch - 1
+            } else {
+                source_epoch
+            }),
             ..Default::default()
         },
     )
     .unwrap();
     writer.push(document).unwrap();
     writer.finish().unwrap();
+    if let Some(delta) = delta {
+        let reader = hawdb_search::SearchOutOfCoreReader::open(&stage_path).unwrap();
+        let update = hawdb_search::SearchOutOfCoreGenerationWriter::prepare_delta(
+            &reader,
+            delta,
+            Default::default(),
+        )
+        .unwrap();
+        drop(reader);
+        let (_, report, _) = update.finish().unwrap();
+        assert_eq!(report.generation, 2);
+    }
     assert!(!stage_path.join("search_projection.hawdb").exists());
     let stage = hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
     let manifest_bytes = std::fs::read(stage_path.join(MANIFEST)).unwrap();
     let mut names = std::fs::read_dir(&stage_path)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-        .filter(|name| name.ends_with(".1.hawdb"))
+        .filter(|name| {
+            name.strip_suffix(".hawdb")
+                .and_then(|stem| stem.rsplit('.').next())
+                .is_some_and(|generation| generation.parse::<u64>().is_ok())
+        })
         .collect::<Vec<_>>();
     names.sort();
     let bytes = names
@@ -2735,6 +2766,135 @@ fn consumer_native_candidate_view_keeps_old_pins_across_successor_and_failed_sel
     assert_eq!(governor.snapshot().active_background_tasks, 0);
     assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
     drop(reopened);
+}
+
+#[test]
+#[cfg(feature = "full-text-search")]
+fn consumer_native_candidate_view_queries_incremental_retractions_with_fresh_admission() {
+    use hawdb_qos::{
+        IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
+    };
+    for deleted in [false, true] {
+        let fixture = Fixture::new();
+        let mut db = fixture.database();
+        append(&mut db, 1);
+        append(&mut db, 2);
+        let mut birth = reserve_native_generation(&mut db, &fixture)
+            .prepare_stationary_generation(&fixture.0)
+            .unwrap();
+        birth.create().unwrap();
+        #[cfg(unix)]
+        let target_path = fixture.0.join(birth.generation_name());
+        let epoch = db.begin_read_transaction().unwrap().commit_epoch();
+        let governor = RuntimeGovernor::detect(
+            RuntimeGovernorConfig {
+                memory_budget_bytes: Some(64 * 1024 * 1024),
+                ..RuntimeGovernorConfig::shared_host()
+            },
+            IoConcurrencyBudget::new(2, 1),
+        );
+        let initial = hawdb_search::SearchDocument {
+            id: "memory:m1".into(),
+            title: "candidate".into(),
+            content: "amber".into(),
+            embedding: None,
+            metadata: std::collections::BTreeMap::from([("space_id".into(), "team".into())]),
+        };
+        let row = hawdb_search::SearchProjectionRow {
+            kind: hawdb_search::SearchProjectionKind::Memory,
+            external_id: "m1".into(),
+            title: "candidate".into(),
+            body: "violet".into(),
+            embedding: None,
+            source_id: None,
+            metadata: std::collections::BTreeMap::from([("space_id".into(), "private".into())]),
+        };
+        let delta = hawdb_search::SearchProjectionDelta {
+            upserts: if deleted { Vec::new() } else { vec![row] },
+            deletes: if deleted {
+                vec!["memory:m1".into()]
+            } else {
+                Vec::new()
+            },
+            max_operations: Some(8),
+            source_graph_commit_epoch: Some(epoch),
+        };
+        let mut lease = sealed_native_candidate_delta_lease(
+            &mut birth,
+            &fixture,
+            epoch,
+            &governor,
+            initial,
+            Some(delta),
+        );
+        #[cfg(unix)]
+        {
+            // Incremental target validation must create its scratch through the
+            // captured native parent, even if the diagnostic name is replaced.
+            std::fs::rename(&target_path, target_path.with_extension("original")).unwrap();
+            std::fs::create_dir(&target_path).unwrap();
+            std::fs::write(target_path.join("foreign"), b"untouched").unwrap();
+        }
+        let report = lease
+            .prepare_candidate_view(NonZeroU64::new(32 * 1024 * 1024).unwrap())
+            .unwrap();
+        assert_eq!(report.generation, 2);
+        assert_eq!(report.document_count, usize::from(!deleted));
+        let detached = lease.detach_candidate().unwrap();
+        let candidate = detached.attach_birth(birth).unwrap();
+        assert_eq!(governor.snapshot().active_background_tasks, 0);
+        for (term, space, expected) in [
+            ("amber", "team", 0),
+            ("violet", "team", 0),
+            ("violet", "private", usize::from(!deleted)),
+        ] {
+            let permit = governor
+                .try_admit(
+                    RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                        .with_io_wave_slots(1),
+                )
+                .unwrap();
+            let output = candidate
+                .probe_candidate_query(
+                    &permit,
+                    hawdb_core::RuntimeTaskContext::with_timeout(std::time::Duration::from_secs(
+                        10,
+                    )),
+                    term,
+                    None,
+                    hawdb_search::SearchMode::Text,
+                    hawdb_search::SearchQueryOptions {
+                        limit: 4,
+                        offset: 0,
+                        rank_window: None,
+                        fusion_weights: Default::default(),
+                        metadata_filters: std::collections::BTreeMap::from([(
+                            "space_id".into(),
+                            space.into(),
+                        )]),
+                        policy_epoch: None,
+                    },
+                )
+                .unwrap();
+            assert_eq!(output.result.total_hits, expected);
+            if expected != 0 {
+                assert_eq!(output.result.hits[0].id, "memory:m1");
+            }
+            drop(permit);
+            assert_eq!(governor.snapshot().active_background_tasks, 0);
+            assert_eq!(governor.snapshot().active_background_io_slots, 0);
+        }
+        drop(candidate.abandon());
+        assert_eq!(governor.snapshot().admitted_memory_bytes, 0);
+        #[cfg(unix)]
+        {
+            assert_eq!(
+                std::fs::read(target_path.join("foreign")).unwrap(),
+                b"untouched"
+            );
+            assert_eq!(std::fs::read_dir(target_path).unwrap().count(), 1);
+        }
+    }
 }
 
 #[test]

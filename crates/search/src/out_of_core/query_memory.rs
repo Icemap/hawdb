@@ -124,12 +124,17 @@ impl SearchOutOfCoreReader {
             None => ordinary.as_mut().expect("ordinary query statistics"),
         };
         if !self.visibility.is_empty() {
-            statistics.retract_streamed(self.visibility.retractions().map(|entry| {
+            let retractions = self.visibility.retractions().map(|entry| {
                 (
                     entry.retraction.lexical_document_len,
                     &entry.retraction.unique_terms,
                 )
-            }))?;
+            });
+            if context.is_some() {
+                statistics.retract_streamed_with_context(retractions, context)?;
+            } else {
+                statistics.retract_streamed(retractions)?;
+            }
         }
         let mut output = TextScores {
             values: BTreeMap::new(),
