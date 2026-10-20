@@ -26,11 +26,14 @@ fn limits() -> PreparedReadLimits {
 
 #[test]
 fn randomized_single_hop_dependencies_preserve_query_results() {
-    let mut accepted = [0usize; 3];
-    let mut rejected = [0usize; 3];
+    let mut accepted = [0usize; 4];
+    let mut rejected = [0usize; 4];
     for seed in [1130, 0x51ce, 0xdecaf, 0x1234_5678] {
         let mut random = Random(seed);
-        for (shape, effect) in ["create", "delete", "property"].into_iter().enumerate() {
+        for (shape, effect) in ["create", "delete", "property", "target_property"]
+            .into_iter()
+            .enumerate()
+        {
             for same_root in [false, true] {
                 for same_type in [false, true] {
                     let mut db = Database::new();
@@ -71,6 +74,7 @@ fn randomized_single_hop_dependencies_preserve_query_results() {
                     "create" => format!("MATCH (a:Memory {{key: '{write_root}'}}), (b:Document {{key: 'b'}}) CREATE (a)-[:{kind} {{weight: {value}}}]->(b)"),
                     "delete" => format!("MATCH (a:Memory {{key: '{write_root}'}})-[r:{kind}]->(:Document {{key: 'a'}}) DELETE r"),
                     "property" => format!("MATCH (a:Memory {{key: '{write_root}'}})-[r:{kind}]->(:Document {{key: 'a'}}) SET r.weight = {value}"),
+                    "target_property" => format!("MATCH (b:Document {{key: '{}'}}) SET b.key = '{value}'", if same_root { "a" } else { "c" }),
                     _ => unreachable!(),
                 };
                     db.query(&write).unwrap();
@@ -101,8 +105,8 @@ fn randomized_single_hop_dependencies_preserve_query_results() {
             }
         }
     }
-    assert_eq!(accepted, [8, 8, 12]);
-    assert_eq!(rejected, [8, 8, 4]);
+    assert_eq!(accepted, [8, 8, 12, 8]);
+    assert_eq!(rejected, [8, 8, 4, 8]);
 }
 
 #[test]
