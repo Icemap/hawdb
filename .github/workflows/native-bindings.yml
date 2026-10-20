@@ -44,6 +44,8 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - "scripts/cargo-test-required.sh"
+      - "tests/in_memory_portable.rs"
+      - "tests/branch_project_open.rs"
       - "bindings/ffi/**"
       - "bindings/go/**"
       - "MODULE.bazel"
@@ -60,6 +62,8 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - "scripts/cargo-test-required.sh"
+      - "tests/in_memory_portable.rs"
+      - "tests/branch_project_open.rs"
       - "bindings/ffi/**"
       - "bindings/go/**"
       - "MODULE.bazel"
@@ -228,6 +232,30 @@ jobs:
           bash scripts/cargo-test-required.sh --locked -p hawdb --features tokio-runtime \
             --lib api::retained_query::node::tests -- --nocapture \
             2>&1 | tee windows-native-results/retained-node.txt
+
+      - name: Test database instance identity and published views
+        shell: bash
+        run: |
+          set -euo pipefail
+          for profile in default minimal; do
+            feature_args=()
+            if [[ "$profile" == minimal ]]; then
+              feature_args=(--no-default-features)
+            fi
+            for target in in_memory_portable branch_project_open; do
+              output="windows-native-results/instance-identity-$profile-$target.txt"
+              bash scripts/cargo-test-required.sh --locked -p hawdb "${feature_args[@]}" \
+                --test "$target" -- database_instance_identity_ --nocapture \
+                2>&1 | tee "$output"
+              grep -Eq '^test result: ok\. 1 passed; 0 failed; 0 ignored;' "$output"
+            done
+            output="windows-native-results/instance-identity-$profile-views.txt"
+            bash scripts/cargo-test-required.sh --locked -p hawdb "${feature_args[@]}" \
+              --lib -- database_instance_identity_ --nocapture \
+              2>&1 | tee "$output"
+            # Both ordinary writes and replacement must preserve view binding.
+            grep -Eq '^test result: ok\. 2 passed; 0 failed; 0 ignored;' "$output"
+          done
 
       - name: Test retained Arrow array and stream contracts
         shell: bash

@@ -2203,6 +2203,48 @@ fn bounded_out_of_core_text_seed_filters_before_top_k() {
 }
 
 #[test]
+fn database_instance_identity_survives_committed_handle_writes() {
+    let handle = app_read_handle();
+    let writer = handle.clone();
+    let identity = handle.database_instance_identity().unwrap();
+    let epoch = handle.runtime_status().unwrap().graph_commit_epoch;
+    writer
+        .query_with_report("MATCH (m:Memory {id: 'nearest'}) SET m.title = 'Updated memory'")
+        .unwrap();
+    assert!(handle.runtime_status().unwrap().graph_commit_epoch > epoch);
+    assert_eq!(handle.database_instance_identity().unwrap(), identity);
+    assert_eq!(writer.database_instance_identity().unwrap(), identity);
+
+    let budget = NowledgeMemReadSnapshotBudget {
+        max_rows: 1,
+        max_payload_bytes: 4096,
+    };
+    for pin_projection in [false, true] {
+        let check = |snapshot: &mut super::NowledgeMemReadSnapshot<'_>| {
+            assert_eq!(snapshot.database_instance_identity(), &identity);
+            let output = snapshot.query_cypher(
+                "MATCH (m:Memory {id: 'nearest'}) RETURN m.title AS title LIMIT 1",
+                &BTreeMap::new(),
+                1,
+            )?;
+            assert_eq!(output.rows.len(), 1);
+            assert_eq!(
+                output.rows[0].get("title"),
+                Some(&Value::String("Updated memory".into()))
+            );
+            Ok(())
+        };
+        if pin_projection {
+            handle.with_bounded_read_snapshot(budget, check).unwrap();
+        } else {
+            handle
+                .with_bounded_graph_read_snapshot(budget, check)
+                .unwrap();
+        }
+    }
+}
+
+#[test]
 fn database_instance_identity_tracks_the_exact_published_read_view() {
     let handle = app_read_handle();
     let cloned = handle.clone();
