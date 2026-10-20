@@ -42,6 +42,8 @@ pub struct PendingConsumerGeneration {
     phase: Phase,
     settlement_publication_attempted: bool,
     candidate_seal_attempted: bool,
+    publication_intent_attempted: bool,
+    publication_intent: Option<PublicationIntent>,
     producer_exposed: AtomicBool,
     retirement_step: RetirementStep,
 }
@@ -106,6 +108,8 @@ impl ReservedConsumerAllocation {
             phase: Phase::Prepared,
             settlement_publication_attempted: false,
             candidate_seal_attempted: false,
+            publication_intent_attempted: false,
+            publication_intent: None,
             producer_exposed: AtomicBool::new(false),
             retirement_step: RetirementStep::Intent,
         })
@@ -354,6 +358,73 @@ impl PendingConsumerGeneration {
                 );
                 // A failed or lost native response never starts a fresh seal
                 // attempt for this owner. Resolve the original ledger effect.
+                *attempted = true;
+                let mut candidate = root.create_control_candidate(context, &name)?;
+                candidate.write_all(&bytes)?;
+                candidate.seal()?;
+                candidate.replace_head(context, LEDGER_FILE)?;
+                Ok(())
+            })
+    }
+
+    /// Persist old/new recovery roots before any Consumer selector attempt.
+    /// The new root is this pending row and its seal; the previous selected
+    /// root is copied into the intent. No selector or receipt is published.
+    pub fn record_publication_intent(&mut self) -> Result<()> {
+        self.born_directory()?;
+        let attempted = &mut self.publication_intent_attempted;
+        let remembered = &mut self.publication_intent;
+        let allocation = self
+            .allocation
+            .as_ref()
+            .ok_or_else(|| invalid("publication intent lost its reservation"))?;
+        allocation
+            ._project
+            .with_locked_catalog(|root, context, catalog| {
+                let mut ledger = check_source(
+                    &allocation._project,
+                    &allocation._source,
+                    allocation.source_branch,
+                    root,
+                    context,
+                    &catalog,
+                )?;
+                let index = ledger
+                    .pending
+                    .iter()
+                    .position(|row| row.operation == allocation.operation.0)
+                    .ok_or_else(|| invalid("publication intent reservation is missing"))?;
+                let row = &ledger.pending[index];
+                allocation.require_row(row)?;
+                SelectedRoot::from_candidate(row)?;
+                if *attempted {
+                    if row.publication_intent.as_ref() != remembered.as_ref() {
+                        return Err(invalid("publication intent outcome is unresolved"));
+                    }
+                    let file = root.open_mutable_child(context, LEDGER_FILE, false)?;
+                    file.sync_all()?;
+                    root.sync(context)?;
+                    return Ok(());
+                }
+                if row.publication_intent.is_some() {
+                    return Err(invalid("publication intent already exists"));
+                }
+                let previous = ledger
+                    .selected
+                    .iter()
+                    .find(|selected| selected.matches_consumer(row))
+                    .cloned();
+                let intent = PublicationIntent { previous };
+                ledger.pending[index].publication_intent = Some(intent.clone());
+                validate(&ledger)?;
+                let bytes = encode(&ledger)?;
+                let name = format!(
+                    "consumer-intent-ledger-{}.tmp",
+                    hawdb_core::generate_uuidv7()?
+                );
+                *remembered = Some(intent);
+                // Reentry after an uncertain native effect only resolves this
+                // exact intent; it never selects a replacement root by name.
                 *attempted = true;
                 let mut candidate = root.create_control_candidate(context, &name)?;
                 candidate.write_all(&bytes)?;

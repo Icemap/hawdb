@@ -2030,6 +2030,12 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
                 crate::ProjectionSourceDurability::Synchronize,
             )
             .unwrap();
+            prepared.record_publication_intent().unwrap();
+            prepared.record_publication_intent().unwrap();
+            assert!(
+                allocation_evidence(&fixture).1["pending"][0]["publication_intent"]["previous"]
+                    .is_null()
+            );
             let foreign = Fixture::new();
             let mut foreign_db = foreign.database();
             assert!(foreign_db
@@ -2128,6 +2134,10 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
             assert_eq!(
                 allocation_evidence(&fixture).1["pending"][0]["candidate_seal"]["source_epoch"],
                 source_epoch
+            );
+            assert!(
+                allocation_evidence(&fixture).1["pending"][0]["publication_intent"]["previous"]
+                    .is_null()
             );
             drop(reopened);
         }

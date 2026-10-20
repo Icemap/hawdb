@@ -33,6 +33,8 @@ struct Ledger {
     main_branch_id: String,
     high_water: u64,
     pending: Vec<Reservation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    selected: Vec<SelectedRoot>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +53,8 @@ struct Reservation {
     native_birth: NativeBirth,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     candidate_seal: Option<CandidateSeal>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    publication_intent: Option<PublicationIntent>,
 }
 
 /// Durable candidate debt, not a selector or a completed publication receipt.
@@ -60,6 +64,78 @@ struct CandidateSeal {
     source_epoch: u64,
     metadata_length: u64,
     metadata_sha256: String,
+}
+
+/// A logical selected root. Native directory and file custody must be
+/// reconstructed and verified before it can serve after reopen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SelectedRoot {
+    branch_id: String,
+    database_uuid: String,
+    consumer_id: String,
+    target_locator: String,
+    target_incarnation: u64,
+    generation: u64,
+    operation: u64,
+    registration_uuid: String,
+    projection_uuid: String,
+    checkpoint_uuid: String,
+    generation_name: String,
+    parent_locator: String,
+    seal: CandidateSeal,
+}
+
+/// Retains the old root before any attempt to select the candidate in this row.
+/// The candidate itself remains rooted by the pending row and its seal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PublicationIntent {
+    previous: Option<SelectedRoot>,
+}
+
+impl SelectedRoot {
+    fn consumer_key(&self) -> (&str, &str, &str) {
+        (&self.branch_id, &self.database_uuid, &self.consumer_id)
+    }
+
+    fn matches_consumer(&self, row: &Reservation) -> bool {
+        self.consumer_key()
+            == (
+                row.branch_id.as_str(),
+                row.database_uuid.as_str(),
+                row.consumer_id.as_str(),
+            )
+    }
+
+    fn from_candidate(row: &Reservation) -> Result<Self> {
+        let NativeBirth::Recorded {
+            generation_name,
+            parent_locator,
+        } = &row.native_birth
+        else {
+            return Err(invalid("selected candidate has no recorded birth"));
+        };
+        let seal = row
+            .candidate_seal
+            .clone()
+            .ok_or_else(|| invalid("selected candidate has no durable seal"))?;
+        Ok(Self {
+            branch_id: row.branch_id.clone(),
+            database_uuid: row.database_uuid.clone(),
+            consumer_id: row.consumer_id.clone(),
+            target_locator: row.target_locator.clone(),
+            target_incarnation: row.target_incarnation,
+            generation: row.generation,
+            operation: row.operation,
+            registration_uuid: row.registration_uuid.clone(),
+            projection_uuid: row.projection_uuid.clone(),
+            checkpoint_uuid: row.checkpoint_uuid.clone(),
+            generation_name: generation_name.clone(),
+            parent_locator: parent_locator.clone(),
+            seal,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -313,11 +389,14 @@ fn validate(ledger: &Ledger) -> Result<()> {
     let main =
         BranchId::parse(&ledger.main_branch_id).map_err(|_| invalid("invalid main identity"))?;
     ProjectSelector::new(project, main)?;
-    if ledger.pending.len() > MAX_PENDING || !ledger.high_water.is_multiple_of(3) {
+    if ledger.pending.len() > MAX_PENDING
+        || ledger.selected.len() > MAX_PENDING
+        || !ledger.high_water.is_multiple_of(3)
+    {
         return Err(invalid("invalid allocator boundary"));
     }
     let mut previous = 0;
-    for row in &ledger.pending {
+    for (index, row) in ledger.pending.iter().enumerate() {
         if row.operation > ledger.high_water
             || row.operation <= previous
             || !row.operation.is_multiple_of(3)
@@ -327,16 +406,23 @@ fn validate(ledger: &Ledger) -> Result<()> {
         {
             return Err(invalid("invalid reservation identities"));
         }
-        BranchId::parse(&row.branch_id).map_err(|_| invalid("invalid source branch"))?;
+        let branch =
+            BranchId::parse(&row.branch_id).map_err(|_| invalid("invalid source branch"))?;
+        if branch.as_uuid().to_string() != row.branch_id {
+            return Err(invalid("noncanonical source branch"));
+        }
         for id in [
             &row.database_uuid,
             &row.registration_uuid,
             &row.projection_uuid,
             &row.checkpoint_uuid,
         ] {
-            let id = Uuid::parse_str(id).map_err(|_| invalid("invalid binding UUID"))?;
-            if id.is_nil() {
+            let parsed = Uuid::parse_str(id).map_err(|_| invalid("invalid binding UUID"))?;
+            if parsed.is_nil() {
                 return Err(invalid("nil binding UUID"));
+            }
+            if parsed.to_string() != *id {
+                return Err(invalid("noncanonical binding UUID"));
             }
         }
         if row.consumer_id.is_empty()
@@ -378,17 +464,100 @@ fn validate(ledger: &Ledger) -> Result<()> {
             return Err(invalid("birth generation differs from reservation"));
         }
         if let Some(seal) = &row.candidate_seal
-            && (!matches!(row.native_birth, NativeBirth::Recorded { .. })
-                || seal.metadata_length == 0
-                || seal.metadata_length > MAX_BYTES as u64
-                || seal
-                    .metadata_sha256
-                    .parse::<hawdb_integrity::Sha256Digest>()
-                    .is_err())
+            && (!matches!(row.native_birth, NativeBirth::Recorded { .. }) || !valid_seal(seal))
         {
             return Err(invalid("invalid candidate seal"));
         }
+        if let Some(intent) = &row.publication_intent {
+            let next = SelectedRoot::from_candidate(row)?;
+            let active = ledger
+                .selected
+                .iter()
+                .find(|selected| selected.matches_consumer(row));
+            if intent.previous.as_ref() != active && active != Some(&next) {
+                return Err(invalid("publication intent lost its previous root"));
+            }
+            if let Some(previous) = &intent.previous {
+                if !previous.matches_consumer(row) {
+                    return Err(invalid("publication intent has a foreign previous root"));
+                }
+                validate_selected_root(project, ledger.high_water, previous)?;
+            }
+            if ledger.pending[..index].iter().any(|candidate| {
+                candidate.branch_id == row.branch_id
+                    && candidate.database_uuid == row.database_uuid
+                    && candidate.consumer_id == row.consumer_id
+                    && candidate.publication_intent.is_some()
+            }) {
+                return Err(invalid("multiple publication intents for one consumer"));
+            }
+        }
         previous = row.operation;
+    }
+    let mut previous_consumer = None;
+    for selected in &ledger.selected {
+        validate_selected_root(project, ledger.high_water, selected)?;
+        if previous_consumer.is_some_and(|previous| selected.consumer_key() <= previous) {
+            return Err(invalid("selected consumers are not unique and ordered"));
+        }
+        previous_consumer = Some(selected.consumer_key());
+    }
+    Ok(())
+}
+
+fn valid_seal(seal: &CandidateSeal) -> bool {
+    seal.metadata_length != 0
+        && seal.metadata_length <= MAX_BYTES as u64
+        && seal
+            .metadata_sha256
+            .parse::<hawdb_integrity::Sha256Digest>()
+            .is_ok()
+}
+
+fn validate_selected_root(project: BranchId, high_water: u64, root: &SelectedRoot) -> Result<()> {
+    if root.operation > high_water
+        || !root.operation.is_multiple_of(3)
+        || root.operation.checked_sub(2) != Some(root.target_incarnation)
+        || root.operation.checked_sub(1) != Some(root.generation)
+        || root.target_incarnation == 0
+        || root.consumer_id.is_empty()
+        || root.consumer_id.len() > 128
+        || !root
+            .consumer_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+        || root.target_locator.len() > 16 * 1024
+        || root.parent_locator.is_empty()
+        || root.parent_locator.len() > 16 * 1024
+        || root.generation_name
+            != generation_name_for(
+                project,
+                root.target_incarnation,
+                root.generation,
+                root.operation,
+            )
+        || !valid_seal(&root.seal)
+    {
+        return Err(invalid("invalid selected Consumer root"));
+    }
+    let branch =
+        BranchId::parse(&root.branch_id).map_err(|_| invalid("invalid selected source branch"))?;
+    if branch.as_uuid().to_string() != root.branch_id {
+        return Err(invalid("noncanonical selected source branch"));
+    }
+    for id in [
+        &root.database_uuid,
+        &root.registration_uuid,
+        &root.projection_uuid,
+        &root.checkpoint_uuid,
+    ] {
+        let parsed = Uuid::parse_str(id).map_err(|_| invalid("invalid selected binding UUID"))?;
+        if parsed.is_nil() {
+            return Err(invalid("nil selected binding UUID"));
+        }
+        if parsed.to_string() != *id {
+            return Err(invalid("noncanonical selected binding UUID"));
+        }
     }
     Ok(())
 }
@@ -463,6 +632,7 @@ pub(crate) fn bootstrap(
                 main_branch_id: proposed.main_branch_id().as_uuid().to_string(),
                 high_water: 0,
                 pending: Vec::new(),
+                selected: Vec::new(),
             };
             let bytes = encode(&ledger)?;
             let mut file = root.create_child_new(context, LEDGER_FILE)?;
@@ -515,6 +685,7 @@ pub(crate) fn reserve(
             checkpoint_uuid: checkpoint.to_string(),
             native_birth: NativeBirth::Reserved,
             candidate_seal: None,
+            publication_intent: None,
         });
         ledger.high_water = operation;
         validate(&ledger)?;
@@ -553,4 +724,55 @@ fn generation_name_for(
         "hawdb-generation-{}-{incarnation}-{generation}-{operation}",
         project.as_uuid()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn selected_next_cannot_hide_a_foreign_previous_root() {
+        let uuid = |byte| Uuid::from_bytes([byte; 16]).to_string();
+        let project = BranchId::new(Uuid::from_bytes([1; 16])).unwrap();
+        let branch = BranchId::new(Uuid::from_bytes([2; 16])).unwrap();
+        let mut row = Reservation {
+            branch_id: branch.as_uuid().to_string(),
+            database_uuid: uuid(3),
+            consumer_id: "memory".into(),
+            target_locator: "target".into(),
+            target_incarnation: 1,
+            generation: 2,
+            operation: 3,
+            registration_uuid: uuid(4),
+            projection_uuid: uuid(5),
+            checkpoint_uuid: uuid(6),
+            native_birth: NativeBirth::Recorded {
+                generation_name: generation_name_for(project, 1, 2, 3),
+                parent_locator: "parent".into(),
+            },
+            candidate_seal: Some(CandidateSeal {
+                source_epoch: 7,
+                metadata_length: 1,
+                metadata_sha256: "0".repeat(64),
+            }),
+            publication_intent: None,
+        };
+        let next = SelectedRoot::from_candidate(&row).unwrap();
+        let mut foreign_previous = next.clone();
+        foreign_previous.branch_id = uuid(9);
+        row.publication_intent = Some(PublicationIntent {
+            previous: Some(foreign_previous),
+        });
+        let ledger = Ledger {
+            project_id: project.as_uuid().to_string(),
+            main_branch_id: branch.as_uuid().to_string(),
+            high_water: 3,
+            pending: vec![row],
+            selected: vec![next],
+        };
+        assert!(validate(&ledger)
+            .unwrap_err()
+            .to_string()
+            .contains("foreign previous root"));
+    }
 }

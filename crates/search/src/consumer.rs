@@ -277,6 +277,12 @@ impl ConsumerPreparedCandidate {
             .record_candidate_seal(self.detached.source_epoch, self.detached.metadata.reference)
     }
 
+    /// Retain the previous selected root and this candidate in the durable
+    /// allocation ledger before a selector attempt. This is still unselected.
+    pub fn record_publication_intent(&mut self) -> Result<()> {
+        self.birth.record_publication_intent()
+    }
+
     pub fn report(&self) -> ConsumerCandidateViewReport {
         ConsumerCandidateViewReport {
             source_epoch: self.detached.source_epoch,

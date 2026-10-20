@@ -3,12 +3,13 @@
 Status: implementation contract with checked bounded safety models. A bounded
 runtime allocation/bootstrap ledger, native birth, proven no-effect settlement,
 private-unused retirement, target publication lease, bounded native artifact
-copy and private metadata sealing now cover separate prerequisites. Sealing
+copy, private metadata sealing, a pinned out-of-core candidate reader, durable
+candidate seal debt and a preselection publication intent now cover separate
+prerequisites. Sealing
 checks the Search manifest's source epoch and exact top-level artifact set
 against producer references through the born target, and refuses a declared
 resident snapshot absence if that child is present. Complete C/E construction,
-serving closure, stationary
-generation view/selector, exposed-debt recovery and adoption below remain
+serving authority, stationary selector/receipt, exposed-debt recovery and adoption below remain
 **not implemented**. This document preserves the complete acceptance scope in
 [MVCC_VERSIONED_PUBLICATION_SPEC.md](MVCC_VERSIONED_PUBLICATION_SPEC.md).
 
@@ -135,6 +136,12 @@ when the selected ledger already lacks its row; see
 A completed private birth can also persist retirement intent, delete through its
 original native custody, persist the deletion/tombstone and close target handles
 before settlement; see [the private-birth retirement refinement](../tla/CONSUMER_PRIVATE_BIRTH_RETIREMENT_PROOF.md).
+An exposed private candidate can retain its verified metadata reference and
+source epoch in the same durable ledger. Before any selector attempt, its
+publication intent records the prior selected root when one exists; the pending
+row retains the new root. Selected-root matching uses source branch, database
+identity and Consumer ID together. These records preserve recovery debt but do
+not yet publish a selector or authorize serving.
 Exposed known-born/uncertain debt, complete producer closure, recovery resolution and
 stationary serving/selection remain unfinished. Allocation ledger
 V2 replaces the earlier development-only envelope without a compatibility migration.
