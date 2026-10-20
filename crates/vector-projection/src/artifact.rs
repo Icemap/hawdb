@@ -21,9 +21,13 @@ use crate::model::{
 use crc32fast::Hasher;
 use hawdb_core::SharedAllocation;
 #[cfg(feature = "storage-io")]
+use hawdb_integrity::Crc32cHasher;
+#[cfg(feature = "storage-io")]
 use hawdb_storage::file_io::try_exists as target_exists;
 #[cfg(feature = "storage-io")]
 use hawdb_storage::file_io::{self as fs, File, OpenOptions};
+#[cfg(feature = "storage-io")]
+use hawdb_storage::immutable_object::{ObjectKind, ObjectReference, ObjectReferenceWriter};
 use memmap2::Mmap;
 #[cfg(not(feature = "storage-io"))]
 use std::fs::exists as target_exists;
@@ -149,6 +153,9 @@ impl ProjectionWriter {
                 .map_err(|error| ProjectionError::Io(std::io::Error::other(error)))?;
             project.reserve_admission(2)?
         };
+        #[cfg(feature = "storage-io")]
+        let projection = FileProjection::open_named_with_reference(&self.temporary, &self.target)?;
+        #[cfg(not(feature = "storage-io"))]
         let projection = FileProjection::open_named(&self.temporary, &self.target)?;
         fs::rename(&self.temporary, &self.target)?;
         sync_parent(&self.target)?;
@@ -233,6 +240,10 @@ pub struct FileProjection<Memory = ()> {
 struct ProjectionContents<Memory> {
     path: PathBuf,
     manifest: ProjectionManifest,
+    #[cfg(feature = "storage-io")]
+    object_reference: Option<ObjectReference>,
+    #[cfg(feature = "storage-io")]
+    artifact_checksum: Option<u64>,
     mmap: Mmap,
     // Payloads and their shared allocation die before either capacity owner.
     _path_memory: Memory,
@@ -259,12 +270,27 @@ impl FileProjection {
         Self::open_admitted_file(input, identity_path, &admission::Unaccounted)
     }
 
+    #[cfg(feature = "storage-io")]
+    #[doc(hidden)]
+    pub fn open_file_with_reference(input: File, identity_path: &Path) -> Result<Self> {
+        Self::open_admitted_file_with_reference(input, identity_path, &admission::Unaccounted)
+    }
+
     fn open_named(source: &Path, identity_path: &Path) -> Result<Self> {
         #[cfg(all(test, feature = "storage-io"))]
         if let Some(callback) = BEFORE_PROJECTION_OPEN.with(|slot| slot.replace(None)) {
             callback();
         }
         Self::open_file(File::open(source)?, identity_path)
+    }
+
+    #[cfg(feature = "storage-io")]
+    fn open_named_with_reference(source: &Path, identity_path: &Path) -> Result<Self> {
+        #[cfg(test)]
+        if let Some(callback) = BEFORE_PROJECTION_OPEN.with(|slot| slot.replace(None)) {
+            callback();
+        }
+        Self::open_file_with_reference(File::open(source)?, identity_path)
     }
 
     /// Constructs shared metadata under caller-supplied admission. The supplied
@@ -275,6 +301,26 @@ impl FileProjection {
         input: File,
         identity_path: &Path,
         admission: &A,
+    ) -> Result<FileProjection<A::Retained>> {
+        Self::open_admitted_file_impl(input, identity_path, admission, false)
+    }
+
+    #[cfg(feature = "storage-io")]
+    #[doc(hidden)]
+    pub fn open_admitted_file_with_reference<A: ProjectionReadAdmission>(
+        input: File,
+        identity_path: &Path,
+        admission: &A,
+    ) -> Result<FileProjection<A::Retained>> {
+        Self::open_admitted_file_impl(input, identity_path, admission, true)
+    }
+
+    fn open_admitted_file_impl<A: ProjectionReadAdmission>(
+        input: File,
+        identity_path: &Path,
+        admission: &A,
+        #[cfg(feature = "storage-io")] capture_reference: bool,
+        #[cfg(not(feature = "storage-io"))] _capture_reference: bool,
     ) -> Result<FileProjection<A::Retained>> {
         admission.checkpoint()?;
         let fixed = admission::add(
@@ -352,7 +398,52 @@ impl FileProjection {
 
         // Validate the held file before mapping it. Opening a reader must not
         // fault the complete payload into its mapping just to establish integrity.
+        #[cfg(feature = "storage-io")]
+        let mut reference = if capture_reference {
+            Some(
+                ObjectReferenceWriter::new(ObjectKind::CheckpointArtifact, 1, file_bytes)
+                    .map_err(|error| ProjectionError::CorruptArtifact(error.to_string()))?,
+            )
+        } else {
+            None
+        };
+        #[cfg(feature = "storage-io")]
+        let mut artifact_checksum = capture_reference.then(Crc32cHasher::new);
+        #[cfg(feature = "storage-io")]
+        if let (Some(reference), Some(artifact_checksum)) =
+            (reference.as_mut(), artifact_checksum.as_mut())
+        {
+            stream_verify::verify_admitted_observing(
+                &mut file,
+                &manifest,
+                admission,
+                &mut |bytes| {
+                    reference.write_all(bytes)?;
+                    artifact_checksum.update(bytes);
+                    Ok(())
+                },
+            )?;
+        } else {
+            stream_verify::verify_admitted(&mut file, &manifest, admission)?;
+        }
+        #[cfg(not(feature = "storage-io"))]
         stream_verify::verify_admitted(&mut file, &manifest, admission)?;
+        #[cfg(feature = "storage-io")]
+        let object_reference = reference
+            .map(|mut reference| {
+                reference.write_all(&encoded_manifest)?;
+                reference.write_all(&footer)?;
+                reference
+                    .finish()
+                    .map_err(|error| ProjectionError::CorruptArtifact(error.to_string()))
+            })
+            .transpose()?;
+        #[cfg(feature = "storage-io")]
+        let artifact_checksum = artifact_checksum.map(|mut checksum| {
+            checksum.update(&encoded_manifest);
+            checksum.update(&footer);
+            checksum.finish()
+        });
 
         // SAFETY: the artifact is published via atomic rename and never mutated in
         // place after that point, so external truncation/mutation racing this map is
@@ -375,6 +466,10 @@ impl FileProjection {
             contents: SharedAllocation::new(ProjectionContents {
                 path,
                 manifest,
+                #[cfg(feature = "storage-io")]
+                object_reference,
+                #[cfg(feature = "storage-io")]
+                artifact_checksum,
                 mmap,
                 _path_memory: path_memory,
                 _metadata_memory: metadata_memory,
@@ -384,6 +479,20 @@ impl FileProjection {
 }
 
 impl<Memory> FileProjection<Memory> {
+    /// Producer reference computed during the existing complete validation pass.
+    #[cfg(feature = "storage-io")]
+    #[doc(hidden)]
+    pub fn object_reference(&self) -> Option<ObjectReference> {
+        self.contents.object_reference
+    }
+
+    /// Full artifact CRC32C computed during the same validation pass.
+    #[cfg(feature = "storage-io")]
+    #[doc(hidden)]
+    pub fn artifact_checksum(&self) -> Option<u64> {
+        self.contents.artifact_checksum
+    }
+
     pub fn manifest(&self) -> &ProjectionManifest {
         &self.contents.manifest
     }
@@ -735,6 +844,43 @@ mod tests {
             10
         );
         drop(cloned);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "storage-io")]
+    fn streamed_validation_returns_the_complete_producer_reference() {
+        let root = unique_test_dir("streamed-producer-reference");
+        fs::create_dir_all(&root).unwrap();
+        let artifact = root.join("search_rabitq.1.hawdb");
+        let mut writer = ProjectionWriter::create(
+            &artifact,
+            ProjectionBuildConfig::new(8, ProjectionIdentity::new(1)).with_segment_rows(2),
+        )
+        .unwrap();
+        for id in [10, 20, 30] {
+            writer.push(id, &[id as f32; 8]).unwrap();
+        }
+        let published = writer.finish().unwrap();
+        let expected = ObjectReference::for_bytes(
+            ObjectKind::CheckpointArtifact,
+            1,
+            &fs::read(&artifact).unwrap(),
+        );
+        assert_eq!(published.object_reference(), Some(expected));
+        assert_eq!(
+            published.artifact_checksum(),
+            Some(hawdb_integrity::checksum_u64(&fs::read(&artifact).unwrap()))
+        );
+        assert!(FileProjection::open(&artifact)
+            .unwrap()
+            .object_reference()
+            .is_none());
+        let reopened =
+            FileProjection::open_file_with_reference(File::open(&artifact).unwrap(), &artifact)
+                .unwrap();
+        assert_eq!(reopened.object_reference(), Some(expected));
+        assert_eq!(reopened.artifact_checksum(), published.artifact_checksum());
         fs::remove_dir_all(root).unwrap();
     }
 
