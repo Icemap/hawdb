@@ -126,6 +126,7 @@ pub use graph_read::{
 };
 #[path = "store/read_dependencies.rs"]
 mod read_dependencies;
+pub use read_dependencies::ReadDependencyValidationFailures;
 #[doc(hidden)]
 pub use read_dependencies::{GraphReadDependencies, GraphReadDependencyError};
 #[path = "store/graph_recovery.rs"]
@@ -381,7 +382,7 @@ use search_projection_change_log::SearchProjectionChangeLog;
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use wal_codec::binary::encode_binary_wal_record;
 use wal_codec::frame::{
@@ -818,6 +819,7 @@ pub struct GraphStore {
     version_snapshot_pins: hawdb_storage::version::VersionSnapshotPins,
     version_snapshot_pin: Option<hawdb_storage::version::VersionSnapshotPin>,
     read_dependency_readers: Arc<AtomicUsize>,
+    read_dependency_validation_failures: Arc<read_dependencies::ValidationFailureCounters>,
     nodes: crate::cow::CowNodeMap,
     relationships: CowSegmentedMap<RelId, RelRecord>,
     basic_statistics: BasicStatisticsState,
@@ -1760,6 +1762,7 @@ impl GraphStore {
             version_snapshot_pins: Default::default(),
             version_snapshot_pin: None,
             read_dependency_readers: Arc::new(AtomicUsize::new(0)),
+            read_dependency_validation_failures: Arc::new(Default::default()),
             nodes: crate::cow::CowNodeMap::default(),
             relationships: CowSegmentedMap::default(),
             basic_statistics: BasicStatisticsState::default(),
@@ -2227,6 +2230,9 @@ impl GraphStore {
             version_snapshot_pins: self.version_snapshot_pins.clone(),
             version_snapshot_pin: Some(self.version_snapshot_pins.pin(pin_epoch)),
             read_dependency_readers: Arc::clone(&self.read_dependency_readers),
+            read_dependency_validation_failures: Arc::clone(
+                &self.read_dependency_validation_failures,
+            ),
             nodes: self.nodes.clone(),
             relationships: self.relationships.clone(),
             basic_statistics: self.basic_statistics.clone(),
