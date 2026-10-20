@@ -58,6 +58,25 @@ pub(super) struct OpenedRoot {
     _collections_memory: Option<ReaderMemory>,
 }
 impl OpenedRoot {
+    pub(super) fn probe_query(
+        &self,
+        query_text: &str,
+        query_embedding: Option<&[f32]>,
+        mode: super::SearchMode,
+        options: super::SearchQueryOptions,
+        task: &hawdb_core::RuntimeTaskContext,
+    ) -> Result<super::SearchOutOfCoreOutput> {
+        self.reader
+            .search_with_options_compressed_vector_projection_context(
+                query_text,
+                query_embedding,
+                mode,
+                options,
+                super::CompressedVectorSearchMode::Disabled,
+                task,
+            )
+    }
+
     pub(super) fn document_count(&self) -> usize {
         self.reader.document_count()
     }

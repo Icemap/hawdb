@@ -1907,6 +1907,22 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
         output.seal_generation_metadata(&input, limits).unwrap();
         drop(output);
         assert!(!target_path.join("search_projection.hawdb").exists());
+        #[cfg(feature = "full-text-search")]
+        assert!(lease
+            .probe_candidate_query(
+                "out of core",
+                None,
+                hawdb_search::SearchMode::Text,
+                hawdb_search::SearchQueryOptions {
+                    limit: 1,
+                    offset: 0,
+                    rank_window: None,
+                    fusion_weights: Default::default(),
+                    metadata_filters: Default::default(),
+                    policy_epoch: None,
+                },
+            )
+            .is_err());
 
         #[cfg(unix)]
         let captured_path = {
@@ -1935,6 +1951,32 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
                 .unwrap();
             assert_eq!(view.source_epoch, 7);
             assert_eq!(view.document_count, 1);
+            #[cfg(feature = "full-text-search")]
+            {
+                let result = lease
+                    .probe_candidate_query(
+                        "out of core",
+                        None,
+                        hawdb_search::SearchMode::Text,
+                        hawdb_search::SearchQueryOptions {
+                            limit: 1,
+                            offset: 0,
+                            rank_window: None,
+                            fusion_weights: Default::default(),
+                            metadata_filters: Default::default(),
+                            policy_epoch: None,
+                        },
+                    )
+                    .unwrap();
+                assert_eq!(result.result.total_hits, 1);
+                assert_eq!(result.result.hits[0].id, "memory:m1");
+                assert_eq!(
+                    result.result.hits[0]
+                        .projection_freshness
+                        .source_graph_commit_epoch,
+                    Some(7)
+                );
+            }
         }
     }
 }

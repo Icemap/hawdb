@@ -70,6 +70,18 @@ impl std::fmt::Debug for CandidateView {
 }
 
 impl CandidateView {
+    pub(crate) fn probe_query(
+        &self,
+        query_text: &str,
+        query_embedding: Option<&[f32]>,
+        mode: SearchMode,
+        options: SearchQueryOptions,
+        task: &hawdb_core::RuntimeTaskContext,
+    ) -> Result<SearchOutOfCoreOutput> {
+        self.0
+            .probe_query(query_text, query_embedding, mode, options, task)
+    }
+
     pub(crate) fn document_count(&self) -> usize {
         self.0.document_count()
     }

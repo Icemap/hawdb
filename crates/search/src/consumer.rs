@@ -155,6 +155,35 @@ pub struct ConsumerCandidateViewReport {
 }
 
 impl<'birth> ConsumerStationaryTargetLease<'birth> {
+    /// Probe the sealed candidate's pinned files under this lease's runtime
+    /// admission. Results are validation evidence only: the source-E fence and
+    /// durable selector must still complete before any serving acknowledgement.
+    pub fn probe_candidate_query(
+        &self,
+        query_text: &str,
+        query_embedding: Option<&[f32]>,
+        mode: crate::SearchMode,
+        options: crate::SearchQueryOptions,
+    ) -> Result<crate::SearchOutOfCoreOutput> {
+        let view = self
+            .candidate_view
+            .as_ref()
+            .ok_or_else(|| invalid("consumer candidate view is not prepared"))?;
+        if self.host_admission.is_none() {
+            return Err(HawDBError::Execution(
+                "consumer candidate query requires runtime admission".into(),
+            ));
+        }
+        let _io = self
+            .task
+            .acquire_io_wave(std::num::NonZeroUsize::MIN)
+            .map_err(|error| HawDBError::Execution(error.to_string()))?
+            .ok_or_else(|| {
+                HawDBError::Execution("consumer candidate query requires I/O admission".into())
+            })?;
+        view.probe_query(query_text, query_embedding, mode, options, &self.task)
+    }
+
     /// Acquire against the original native generation, never its saved path.
     /// A failed acquisition leaves the caller's birth token available for
     /// resolution and conservatively retains exposed-birth debt.
