@@ -9123,7 +9123,7 @@ mod tests {
             evidence["protocol"],
             "hawdb-nowledge-search-projection-evidence"
         );
-        assert_eq!(evidence["ready"], true, "evidence={evidence:#}");
+        assert_eq!(evidence["ready"], true, "evidence={evidence}");
         assert_eq!(evidence["covered_table_count"], 6);
         assert_eq!(evidence["required_table_count"], 6);
         assert_eq!(evidence["source_chunk_ready"], true);
@@ -9181,7 +9181,7 @@ mod tests {
             evidence["protocol"],
             "hawdb-nowledge-search-projection-shadow-evidence"
         );
-        assert_eq!(evidence["ready"], true, "evidence={evidence:#}");
+        assert_eq!(evidence["ready"], true, "evidence={evidence}");
         assert_eq!(evidence["primary_ready"], true);
         assert_eq!(evidence["shadow_ready"], true);
         assert_eq!(evidence["document_count_parity"], true);

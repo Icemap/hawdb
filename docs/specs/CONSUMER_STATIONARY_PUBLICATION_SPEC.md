@@ -5,7 +5,8 @@ runtime allocation/bootstrap ledger, native birth, proven no-effect settlement,
 private-unused retirement, target publication lease, bounded native artifact
 copy and private metadata sealing now cover separate prerequisites. Sealing
 checks the Search manifest's source epoch and exact top-level artifact set
-against producer references through the born target. Complete C/E construction,
+against producer references through the born target, and refuses a declared
+resident snapshot absence if that child is present. Complete C/E construction,
 serving closure, stationary
 generation view/selector, exposed-debt recovery and adoption below remain
 **not implemented**. This document preserves the complete acceptance scope in
