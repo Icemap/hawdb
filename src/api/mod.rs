@@ -89,6 +89,10 @@ pub use automatic_checkpoint::AutomaticCheckpointReport;
 mod branch_lifecycle;
 mod canonical_snapshot;
 mod concurrent;
+mod dependency_read;
+pub use dependency_read::{
+    PreparedRead, PreparedReadDependencies, PreparedReadLimits, ProjectionPublicationError,
+};
 mod explain;
 mod graph_analytics;
 mod knowledge_graph_filters;

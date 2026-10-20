@@ -1529,6 +1529,13 @@ transactions, and safe version-history pruning. Its
 [proof and source mapping](MVCC_VALIDATION_PROOF.md) document seven negative
 controls, reachability probes, and the limits of the finite abstraction. The
 older transaction model and its recorded results remain unchanged. The
+[`HawDBVersionedProjectionPublication.tla`](HawDBVersionedProjectionPublication.tla)
+model specifies pinned preparation, complete point/scan dependencies, instance
+and target-incarnation checks, a publication fence, durable source/artifact
+closure, cancellation, GC and lost-response recovery. Its
+[argument and controls](VERSIONED_PROJECTION_PUBLICATION_PROOF.md) distinguish
+the finite protocol evidence from the native integration still required by
+#231/#232. The
 [`HawDBOptimisticCommitAdmission.tla`](HawDBOptimisticCommitAdmission.tla)
 model separately checks concurrent optimistic admission, exclusion against
 ordinary locks, permit lifetime, within-group conflict validation, sync-failure
