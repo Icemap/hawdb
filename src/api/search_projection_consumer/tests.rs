@@ -2243,10 +2243,6 @@ fn consumer_allocation_exhaustion_refuses_without_effect_or_counter_reset() {
     append(&mut db, 2);
 }
 
-// Windows deliberately refuses public Consumer publication until the held
-// native owner can support its directory move; the refusal path has its own
-// Windows regression above.
-#[cfg(not(windows))]
 #[test]
 fn legacy_registered_prefix_1043_refuses_before_hydration_and_reopens_complete_retry() {
     let fixture = Fixture::new();
