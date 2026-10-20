@@ -144,6 +144,81 @@ fn dropped_attempted_owner_retains_gc_roots_and_can_be_resolved_by_matching_toke
 }
 
 #[test]
+fn mismatched_selected_manifest_reports_conflict_and_retains_recovery_roots() {
+    for retain_owner in [true, false] {
+        let fixture = Fixture::new();
+        let store = ProjectionGenerationStore::open(&fixture.0).unwrap();
+        let old = stage(&store, begin("g1", None, 1), &[]);
+        store.publish(&old).unwrap();
+        let old_identity = old.manifest.begin.identity.clone();
+        drop(old);
+        let sealed = stage(&store, begin("g2", Some("g1"), 2), &[]);
+        let new_identity = sealed.manifest.begin.identity.clone();
+        let mut prepared = prepare(&store, &sealed);
+        drop(prepared.select().unwrap());
+        let mut prepared = if retain_owner {
+            Some(prepared)
+        } else {
+            drop(prepared);
+            None
+        };
+
+        // Model external content reuse after selection, without declaring
+        // either the original operation or its durability resolved.
+        let path = store.head_path("session_spans", b"session-1");
+        let mut head = store.read_optional_head(&path).unwrap().unwrap();
+        head.manifest.begin.source_watermark += 1;
+        let bytes = encode_head(&head).unwrap();
+        store
+            .write_control(&path, &bytes, &mut store.lock_shared().unwrap())
+            .unwrap();
+        for _ in 0..2 {
+            let result = if let Some(prepared) = &mut prepared {
+                prepared.resolve().map(|_| ())
+            } else {
+                store.published_receipt(&sealed).map(|_| ())
+            };
+            assert!(
+                matches!(result, Err(ProjectionGenerationError::Conflict(message))
+                if message == "published generation identity was reused with different content")
+            );
+            assert_eq!(store.read_optional_head(&path).unwrap(), Some(head.clone()));
+        }
+        assert!(matches!(
+            store.open_active("session_spans", b"session-1"),
+            Err(ProjectionGenerationError::Corruption(_))
+        ));
+        drop(prepared);
+        assert!(matches!(
+            store.prepare_publication(&sealed),
+            Err(ProjectionGenerationError::PublicationUncertain)
+        ));
+        assert!(matches!(
+            store.publish(&sealed),
+            Err(ProjectionGenerationError::Conflict(_))
+        ));
+        drop(sealed);
+        let status = store.status(&new_identity).unwrap();
+        assert!(!status.pinned);
+        assert_eq!(
+            status.state,
+            ProjectionGenerationState::PublicationUncertain
+        );
+        let reclaimed = store
+            .reclaim(ProjectionGenerationGcLimits::default())
+            .unwrap();
+        assert_eq!(reclaimed.generations_reclaimed, 0);
+        assert_eq!(reclaimed.pinned_generations_skipped, 2);
+        for identity in [old_identity, new_identity] {
+            assert!(store.file_exists(&store.data_path(&identity)).unwrap());
+            assert!(store.file_exists(&store.manifest_path(&identity)).unwrap());
+        }
+        let other = stage(&store, begin_for(b"other", "g1", None, 1), &[]);
+        store.publish(&other).unwrap();
+    }
+}
+
+#[test]
 fn missing_private_candidate_resolves_not_selected_without_reusing_attempt() {
     let fixture = Fixture::new();
     let store = ProjectionGenerationStore::open(&fixture.0).unwrap();

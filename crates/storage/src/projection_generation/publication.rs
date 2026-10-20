@@ -155,6 +155,8 @@ impl PreparedProjectionPublication {
     /// Revalidate the retained old selector identity and perform native atomic
     /// selection. Does not serialize manifests, synchronize files/directories,
     /// wait for the catalog mutex, clone the report, or consume rejected owners.
+    /// For an unattempted token, `Busy` preserves preparation: retry `select`
+    /// on the same token after contention clears.
     /// Native calls may still block; this is not a hard latency guarantee.
     pub fn select(
         &mut self,
@@ -207,6 +209,9 @@ impl PreparedProjectionPublication {
 
     /// Resolve this live owner's attempted selection outside the source fence.
     /// A resolved operation cannot be retried: prepare a new owner if necessary.
+    /// Reusing the selected generation identity with different content returns
+    /// `Conflict`. Retrying unchanged content cannot resolve that conflict;
+    /// the reservation still protects both recovery roots from GC.
     pub fn resolve(&mut self) -> Result<ProjectionGenerationResolution, ProjectionGenerationError> {
         if self.reservation.closed {
             return Err(ProjectionGenerationError::Conflict(
@@ -419,7 +424,11 @@ impl ProjectionGenerationStore {
         {
             validate_head_owner(&head, identity)?;
             if head.manifest != sealed.manifest {
-                return Err(ProjectionGenerationError::PublicationUncertain);
+                // A content conflict is terminal for these bytes, but does not
+                // establish a durable outcome or release either recovery root.
+                return Err(ProjectionGenerationError::Conflict(
+                    "published generation identity was reused with different content".into(),
+                ));
             }
             self.stabilize_selected_head(&path, &head)?;
             ProjectionGenerationResolution::Published(ProjectionGenerationPublishReport {

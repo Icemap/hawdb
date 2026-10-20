@@ -31,6 +31,9 @@ catalog mutex, and returns the report. A live pending operation excludes
 publication and outcome resolution by another operation for the same owner.
 Other owners remain usable. General catalog operations still use a blocking
 mutex; only selection promises immediate refusal when that mutex is busy.
+`select()` returning `Busy` on an unattempted token preserves that preparation;
+retry the same token after contention clears. The host should retain that
+preparation rather than discard it as a conflict or start a competing one.
 
 A pre-selection rejection preserves the prepared value for disposal outside
 SourceOwner. A native attempt permanently revokes selection retries. Dropping
@@ -40,6 +43,16 @@ Only the same sealed generation can resolve an abandoned uncertain operation.
 Resolution stabilizes a selected complete generation or confirms the original
 native head/absence. Unknown heads, corruption and failed barriers preserve
 uncertainty and evidence. A confirmed non-selection requires a new preparation.
+
+A selected head that reuses the requested generation identity with a different
+manifest returns `Conflict`, matching preparation and ordinary receipt lookup.
+Unchanged bytes cannot resolve that content conflict through retries. This is
+not evidence of a completed durability barrier or a safe rollback: the owner
+reservation and both recovery roots remain retained. Status still describes
+pending or abandoned publication custody, not whether resolution encountered a
+content error. Neither a failed resolve nor dropping the token acknowledges the
+operation, rewrites the head, or authorizes reclamation. Recovery must establish
+a valid complete outcome before releasing that evidence.
 
 While any reservation exists, GC defers that owner's generations, including the
 old durable head and new candidate, before synchronization or unlink. This is
