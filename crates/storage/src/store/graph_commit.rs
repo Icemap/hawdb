@@ -1929,16 +1929,32 @@ impl GraphStore {
         self.poison_on_storage_error(&row_publication_requirement);
         row_publication_requirement?;
         self.validate_constraints_for_ops(&working_catalog, &ops)?;
-        // Writer validation above consumes destinations only. Domain summaries
-        // invalidate prepared reads and must not serialize disjoint writers.
-        // Admission still completes before WAL; install all stamps atomically.
-        self.extend_read_invalidation_stamps(&working_catalog, &ops, &mut version_writes)?;
-        let staged_versions = self
-            .stage_version_index(&version_writes, next_commit_epoch)
-            .or_else(|_| {
-                self.reclaim_version_history();
-                self.stage_version_index(&version_writes, next_commit_epoch)
-            })?;
+        // Read-only summaries must never make an otherwise admissible writer
+        // fail. If their bounded write set or retained history does not fit,
+        // publish the permanently reserved ReadBarrier instead. The writer's
+        // destination keys still require normal pre-WAL admission.
+        let mut with_read_summaries = version_writes.clone();
+        let fine_summaries_fit = self
+            .extend_read_invalidation_stamps(&working_catalog, &ops, &mut with_read_summaries)
+            .is_ok();
+        let mut staged_versions = fine_summaries_fit
+            .then(|| {
+                self.stage_version_index(&with_read_summaries, next_commit_epoch, false)
+                    .ok()
+            })
+            .flatten();
+        if staged_versions.is_none() {
+            self.reclaim_version_history();
+            if fine_summaries_fit {
+                staged_versions = self
+                    .stage_version_index(&with_read_summaries, next_commit_epoch, false)
+                    .ok();
+            }
+        }
+        let staged_versions = match staged_versions {
+            Some(versions) => versions,
+            None => self.stage_version_index(&version_writes, next_commit_epoch, true)?,
+        };
         let wal_result =
             if preserve_single_create_wal && let [op @ WalOp::CreateNode { .. }] = ops.as_slice() {
                 self.append_durable_wal_single(op.clone())
@@ -1981,7 +1997,12 @@ impl GraphStore {
     // When every usable snapshot is at the current epoch, earlier stamps
     // cannot affect validation. Prepare from a constant baseline instead of
     // copying obsolete pages; publish it only after the WAL accepts the commit.
-    fn stage_version_index(&self, writes: &VersionWriteSet, epoch: u64) -> Result<VersionIndex> {
+    fn stage_version_index(
+        &self,
+        writes: &VersionWriteSet,
+        epoch: u64,
+        read_barrier: bool,
+    ) -> Result<VersionIndex> {
         // The commit's exclusive store borrow excludes fresh canonical captures.
         // Other sources retain their inherited pin while registering descendants,
         // so a later registration cannot introduce an older protection floor.
@@ -1991,12 +2012,22 @@ impl GraphStore {
             .is_none_or(|oldest| oldest >= self.commit_epoch)
             .then(|| self.version_index.read_baseline(self.commit_epoch));
         let versions = baseline.as_ref().unwrap_or(&self.version_index);
-        if !versions.admits(writes) {
+        let admitted = if read_barrier {
+            versions.admits_after_read_summary_collapse(writes)
+        } else {
+            versions.admits(writes)
+        };
+        if !admitted {
             return Err(HawDBError::Storage(
                 "MVCC version index estimated payload budget exhausted; release old snapshots and checkpoint before retrying".into(),
             ));
         }
-        versions.stage(writes, epoch).ok_or_else(|| HawDBError::Storage(
+        let staged = if read_barrier {
+            versions.stage_with_read_barrier(writes, epoch)
+        } else {
+            versions.stage(writes, epoch)
+        };
+        staged.ok_or_else(|| HawDBError::Storage(
             "MVCC retained version history budget exhausted; release old snapshots before retrying".into(),
         ))
     }

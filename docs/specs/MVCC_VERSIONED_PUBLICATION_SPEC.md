@@ -242,17 +242,20 @@ Destination writes are validated before these summaries are added to the staged
 index; the union is admitted before WAL and installed with canonical commit.
 When no prepared source exists, ordinary commits do not build those summaries.
 
-This initial collector has one summary key per label plus the all-node domain
-and `ReadBarrier`; distinct property values do not create additional summary
-keys. A future per-value or relational-prefix collector must not let read-summary
-growth turn a long-lived preparation into a writer outage. If its summaries do
-not fit the version-index or history allowance, it must collapse them to the
-fixed-size `ReadBarrier`, let an otherwise admissible write commit, and invalidate
-affected captures. Writer destination keys retain their existing admission and
-conflict checks. That future slice must reserve/admit the fallback itself before
-WAL, test that the write commits while capture validation conflicts, and qualify
-the accounting and retention cost; this document does not claim that fallback
-is implemented by the current coarse collector.
+This initial collector has one summary key per label plus the all-node domain;
+distinct property values do not create additional summary keys. The version
+index permanently reserves an inline `ReadBarrier`. If fine-grained summary
+collection or staging exceeds its bounded write set, current-index estimate or
+retained-history allowance, commit admission drops old read-only summaries and
+stages the writer destinations with that barrier before WAL. Captures from an
+earlier epoch then conflict, while disjoint writer conflict checks remain scoped
+to their destinations. A writer whose own destination keys cannot be admitted
+still fails before WAL. The 64 MiB current-index and 256 MiB shared retained-root
+limits count estimated key/stamp payloads, including the fixed inline reservation;
+they exclude B-tree and allocator overhead. The fallback is covered by bounded
+index, canonical commit, conflict and durable reopen tests. Churn, long-pin RSS
+and cleanup-latency qualification remain open, including future per-value and
+relational-prefix collectors.
 
 `Database::read_dependency_validation_failures` exposes process-lifetime,
 per-instance counts of rejected validation calls. Conflict counters distinguish

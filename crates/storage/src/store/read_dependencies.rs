@@ -141,7 +141,13 @@ impl ValidationFailureCounters {
                 VersionKey::Database => &self.database,
                 VersionKey::ReadNodeDomain(_) => &self.domain,
                 VersionKey::Schema => &self.schema,
-                _ => &self.exact,
+                VersionKey::GraphNode(_)
+                | VersionKey::GraphRelationship(_)
+                | VersionKey::GraphAdjacency { .. }
+                | VersionKey::RelationalRow { .. }
+                | VersionKey::RelationalIndex { .. }
+                | VersionKey::ForeignKey { .. }
+                | VersionKey::AppendTable(_) => &self.exact,
             },
             GraphReadDependencyError::SourceChanged => &self.source_changed,
             GraphReadDependencyError::CaptureRefused => &self.capture_refused,
@@ -625,7 +631,7 @@ mod tests {
     }
 
     #[test]
-    fn read_summary_admission_failure_precedes_wal_and_reopen() {
+    fn read_summary_pressure_commits_writer_and_invalidates_capture() {
         let path = std::env::temp_dir().join(format!(
             "hawdb_read_dependency_admission_{}_{}",
             std::process::id(),
@@ -647,25 +653,25 @@ mod tests {
         let wal_path = store.durable.as_ref().unwrap().wal_path.clone();
         let wal = std::fs::read(&wal_path).unwrap();
         let epoch = store.commit_epoch();
-        let error = store
+        store
             .commit_mutations(&mut catalog, vec![create("Memory")])
-            .unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("version index estimated payload budget"),
-            "{error}"
-        );
-        assert_eq!(store.commit_epoch(), epoch);
-        assert_eq!(store.node_count_for_label(None), 1);
-        assert_eq!(catalog.label_id("Memory"), None);
-        assert_eq!(std::fs::read(&wal_path).unwrap(), wal);
-        store.validate_read_dependencies(&captured).unwrap();
+            .unwrap();
+        assert_eq!(store.commit_epoch(), epoch + 1);
+        assert_eq!(store.node_count_for_label(None), 2);
+        assert!(catalog.label_id("Memory").is_some());
+        assert_ne!(std::fs::read(&wal_path).unwrap(), wal);
+        assert!(matches!(
+            store.validate_read_dependencies(&captured),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::ReadBarrier,
+                committed_epoch,
+            })) if committed_epoch == epoch + 1
+        ));
         drop(store);
         let mut recovered_catalog = Catalog::default();
         let recovered = GraphStore::open(&path, &mut recovered_catalog).unwrap();
-        assert_eq!(recovered.commit_epoch(), epoch);
-        assert_eq!(recovered.node_count_for_label(None), 1);
+        assert_eq!(recovered.commit_epoch(), epoch + 1);
+        assert_eq!(recovered.node_count_for_label(None), 2);
         assert!(matches!(
             recovered.validate_read_dependencies(&captured),
             Err(GraphReadDependencyError::SourceChanged)
@@ -673,5 +679,136 @@ mod tests {
         drop(captured);
         drop(recovered);
         std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn accumulated_read_summaries_collapse_before_a_second_writer() {
+        let mut store = GraphStore::default();
+        let mut catalog = Catalog::default();
+        let weight = |key: VersionKey| key.cow_page_bytes() + std::mem::size_of::<VersionStamp>();
+        let reserve = VersionIndex::default().estimated_bytes();
+        let limit = reserve
+            + 2 * weight(VersionKey::GraphNode(NodeId(0)))
+            + weight(VersionKey::ReadNodeDomain(None))
+            + weight(VersionKey::ReadNodeDomain(Some("Memory".into())));
+        store.version_index = VersionIndex::with_byte_limit(limit);
+        let captured = capture(&store, VersionKey::ReadNodeDomain(Some("Other".into())));
+        store
+            .commit_mutations(&mut catalog, vec![create("Memory")])
+            .unwrap();
+        store.validate_read_dependencies(&captured).unwrap();
+        assert!(store
+            .version_index
+            .stamp(&VersionKey::ReadNodeDomain(Some("Memory".into())))
+            .is_some());
+
+        store
+            .commit_mutations(&mut catalog, vec![create("Other")])
+            .unwrap();
+        assert_eq!(store.node_count_for_label(None), 2);
+        assert!(store
+            .version_index
+            .stamp(&VersionKey::ReadNodeDomain(Some("Memory".into())))
+            .is_none());
+        assert!(matches!(
+            store.validate_read_dependencies(&captured),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::ReadBarrier,
+                committed_epoch: 2,
+            }))
+        ));
+    }
+
+    #[test]
+    fn validation_failure_report_preserves_exact_keys_across_summary_collapse() {
+        let mut store = GraphStore::default();
+        let mut catalog = Catalog::default();
+        store
+            .commit_mutations(&mut catalog, vec![create("Memory"), create("Memory")])
+            .unwrap();
+        let reserve = VersionIndex::default().estimated_bytes();
+        let writer_bytes =
+            VersionKey::GraphNode(NodeId(0)).cow_page_bytes() + std::mem::size_of::<VersionStamp>();
+        store.version_index = VersionIndex::with_byte_limit(reserve + 2 * writer_bytes);
+        let first = capture(&store, VersionKey::GraphNode(NodeId(0)));
+        let second = capture(&store, VersionKey::GraphNode(NodeId(1)));
+        let domain = capture(&store, VersionKey::ReadNodeDomain(Some("Memory".into())));
+        let captured_epoch = store.commit_epoch();
+
+        store
+            .commit_mutations(&mut catalog, vec![update(1, 10)])
+            .unwrap();
+        let disjoint_epoch = store.commit_epoch();
+        assert_eq!(disjoint_epoch, captured_epoch + 1);
+        assert_eq!(
+            store.version_index.stamp(&VersionKey::ReadBarrier),
+            Some(VersionStamp {
+                commit_epoch: disjoint_epoch,
+                disposition: crate::version::VersionDisposition::Live,
+            })
+        );
+        store.validate_read_dependencies(&first).unwrap();
+        assert_eq!(
+            store.read_dependency_validation_failures(),
+            Default::default()
+        );
+        assert!(matches!(
+            store.validate_read_dependencies(&second),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::GraphNode(NodeId(1)),
+                committed_epoch,
+            })) if committed_epoch == disjoint_epoch
+        ));
+        assert!(matches!(
+            store.validate_read_dependencies(&domain),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::ReadBarrier,
+                committed_epoch,
+            })) if committed_epoch == disjoint_epoch
+        ));
+        assert_eq!(
+            store.read_dependency_validation_failures(),
+            ReadDependencyValidationFailures {
+                read_barrier: 1,
+                exact: 1,
+                ..Default::default()
+            }
+        );
+
+        store
+            .commit_mutations(&mut catalog, vec![update(0, 20)])
+            .unwrap();
+        let intersecting_epoch = store.commit_epoch();
+        assert_eq!(intersecting_epoch, disjoint_epoch + 1);
+        assert_eq!(
+            store.version_index.stamp(&VersionKey::ReadBarrier),
+            Some(VersionStamp {
+                commit_epoch: intersecting_epoch,
+                disposition: crate::version::VersionDisposition::Live,
+            })
+        );
+        assert!(matches!(
+            store.validate_read_dependencies(&first),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::GraphNode(NodeId(0)),
+                committed_epoch,
+            })) if committed_epoch == intersecting_epoch
+        ));
+        // The second rebuild must preserve the first writer's original stamp.
+        assert!(matches!(
+            store.validate_read_dependencies(&second),
+            Err(GraphReadDependencyError::Conflict(VersionConflict {
+                key: VersionKey::GraphNode(NodeId(1)),
+                committed_epoch,
+            })) if committed_epoch == disjoint_epoch
+        ));
+        assert_eq!(
+            store.read_dependency_validation_failures(),
+            ReadDependencyValidationFailures {
+                read_barrier: 1,
+                exact: 3,
+                ..Default::default()
+            }
+        );
     }
 }
