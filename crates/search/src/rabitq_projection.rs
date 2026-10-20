@@ -407,6 +407,17 @@ impl RaBitQCandidateProjection {
         }
     }
 
+    pub(crate) fn file_artifact_reference(
+        &self,
+    ) -> Option<(hawdb_storage::immutable_object::ObjectReference, u64)> {
+        match &self.storage {
+            RaBitQCandidateProjectionStorage::InMemory(_) => None,
+            RaBitQCandidateProjectionStorage::File(projection) => projection
+                .object_reference()
+                .zip(projection.artifact_checksum()),
+        }
+    }
+
     pub fn build_report(&self) -> &ProjectionBuildReport {
         &self.build_report
     }

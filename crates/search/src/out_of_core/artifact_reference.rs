@@ -220,6 +220,8 @@ mod tests {
         index.checkpoint().unwrap();
         let reader = SearchOutOfCoreReader::open(&resident.0).unwrap();
         check(&resident.0, &reader.manifest);
+        #[cfg(feature = "vector-search")]
+        assert!(reader.manifest.segments[0].objects.rabitq.is_some());
     }
 
     #[test]

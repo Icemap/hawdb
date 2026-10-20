@@ -84,6 +84,15 @@ pub(super) fn verify_admitted(
     manifest: &ProjectionManifest,
     admission: &impl ProjectionReadAdmission,
 ) -> Result<()> {
+    verify_admitted_observing(reader, manifest, admission, &mut |_| Ok(()))
+}
+
+pub(super) fn verify_admitted_observing(
+    reader: &mut (impl Read + Seek),
+    manifest: &ProjectionManifest,
+    admission: &impl ProjectionReadAdmission,
+    observe: &mut impl FnMut(&[u8]) -> Result<()>,
+) -> Result<()> {
     admission.checkpoint()?;
     {
         let _io = admission.acquire_io()?;
@@ -118,15 +127,15 @@ pub(super) fn verify_admitted(
                 "segment codes have {codes_bytes} bytes, expected {expected_codes}"
             )));
         }
-        let mut segment_hasher = Hasher::new();
+        let mut hashes = (Hasher::new(), &mut payload_hasher);
         let mut invalid = None;
         column::<8>(
             reader,
             rows,
             &mut buffer,
-            &mut segment_hasher,
-            &mut payload_hasher,
+            &mut hashes,
             admission,
+            observe,
             |row, word| {
                 let id = u64::from_le_bytes(*word);
                 if let Some(previous) = previous_id
@@ -145,9 +154,9 @@ pub(super) fn verify_admitted(
             reader,
             rows,
             &mut buffer,
-            &mut segment_hasher,
-            &mut payload_hasher,
+            &mut hashes,
             admission,
+            observe,
             |row, word| {
                 let scale = f32::from_le_bytes(*word);
                 if !scale.is_finite() || scale < 0.0 {
@@ -159,9 +168,9 @@ pub(super) fn verify_admitted(
             reader,
             rows,
             &mut buffer,
-            &mut segment_hasher,
-            &mut payload_hasher,
+            &mut hashes,
             admission,
+            observe,
             |row, word| {
                 if !f32::from_le_bytes(*word).is_finite() {
                     Violation::retain_first(&mut invalid, row, InvalidField::Offset);
@@ -172,13 +181,14 @@ pub(super) fn verify_admitted(
         while remaining != 0 {
             let length = remaining.min(buffer.len());
             admission::read_exact(reader, &mut buffer[..length], admission)?;
-            segment_hasher.update(&buffer[..length]);
-            payload_hasher.update(&buffer[..length]);
+            hashes.0.update(&buffer[..length]);
+            hashes.1.update(&buffer[..length]);
+            observe(&buffer[..length])?;
             remaining -= length;
         }
         #[cfg(test)]
         SEGMENT_CHECKSUM_CALLS.with(|calls| calls.set(calls.get().saturating_add(1)));
-        if segment_hasher.finalize() != descriptor.payload_checksum {
+        if hashes.0.finalize() != descriptor.payload_checksum {
             return Err(ProjectionError::CorruptArtifact(format!(
                 "segment {} checksum mismatch",
                 descriptor.index
@@ -200,9 +210,9 @@ fn column<const WIDTH: usize>(
     reader: &mut impl Read,
     rows: usize,
     buffer: &mut [u8; BUFFER_BYTES],
-    segment_hasher: &mut Hasher,
-    payload_hasher: &mut Hasher,
+    hashes: &mut (Hasher, &mut Hasher),
     admission: &impl ProjectionReadAdmission,
+    observe: &mut impl FnMut(&[u8]) -> Result<()>,
     mut visit: impl FnMut(usize, &[u8; WIDTH]),
 ) -> Result<()> {
     let mut row = 0;
@@ -210,8 +220,9 @@ fn column<const WIDTH: usize>(
         let count = (rows - row).min(buffer.len() / WIDTH);
         let length = count * WIDTH;
         admission::read_exact(reader, &mut buffer[..length], admission)?;
-        segment_hasher.update(&buffer[..length]);
-        payload_hasher.update(&buffer[..length]);
+        hashes.0.update(&buffer[..length]);
+        hashes.1.update(&buffer[..length]);
+        observe(&buffer[..length])?;
         for (offset, word) in buffer[..length].chunks_exact(WIDTH).enumerate() {
             visit(
                 row + offset,

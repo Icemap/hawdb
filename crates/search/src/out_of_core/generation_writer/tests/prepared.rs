@@ -487,7 +487,7 @@ fn stale_cleanup_preserves_a_peers_standalone_resident_vectors() {
     let mut peer = crate::SearchIndex::open(&root).unwrap();
     peer.upsert(document(0)).unwrap();
     peer.checkpoint().unwrap();
-    let artifact = root.join("search_rabitq.1.hawdb");
+    let artifact = crate::latest_rabitq_artifact(&root).unwrap().unwrap().1;
     assert!(artifact.exists());
     stale.retry_projection_cleanup(Default::default());
     assert!(artifact.exists());
