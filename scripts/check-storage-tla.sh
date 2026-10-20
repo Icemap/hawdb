@@ -308,6 +308,7 @@ check_mutants() {
   mkdir -p "$mutant_state_root"
   while read -r module config invariant; do
     [[ -n "$module" ]] || continue
+    [[ "$module" == \#* ]] && continue
     local module_path="$repository_root/docs/tla/$module.tla"
     local config_path="$repository_root/docs/tla/mutants/$config.cfg"
     local state_dir="$mutant_state_root/$config"
@@ -328,7 +329,8 @@ check_mutants() {
       printf 'storage TLA+ mutant survived unexpectedly: %s\n' "$config" >&2
       return 1
     fi
-    if ! grep -Fq "Invariant $invariant is violated." "$log"; then
+    if [[ ! "$invariant" =~ ^[A-Za-z0-9_]+(\|[A-Za-z0-9_]+)*$ ]] ||
+      ! grep -Eq "Invariant ($invariant) is violated\\." "$log"; then
       printf 'storage TLA+ mutant did not violate %s: %s\n' \
         "$invariant" "$config" >&2
       cat "$log" >&2
