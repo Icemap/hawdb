@@ -1825,6 +1825,109 @@ fn consumer_native_candidate_metadata_refuses_a_changed_child_before_sealing() {
 }
 
 #[test]
+fn consumer_native_candidate_metadata_refuses_a_false_resident_absence_claim() {
+    use hawdb_search::consumer::generation_metadata::{ArtifactReference, MetadataInput};
+
+    const MANIFEST: &str = "search_projection.out_of_core.manifest.hawdb";
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    let allocation = reserve_native_generation(&mut db, &fixture);
+    let mut pending = allocation
+        .prepare_stationary_generation(&fixture.0)
+        .unwrap();
+    pending.create().unwrap();
+    let target_path = fixture.0.join(pending.generation_name());
+    let context = pending.born_directory().unwrap().operation_context();
+    let stage_path = fixture.0.join("candidate-absent-snapshot-stage");
+    let mut writer = hawdb_search::SearchOutOfCoreGenerationWriter::create(
+        &stage_path,
+        hawdb_search::SearchOutOfCoreGenerationBuildOptions {
+            source_graph_commit_epoch: Some(7),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    writer
+        .push(hawdb_search::SearchDocument {
+            id: "memory:m1".into(),
+            title: "candidate".into(),
+            content: "absent resident snapshot".into(),
+            embedding: None,
+            metadata: Default::default(),
+        })
+        .unwrap();
+    writer.finish().unwrap();
+    let stage = hawdb_storage::file_io::SourceDirectory::capture(&stage_path, &context).unwrap();
+    let manifest_bytes = std::fs::read(stage_path.join(MANIFEST)).unwrap();
+    let mut names = std::fs::read_dir(&stage_path)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .filter(|name| name.ends_with(".1.hawdb"))
+        .collect::<Vec<_>>();
+    names.sort();
+    let bytes = names
+        .iter()
+        .map(|name| std::fs::read(stage_path.join(name)).unwrap())
+        .collect::<Vec<_>>();
+    let artifacts = names
+        .iter()
+        .zip(&bytes)
+        .map(|(name, bytes)| ArtifactReference {
+            name,
+            reference: candidate_reference(bytes),
+        })
+        .collect::<Vec<_>>();
+    let (binding, target_incarnation, generation, operation) =
+        candidate_metadata_identity(&pending);
+    let input = MetadataInput {
+        binding: &binding,
+        source_epoch: 7,
+        target_incarnation,
+        generation,
+        operation,
+        component_uuid: hawdb_core::Uuid::from_bytes([5; 16]),
+        search_manifest: candidate_reference(&manifest_bytes),
+        artifacts: &artifacts,
+    };
+    let limits = candidate_metadata_limits();
+    let task = hawdb_core::RuntimeTaskContext::default();
+    let metadata_len = input.encoded_len(limits, &task).unwrap() as u64;
+    let total = manifest_bytes.len() as u64
+        + bytes.iter().map(|bytes| bytes.len() as u64).sum::<u64>()
+        + metadata_len;
+    let mut lease =
+        hawdb_search::consumer::ConsumerStationaryTargetLease::acquire(&mut pending, &task)
+            .unwrap();
+    let mut output = lease.begin_candidate_output(total).unwrap();
+    output
+        .install_artifact(&stage, MANIFEST, MANIFEST, input.search_manifest)
+        .unwrap();
+    for artifact in &artifacts {
+        output
+            .install_artifact(&stage, artifact.name, artifact.name, artifact.reference)
+            .unwrap();
+    }
+    std::fs::write(
+        target_path.join("search_projection.hawdb"),
+        b"foreign snapshot",
+    )
+    .unwrap();
+    let error = output.seal_generation_metadata(&input, limits).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("present despite manifest absence proof"));
+    assert!(!target_path.join("consumer-generation.meta.hawdb").exists());
+    assert_eq!(output.remaining_bytes(), metadata_len);
+    assert!(output.seal_generation_metadata(&input, limits).is_err());
+    drop(output);
+    drop(lease);
+    assert_eq!(
+        allocation_evidence(&fixture).1["pending"][0]["native_birth"]["state"],
+        "Recorded"
+    );
+}
+
+#[test]
 fn consumer_native_birth_refuses_mutated_marker_before_exposing_target() {
     let fixture = Fixture::new();
     let mut db = fixture.database();

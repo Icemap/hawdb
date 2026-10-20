@@ -532,7 +532,7 @@ pub(crate) fn validate_consumer_manifest_artifacts(
     source_epoch: u64,
     artifacts: &[crate::consumer::generation_metadata::ArtifactReference<'_>],
     task: &hawdb_core::RuntimeTaskContext,
-) -> Result<()> {
+) -> Result<bool> {
     let manifest = SearchOutOfCoreManifestBody::decode_with_context(bytes, Some(task))?;
     if manifest.source_graph_commit_epoch != Some(source_epoch)
         || (manifest.resident_snapshot.is_none() && !manifest.resident_snapshot_absent)
@@ -615,7 +615,7 @@ pub(crate) fn validate_consumer_manifest_artifacts(
             ));
         }
     }
-    Ok(())
+    Ok(manifest.resident_snapshot_absent)
 }
 
 pub(crate) fn consumer_manifest_decode_capacity(

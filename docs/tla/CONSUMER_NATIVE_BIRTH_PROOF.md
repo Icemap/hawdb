@@ -91,8 +91,9 @@ after an error. The same target can verify the copied manifest and each declared
 artifact through original native handles before durably writing bounded private
 generation metadata. It parses the verified Search manifest and requires its
 source epoch and top-level artifact set to match the metadata exactly. A failed
-seal retains birth debt and cannot be retried
-through that output token; no path or marker content grants target authority.
+resident snapshot absence check also refuses the seal through the born target.
+A failed seal retains birth debt and cannot be retried through that output
+token; no path or marker content grants target authority.
 This is private artifact and metadata custody with top-level manifest checks;
 complete serving closure and a selected view remain unproven.
 Explicit resolution with admitted native custody, complete producer closure,

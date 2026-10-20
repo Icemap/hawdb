@@ -424,12 +424,24 @@ impl ConsumerCandidateOutput<'_, '_> {
             let _decode_memory = self.memory.spool.reserve(
                 crate::out_of_core::consumer_manifest_decode_capacity(&manifest, &self.task)?,
             )?;
-            crate::out_of_core::validate_consumer_manifest_artifacts(
+            let resident_snapshot_absent = crate::out_of_core::validate_consumer_manifest_artifacts(
                 &manifest,
                 input.source_epoch,
                 input.artifacts,
                 &self.task,
             )?;
+            if resident_snapshot_absent {
+                match target.open_child(&context, crate::SEARCH_SNAPSHOT_FILE) {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.into()),
+                    Ok(_) => {
+                        return Err(HawDBError::StorageIntegrity(
+                            "consumer candidate resident snapshot is present despite manifest absence proof"
+                                .into(),
+                        ));
+                    }
+                }
+            }
             for artifact in input.artifacts {
                 verify_candidate_child(
                     target,
