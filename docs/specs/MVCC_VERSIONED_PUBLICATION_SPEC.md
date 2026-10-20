@@ -242,6 +242,29 @@ Destination writes are validated before these summaries are added to the staged
 index; the union is admitted before WAL and installed with canonical commit.
 When no prepared source exists, ordinary commits do not build those summaries.
 
+This initial collector has one summary key per label plus the all-node domain
+and `ReadBarrier`; distinct property values do not create additional summary
+keys. A future per-value or relational-prefix collector must not let read-summary
+growth turn a long-lived preparation into a writer outage. If its summaries do
+not fit the version-index or history allowance, it must collapse them to the
+fixed-size `ReadBarrier`, let an otherwise admissible write commit, and invalidate
+affected captures. Writer destination keys retain their existing admission and
+conflict checks. That future slice must reserve/admit the fallback itself before
+WAL, test that the write commits while capture validation conflicts, and qualify
+the accounting and retention cost; this document does not claim that fallback
+is implemented by the current coarse collector.
+
+The collector regression
+`randomized_node_dependency_validation_preserves_query_results` exercises a
+fixed-seed matrix of label scans, indexed seeks, counts and empty results against
+same-label and other-label inserts, updates and deletes. It compares the retained
+query output with an independent canonical re-execution whenever the real kernel
+validator accepts. Plan assertions and accepted/rejected counts prevent an
+unexercised access path or an always-refusing validator from passing vacuously.
+The existing publication tests separately cover validation under the facade's
+publication ownership; this in-memory matrix is not durability or concurrency
+performance qualification.
+
 `publish_prepared_projection` validates the source identity, captured watermark
 and dependencies and calls the existing generation catalog under one exclusive
 database borrow. Its expected-head CAS protects the catalog head. It resolves an
