@@ -2149,3 +2149,13 @@ loses already accepted work. Both have explicit manual Bazel negative-control
 targets and entries in `mutants/mutants.txt`. Native row-runtime regressions
 cover owned/borrowed callbacks, page/byte/row/overlay admission, parent resume,
 complete admitted results and callback unwind.
+
+## Conditional Consumer incarnation custody
+
+[`HawDBConsumerIncarnationCustody`](CONSUMER_INCARNATION_CUSTODY_PROOF.md)
+checks non-reused installation identities, native birth evidence, retained
+pending debt, complete selected closure and durable acknowledgement in a bounded
+design model. Its seven negative controls are generated from the base config
+and run through `//docs/tla:consumer_incarnation_custody_controls`. The model
+adds no runtime publication authority; the stationary Consumer implementation
+remains open under #1092 and draft #1039.
