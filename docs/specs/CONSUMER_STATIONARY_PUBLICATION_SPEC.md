@@ -4,12 +4,13 @@ Status: implementation contract with checked bounded safety models. A bounded
 runtime allocation/bootstrap ledger, native birth, proven no-effect settlement,
 private-unused retirement, target publication lease, bounded native artifact
 copy, private metadata sealing, a pinned out-of-core candidate reader, durable
-candidate seal debt and a preselection publication intent now cover separate
+candidate seal debt, a preselection publication intent and a captured ledger
+selector with pending barriers and live-operation resolution now cover separate
 prerequisites. Sealing
 checks the Search manifest's source epoch and exact top-level artifact set
 against producer references through the born target, and refuses a declared
 resident snapshot absence if that child is present. Complete C/E construction,
-serving authority, stationary selector/receipt, exposed-debt recovery and adoption below remain
+registered serving-view exchange, restart adoption, exposed-debt recovery and reclamation below remain
 **not implemented**. This document preserves the complete acceptance scope in
 [MVCC_VERSIONED_PUBLICATION_SPEC.md](MVCC_VERSIONED_PUBLICATION_SPEC.md).
 
@@ -141,9 +142,20 @@ source epoch in the same durable ledger. Before any selector attempt, its
 publication intent records the prior selected root when one exists; the pending
 row retains the new root. Selected-root matching uses source branch, database
 identity and Consumer ID together. These records preserve recovery debt but do
-not yet publish a selector or authorize serving.
-Exposed known-born/uncertain debt, complete producer closure, recovery resolution and
-stationary serving/selection remain unfinished. Allocation ledger
+not authorize serving by themselves.
+The typed candidate selector precomputes and synchronizes a complete ledger
+replacement while retaining the original ledger file. Under the exclusive
+database borrow, source E validation precedes a native selector attempt fenced
+against that held file's identity. A concurrent ledger replacement refuses
+selection instead of overwriting new reservations. Pending file/directory
+barriers and the durable completed receipt run after releasing the database
+borrow. Lost native responses resolve the same operation from its retained
+previous/next roots; later source writes do not reverse a completed selection.
+This lower-level path does not install the registered Consumer read view or
+replace the legacy facade's directory move. Post-restart adoption and composed
+power-loss qualification remain separate work.
+Exposed known-born/uncertain debt, complete host mapping closure, restart resolution and
+registered stationary serving integration remain unfinished. Allocation ledger
 V2 replaces the earlier development-only envelope without a compatibility migration.
 
 The source project's durable allocation ledger is authoritative for reservations,

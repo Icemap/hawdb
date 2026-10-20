@@ -44,6 +44,7 @@ pub struct PendingConsumerGeneration {
     candidate_seal_attempted: bool,
     publication_intent_attempted: bool,
     publication_intent: Option<PublicationIntent>,
+    selection_preparation_attempted: bool,
     producer_exposed: AtomicBool,
     retirement_step: RetirementStep,
 }
@@ -110,12 +111,13 @@ impl ReservedConsumerAllocation {
             candidate_seal_attempted: false,
             publication_intent_attempted: false,
             publication_intent: None,
+            selection_preparation_attempted: false,
             producer_exposed: AtomicBool::new(false),
             retirement_step: RetirementStep::Intent,
         })
     }
 
-    fn require_row(&self, row: &Reservation) -> Result<()> {
+    pub(super) fn require_row(&self, row: &Reservation) -> Result<()> {
         if row.operation != self.operation.0
             || row.target_incarnation != self.incarnation.0
             || row.generation != self.generation.0
@@ -256,6 +258,26 @@ impl ReservedConsumerAllocation {
 }
 
 impl PendingConsumerGeneration {
+    /// Precompute a Consumer ledger selector outside the source validation
+    /// fence. The caller retains this original birth and target exclusion.
+    pub fn prepare_selection(&mut self) -> Result<PreparedConsumerSelection> {
+        self.born_directory()?;
+        let allocation = self
+            .allocation
+            .as_ref()
+            .ok_or_else(|| invalid("selection lost its reservation"))?;
+        let intent = self
+            .publication_intent
+            .as_ref()
+            .filter(|_| self.publication_intent_attempted)
+            .ok_or_else(|| invalid("selection requires its original publication intent"))?;
+        super::selection::prepare(
+            allocation,
+            intent,
+            &mut self.selection_preparation_attempted,
+        )
+    }
+
     pub fn generation_name(&self) -> &str {
         self.candidate.name()
     }
@@ -414,7 +436,11 @@ impl PendingConsumerGeneration {
                     .iter()
                     .find(|selected| selected.matches_consumer(row))
                     .cloned();
-                let intent = PublicationIntent { previous };
+                let intent = PublicationIntent {
+                    previous,
+                    receipt_complete: false,
+                    not_selected: false,
+                };
                 ledger.pending[index].publication_intent = Some(intent.clone());
                 validate(&ledger)?;
                 let bytes = encode(&ledger)?;

@@ -25,6 +25,11 @@ const HEADER: &[u8] = b"HAWDB_CONSUMER_ALLOCATIONS_V2\n";
 
 mod native_birth;
 pub use native_birth::PendingConsumerGeneration;
+mod selection;
+pub use selection::{
+    ConsumerSelectionReceipt, ConsumerSelectionResolution, PendingConsumerSelection,
+    PreparedConsumerSelection, CONSUMER_SELECTION_MEMORY_BOUND,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -92,6 +97,20 @@ struct SelectedRoot {
 #[serde(deny_unknown_fields)]
 struct PublicationIntent {
     previous: Option<SelectedRoot>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    receipt_complete: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    not_selected: bool,
+}
+
+impl PublicationIntent {
+    fn pending(&self) -> bool {
+        !self.receipt_complete && !self.not_selected
+    }
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl SelectedRoot {
@@ -474,12 +493,28 @@ fn validate(ledger: &Ledger) -> Result<()> {
                 .selected
                 .iter()
                 .find(|selected| selected.matches_consumer(row));
-            if intent.previous.as_ref() != active && active != Some(&next) {
+            if intent.receipt_complete && intent.not_selected {
+                return Err(invalid("publication intent has conflicting outcomes"));
+            }
+            if intent.receipt_complete
+                && active.is_none_or(|active| active.operation < next.operation)
+            {
+                return Err(invalid("completed receipt lost its selected successor"));
+            }
+            if intent.not_selected && active == Some(&next) {
+                return Err(invalid("unselected operation became an active selector"));
+            }
+            if intent.pending() && intent.previous.as_ref() != active && active != Some(&next) {
                 return Err(invalid("publication intent lost its previous root"));
             }
             if let Some(previous) = &intent.previous {
                 if !previous.matches_consumer(row) {
                     return Err(invalid("publication intent has a foreign previous root"));
+                }
+                if previous.operation >= next.operation
+                    || previous.seal.source_epoch > next.seal.source_epoch
+                {
+                    return Err(invalid("publication intent regresses its previous root"));
                 }
                 validate_selected_root(project, ledger.high_water, previous)?;
             }
@@ -487,7 +522,11 @@ fn validate(ledger: &Ledger) -> Result<()> {
                 candidate.branch_id == row.branch_id
                     && candidate.database_uuid == row.database_uuid
                     && candidate.consumer_id == row.consumer_id
-                    && candidate.publication_intent.is_some()
+                    && intent.pending()
+                    && candidate
+                        .publication_intent
+                        .as_ref()
+                        .is_some_and(PublicationIntent::pending)
             }) {
                 return Err(invalid("multiple publication intents for one consumer"));
             }
@@ -497,6 +536,19 @@ fn validate(ledger: &Ledger) -> Result<()> {
     let mut previous_consumer = None;
     for selected in &ledger.selected {
         validate_selected_root(project, ledger.high_water, selected)?;
+        let row = ledger
+            .pending
+            .iter()
+            .find(|row| row.operation == selected.operation)
+            .ok_or_else(|| invalid("selected root lost its reservation"))?;
+        if SelectedRoot::from_candidate(row)? != *selected
+            || row
+                .publication_intent
+                .as_ref()
+                .is_none_or(|intent| intent.not_selected)
+        {
+            return Err(invalid("selected root differs from its publication intent"));
+        }
         if previous_consumer.is_some_and(|previous| selected.consumer_key() <= previous) {
             return Err(invalid("selected consumers are not unique and ordered"));
         }
@@ -762,6 +814,8 @@ mod tests {
         foreign_previous.branch_id = uuid(9);
         row.publication_intent = Some(PublicationIntent {
             previous: Some(foreign_previous),
+            receipt_complete: false,
+            not_selected: false,
         });
         let ledger = Ledger {
             project_id: project.as_uuid().to_string(),

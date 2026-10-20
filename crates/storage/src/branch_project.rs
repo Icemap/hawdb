@@ -211,6 +211,14 @@ impl CapturedProject {
         self.selector
     }
 
+    pub(crate) fn create_owned_control_candidate(
+        &self,
+        name: &str,
+    ) -> io::Result<crate::file_io::CapturedControlCandidate<'static>> {
+        self.root
+            .create_owned_control_candidate(&self.files.io_context(), name)
+    }
+
     pub(crate) fn with_locked_catalog<T>(
         &self,
         operation: impl FnOnce(

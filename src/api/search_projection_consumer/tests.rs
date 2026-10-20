@@ -1383,6 +1383,98 @@ fn candidate_reference(bytes: &[u8]) -> hawdb_storage::immutable_object::ObjectR
     )
 }
 
+#[test]
+fn consumer_native_selector_retains_previous_root_and_historical_receipt() {
+    use hawdb_storage::consumer_allocation::{
+        ConsumerSelectionResolution, PendingConsumerGeneration,
+    };
+
+    fn sealed_birth(
+        db: &mut Database,
+        fixture: &Fixture,
+        bytes: &[u8],
+    ) -> PendingConsumerGeneration {
+        let epoch = db.begin_read_transaction().unwrap().commit_epoch();
+        let mut birth = reserve_native_generation(db, fixture)
+            .prepare_stationary_generation(&fixture.0)
+            .unwrap();
+        birth.create().unwrap();
+        let directory = birth.born_directory().unwrap();
+        let context = directory.operation_context();
+        let mut file = directory
+            .create_child_new(&context, "consumer-generation.meta.hawdb")
+            .unwrap();
+        std::io::Write::write_all(&mut file, bytes).unwrap();
+        file.sync_all().unwrap();
+        directory.sync(&context).unwrap();
+        drop(file);
+        birth
+            .record_candidate_seal(epoch, candidate_reference(bytes))
+            .unwrap();
+        birth.record_publication_intent().unwrap();
+        birth
+    }
+
+    let fixture = Fixture::new();
+    let mut db = fixture.database();
+    append(&mut db, 1);
+    let mut first = sealed_birth(&mut db, &fixture, b"first metadata");
+    let first_path = fixture.0.join(first.generation_name());
+    let mut first_selector = first.prepare_selection().unwrap();
+    let admission = first_selector.reserve_attempt_descriptors().unwrap();
+    let first_receipt = first_selector.select().unwrap().finish().unwrap();
+    drop(admission);
+    append(&mut db, 2);
+    let mut second = sealed_birth(&mut db, &fixture, b"second metadata");
+    let second_path = fixture.0.join(second.generation_name());
+    let evidence = allocation_evidence(&fixture).1;
+    assert_eq!(
+        evidence["pending"][1]["publication_intent"]["previous"]["operation"],
+        first_receipt.binding().operation.get()
+    );
+    let mut second_selector = second.prepare_selection().unwrap();
+    let admission = second_selector.reserve_attempt_descriptors().unwrap();
+    drop(second_selector.select().unwrap());
+    drop(admission);
+    append(&mut db, 3);
+    let admission = second_selector.reserve_attempt_descriptors().unwrap();
+    let ConsumerSelectionResolution::Published(second_receipt) = second_selector.resolve().unwrap()
+    else {
+        panic!("second native selection was lost");
+    };
+    assert_eq!(
+        second_receipt.metadata_reference(),
+        candidate_reference(b"second metadata")
+    );
+    assert_eq!(
+        first_selector.resolve().unwrap(),
+        ConsumerSelectionResolution::Published(Box::new(first_receipt.clone()))
+    );
+    drop(admission);
+    drop(first_selector);
+    drop(second_selector);
+    drop(first);
+    drop(second);
+    drop(db);
+    let reopened = fixture.database();
+    let evidence = allocation_evidence(&fixture).1;
+    assert_eq!(
+        evidence["selected"][0]["operation"],
+        second_receipt.binding().operation.get()
+    );
+    assert_eq!(
+        evidence["pending"][0]["publication_intent"]["receipt_complete"],
+        true
+    );
+    assert_eq!(
+        evidence["pending"][1]["publication_intent"]["receipt_complete"],
+        true
+    );
+    assert!(first_path.join("consumer-generation.meta.hawdb").exists());
+    assert!(second_path.join("consumer-generation.meta.hawdb").exists());
+    drop(reopened);
+}
+
 fn candidate_metadata_identity(
     pending: &hawdb_storage::consumer_allocation::PendingConsumerGeneration,
 ) -> (
@@ -1799,16 +1891,34 @@ fn consumer_native_candidate_metadata_seals_verified_files_in_the_born_target() 
 }
 
 #[test]
-fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapshot() {
+fn consumer_native_candidate_view_selects_durably_without_resident_snapshot() {
     use hawdb_qos::{
         IoConcurrencyBudget, RuntimeGovernor, RuntimeGovernorConfig, RuntimeWorkRequest,
     };
     use hawdb_search::consumer::generation_metadata::{ArtifactReference, MetadataInput};
 
     const MANIFEST: &str = "search_projection.out_of_core.manifest.hawdb";
-    for tamper_after_seal in [false, true] {
+    #[derive(Clone, Copy)]
+    enum SelectionCase {
+        Complete,
+        LostResponse,
+        Stale,
+        SourceConflict,
+        #[cfg(unix)]
+        NativeFailure,
+    }
+    for (tamper_after_seal, selection_case) in [
+        (false, SelectionCase::Complete),
+        (false, SelectionCase::LostResponse),
+        (false, SelectionCase::Stale),
+        (false, SelectionCase::SourceConflict),
+        #[cfg(unix)]
+        (false, SelectionCase::NativeFailure),
+        (true, SelectionCase::Complete),
+    ] {
         let fixture = Fixture::new();
         let mut db = fixture.database();
+        append(&mut db, 1);
         let allocation = reserve_native_generation(&mut db, &fixture);
         let source_limits = crate::PreparedReadLimits {
             dependency_entries: std::num::NonZeroUsize::new(8).unwrap(),
@@ -1816,11 +1926,11 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
             statement_rows: std::num::NonZeroUsize::new(8).unwrap(),
             statement_payload_bytes: std::num::NonZeroUsize::new(4096).unwrap(),
         };
-        let source = db
-            .begin_prepared_read(source_limits)
-            .unwrap()
-            .finish()
+        let mut source_read = db.begin_prepared_read(source_limits).unwrap();
+        source_read
+            .query_with_params("MATCH (n:Memory) RETURN n.content", &Default::default())
             .unwrap();
+        let source = source_read.finish().unwrap();
         let source_epoch = source.source_epoch();
         let mut pending = allocation
             .prepare_stationary_generation(&fixture.0)
@@ -2036,6 +2146,156 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
                 allocation_evidence(&fixture).1["pending"][0]["publication_intent"]["previous"]
                     .is_null()
             );
+            let preparation_permit = governor
+                .try_admit(
+                    RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                        .with_io_wave_slots(1),
+                )
+                .unwrap();
+            prepared
+                .prepare_selection(
+                    &preparation_permit,
+                    hawdb_core::RuntimeTaskContext::default(),
+                )
+                .unwrap();
+            drop(preparation_permit);
+            assert_eq!(governor.snapshot().active_background_tasks, 0);
+            if matches!(selection_case, SelectionCase::Stale) {
+                let unrelated = reserve_native_generation(&mut db, &fixture);
+                drop(unrelated);
+            }
+            if matches!(selection_case, SelectionCase::SourceConflict) {
+                db.query("MATCH (n:Memory) SET n.content = 'source changed'")
+                    .unwrap();
+            }
+            #[cfg(unix)]
+            if matches!(selection_case, SelectionCase::NativeFailure) {
+                let selector = std::fs::read_dir(fixture.0.join("database"))
+                    .unwrap()
+                    .map(|entry| entry.unwrap().path())
+                    .find(|path| {
+                        path.file_name()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .starts_with("consumer-selector-")
+                    })
+                    .unwrap();
+                std::fs::remove_file(selector).unwrap();
+            }
+            let selection_permit = std::sync::Arc::new(
+                governor
+                    .try_admit(
+                        RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                            .with_io_wave_slots(1),
+                    )
+                    .unwrap(),
+            );
+            let mut attempt = prepared
+                .admit_selection(selection_permit, hawdb_core::RuntimeTaskContext::default())
+                .unwrap();
+            match selection_case {
+                SelectionCase::Complete => {
+                    let pending = db
+                        .select_prepared_consumer_candidate(&source, &mut attempt)
+                        .unwrap();
+                    append(&mut db, 2);
+                    let receipt = pending.finish().unwrap();
+                    assert_eq!(receipt.source_epoch(), source_epoch);
+                    assert_eq!(receipt.metadata_reference(), view.metadata_reference);
+                    assert_eq!(receipt.binding().operation, operation);
+                }
+                SelectionCase::LostResponse => {
+                    let pending = db
+                        .select_prepared_consumer_candidate(&source, &mut attempt)
+                        .unwrap();
+                    drop(pending);
+                    drop(attempt);
+                    assert_eq!(governor.snapshot().active_background_tasks, 0);
+                    append(&mut db, 2);
+                    let retry_permit = std::sync::Arc::new(
+                        governor
+                            .try_admit(
+                                RuntimeWorkRequest::background_maintenance(16 * 1024 * 1024)
+                                    .with_io_wave_slots(1),
+                            )
+                            .unwrap(),
+                    );
+                    attempt = prepared
+                        .admit_selection(retry_permit, hawdb_core::RuntimeTaskContext::default())
+                        .unwrap();
+                    let hawdb_storage::consumer_allocation::ConsumerSelectionResolution::Published(
+                        receipt,
+                    ) = attempt.resolve().unwrap()
+                    else {
+                        panic!("lost selection response lost its committed possibility");
+                    };
+                    assert_eq!(receipt.source_epoch(), source_epoch);
+                    assert_eq!(receipt.metadata_reference(), view.metadata_reference);
+                }
+                SelectionCase::Stale => {
+                    let error = db
+                        .select_prepared_consumer_candidate(&source, &mut attempt)
+                        .unwrap_err();
+                    assert!(error.to_string().contains("preparation became stale"));
+                    assert_eq!(
+                        attempt.resolve().unwrap(),
+                        hawdb_storage::consumer_allocation::ConsumerSelectionResolution::NotSelected,
+                    );
+                    assert_eq!(
+                        allocation_evidence(&fixture).1["pending"]
+                            .as_array()
+                            .unwrap()
+                            .len(),
+                        3
+                    );
+                    append(&mut db, 2);
+                }
+                SelectionCase::SourceConflict => {
+                    let error = db
+                        .select_prepared_consumer_candidate(&source, &mut attempt)
+                        .unwrap_err();
+                    assert!(matches!(
+                        error,
+                        crate::ProjectionPublicationError::Dependency(_)
+                    ));
+                    append(&mut db, 2);
+                }
+                #[cfg(unix)]
+                SelectionCase::NativeFailure => {
+                    assert!(db
+                        .select_prepared_consumer_candidate(&source, &mut attempt)
+                        .is_err());
+                    assert_eq!(
+                        attempt.resolve().unwrap(),
+                        hawdb_storage::consumer_allocation::ConsumerSelectionResolution::NotSelected,
+                    );
+                    assert_eq!(
+                        allocation_evidence(&fixture).1["pending"][0]["publication_intent"]
+                            ["not_selected"],
+                        true
+                    );
+                    append(&mut db, 2);
+                }
+            }
+            drop(attempt);
+            assert_eq!(governor.snapshot().active_background_tasks, 0);
+            let evidence = allocation_evidence(&fixture).1;
+            let selected = match selection_case {
+                SelectionCase::Complete | SelectionCase::LostResponse => true,
+                SelectionCase::Stale | SelectionCase::SourceConflict => false,
+                #[cfg(unix)]
+                SelectionCase::NativeFailure => false,
+            };
+            if !selected {
+                assert!(evidence.get("selected").is_none());
+            } else {
+                assert_eq!(evidence["selected"][0]["operation"], operation.get());
+                assert_eq!(
+                    evidence["pending"][0]["publication_intent"]["receipt_complete"],
+                    true
+                );
+            }
             let foreign = Fixture::new();
             let mut foreign_db = foreign.database();
             assert!(foreign_db
@@ -2109,7 +2369,6 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
                     "memory:m1"
                 );
             }
-            append(&mut db, 2);
             let later = db
                 .begin_prepared_read(source_limits)
                 .unwrap()
@@ -2139,6 +2398,17 @@ fn consumer_native_candidate_view_prepares_a_generation_without_resident_snapsho
                 allocation_evidence(&fixture).1["pending"][0]["publication_intent"]["previous"]
                     .is_null()
             );
+            if selected {
+                let evidence = allocation_evidence(&fixture).1;
+                assert_eq!(
+                    evidence["selected"][0]["seal"]["source_epoch"],
+                    source_epoch
+                );
+                assert_eq!(
+                    evidence["pending"][0]["publication_intent"]["receipt_complete"],
+                    true
+                );
+            }
             drop(reopened);
         }
     }
