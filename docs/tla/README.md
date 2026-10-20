@@ -2266,3 +2266,14 @@ The finite model does not certify the current native cleanup implementation.
 Root process ownership, producer-slot separation and concurrent reference
 retirement are specified in [ROOT_PROCESS_CUSTODY_PROOF.md](ROOT_PROCESS_CUSTODY_PROOF.md).
 These are proposed finite protocols; native registry/GC refinement remains open.
+
+## Conditional Consumer incarnation custody
+
+[`HawDBConsumerIncarnationCustody`](CONSUMER_INCARNATION_CUSTODY_PROOF.md)
+checks non-reused installation identities, native birth evidence, retained
+pending debt, complete selected closure and durable acknowledgement in a bounded
+design model. Its seven single-fault configs are registered with expected
+invariants in `mutants/mutants.txt` and run through
+`//docs/tla:consumer_incarnation_custody_controls` and `--check-mutants`. The model
+adds no runtime publication authority; the separate native allocation/birth
+refinements and their limits are described in the linked proof.
