@@ -122,6 +122,13 @@ mod tests {
                 };
                 index.upsert(document.clone()).unwrap();
                 index.checkpoint().unwrap();
+                let vector_artifact = root.join("search_rabitq.1.hawdb");
+                let vector_before = if vector && cfg!(feature = "vector-search") {
+                    Some(std::fs::read(&vector_artifact).unwrap())
+                } else {
+                    assert!(!vector_artifact.exists());
+                    None
+                };
                 let head = root.join(OUT_OF_CORE_MANIFEST_FILE);
                 let mut manifest =
                     SearchOutOfCoreManifestBody::decode(&std::fs::read(&head).unwrap()).unwrap();
@@ -242,8 +249,10 @@ mod tests {
                     }
                 }
                 assert_eq!(orphan.exists(), !success);
-                if vector {
-                    assert!(root.join("search_rabitq.1.hawdb").exists());
+                if let Some(expected) = vector_before {
+                    assert_eq!(std::fs::read(&vector_artifact).unwrap(), expected);
+                } else {
+                    assert!(!vector_artifact.exists());
                 }
                 drop(publication);
                 assert_eq!(memory.ledger.snapshot().used_bytes, 0);

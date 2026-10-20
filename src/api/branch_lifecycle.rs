@@ -727,12 +727,14 @@ mod tests {
         let error = database
             .query_sql_with_params("USE BRANCH ID $1", &[Value::Uuid(child.id)])
             .unwrap_err();
+        // Admission funds three directory/lock pairs, one WAL and four
+        // temporaries. Query read waves obtain capacity after admission.
         assert!(
             matches!(
                 error,
                 HawDBError::FileDescriptors(
                     hawdb_core::error::FileDescriptorError::BudgetExceeded {
-                        requested: 24,
+                        requested: 11,
                         available: 4,
                         limit: 32
                     }
