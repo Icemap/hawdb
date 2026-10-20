@@ -294,6 +294,18 @@ impl ProjectFileDescriptors {
         }
     }
 
+    /// Retain the descriptor domain of an already captured native directory.
+    /// Registered readers must not resolve a saved path again after acquiring
+    /// the original directory, since that label may now name another root.
+    #[doc(hidden)]
+    pub fn from_open_context(context: &FileOpenContext) -> Self {
+        let state = Arc::clone(&context.state);
+        Self {
+            immutable_handles: state.immutable_handles(),
+            state,
+        }
+    }
+
     /// Internal runtimes and maintenance borrow the containing project domain.
     /// They must never turn a branch/runtime subdirectory into a second budget.
     pub(crate) fn acquire_containing(root: &Path, limit: usize) -> Result<Self, HawDBError> {

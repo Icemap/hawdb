@@ -1498,11 +1498,17 @@ impl SearchIndex {
     ) -> Result<Self> {
         let mut index = Self {
             path: Some(path.to_path_buf()),
-            _project_files: Some(
+            _project_files: Some(if registered {
+                publication.with_captured_directory(|directory| {
+                    hawdb_storage::file_descriptors::ProjectFileDescriptors::from_open_context(
+                        &directory.operation_context(),
+                    )
+                })
+            } else {
                 hawdb_storage::file_descriptors::ProjectFileDescriptors::acquire_component(
                     path, false,
-                )?,
-            ),
+                )?
+            }),
             ..Self::default()
         };
         let loaded = if registered {

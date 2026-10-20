@@ -1446,6 +1446,11 @@ mod tests {
         assert_eq!(index.documents["memory:original"].content, "original");
         assert!(index.consumer_binding.is_some());
 
+        let reopened = SearchIndex::open_under_lease(&root, true, &lease).unwrap();
+        assert_eq!(reopened.documents["memory:original"].content, "original");
+        assert!(lease.with_captured_directory(|directory| directory
+            .shares_project_context(&reopened._project_files.as_ref().unwrap().io_context())));
+
         drop(lease);
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(moved).unwrap();
@@ -1482,12 +1487,9 @@ mod tests {
         fs::create_dir(&root).unwrap();
         fs::write(root.join(artifact_name), b"foreign vector artifact").unwrap();
 
-        let mut index = SearchIndex {
-            path: Some(root.clone()),
-            ..SearchIndex::default()
-        };
-        index.load_snapshot_from_publication(&lease).unwrap();
-        index.load_registered_rabitq_projection(&lease).unwrap();
+        let index = SearchIndex::open_under_lease(&root, true, &lease).unwrap();
+        assert!(lease.with_captured_directory(|directory| directory
+            .shares_project_context(&index._project_files.as_ref().unwrap().io_context())));
         let candidates = index
             .rabitq_projection()
             .unwrap()
