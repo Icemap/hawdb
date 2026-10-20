@@ -1388,6 +1388,42 @@ mod tests {
         fs::remove_dir_all(root_a).unwrap();
         fs::remove_dir_all(root_b).unwrap();
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn registered_snapshot_load_uses_captured_directory_after_path_replacement() {
+        let root = directory();
+        let moved = root.with_extension("moved");
+        let owner = ConsumerProjection::initialize(&root, binding(), 0, |index| {
+            index.upsert(crate::SearchDocument {
+                id: "memory:original".into(),
+                title: String::new(),
+                content: "original".into(),
+                embedding: None,
+                metadata: Default::default(),
+            })
+        })
+        .unwrap();
+        drop(owner);
+
+        let lease = SearchProjectionPublishLease::acquire_for_consumer(&root).unwrap();
+        fs::rename(&root, &moved).unwrap();
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join(SEARCH_SNAPSHOT_FILE), b"foreign snapshot").unwrap();
+
+        let mut index = SearchIndex {
+            path: Some(root.clone()),
+            ..SearchIndex::default()
+        };
+        index.load_snapshot_from_publication(&lease).unwrap();
+        assert_eq!(index.documents["memory:original"].content, "original");
+        assert!(index.consumer_binding.is_some());
+
+        drop(lease);
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(moved).unwrap();
+    }
+
     #[test]
     fn pre_registration_handle_cannot_write_registered_root_markers() {
         let root = directory();

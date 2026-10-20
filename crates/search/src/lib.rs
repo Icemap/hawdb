@@ -1505,7 +1505,12 @@ impl SearchIndex {
             ),
             ..Self::default()
         };
-        index.load_snapshot().map_err(|error| {
+        let loaded = if registered {
+            index.load_snapshot_from_publication(publication)
+        } else {
+            index.load_snapshot()
+        };
+        loaded.map_err(|error| {
             if registered && !matches!(error, HawDBError::FileDescriptors(_)) {
                 HawDBError::StorageIntegrity(error.to_string())
             } else {
@@ -3964,7 +3969,24 @@ impl SearchIndex {
             return Ok(());
         }
         let text = read_search_snapshot_text(&snapshot_path)?;
-        let (body, checksum) = split_checksum(&text)?;
+        self.parse_snapshot_text(&text)
+    }
+
+    /// Read the registered snapshot through the original native directory.
+    /// A saved pathname may now designate another projection namespace.
+    fn load_snapshot_from_publication(
+        &mut self,
+        publication: &out_of_core::SearchProjectionPublishLease,
+    ) -> Result<()> {
+        let mut file = publication.open_captured_child(SEARCH_SNAPSHOT_FILE)?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+        let text = decode_search_snapshot_envelope(&bytes)?;
+        self.parse_snapshot_text(&text)
+    }
+
+    fn parse_snapshot_text(&mut self, text: &str) -> Result<()> {
+        let (body, checksum) = split_checksum(text)?;
         let actual = checksum_bytes(body.as_bytes());
         if checksum != actual {
             return Err(HawDBError::Storage(format!(
@@ -7753,12 +7775,16 @@ fn search_snapshot_compression_header(
 
 fn read_search_snapshot_text(path: &Path) -> Result<String> {
     let bytes = fs::read(path)?;
+    decode_search_snapshot_envelope(&bytes)
+}
+
+fn decode_search_snapshot_envelope(bytes: &[u8]) -> Result<String> {
     if !bytes.starts_with(SEARCH_COMPRESSION_HEADER.as_bytes()) {
         return Err(HawDBError::Storage(
             "search projection is missing the V1 compressed envelope".to_string(),
         ));
     }
-    decode_search_snapshot_text(&bytes)
+    decode_search_snapshot_text(bytes)
 }
 
 fn decode_search_snapshot_text(bytes: &[u8]) -> Result<String> {

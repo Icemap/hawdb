@@ -269,7 +269,7 @@ impl SearchProjectionPublishLease {
         self.root.with_directory(action)
     }
 
-    pub(super) fn open_captured_child(&self, name: &str) -> std::io::Result<File> {
+    pub(crate) fn open_captured_child(&self, name: &str) -> std::io::Result<File> {
         self.root
             .with_directory(|directory| directory.open_child(&directory.operation_context(), name))
     }
