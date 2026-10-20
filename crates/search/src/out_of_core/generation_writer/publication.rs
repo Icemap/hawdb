@@ -705,16 +705,18 @@ pub(super) fn install_generation(
             }
         });
 
-        io.verify(
+        io.verify_artifact(
             &io.path(input.root, descriptor_file.as_ref())?,
             descriptor_len,
+            objects.descriptor,
             Some(descriptor_checksum),
             "descriptor",
         )?;
         if let Some(rabitq) = input.rabitq {
-            io.verify(
+            io.verify_artifact(
                 &io.path(input.root, rabitq.file_name.as_ref())?,
                 rabitq.artifact_bytes,
+                objects.rabitq.expect("validated vector reference"),
                 Some(rabitq.artifact_checksum),
                 "RaBitQ artifact",
             )?;
@@ -734,9 +736,10 @@ pub(super) fn install_generation(
             vector_seal,
             "vector payload",
         )?;
-        io.verify(
+        io.verify_artifact(
             &io.path(input.root, lexical_manifest_file.as_ref())?,
             lexical_manifest_len,
+            objects.lexical_manifest,
             Some(lexical_manifest_checksum),
             "lexical manifest",
         )?;
@@ -745,19 +748,7 @@ pub(super) fn install_generation(
             lexical_artifact_seal,
             "lexical artifact",
         )?;
-        for (name, object) in [
-            (descriptor_file.as_str(), objects.descriptor),
-            (layout_file.as_str(), objects.layout),
-            (lexical_manifest_file.as_str(), objects.lexical_manifest),
-        ] {
-            io.verify_object(&io.path(input.root, Path::new(name))?, object)?;
-        }
-        if let Some(artifact) = input.rabitq {
-            io.verify_object(
-                &io.path(input.root, artifact.file_name.as_ref())?,
-                objects.rabitq.expect("validated vector reference"),
-            )?;
-        }
+        io.verify_object(&io.path(input.root, layout_file.as_ref())?, objects.layout)?;
     }
     if let (Some(name), Some(encoded)) = (&mutation_name, &mutation_bytes) {
         let staged = io.path(input.stage, name.as_ref())?;
@@ -772,15 +763,12 @@ pub(super) fn install_generation(
         file.sync_all()?;
         drop(file);
         io.link(&staged, &published)?;
-        io.verify(
+        io.verify_artifact(
             &published,
             encoded.len() as u64,
+            super::super::ArtifactObject::from_reference(encoded.artifact_reference(task)?)?,
             Some(encoded.checksum()),
             "mutation run",
-        )?;
-        io.verify_object(
-            &published,
-            super::super::ArtifactObject::from_reference(encoded.artifact_reference(task)?)?,
         )?;
     }
 

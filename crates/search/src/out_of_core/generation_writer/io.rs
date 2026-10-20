@@ -118,10 +118,6 @@ impl<'a> GenerationIo<'a> {
         Ok(work())
     }
 
-    pub(super) fn length(&self, path: &Path) -> Result<u64> {
-        Ok(self.native(&[path], || fs::metadata(path))??.len())
-    }
-
     pub(super) fn read(&self, path: &Path, max_bytes: u64) -> Result<AdmittedBytes> {
         let mut file = self.native(&[path], || File::open(path))??;
         let length = file.metadata()?.len();
@@ -203,35 +199,7 @@ impl<'a> GenerationIo<'a> {
     fn seal_file_admitted(&self, file: &mut File) -> Result<ArtifactSeal> {
         file.seek(SeekFrom::Start(0))?;
         let expected = file.metadata()?.len();
-        let mut hasher = ObjectReferenceWriter::new(ObjectKind::CheckpointArtifact, 1, expected)
-            .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
-        let mut buffer = [0u8; SPOOL_BUFFER_BYTES];
-        let mut length = 0u64;
-        loop {
-            let count = read_chunk(file, &mut buffer, self.task)?;
-            if count == 0 {
-                break;
-            }
-            length = length
-                .checked_add(count as u64)
-                .filter(|length| *length <= expected)
-                .ok_or_else(|| {
-                    HawDBError::StorageIntegrity("search artifact grew while sealing".into())
-                })?;
-            hasher.write_all(&buffer[..count])?;
-        }
-        checkpoint(self.task)?;
-        if length != expected {
-            return Err(HawDBError::StorageIntegrity(
-                "search artifact shrank while sealing".into(),
-            ));
-        }
-        Ok(ArtifactSeal {
-            length,
-            reference: hasher
-                .finish()
-                .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?,
-        })
+        seal_reader(file, expected, self.task, None)
     }
 
     pub(in crate::out_of_core) fn verify_object(
@@ -261,22 +229,36 @@ impl<'a> GenerationIo<'a> {
         Ok(())
     }
 
-    pub(super) fn verify(
+    /// Check both identities in one bounded read of the same installed file.
+    /// Keep the producer reference independent of the installed bytes: native
+    /// identity alone cannot detect in-place damage or support copy fallback.
+    pub(super) fn verify_artifact(
         &self,
         path: &Path,
         expected_len: u64,
+        object: super::super::ArtifactObject,
         expected_checksum: Option<u64>,
         name: &str,
     ) -> Result<()> {
-        let actual_len = self.length(path)?;
-        let checksum_matches = match expected_checksum {
-            Some(expected) => self.checksum(path)?.1 == expected,
-            None => true,
-        };
-        if actual_len != expected_len || !checksum_matches {
+        let _buffer = self.memory.spool.reserve(SPOOL_BUFFER_BYTES)?;
+        let mut file = self.native(&[path], || File::open(path))??;
+        let length = file.metadata()?.len();
+        if length != expected_len {
             return Err(HawDBError::Storage(format!(
                 "published search generation {name} does not match its staged artifact"
             )));
+        }
+        let mut checksum = expected_checksum.map(|_| Crc32cHasher::new());
+        let seal = seal_reader(&mut file, length, self.task, checksum.as_mut())?;
+        if checksum.map(|digest| digest.finish()) != expected_checksum {
+            return Err(HawDBError::Storage(format!(
+                "published search generation {name} does not match its staged artifact"
+            )));
+        }
+        if seal.reference != object.reference() {
+            return Err(HawDBError::StorageIntegrity(
+                "installed Search artifact differs from its producer reference".into(),
+            ));
         }
         Ok(())
     }
@@ -406,6 +388,46 @@ impl Drop for Temporary {
             let _ = fs::remove_file(&self.path);
         }
     }
+}
+
+fn seal_reader(
+    reader: &mut impl Read,
+    expected: u64,
+    task: &RuntimeTaskContext,
+    mut checksum: Option<&mut Crc32cHasher>,
+) -> Result<ArtifactSeal> {
+    let mut hasher = ObjectReferenceWriter::new(ObjectKind::CheckpointArtifact, 1, expected)
+        .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?;
+    let mut buffer = [0u8; SPOOL_BUFFER_BYTES];
+    let mut length = 0u64;
+    loop {
+        let count = read_chunk(reader, &mut buffer, task)?;
+        if count == 0 {
+            break;
+        }
+        length = length
+            .checked_add(count as u64)
+            .filter(|length| *length <= expected)
+            .ok_or_else(|| {
+                HawDBError::StorageIntegrity("search artifact grew while sealing".into())
+            })?;
+        hasher.write_all(&buffer[..count])?;
+        if let Some(checksum) = &mut checksum {
+            checksum.update(&buffer[..count]);
+        }
+    }
+    checkpoint(task)?;
+    if length != expected {
+        return Err(HawDBError::StorageIntegrity(
+            "search artifact shrank while sealing".into(),
+        ));
+    }
+    Ok(ArtifactSeal {
+        length,
+        reference: hasher
+            .finish()
+            .map_err(|error| HawDBError::StorageIntegrity(error.to_string()))?,
+    })
 }
 
 fn checksum_reader(reader: &mut impl Read, task: &RuntimeTaskContext) -> Result<(u64, u64)> {
