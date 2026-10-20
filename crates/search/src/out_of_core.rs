@@ -3872,6 +3872,7 @@ pub(super) struct CapturedGenerations {
     pub(super) generations: Option<PublishedArtifactGenerations>,
     pub(super) memory: Option<crate::build_memory::read::ReaderMemory>,
     pub(super) resident_vector_absence_verified: bool,
+    pub(super) resident_vector_receipt_verified: bool,
 }
 
 pub(super) fn captured_artifact_generations(
@@ -3903,6 +3904,7 @@ pub(super) fn captured_artifact_generations(
                     generations: None,
                     memory: None,
                     resident_vector_absence_verified: true,
+                    resident_vector_receipt_verified: false,
                 });
             };
             let bytes = admission.read_unbound_file(
@@ -3922,6 +3924,7 @@ pub(super) fn captured_artifact_generations(
                 manifest.resident_snapshot_absent,
                 Some(admission),
             )?;
+            let resident_vector_receipt_verified = manifest.resident_snapshot.is_some();
             let records = manifest
                 .segments
                 .len()
@@ -3952,6 +3955,7 @@ pub(super) fn captured_artifact_generations(
                 generations: Some(artifact_generations(&closure)),
                 memory: Some(memory),
                 resident_vector_absence_verified,
+                resident_vector_receipt_verified,
             })
         }
         None => {
@@ -3969,6 +3973,7 @@ pub(super) fn captured_artifact_generations(
                     generations: None,
                     memory: None,
                     resident_vector_absence_verified: true,
+                    resident_vector_receipt_verified: false,
                 });
             };
             let manifest = SearchOutOfCoreManifestBody::decode_with_context(&bytes, Some(task))?;
@@ -3977,6 +3982,7 @@ pub(super) fn captured_artifact_generations(
                 manifest.resident_snapshot_absent,
                 None,
             )?;
+            let resident_vector_receipt_verified = manifest.resident_snapshot.is_some();
             let closure = load_artifact_closure_with_context(
                 ClosureLoadContext {
                     cleanup_source: Some(&source),
@@ -3997,6 +4003,7 @@ pub(super) fn captured_artifact_generations(
                 generations: Some(artifact_generations(&closure)),
                 memory: None,
                 resident_vector_absence_verified,
+                resident_vector_receipt_verified,
             })
         }
     }
@@ -4031,11 +4038,29 @@ struct ResidentProducerReferences {
     lexical: crate::lexical_projection::ProducerReferences,
 }
 
+#[cfg(feature = "vector-search")]
+pub(super) struct ResidentRaBitQArtifact {
+    pub(super) reference: hawdb_storage::immutable_object::ObjectReference,
+    pub(super) checksum: u64,
+    pub(super) source_digest: u64,
+    pub(super) vector_document_count: usize,
+    pub(super) payload_checksum: u32,
+    pub(super) peak_build_working_bytes: usize,
+}
+
+pub(super) struct ResidentPublicationPlan {
+    pub(super) generation: u64,
+    #[cfg(feature = "vector-search")]
+    pub(super) rabitq: Option<ResidentRaBitQArtifact>,
+}
+
 pub(super) fn write_resident_artifacts(
     index: &SearchIndex,
     root: &Path,
     snapshot: &crate::snapshot_writer::SearchSnapshotWriteReport,
+    plan: ResidentPublicationPlan,
 ) -> Result<PublishedOutOfCoreProjection> {
+    let generation = plan.generation;
     // This legacy checkpoint has no host task parameter. Reuse its existing
     // native publication accounting through every producer and verification.
     let task = hawdb_core::RuntimeTaskContext::default();
@@ -4050,7 +4075,7 @@ pub(super) fn write_resident_artifacts(
         super::write_search_segment_descriptor_output(root, &descriptor, u64::MAX, |file| {
             ArtifactObject::from_reference(io.seal_file(file)?.reference)
         })?;
-    let lexical_generation = next_generation(root, index.lexical_config.max_manifest_bytes.get())?;
+    let lexical_generation = generation;
     let projection = super::LexicalProjectionWriter::new(index.lexical_config)
         .with_context(memory.clone(), task.clone())
         .write(
@@ -4077,6 +4102,7 @@ pub(super) fn write_resident_artifacts(
         root,
         snapshot,
         &descriptor,
+        plan,
         ResidentProducerReferences {
             descriptor: descriptor_object,
             payload,
@@ -4094,15 +4120,18 @@ fn publish_out_of_core_projection(
     root: &Path,
     snapshot: &crate::snapshot_writer::SearchSnapshotWriteReport,
     descriptor: &SearchSegmentDescriptor,
+    plan: ResidentPublicationPlan,
     producer: ResidentProducerReferences,
     io: &generation_writer::io::GenerationIo<'_>,
 ) -> Result<PublishedOutOfCoreProjection> {
+    let generation = plan.generation;
+    #[cfg(feature = "vector-search")]
+    let rabitq = plan.rabitq;
     if !descriptor.matches_documents(&index.documents) {
         return Err(HawDBError::Storage(
             "search segment descriptor does not match checkpoint documents".to_string(),
         ));
     }
-    let generation = next_generation(root, DEFAULT_MAX_MANIFEST_BYTES)?;
     let descriptor_file = format!("search_projection_segments.{generation}.hawdb");
     let payload_file = format!("search_projection_segment_payloads.{generation}.hawdb");
     let metadata_payload_file = format!("search_projection_metadata_payloads.{generation}.hawdb");
@@ -4177,6 +4206,13 @@ fn publish_out_of_core_projection(
     ] {
         io.verify_object(&root.join(name), object)?;
     }
+    #[cfg(feature = "vector-search")]
+    if let Some(artifact) = rabitq.as_ref() {
+        io.verify_object(
+            &root.join(format!("search_rabitq.{generation}.hawdb")),
+            ArtifactObject::from_reference(artifact.reference)?,
+        )?;
+    }
     let objects = SegmentObjects {
         lexical_generation: producer.lexical_generation,
         descriptor: producer.descriptor,
@@ -4186,6 +4222,12 @@ fn publish_out_of_core_projection(
         layout: layout_object,
         lexical_manifest: lexical_manifest_object,
         lexical_payload: lexical_payload_object,
+        #[cfg(feature = "vector-search")]
+        rabitq: rabitq
+            .as_ref()
+            .map(|artifact| ArtifactObject::from_reference(artifact.reference))
+            .transpose()?,
+        #[cfg(not(feature = "vector-search"))]
         rabitq: None,
     };
     let embedding = index.embedding_manifest.as_ref();
@@ -4220,12 +4262,41 @@ fn publish_out_of_core_projection(
             lexical_manifest_file,
             lexical_manifest_len: lexical_manifest_bytes.len() as u64,
             lexical_manifest_checksum: checksum_bytes(&lexical_manifest_bytes),
+            #[cfg(feature = "vector-search")]
+            rabitq_artifact_file: rabitq
+                .as_ref()
+                .map(|_| format!("search_rabitq.{generation}.hawdb")),
+            #[cfg(not(feature = "vector-search"))]
             rabitq_artifact_file: None,
+            #[cfg(feature = "vector-search")]
+            rabitq_artifact_len: rabitq
+                .as_ref()
+                .map(|artifact| artifact.reference.byte_length),
+            #[cfg(not(feature = "vector-search"))]
             rabitq_artifact_len: None,
+            #[cfg(feature = "vector-search")]
+            rabitq_artifact_checksum: rabitq.as_ref().map(|artifact| artifact.checksum),
+            #[cfg(not(feature = "vector-search"))]
             rabitq_artifact_checksum: None,
+            #[cfg(feature = "vector-search")]
+            rabitq_source_digest: rabitq.as_ref().map(|artifact| artifact.source_digest),
+            #[cfg(not(feature = "vector-search"))]
             rabitq_source_digest: None,
+            #[cfg(feature = "vector-search")]
+            rabitq_vector_document_count: rabitq
+                .as_ref()
+                .map(|artifact| artifact.vector_document_count),
+            #[cfg(not(feature = "vector-search"))]
             rabitq_vector_document_count: None,
+            #[cfg(feature = "vector-search")]
+            rabitq_payload_checksum: rabitq.as_ref().map(|artifact| artifact.payload_checksum),
+            #[cfg(not(feature = "vector-search"))]
             rabitq_payload_checksum: None,
+            #[cfg(feature = "vector-search")]
+            rabitq_peak_build_working_bytes: rabitq
+                .as_ref()
+                .map(|artifact| artifact.peak_build_working_bytes),
+            #[cfg(not(feature = "vector-search"))]
             rabitq_peak_build_working_bytes: None,
             document_count: index.documents.len(),
             documents_digest: lexical_documents_digest(&index.documents),
@@ -6029,9 +6100,38 @@ mod tests {
         }
         initial.finish().unwrap();
 
-        // The next full replacement may reclaim unpinned vector artifacts.
-        // Keep the first closure alive until the combined manifest selects it.
-        let initial_reader = SearchOutOfCoreReader::open(path).unwrap();
+        // Ordinary readers do not register GC pins. Retain an admitted private
+        // capture until the combined manifest selects the first closure again.
+        let initial_capture = {
+            use crate::build_memory::read::{ReadAdmission, ReadPermit};
+            let reader = SearchOutOfCoreReader::open(path).unwrap();
+            let governor = crate::build_memory::read::tests::governor();
+            let permit = governor
+                .try_admit(
+                    hawdb_qos::RuntimeWorkRequest::background_maintenance(8 << 20)
+                        .with_io_wave_slots(1),
+                )
+                .unwrap();
+            let task = permit.bind_task_context(Default::default());
+            let memory = crate::build_memory::BuildMemory::new(&task).unwrap();
+            let admission = ReadAdmission {
+                memory: &memory,
+                task: &task,
+                permit: ReadPermit::Governed(&permit),
+            };
+            admitted_root::open(admitted_root::OpenContext {
+                root: path,
+                config: reader.config.clone(),
+                analyzer_lexicon: reader.analyzer_lexicon.clone(),
+                lexical_term_policy: reader.lexical_term_policy,
+                lexical_source_policy: reader.lexical_source_policy,
+                admission: Some(&admission),
+                project: Some(&reader._project_files),
+                max_artifact_read_bytes: 32 << 20,
+                publication: None,
+            })
+            .unwrap()
+        };
         let manifest_path = path.join(OUT_OF_CORE_MANIFEST_FILE);
         let initial_manifest: SearchOutOfCoreManifestEnvelope =
             serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
@@ -6045,6 +6145,12 @@ mod tests {
         let mut next = SearchOutOfCoreGenerationWriter::create(path, next_options).unwrap();
         next.push(next_document).unwrap();
         next.finish().unwrap();
+        if let Some(name) = &initial_segment.rabitq_artifact_file {
+            assert!(
+                path.join(name).is_file(),
+                "the captured first segment must survive replacement cleanup"
+            );
+        }
 
         let next_manifest: SearchOutOfCoreManifestEnvelope =
             serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
@@ -6070,7 +6176,7 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        drop(initial_reader);
+        drop(initial_capture);
     }
 
     fn install_delete_mutation_run(
@@ -6270,7 +6376,7 @@ mod tests {
 
         let cleanup = index.retry_projection_cleanup(SearchProjectionCleanupOptions::default());
         assert_eq!(cleanup.generation_discovery_failures, 0);
-        assert!(!cleanup.retry_required);
+        assert!(!cleanup.retry_required, "{cleanup:?}");
         assert!(path.join(&manifest.body.mutation_runs[0].file).is_file());
         assert_eq!(
             old_reader
@@ -8137,7 +8243,7 @@ mod tests {
         }
         drop(oldest_reader);
         let cleanup = index.retry_projection_cleanup(SearchProjectionCleanupOptions::default());
-        assert!(!cleanup.retry_required);
+        assert!(!cleanup.retry_required, "{cleanup:?}");
         fs::remove_dir_all(path).unwrap();
     }
 

@@ -124,13 +124,13 @@ pub(super) fn install(
         checkpoint(task)?;
         if offset >= update.old_segments {
             let bytes = dependencies(writer, private, segment, |source, _, object, checksum| {
-                io.verify(
+                io.verify_artifact(
                     source,
                     object.byte_length,
+                    object,
                     checksum,
                     "staged initial dependency",
-                )?;
-                io.verify_object(source, object)
+                )
             })?;
             if segment.document_count > writer.options.max_content_documents.get()
                 || (segment.document_count > 1
@@ -162,8 +162,13 @@ pub(super) fn install(
             segment,
             |source, target, object, checksum| {
                 io.link(source, target)?;
-                io.verify(target, object.byte_length, checksum, "initial dependency")?;
-                io.verify_object(target, object)
+                io.verify_artifact(
+                    target,
+                    object.byte_length,
+                    object,
+                    checksum,
+                    "initial dependency",
+                )
             },
         )?;
     }

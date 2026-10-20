@@ -203,21 +203,166 @@ impl Read for CancelReader<'_> {
 }
 
 #[test]
-fn checksum_and_copy_stop_at_the_next_bounded_io_checkpoint() {
-    for copy in [false, true] {
+fn checksum_copy_and_combined_seal_stop_at_the_next_bounded_io_checkpoint() {
+    for operation in ["checksum", "copy", "combined seal"] {
         let task = RuntimeTaskContext::default();
         let mut reader = CancelReader {
             bytes: Cursor::new(vec![1; 8 * SPOOL_BUFFER_BYTES]),
             task: &task,
             reads: 0,
         };
-        let result = if copy {
-            copy_reader(&mut reader, &mut io::sink(), &task).map(|length| (length, 0))
-        } else {
-            checksum_reader(&mut reader, &task)
+        let result = match operation {
+            "copy" => copy_reader(&mut reader, &mut io::sink(), &task).map(|_| ()),
+            "checksum" => checksum_reader(&mut reader, &task).map(|_| ()),
+            _ => seal_reader(
+                &mut reader,
+                (8 * SPOOL_BUFFER_BYTES) as u64,
+                &task,
+                Some(&mut Crc32cHasher::new()),
+            )
+            .map(|_| ()),
         };
         assert!(result.unwrap_err().to_string().contains("cancel"));
         assert_eq!(reader.reads, 1);
+    }
+}
+
+struct CountedReader<'a> {
+    input: Cursor<&'a [u8]>,
+    bytes_read: usize,
+}
+
+impl Read for CountedReader<'_> {
+    fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+        assert!(output.len() <= SPOOL_BUFFER_BYTES);
+        let count = self.input.read(output)?;
+        self.bytes_read += count;
+        Ok(count)
+    }
+}
+
+#[test]
+fn combined_seal_reads_once_and_matches_separate_crc_and_object_scans() {
+    for length in [0, SPOOL_BUFFER_BYTES - 1, 3 * SPOOL_BUFFER_BYTES + 11] {
+        let bytes = vec![37; length];
+        let task = RuntimeTaskContext::default();
+        let mut reader = CountedReader {
+            input: Cursor::new(bytes.as_slice()),
+            bytes_read: 0,
+        };
+        let (_, expected_checksum) = checksum_reader(&mut reader, &task).unwrap();
+        reader.input.set_position(0);
+        let expected_seal = seal_reader(&mut reader, length as u64, &task, None).unwrap();
+        assert_eq!(reader.bytes_read, 2 * length);
+        assert_eq!(
+            expected_seal.reference,
+            ObjectReference::for_bytes(ObjectKind::CheckpointArtifact, 1, &bytes)
+        );
+
+        reader.input.set_position(0);
+        reader.bytes_read = 0;
+        let mut checksum = Crc32cHasher::new();
+        let seal = seal_reader(&mut reader, length as u64, &task, Some(&mut checksum)).unwrap();
+        assert_eq!(seal, expected_seal);
+        assert_eq!(checksum.finish(), expected_checksum);
+        assert_eq!(reader.bytes_read, length);
+    }
+}
+
+#[test]
+fn combined_verification_rejects_independent_checksum_reference_and_length_mismatches() {
+    let root = Directory::new();
+    let source = root.0.join("source");
+    let bytes = vec![37; 3 * SPOOL_BUFFER_BYTES + 11];
+    fs::write(&source, &bytes).unwrap();
+    let object = crate::out_of_core::ArtifactObject::for_bytes(&bytes);
+    let checksum = crate::checksum_bytes(&bytes);
+    let (memory, task) = context(256 * 1024);
+    let io = GenerationIo::new(&memory, &task);
+    io.verify_artifact(
+        &source,
+        bytes.len() as u64,
+        object,
+        Some(checksum),
+        "payload",
+    )
+    .unwrap();
+    assert!(matches!(
+        io.verify_artifact(
+            &source,
+            bytes.len() as u64,
+            object,
+            Some(checksum ^ 1),
+            "payload"
+        ),
+        Err(HawDBError::Storage(_))
+    ));
+    let mut changed = bytes.clone();
+    *changed.last_mut().unwrap() ^= 1;
+    fs::write(&source, &changed).unwrap();
+    for checksum in [None, Some(crate::checksum_bytes(&changed))] {
+        assert!(matches!(
+            io.verify_artifact(&source, bytes.len() as u64, object, checksum, "payload"),
+            Err(HawDBError::StorageIntegrity(_))
+        ));
+    }
+    for length in [bytes.len() - 1, bytes.len() + 1] {
+        fs::write(&source, vec![37; length]).unwrap();
+        assert!(matches!(
+            io.verify_artifact(
+                &source,
+                bytes.len() as u64,
+                object,
+                Some(checksum),
+                "payload"
+            ),
+            Err(HawDBError::Storage(_))
+        ));
+    }
+    assert_eq!(memory.ledger.snapshot().used_bytes, 0);
+}
+
+#[test]
+fn combined_verification_admits_one_buffer_and_refunds_denial_and_cancellation() {
+    let root = Directory::new();
+    let source = root.0.join("source");
+    let bytes = vec![37; SPOOL_BUFFER_BYTES + 11];
+    fs::write(&source, &bytes).unwrap();
+    let object = crate::out_of_core::ArtifactObject::for_bytes(&bytes);
+    let checksum = crate::checksum_bytes(&bytes);
+    let held = 1024;
+    let exact = held + SPOOL_BUFFER_BYTES + native_path::bytes(&source).unwrap();
+    for short in [1, 0] {
+        let (memory, task) = context(exact - short);
+        let other = memory.input.reserve(held).unwrap();
+        let io = GenerationIo::new(&memory, &task);
+        let result = io.verify_artifact(
+            &source,
+            bytes.len() as u64,
+            object,
+            Some(checksum),
+            "payload",
+        );
+        if short == 1 {
+            assert!(result.unwrap_err().to_string().contains("query memory"));
+        } else {
+            result.unwrap();
+            task.cancellation().cancel();
+            assert!(io
+                .verify_artifact(
+                    &source,
+                    bytes.len() as u64,
+                    object,
+                    Some(checksum),
+                    "payload"
+                )
+                .unwrap_err()
+                .to_string()
+                .contains("cancel"));
+        }
+        assert_eq!(memory.ledger.snapshot().used_bytes, held);
+        drop(other);
+        assert_eq!(memory.ledger.snapshot().used_bytes, 0);
     }
 }
 

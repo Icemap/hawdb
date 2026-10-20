@@ -36,22 +36,25 @@ impl<'a> VerifiedRetention<'a> {
             admission,
         )?;
         let resident_vector_absence_verified = verified.resident_vector_absence_verified;
+        let resident_vector_receipt_verified = verified.resident_vector_receipt_verified;
         let generations =
             verified
                 .generations
                 .map_or_else(SearchProjectionGenerations::default, |current| {
+                    let rabitq = current.rabitq_generations.last().copied();
                     SearchProjectionGenerations {
                         lexical: current.lexical_generations.last().copied(),
                         out_of_core: Some(current.active_generation),
                         retained_lexical: current.lexical_generations,
                         retained_out_of_core: current.out_of_core_generations,
-                        // Standalone resident vector receipts are not covered by an OOC
-                        // closure. Preserve their files/evidence until that source is bound.
-                        rabitq: None,
+                        // Only the captured, verified closure can name retained
+                        // standalone vector generations.
+                        rabitq,
                         retained_rabitq: current.rabitq_generations,
                         rabitq_remove_all: resident_vector_absence_verified,
                         out_of_core_discovery_failed: false,
-                        rabitq_discovery_failed: !resident_vector_absence_verified,
+                        rabitq_discovery_failed: !resident_vector_absence_verified
+                            && (!resident_vector_receipt_verified || rabitq.is_none()),
                     }
                 });
         Ok(Self {

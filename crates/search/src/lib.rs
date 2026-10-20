@@ -2566,11 +2566,23 @@ impl SearchIndex {
                 self.consumer_binding.as_ref(),
                 self.documents.values(),
             )?;
-            let publication = out_of_core::write_resident_artifacts(self, path, &snapshot)?;
+            let generation =
+                out_of_core::next_generation(path, self.lexical_config.max_manifest_bytes.get())?;
             #[cfg(feature = "vector-search")]
-            let rabitq_bytes_written = self.write_rabitq_projection(path)?;
+            let (generation, rabitq_bytes_written, rabitq) =
+                self.write_rabitq_projection(path, generation)?;
             #[cfg(not(feature = "vector-search"))]
             let rabitq_bytes_written = 0;
+            let publication = out_of_core::write_resident_artifacts(
+                self,
+                path,
+                &snapshot,
+                out_of_core::ResidentPublicationPlan {
+                    generation,
+                    #[cfg(feature = "vector-search")]
+                    rabitq,
+                },
+            )?;
             let projection_bytes_written = publication
                 .bytes_written
                 .saturating_add(rabitq_bytes_written);
@@ -2624,14 +2636,18 @@ impl SearchIndex {
     }
 
     #[cfg(feature = "vector-search")]
-    fn write_rabitq_projection(&self, path: &Path) -> Result<u64> {
+    fn write_rabitq_projection(
+        &self,
+        path: &Path,
+        minimum_generation: u64,
+    ) -> Result<(u64, u64, Option<out_of_core::ResidentRaBitQArtifact>)> {
         if self
             .documents
             .values()
             .all(|document| document.embedding.is_none())
         {
             self.invalidate_rabitq_projection();
-            return Ok(0);
+            return Ok((minimum_generation, 0, None));
         }
         let loaded_generation = self
             .rabitq_projection()
@@ -2640,7 +2656,9 @@ impl SearchIndex {
         let artifact_generation = latest_rabitq_artifact(path)?
             .map(|(generation, _)| generation)
             .unwrap_or(0);
-        let generation = loaded_generation.max(artifact_generation).saturating_add(1);
+        let generation = minimum_generation
+            .max(loaded_generation.saturating_add(1))
+            .max(artifact_generation.saturating_add(1));
         let artifact_path = path.join(rabitq_artifact_file(generation));
         let projection = RaBitQCandidateProjection::write_from_documents(
             &artifact_path,
@@ -2655,11 +2673,24 @@ impl SearchIndex {
             )
         })?;
         let bytes_written = fs::metadata(&artifact_path)?.len();
+        let (reference, checksum) = projection.file_artifact_reference().ok_or_else(|| {
+            HawDBError::StorageIntegrity(
+                "resident RaBitQ producer did not return an artifact reference".into(),
+            )
+        })?;
+        let artifact = out_of_core::ResidentRaBitQArtifact {
+            reference,
+            checksum,
+            source_digest: projection.manifest().source_digest,
+            vector_document_count: projection.manifest().document_count,
+            payload_checksum: projection.manifest().payload_checksum,
+            peak_build_working_bytes: projection.manifest().peak_build_working_bytes,
+        };
         *self
             .rabitq_projection
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::new(projection));
-        Ok(bytes_written)
+        Ok((generation, bytes_written, Some(artifact)))
     }
 
     /// Searches resident documents, returning unavailable-capability and execution errors.
@@ -10920,13 +10951,13 @@ mod tests {
         assert_eq!(probe["compressed_vector_projection"]["ready"], true);
         assert_eq!(probe["compressed_vector_projection"]["generation"], 1);
         assert!(!latest.exists());
-        assert!(!std::fs::read_dir(&path).unwrap().flatten().any(|entry| {
+        assert!(std::fs::read_dir(&path).unwrap().flatten().any(|entry| {
             entry
                 .file_name()
                 .to_string_lossy()
                 .starts_with("search_rabitq.2.hawdb.corrupt.")
         }));
-        assert!(index.projection_cleanup_report().deleted_files >= 1);
+        assert!(index.projection_cleanup_report().retry_required);
 
         let result = index
             .search_with_options_compressed_vector_projection_mode(
