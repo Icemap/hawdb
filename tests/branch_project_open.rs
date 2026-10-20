@@ -1930,6 +1930,48 @@ fn stale_pending_recovery_does_not_recreate_a_reclaimed_successful_child() {
 }
 
 #[test]
+fn database_instance_identity_retries_failed_deferred_admission() {
+    let project = Project::new();
+    let mut writer = Database::open(&project.0).unwrap();
+    writer.query("CREATE (:Memory {id: 'identity'})").unwrap();
+    let writer_identity = writer.instance_identity().unwrap();
+    let before = writer.file_descriptor_metrics().unwrap();
+    let mut deferred = Database::open(&project.0).unwrap();
+    for _ in 0..2 {
+        assert!(matches!(
+            deferred.instance_identity(),
+            Err(HawDBError::BranchBusy { .. })
+        ));
+        let after = deferred.file_descriptor_metrics().unwrap();
+        assert_eq!(after.admitted_runtimes, before.admitted_runtimes);
+        assert_eq!(after.ownership_locks, before.ownership_locks);
+        assert_eq!(after.mutable_wals, before.mutable_wals);
+        assert_eq!(after.reserved, before.reserved);
+        assert_eq!(writer.instance_identity().unwrap(), writer_identity);
+    }
+    drop(writer);
+    assert_no_runtime(&deferred);
+
+    let admitted_identity = deferred.instance_identity().unwrap();
+    assert_ne!(admitted_identity, writer_identity);
+    assert_eq!(
+        values(&mut deferred),
+        vec![BTreeMap::from([(
+            "id".into(),
+            Value::String("identity".into())
+        )])]
+    );
+    assert_eq!(deferred.instance_identity().unwrap(), admitted_identity);
+    assert_eq!(
+        deferred
+            .file_descriptor_metrics()
+            .unwrap()
+            .admitted_runtimes,
+        1
+    );
+}
+
+#[test]
 fn database_instance_identity_changes_on_branch_selection_and_reopen() {
     let project = Project::new();
     let mut database = Database::open(&project.0).unwrap();

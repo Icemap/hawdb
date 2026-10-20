@@ -844,7 +844,7 @@ fn inline_barrier_bytes() -> usize {
     version_stamp_bytes(&VersionKey::Database) + version_stamp_bytes(&VersionKey::ReadBarrier)
 }
 
-fn is_read_summary_key(key: &VersionKey) -> bool {
+pub(crate) fn is_read_summary_key(key: &VersionKey) -> bool {
     matches!(
         key,
         VersionKey::ReadNodeDomain(_)

@@ -154,6 +154,17 @@ original values and commit epoch. Checkpoints MUST refresh the physical view eve
 when the logical epoch is unchanged. Replacing the current view releases only
 its own pin reference; the last fork releases the old generation for reclamation.
 
+Each bounded view MUST expose the process-local `DatabaseInstanceIdentity` of
+the native database that supplied that exact snapshot. Canonical publication
+MUST capture the identity with the snapshot; projection-pinned reads MUST obtain
+both under the same store guard. Ordinary commits and checkpoints retain the
+runtime's identity, while a new database instance or successful selection of a
+different branch runtime receives a new identity. A retained token MUST NOT keep
+database files, locks, or generation pins alive. The token is not serializable
+and does not establish durable incarnation, a held fence, or complete host
+qualification. The API and replacement-fixture boundary are documented in
+[`Database instance identity`](../DATABASE_INSTANCE_IDENTITY.md).
+
 Fatal canonical integrity or post-WAL apply failures invalidate both current
 storage and previously captured snapshots until close and reopen. The read
 callback's successful return MUST recheck this shared fault state, including a

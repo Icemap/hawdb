@@ -57,10 +57,19 @@ semantics, source C..E coverage, platform syscall behavior or power-loss barrier
 | `CreateBeforeReservationBarrier` | Crash loses the pending owner while the directory survives: `NativeCustodyRetained` |
 | `ReuseCancelledIncarnation` | Cancellation rolls back the allocator: `IncarnationsNeverReuse` |
 | `AdoptUnknownBirth` | Matching pending path is treated as birth authority: `AdoptionHasActualBirth` |
-| `ResetMissingLedger` | Recreating a zero ledger loses native owners: `NativeCustodyRetained` |
+| `ResetMissingLedger` | Recreating a zero ledger can reuse an issued identity or lose native owners: `IncarnationAndCustodyPreserved` |
 | `ForgetDebtOnClose` | Caller closure forgets an unselected directory: `NativeCustodyRetained` |
 | `RetireBeforeSelectorBarrier` | Early physical retirement destroys the durable old head: `DurableSelectorUsable` |
 | `SelectIncompleteClosure` | Selector is exposed before sealing: `SelectedClosureComplete` |
+
+The reset control checks `IncarnationAndCustodyPreserved`, the conjunction of
+`IncarnationsNeverReuse` and `NativeCustodyRetained`. Resetting after a durable
+reservation can permit identity reuse before any directory exists; resetting
+after directory creation can instead lose custody immediately. TLC may discover
+either counterexample first. A single equivalent predicate gives the manifest
+a stable diagnostic without changing which states violate the two checks.
+The positive configuration and the other controls retain their separate
+invariant names; all remaining reset-control invariants also remain enabled.
 
 Positive TLC: **1,226 generated / 677 distinct states**, complete graph depth
 **20**, no violations. The seven independently enabled controls each violated

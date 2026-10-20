@@ -329,8 +329,7 @@ check_mutants() {
       printf 'storage TLA+ mutant survived unexpectedly: %s\n' "$config" >&2
       return 1
     fi
-    if [[ ! "$invariant" =~ ^[A-Za-z0-9_]+(\|[A-Za-z0-9_]+)*$ ]] ||
-      ! grep -Eq "Invariant ($invariant) is violated\\." "$log"; then
+    if ! grep -Fq "Invariant $invariant is violated." "$log"; then
       printf 'storage TLA+ mutant did not violate %s: %s\n' \
         "$invariant" "$config" >&2
       cat "$log" >&2

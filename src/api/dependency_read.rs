@@ -63,6 +63,9 @@ pub use projection_feed::{
 mod relational;
 #[path = "dependency_read/search_projection.rs"]
 mod search_projection;
+#[cfg(test)]
+#[path = "dependency_read/soundness_tests.rs"]
+mod soundness_tests;
 
 /// Limits for one preparation. Output limits apply to each statement; callers
 /// must additionally bound cross-statement work and the artifact builder.

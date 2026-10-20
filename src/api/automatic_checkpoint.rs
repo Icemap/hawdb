@@ -2027,6 +2027,22 @@ mod tests {
         }
     }
 
+    fn libtest_thread_argument() -> Option<std::ffi::OsString> {
+        let mut arguments = std::env::args_os();
+        while let Some(argument) = arguments.next() {
+            if argument == "--test-threads" {
+                return arguments.next();
+            }
+            if let Some(value) = argument
+                .to_str()
+                .and_then(|argument| argument.strip_prefix("--test-threads="))
+            {
+                return Some(value.into());
+            }
+        }
+        None
+    }
+
     fn wait_diagnostics(
         control: &Control,
         state: Option<&State>,
@@ -2038,7 +2054,8 @@ mod tests {
         format!(
             "elapsed={:?}, phase={:?}, attempts_started={:?}, suspensions={:?}, \
              stopping={:?}, work_progress={initial_progress}->{}, failed={}, \
-             handoff_ready={}, publication_requested={}, wake_epoch={}",
+             handoff_ready={}, publication_requested={}, wake_epoch={}, \
+             resources={:?}, libtest_threads_env={:?}, libtest_threads_argument={:?}",
             started.elapsed(),
             state.map(|state| state.phase),
             state.map(|state| state.attempts_started),
@@ -2049,6 +2066,9 @@ mod tests {
             control.handoff_ready.load(Ordering::Acquire),
             control.publication_requested.load(Ordering::Acquire),
             control.handoff_wake_epoch.load(Ordering::Acquire),
+            hawdb_qos::RuntimeResourceSnapshot::detect(),
+            std::env::var_os("RUST_TEST_THREADS"),
+            libtest_thread_argument(),
         )
     }
 

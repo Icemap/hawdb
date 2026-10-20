@@ -226,6 +226,21 @@ mod transaction_merge;
 use query_first_support::QueryFirstTestExt;
 
 #[test]
+fn database_instance_identity_rejects_poisoned_store() {
+    let database = Database::new();
+    assert!(database.instance_identity().is_ok());
+    let store = &database.runtime.get().unwrap().store;
+    store.poison_on_storage_error::<()>(&Err(crate::HawDBError::StorageIntegrity(
+        "injected identity admission failure".into(),
+    )));
+    let expected = store.ensure_usable().unwrap_err();
+    assert!(matches!(expected, crate::HawDBError::Storage(_)));
+    for _ in 0..2 {
+        assert_eq!(database.instance_identity().unwrap_err(), expected);
+    }
+}
+
+#[test]
 fn runs_create_match_return_demo() {
     let mut db = Database::new();
     db.query("CREATE (:Memory {id: 1, title: 'Graph foundations'})")
