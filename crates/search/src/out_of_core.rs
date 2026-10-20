@@ -6029,9 +6029,38 @@ mod tests {
         }
         initial.finish().unwrap();
 
-        // The next full replacement may reclaim unpinned vector artifacts.
-        // Keep the first closure alive until the combined manifest selects it.
-        let initial_reader = SearchOutOfCoreReader::open(path).unwrap();
+        // Ordinary readers do not register GC pins. Retain an admitted private
+        // capture until the combined manifest selects the first closure again.
+        let initial_capture = {
+            use crate::build_memory::read::{ReadAdmission, ReadPermit};
+            let reader = SearchOutOfCoreReader::open(path).unwrap();
+            let governor = crate::build_memory::read::tests::governor();
+            let permit = governor
+                .try_admit(
+                    hawdb_qos::RuntimeWorkRequest::background_maintenance(8 << 20)
+                        .with_io_wave_slots(1),
+                )
+                .unwrap();
+            let task = permit.bind_task_context(Default::default());
+            let memory = crate::build_memory::BuildMemory::new(&task).unwrap();
+            let admission = ReadAdmission {
+                memory: &memory,
+                task: &task,
+                permit: ReadPermit::Governed(&permit),
+            };
+            admitted_root::open(admitted_root::OpenContext {
+                root: path,
+                config: reader.config.clone(),
+                analyzer_lexicon: reader.analyzer_lexicon.clone(),
+                lexical_term_policy: reader.lexical_term_policy,
+                lexical_source_policy: reader.lexical_source_policy,
+                admission: Some(&admission),
+                project: Some(&reader._project_files),
+                max_artifact_read_bytes: 32 << 20,
+                publication: None,
+            })
+            .unwrap()
+        };
         let manifest_path = path.join(OUT_OF_CORE_MANIFEST_FILE);
         let initial_manifest: SearchOutOfCoreManifestEnvelope =
             serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
@@ -6045,6 +6074,12 @@ mod tests {
         let mut next = SearchOutOfCoreGenerationWriter::create(path, next_options).unwrap();
         next.push(next_document).unwrap();
         next.finish().unwrap();
+        if let Some(name) = &initial_segment.rabitq_artifact_file {
+            assert!(
+                path.join(name).is_file(),
+                "the captured first segment must survive replacement cleanup"
+            );
+        }
 
         let next_manifest: SearchOutOfCoreManifestEnvelope =
             serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
@@ -6070,7 +6105,7 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        drop(initial_reader);
+        drop(initial_capture);
     }
 
     fn install_delete_mutation_run(
