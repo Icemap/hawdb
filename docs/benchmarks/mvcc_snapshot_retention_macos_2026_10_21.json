@@ -1,0 +1,690 @@
+{
+  "issue": "https://github.com/nowledge-co/hawdb/issues/1137",
+  "recorded_at_utc": "2026-10-21T04:26:15.221078+00:00",
+  "baseline_kernel_sha": "2d77562a2fe70326e21a4a7e926a11f79e3ffc6e",
+  "final_base_sha": "97217f9a4d53bb2bca5995644fb74328a72f3879",
+  "production_kernel_changed": false,
+  "comparison_scope": "Identical COW fixtures on unchanged production kernel with native test allocator observations. Final base additionally includes documentation PR #1141. Repeatability observations, not a performance improvement.",
+  "baseline_harness_sha256": {
+    "crates/storage/src/store/snapshot_retention_tests.rs": "a422cd735ed413cba0764a5ac49e2612d071135230ad07d090b1bd4937e8a524",
+    "src/api/tests/snapshot_retention.rs": "650ba1d314279b27c559f5022b50dc3dce23f2a322b61d3faab293c51ce184e7",
+    "crates/storage/src/store.rs": "1b6cf2cd694c992adf4398be108335ced334f869f015078a88623cfea6a418ce",
+    "crates/storage/src/test_allocator.rs": "c370983987795f6fc049cc1300128f7c901b86c255b86c06cebf8e565530cd46",
+    "src/api/tests.rs": "470ddd28f88cf554611c28da6e6c964816639ad201a6e7341739e88eafe0ade3"
+  },
+  "final_source_sha256": {
+    "crates/storage/src/store/snapshot_retention_tests.rs": "6b477dd977e7b5dfb2f4004f1d6670ae6c630887058c8fb7a3c2fa9ad1836366",
+    "src/api/tests/snapshot_retention.rs": "8e3d0f25bb60931bc25c46bb7805c30e2ed084c8a3fccadd2b6bc786a9ace69c",
+    "crates/storage/src/store.rs": "1b6cf2cd694c992adf4398be108335ced334f869f015078a88623cfea6a418ce",
+    "crates/storage/src/test_allocator.rs": "c370983987795f6fc049cc1300128f7c901b86c255b86c06cebf8e565530cd46",
+    "src/api/tests.rs": "470ddd28f88cf554611c28da6e6c964816639ad201a6e7341739e88eafe0ade3"
+  },
+  "environment": {
+    "os": "macOS-27.0.1-arm64-arm-64bit",
+    "architecture": "arm64",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+    "bazel": "bazel 9.3.0",
+    "bazel_profile": "default darwin_arm64-fastbuild, native tests",
+    "clippy_configuration": "--locked --workspace --all-targets --all-features",
+    "persistent_durability": "SyncOnEveryWrite (default)",
+    "residency_modes": [
+      "Materialized",
+      "OutOfCore"
+    ]
+  },
+  "fixture": {
+    "rows": [
+      64,
+      512
+    ],
+    "body_bytes": 16384,
+    "reader_age_commits": [
+      1,
+      4
+    ],
+    "updated_internal_node_id": 0,
+    "precise_root_per_commit": true,
+    "producer_dropped_before_readers": true,
+    "canonical_data_capture": "GraphStore::snapshot_for_read (not the complete facade API)",
+    "rss_command": "/usr/bin/time -l bazel-bin/crates/storage/hawdb_storage_tests --exact store::snapshot_retention_tests::cow_snapshot_profile_<case> --nocapture --test-threads=1",
+    "allocator_scope": "calling thread; requested successful allocation/reallocation traffic and frees; includes retirement of preexisting allocations; not global live heap",
+    "version_estimate_scope": "key/stamp payload, excludes canonical data and allocator/page overhead",
+    "rss_scope": "whole isolated test process peak, macOS reports bytes; includes setup, libtest/runtime/cache effects; does not measure final live RSS"
+  },
+  "observations": {
+    "baseline": [
+      {
+        "base_epoch": 64,
+        "body_bytes": 16384,
+        "capture": {
+          "allocated_bytes": 272,
+          "allocation_calls": 2,
+          "deallocated_bytes": 0,
+          "deallocation_calls": 0
+        },
+        "current_version_payload_estimate": 96,
+        "reader_age_commits": 1,
+        "retained_version_payload_after_retirement": 0,
+        "retained_version_payload_estimate": 96,
+        "retirement": {
+          "allocated_bytes": 0,
+          "allocation_calls": 0,
+          "deallocated_bytes": 1141707,
+          "deallocation_calls": 665
+        },
+        "rows": 64,
+        "scope": "in-memory GraphStore; calling-thread allocator traffic; conflict payload estimates exclude allocator overhead and canonical values; RSS recorded separately",
+        "shared_segments_after_each_update": [
+          15
+        ],
+        "untouched_row_owner_shared": true,
+        "updates_and_precise_snapshots": {
+          "allocated_bytes": 75529,
+          "allocation_calls": 69,
+          "deallocated_bytes": 55886,
+          "deallocation_calls": 47
+        },
+        "phase": "baseline_kernel_with_measurement_harness",
+        "max_rss_bytes": 19775488,
+        "os": "macOS-27.0.1-arm64-arm-64bit",
+        "test": "store::snapshot_retention_tests::cow_snapshot_profile_small_young"
+      },
+      {
+        "base_epoch": 64,
+        "body_bytes": 16384,
+        "capture": {
+          "allocated_bytes": 272,
+          "allocation_calls": 2,
+          "deallocated_bytes": 0,
+          "deallocation_calls": 0
+        },
+        "current_version_payload_estimate": 96,
+        "reader_age_commits": 4,
+        "retained_version_payload_after_retirement": 0,
+        "retained_version_payload_estimate": 384,
+        "retirement": {
+          "allocated_bytes": 0,
+          "allocation_calls": 0,
+          "deallocated_bytes": 1224412,
+          "deallocation_calls": 731
+        },
+        "rows": 64,
+        "scope": "in-memory GraphStore; calling-thread allocator traffic; conflict payload estimates exclude allocator overhead and canonical values; RSS recorded separately",
+        "shared_segments_after_each_update": [
+          15,
+          15,
+          15,
+          15
+        ],
+        "untouched_row_owner_shared": true,
+        "updates_and_precise_snapshots": {
+          "allocated_bytes": 300236,
+          "allocation_calls": 270,
+          "deallocated_bytes": 223088,
+          "deallocation_calls": 182
+        },
+        "phase": "baseline_kernel_with_measurement_harness",
+        "max_rss_bytes": 19939328,
+        "os": "macOS-27.0.1-arm64-arm-64bit",
+        "test": "store::snapshot_retention_tests::cow_snapshot_profile_small_old"
+      },
+      {
+        "base_epoch": 512,
+        "body_bytes": 16384,
+        "capture": {
+          "allocated_bytes": 272,
+          "allocation_calls": 2,
+          "deallocated_bytes": 0,
+          "deallocation_calls": 0
+        },
+        "current_version_payload_estimate": 96,
+        "reader_age_commits": 1,
+        "retained_version_payload_after_retirement": 0,
+        "retained_version_payload_estimate": 96,
+        "retirement": {
+          "allocated_bytes": 0,
+          "allocation_calls": 0,
+          "deallocated_bytes": 8918219,
+          "deallocation_calls": 4935
+        },
+        "rows": 512,
+        "scope": "in-memory GraphStore; calling-thread allocator traffic; conflict payload estimates exclude allocator overhead and canonical values; RSS recorded separately",
+        "shared_segments_after_each_update": [
+          127
+        ],
+        "untouched_row_owner_shared": true,
+        "updates_and_precise_snapshots": {
+          "allocated_bytes": 77473,
+          "allocation_calls": 69,
+          "deallocated_bytes": 56838,
+          "deallocation_calls": 47
+        },
+        "phase": "baseline_kernel_with_measurement_harness",
+        "max_rss_bytes": 27803648,
+        "os": "macOS-27.0.1-arm64-arm-64bit",
+        "test": "store::snapshot_retention_tests::cow_snapshot_profile_large_young"
+      },
+      {
+        "base_epoch": 512,
+        "body_bytes": 16384,
+        "capture": {
+          "allocated_bytes": 272,
+          "allocation_calls": 2,
+          "deallocated_bytes": 0,
+          "deallocation_calls": 0
+        },
+        "current_version_payload_estimate": 96,
+        "reader_age_commits": 4,
+        "retained_version_payload_after_retirement": 0,
+        "retained_version_payload_estimate": 384,
+        "retirement": {
+          "allocated_bytes": 0,
+          "allocation_calls": 0,
+          "deallocated_bytes": 9003780,
+          "deallocation_calls": 5001
+        },
+        "rows": 512,
+        "scope": "in-memory GraphStore; calling-thread allocator traffic; conflict payload estimates exclude allocator overhead and canonical values; RSS recorded separately",
+        "shared_segments_after_each_update": [
+          127,
+          127,
+          127,
+          127
+        ],
+        "untouched_row_owner_shared": true,
+        "updates_and_precise_snapshots": {
+          "allocated_bytes": 307724,
+          "allocation_calls": 270,
+          "deallocated_bytes": 226728,
+          "deallocation_calls": 182
+        },
+        "phase": "baseline_kernel_with_measurement_harness",
+        "max_rss_bytes": 27951104,
+        "os": "macOS-27.0.1-arm64-arm-64bit",
+        "test": "store::snapshot_retention_tests::cow_snapshot_profile_large_old"
+      }
+    ],
+    "final": [
+      {
+        "base_epoch": 64,
+        "body_bytes": 16384,
+        "capture": {
+          "allocated_bytes": 272,
+          "allocation_calls": 2,
+          "deallocated_bytes": 0,
+          "deallocation_calls": 0
+        },
+        "current_version_payload_estimate": 96,
+        "reader_age_commits": 1,
+        "retained_version_payload_after_retirement": 0,
+        "retained_version_payload_estimate": 96,
+        "retirement": {
+          "allocated_bytes": 0,
+          "allocation_calls": 0,
+          "deallocated_bytes": 1141707,
+          "deallocation_calls": 665
+        },
+        "rows": 64,
+        "scope": "in-memory GraphStore; calling-thread allocator traffic; conflict payload estimates exclude allocator overhead and canonical values; RSS recorded separately",
+        "shared_segments_after_each_update": [
+          15
+        ],
+        "untouched_row_owner_shared": true,
+        "updates_and_precise_snapshots": {
+          "allocated_bytes": 75529,
+          "allocation_calls": 69,
+          "deallocated_bytes": 55886,
+          "deallocation_calls": 47
+        },
+        "phase": "final_qualification_harness",
+        "max_rss_bytes": 19742720,
+        "os": "macOS-27.0.1-arm64-arm-64bit",
+        "test": "store::snapshot_retention_tests::cow_snapshot_profile_small_young"
+      },
+      {
+        "base_epoch": 64,
+        "body_bytes": 16384,
+        "capture": {
+          "allocated_bytes": 272,
+          "allocation_calls": 2,
+          "deallocated_bytes": 0,
+          "deallocation_calls": 0
+        },
+        "current_version_payload_estimate": 96,
+        "reader_age_commits": 4,
+        "retained_version_payload_after_retirement": 0,
+        "retained_version_payload_estimate": 384,
+        "retirement": {
+          "allocated_bytes": 0,
+          "allocation_calls": 0,
+          "deallocated_bytes": 1224412,
+          "deallocation_calls": 731
+        },
+        "rows": 64,
+        "scope": "in-memory GraphStore; calling-thread allocator traffic; conflict payload estimates exclude allocator overhead and canonical values; RSS recorded separately",
+        "shared_segments_after_each_update": [
+          15,
+          15,
+          15,
+          15
+        ],
+        "untouched_row_owner_shared": true,
+        "updates_and_precise_snapshots": {
+          "allocated_bytes": 300236,
+          "allocation_calls": 270,
+          "deallocated_bytes": 223088,
+          "deallocation_calls": 182
+        },
+        "phase": "final_qualification_harness",
+        "max_rss_bytes": 19873792,
+        "os": "macOS-27.0.1-arm64-arm-64bit",
+        "test": "store::snapshot_retention_tests::cow_snapshot_profile_small_old"
+      },
+      {
+        "base_epoch": 512,
+        "body_bytes": 16384,
+        "capture": {
+          "allocated_bytes": 272,
+          "allocation_calls": 2,
+          "deallocated_bytes": 0,
+          "deallocation_calls": 0
+        },
+        "current_version_payload_estimate": 96,
+        "reader_age_commits": 1,
+        "retained_version_payload_after_retirement": 0,
+        "retained_version_payload_estimate": 96,
+        "retirement": {
+          "allocated_bytes": 0,
+          "allocation_calls": 0,
+          "deallocated_bytes": 8918219,
+          "deallocation_calls": 4935
+        },
+        "rows": 512,
+        "scope": "in-memory GraphStore; calling-thread allocator traffic; conflict payload estimates exclude allocator overhead and canonical values; RSS recorded separately",
+        "shared_segments_after_each_update": [
+          127
+        ],
+        "untouched_row_owner_shared": true,
+        "updates_and_precise_snapshots": {
+          "allocated_bytes": 77473,
+          "allocation_calls": 69,
+          "deallocated_bytes": 56838,
+          "deallocation_calls": 47
+        },
+        "phase": "final_qualification_harness",
+        "max_rss_bytes": 27787264,
+        "os": "macOS-27.0.1-arm64-arm-64bit",
+        "test": "store::snapshot_retention_tests::cow_snapshot_profile_large_young"
+      },
+      {
+        "base_epoch": 512,
+        "body_bytes": 16384,
+        "capture": {
+          "allocated_bytes": 272,
+          "allocation_calls": 2,
+          "deallocated_bytes": 0,
+          "deallocation_calls": 0
+        },
+        "current_version_payload_estimate": 96,
+        "reader_age_commits": 4,
+        "retained_version_payload_after_retirement": 0,
+        "retained_version_payload_estimate": 384,
+        "retirement": {
+          "allocated_bytes": 0,
+          "allocation_calls": 0,
+          "deallocated_bytes": 9003780,
+          "deallocation_calls": 5001
+        },
+        "rows": 512,
+        "scope": "in-memory GraphStore; calling-thread allocator traffic; conflict payload estimates exclude allocator overhead and canonical values; RSS recorded separately",
+        "shared_segments_after_each_update": [
+          127,
+          127,
+          127,
+          127
+        ],
+        "untouched_row_owner_shared": true,
+        "updates_and_precise_snapshots": {
+          "allocated_bytes": 307724,
+          "allocation_calls": 270,
+          "deallocated_bytes": 226728,
+          "deallocation_calls": 182
+        },
+        "phase": "final_qualification_harness",
+        "max_rss_bytes": 28000256,
+        "os": "macOS-27.0.1-arm64-arm-64bit",
+        "test": "store::snapshot_retention_tests::cow_snapshot_profile_large_old"
+      }
+    ]
+  },
+  "validation": {
+    "baseline-focused": {
+      "command": [
+        "bazel",
+        "test",
+        "//crates/storage:hawdb_storage_tests",
+        "//:hawdb_unit_test_binary",
+        "--test_arg=version::",
+        "--test_arg=read_transactions",
+        "--test_arg=transaction_compaction",
+        "--test_arg=writer_pin",
+        "--test_arg=version_history",
+        "--test_arg=retained_history",
+        "--test_arg=read_snapshot_baseline",
+        "--test_arg=cleanup_context",
+        "--test_output=errors"
+      ],
+      "exit_code": 0,
+      "seconds": 95.162,
+      "log_sha256": "a251fdaabc1e1f88a7fc05fdd844250d47f18ab8ac3db16ffd0266f2853ba4d5"
+    },
+    "new-focused": {
+      "command": [
+        "bazel",
+        "test",
+        "//crates/storage:hawdb_storage_tests",
+        "//:hawdb_unit_test_binary",
+        "--test_arg=snapshot_retention",
+        "--test_output=all"
+      ],
+      "exit_code": 0,
+      "seconds": 69.217,
+      "log_sha256": "8cd45263d856b340a4bc035c269ae888f5eaec3d96b8fcf48fc93e9174941e84",
+      "libtest_results": [
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 2004
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 2131
+        }
+      ]
+    },
+    "final-focused": {
+      "command": [
+        "bazel",
+        "test",
+        "//crates/storage:hawdb_storage_tests",
+        "//:hawdb_unit_test_binary",
+        "--test_arg=version::",
+        "--test_arg=read_transactions",
+        "--test_arg=transaction_compaction",
+        "--test_arg=writer_pin",
+        "--test_arg=version_history",
+        "--test_arg=retained_history",
+        "--test_arg=read_snapshot_baseline",
+        "--test_arg=cleanup_context",
+        "--test_arg=snapshot_retention",
+        "--test_arg=incremental_memory_tests",
+        "--test_output=all"
+      ],
+      "exit_code": 0,
+      "seconds": 80.577,
+      "log_sha256": "690f5282c027694b1a77835984918cafb2e2ade8dff57f9228dcd31a1d3d64e2",
+      "libtest_results": [
+        {
+          "passed": 38,
+          "failed": 0,
+          "ignored": 1,
+          "measured": 0,
+          "filtered_out": 1970
+        },
+        {
+          "passed": 22,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 2113
+        }
+      ]
+    },
+    "ownership-regressions": {
+      "command": [
+        "bazel",
+        "test",
+        "//crates/storage:hawdb_storage_tests",
+        "//:hawdb_unit_test_binary",
+        "--test_arg=optimistic_group_admission_batches_disjoint_writes_and_rejects_overlap",
+        "--test_arg=optimistic_transactions_prepare_in_parallel_and_reject_the_conflicting_committer",
+        "--test_arg=optimistic_transactions_commit_disjoint_graph_updates_from_one_snapshot",
+        "--test_arg=optimistic_tombstone_conflict_survives_checkpoint_cleanup",
+        "--test_arg=optimistic_mvcc_reopen_preserves_disjoint_commits_and_same_key_conflicts",
+        "--test_arg=retained_node_row_keeps_checkpoint_copy_charge_after_directory_release",
+        "--test_arg=denied_retained_node_checkpoint_copy_preserves_rows_and_releases_admission",
+        "--test_output=all"
+      ],
+      "exit_code": 0,
+      "seconds": 9.68,
+      "log_sha256": "bf1c1c252a428a06c8296d227517e2a38286f616979d93f585b02a1176e8922a",
+      "libtest_results": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 2007
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered_out": 2130
+        }
+      ]
+    },
+    "fmt": {
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 5.047,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "clippy": {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 47.802,
+      "log_sha256": "fc6434bb56b559efa79a2305651acefc9b44f8db71b8489254d2c4516a4a82c1"
+    },
+    "prek-install": {
+      "command": [
+        "prek",
+        "install"
+      ],
+      "exit_code": 0,
+      "seconds": 0.072,
+      "log_sha256": "57e1e5b3cb776b7c093166abbb35ea4f949e5645b20b393581d284b82bee2877"
+    },
+    "prek": {
+      "command": [
+        "prek",
+        "run",
+        "--all-files"
+      ],
+      "exit_code": 0,
+      "seconds": 25.523,
+      "log_sha256": "0bdfb3db81dee654862b4a367e8cdeeb0af1c186615b2b8bbf8c4592fe1698bf"
+    },
+    "mvcc-fuzz": {
+      "command": [
+        "cargo",
+        "run",
+        "--locked",
+        "--manifest-path",
+        "tools/mvcc-fuzz/Cargo.toml",
+        "--",
+        "run",
+        "--seconds",
+        "30",
+        "--explain"
+      ],
+      "exit_code": 0,
+      "seconds": 56.565,
+      "log_sha256": "0a2d20716ed09c0aa89b7a6779de72de88861579aa60ba074ff5146d25400c7c",
+      "campaign_summary": "PASS | 7497 cases | 30001 ms | target/mvcc-fuzz/729-1792556614023113000\n  same_key           T1 first:    473  T2 first:    465\n  disjoint           T1 first:    463  T2 first:    474\n  net_zero           T1 first:    226  T2 first:    711\n  absent_delete      T1 first:    474  T2 first:    463\n  delete_insert      T1 first:    253  T2 first:    684\n  broad_narrow       T1 first:    472  T2 first:    465\n  duplicate_insert   T1 first:    472  T2 first:    465\n  rollback           T1 first:    472  T2 first:    465"
+    },
+    "bazel-fuzz": {
+      "command": [
+        "bazel",
+        "test",
+        "//tools/shiro:shiro_tests",
+        "//tools/shiro:shiro_cli_tests",
+        "//:hawdb_linux_ci_fuzz_smoke_test",
+        "--test_output=all"
+      ],
+      "exit_code": 0,
+      "seconds": 737.779,
+      "log_sha256": "f07b5749ba73e1c4ce6ff0d2b18503604bea85d7b870aa204b33874eb0d5dae0",
+      "bazel_targets": {
+        "executed": 98,
+        "passed": 98,
+        "failed": 0
+      },
+      "libtest_totals": {
+        "passed": 283,
+        "failed": 0,
+        "ignored": 0
+      },
+      "libtest_summary_count": 97,
+      "passed_targets": [
+        "//:hawdb_concurrent_key_range_fuzz_tests",
+        "//:hawdb_graph_projection_residency_fuzz_first_half_tests",
+        "//:hawdb_graph_projection_residency_fuzz_second_half_tests",
+        "//:hawdb_linux_ci_fuzz_smoke_test",
+        "//:hawdb_scan_callback_fuzz_tests",
+        "//crates/compat:hawdb_compat_contract_fuzz_tests",
+        "//crates/cypher:hawdb_cypher_backtracking_fuzz_tests",
+        "//crates/evidence:hawdb_inventory_health_fuzz_tests",
+        "//crates/evidence:hawdb_resource_profile_fuzz_tests",
+        "//crates/evidence:hawdb_source_inventory_fuzz_tests",
+        "//crates/executor:hawdb_batch_dispatch_fuzz_tests",
+        "//crates/executor:hawdb_execution_lifecycle_fuzz_tests",
+        "//crates/executor:hawdb_execution_report_value_fuzz_tests",
+        "//crates/executor:hawdb_graph_algorithm_fuzz_tests",
+        "//crates/executor:hawdb_graph_hash_join_fuzz_tests",
+        "//crates/executor:hawdb_morsel_oracle_fuzz_tests",
+        "//crates/executor:hawdb_mutation_lowering_fuzz_tests",
+        "//crates/executor:hawdb_mutation_preflight_fuzz_tests",
+        "//crates/executor:hawdb_numeric_execution_fuzz_tests",
+        "//crates/executor:hawdb_query_observer_fuzz_tests",
+        "//crates/executor:hawdb_result_delivery_fuzz_tests",
+        "//crates/executor:hawdb_sort_merge_account_fuzz_tests",
+        "//crates/executor:hawdb_spill_compaction_fuzz_tests",
+        "//crates/executor:hawdb_transform_fuzz_tests",
+        "//crates/executor:hawdb_vector_seed_fuzz_tests",
+        "//crates/optimizer-graph:hawdb_optimizer_candidate_fingerprint_fuzz_tests",
+        "//crates/optimizer-graph:hawdb_optimizer_cardinality_defaults_fuzz_tests",
+        "//crates/optimizer-graph:hawdb_optimizer_cardinality_metadata_fuzz_tests",
+        "//crates/optimizer-graph:hawdb_optimizer_ddl_command_fuzz_tests",
+        "//crates/optimizer-graph:hawdb_optimizer_full_text_cost_fuzz_tests",
+        "//crates/optimizer-graph:hawdb_optimizer_trace_cost_fuzz_tests",
+        "//crates/optimizer-relational:hawdb_optimizer_access_cost_fuzz_tests",
+        "//crates/plan-cypher:hawdb_plan_cypher_explain_fuzz_tests",
+        "//crates/readiness:hawdb_graph_route_readiness_fuzz_tests",
+        "//crates/readiness:hawdb_integration_bundle_fuzz_tests",
+        "//crates/readiness:hawdb_replacement_summary_fuzz_tests",
+        "//crates/readiness:hawdb_source_mutation_readiness_fuzz_tests",
+        "//crates/relational:hawdb_relational_aggregate_state_fuzz_tests",
+        "//crates/relational:hawdb_relational_columnar_aggregate_fuzz_tests",
+        "//crates/relational:hawdb_relational_explain_report_fuzz_tests",
+        "//crates/relational:hawdb_relational_field_plan_fuzz_tests",
+        "//crates/relational:hawdb_relational_index_runtime_fuzz_tests",
+        "//crates/relational:hawdb_relational_physical_plan_fuzz_tests",
+        "//crates/relational:hawdb_relational_qualification_fuzz_tests",
+        "//crates/relational:hawdb_relational_row_runtime_fuzz_tests",
+        "//crates/relational:hawdb_relational_statement_fuzz_tests",
+        "//crates/route-ownership:hawdb_graph_route_ownership_fuzz_tests",
+        "//crates/search:hawdb_search_block_encoding_fuzz_tests",
+        "//crates/search:hawdb_search_bounded_file_fuzz_tests",
+        "//crates/search:hawdb_search_candidate_evidence_fuzz_tests",
+        "//crates/search:hawdb_search_compression_fuzz_tests",
+        "//crates/search:hawdb_search_concurrent_read_fuzz_tests",
+        "//crates/search:hawdb_search_document_analysis_fuzz_tests",
+        "//crates/search:hawdb_search_document_frequency_fuzz_tests",
+        "//crates/search:hawdb_search_hex_decoding_fuzz_tests",
+        "//crates/search:hawdb_search_hydration_fuzz_tests",
+        "//crates/search:hawdb_search_lexical_spill_fuzz_tests",
+        "//crates/search:hawdb_search_manifest_budget_fuzz_tests",
+        "//crates/search:hawdb_search_manifest_encoding_fuzz_tests",
+        "//crates/search:hawdb_search_mini_delta_snapshot_fuzz_tests",
+        "//crates/search:hawdb_search_projection_evidence_fuzz_tests",
+        "//crates/search:hawdb_search_spool_decoding_fuzz_tests",
+        "//crates/search:hawdb_search_spool_encoding_fuzz_tests",
+        "//crates/search:hawdb_search_term_policy_fuzz_tests",
+        "//crates/sql:hawdb_sql_clause_diagnostics_fuzz_tests",
+        "//crates/sql:hawdb_sql_create_binding_fuzz_tests",
+        "//crates/sql:hawdb_sql_frontend_corpus_fuzz_tests",
+        "//crates/sql-syntax:hawdb_sql_alias_boundary_fuzz_tests",
+        "//crates/storage:hawdb_storage_append_reader_fuzz_tests",
+        "//crates/storage:hawdb_storage_artifact_binding_fuzz_tests",
+        "//crates/storage:hawdb_storage_backup_hex_fuzz_tests",
+        "//crates/storage:hawdb_storage_checkpoint_wal_verbatim_fuzz_tests",
+        "//crates/storage:hawdb_storage_durable_envelope_fuzz_tests",
+        "//crates/storage:hawdb_storage_durable_manifest_fuzz_tests",
+        "//crates/storage:hawdb_storage_file_lock_fuzz_tests",
+        "//crates/storage:hawdb_storage_graph_constraints_fuzz_tests",
+        "//crates/storage:hawdb_storage_graph_overlay_fuzz_tests",
+        "//crates/storage:hawdb_storage_positioned_read_fuzz_tests",
+        "//crates/storage:hawdb_storage_projected_artifact_fuzz_tests",
+        "//crates/storage:hawdb_storage_property_projection_hex_fuzz_tests",
+        "//crates/storage:hawdb_storage_relational_index_view_fuzz_tests",
+        "//crates/storage:hawdb_storage_relational_row_workspace_fuzz_tests",
+        "//crates/storage:hawdb_storage_set_value_fuzz_tests",
+        "//crates/storage:hawdb_storage_shadow_metadata_fuzz_tests",
+        "//crates/storage:hawdb_storage_sharded_cache_fuzz_tests",
+        "//crates/storage:hawdb_storage_source_scan_fuzz_tests",
+        "//crates/storage:hawdb_storage_statistics_refresh_fuzz_tests",
+        "//crates/storage:hawdb_storage_text_fuzz_tests",
+        "//crates/storage:hawdb_storage_transaction_compaction_fuzz_tests",
+        "//crates/storage:hawdb_storage_transaction_locks_fuzz_tests",
+        "//tools/shiro:shiro_append_cli_tests",
+        "//tools/shiro:shiro_append_replay_tests",
+        "//tools/shiro:shiro_append_seed_7_tests",
+        "//tools/shiro:shiro_cli_tests",
+        "//tools/shiro:shiro_fast_tests",
+        "//tools/shiro:shiro_parser_cli_tests",
+        "//tools/shiro:shiro_relational_join_rewrite_tests",
+        "//tools/shiro:shiro_storage_tests"
+      ],
+      "target_rename_note": "Maintained Shiro targets replace //crates/fuzz:* removed in #1135; same explicit local-only routine, no CI fuzz changes."
+    }
+  },
+  "new_tests": {
+    "storage": 5,
+    "facade": 4,
+    "all_executed": true
+  },
+  "final_ownership_regressions": {
+    "passed": 67,
+    "failed": 0,
+    "ignored": 1,
+    "ignored_reason": "Existing bounded local transaction journal compaction differential campaign; ordinary smoke executed."
+  },
+  "remaining_gates": [
+    "Required CI and other supported platforms/features, linked in PR",
+    "Complete #232 fairness/latency qualification is separate; no production path changed",
+    "Windows power-loss follow-up stays post-merge; positive Windows publication is separate"
+  ]
+}

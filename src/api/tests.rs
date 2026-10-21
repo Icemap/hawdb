@@ -207,6 +207,7 @@ mod search_projection_graph_delta;
 mod search_projection_rebuild_facade;
 mod set_mutations;
 mod skill_reads;
+mod snapshot_retention;
 mod source_reads;
 mod source_reference;
 mod statistics;
